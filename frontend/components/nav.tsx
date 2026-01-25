@@ -1,16 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 
 export function Nav() {
-  const router = useRouter();
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    router.push('/login');
-  };
+  const { logout } = useAuth();
 
   return (
     <nav className="border-b">
@@ -32,7 +27,7 @@ export function Nav() {
             Rota
           </Link>
         </div>
-        <Button variant="outline" onClick={handleLogout}>
+        <Button variant="outline" onClick={logout}>
           Logout
         </Button>
       </div>

@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,47 +11,30 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
+import { useSites, useCreateSite, useDeleteSite } from '@/hooks/use-sites';
+import { siteSchema } from '@/lib/validation';
+import type { Site } from '@/lib/types';
 
 export default function SitesPage() {
-  const router = useRouter();
-  const [sites, setSites] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    address: '',
-    contact_person: '',
-    contact_phone: '',
+  const { data: sites = [], isLoading, refetch, isRefetching } = useSites();
+  const createSite = useCreateSite();
+  const deleteSite = useDeleteSite();
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<Omit<Site, 'id' | 'company_id' | 'created_at'>>({
+    resolver: zodResolver(siteSchema),
   });
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    loadSites();
-  }, [router]);
-
-  const loadSites = async () => {
+  const handleCreate = async (data: Omit<Site, 'id' | 'company_id' | 'created_at'>) => {
     try {
-      const data = await api.sites.list();
-      setSites(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.sites.create(formData);
+      await createSite.mutateAsync(data);
       setOpen(false);
-      setFormData({ name: '', address: '', contact_person: '', contact_phone: '' });
-      loadSites();
+      reset();
     } catch (err) {
       console.error(err);
     }
@@ -58,85 +43,97 @@ export default function SitesPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure?')) return;
     try {
-      await api.sites.delete(id);
-      loadSites();
+      await deleteSite.mutateAsync(id);
     } catch (err) {
       console.error(err);
     }
   };
 
-  if (loading) return <div>Loading...</div>;
-
   return (
-    <div>
-      <Nav />
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Sites</h1>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button>Add Site</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Site</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Address</Label>
-                  <Input value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Contact Person</Label>
-                  <Input value={formData.contact_person} onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Contact Phone</Label>
-                  <Input value={formData.contact_phone} onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })} />
-                </div>
-                <Button type="submit" className="w-full">Create</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+    <ProtectedRoute>
+      <div>
+        <Nav />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Sites</h1>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
+                {isRefetching ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>Add Site</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Site</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit(handleCreate)} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Name</Label>
+                    <Input {...register('name')} />
+                    {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Address</Label>
+                    <Input {...register('address')} />
+                    {errors.address && <p className="text-sm text-destructive">{errors.address.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Contact Person</Label>
+                    <Input {...register('contact_person')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Contact Phone</Label>
+                    <Input {...register('contact_phone')} />
+                    {errors.contact_phone && <p className="text-sm text-destructive">{errors.contact_phone.message}</p>}
+                  </div>
+                  <Button type="submit" className="w-full" disabled={createSite.isPending}>
+                    {createSite.isPending ? 'Creating...' : 'Create'}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>All Sites</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Address</TableHead>
+                      <TableHead>Contact Person</TableHead>
+                      <TableHead>Contact Phone</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sites.map((site) => (
+                      <TableRow key={site.id}>
+                        <TableCell>{site.name}</TableCell>
+                        <TableCell>{site.address || '-'}</TableCell>
+                        <TableCell>{site.contact_person || '-'}</TableCell>
+                        <TableCell>{site.contact_phone || '-'}</TableCell>
+                        <TableCell>
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(site.id)} disabled={deleteSite.isPending}>
+                            Delete
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>All Sites</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Contact Person</TableHead>
-                  <TableHead>Contact Phone</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sites.map((site) => (
-                  <TableRow key={site.id}>
-                    <TableCell>{site.name}</TableCell>
-                    <TableCell>{site.address || '-'}</TableCell>
-                    <TableCell>{site.contact_person || '-'}</TableCell>
-                    <TableCell>{site.contact_phone || '-'}</TableCell>
-                    <TableCell>
-                      <Button variant="destructive" size="sm" onClick={() => handleDelete(site.id)}>
-                        Delete
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }

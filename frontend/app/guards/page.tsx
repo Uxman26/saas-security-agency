@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { useGuards, useCreateGuard, useDeleteGuard } from '@/hooks/use-guards';
 import { guardSchema } from '@/lib/validation';
 import type { Guard } from '@/lib/types';
+import { EmailDialog } from '@/components/email-dialog';
 
 export default function GuardsPage() {
   const [open, setOpen] = useState(false);
@@ -129,14 +130,19 @@ export default function GuardsPage() {
                         <TableCell>{guard.phone || '-'}</TableCell>
                         <TableCell>{guard.badge_number || '-'}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(guard.id)}
-                            disabled={deleteGuard.isPending}
-                          >
-                            Delete
-                          </Button>
+                          <div className="flex gap-2">
+                            {guard.email && (
+                              <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} />
+                            )}
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(guard.id)}
+                              disabled={deleteGuard.isPending}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

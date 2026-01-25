@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import auth, guards, sites, assignments, clients, sub_contractors
+from app.routers import auth, guards, sites, assignments, clients, sub_contractors, email
 from app.database import engine, Base
 
 Base.metadata.create_all(bind=engine)
@@ -12,6 +12,7 @@ app.include_router(sites.router)
 app.include_router(assignments.router)
 app.include_router(clients.router)
 app.include_router(sub_contractors.router)
+app.include_router(email.router)
 
 @app.get("/")
 def root():

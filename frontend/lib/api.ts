@@ -156,6 +156,16 @@ export const api = {
     },
     delete: (id: number): Promise<void> => request<void>(`/sub-contractors/${id}`, { method: 'DELETE' }),
   },
+  email: {
+    send: (data: { to_email: string; subject: string; body: string }): Promise<{ message: string }> => {
+      const sanitized = {
+        to_email: sanitizeInput(data.to_email),
+        subject: sanitizeInput(data.subject),
+        body: data.body,
+      };
+      return request<{ message: string }>('/email/send', { method: 'POST', body: JSON.stringify(sanitized) });
+    },
+  },
 };
 
 export { ApiError };

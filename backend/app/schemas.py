@@ -134,3 +134,8 @@ class SubContractorResponse(SubContractorBase):
     
     class Config:
         from_attributes = True
+
+class EmailRequest(BaseModel):
+    to_email: str
+    subject: str
+    body: str

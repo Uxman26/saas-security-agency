@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
+import { EmailDialog } from '@/components/email-dialog';
 
 export function Nav() {
   const { logout } = useAuth();
@@ -33,9 +34,12 @@ export function Nav() {
             Sub-Contractors
           </Link>
         </div>
-        <Button variant="outline" onClick={logout}>
-          Logout
-        </Button>
+        <div className="flex gap-2">
+          <EmailDialog />
+          <Button variant="outline" onClick={logout}>
+            Logout
+          </Button>
+        </div>
       </div>
     </nav>
   );

@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { useSubContractors, useCreateSubContractor, useDeleteSubContractor } from '@/hooks/use-sub-contractors';
 import { subContractorSchema } from '@/lib/validation';
 import type { SubContractor } from '@/lib/types';
+import { EmailDialog } from '@/components/email-dialog';
 
 export default function SubContractorsPage() {
   const [open, setOpen] = useState(false);
@@ -132,14 +133,19 @@ export default function SubContractorsPage() {
                         <TableCell>{subContractor.contact_person || '-'}</TableCell>
                         <TableCell>{subContractor.license_number || '-'}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(subContractor.id)}
-                            disabled={deleteSubContractor.isPending}
-                          >
-                            Delete
-                          </Button>
+                          <div className="flex gap-2">
+                            {subContractor.email && (
+                              <EmailDialog defaultEmail={subContractor.email} defaultName={subContractor.name} />
+                            )}
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(subContractor.id)}
+                              disabled={deleteSubContractor.isPending}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

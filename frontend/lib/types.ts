@@ -59,3 +59,26 @@ export interface LoginResponse {
   access_token: string;
   token_type: string;
 }
+
+export interface Client {
+  id: number;
+  company_id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contact_person?: string;
+  created_at: string;
+}
+
+export interface SubContractor {
+  id: number;
+  company_id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  contact_person?: string;
+  license_number?: string;
+  created_at: string;
+}

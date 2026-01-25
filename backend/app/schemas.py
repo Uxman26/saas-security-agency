@@ -97,3 +97,40 @@ class RotaResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class ClientBase(BaseModel):
+    name: str
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+
+class ClientCreate(ClientBase):
+    pass
+
+class ClientResponse(ClientBase):
+    id: int
+    company_id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class SubContractorBase(BaseModel):
+    name: str
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    license_number: Optional[str] = None
+
+class SubContractorCreate(SubContractorBase):
+    pass
+
+class SubContractorResponse(SubContractorBase):
+    id: int
+    company_id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

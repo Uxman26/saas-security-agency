@@ -26,6 +26,8 @@ class Company(Base):
     admin = relationship("User", back_populates="company")
     guards = relationship("Guard", back_populates="company", cascade="all, delete-orphan")
     sites = relationship("Site", back_populates="company", cascade="all, delete-orphan")
+    clients = relationship("Client", back_populates="company", cascade="all, delete-orphan")
+    sub_contractors = relationship("SubContractor", back_populates="company", cascade="all, delete-orphan")
 
 class Guard(Base):
     __tablename__ = "guards"
@@ -70,3 +72,32 @@ class Assignment(Base):
     
     guard = relationship("Guard", back_populates="assignments")
     site = relationship("Site", back_populates="assignments")
+
+class Client(Base):
+    __tablename__ = "clients"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    name = Column(String, nullable=False)
+    email = Column(String)
+    phone = Column(String)
+    address = Column(String)
+    contact_person = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    company = relationship("Company", back_populates="clients")
+
+class SubContractor(Base):
+    __tablename__ = "sub_contractors"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    name = Column(String, nullable=False)
+    email = Column(String)
+    phone = Column(String)
+    address = Column(String)
+    contact_person = Column(String)
+    license_number = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    company = relationship("Company", back_populates="sub_contractors")

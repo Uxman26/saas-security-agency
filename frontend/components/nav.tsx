@@ -26,6 +26,12 @@ export function Nav() {
           <Link href="/rota" className="text-muted-foreground hover:text-foreground">
             Rota
           </Link>
+          <Link href="/clients" className="text-muted-foreground hover:text-foreground">
+            Clients
+          </Link>
+          <Link href="/sub-contractors" className="text-muted-foreground hover:text-foreground">
+            Sub-Contractors
+          </Link>
         </div>
         <Button variant="outline" onClick={logout}>
           Logout

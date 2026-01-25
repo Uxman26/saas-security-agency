@@ -35,3 +35,20 @@ export const assignmentSchema = z.object({
   shift_start: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
   shift_end: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
 });
+
+export const clientSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
+  address: z.string().max(200).optional().or(z.literal('')),
+  contact_person: z.string().max(100).optional().or(z.literal('')),
+});
+
+export const subContractorSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
+  address: z.string().max(200).optional().or(z.literal('')),
+  contact_person: z.string().max(100).optional().or(z.literal('')),
+  license_number: z.string().max(50).optional().or(z.literal('')),
+});

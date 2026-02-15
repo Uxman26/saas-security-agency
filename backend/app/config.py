@@ -1,7 +1,8 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://user:password@localhost:5432/security_db"
+    database_url: str = "sqlite:///./security.db"
     secret_key: str = "your-secret-key-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
@@ -11,7 +12,14 @@ class Settings(BaseSettings):
     mail_port: int = 587
     mail_server: str = "smtp.gmail.com"
     mail_from_name: str = "Security Agency"
-    
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def default_sqlite_if_placeholder(cls, v: str) -> str:
+        if v and v.startswith("postgresql://user:password@"):
+            return "sqlite:///./security.db"
+        return v or "sqlite:///./security.db"
+
     class Config:
         env_file = ".env"
 

@@ -37,4 +37,4 @@ def authenticate_user(db: Session, email: str, password: str) -> dict:
     access_token = create_access_token(
         data={"sub": user.id}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"access_token": str(access_token), "token_type": "bearer"}

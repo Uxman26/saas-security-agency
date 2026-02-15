@@ -10,7 +10,8 @@ class ApiError extends Error {
 }
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const raw = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = raw ? raw.trim() : null;
   
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,

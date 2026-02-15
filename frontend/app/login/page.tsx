@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -39,11 +40,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Login</CardTitle>
-          <CardDescription>Enter your credentials to access your account</CardDescription>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5 dark:to-primary/10">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,var(--primary)/15%,transparent)]" />
+      <Card className="relative w-full max-w-md shadow-xl border-primary/10 dark:border-primary/20 bg-card/95 dark:bg-card">
+        <CardHeader className="space-y-1 text-center pb-2">
+          <CardTitle className="text-2xl">Welcome back</CardTitle>
+          <CardDescription>Sign in to your Security Agency account</CardDescription>
         </CardHeader>
         <CardContent>
           <form
@@ -55,7 +60,7 @@ export default function LoginPage() {
           >
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" {...register('email')} />
+              <Input id="email" type="email" placeholder="you@company.com" {...register('email')} />
               {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
             </div>
             <div className="space-y-2">
@@ -65,11 +70,11 @@ export default function LoginPage() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? 'Signing in...' : 'Sign in'}
             </Button>
             <p className="text-sm text-center text-muted-foreground">
               Don't have an account?{' '}
-              <a href="/signup" className="text-primary hover:underline">
+              <a href="/signup" className="text-primary font-medium hover:underline">
                 Sign up
               </a>
             </p>

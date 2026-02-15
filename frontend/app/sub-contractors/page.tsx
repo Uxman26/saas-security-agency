@@ -101,59 +101,59 @@ export default function SubContractorsPage() {
                       {createSubContractor.isPending ? 'Creating...' : 'Create'}
                     </Button>
                   </form>
-                </DialogContent>
-              </Dialog>
-            </div>
+              </DialogContent>
+            </Dialog>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>All Sub-Contractors</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Contact Person</TableHead>
-                      <TableHead>License Number</TableHead>
-                      <TableHead>Actions</TableHead>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>All Sub-Contractors</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Contact Person</TableHead>
+                    <TableHead>License Number</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subContractors.map((subContractor) => (
+                    <TableRow key={subContractor.id}>
+                      <TableCell>{subContractor.name}</TableCell>
+                      <TableCell>{subContractor.email || '-'}</TableCell>
+                      <TableCell>{subContractor.phone || '-'}</TableCell>
+                      <TableCell>{subContractor.contact_person || '-'}</TableCell>
+                      <TableCell>{subContractor.license_number || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {subContractor.email && (
+                            <EmailDialog defaultEmail={subContractor.email} defaultName={subContractor.name} />
+                          )}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(subContractor.id)}
+                            disabled={deleteSubContractor.isPending}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {subContractors.map((subContractor) => (
-                      <TableRow key={subContractor.id}>
-                        <TableCell>{subContractor.name}</TableCell>
-                        <TableCell>{subContractor.email || '-'}</TableCell>
-                        <TableCell>{subContractor.phone || '-'}</TableCell>
-                        <TableCell>{subContractor.contact_person || '-'}</TableCell>
-                        <TableCell>{subContractor.license_number || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            {subContractor.email && (
-                              <EmailDialog defaultEmail={subContractor.email} defaultName={subContractor.name} />
-                            )}
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDelete(subContractor.id)}
-                              disabled={deleteSubContractor.isPending}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
         </div>
       </div>
     </ProtectedRoute>

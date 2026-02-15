@@ -136,52 +136,53 @@ export default function AssignmentsPage() {
               </DialogContent>
             </Dialog>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>All Assignments</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Guard</TableHead>
-                      <TableHead>Site</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Shift</TableHead>
-                      <TableHead>Actions</TableHead>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>All Assignments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Guard</TableHead>
+                    <TableHead>Site</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Shift</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assignments.map((assignment) => (
+                    <TableRow key={assignment.id}>
+                      <TableCell>{guardMap.get(assignment.guard_id) || '-'}</TableCell>
+                      <TableCell>{siteMap.get(assignment.site_id) || '-'}</TableCell>
+                      <TableCell>{assignment.date}</TableCell>
+                      <TableCell>
+                        {assignment.shift_start && assignment.shift_end
+                          ? `${assignment.shift_start} - ${assignment.shift_end}`
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(assignment.id)}
+                          disabled={deleteAssignment.isPending}
+                        >
+                          Delete
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {assignments.map((assignment) => (
-                      <TableRow key={assignment.id}>
-                        <TableCell>{guardMap.get(assignment.guard_id) || '-'}</TableCell>
-                        <TableCell>{siteMap.get(assignment.site_id) || '-'}</TableCell>
-                        <TableCell>{assignment.date}</TableCell>
-                        <TableCell>
-                          {assignment.shift_start && assignment.shift_end
-                            ? `${assignment.shift_start} - ${assignment.shift_end}`
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(assignment.id)}
-                            disabled={deleteAssignment.isPending}
-                          >
-                            Delete
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
         </div>
       </div>
     </ProtectedRoute>

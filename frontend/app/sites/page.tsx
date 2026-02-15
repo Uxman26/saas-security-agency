@@ -95,43 +95,44 @@ export default function SitesPage() {
               </DialogContent>
             </Dialog>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>All Sites</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Contact Person</TableHead>
-                      <TableHead>Contact Phone</TableHead>
-                      <TableHead>Actions</TableHead>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>All Sites</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Address</TableHead>
+                    <TableHead>Contact Person</TableHead>
+                    <TableHead>Contact Phone</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sites.map((site) => (
+                    <TableRow key={site.id}>
+                      <TableCell>{site.name}</TableCell>
+                      <TableCell>{site.address || '-'}</TableCell>
+                      <TableCell>{site.contact_person || '-'}</TableCell>
+                      <TableCell>{site.contact_phone || '-'}</TableCell>
+                      <TableCell>
+                        <Button variant="destructive" size="sm" onClick={() => handleDelete(site.id)} disabled={deleteSite.isPending}>
+                          Delete
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sites.map((site) => (
-                      <TableRow key={site.id}>
-                        <TableCell>{site.name}</TableCell>
-                        <TableCell>{site.address || '-'}</TableCell>
-                        <TableCell>{site.contact_person || '-'}</TableCell>
-                        <TableCell>{site.contact_phone || '-'}</TableCell>
-                        <TableCell>
-                          <Button variant="destructive" size="sm" onClick={() => handleDelete(site.id)} disabled={deleteSite.isPending}>
-                            Delete
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
         </div>
       </div>
     </ProtectedRoute>

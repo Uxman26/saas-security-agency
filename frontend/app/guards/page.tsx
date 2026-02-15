@@ -104,53 +104,54 @@ export default function GuardsPage() {
               </DialogContent>
             </Dialog>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>All Guards</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Badge Number</TableHead>
-                      <TableHead>Actions</TableHead>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>All Guards</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Badge Number</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {guards.map((guard) => (
+                    <TableRow key={guard.id}>
+                      <TableCell>{guard.full_name}</TableCell>
+                      <TableCell>{guard.email || '-'}</TableCell>
+                      <TableCell>{guard.phone || '-'}</TableCell>
+                      <TableCell>{guard.badge_number || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {guard.email && (
+                            <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} />
+                          )}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(guard.id)}
+                            disabled={deleteGuard.isPending}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {guards.map((guard) => (
-                      <TableRow key={guard.id}>
-                        <TableCell>{guard.full_name}</TableCell>
-                        <TableCell>{guard.email || '-'}</TableCell>
-                        <TableCell>{guard.phone || '-'}</TableCell>
-                        <TableCell>{guard.badge_number || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            {guard.email && (
-                              <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} />
-                            )}
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleDelete(guard.id)}
-                              disabled={deleteGuard.isPending}
-                            >
-                              Delete
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
         </div>
       </div>
     </ProtectedRoute>

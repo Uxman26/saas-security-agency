@@ -29,6 +29,7 @@ export default function GuardsPage() {
     formState: { errors },
   } = useForm<Omit<Guard, 'id' | 'company_id' | 'created_at'>>({
     resolver: zodResolver(guardSchema),
+    defaultValues: { sia_expiry_date: '', employment_history: '' },
   });
 
   const handleCreate = async (data: Omit<Guard, 'id' | 'company_id' | 'created_at'>) => {
@@ -94,6 +95,26 @@ export default function GuardsPage() {
                     <Input {...register('license_number')} />
                   </div>
                   <div className="space-y-2">
+                    <Label>SIA Number</Label>
+                    <Input {...register('sia_number')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SIA Expiry Date</Label>
+                    <Input type="date" {...register('sia_expiry_date')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Visa Status</Label>
+                    <Input {...register('visa_status')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>RTW Status</Label>
+                    <Input {...register('rtw_status')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Employment History (5 years)</Label>
+                    <Input {...register('employment_history')} placeholder="Brief summary" />
+                  </div>
+                  <div className="space-y-2">
                     <Label>Address</Label>
                     <Input {...register('address')} />
                   </div>
@@ -115,11 +136,12 @@ export default function GuardsPage() {
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
+                    <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
-                    <TableHead>Badge Number</TableHead>
+                    <TableHead>Badge</TableHead>
+                    <TableHead>SIA Expiry</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -130,6 +152,7 @@ export default function GuardsPage() {
                       <TableCell>{guard.email || '-'}</TableCell>
                       <TableCell>{guard.phone || '-'}</TableCell>
                       <TableCell>{guard.badge_number || '-'}</TableCell>
+                      <TableCell>{guard.sia_expiry_date || '-'}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           {guard.email && (

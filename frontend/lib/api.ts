@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, LoginResponse, Client, SubContractor } from './types';
+import type { User, Guard, Site, Assignment, Rota, LoginResponse, Client, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -166,6 +166,47 @@ export const api = {
       };
       return request<{ message: string }>('/email/send', { method: 'POST', body: JSON.stringify(sanitized) });
     },
+  },
+  reports: {
+    dashboard: (): Promise<DashboardStats> => request<DashboardStats>('/reports/dashboard'),
+    compliance: (days?: number): Promise<ComplianceAlert[]> => request<ComplianceAlert[]>(`/reports/compliance${days != null ? `?days=${days}` : ''}`),
+  },
+  payroll: {
+    list: (params?: { guard_id?: number; period_start?: string; period_end?: string }): Promise<Payroll[]> => {
+      const q = new URLSearchParams();
+      if (params?.guard_id) q.append('guard_id', params.guard_id.toString());
+      if (params?.period_start) q.append('period_start', params.period_start);
+      if (params?.period_end) q.append('period_end', params.period_end);
+      return request<Payroll[]>(`/payroll?${q.toString()}`);
+    },
+    get: (id: number): Promise<Payroll> => request<Payroll>(`/payroll/${id}`),
+    create: (data: Partial<Payroll>): Promise<Payroll> => request<Payroll>('/payroll', { method: 'POST', body: JSON.stringify(data) }),
+    calculate: (guard_id: number, period_start: string, period_end: string): Promise<Payroll> =>
+      request<Payroll>(`/payroll/calculate?guard_id=${guard_id}&period_start=${period_start}&period_end=${period_end}`, { method: 'POST' }),
+    delete: (id: number): Promise<void> => request<void>(`/payroll/${id}`, { method: 'DELETE' }),
+  },
+  invoices: {
+    list: (params?: { client_id?: number; status?: string }): Promise<Invoice[]> => {
+      const q = new URLSearchParams();
+      if (params?.client_id) q.append('client_id', params.client_id.toString());
+      if (params?.status) q.append('status', params.status);
+      return request<Invoice[]>(`/invoices?${q.toString()}`);
+    },
+    get: (id: number): Promise<Invoice> => request<Invoice>(`/invoices/${id}`),
+    create: (data: Partial<Invoice>): Promise<Invoice> => request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
+    generate: (client_id: number, period_start: string, period_end: string): Promise<Invoice> =>
+      request<Invoice>(`/invoices/generate?client_id=${client_id}&period_start=${period_start}&period_end=${period_end}`, { method: 'POST' }),
+    updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
+    delete: (id: number): Promise<void> => request<void>(`/invoices/${id}`, { method: 'DELETE' }),
+  },
+  allowances: {
+    list: (): Promise<Allowance[]> => request<Allowance[]>('/allowances'),
+    get: (id: number): Promise<Allowance> => request<Allowance>(`/allowances/${id}`),
+    create: (data: Omit<Allowance, 'id' | 'company_id' | 'created_at'>): Promise<Allowance> =>
+      request<Allowance>('/allowances', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<Omit<Allowance, 'id' | 'company_id' | 'created_at'>>): Promise<Allowance> =>
+      request<Allowance>(`/allowances/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/allowances/${id}`, { method: 'DELETE' }),
   },
 };
 

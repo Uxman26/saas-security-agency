@@ -19,7 +19,7 @@ export function Nav() {
             className="flex items-center gap-2 font-semibold text-primary transition-colors hover:text-primary/90"
           >
             <Shield className="size-5" />
-            Security Agency
+            SecureForce Manager
           </Link>
           <div className="hidden md:flex items-center gap-1">
             {[
@@ -29,6 +29,9 @@ export function Nav() {
               { href: '/rota', label: 'Rota' },
               { href: '/clients', label: 'Clients' },
               { href: '/sub-contractors', label: 'Sub-Contractors' },
+              { href: '/payroll', label: 'Payroll' },
+              { href: '/invoices', label: 'Invoices' },
+              { href: '/allowances', label: 'Allowances' },
             ].map(({ href, label }) => (
               <Link
                 key={href}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -13,13 +13,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSites, useCreateSite, useDeleteSite } from '@/hooks/use-sites';
 import { siteSchema } from '@/lib/validation';
-import type { Site } from '@/lib/types';
+import type { Site, Client } from '@/lib/types';
+import { api } from '@/lib/api';
 
 export default function SitesPage() {
   const [open, setOpen] = useState(false);
+  const [clients, setClients] = useState<Client[]>([]);
   const { data: sites = [], isLoading, refetch, isRefetching } = useSites();
   const createSite = useCreateSite();
   const deleteSite = useDeleteSite();
+
+  useEffect(() => {
+    api.clients.list().then(setClients).catch(() => {});
+  }, []);
 
   const {
     register,
@@ -28,11 +34,15 @@ export default function SitesPage() {
     formState: { errors },
   } = useForm<Omit<Site, 'id' | 'company_id' | 'created_at'>>({
     resolver: zodResolver(siteSchema),
+    defaultValues: { client_id: undefined, default_hourly_rate: undefined },
   });
 
   const handleCreate = async (data: Omit<Site, 'id' | 'company_id' | 'created_at'>) => {
+    const payload = { ...data };
+    if (payload.client_id != null && Number.isNaN(Number(payload.client_id))) delete (payload as Record<string, unknown>).client_id;
+    if (payload.default_hourly_rate != null && Number.isNaN(Number(payload.default_hourly_rate))) delete (payload as Record<string, unknown>).default_hourly_rate;
     try {
-      await createSite.mutateAsync(data);
+      await createSite.mutateAsync(payload);
       setOpen(false);
       reset();
     } catch (err) {
@@ -75,6 +85,19 @@ export default function SitesPage() {
                     {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
                   </div>
                   <div className="space-y-2">
+                    <Label>Client</Label>
+                    <select className="w-full border rounded px-3 py-2" {...register('client_id', { valueAsNumber: true })}>
+                      <option value="">None</option>
+                      {clients.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Default Hourly Rate (£)</Label>
+                    <Input type="number" step="0.01" {...register('default_hourly_rate', { valueAsNumber: true })} />
+                  </div>
+                  <div className="space-y-2">
                     <Label>Address</Label>
                     <Input {...register('address')} />
                     {errors.address && <p className="text-sm text-destructive">{errors.address.message}</p>}
@@ -108,9 +131,10 @@ export default function SitesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Client ID</TableHead>
+                    <TableHead>Default Rate</TableHead>
                     <TableHead>Address</TableHead>
-                    <TableHead>Contact Person</TableHead>
-                    <TableHead>Contact Phone</TableHead>
+                    <TableHead>Contact</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -118,9 +142,10 @@ export default function SitesPage() {
                   {sites.map((site) => (
                     <TableRow key={site.id}>
                       <TableCell>{site.name}</TableCell>
+                      <TableCell>{site.client_id ?? '-'}</TableCell>
+                      <TableCell>{site.default_hourly_rate != null ? `£${site.default_hourly_rate}` : '-'}</TableCell>
                       <TableCell>{site.address || '-'}</TableCell>
-                      <TableCell>{site.contact_person || '-'}</TableCell>
-                      <TableCell>{site.contact_phone || '-'}</TableCell>
+                      <TableCell>{site.contact_person || site.contact_phone || '-'}</TableCell>
                       <TableCell>
                         <Button variant="destructive" size="sm" onClick={() => handleDelete(site.id)} disabled={deleteSite.isPending}>
                           Delete

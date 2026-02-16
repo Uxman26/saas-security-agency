@@ -14,13 +14,16 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     user = User(
         email=user_data.email,
         password_hash=hashed_password,
-        full_name=user_data.full_name
+        full_name=user_data.full_name,
+        role="company_admin"
     )
     db.add(user)
     db.flush()
     
     company = Company(name=user_data.company_name, admin_id=user.id)
     db.add(company)
+    db.flush()
+    user.company_id = company.id
     db.commit()
     db.refresh(user)
     

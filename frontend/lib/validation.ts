@@ -18,14 +18,21 @@ export const guardSchema = z.object({
   phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
   badge_number: z.string().max(50).optional().or(z.literal('')),
   license_number: z.string().max(50).optional().or(z.literal('')),
+  sia_number: z.string().max(50).optional().or(z.literal('')),
+  sia_expiry_date: z.string().optional().or(z.literal('')),
+  visa_status: z.string().max(100).optional().or(z.literal('')),
+  rtw_status: z.string().max(100).optional().or(z.literal('')),
+  employment_history: z.string().max(2000).optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
 });
 
 export const siteSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  client_id: z.number().int().optional().nullable(),
   address: z.string().max(200).optional().or(z.literal('')),
   contact_person: z.string().max(100).optional().or(z.literal('')),
   contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
+  default_hourly_rate: z.number().min(0).optional().nullable(),
 });
 
 export const assignmentSchema = z.object({
@@ -34,6 +41,8 @@ export const assignmentSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
   shift_start: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
   shift_end: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
+  break_minutes: z.number().int().min(0).optional(),
+  shift_type: z.enum(['day', 'night', 'holiday']).optional(),
 });
 
 export const clientSchema = z.object({

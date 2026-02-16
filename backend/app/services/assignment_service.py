@@ -61,14 +61,14 @@ def get_rota(
         Site.name.label("site_name"),
         Assignment.date,
         Assignment.shift_start,
-        Assignment.shift_end
+        Assignment.shift_end,
+        Assignment.break_minutes,
+        Assignment.shift_type
     ).join(Guard).join(Site).filter(Guard.company_id == company.id)
-    
     if start_date:
         query = query.filter(Assignment.date >= start_date)
     if end_date:
         query = query.filter(Assignment.date <= end_date)
-    
     results = query.all()
     return [
         RotaResponse(
@@ -78,7 +78,9 @@ def get_rota(
             site_name=r.site_name,
             date=r.date,
             shift_start=r.shift_start,
-            shift_end=r.shift_end
+            shift_end=r.shift_end,
+            break_minutes=r.break_minutes,
+            shift_type=r.shift_type
         )
         for r in results
     ]

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     mail_port: int = 587
     mail_server: str = "smtp.gmail.com"
     mail_from_name: str = "Security Agency"
+    super_admin_email: str = ""
 
     @field_validator("database_url", mode="before")
     @classmethod

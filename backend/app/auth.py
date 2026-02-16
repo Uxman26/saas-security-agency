@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import User
 from app.config import settings
 
+SUPER_ADMIN_ROLE = "super_admin"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 def _password_bytes(password: str) -> bytes:
@@ -51,4 +52,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise credentials_exception
+    return user
+
+def get_current_super_admin(user: User = Depends(get_current_user)) -> User:
+    if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin only")
     return user

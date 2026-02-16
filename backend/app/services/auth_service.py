@@ -2,31 +2,30 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from app.models import User, Company
 from app.schemas import UserCreate
-from app.auth import get_password_hash, create_access_token
+from app.auth import get_password_hash, create_access_token, SUPER_ADMIN_ROLE
 from datetime import timedelta
 from app.config import settings
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+    is_super = bool(getattr(settings, "super_admin_email", "")) and user_data.email.lower() == getattr(settings, "super_admin_email", "").lower()
     hashed_password = get_password_hash(user_data.password)
     user = User(
         email=user_data.email,
         password_hash=hashed_password,
         full_name=user_data.full_name,
-        role="company_admin"
+        role=SUPER_ADMIN_ROLE if is_super else "company_admin"
     )
     db.add(user)
     db.flush()
-    
-    company = Company(name=user_data.company_name, admin_id=user.id)
-    db.add(company)
-    db.flush()
-    user.company_id = company.id
+    if not is_super:
+        company = Company(name=user_data.company_name, admin_id=user.id)
+        db.add(company)
+        db.flush()
+        user.company_id = company.id
     db.commit()
     db.refresh(user)
-    
     return user
 
 def authenticate_user(db: Session, email: str, password: str) -> dict:

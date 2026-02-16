@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, email
-from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports
+from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin
 from app.database import engine, Base
 
 try:
@@ -37,6 +37,7 @@ app.include_router(payroll.router)
 app.include_router(invoices.router)
 app.include_router(payments.router)
 app.include_router(reports.router)
+app.include_router(admin.router)
 
 @app.get("/")
 def root():

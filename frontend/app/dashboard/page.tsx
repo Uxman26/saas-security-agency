@@ -19,9 +19,10 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
 import type { DashboardStats, ComplianceAlert } from '@/lib/types';
 
-const tiles = [
+const companyTiles = [
   { href: '/guards', title: 'Guards', desc: 'Manage security guards', icon: Users },
   { href: '/sites', title: 'Sites', desc: 'Manage sites', icon: MapPin },
   { href: '/assignments', title: 'Assignments', desc: 'Manage assignments', icon: ClipboardList },
@@ -33,14 +34,24 @@ const tiles = [
   { href: '/allowances', title: 'Allowances', desc: 'Rates & allowances', icon: Wallet },
 ];
 
+const adminTiles = [
+  { href: '/admin/companies', title: 'Companies', desc: 'View all tenant companies', icon: Building2 },
+];
+
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
 
   useEffect(() => {
-    api.reports.dashboard().then(setStats).catch(() => {});
-    api.reports.compliance(30).then(setAlerts).catch(() => {});
-  }, []);
+    if (!isSuperAdmin) {
+      api.reports.dashboard().then(setStats).catch(() => {});
+      api.reports.compliance(30).then(setAlerts).catch(() => {});
+    }
+  }, [isSuperAdmin]);
+
+  const tiles = isSuperAdmin ? adminTiles : companyTiles;
 
   return (
     <ProtectedRoute>
@@ -48,10 +59,14 @@ export default function DashboardPage() {
         <Nav />
         <div className="container mx-auto px-4 py-8">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-            <p className="mt-1 text-muted-foreground">Overview of your security operations</p>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              {isSuperAdmin ? 'Platform Admin' : 'Dashboard'}
+            </h1>
+            <p className="mt-1 text-muted-foreground">
+              {isSuperAdmin ? 'Manage platform and tenant companies' : 'Overview of your security operations'}
+            </p>
           </div>
-          {stats && (
+          {!isSuperAdmin && stats && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-8">
               <Card>
                 <CardHeader className="pb-2">
@@ -95,7 +110,7 @@ export default function DashboardPage() {
               </Card>
             </div>
           )}
-          {alerts.length > 0 && (
+          {!isSuperAdmin && alerts.length > 0 && (
             <Card className="mb-8 border-amber-500/50">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -112,7 +127,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           )}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={`grid gap-4 ${isSuperAdmin ? 'sm:grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
             {tiles.map(({ href, title, desc, icon: Icon }) => (
               <Link key={href} href={href}>
                 <Card className="h-full transition-all duration-200 border-border/80 hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 group">

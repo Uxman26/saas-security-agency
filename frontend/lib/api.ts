@@ -208,6 +208,9 @@ export const api = {
       request<Allowance>(`/allowances/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/allowances/${id}`, { method: 'DELETE' }),
   },
+  admin: {
+    companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),
+  },
 };
 
 export { ApiError };

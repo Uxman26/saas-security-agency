@@ -2,6 +2,8 @@ export interface User {
   id: number;
   email: string;
   full_name: string;
+  role?: string;
+  company_id?: number | null;
   is_active: boolean;
   created_at: string;
 }
@@ -10,6 +12,7 @@ export interface Company {
   id: number;
   name: string;
   admin_id: number;
+  subscription_tier?: string;
   created_at: string;
 }
 

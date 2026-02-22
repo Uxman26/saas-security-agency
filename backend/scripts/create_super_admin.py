@@ -2,9 +2,11 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.database import SessionLocal
+from app.database import SessionLocal, engine, Base
 from app.models import User
 from app.auth import get_password_hash, SUPER_ADMIN_ROLE
+
+Base.metadata.create_all(bind=engine)
 
 EMAIL = "superadmin@gmail.com"
 PASSWORD = "11223344"

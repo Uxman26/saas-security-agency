@@ -1,5 +1,6 @@
 services:
   backend:
+    image: security-backend
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -9,6 +10,16 @@ services:
       - "8000:8000"
     volumes:
       - backend_data:/app/data
+
+  create-super-admin:
+    image: security-backend
+    env_file:
+      - ./backend/.env
+    volumes:
+      - backend_data:/app/data
+    command: python scripts/create_super_admin.py
+    profiles:
+      - admin
 
   frontend:
     build:

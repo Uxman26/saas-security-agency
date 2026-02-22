@@ -34,6 +34,7 @@ export const siteSchema = z.object({
   contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
   default_hourly_rate: z.number().min(0).optional().nullable(),
 });
+export type SiteFormData = z.infer<typeof siteSchema>;
 
 export const assignmentSchema = z.object({
   guard_id: z.number().int().positive('Guard is required'),
@@ -44,6 +45,7 @@ export const assignmentSchema = z.object({
   break_minutes: z.number().int().min(0).optional(),
   shift_type: z.enum(['day', 'night', 'holiday']).optional(),
 });
+export type AssignmentFormData = z.infer<typeof assignmentSchema>;
 
 export const clientSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),

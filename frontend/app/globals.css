@@ -123,3 +123,54 @@
     @apply bg-background text-foreground transition-colors duration-200;
   }
 }
+
+@keyframes shield-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 0 oklch(0.55 0.2 264 / 0.4)); }
+  50% { opacity: 0.95; transform: scale(1.03); filter: drop-shadow(0 0 24px oklch(0.55 0.2 264 / 0.25)); }
+}
+
+@keyframes radar-ring {
+  0% { transform: scale(0.6); opacity: 0.6; border-color: oklch(0.55 0.2 264 / 0.4); }
+  100% { transform: scale(1.8); opacity: 0; border-color: oklch(0.55 0.2 264 / 0); }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0.8; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.25; }
+}
+
+@keyframes lock-shine {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.animate-shield-pulse {
+  animation: shield-pulse 3s ease-in-out infinite;
+}
+
+.animate-radar-ring {
+  animation: radar-ring 2.5s ease-out infinite;
+}
+
+.animate-scan-line {
+  animation: scan-line 4s linear infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.7s ease-out forwards;
+}
+
+.animate-glow-breathe {
+  animation: glow-breathe 4s ease-in-out infinite;
+}

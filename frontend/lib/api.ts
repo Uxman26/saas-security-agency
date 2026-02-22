@@ -48,12 +48,13 @@ function sanitizeInput(input: string): string {
 
 export const api = {
   auth: {
-    signup: (data: { email: string; password: string; full_name: string; company_name: string }): Promise<User> => {
+    signup: (data: { email: string; password: string; full_name: string; company_name: string; subscription_tier?: string }): Promise<User> => {
       const sanitized = {
         email: sanitizeInput(data.email),
         password: data.password,
         full_name: sanitizeInput(data.full_name),
         company_name: sanitizeInput(data.company_name),
+        ...(data.subscription_tier && { subscription_tier: sanitizeInput(data.subscription_tier) }),
       };
       return request<User>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
     },

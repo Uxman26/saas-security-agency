@@ -15,8 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAssignments, useCreateAssignment, useDeleteAssignment } from '@/hooks/use-assignments';
 import { useGuards } from '@/hooks/use-guards';
 import { useSites } from '@/hooks/use-sites';
-import { assignmentSchema } from '@/lib/validation';
-import type { Assignment } from '@/lib/types';
+import { assignmentSchema, type AssignmentFormData } from '@/lib/validation';
 
 export default function AssignmentsPage() {
   const [open, setOpen] = useState(false);
@@ -33,7 +32,7 @@ export default function AssignmentsPage() {
     setValue,
     watch,
     formState: { errors },
-  } = useForm<Omit<Assignment, 'id' | 'created_at'>>({
+  } = useForm<AssignmentFormData>({
     resolver: zodResolver(assignmentSchema),
   });
 
@@ -43,7 +42,7 @@ export default function AssignmentsPage() {
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
   const siteMap = useMemo(() => new Map(sites.map((s) => [s.id, s.name])), [sites]);
 
-  const handleCreate = async (data: Omit<Assignment, 'id' | 'created_at'>) => {
+  const handleCreate = async (data: AssignmentFormData) => {
     try {
       await createAssignment.mutateAsync(data);
       setOpen(false);

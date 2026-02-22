@@ -12,8 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSites, useCreateSite, useDeleteSite } from '@/hooks/use-sites';
-import { siteSchema } from '@/lib/validation';
-import type { Site, Client } from '@/lib/types';
+import { siteSchema, type SiteFormData } from '@/lib/validation';
+import type { Client } from '@/lib/types';
 import { api } from '@/lib/api';
 
 export default function SitesPage() {
@@ -32,13 +32,17 @@ export default function SitesPage() {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<Omit<Site, 'id' | 'company_id' | 'created_at'>>({
+  } = useForm<SiteFormData>({
     resolver: zodResolver(siteSchema),
     defaultValues: { client_id: undefined, default_hourly_rate: undefined },
   });
 
-  const handleCreate = async (data: Omit<Site, 'id' | 'company_id' | 'created_at'>) => {
-    const payload = { ...data };
+  const handleCreate = async (data: SiteFormData) => {
+    const payload = {
+      ...data,
+      client_id: data.client_id ?? undefined,
+      default_hourly_rate: data.default_hourly_rate ?? undefined,
+    };
     if (payload.client_id != null && Number.isNaN(Number(payload.client_id))) delete (payload as Record<string, unknown>).client_id;
     if (payload.default_hourly_rate != null && Number.isNaN(Number(payload.default_hourly_rate))) delete (payload as Record<string, unknown>).default_hourly_rate;
     try {

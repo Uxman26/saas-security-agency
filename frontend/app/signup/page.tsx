@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -12,8 +13,13 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 
-export default function SignupPage() {
+const VALID_TIERS = ['basic', 'standard', 'premium'];
+
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tierParam = searchParams.get('tier');
+  const subscription_tier = tierParam && VALID_TIERS.includes(tierParam) ? tierParam : undefined;
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -29,7 +35,7 @@ export default function SignupPage() {
     setError('');
     setLoading(true);
     try {
-      await api.auth.signup(data);
+      await api.auth.signup({ ...data, subscription_tier });
       router.push('/login');
     } catch (err: any) {
       setError(err.message || 'Signup failed');
@@ -40,14 +46,19 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5 dark:to-primary/10">
-      <div className="absolute top-4 right-4">
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <Link href="/pricing">
+          <Button variant="ghost" size="sm">Plans</Button>
+        </Link>
         <ThemeToggle />
       </div>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,var(--primary)/15%,transparent)]" />
       <Card className="relative w-full max-w-md shadow-xl border-primary/10 dark:border-primary/20 bg-card/95 dark:bg-card">
         <CardHeader className="space-y-1 text-center pb-2">
-          <CardTitle className="text-2xl">Create account</CardTitle>
-          <CardDescription>Register your company to get started</CardDescription>
+          <CardTitle className="text-2xl">Create company</CardTitle>
+          <CardDescription>
+            {subscription_tier ? `Sign up with ${subscription_tier} plan` : 'Register your company to get started'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -80,10 +91,22 @@ export default function SignupPage() {
               <a href="/login" className="text-primary font-medium hover:underline">
                 Sign in
               </a>
+              {' · '}
+              <Link href="/pricing" className="text-primary font-medium hover:underline">
+                View plans
+              </Link>
             </p>
           </form>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <SignupForm />
+    </Suspense>
   );
 }

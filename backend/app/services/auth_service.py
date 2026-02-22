@@ -5,6 +5,7 @@ from app.schemas import UserCreate
 from app.auth import get_password_hash, create_access_token, SUPER_ADMIN_ROLE
 from datetime import timedelta
 from app.config import settings
+from app.services.subscription_service import TIERS
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if db.query(User).filter(User.email == user_data.email).first():
@@ -20,7 +21,8 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     db.add(user)
     db.flush()
     if not is_super:
-        company = Company(name=user_data.company_name, admin_id=user.id)
+        tier = user_data.subscription_tier if user_data.subscription_tier and user_data.subscription_tier in TIERS else "basic"
+        company = Company(name=user_data.company_name, admin_id=user.id, subscription_tier=tier)
         db.add(company)
         db.flush()
         user.company_id = company.id

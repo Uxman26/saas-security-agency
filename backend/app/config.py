@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     mail_server: str = "smtp.gmail.com"
     mail_from_name: str = "Security Agency"
     super_admin_email: str = ""
+    cors_origins: str = "http://localhost:3000"
 
     @field_validator("database_url", mode="before")
     @classmethod

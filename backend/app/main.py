@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, email
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin
 from app.database import engine, Base
+from app.config import settings
 
 try:
     from migrate_db import run as run_migrate
@@ -13,9 +14,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SecureForce Manager", version="1.0.0")
 
+origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

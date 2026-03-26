@@ -1,0 +1,67 @@
+# Code Quality Rules
+
+## General Principles
+- Write clean, minimal code without comments
+- Avoid unnecessary verbosity - use fewer tokens
+- Prefer short, optimal implementations
+- Remove unused imports, variables, and code
+- No documentation comments in code files
+
+## Architecture
+- Backend: FastAPI with traditional architecture
+- Frontend: Next.js with shadcn/ui components
+- Follow traditional MVC/MVP patterns
+- Keep separation of concerns clear
+
+## Code Style
+
+### Python (FastAPI)
+- No docstrings or comments
+- Use type hints minimally (only when necessary)
+- Prefer list/dict comprehensions over loops
+- Use async/await properly
+- Keep functions short and focused
+- No unnecessary error handling verbosity
+
+### TypeScript/JavaScript (Next.js)
+- No comments or JSDoc
+- Use functional components
+- Prefer arrow functions
+- Use shadcn/ui components from @/components/ui
+- Keep components small and focused
+- Use TypeScript types minimally (infer when possible)
+
+## File Guidelines
+
+### Test Files
+- Keep tests minimal and focused
+- Only test critical paths
+- No verbose test descriptions
+- Use concise test names
+
+### Documentation Files
+- Minimize markdown files
+- Only essential README.md
+- No extensive documentation
+- Keep it brief and to the point
+
+## What to Avoid
+- Comments in code
+- Unnecessary documentation
+- Verbose variable names
+- Redundant code
+- Over-engineering
+- Unused imports or dependencies
+- Excessive type annotations
+- Long function names
+- Unnecessary abstractions
+
+## What to Prefer
+- Short, readable code
+- Self-documenting code through good naming
+- Direct implementations
+- Minimal dependencies
+- Concise error handling
+- Functional programming patterns where appropriate
+- Reusable utilities
+- DRY principle (but don't over-abstract)

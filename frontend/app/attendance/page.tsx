@@ -1,0 +1,285 @@
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { ProtectedRoute } from '@/components/protected-route';
+import { Nav } from '@/components/nav';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { api } from '@/lib/api';
+import type { Attendance, Guard, Assignment } from '@/lib/types';
+import { Clock, Plus } from 'lucide-react';
+
+const STATUS_STYLES: Record<string, string> = {
+  on_time: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  late: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  absent: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  early_leave: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+};
+
+export default function AttendancePage() {
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [guards, setGuards] = useState<Guard[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [lateView, setLateView] = useState(false);
+
+  // Book On/Off form
+  const [bookAssignmentId, setBookAssignmentId] = useState('');
+  const [bookGuardId, setBookGuardId] = useState('');
+  const [bookOff, setBookOff] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
+
+  const loadAttendance = () => {
+    setLoading(true);
+    api.attendance.list().then(setAttendance).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadAttendance();
+    api.guards.list().then(setGuards).catch(() => {});
+    api.assignments.list().then(setAssignments).catch(() => {});
+  }, []);
+
+  const handleBook = async () => {
+    if (!bookAssignmentId) return;
+    setSubmitting(true);
+    try {
+      if (bookOff) {
+        await api.attendance.bookOff(parseInt(bookAssignmentId));
+      } else {
+        await api.attendance.bookOn(parseInt(bookAssignmentId));
+      }
+      setBookOpen(false);
+      setBookAssignmentId('');
+      setBookGuardId('');
+      setBookOff(false);
+      loadAttendance();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const filtered = useMemo(() => {
+    const list = lateView ? attendance.filter(a => a.status === 'late') : attendance;
+    return list.filter(a =>
+      (guardMap.get(a.guard_id) ?? '').toLowerCase().includes(search.toLowerCase())
+    );
+  }, [attendance, search, guardMap, lateView]);
+
+  const lateCount = useMemo(() => attendance.filter(a => a.status === 'late').length, [attendance]);
+  const onTimeCount = useMemo(() => attendance.filter(a => a.status === 'on_time').length, [attendance]);
+
+  return (
+    <ProtectedRoute>
+      <div>
+        <Nav />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2"><Clock className="size-7" /> Attendance</h1>
+              <p className="text-muted-foreground mt-1">{attendance.length} attendance record{attendance.length !== 1 ? 's' : ''}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={loadAttendance} disabled={loading}>
+                {loading ? 'Loading...' : 'Refresh'}
+              </Button>
+              <Dialog open={bookOpen} onOpenChange={setBookOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="size-4 mr-2" />
+                    Book Attendance
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Book Guard Attendance</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <p className="text-sm text-muted-foreground">
+                      Records the current time as the book-on or book-off time for the selected assignment.
+                    </p>
+                    <div className="space-y-1">
+                      <Label>Filter by Guard</Label>
+                      <Select value={bookGuardId || 'all'} onValueChange={(v) => setBookGuardId(v === 'all' ? '' : v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="All guards" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Guards</SelectItem>
+                          {guards.map((g) => (
+                            <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Assignment <span className="text-destructive">*</span></Label>
+                      <Select value={bookAssignmentId} onValueChange={setBookAssignmentId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select assignment" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {assignments
+                            .filter(a => !bookGuardId || a.guard_id === parseInt(bookGuardId))
+                            .map((a) => (
+                              <SelectItem key={a.id} value={a.id.toString()}>
+                                {guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`} — {a.date} {a.shift_start ?? '?'}–{a.shift_end ?? '?'}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Action</Label>
+                      <div className="flex rounded-md border overflow-hidden">
+                        <button
+                          type="button"
+                          className={`flex-1 py-2 text-sm font-medium transition-colors ${!bookOff ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
+                          onClick={() => setBookOff(false)}
+                        >
+                          Book On
+                        </button>
+                        <button
+                          type="button"
+                          className={`flex-1 py-2 text-sm font-medium transition-colors ${bookOff ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
+                          onClick={() => setBookOff(true)}
+                        >
+                          Book Off
+                        </button>
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full"
+                      onClick={handleBook}
+                      disabled={submitting || !bookAssignmentId}
+                    >
+                      {submitting ? 'Booking...' : `Book ${bookOff ? 'Off' : 'On'} Now`}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+
+          {/* Summary */}
+          {attendance.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-3 mb-6">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Records</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <span className="text-2xl font-bold">{attendance.length}</span>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">On Time</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <span className="text-2xl font-bold text-green-600">{onTimeCount}</span>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Late Arrivals</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <span className="text-2xl font-bold text-red-600">{lateCount}</span>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <Input
+              placeholder="Search by guard name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+            <Button
+              variant={lateView ? 'default' : 'outline'}
+              onClick={() => setLateView(!lateView)}
+              size="sm"
+            >
+              {lateView ? 'Show All' : `Late Only (${lateCount})`}
+            </Button>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Attendance Records</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading attendance records...</div>
+              ) : filtered.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  {search || lateView ? 'No records match your filter.' : 'No attendance records yet. Click "Book Attendance" to get started.'}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Guard</TableHead>
+                        <TableHead>Assignment ID</TableHead>
+                        <TableHead>Booked On</TableHead>
+                        <TableHead>Booked Off</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Recorded</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((a) => (
+                        <TableRow key={a.id}>
+                          <TableCell className="font-medium whitespace-nowrap">
+                            {guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">#{a.assignment_id}</TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell>
+                            {a.status ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[a.status] ?? 'bg-secondary text-secondary-foreground'}`}>
+                                {a.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+                                Pending
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </ProtectedRoute>
+  );
+}

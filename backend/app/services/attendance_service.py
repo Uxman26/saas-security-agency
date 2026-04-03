@@ -6,6 +6,13 @@ from app.models import Attendance, Assignment, Guard
 from app.schemas import AttendanceCreate, BookingOnOff
 from app.services.company_service import get_company_by_user_id
 
+def get_all_attendance(db: Session, user_id: int, guard_id: Optional[int] = None) -> List[Attendance]:
+    company = get_company_by_user_id(db, user_id)
+    q = db.query(Attendance).join(Assignment).join(Guard).filter(Guard.company_id == company.id)
+    if guard_id:
+        q = q.filter(Attendance.guard_id == guard_id)
+    return q.order_by(Attendance.created_at.desc()).all()
+
 def create_attendance(db: Session, data: AttendanceCreate, user_id: int) -> Attendance:
     company = get_company_by_user_id(db, user_id)
     a = db.query(Assignment).join(Guard).filter(

@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, LoginResponse, Client, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance } from './types';
+import type { User, Guard, Site, Assignment, Rota, LoginResponse, Client, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -211,6 +211,58 @@ export const api = {
   },
   admin: {
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),
+  },
+  documents: {
+    // Flat /documents endpoint — guard_id optional for filtering
+    list: (guard_id?: number): Promise<GuardDocument[]> => {
+      const q = new URLSearchParams();
+      if (guard_id) q.append('guard_id', guard_id.toString());
+      return request<GuardDocument[]>(`/documents?${q.toString()}`);
+    },
+    // guard_id is in the body via GuardDocumentCreateFlat
+    create: (data: { guard_id: number; document_type: string; file_path?: string; expiry_date?: string }): Promise<GuardDocument> =>
+      request<GuardDocument>('/documents', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/documents/${id}`, { method: 'DELETE' }),
+  },
+  attendance: {
+    list: (params?: { guard_id?: number }): Promise<Attendance[]> => {
+      const q = new URLSearchParams();
+      if (params?.guard_id) q.append('guard_id', params.guard_id.toString());
+      return request<Attendance[]>(`/attendance?${q.toString()}`);
+    },
+    // Backend BookingOnOff only accepts { assignment_id, book_off }
+    bookOn: (assignment_id: number): Promise<Attendance> =>
+      request<Attendance>('/attendance/book', { method: 'POST', body: JSON.stringify({ assignment_id, book_off: false }) }),
+    bookOff: (assignment_id: number): Promise<Attendance> =>
+      request<Attendance>('/attendance/book', { method: 'POST', body: JSON.stringify({ assignment_id, book_off: true }) }),
+    late: (params?: { start_date?: string; end_date?: string }): Promise<Attendance[]> => {
+      const q = new URLSearchParams();
+      if (params?.start_date) q.append('start_date', params.start_date);
+      if (params?.end_date) q.append('end_date', params.end_date);
+      return request<Attendance[]>(`/attendance/late?${q.toString()}`);
+    },
+  },
+  payments: {
+    list: (params?: { invoice_id?: number }): Promise<Payment[]> => {
+      const q = new URLSearchParams();
+      if (params?.invoice_id) q.append('invoice_id', params.invoice_id.toString());
+      return request<Payment[]>(`/payments?${q.toString()}`);
+    },
+    create: (data: { invoice_id?: number; amount: number; method: string; paid_at: string }): Promise<Payment> =>
+      request<Payment>('/payments', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/payments/${id}`, { method: 'DELETE' }),
+  },
+  rates: {
+    guardRates: (guard_id: number): Promise<GuardRate[]> => request<GuardRate[]>(`/rates/guards/${guard_id}`),
+    createGuardRate: (guard_id: number, data: { hourly_rate: number; effective_from: string }): Promise<GuardRate> =>
+      request<GuardRate>(`/rates/guards/${guard_id}`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteGuardRate: (guard_id: number, rate_id: number): Promise<void> =>
+      request<void>(`/rates/guards/${guard_id}/${rate_id}`, { method: 'DELETE' }),
+    siteRates: (site_id: number): Promise<SiteRate[]> => request<SiteRate[]>(`/rates/sites/${site_id}`),
+    createSiteRate: (site_id: number, data: { shift_type: string; hourly_rate: number }): Promise<SiteRate> =>
+      request<SiteRate>(`/rates/sites/${site_id}`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteSiteRate: (site_id: number, rate_id: number): Promise<void> =>
+      request<void>(`/rates/sites/${site_id}/${rate_id}`, { method: 'DELETE' }),
   },
 };
 

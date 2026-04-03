@@ -8,9 +8,10 @@ from app.services.company_service import get_company_by_user_id
 
 def create_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
     company = get_company_by_user_id(db, user_id)
-    inv = db.query(Invoice).filter(Invoice.id == data.invoice_id, Invoice.company_id == company.id).first()
-    if not inv:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+    if data.invoice_id is not None:
+        inv = db.query(Invoice).filter(Invoice.id == data.invoice_id, Invoice.company_id == company.id).first()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invoice not found")
     payload = data.model_dump() if hasattr(data, "model_dump") else data.dict()
     pay = Payment(company_id=company.id, **payload)
     db.add(pay)

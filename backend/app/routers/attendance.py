@@ -10,6 +10,14 @@ from app.services import attendance_service
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
 
+@router.get("", response_model=List[AttendanceResponse])
+def list_attendance_all(
+    guard_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return attendance_service.get_all_attendance(db, current_user.id, guard_id)
+
 @router.post("", response_model=AttendanceResponse, status_code=status.HTTP_201_CREATED)
 def create_attendance(data: AttendanceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return attendance_service.create_attendance(db, data, current_user.id)

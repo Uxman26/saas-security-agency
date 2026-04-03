@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import type { Allowance } from '@/lib/types';
 import { z } from 'zod';
+import { Wallet, Pencil, Trash2 } from 'lucide-react';
 
 const allowanceSchema = z.object({
   name: z.string().min(2).max(100),
@@ -23,20 +24,89 @@ const allowanceSchema = z.object({
   in_invoice: z.boolean().default(true),
 });
 
+type AllowanceFormData = z.infer<typeof allowanceSchema>;
+
+function AllowanceForm({
+  form,
+  onSubmit,
+  isPending,
+  submitLabel,
+}: {
+  form: ReturnType<typeof useForm<AllowanceFormData>>;
+  onSubmit: (data: AllowanceFormData) => void;
+  isPending: boolean;
+  submitLabel: string;
+}) {
+  const { register, handleSubmit, formState: { errors } } = form;
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Allowance Name <span className="text-destructive">*</span></Label>
+          <Input {...register('name')} placeholder="Meal Allowance" />
+          {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+        </div>
+        <div className="space-y-1">
+          <Label>Type</Label>
+          <select
+            className="w-full border rounded-md px-3 py-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            {...register('allowance_type')}
+          >
+            <option value="fixed">Fixed (flat amount per period)</option>
+            <option value="hourly">Hourly (per hour worked)</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label>Amount (£)</Label>
+          <Input type="number" step="0.01" min="0" {...register('amount', { valueAsNumber: true })} placeholder="10.00" />
+          {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
+        </div>
+      </div>
+      <div className="rounded-md border p-3 space-y-3">
+        <p className="text-sm font-medium text-muted-foreground">Apply to</p>
+        <div className="flex gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" className="rounded" {...register('in_payroll')} />
+            <span className="text-sm">Include in Payroll</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" className="rounded" {...register('in_invoice')} />
+            <span className="text-sm">Include in Invoices</span>
+          </label>
+        </div>
+      </div>
+      <Button type="submit" className="w-full" disabled={isPending}>
+        {isPending ? 'Saving...' : submitLabel}
+      </Button>
+    </form>
+  );
+}
+
 export default function AllowancesPage() {
-  const [open, setOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingAllowance, setEditingAllowance] = useState<Allowance | null>(null);
   const [allowances, setAllowances] = useState<Allowance[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const { register, handleSubmit, reset } = useForm({
+  const addForm = useForm<AllowanceFormData>({
     resolver: zodResolver(allowanceSchema),
     defaultValues: { name: '', allowance_type: 'fixed', amount: 0, in_payroll: true, in_invoice: true },
   });
 
-  const load = () => api.allowances.list().then(setAllowances).catch(() => {}).finally(() => setLoading(false));
+  const editForm = useForm<AllowanceFormData>({
+    resolver: zodResolver(allowanceSchema),
+    defaultValues: { in_payroll: true, in_invoice: true },
+  });
+
+  const load = () => {
+    setLoading(true);
+    api.allowances.list().then(setAllowances).catch(() => {}).finally(() => setLoading(false));
+  };
+
   useEffect(() => { load(); }, []);
 
-  const onSubmit = async (data: { name: string; allowance_type: string; amount: number; in_payroll?: boolean; in_invoice?: boolean }) => {
+  const handleCreate = async (data: AllowanceFormData) => {
     try {
       await api.allowances.create({
         name: data.name,
@@ -45,22 +115,46 @@ export default function AllowancesPage() {
         in_payroll: data.in_payroll ?? true,
         in_invoice: data.in_invoice ?? true,
       });
-      setOpen(false);
-      reset();
+      setAddOpen(false);
+      addForm.reset();
       load();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
+  };
+
+  const openEdit = (a: Allowance) => {
+    setEditingAllowance(a);
+    editForm.reset({
+      name: a.name,
+      allowance_type: a.allowance_type as 'fixed' | 'hourly',
+      amount: a.amount,
+      in_payroll: a.in_payroll,
+      in_invoice: a.in_invoice,
+    });
+    setEditOpen(true);
+  };
+
+  const handleUpdate = async (data: AllowanceFormData) => {
+    if (!editingAllowance) return;
+    try {
+      await api.allowances.update(editingAllowance.id, {
+        name: data.name,
+        allowance_type: data.allowance_type,
+        amount: data.amount,
+        in_payroll: data.in_payroll ?? true,
+        in_invoice: data.in_invoice ?? true,
+      });
+      setEditOpen(false);
+      setEditingAllowance(null);
+      load();
+    } catch (err) { console.error(err); }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this allowance?')) return;
+    if (!confirm('Delete this allowance? This cannot be undone.')) return;
     try {
       await api.allowances.delete(id);
       load();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   return (
@@ -68,85 +162,111 @@ export default function AllowancesPage() {
       <div>
         <Nav />
         <div className="container mx-auto px-4 py-8">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">Allowances</h1>
-            <Dialog open={open} onOpenChange={setOpen}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-2"><Wallet className="size-7" /> Allowances</h1>
+              <p className="text-muted-foreground mt-1">Configure payroll and invoice allowances</p>
+            </div>
+            <Dialog open={addOpen} onOpenChange={setAddOpen}>
               <DialogTrigger asChild>
                 <Button>Add Allowance</Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Add Allowance</DialogTitle>
+                  <DialogTitle>Add New Allowance</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Name</Label>
-                    <Input {...register('name')} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Type</Label>
-                    <select className="w-full border rounded px-3 py-2" {...register('allowance_type')}>
-                      <option value="fixed">Fixed</option>
-                      <option value="hourly">Hourly</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Amount</Label>
-                    <Input type="number" step="0.01" {...register('amount', { valueAsNumber: true })} />
-                  </div>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" {...register('in_payroll')} />
-                      In Payroll
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" {...register('in_invoice')} />
-                      In Invoice
-                    </label>
-                  </div>
-                  <Button type="submit" className="w-full">Create</Button>
-                </form>
+                <AllowanceForm form={addForm} onSubmit={handleCreate} isPending={false} submitLabel="Create Allowance" />
               </DialogContent>
             </Dialog>
           </div>
+
           <Card>
             <CardHeader>
-              <CardTitle>Allowances</CardTitle>
+              <CardTitle>All Allowances</CardTitle>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              ) : allowances.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  No allowances configured yet. Click "Add Allowance" to get started.
+                </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Payroll</TableHead>
-                      <TableHead>Invoice</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {allowances.map((a) => (
-                      <TableRow key={a.id}>
-                        <TableCell>{a.name}</TableCell>
-                        <TableCell>{a.allowance_type}</TableCell>
-                        <TableCell>£{a.amount.toFixed(2)}</TableCell>
-                        <TableCell>{a.in_payroll ? 'Yes' : 'No'}</TableCell>
-                        <TableCell>{a.in_invoice ? 'Yes' : 'No'}</TableCell>
-                        <TableCell>
-                          <Button variant="destructive" size="sm" onClick={() => handleDelete(a.id)}>Delete</Button>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>In Payroll</TableHead>
+                        <TableHead>In Invoice</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {allowances.map((a) => (
+                        <TableRow key={a.id}>
+                          <TableCell className="font-medium">{a.name}</TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              a.allowance_type === 'hourly'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                                : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                            }`}>
+                              {a.allowance_type === 'hourly' ? 'Per Hour' : 'Fixed'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-medium">£{a.amount.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              a.in_payroll ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-secondary text-secondary-foreground'
+                            }`}>
+                              {a.in_payroll ? 'Yes' : 'No'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              a.in_invoice ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-secondary text-secondary-foreground'
+                            }`}>
+                              {a.in_invoice ? 'Yes' : 'No'}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit allowance">
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(a.id)}
+                                title="Delete allowance"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Edit Dialog */}
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Allowance — {editingAllowance?.name}</DialogTitle>
+            </DialogHeader>
+            <AllowanceForm form={editForm} onSubmit={handleUpdate} isPending={false} submitLabel="Save Changes" />
+          </DialogContent>
+        </Dialog>
       </div>
     </ProtectedRoute>
   );

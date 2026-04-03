@@ -157,11 +157,14 @@ class EmailRequest(BaseModel):
 
 class GuardDocumentBase(BaseModel):
     document_type: str
-    file_path: str
+    file_path: Optional[str] = None
     expiry_date: Optional[date] = None
 
 class GuardDocumentCreate(GuardDocumentBase):
     pass
+
+class GuardDocumentCreateFlat(GuardDocumentBase):
+    guard_id: int
 
 class GuardDocumentResponse(GuardDocumentBase):
     id: int
@@ -299,7 +302,7 @@ class InvoiceResponse(InvoiceBase):
         from_attributes = True
 
 class PaymentBase(BaseModel):
-    invoice_id: int
+    invoice_id: Optional[int] = None
     amount: float
     method: Optional[str] = None
     paid_at: Optional[datetime] = None

@@ -160,3 +160,48 @@ export interface Allowance {
   in_invoice: boolean;
   created_at: string;
 }
+
+export interface GuardDocument {
+  id: number;
+  guard_id: number;
+  document_type: string;
+  file_path?: string;
+  expiry_date?: string;
+  created_at: string;
+}
+
+export interface Attendance {
+  id: number;
+  assignment_id: number;
+  guard_id: number;
+  booked_at?: string;
+  booked_off_at?: string;
+  status?: string;
+  created_at: string;
+}
+
+export interface Payment {
+  id: number;
+  company_id: number;
+  invoice_id?: number;
+  amount: number;
+  method: string;
+  paid_at: string;
+  created_at: string;
+}
+
+export interface GuardRate {
+  id: number;
+  guard_id: number;
+  hourly_rate: number;
+  effective_from: string;
+  created_at: string;
+}
+
+export interface SiteRate {
+  id: number;
+  site_id: number;
+  shift_type: string;
+  hourly_rate: number;
+  created_at: string;
+}

@@ -20,8 +20,8 @@ const allowanceSchema = z.object({
   name: z.string().min(2).max(100),
   allowance_type: z.enum(['fixed', 'hourly']),
   amount: z.number().min(0),
-  in_payroll: z.boolean().default(true),
-  in_invoice: z.boolean().default(true),
+  in_payroll: z.boolean(),
+  in_invoice: z.boolean(),
 });
 
 type AllowanceFormData = z.infer<typeof allowanceSchema>;

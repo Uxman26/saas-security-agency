@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from typing import List
+from typing import List, Optional
 from datetime import date
 from app.models import GuardDocument, Guard
 from app.schemas import GuardDocumentCreate

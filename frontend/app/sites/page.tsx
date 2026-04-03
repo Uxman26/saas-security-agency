@@ -100,11 +100,18 @@ export default function SitesPage() {
 
   const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) });
 
-  const sanitize = (data: SiteFormData) => {
-    const payload = { ...data };
-    if (payload.client_id != null && Number.isNaN(Number(payload.client_id))) delete (payload as Record<string, unknown>).client_id;
-    if (payload.default_hourly_rate != null && Number.isNaN(Number(payload.default_hourly_rate))) delete (payload as Record<string, unknown>).default_hourly_rate;
-    return payload;
+  const sanitize = (data: SiteFormData): Omit<Site, 'id' | 'company_id' | 'created_at'> => {
+    const o: Omit<Site, 'id' | 'company_id' | 'created_at'> = {
+      name: data.name,
+      address: data.address,
+      contact_person: data.contact_person,
+      contact_phone: data.contact_phone,
+    };
+    const cid = data.client_id;
+    if (cid != null && !Number.isNaN(Number(cid))) o.client_id = cid;
+    const rate = data.default_hourly_rate;
+    if (rate != null && !Number.isNaN(Number(rate))) o.default_hourly_rate = rate;
+    return o;
   };
 
   const handleCreate = async (data: SiteFormData) => {

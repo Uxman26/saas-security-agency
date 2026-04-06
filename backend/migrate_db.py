@@ -46,6 +46,7 @@ def run():
         ("assignments", "shift_type", "TEXT DEFAULT 'day'"),
         ("assignments", "updated_at", "TEXT"),
         ("sub_contractors", "updated_at", "TEXT"),
+        ("guards", "dbs_status", "TEXT"),
     ]
     for table, col, spec in alters:
         if table_exists(cur, table) and not column_exists(cur, table, col):
@@ -53,6 +54,22 @@ def run():
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
             except sqlite3.OperationalError:
                 pass
+    if table_exists(cur, "companies") and not table_exists(cur, "audit_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER REFERENCES companies(id),
+                user_id INTEGER REFERENCES users(id),
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id INTEGER,
+                meta TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
 

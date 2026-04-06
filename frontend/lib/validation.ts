@@ -24,6 +24,7 @@ export const guardSchema = z.object({
   rtw_status: z.string().max(100).optional().or(z.literal('')),
   employment_history: z.string().max(2000).optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
+  dbs_status: z.string().max(100).optional().or(z.literal('')),
 });
 
 export const siteSchema = z.object({

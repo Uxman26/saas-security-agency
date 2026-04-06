@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, List, Optional
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -24,6 +24,11 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+class UserMeResponse(UserResponse):
+    permissions: List[str] = Field(default_factory=list)
+    plan: Optional[dict[str, Any]] = None
 
 class CompanyBase(BaseModel):
     name: str
@@ -49,6 +54,7 @@ class GuardBase(BaseModel):
     rtw_status: Optional[str] = None
     employment_history: Optional[str] = None
     address: Optional[str] = None
+    dbs_status: Optional[str] = None
 
 class GuardCreate(GuardBase):
     pass

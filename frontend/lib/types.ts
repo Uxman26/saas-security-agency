@@ -1,3 +1,12 @@
+export interface PlanSummary {
+  tier: string;
+  max_guards: number | null;
+  max_sites: number | null;
+  guards_used: number;
+  sites_used: number;
+  features: Record<string, boolean>;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -6,6 +15,8 @@ export interface User {
   company_id?: number | null;
   is_active: boolean;
   created_at: string;
+  permissions?: string[];
+  plan?: PlanSummary | null;
 }
 
 export interface Company {
@@ -30,6 +41,7 @@ export interface Guard {
   rtw_status?: string;
   employment_history?: string;
   address?: string;
+  dbs_status?: string;
   created_at: string;
 }
 

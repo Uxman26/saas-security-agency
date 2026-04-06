@@ -15,6 +15,9 @@ import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard } from '@/hoo
 import { guardSchema } from '@/lib/validation';
 import type { Guard } from '@/lib/types';
 import { EmailDialog } from '@/components/email-dialog';
+import { useAuth } from '@/contexts/auth-context';
+import { can } from '@/lib/permissions';
+import { formatDateUK } from '@/lib/date-format';
 import { Pencil, Trash2, Users } from 'lucide-react';
 
 type GuardFormData = Omit<Guard, 'id' | 'company_id' | 'created_at'>;
@@ -82,6 +85,10 @@ function GuardForm({
           <Label>RTW Status</Label>
           <Input {...register('rtw_status')} placeholder="Right to Work status" />
         </div>
+        <div className="space-y-1">
+          <Label>DBS check</Label>
+          <Input {...register('dbs_status')} placeholder="e.g. Clear, Pending, N/A" />
+        </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Address</Label>
           <Input {...register('address')} placeholder="123 High Street, London" />
@@ -99,6 +106,7 @@ function GuardForm({
 }
 
 export default function GuardsPage() {
+  const { user } = useAuth();
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingGuard, setEditingGuard] = useState<Guard | null>(null);
@@ -111,7 +119,7 @@ export default function GuardsPage() {
 
   const addForm = useForm<GuardFormData>({
     resolver: zodResolver(guardSchema),
-    defaultValues: { sia_expiry_date: '', employment_history: '', visa_status: '', rtw_status: '' },
+    defaultValues: { sia_expiry_date: '', employment_history: '', visa_status: '', rtw_status: '', dbs_status: '' },
   });
 
   const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSchema) });
@@ -138,6 +146,7 @@ export default function GuardsPage() {
       rtw_status: guard.rtw_status ?? '',
       employment_history: guard.employment_history ?? '',
       address: guard.address ?? '',
+      dbs_status: guard.dbs_status ?? '',
     });
     setEditOpen(true);
   };
@@ -180,7 +189,7 @@ export default function GuardsPage() {
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
-                  <Button>Add Guard</Button>
+                  <Button disabled={!can(user, 'guards.write')}>Add Guard</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
@@ -225,6 +234,7 @@ export default function GuardsPage() {
                         <TableHead>SIA Expiry</TableHead>
                         <TableHead>RTW</TableHead>
                         <TableHead>Visa</TableHead>
+                        <TableHead>DBS</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -245,7 +255,7 @@ export default function GuardsPage() {
                                   siaStatus === 'critical' ? 'text-orange-600 font-semibold' :
                                   siaStatus === 'warning' ? 'text-amber-600 font-medium' : ''
                                 }>
-                                  {guard.sia_expiry_date}
+                                  {formatDateUK(guard.sia_expiry_date)}
                                   {siaStatus === 'expired' && ' ⚠ Expired'}
                                   {siaStatus === 'critical' && ' ⚠ <30d'}
                                   {siaStatus === 'warning' && ' ⚠ <90d'}
@@ -264,9 +274,10 @@ export default function GuardsPage() {
                               ) : '-'}
                             </TableCell>
                             <TableCell>{guard.visa_status || '-'}</TableCell>
+                            <TableCell className="text-sm max-w-[120px] truncate" title={guard.dbs_status || ''}>{guard.dbs_status || '-'}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(guard)} title="Edit guard">
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(guard)} title="Edit guard" disabled={!can(user, 'guards.write')}>
                                   <Pencil className="size-4" />
                                 </Button>
                                 {guard.email && (
@@ -277,7 +288,7 @@ export default function GuardsPage() {
                                   size="sm"
                                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                   onClick={() => handleDelete(guard.id)}
-                                  disabled={deleteGuard.isPending}
+                                  disabled={deleteGuard.isPending || !can(user, 'guards.delete')}
                                   title="Delete guard"
                                 >
                                   <Trash2 className="size-4" />

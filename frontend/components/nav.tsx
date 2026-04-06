@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { can } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { EmailDialog } from '@/components/email-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Shield, Building2, Menu, X } from 'lucide-react';
-import { useState } from 'react';
 
 const companyNav = [
   { href: '/guards', label: 'Guards' },
@@ -29,6 +30,10 @@ export function Nav() {
   const pathname = usePathname();
   const isSuperAdmin = user?.role === 'super_admin';
   const [mobileOpen, setMobileOpen] = useState(false);
+  const linksNav = useMemo(() => {
+    const showSubs = can(user, 'subs.read') && user?.plan?.features?.subcontractors === true;
+    return companyNav.filter((i) => i.href !== '/sub-contractors' || showSubs);
+  }, [user]);
 
   const isActive = (href: string) => pathname === href;
 
@@ -60,7 +65,7 @@ export function Nav() {
                 Companies
               </Link>
             ) : (
-              companyNav.map(({ href, label }) => (
+              linksNav.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
@@ -108,7 +113,7 @@ export function Nav() {
                 Companies
               </Link>
             ) : (
-              companyNav.map(({ href, label }) => (
+              linksNav.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}

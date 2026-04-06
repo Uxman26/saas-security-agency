@@ -18,10 +18,7 @@ Think of it as: **who** (guards), **where** (sites), **who you bill** (clients).
 
 **Assignments (rota)** are the shifts: which guard is at which site on which day, with start and end times (and breaks).
 
-**Rates** are resolved in two ways:
-
-- **Pay rates** (payroll): guard hourly rates and effective dates first, then site/shift fallbacks—what you **pay** staff.
-- **Billing rates** (invoices): site rates for the shift type and site default hourly rate first, then the same fallbacks as pay if nothing is set—what you **charge** the client.
+**Rates** tell the system **how much per hour** to use for pay or for billing. It uses the guard/site/shift rules you have entered.
 
 ---
 
@@ -36,8 +33,6 @@ Each allowance has two switches:
 
 So the same allowance can affect pay only, billing only, or both, depending on those switches.
 
-On **invoices**, each allowance marked for invoicing is added **once per invoice** (not repeated for every shift line).
-
 ---
 
 ## Payroll (money to guards)
@@ -48,19 +43,13 @@ For a chosen **guard** and **date range**, payroll uses that guard’s **schedul
 
 ## Invoices (money from clients)
 
-For a chosen **client** and **date range**, the system finds **sites linked to that client**, gathers **shifts** at those sites in the range, and builds **invoice lines** from hours and **billing rates**. It also adds **separate lines** for allowances marked for invoices (one line per allowance for the period). You get an **invoice** (usually starting as a draft) with a total you can track and send.
+For a chosen **client** and **date range**, the system finds **sites linked to that client**, gathers **shifts** at those sites in the range, and builds **invoice lines** from hours and **billing rates**. It also adds allowances marked for invoices. You get an **invoice** (usually starting as a draft) with a total you can track and send.
 
 ---
 
 ## Payments (money received)
 
 When a client **pays** you toward an invoice, you record a **payment** against that invoice (amount, method, date). That is your record of money **in**, separate from the invoice itself.
-
----
-
-## Background jobs (automation)
-
-A **worker** process (Redis + ARQ) runs **scheduled tasks** outside the web API—for example a daily job that scans guard records for **SIA expiry** within the next 30 days (foundation for alerts and reports). Run the `worker` service in Docker Compose alongside **redis**; set `REDIS_URL` to match your Redis host (e.g. `redis://redis:6379/0` in containers).
 
 ---
 

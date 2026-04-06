@@ -2,10 +2,10 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import Invoice, InvoiceLine, Client, Site, Assignment, Guard
+from app.models import Invoice, InvoiceLine, Client, Site, Assignment
 from app.schemas import InvoiceCreate, InvoiceLineBase
 from app.services.company_service import get_company_by_user_id
-from app.services.rate_service import resolve_rate
+from app.services.rate_service import resolve_billing_rate
 from app.models import Allowance
 
 def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
@@ -69,10 +69,11 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
     inv = Invoice(company_id=company.id, client_id=client_id, period_start=period_start, period_end=period_end, total=0, status="draft")
     db.add(inv)
     db.flush()
-    allowance_inv = [a for a in db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()]
+    allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
     total = 0.0
+    anchor_site_id = site_ids[0]
     for a in assignments:
-        r = resolve_rate(db, company.id, a.guard_id, a.site_id, a.shift_type or "day", a.date)
+        r = resolve_billing_rate(db, company.id, a.guard_id, a.site_id, a.shift_type or "day", a.date)
         start = (a.shift_start or "0:0").strip().split(":")
         end = (a.shift_end or "0:0").strip().split(":")
         try:
@@ -81,10 +82,21 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
         except (ValueError, IndexError):
             hrs = 0.0
         amt = hrs * r
-        allow_amt = sum(al.amount for al in allowance_inv)
-        line = InvoiceLine(invoice_id=inv.id, site_id=a.site_id, guard_id=a.guard_id, hours=hrs, rate=r, amount=amt, allowance_amount=allow_amt)
+        line = InvoiceLine(invoice_id=inv.id, site_id=a.site_id, guard_id=a.guard_id, hours=hrs, rate=r, amount=amt, allowance_amount=0)
         db.add(line)
-        total += amt + allow_amt
+        total += amt
+    for al in allowance_inv:
+        line = InvoiceLine(
+            invoice_id=inv.id,
+            site_id=anchor_site_id,
+            guard_id=None,
+            hours=0,
+            rate=0,
+            amount=al.amount,
+            allowance_amount=al.amount,
+        )
+        db.add(line)
+        total += al.amount
     inv.total = total
     db.commit()
     db.refresh(inv)

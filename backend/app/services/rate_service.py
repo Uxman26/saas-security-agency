@@ -25,7 +25,17 @@ def _guard_rate_for_date(db: Session, guard_id: int, site_id: Optional[int], shi
             return site.default_hourly_rate
     return None
 
-def resolve_rate(db: Session, company_id: int, guard_id: int, site_id: int, shift_type: str, d: date) -> float:
+def _billing_rate_for_site(db: Session, company_id: int, site_id: int, shift_type: str) -> Optional[float]:
+    st = shift_type or "day"
+    sr = db.query(SiteRate).filter(SiteRate.site_id == site_id, SiteRate.shift_type == st).first()
+    if sr:
+        return sr.hourly_rate
+    site = db.query(Site).filter(Site.id == site_id, Site.company_id == company_id).first()
+    if site and site.default_hourly_rate is not None:
+        return site.default_hourly_rate
+    return None
+
+def resolve_pay_rate(db: Session, company_id: int, guard_id: int, site_id: int, shift_type: str, d: date) -> float:
     r = _guard_rate_for_date(db, guard_id, site_id, shift_type or "day", d)
     if r is not None:
         return r
@@ -34,6 +44,15 @@ def resolve_rate(db: Session, company_id: int, guard_id: int, site_id: int, shif
         return site.default_hourly_rate
     gr = db.query(GuardRate).filter(GuardRate.guard_id == guard_id).order_by(GuardRate.effective_from.desc()).first()
     return gr.hourly_rate if gr else 0.0
+
+def resolve_billing_rate(db: Session, company_id: int, guard_id: int, site_id: int, shift_type: str, d: date) -> float:
+    r = _billing_rate_for_site(db, company_id, site_id, shift_type or "day")
+    if r is not None:
+        return r
+    return resolve_pay_rate(db, company_id, guard_id, site_id, shift_type, d)
+
+def resolve_rate(db: Session, company_id: int, guard_id: int, site_id: int, shift_type: str, d: date) -> float:
+    return resolve_pay_rate(db, company_id, guard_id, site_id, shift_type, d)
 
 def create_guard_rate(db: Session, guard_id: int, data: GuardRateCreate, user_id: int) -> GuardRate:
     company = get_company_by_user_id(db, user_id)

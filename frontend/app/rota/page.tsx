@@ -17,7 +17,9 @@ import { useGuards } from '@/hooks/use-guards';
 import { useSites } from '@/hooks/use-sites';
 import { api } from '@/lib/api';
 import { assignmentSchema, type AssignmentFormData } from '@/lib/validation';
-import type { Client, RotaDetail } from '@/lib/types';
+import type { Client, RotaDetail, RotaSummary } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Calendar, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 
 function fmt(d: Date) {
@@ -94,6 +96,10 @@ export default function RotaPage() {
   const { data: guards = [] } = useGuards();
   const { data: sites = [] } = useSites();
   const [specialLabels, setSpecialLabels] = useState<Map<string, string>>(new Map());
+  const [summarySearch, setSummarySearch] = useState('');
+  const summarySort = useTableSort();
+  const [summaryPage, setSummaryPage] = useState(1);
+  const [summaryPageSize, setSummaryPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
   const createAssignment = useCreateAssignment();
   const updateAssignment = useUpdateAssignment();
   const deleteAssignment = useDeleteAssignment();
@@ -219,6 +225,48 @@ export default function RotaPage() {
   );
 
   const siteMap = useMemo(() => new Map(sites.map((s) => [s.id, s.name])), [sites]);
+
+  const getSummarySearchText = useCallback(
+    (s: RotaSummary) =>
+      [s.guard_name, String(s.guard_id), s.total_hours.toFixed(1), String(s.late_arrivals), s.committed_hours.toFixed(1), s.overtime_hours.toFixed(1)].join(
+        ' '
+      ),
+    []
+  );
+  const getSummarySortValue = useCallback((s: RotaSummary, key: string) => {
+    switch (key) {
+      case 'guard':
+        return s.guard_name;
+      case 'total':
+        return s.total_hours;
+      case 'late':
+        return s.late_arrivals;
+      case 'committed':
+        return s.committed_hours;
+      case 'ot':
+        return s.overtime_hours;
+      default:
+        return '';
+    }
+  }, []);
+
+  const summaryList = useTableList(
+    summary,
+    summarySearch,
+    summarySort.sortKey,
+    summarySort.sortDir,
+    summaryPage,
+    summaryPageSize,
+    getSummarySearchText,
+    getSummarySortValue
+  );
+
+  useEffect(() => {
+    setSummaryPage(1);
+  }, [summarySearch, range.start, range.end, fSite, fClient, fGuard]);
+  useEffect(() => {
+    setSummaryPage((x) => Math.min(x, summaryList.pageCount));
+  }, [summaryList.pageCount]);
 
   return (
     <ProtectedRoute>
@@ -498,31 +546,83 @@ export default function RotaPage() {
               <CardTitle>Hours & commitments</CardTitle>
               <CardDescription>Total hours, late arrivals, contracted hours for the period, and overtime (hours over contract prorated by days).</CardDescription>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Guard</TableHead>
-                    <TableHead className="text-right">Total hours</TableHead>
-                    <TableHead className="text-right">Late arrivals</TableHead>
-                    <TableHead className="text-right">Committed (period)</TableHead>
-                    <TableHead className="text-right">Overtime</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {summary.map((s) => (
-                    <TableRow key={s.guard_id}>
-                      <TableCell className="font-medium">{s.guard_name}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.total_hours.toFixed(1)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.late_arrivals}</TableCell>
-                      <TableCell className="text-right tabular-nums">{s.committed_hours.toFixed(1)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400">{s.overtime_hours.toFixed(1)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {summary.length === 0 && !isLoading && (
+            <CardContent className="overflow-x-auto space-y-4">
+              <Input
+                placeholder="Search summary by guard..."
+                value={summarySearch}
+                onChange={(e) => setSummarySearch(e.target.value)}
+                className="max-w-md"
+              />
+              {summary.length === 0 && !isLoading ? (
                 <p className="text-sm text-muted-foreground py-4">No summary rows for this period.</p>
+              ) : summaryList.total === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">No matches.</p>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <SortableHead label="Guard" colKey="guard" sortKey={summarySort.sortKey} sortDir={summarySort.sortDir} onSort={summarySort.toggleSort} />
+                        <SortableHead
+                          label="Total hours"
+                          colKey="total"
+                          sortKey={summarySort.sortKey}
+                          sortDir={summarySort.sortDir}
+                          onSort={summarySort.toggleSort}
+                          className="text-right"
+                        />
+                        <SortableHead
+                          label="Late arrivals"
+                          colKey="late"
+                          sortKey={summarySort.sortKey}
+                          sortDir={summarySort.sortDir}
+                          onSort={summarySort.toggleSort}
+                          className="text-right"
+                        />
+                        <SortableHead
+                          label="Committed (period)"
+                          colKey="committed"
+                          sortKey={summarySort.sortKey}
+                          sortDir={summarySort.sortDir}
+                          onSort={summarySort.toggleSort}
+                          className="text-right"
+                        />
+                        <SortableHead
+                          label="Overtime"
+                          colKey="ot"
+                          sortKey={summarySort.sortKey}
+                          sortDir={summarySort.sortDir}
+                          onSort={summarySort.toggleSort}
+                          className="text-right"
+                        />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {summaryList.pageRows.map((s) => (
+                        <TableRow key={s.guard_id}>
+                          <TableCell className="font-medium">{s.guard_name}</TableCell>
+                          <TableCell className="text-right tabular-nums">{s.total_hours.toFixed(1)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{s.late_arrivals}</TableCell>
+                          <TableCell className="text-right tabular-nums">{s.committed_hours.toFixed(1)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400">{s.overtime_hours.toFixed(1)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <TablePaginationBar
+                    safePage={summaryList.safePage}
+                    pageCount={summaryList.pageCount}
+                    total={summaryList.total}
+                    pageSize={summaryPageSize}
+                    rangeStart={summaryList.rangeStart}
+                    rangeEnd={summaryList.rangeEnd}
+                    onPageChange={setSummaryPage}
+                    onPageSizeChange={(n) => {
+                      setSummaryPageSize(n);
+                      setSummaryPage(1);
+                    }}
+                  />
+                </>
               )}
             </CardContent>
           </Card>

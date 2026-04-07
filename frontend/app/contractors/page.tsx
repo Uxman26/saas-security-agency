@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -17,6 +17,8 @@ import { useSubContractors, useCreateSubContractor, useUpdateSubContractor, useD
 import { mainContractorSchema, subContractorSchema } from '@/lib/validation';
 import type { MainContractor, SubContractor } from '@/lib/types';
 import { EmailDialog } from '@/components/email-dialog';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Building2, Network, Pencil, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 
@@ -198,6 +200,14 @@ export default function ContractorsPage() {
   const [editingSub, setEditingSub] = useState<SubContractor | null>(null);
   const [searchMain, setSearchMain] = useState('');
   const [searchSub, setSearchSub] = useState('');
+  const [statusMain, setStatusMain] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusSub, setStatusSub] = useState<'all' | 'active' | 'inactive'>('all');
+  const sortMain = useTableSort();
+  const sortSub = useTableSort();
+  const [pageMain, setPageMain] = useState(1);
+  const [pageSub, setPageSub] = useState(1);
+  const [pageSizeMain, setPageSizeMain] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [pageSizeSub, setPageSizeSub] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const { data: mains = [], isLoading: loadMain, refetch: refMain, isRefetching: refetchingMain } = useMainContractors();
   const { data: subs = [], isLoading: loadSub, refetch: refSub, isRefetching: refetchingSub } = useSubContractors();
@@ -315,17 +325,110 @@ export default function ContractorsPage() {
     } catch (e) { console.error(e); }
   };
 
-  const filteredMains = useMemo(() =>
-    mains.filter((m) =>
-      m.name.toLowerCase().includes(searchMain.toLowerCase()) ||
-      (m.registration_number ?? '').toLowerCase().includes(searchMain.toLowerCase())
-    ), [mains, searchMain]);
+  const mainsForTable = useMemo(
+    () => (statusMain === 'all' ? mains : mains.filter((m) => m.status === statusMain)),
+    [mains, statusMain]
+  );
+  const subsForTable = useMemo(
+    () => (statusSub === 'all' ? subs : subs.filter((s) => s.status === statusSub)),
+    [subs, statusSub]
+  );
 
-  const filteredSubs = useMemo(() =>
-    subs.filter((s) =>
-      s.name.toLowerCase().includes(searchSub.toLowerCase()) ||
-      (mainMap.get(s.main_contractor_id ?? 0) ?? '').toLowerCase().includes(searchSub.toLowerCase())
-    ), [subs, searchSub, mainMap]);
+  const getSearchMain = useCallback(
+    (m: MainContractor) =>
+      [m.name, m.contact_person, m.phone, m.email, m.address, m.registration_number, m.contract_start_date, m.contract_end_date, m.status]
+        .filter(Boolean)
+        .join(' '),
+    []
+  );
+  const getSortMain = useCallback((m: MainContractor, key: string) => {
+    switch (key) {
+      case 'name':
+        return m.name;
+      case 'contact':
+        return m.contact_person || '';
+      case 'phone':
+        return m.phone || '';
+      case 'email':
+        return m.email || '';
+      case 'reg':
+        return m.registration_number || '';
+      case 'contract':
+        return `${m.contract_start_date ?? ''}${m.contract_end_date ?? ''}`;
+      case 'status':
+        return m.status || '';
+      default:
+        return '';
+    }
+  }, []);
+
+  const getSearchSub = useCallback(
+    (s: SubContractor) =>
+      [s.name, mainMap.get(s.main_contractor_id ?? 0), s.contact_person, s.phone, s.email, s.registration_number, s.license_number, s.contract_start_date, s.contract_end_date, s.status]
+        .filter(Boolean)
+        .join(' '),
+    [mainMap]
+  );
+  const getSortSub = useCallback(
+    (s: SubContractor, key: string) => {
+      switch (key) {
+        case 'main':
+          return mainMap.get(s.main_contractor_id ?? 0) ?? '';
+        case 'name':
+          return s.name;
+        case 'contact':
+          return s.contact_person || '';
+        case 'phone':
+          return s.phone || '';
+        case 'email':
+          return s.email || '';
+        case 'reg':
+          return s.registration_number || s.license_number || '';
+        case 'contract':
+          return `${s.contract_start_date ?? ''}${s.contract_end_date ?? ''}`;
+        case 'status':
+          return s.status || '';
+        default:
+          return '';
+      }
+    },
+    [mainMap]
+  );
+
+  const mainList = useTableList(
+    mainsForTable,
+    searchMain,
+    sortMain.sortKey,
+    sortMain.sortDir,
+    pageMain,
+    pageSizeMain,
+    getSearchMain,
+    getSortMain
+  );
+  const subList = useTableList(
+    subsForTable,
+    searchSub,
+    sortSub.sortKey,
+    sortSub.sortDir,
+    pageSub,
+    pageSizeSub,
+    getSearchSub,
+    getSortSub
+  );
+
+  useEffect(() => {
+    setPageMain(1);
+  }, [searchMain, statusMain]);
+  useEffect(() => {
+    setPageMain((p) => Math.min(p, mainList.pageCount));
+  }, [mainList.pageCount]);
+
+  useEffect(() => {
+    setPageSub(1);
+  }, [searchSub, statusSub]);
+  useEffect(() => {
+    setPageSub((p) => Math.min(p, subList.pageCount));
+  }, [subList.pageCount]);
 
   return (
     <ProtectedRoute>
@@ -355,31 +458,45 @@ export default function ContractorsPage() {
                 </DialogContent>
               </Dialog>
             </div>
-            <Input placeholder="Search mains..." value={searchMain} onChange={(e) => setSearchMain(e.target.value)} className="max-w-md mb-4" />
+            <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
+              <Input placeholder="Search mains..." value={searchMain} onChange={(e) => setSearchMain(e.target.value)} className="max-w-md" />
+              <Select value={statusMain} onValueChange={(v) => setStatusMain(v as typeof statusMain)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Card>
               <CardHeader><CardTitle>Main contractors ({mains.length})</CardTitle></CardHeader>
               <CardContent>
                 {loadMain ? (
                   <div className="text-center py-8 text-muted-foreground">Loading...</div>
-                ) : filteredMains.length === 0 ? (
+                ) : mains.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">No main contractors yet.</div>
+                ) : mainList.total === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">No main contractors match filters.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Contact</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Reg. no.</TableHead>
-                          <TableHead>Contract</TableHead>
-                          <TableHead>Status</TableHead>
+                          <SortableHead label="Name" colKey="name" sortKey={sortMain.sortKey} sortDir={sortMain.sortDir} onSort={sortMain.toggleSort} />
+                          <SortableHead label="Contact" colKey="contact" sortKey={sortMain.sortKey} sortDir={sortMain.sortDir} onSort={sortMain.toggleSort} />
+                          <SortableHead label="Phone" colKey="phone" sortKey={sortMain.sortKey} sortDir={sortMain.sortDir} onSort={sortMain.toggleSort} />
+                          <SortableHead label="Email" colKey="email" sortKey={sortMain.sortKey} sortDir={sortMain.sortDir} onSort={sortMain.toggleSort} />
+                          <SortableHead label="Reg. no." colKey="reg" sortKey={sortMain.sortKey} sortDir={sortMain.sortDir} onSort={sortMain.toggleSort} />
+                          <SortableHead label="Contract" colKey="contract" sortKey={sortMain.sortKey} sortDir={sortMain.sortDir} onSort={sortMain.toggleSort} />
+                          <SortableHead label="Status" colKey="status" sortKey={sortMain.sortKey} sortDir={sortMain.sortDir} onSort={sortMain.toggleSort} />
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredMains.map((m) => (
+                        {mainList.pageRows.map((m) => (
                           <TableRow key={m.id}>
                             <TableCell className="font-medium whitespace-nowrap">{m.name}</TableCell>
                             <TableCell>{m.contact_person || '-'}</TableCell>
@@ -403,6 +520,19 @@ export default function ContractorsPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePaginationBar
+                      safePage={mainList.safePage}
+                      pageCount={mainList.pageCount}
+                      total={mainList.total}
+                      pageSize={pageSizeMain}
+                      rangeStart={mainList.rangeStart}
+                      rangeEnd={mainList.rangeEnd}
+                      onPageChange={setPageMain}
+                      onPageSizeChange={(n) => {
+                        setPageSizeMain(n);
+                        setPageMain(1);
+                      }}
+                    />
                   </div>
                 )}
               </CardContent>
@@ -428,32 +558,46 @@ export default function ContractorsPage() {
             {mains.length === 0 && (
               <p className="text-sm text-amber-700 dark:text-amber-400 mb-4 border border-amber-500/40 rounded-md p-3 bg-amber-50/50 dark:bg-amber-950/20">Add at least one main contractor before creating sub contractors.</p>
             )}
-            <Input placeholder="Search subs..." value={searchSub} onChange={(e) => setSearchSub(e.target.value)} className="max-w-md mb-4" />
+            <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
+              <Input placeholder="Search subs..." value={searchSub} onChange={(e) => setSearchSub(e.target.value)} className="max-w-md" />
+              <Select value={statusSub} onValueChange={(v) => setStatusSub(v as typeof statusSub)}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Card>
               <CardHeader><CardTitle>Sub contractors ({subs.length})</CardTitle></CardHeader>
               <CardContent>
                 {loadSub ? (
                   <div className="text-center py-8 text-muted-foreground">Loading...</div>
-                ) : filteredSubs.length === 0 ? (
+                ) : subs.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">No sub contractors yet.</div>
+                ) : subList.total === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">No sub contractors match filters.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Main</TableHead>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Contact</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Reg. no.</TableHead>
-                          <TableHead>Contract</TableHead>
-                          <TableHead>Status</TableHead>
+                          <SortableHead label="Main" colKey="main" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
+                          <SortableHead label="Name" colKey="name" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
+                          <SortableHead label="Contact" colKey="contact" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
+                          <SortableHead label="Phone" colKey="phone" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
+                          <SortableHead label="Email" colKey="email" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
+                          <SortableHead label="Reg. no." colKey="reg" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
+                          <SortableHead label="Contract" colKey="contract" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
+                          <SortableHead label="Status" colKey="status" sortKey={sortSub.sortKey} sortDir={sortSub.sortDir} onSort={sortSub.toggleSort} />
                           <TableHead>Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredSubs.map((s) => (
+                        {subList.pageRows.map((s) => (
                           <TableRow key={s.id}>
                             <TableCell className="text-sm">{mainMap.get(s.main_contractor_id ?? 0) ?? '—'}</TableCell>
                             <TableCell className="font-medium whitespace-nowrap">{s.name}</TableCell>
@@ -478,6 +622,19 @@ export default function ContractorsPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <TablePaginationBar
+                      safePage={subList.safePage}
+                      pageCount={subList.pageCount}
+                      total={subList.total}
+                      pageSize={pageSizeSub}
+                      rangeStart={subList.rangeStart}
+                      rangeEnd={subList.rangeEnd}
+                      onPageChange={setPageSub}
+                      onPageSizeChange={(n) => {
+                        setPageSizeSub(n);
+                        setPageSub(1);
+                      }}
+                    />
                   </div>
                 )}
               </CardContent>

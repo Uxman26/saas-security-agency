@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import type { SpecialDay } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { CalendarRange, Plus, Trash2, Sparkles } from 'lucide-react';
 import { can } from '@/lib/permissions';
 import { useAuth } from '@/contexts/auth-context';
@@ -39,6 +41,10 @@ export default function SpecialDaysSettingsPage() {
   const [label, setLabel] = useState('');
   const [yearSeed, setYearSeed] = useState(new Date().getFullYear());
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const load = useCallback(() => {
     api.specialDays
@@ -93,6 +99,27 @@ export default function SpecialDaysSettingsPage() {
   };
 
   const canWrite = user && can(user, 'allow.write');
+
+  const getSearchText = useCallback((r: SpecialDay) => `${r.date} ${r.label}`, []);
+  const getSortValue = useCallback((r: SpecialDay, key: string) => (key === 'date' ? r.date : r.label), []);
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    rows,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+  useEffect(() => {
+    setPage((x) => Math.min(x, pageCount));
+  }, [pageCount]);
   const canDelete = user && can(user, 'allow.delete');
 
   return (
@@ -145,22 +172,26 @@ export default function SpecialDaysSettingsPage() {
                 </Button>
               )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <Input placeholder="Search by date or label..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-md" />
               {loading ? (
                 <p className="text-muted-foreground">Loading…</p>
               ) : rows.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No special days yet. Seed UK holidays or add a date.</p>
+              ) : total === 0 ? (
+                <p className="text-muted-foreground text-sm">No rows match your search.</p>
               ) : (
+                <>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Label</TableHead>
+                      <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableHead label="Label" colKey="label" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       {canDelete && <TableHead className="w-12" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((r) => (
+                    {pageRows.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell className="font-mono text-sm">{r.date}</TableCell>
                         <TableCell>{r.label}</TableCell>
@@ -181,6 +212,20 @@ export default function SpecialDaysSettingsPage() {
                     ))}
                   </TableBody>
                 </Table>
+                <TablePaginationBar
+                  safePage={safePage}
+                  pageCount={pageCount}
+                  total={total}
+                  pageSize={pageSize}
+                  rangeStart={rangeStart}
+                  rangeEnd={rangeEnd}
+                  onPageChange={setPage}
+                  onPageSizeChange={(n) => {
+                    setPageSize(n);
+                    setPage(1);
+                  }}
+                />
+                </>
               )}
             </CardContent>
           </Card>

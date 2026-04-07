@@ -36,6 +36,8 @@ import type { Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
 import { ArrowLeft, Eye, Plus, Save, Trash2 } from 'lucide-react';
 import { can } from '@/lib/permissions';
 import { useAuth } from '@/contexts/auth-context';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 
 const STATUSES = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
 
@@ -61,6 +63,10 @@ export default function InvoiceEditPage() {
     rate: '0',
     allowance: '0',
   });
+  const [lineSearch, setLineSearch] = useState('');
+  const lineSort = useTableSort();
+  const [linePage, setLinePage] = useState(1);
+  const [linePageSize, setLinePageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const load = useCallback(async () => {
     const data = await api.invoices.get(id);
@@ -154,6 +160,59 @@ export default function InvoiceEditPage() {
     });
   };
 
+  const lines = inv?.lines ?? [];
+  const siteName = useCallback(
+    (line: InvoiceLine) => sites.find((s) => s.id === line.site_id)?.name ?? line.site_name ?? '',
+    [sites]
+  );
+  const guardName = useCallback(
+    (line: InvoiceLine) => guards.find((g) => g.id === line.guard_id)?.full_name ?? line.guard_name ?? '',
+    [guards]
+  );
+  const getLineSearchText = useCallback(
+    (line: InvoiceLine) =>
+      [
+        siteName(line),
+        guardName(line),
+        String(line.hours),
+        String(line.rate),
+        String(line.allowance_amount),
+        String(line.amount),
+        String(line.id),
+      ].join(' '),
+    [siteName, guardName]
+  );
+  const getLineSortValue = useCallback(
+    (line: InvoiceLine, key: string) => {
+      switch (key) {
+        case 'site':
+          return siteName(line);
+        case 'guard':
+          return guardName(line);
+        case 'hours':
+          return line.hours;
+        case 'rate':
+          return line.rate;
+        case 'allowance':
+          return line.allowance_amount;
+        case 'amount':
+          return line.amount;
+        default:
+          return '';
+      }
+    },
+    [siteName, guardName]
+  );
+
+  const lineList = useTableList(lines, lineSearch, lineSort.sortKey, lineSort.sortDir, linePage, linePageSize, getLineSearchText, getLineSortValue);
+
+  useEffect(() => {
+    setLinePage(1);
+  }, [lineSearch, id]);
+  useEffect(() => {
+    setLinePage((x) => Math.min(x, lineList.pageCount));
+  }, [lineList.pageCount]);
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
@@ -240,21 +299,33 @@ export default function InvoiceEditPage() {
                     <Plus className="size-4 mr-1" /> Add line
                   </Button>
                 </CardHeader>
-                <CardContent className="overflow-x-auto">
+                <CardContent className="overflow-x-auto space-y-4">
+                  <Input
+                    placeholder="Search lines..."
+                    value={lineSearch}
+                    onChange={(e) => setLineSearch(e.target.value)}
+                    className="max-w-md"
+                  />
+                  {lines.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No line items yet.</p>
+                  ) : lineList.total === 0 ? (
+                    <p className="text-sm text-muted-foreground">No matches.</p>
+                  ) : (
+                    <>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Site</TableHead>
-                        <TableHead>Guard</TableHead>
-                        <TableHead>Hours</TableHead>
-                        <TableHead>Rate</TableHead>
-                        <TableHead>Allowance</TableHead>
-                        <TableHead>Amount</TableHead>
+                        <SortableHead label="Site" colKey="site" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} />
+                        <SortableHead label="Guard" colKey="guard" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} />
+                        <SortableHead label="Hours" colKey="hours" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
+                        <SortableHead label="Rate" colKey="rate" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
+                        <SortableHead label="Allowance" colKey="allowance" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
+                        <SortableHead label="Amount" colKey="amount" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
                         <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(inv.lines ?? []).map((line) => (
+                      {lineList.pageRows.map((line) => (
                         <TableRow key={line.id}>
                           <TableCell>
                             <Select
@@ -363,6 +434,21 @@ export default function InvoiceEditPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={lineList.safePage}
+                    pageCount={lineList.pageCount}
+                    total={lineList.total}
+                    pageSize={linePageSize}
+                    rangeStart={lineList.rangeStart}
+                    rangeEnd={lineList.rangeEnd}
+                    onPageChange={setLinePage}
+                    onPageSizeChange={(n) => {
+                      setLinePageSize(n);
+                      setLinePage(1);
+                    }}
+                  />
+                    </>
+                  )}
                 </CardContent>
               </Card>
 

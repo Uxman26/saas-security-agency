@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -23,7 +23,10 @@ import { clientSchema, clientRenewSchema } from '@/lib/validation';
 import type { Client } from '@/lib/types';
 import type { z } from 'zod';
 import { EmailDialog } from '@/components/email-dialog';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Building2, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 type ClientFormData = z.output<typeof clientSchema>;
 type RenewFormData = z.output<typeof clientRenewSchema>;
 
@@ -148,6 +151,10 @@ export default function ClientsPage() {
   const [renewClient, setRenewClient] = useState<Client | null>(null);
   const [historyClient, setHistoryClient] = useState<Client | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'valid' | 'soon' | 'expired' | 'none'>('all');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const { data: clients = [], isLoading, refetch, isRefetching } = useClients();
   const createClient = useCreateClient();
@@ -241,16 +248,65 @@ export default function ClientsPage() {
     }
   };
 
-  const filtered = useMemo(
-    () =>
-      clients.filter(
-        (c) =>
-          c.name.toLowerCase().includes(search.toLowerCase()) ||
-          (c.email ?? '').toLowerCase().includes(search.toLowerCase()) ||
-          (c.contact_person ?? '').toLowerCase().includes(search.toLowerCase())
-      ),
-    [clients, search]
+  const byStatus = useMemo(() => {
+    if (statusFilter === 'all') return clients;
+    return clients.filter((c) => {
+      const t = contractTone(c.contract_end_date).tone;
+      if (statusFilter === 'none') return t === 'none';
+      if (statusFilter === 'valid') return t === 'ok';
+      if (statusFilter === 'soon') return t === 'soon';
+      if (statusFilter === 'expired') return t === 'expired';
+      return true;
+    });
+  }, [clients, statusFilter]);
+
+  const getSearchText = useCallback(
+    (c: Client) =>
+      [c.name, c.email, c.phone, c.contact_person, c.address, c.contract_end_date, c.contract_start_date]
+        .filter(Boolean)
+        .join(' '),
+    []
   );
+
+  const getSortValue = useCallback((c: Client, key: string) => {
+    switch (key) {
+      case 'name':
+        return c.name;
+      case 'contract_end':
+        return c.contract_end_date || '';
+      case 'status':
+        return contractTone(c.contract_end_date).label;
+      case 'email':
+        return c.email || '';
+      case 'phone':
+        return c.phone || '';
+      case 'contact_person':
+        return c.contact_person || '';
+      case 'address':
+        return c.address || '';
+      default:
+        return '';
+    }
+  }, []);
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    byStatus,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount));
+  }, [pageCount]);
 
   return (
     <ProtectedRoute>
@@ -284,13 +340,25 @@ export default function ClientsPage() {
             </div>
           </div>
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3 flex-wrap">
             <Input
-              placeholder="Search by name, email or contact person..."
+              placeholder="Search name, email, phone, address, contract dates..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
             />
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Contract status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="valid">Valid (&gt;30d)</SelectItem>
+                <SelectItem value="soon">Expiring (≤30d)</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="none">No end date</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <Card>
@@ -300,27 +368,29 @@ export default function ClientsPage() {
             <CardContent>
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading clients...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search ? 'No clients match your search.' : 'No clients yet. Click "Add Client" to get started.'}
+                  {search || statusFilter !== 'all'
+                    ? 'No clients match your filters.'
+                    : 'No clients yet. Click "Add Client" to get started.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Contract end</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>Contact Person</TableHead>
-                        <TableHead>Address</TableHead>
+                        <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Contract end" colKey="contract_end" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Email" colKey="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Phone" colKey="phone" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Contact Person" colKey="contact_person" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Address" colKey="address" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((client) => {
+                      {pageRows.map((client) => {
                         const { label, tone } = contractTone(client.contract_end_date);
                         const expiredRow = tone === 'expired';
                         return (
@@ -371,6 +441,19 @@ export default function ClientsPage() {
                       })}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

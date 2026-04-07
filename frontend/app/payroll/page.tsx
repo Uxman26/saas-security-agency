@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Payroll, Guard } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { PoundSterling, Calculator, Trash2 } from 'lucide-react';
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
@@ -30,6 +32,9 @@ export default function PayrollPage() {
   const [calcEnd, setCalcEnd] = useState('');
   const [calcLoading, setCalcLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
 
@@ -68,16 +73,60 @@ export default function PayrollPage() {
     } catch (err) { console.error(err); }
   };
 
-  const filtered = useMemo(() =>
-    payrolls.filter(p =>
-      (guardMap.get(p.guard_id) ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      p.period_start.includes(search) ||
-      p.period_end.includes(search)
-    ), [payrolls, search, guardMap]);
+  const getSearchText = useCallback(
+    (p: Payroll) =>
+      [guardMap.get(p.guard_id), p.period_start, p.period_end, String(p.total_hours), String(p.hourly_rate), String(p.bank_amount), String(p.cash_amount), p.payment_mode]
+        .filter(Boolean)
+        .join(' '),
+    [guardMap]
+  );
+  const getSortValue = useCallback(
+    (p: Payroll, key: string) => {
+      switch (key) {
+        case 'guard':
+          return guardMap.get(p.guard_id) ?? '';
+        case 'period':
+          return p.period_start;
+        case 'hours':
+          return p.total_hours;
+        case 'rate':
+          return p.hourly_rate;
+        case 'bank':
+          return p.bank_amount;
+        case 'cash':
+          return p.cash_amount;
+        case 'allowances':
+          return p.allowance_total;
+        case 'mode':
+          return p.payment_mode || '';
+        default:
+          return '';
+      }
+    },
+    [guardMap]
+  );
 
-  const totalBank = filtered.reduce((sum, p) => sum + p.bank_amount, 0);
-  const totalCash = filtered.reduce((sum, p) => sum + p.cash_amount, 0);
-  const totalAllowances = filtered.reduce((sum, p) => sum + p.allowance_total, 0);
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    payrolls,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+  useEffect(() => {
+    setPage((x) => Math.min(x, pageCount));
+  }, [pageCount]);
+
+  const totalBank = payrolls.reduce((sum, p) => sum + p.bank_amount, 0);
+  const totalCash = payrolls.reduce((sum, p) => sum + p.cash_amount, 0);
+  const totalAllowances = payrolls.reduce((sum, p) => sum + p.allowance_total, 0);
 
   return (
     <ProtectedRoute>
@@ -145,7 +194,7 @@ export default function PayrollPage() {
           </div>
 
           {/* Summary cards */}
-          {filtered.length > 0 && (
+          {payrolls.length > 0 && (
             <div className="grid gap-4 sm:grid-cols-3 mb-6">
               <Card>
                 <CardHeader className="pb-2">
@@ -190,7 +239,7 @@ export default function PayrollPage() {
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading payroll records...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No records match your search.' : 'No payroll records yet. Use "Calculate Payroll" to generate records.'}
                 </div>
@@ -199,19 +248,19 @@ export default function PayrollPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Guard</TableHead>
-                        <TableHead>Period</TableHead>
-                        <TableHead>Hours</TableHead>
-                        <TableHead>Rate</TableHead>
-                        <TableHead>Bank</TableHead>
-                        <TableHead>Cash</TableHead>
-                        <TableHead>Allowances</TableHead>
-                        <TableHead>Payment Mode</TableHead>
+                        <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Hours" colKey="hours" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Bank" colKey="bank" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Cash" colKey="cash" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Allowances" colKey="allowances" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Payment Mode" colKey="mode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((p) => (
+                      {pageRows.map((p) => (
                         <TableRow key={p.id}>
                           <TableCell className="font-medium whitespace-nowrap">
                             {guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`}
@@ -244,6 +293,19 @@ export default function PayrollPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

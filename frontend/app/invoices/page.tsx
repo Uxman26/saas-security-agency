@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { Invoice, Client } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { FileText, Zap, Trash2, Eye, Pencil } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
@@ -39,6 +41,9 @@ export default function InvoicesPage() {
   const [genLoading, setGenLoading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
 
@@ -84,17 +89,63 @@ export default function InvoicesPage() {
     } catch (err) { console.error(err); }
   };
 
-  const filtered = useMemo(() =>
-    invoices.filter(inv =>
-      (clientMap.get(inv.client_id) ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      inv.status.includes(search.toLowerCase()) ||
-      inv.period_start.includes(search) ||
-      inv.period_end.includes(search)
-    ), [invoices, search, clientMap]);
+  const getSearchText = useCallback(
+    (inv: Invoice) =>
+      [
+        String(inv.id),
+        inv.client_name ?? clientMap.get(inv.client_id),
+        inv.status,
+        inv.period_start,
+        inv.period_end,
+        String(inv.total),
+      ]
+        .filter(Boolean)
+        .join(' '),
+    [clientMap]
+  );
 
-  const totalAmount = filtered.reduce((sum, inv) => sum + inv.total, 0);
-  const paidAmount = filtered.filter(i => i.status === 'paid').reduce((sum, i) => sum + i.total, 0);
-  const outstanding = filtered.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + i.total, 0);
+  const getSortValue = useCallback(
+    (inv: Invoice, key: string) => {
+      switch (key) {
+        case 'id':
+          return inv.id;
+        case 'client':
+          return inv.client_name ?? clientMap.get(inv.client_id) ?? '';
+        case 'period':
+          return inv.period_start;
+        case 'total':
+          return inv.total;
+        case 'status':
+          return inv.status;
+        default:
+          return '';
+      }
+    },
+    [clientMap]
+  );
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    invoices,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount));
+  }, [pageCount]);
+
+  const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
+  const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.total, 0);
+  const outstanding = invoices.filter((i) => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + i.total, 0);
 
   return (
     <ProtectedRoute>
@@ -226,7 +277,7 @@ export default function InvoicesPage() {
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No invoices match your search.' : 'No invoices yet. Use "Generate Invoice" to create one.'}
                 </div>
@@ -235,17 +286,17 @@ export default function InvoicesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Inv #</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Period</TableHead>
-                        <TableHead>Total</TableHead>
-                        <TableHead>Status</TableHead>
+                        <SortableHead label="Inv #" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Change Status</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((inv) => (
+                      {pageRows.map((inv) => (
                         <TableRow key={inv.id}>
                           <TableCell className="font-medium text-muted-foreground">#{inv.id}</TableCell>
                           <TableCell className="font-medium whitespace-nowrap">
@@ -304,6 +355,19 @@ export default function InvoicesPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

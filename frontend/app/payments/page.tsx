@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Payment, Invoice } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { CreditCard, Plus, Trash2 } from 'lucide-react';
 
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'card', 'direct_debit', 'other'];
@@ -30,6 +32,10 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [methodFilter, setMethodFilter] = useState<string>('all');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   // Form state
   const [formInvoiceId, setFormInvoiceId] = useState('');
@@ -81,21 +87,59 @@ export default function PaymentsPage() {
     } catch (err) { console.error(err); }
   };
 
-  const filtered = useMemo(() =>
-    payments.filter(p =>
-      (p.method ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (p.paid_at ?? '').includes(search) ||
-      (p.invoice_id?.toString() ?? '').includes(search)
-    ), [payments, search]);
+  const forTable = useMemo(
+    () => (methodFilter === 'all' ? payments : payments.filter((p) => p.method === methodFilter)),
+    [payments, methodFilter]
+  );
 
-  const totalPaid = filtered.reduce((sum, p) => sum + p.amount, 0);
+  const getSearchText = useCallback(
+    (p: Payment) =>
+      [String(p.id), p.method, p.paid_at, String(p.invoice_id), String(p.amount)].filter(Boolean).join(' '),
+    []
+  );
+  const getSortValue = useCallback((p: Payment, key: string) => {
+    switch (key) {
+      case 'id':
+        return p.id;
+      case 'invoice':
+        return p.invoice_id ?? 0;
+      case 'amount':
+        return p.amount;
+      case 'method':
+        return p.method || '';
+      case 'date':
+        return p.paid_at || '';
+      default:
+        return '';
+    }
+  }, []);
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    forTable,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, methodFilter]);
+  useEffect(() => {
+    setPage((x) => Math.min(x, pageCount));
+  }, [pageCount]);
+
+  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const byMethod = useMemo(() => {
     const map: Record<string, number> = {};
-    filtered.forEach(p => {
+    payments.forEach((p) => {
       map[p.method] = (map[p.method] ?? 0) + p.amount;
     });
     return map;
-  }, [filtered]);
+  }, [payments]);
 
   return (
     <ProtectedRoute>
@@ -206,13 +250,26 @@ export default function PaymentsPage() {
             </div>
           )}
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3 flex-wrap">
             <Input
               placeholder="Search by method, date or invoice ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
             />
+            <Select value={methodFilter} onValueChange={setMethodFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All methods</SelectItem>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {METHOD_LABELS[m] ?? m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <Card>
@@ -222,25 +279,27 @@ export default function PaymentsPage() {
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading payments...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search ? 'No payments match your search.' : 'No payments recorded yet. Click "Record Payment" to get started.'}
+                  {search || methodFilter !== 'all'
+                    ? 'No payments match your filters.'
+                    : 'No payments recorded yet. Click "Record Payment" to get started.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Payment ID</TableHead>
-                        <TableHead>Invoice</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead>Date Paid</TableHead>
+                        <SortableHead label="Payment ID" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Invoice" colKey="invoice" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Amount" colKey="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Method" colKey="method" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Date Paid" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((p) => {
+                      {pageRows.map((p) => {
                         const inv = p.invoice_id ? invoiceMap.get(p.invoice_id) : null;
                         return (
                           <TableRow key={p.id}>
@@ -283,6 +342,19 @@ export default function PaymentsPage() {
                       })}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

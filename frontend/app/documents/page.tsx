@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { GuardDocument, Guard } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { FolderOpen, Plus, Trash2, AlertTriangle } from 'lucide-react';
 
 const DOCUMENT_TYPES = [
@@ -45,6 +47,9 @@ export default function DocumentsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [filterGuardId, setFilterGuardId] = useState('');
   const [search, setSearch] = useState('');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   // Form state
   const [formGuardId, setFormGuardId] = useState('');
@@ -104,11 +109,50 @@ export default function DocumentsPage() {
     loadDocuments(guardId && guardId !== 'all' ? parseInt(guardId) : undefined);
   };
 
-  const filtered = useMemo(() =>
-    documents.filter(d =>
-      (guardMap.get(d.guard_id) ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      d.document_type.toLowerCase().includes(search.toLowerCase())
-    ), [documents, search, guardMap]);
+  const getSearchText = useCallback(
+    (d: GuardDocument) =>
+      [guardMap.get(d.guard_id), d.document_type, d.expiry_date, d.file_path, d.created_at].filter(Boolean).join(' '),
+    [guardMap]
+  );
+  const getSortValue = useCallback(
+    (d: GuardDocument, key: string) => {
+      switch (key) {
+        case 'guard':
+          return guardMap.get(d.guard_id) ?? '';
+        case 'type':
+          return d.document_type;
+        case 'expiry':
+          return d.expiry_date || '';
+        case 'status':
+          return getExpiryStatus(d.expiry_date) || '';
+        case 'file':
+          return d.file_path || '';
+        case 'added':
+          return d.created_at || '';
+        default:
+          return '';
+      }
+    },
+    [guardMap]
+  );
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    documents,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterGuardId]);
+  useEffect(() => {
+    setPage((x) => Math.min(x, pageCount));
+  }, [pageCount]);
 
   const expiringCount = documents.filter(d => {
     const s = getExpiryStatus(d.expiry_date);
@@ -228,7 +272,7 @@ export default function DocumentsPage() {
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading documents...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No documents match your search.' : 'No documents on record. Click "Add Document" to get started.'}
                 </div>
@@ -237,17 +281,17 @@ export default function DocumentsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Guard</TableHead>
-                        <TableHead>Document Type</TableHead>
-                        <TableHead>Expiry Date</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>File Reference</TableHead>
-                        <TableHead>Added</TableHead>
+                        <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Document Type" colKey="type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Expiry Date" colKey="expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="File Reference" colKey="file" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Added" colKey="added" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((doc) => {
+                      {pageRows.map((doc) => {
                         const status = getExpiryStatus(doc.expiry_date);
                         return (
                           <TableRow key={doc.id}>
@@ -306,6 +350,19 @@ export default function DocumentsPage() {
                       })}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

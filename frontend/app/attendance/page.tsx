@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Attendance, Guard, Assignment } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Clock, Plus } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -29,6 +31,9 @@ export default function AttendancePage() {
   const [bookOpen, setBookOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [lateView, setLateView] = useState(false);
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   // Book On/Off form
   const [bookAssignmentId, setBookAssignmentId] = useState('');
@@ -70,12 +75,64 @@ export default function AttendancePage() {
     }
   };
 
-  const filtered = useMemo(() => {
-    const list = lateView ? attendance.filter(a => a.status === 'late') : attendance;
-    return list.filter(a =>
-      (guardMap.get(a.guard_id) ?? '').toLowerCase().includes(search.toLowerCase())
-    );
-  }, [attendance, search, guardMap, lateView]);
+  const baseRows = useMemo(
+    () => (lateView ? attendance.filter((a) => a.status === 'late') : attendance),
+    [attendance, lateView]
+  );
+
+  const getSearchText = useCallback(
+    (a: Attendance) =>
+      [
+        guardMap.get(a.guard_id),
+        String(a.assignment_id),
+        a.status,
+        a.booked_at,
+        a.booked_off_at,
+        a.created_at,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    [guardMap]
+  );
+  const getSortValue = useCallback(
+    (a: Attendance, key: string) => {
+      switch (key) {
+        case 'guard':
+          return guardMap.get(a.guard_id) ?? '';
+        case 'assignment':
+          return a.assignment_id;
+        case 'on':
+          return a.booked_at || '';
+        case 'off':
+          return a.booked_off_at || '';
+        case 'status':
+          return a.status || '';
+        case 'recorded':
+          return a.created_at || '';
+        default:
+          return '';
+      }
+    },
+    [guardMap]
+  );
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    baseRows,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, lateView]);
+  useEffect(() => {
+    setPage((x) => Math.min(x, pageCount));
+  }, [pageCount]);
 
   const lateCount = useMemo(() => attendance.filter(a => a.status === 'late').length, [attendance]);
   const onTimeCount = useMemo(() => attendance.filter(a => a.status === 'on_time').length, [attendance]);
@@ -226,7 +283,7 @@ export default function AttendancePage() {
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading attendance records...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search || lateView ? 'No records match your filter.' : 'No attendance records yet. Click "Book Attendance" to get started.'}
                 </div>
@@ -235,16 +292,16 @@ export default function AttendancePage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Guard</TableHead>
-                        <TableHead>Assignment ID</TableHead>
-                        <TableHead>Booked On</TableHead>
-                        <TableHead>Booked Off</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Recorded</TableHead>
+                        <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Assignment ID" colKey="assignment" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Recorded" colKey="recorded" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((a) => (
+                      {pageRows.map((a) => (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium whitespace-nowrap">
                             {guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`}
@@ -274,6 +331,19 @@ export default function AttendancePage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

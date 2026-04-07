@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -21,6 +21,8 @@ import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { formatDateUK } from '@/lib/date-format';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Pencil, Trash2, Users } from 'lucide-react';
 import type { z } from 'zod';
 
@@ -177,6 +179,9 @@ export default function GuardsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingGuard, setEditingGuard] = useState<Guard | null>(null);
   const [search, setSearch] = useState('');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const { data: guards = [], isLoading, refetch, isRefetching } = useGuards();
   const { data: mains = [] } = useMainContractors();
@@ -252,13 +257,74 @@ export default function GuardsPage() {
     try { await deleteGuard.mutateAsync(id); } catch (err) { console.error(err); }
   };
 
-  const filtered = useMemo(() =>
-    guards.filter(g =>
-      g.full_name.toLowerCase().includes(search.toLowerCase()) ||
-      (g.badge_number ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (g.sia_number ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (g.email ?? '').toLowerCase().includes(search.toLowerCase())
-    ), [guards, search]);
+  const getSearchText = useCallback(
+    (g: Guard) =>
+      [
+        g.full_name,
+        g.email,
+        g.phone,
+        g.badge_number,
+        g.sia_number,
+        g.license_number,
+        g.rtw_status,
+        g.visa_status,
+        g.dbs_status,
+        contractorLabel(g),
+        g.sia_expiry_date,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    [contractorLabel]
+  );
+
+  const getSortValue = useCallback(
+    (g: Guard, key: string) => {
+      switch (key) {
+        case 'name':
+          return g.full_name;
+        case 'contractor':
+          return contractorLabel(g);
+        case 'email':
+          return g.email || '';
+        case 'phone':
+          return g.phone || '';
+        case 'badge':
+          return g.badge_number || '';
+        case 'sia_number':
+          return g.sia_number || '';
+        case 'sia_expiry':
+          return g.sia_expiry_date || '';
+        case 'rtw':
+          return g.rtw_status || '';
+        case 'visa':
+          return g.visa_status || '';
+        case 'dbs':
+          return g.dbs_status || '';
+        default:
+          return '';
+      }
+    },
+    [contractorLabel]
+  );
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    guards,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount));
+  }, [pageCount]);
 
   return (
     <ProtectedRoute>
@@ -290,7 +356,7 @@ export default function GuardsPage() {
 
           <div className="mb-4">
             <Input
-              placeholder="Search by name, email, badge or SIA number..."
+              placeholder="Search guards (name, contractor, badges, SIA, status)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
@@ -310,7 +376,7 @@ export default function GuardsPage() {
             <CardContent>
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading guards...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No guards match your search.' : 'No guards yet. Click "Add Guard" to get started.'}
                 </div>
@@ -319,21 +385,21 @@ export default function GuardsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Contractor</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>Badge</TableHead>
-                        <TableHead>SIA Number</TableHead>
-                        <TableHead>SIA Expiry</TableHead>
-                        <TableHead>RTW</TableHead>
-                        <TableHead>Visa</TableHead>
-                        <TableHead>DBS</TableHead>
+                        <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Email" colKey="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Phone" colKey="phone" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Badge" colKey="badge" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="SIA Number" colKey="sia_number" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="SIA Expiry" colKey="sia_expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="RTW" colKey="rtw" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Visa" colKey="visa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="DBS" colKey="dbs" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((guard) => {
+                      {pageRows.map((guard) => {
                         const siaStatus = getSiaStatus(guard.sia_expiry_date);
                         return (
                           <TableRow key={guard.id}>
@@ -395,6 +461,19 @@ export default function GuardsPage() {
                       })}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

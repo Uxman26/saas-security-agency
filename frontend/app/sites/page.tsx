@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -17,6 +17,8 @@ import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { siteSchema, type SiteFormData } from '@/lib/validation';
 import type { Client, Site } from '@/lib/types';
 import { api } from '@/lib/api';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { MapPin, Pencil, Trash2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -143,6 +145,9 @@ export default function SitesPage() {
   const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState('');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const { data: sites = [], isLoading, refetch, isRefetching } = useSites();
   const { data: mains = [] } = useMainContractors();
@@ -230,12 +235,56 @@ export default function SitesPage() {
     try { await deleteSite.mutateAsync(id); } catch (err) { console.error(err); }
   };
 
-  const filtered = useMemo(() =>
-    sites.filter(s =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      (s.address ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (clientMap.get(s.client_id ?? 0) ?? '').toLowerCase().includes(search.toLowerCase())
-    ), [sites, search, clientMap]);
+  const getSearchText = useCallback(
+    (s: Site) =>
+      [s.name, s.address, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_phone, String(s.default_hourly_rate ?? '')]
+        .filter(Boolean)
+        .join(' '),
+    [clientMap, contractorLabel]
+  );
+
+  const getSortValue = useCallback(
+    (s: Site, key: string) => {
+      switch (key) {
+        case 'name':
+          return s.name;
+        case 'contractor':
+          return contractorLabel(s);
+        case 'client':
+          return clientMap.get(s.client_id ?? 0) ?? '';
+        case 'rate':
+          return s.default_hourly_rate ?? 0;
+        case 'address':
+          return s.address || '';
+        case 'contact_person':
+          return s.contact_person || '';
+        case 'contact_phone':
+          return s.contact_phone || '';
+        default:
+          return '';
+      }
+    },
+    [clientMap, contractorLabel]
+  );
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    sites,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount));
+  }, [pageCount]);
 
   return (
     <ProtectedRoute>
@@ -287,7 +336,7 @@ export default function SitesPage() {
             <CardContent>
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading sites...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No sites match your search.' : 'No sites yet. Click "Add Site" to get started.'}
                 </div>
@@ -296,18 +345,18 @@ export default function SitesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Site Name</TableHead>
-                        <TableHead>Contractor</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Default Rate</TableHead>
-                        <TableHead>Address</TableHead>
-                        <TableHead>Contact Person</TableHead>
-                        <TableHead>Contact Phone</TableHead>
+                        <SortableHead label="Site Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Default Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Address" colKey="address" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Contact Person" colKey="contact_person" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Contact Phone" colKey="contact_phone" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((site) => (
+                      {pageRows.map((site) => (
                         <TableRow key={site.id}>
                           <TableCell className="font-medium whitespace-nowrap">{site.name}</TableCell>
                           <TableCell className="text-sm max-w-[160px] truncate" title={contractorLabel(site)}>{contractorLabel(site)}</TableCell>
@@ -345,6 +394,19 @@ export default function SitesPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

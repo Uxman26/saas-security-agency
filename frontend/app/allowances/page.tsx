@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -14,6 +14,8 @@ import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import type { Allowance } from '@/lib/types';
 import { z } from 'zod';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Wallet, Pencil, Trash2 } from 'lucide-react';
 
 const allowanceSchema = z.object({
@@ -88,6 +90,10 @@ export default function AllowancesPage() {
   const [editingAllowance, setEditingAllowance] = useState<Allowance | null>(null);
   const [allowances, setAllowances] = useState<Allowance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const addForm = useForm<AllowanceFormData>({
     resolver: zodResolver(allowanceSchema),
@@ -157,6 +163,46 @@ export default function AllowancesPage() {
     } catch (err) { console.error(err); }
   };
 
+  const getSearchText = useCallback(
+    (a: Allowance) =>
+      [a.name, a.allowance_type, String(a.amount), a.in_payroll ? 'payroll' : '', a.in_invoice ? 'invoice' : ''].filter(Boolean).join(' '),
+    []
+  );
+  const getSortValue = useCallback((a: Allowance, key: string) => {
+    switch (key) {
+      case 'name':
+        return a.name;
+      case 'type':
+        return a.allowance_type;
+      case 'amount':
+        return a.amount;
+      case 'payroll':
+        return a.in_payroll ? 1 : 0;
+      case 'invoice':
+        return a.in_invoice ? 1 : 0;
+      default:
+        return '';
+    }
+  }, []);
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    allowances,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+  useEffect(() => {
+    setPage((x) => Math.min(x, pageCount));
+  }, [pageCount]);
+
   return (
     <ProtectedRoute>
       <div>
@@ -180,6 +226,15 @@ export default function AllowancesPage() {
             </Dialog>
           </div>
 
+          <div className="mb-4">
+            <Input
+              placeholder="Search allowances..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-md"
+            />
+          </div>
+
           <Card>
             <CardHeader>
               <CardTitle>All Allowances</CardTitle>
@@ -191,21 +246,23 @@ export default function AllowancesPage() {
                 <div className="text-center py-12 text-muted-foreground">
                   No allowances configured yet. Click "Add Allowance" to get started.
                 </div>
+              ) : total === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">No allowances match your search.</div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>In Payroll</TableHead>
-                        <TableHead>In Invoice</TableHead>
+                        <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Type" colKey="type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Amount" colKey="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="In Payroll" colKey="payroll" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="In Invoice" colKey="invoice" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {allowances.map((a) => (
+                      {pageRows.map((a) => (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium">{a.name}</TableCell>
                           <TableCell>
@@ -252,6 +309,19 @@ export default function AllowancesPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

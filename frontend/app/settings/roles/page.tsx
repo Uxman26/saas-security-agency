@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
@@ -34,6 +34,8 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import type { Role, CompanyUser, PermissionMatrix } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Shield, Trash2 } from 'lucide-react';
 
 const MODULE_KEYS = [
@@ -126,6 +128,16 @@ export default function RolesSettingsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editMatrix, setEditMatrix] = useState<PermissionMatrix>(emptyMatrix);
   const [saving, setSaving] = useState(false);
+  const [roleSearch, setRoleSearch] = useState('');
+  const [roleKind, setRoleKind] = useState<'all' | 'system' | 'custom'>('all');
+  const roleSort = useTableSort();
+  const [rolePage, setRolePage] = useState(1);
+  const [rolePageSize, setRolePageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleId, setUserRoleId] = useState<string>('');
+  const userSort = useTableSort();
+  const [userPage, setUserPage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const load = useCallback(async () => {
     const [r, u] = await Promise.all([api.roles.list(), api.users.list()]);
@@ -219,6 +231,89 @@ export default function RolesSettingsPage() {
   const canDelete = user && can(user, 'roles.delete');
   const editing = editId != null ? roles.find((r) => r.id === editId) : null;
 
+  const rolesForTable = useMemo(() => {
+    if (roleKind === 'system') return roles.filter((r) => r.is_system);
+    if (roleKind === 'custom') return roles.filter((r) => !r.is_system);
+    return roles;
+  }, [roles, roleKind]);
+
+  const getRoleSearchText = useCallback(
+    (r: Role) => [r.name, r.slug, r.is_system ? 'system' : 'custom'].join(' '),
+    []
+  );
+  const getRoleSortValue = useCallback((r: Role, key: string) => {
+    switch (key) {
+      case 'name':
+        return r.name;
+      case 'slug':
+        return r.slug;
+      case 'type':
+        return r.is_system ? 'system' : 'custom';
+      default:
+        return '';
+    }
+  }, []);
+
+  const roleList = useTableList(
+    rolesForTable,
+    roleSearch,
+    roleSort.sortKey,
+    roleSort.sortDir,
+    rolePage,
+    rolePageSize,
+    getRoleSearchText,
+    getRoleSortValue
+  );
+
+  const usersForTable = useMemo(() => {
+    if (!userRoleId) return users;
+    const rid = parseInt(userRoleId, 10);
+    if (Number.isNaN(rid)) return users;
+    return users.filter((u) => u.role_id === rid);
+  }, [users, userRoleId]);
+
+  const getUserSearchText = useCallback(
+    (u: CompanyUser) => [u.email, u.full_name, u.role_name ?? '', String(u.role_id ?? '')].join(' '),
+    []
+  );
+  const getUserSortValue = useCallback((u: CompanyUser, key: string) => {
+    switch (key) {
+      case 'email':
+        return u.email;
+      case 'name':
+        return u.full_name;
+      case 'role':
+        return u.role_name ?? '';
+      default:
+        return '';
+    }
+  }, []);
+
+  const userList = useTableList(
+    usersForTable,
+    userSearch,
+    userSort.sortKey,
+    userSort.sortDir,
+    userPage,
+    userPageSize,
+    getUserSearchText,
+    getUserSortValue
+  );
+
+  useEffect(() => {
+    setRolePage(1);
+  }, [roleSearch, roleKind]);
+  useEffect(() => {
+    setRolePage((x) => Math.min(x, roleList.pageCount));
+  }, [roleList.pageCount]);
+
+  useEffect(() => {
+    setUserPage(1);
+  }, [userSearch, userRoleId]);
+  useEffect(() => {
+    setUserPage((x) => Math.min(x, userList.pageCount));
+  }, [userList.pageCount]);
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
@@ -251,17 +346,39 @@ export default function RolesSettingsPage() {
                   )}
                 </CardHeader>
                 <CardContent className="space-y-6">
+                  <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+                    <Input
+                      placeholder="Search roles..."
+                      value={roleSearch}
+                      onChange={(e) => setRoleSearch(e.target.value)}
+                      className="max-w-md"
+                    />
+                    <Select value={roleKind} onValueChange={(v) => setRoleKind(v as 'all' | 'system' | 'custom')}>
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All types</SelectItem>
+                        <SelectItem value="system">System</SelectItem>
+                        <SelectItem value="custom">Custom</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {roleList.total === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4">{rolesForTable.length === 0 ? 'No roles.' : 'No matches.'}</p>
+                  ) : (
+                    <>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Slug</TableHead>
-                        <TableHead>Type</TableHead>
+                        <SortableHead label="Name" colKey="name" sortKey={roleSort.sortKey} sortDir={roleSort.sortDir} onSort={roleSort.toggleSort} />
+                        <SortableHead label="Slug" colKey="slug" sortKey={roleSort.sortKey} sortDir={roleSort.sortDir} onSort={roleSort.toggleSort} />
+                        <SortableHead label="Type" colKey="type" sortKey={roleSort.sortKey} sortDir={roleSort.sortDir} onSort={roleSort.toggleSort} />
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {roles.map((r) => (
+                      {roleList.pageRows.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell className="font-medium">{r.name}</TableCell>
                           <TableCell className="text-muted-foreground text-sm">{r.slug}</TableCell>
@@ -288,6 +405,21 @@ export default function RolesSettingsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={roleList.safePage}
+                    pageCount={roleList.pageCount}
+                    total={roleList.total}
+                    pageSize={rolePageSize}
+                    rangeStart={roleList.rangeStart}
+                    rangeEnd={roleList.rangeEnd}
+                    onPageChange={setRolePage}
+                    onPageSizeChange={(n) => {
+                      setRolePageSize(n);
+                      setRolePage(1);
+                    }}
+                  />
+                    </>
+                  )}
 
                   {editing && (
                     <div className="space-y-3">
@@ -323,17 +455,42 @@ export default function RolesSettingsPage() {
                   <CardTitle>Users</CardTitle>
                   <CardDescription>Assign a role to each user in your organisation.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+                    <Input
+                      placeholder="Search users..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="max-w-md"
+                    />
+                    <Select value={userRoleId || '__all'} onValueChange={(v) => setUserRoleId(v === '__all' ? '' : v)}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Filter by role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all">All roles</SelectItem>
+                        {roles.map((r) => (
+                          <SelectItem key={r.id} value={String(r.id)}>
+                            {r.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {userList.total === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4">{usersForTable.length === 0 ? 'No users.' : 'No matches.'}</p>
+                  ) : (
+                    <>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead className="w-[240px]">Role</TableHead>
+                        <SortableHead label="Email" colKey="email" sortKey={userSort.sortKey} sortDir={userSort.sortDir} onSort={userSort.toggleSort} />
+                        <SortableHead label="Name" colKey="name" sortKey={userSort.sortKey} sortDir={userSort.sortDir} onSort={userSort.toggleSort} />
+                        <SortableHead label="Role" colKey="role" sortKey={userSort.sortKey} sortDir={userSort.sortDir} onSort={userSort.toggleSort} className="w-[240px]" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users.map((u) => (
+                      {userList.pageRows.map((u) => (
                         <TableRow key={u.id}>
                           <TableCell className="text-sm">{u.email}</TableCell>
                           <TableCell>{u.full_name}</TableCell>
@@ -363,6 +520,21 @@ export default function RolesSettingsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={userList.safePage}
+                    pageCount={userList.pageCount}
+                    total={userList.total}
+                    pageSize={userPageSize}
+                    rangeStart={userList.rangeStart}
+                    rangeEnd={userList.rangeEnd}
+                    onPageChange={setUserPage}
+                    onPageSizeChange={(n) => {
+                      setUserPageSize(n);
+                      setUserPage(1);
+                    }}
+                  />
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </>

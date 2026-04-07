@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -17,6 +17,8 @@ import { useGuards } from '@/hooks/use-guards';
 import { useSites } from '@/hooks/use-sites';
 import { assignmentSchema, type AssignmentFormData } from '@/lib/validation';
 import type { Assignment } from '@/lib/types';
+import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
@@ -120,6 +122,10 @@ export default function AssignmentsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [shiftFilter, setShiftFilter] = useState<string>('all');
+  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const { data: assignments = [], isLoading, refetch, isRefetching } = useAssignments();
   const { data: guards = [] } = useGuards();
@@ -192,12 +198,67 @@ export default function AssignmentsPage() {
     try { await deleteAssignment.mutateAsync(id); } catch (err) { console.error(err); }
   };
 
-  const filtered = useMemo(() =>
-    assignments.filter(a =>
-      (guardMap.get(a.guard_id) ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (siteMap.get(a.site_id) ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      a.date.includes(search)
-    ), [assignments, search, guardMap, siteMap]);
+  const byShift = useMemo(() => {
+    if (shiftFilter === 'all') return assignments;
+    return assignments.filter((a) => (a.shift_type || 'day') === shiftFilter);
+  }, [assignments, shiftFilter]);
+
+  const getSearchText = useCallback(
+    (a: Assignment) =>
+      [
+        guardMap.get(a.guard_id),
+        siteMap.get(a.site_id),
+        a.date,
+        a.shift_type,
+        a.shift_start,
+        a.shift_end,
+        String(a.break_minutes ?? ''),
+      ]
+        .filter(Boolean)
+        .join(' '),
+    [guardMap, siteMap]
+  );
+
+  const getSortValue = useCallback(
+    (a: Assignment, key: string) => {
+      switch (key) {
+        case 'guard':
+          return guardMap.get(a.guard_id) ?? '';
+        case 'site':
+          return siteMap.get(a.site_id) ?? '';
+        case 'date':
+          return a.date;
+        case 'shift_type':
+          return a.shift_type || '';
+        case 'shift_hours':
+          return `${a.shift_start ?? ''}${a.shift_end ?? ''}`;
+        case 'break':
+          return a.break_minutes ?? 0;
+        default:
+          return '';
+      }
+    },
+    [guardMap, siteMap]
+  );
+
+  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+    byShift,
+    search,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    getSearchText,
+    getSortValue
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, shiftFilter]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, pageCount));
+  }, [pageCount]);
 
   return (
     <ProtectedRoute>
@@ -234,13 +295,24 @@ export default function AssignmentsPage() {
             </div>
           </div>
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3 flex-wrap">
             <Input
               placeholder="Search by guard name, site or date..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
             />
+            <Select value={shiftFilter} onValueChange={setShiftFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Shift type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All shift types</SelectItem>
+                <SelectItem value="day">Day</SelectItem>
+                <SelectItem value="night">Night</SelectItem>
+                <SelectItem value="weekend">Weekend</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {!canAssign && (
@@ -256,26 +328,28 @@ export default function AssignmentsPage() {
             <CardContent>
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading assignments...</div>
-              ) : filtered.length === 0 ? (
+              ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search ? 'No assignments match your search.' : 'No assignments yet. Click "Add Assignment" to get started.'}
+                  {search || shiftFilter !== 'all'
+                    ? 'No assignments match your filters.'
+                    : 'No assignments yet. Click "Add Assignment" to get started.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Guard</TableHead>
-                        <TableHead>Site</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Shift Type</TableHead>
-                        <TableHead>Shift Hours</TableHead>
-                        <TableHead>Break</TableHead>
+                        <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Shift Type" colKey="shift_type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Shift Hours" colKey="shift_hours" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Break" colKey="break" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filtered.map((a) => (
+                      {pageRows.map((a) => (
                         <TableRow key={a.id}>
                           <TableCell className="font-medium whitespace-nowrap">{guardMap.get(a.guard_id) || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap">{siteMap.get(a.site_id) || '-'}</TableCell>
@@ -316,6 +390,19 @@ export default function AssignmentsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  <TablePaginationBar
+                    safePage={safePage}
+                    pageCount={pageCount}
+                    total={total}
+                    pageSize={pageSize}
+                    rangeStart={rangeStart}
+                    rangeEnd={rangeEnd}
+                    onPageChange={setPage}
+                    onPageSizeChange={(n) => {
+                      setPageSize(n);
+                      setPage(1);
+                    }}
+                  />
                 </div>
               )}
             </CardContent>

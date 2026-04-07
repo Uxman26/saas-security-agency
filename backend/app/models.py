@@ -1,7 +1,19 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Float, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Float, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+
+class Role(Base):
+    __tablename__ = "roles"
+    __table_args__ = (UniqueConstraint("company_id", "slug", name="uq_roles_company_slug"),)
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    name = Column(String, nullable=False)
+    slug = Column(String, nullable=False)
+    is_system = Column(Boolean, default=False)
+    permissions_json = Column(Text, nullable=False, default="{}")
+    company = relationship("Company", back_populates="roles")
+    users = relationship("User", back_populates="role_row")
 
 class User(Base):
     __tablename__ = "users"
@@ -10,12 +22,14 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
     role = Column(String, default="company_admin")
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     company_id = Column(Integer, ForeignKey("companies.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="users", foreign_keys=[company_id])
     admin_company = relationship("Company", back_populates="admin", uselist=False, foreign_keys="Company.admin_id")
+    role_row = relationship("Role", back_populates="users", foreign_keys=[role_id])
 
 class Company(Base):
     __tablename__ = "companies"
@@ -28,6 +42,7 @@ class Company(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     admin = relationship("User", back_populates="admin_company", foreign_keys=[admin_id])
     users = relationship("User", back_populates="company", foreign_keys="User.company_id")
+    roles = relationship("Role", back_populates="company", cascade="all, delete-orphan")
     guards = relationship("Guard", back_populates="company", cascade="all, delete-orphan")
     sites = relationship("Site", back_populates="company", cascade="all, delete-orphan")
     clients = relationship("Client", back_populates="company", cascade="all, delete-orphan")

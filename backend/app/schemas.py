@@ -18,6 +18,7 @@ class UserLogin(BaseModel):
 class UserResponse(UserBase):
     id: int
     role: Optional[str] = None
+    role_id: Optional[int] = None
     company_id: Optional[int] = None
     is_active: bool
     created_at: datetime
@@ -437,3 +438,36 @@ class ComplianceAlert(BaseModel):
     guard_name: str
     document_type: str
     expiry_date: date
+
+
+class RoleOut(BaseModel):
+    id: int
+    company_id: int
+    name: str
+    slug: str
+    is_system: bool
+    matrix: dict[str, Any]
+    uses_matrix: bool
+
+
+class RoleCreate(BaseModel):
+    name: str
+    matrix: dict[str, Any]
+
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = None
+    matrix: Optional[dict[str, Any]] = None
+
+
+class CompanyUserOut(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str
+    role_id: Optional[int] = None
+    role_slug: Optional[str] = None
+    role_name: Optional[str] = None
+
+
+class UserRolePatch(BaseModel):
+    role_id: int

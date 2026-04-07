@@ -7,11 +7,40 @@ export interface PlanSummary {
   features: Record<string, boolean>;
 }
 
+export interface PermissionMatrix {
+  [module: string]: {
+    view: boolean;
+    create: boolean;
+    edit: boolean;
+    delete: boolean;
+  };
+}
+
+export interface Role {
+  id: number;
+  company_id: number;
+  name: string;
+  slug: string;
+  is_system: boolean;
+  matrix: PermissionMatrix;
+  uses_matrix: boolean;
+}
+
+export interface CompanyUser {
+  id: number;
+  email: string;
+  full_name: string;
+  role_id: number | null;
+  role_slug: string | null;
+  role_name: string | null;
+}
+
 export interface User {
   id: number;
   email: string;
   full_name: string;
   role?: string;
+  role_id?: number | null;
   company_id?: number | null;
   is_active: boolean;
   created_at: string;

@@ -1,0 +1,233 @@
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, FrozenSet, Optional
+
+from app.rbac import (
+    PERM_ALLOW_DELETE,
+    PERM_ALLOW_READ,
+    PERM_ALLOW_WRITE,
+    PERM_ASSIGN_DELETE,
+    PERM_ASSIGN_READ,
+    PERM_ASSIGN_WRITE,
+    PERM_ATTEND_READ,
+    PERM_ATTEND_WRITE,
+    PERM_CLIENTS_DELETE,
+    PERM_CLIENTS_READ,
+    PERM_CLIENTS_WRITE,
+    PERM_DOC_DELETE,
+    PERM_DOC_READ,
+    PERM_DOC_WRITE,
+    PERM_EMAIL_SEND,
+    PERM_GUARDS_DELETE,
+    PERM_GUARDS_READ,
+    PERM_GUARDS_WRITE,
+    PERM_INV_DELETE,
+    PERM_INV_READ,
+    PERM_INV_WRITE,
+    PERM_PAY_DELETE,
+    PERM_PAY_READ,
+    PERM_PAY_WRITE,
+    PERM_PAYROLL_READ,
+    PERM_PAYROLL_WRITE,
+    PERM_RATES_DELETE,
+    PERM_RATES_READ,
+    PERM_RATES_WRITE,
+    PERM_REP_READ,
+    PERM_ROLES_DELETE,
+    PERM_ROLES_READ,
+    PERM_ROLES_WRITE,
+    PERM_SITES_DELETE,
+    PERM_SITES_READ,
+    PERM_SITES_WRITE,
+    PERM_SUB_MANAGE,
+    PERM_SUB_READ,
+    PERM_SUBS_DELETE,
+    PERM_SUBS_READ,
+    PERM_SUBS_WRITE,
+)
+
+MODULE_KEYS = (
+    "clients",
+    "sites",
+    "guards",
+    "rota",
+    "invoices",
+    "contractors",
+    "reports",
+    "settings",
+)
+
+
+def _cell(m: Dict[str, Any], mod: str) -> Dict[str, bool]:
+    c = m.get(mod) or {}
+    return {
+        "view": bool(c.get("view")),
+        "create": bool(c.get("create")),
+        "edit": bool(c.get("edit")),
+        "delete": bool(c.get("delete")),
+    }
+
+
+def matrix_to_codes(m: Optional[Dict[str, Any]]) -> FrozenSet[str]:
+    if not m:
+        return frozenset()
+    out: set[str] = set()
+    for mod in MODULE_KEYS:
+        x = _cell(m, mod)
+        v, c, e, d = x["view"], x["create"], x["edit"], x["delete"]
+        if mod == "clients":
+            if v:
+                out.add(PERM_CLIENTS_READ)
+            if c or e:
+                out.add(PERM_CLIENTS_WRITE)
+            if d:
+                out.add(PERM_CLIENTS_DELETE)
+        elif mod == "sites":
+            if v:
+                out.add(PERM_SITES_READ)
+            if c or e:
+                out.add(PERM_SITES_WRITE)
+            if d:
+                out.add(PERM_SITES_DELETE)
+        elif mod == "guards":
+            if v:
+                out.add(PERM_GUARDS_READ)
+            if c or e:
+                out.add(PERM_GUARDS_WRITE)
+            if d:
+                out.add(PERM_GUARDS_DELETE)
+        elif mod == "rota":
+            if v:
+                out.add(PERM_ASSIGN_READ)
+                out.add(PERM_ATTEND_READ)
+            if c:
+                out.add(PERM_ASSIGN_WRITE)
+            if e:
+                out.add(PERM_ATTEND_WRITE)
+                out.add(PERM_ASSIGN_WRITE)
+            if d:
+                out.add(PERM_ASSIGN_DELETE)
+        elif mod == "invoices":
+            if v:
+                out.update([PERM_INV_READ, PERM_PAY_READ, PERM_PAYROLL_READ])
+            if c or e:
+                out.update([PERM_INV_WRITE, PERM_PAY_WRITE, PERM_PAYROLL_WRITE])
+            if d:
+                out.update([PERM_INV_DELETE, PERM_PAY_DELETE])
+        elif mod == "contractors":
+            if v:
+                out.add(PERM_SUBS_READ)
+            if c or e:
+                out.add(PERM_SUBS_WRITE)
+            if d:
+                out.add(PERM_SUBS_DELETE)
+        elif mod == "reports":
+            if v or c or e or d:
+                out.add(PERM_REP_READ)
+        elif mod == "settings":
+            if v:
+                out.update(
+                    [
+                        PERM_ALLOW_READ,
+                        PERM_RATES_READ,
+                        PERM_DOC_READ,
+                        PERM_ATTEND_READ,
+                        PERM_SUB_READ,
+                        PERM_ROLES_READ,
+                    ]
+                )
+            if c or e:
+                out.update(
+                    [
+                        PERM_ALLOW_WRITE,
+                        PERM_RATES_WRITE,
+                        PERM_DOC_WRITE,
+                        PERM_ATTEND_WRITE,
+                        PERM_SUB_MANAGE,
+                        PERM_EMAIL_SEND,
+                        PERM_ROLES_WRITE,
+                    ]
+                )
+            if d:
+                out.update([PERM_ALLOW_DELETE, PERM_RATES_DELETE, PERM_DOC_DELETE, PERM_ROLES_DELETE])
+    return frozenset(out)
+
+
+def default_matrix_admin() -> Dict[str, Any]:
+    return {k: {"view": True, "create": True, "edit": True, "delete": True} for k in MODULE_KEYS}
+
+
+def default_matrix_supervisor() -> Dict[str, Any]:
+    return {
+        "clients": {"view": True, "create": False, "edit": False, "delete": False},
+        "sites": {"view": True, "create": False, "edit": False, "delete": False},
+        "guards": {"view": True, "create": False, "edit": False, "delete": False},
+        "rota": {"view": True, "create": True, "edit": True, "delete": False},
+        "invoices": {"view": True, "create": False, "edit": False, "delete": False},
+        "contractors": {"view": True, "create": False, "edit": False, "delete": False},
+        "reports": {"view": True, "create": False, "edit": False, "delete": False},
+        "settings": {"view": True, "create": False, "edit": False, "delete": False},
+    }
+
+
+def default_matrix_guard() -> Dict[str, Any]:
+    return {
+        "clients": {"view": False, "create": False, "edit": False, "delete": False},
+        "sites": {"view": False, "create": False, "edit": False, "delete": False},
+        "guards": {"view": True, "create": False, "edit": False, "delete": False},
+        "rota": {"view": True, "create": False, "edit": True, "delete": False},
+        "invoices": {"view": False, "create": False, "edit": False, "delete": False},
+        "contractors": {"view": False, "create": False, "edit": False, "delete": False},
+        "reports": {"view": False, "create": False, "edit": False, "delete": False},
+        "settings": {"view": False, "create": False, "edit": False, "delete": False},
+    }
+
+
+def default_matrix_client_portal() -> Dict[str, Any]:
+    return {
+        "clients": {"view": True, "create": False, "edit": False, "delete": False},
+        "sites": {"view": True, "create": False, "edit": False, "delete": False},
+        "guards": {"view": False, "create": False, "edit": False, "delete": False},
+        "rota": {"view": True, "create": False, "edit": False, "delete": False},
+        "invoices": {"view": True, "create": False, "edit": False, "delete": False},
+        "contractors": {"view": False, "create": False, "edit": False, "delete": False},
+        "reports": {"view": False, "create": False, "edit": False, "delete": False},
+        "settings": {"view": False, "create": False, "edit": False, "delete": False},
+    }
+
+
+def parse_matrix_json(raw: Optional[str]) -> Dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        d = json.loads(raw)
+        return d if isinstance(d, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def matrix_json_dumps(m: Dict[str, Any]) -> str:
+    return json.dumps(m, sort_keys=True)
+
+
+def permissions_json_to_codes(raw: Optional[str]) -> FrozenSet[str]:
+    if not raw:
+        return frozenset()
+    try:
+        d = json.loads(raw)
+    except json.JSONDecodeError:
+        return frozenset()
+    if isinstance(d, dict) and "codes" in d and isinstance(d["codes"], list):
+        return frozenset(str(x) for x in d["codes"])
+    if isinstance(d, dict) and "matrix" in d:
+        return matrix_to_codes(d["matrix"])
+    return matrix_to_codes(d if isinstance(d, dict) else {})
+
+
+def wrap_matrix(m: Dict[str, Any]) -> str:
+    return json.dumps({"matrix": m}, sort_keys=True)
+
+
+def wrap_codes(codes: list[str]) -> str:
+    return json.dumps({"codes": codes}, sort_keys=True)

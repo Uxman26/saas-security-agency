@@ -6,6 +6,7 @@ from app.auth import get_password_hash, create_access_token, SUPER_ADMIN_ROLE
 from datetime import timedelta
 from app.config import settings
 from app.services.subscription_service import TIERS
+from app.services.role_service import ensure_roles_for_company, get_role_by_slug
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if db.query(User).filter(User.email == user_data.email).first():
@@ -16,7 +17,7 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         email=user_data.email,
         password_hash=hashed_password,
         full_name=user_data.full_name,
-        role=SUPER_ADMIN_ROLE if is_super else "company_admin"
+        role=SUPER_ADMIN_ROLE if is_super else "admin",
     )
     db.add(user)
     db.flush()
@@ -26,6 +27,12 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         db.add(company)
         db.flush()
         user.company_id = company.id
+        ensure_roles_for_company(db, company.id)
+        db.flush()
+        ar = get_role_by_slug(db, company.id, "admin")
+        if ar:
+            user.role_id = ar.id
+        user.role = "admin"
     db.commit()
     db.refresh(user)
     return user

@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -285,6 +285,19 @@ export const api = {
   },
   admin: {
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),
+  },
+  roles: {
+    list: (): Promise<Role[]> => request<Role[]>('/roles'),
+    create: (data: { name: string; matrix: PermissionMatrix }): Promise<Role> =>
+      request<Role>('/roles', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { name?: string; matrix?: PermissionMatrix }): Promise<Role> =>
+      request<Role>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/roles/${id}`, { method: 'DELETE' }),
+  },
+  users: {
+    list: (): Promise<CompanyUser[]> => request<CompanyUser[]>('/users'),
+    patchRole: (userId: number, role_id: number): Promise<CompanyUser> =>
+      request<CompanyUser>(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role_id }) }),
   },
   documents: {
     // Flat /documents endpoint — guard_id optional for filtering

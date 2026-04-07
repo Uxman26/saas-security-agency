@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import Depends, HTTPException, status
-from app.auth import get_current_user
-from app.models import User
+from sqlalchemy.orm import Session
+from app.auth import get_current_user, SUPER_ADMIN_ROLE
+from app.database import get_db
+from app.models import User, Role
 
 PERM_GUARDS_READ = "guards.read"
 PERM_GUARDS_WRITE = "guards.write"
@@ -42,6 +44,9 @@ PERM_REP_READ = "rep.read"
 PERM_EMAIL_SEND = "email.send"
 PERM_SUB_READ = "sub.read"
 PERM_SUB_MANAGE = "sub.manage"
+PERM_ROLES_READ = "roles.read"
+PERM_ROLES_WRITE = "roles.write"
+PERM_ROLES_DELETE = "roles.delete"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -83,6 +88,9 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_EMAIL_SEND,
         PERM_SUB_READ,
         PERM_SUB_MANAGE,
+        PERM_ROLES_READ,
+        PERM_ROLES_WRITE,
+        PERM_ROLES_DELETE,
     }
 )
 
@@ -107,16 +115,40 @@ _SUPERVISOR = frozenset(
     }
 )
 
+_GUARD_LEGACY = frozenset(
+    {
+        PERM_GUARDS_READ,
+        PERM_ASSIGN_READ,
+        PERM_ATTEND_READ,
+        PERM_ATTEND_WRITE,
+        PERM_DOC_READ,
+    }
+)
+
+_CLIENT_LEGACY = frozenset(
+    {
+        PERM_CLIENTS_READ,
+        PERM_SITES_READ,
+        PERM_ASSIGN_READ,
+        PERM_INV_READ,
+        PERM_PAY_READ,
+    }
+)
+
 _ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "super_admin": ALL_PERMISSION_CODES,
     "company_admin": ALL_PERMISSION_CODES,
     "manager": ALL_PERMISSION_CODES,
     "supervisor": _SUPERVISOR,
+    "guard": _GUARD_LEGACY,
+    "client": _CLIENT_LEGACY,
 }
 
 
 def effective_role(user: User) -> str:
     r = (user.role or "company_admin").lower().strip()
+    if r == "admin":
+        r = "company_admin"
     if r not in _ROLE_PERMISSIONS:
         return "company_admin"
     return r
@@ -134,9 +166,36 @@ def permissions_for_user(user: User) -> list[str]:
     return sorted(_ROLE_PERMISSIONS[effective_role(user)])
 
 
+def user_has_permission_db(db: Session, user: User, code: str) -> bool:
+    if getattr(user, "role", None) == SUPER_ADMIN_ROLE:
+        return True
+    from app.rbac_matrix import permissions_json_to_codes
+
+    if user.role_id:
+        r = db.query(Role).filter(Role.id == user.role_id).first()
+        if r and r.company_id == user.company_id:
+            return code in permissions_json_to_codes(r.permissions_json)
+    return user_has_permission(user, code)
+
+
+def permissions_for_user_db(db: Session, user: User) -> list[str]:
+    if getattr(user, "role", None) == SUPER_ADMIN_ROLE:
+        return sorted(ALL_PERMISSION_CODES)
+    from app.rbac_matrix import permissions_json_to_codes
+
+    if user.role_id:
+        r = db.query(Role).filter(Role.id == user.role_id).first()
+        if r and r.company_id == user.company_id:
+            return sorted(permissions_json_to_codes(r.permissions_json))
+    return permissions_for_user(user)
+
+
 def require_perm(code: str):
-    def checker(user: User = Depends(get_current_user)) -> User:
-        if not user_has_permission(user, code):
+    def checker(
+        db: Session = Depends(get_db),
+        user: User = Depends(get_current_user),
+    ) -> User:
+        if not user_has_permission_db(db, user, code):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return user
 

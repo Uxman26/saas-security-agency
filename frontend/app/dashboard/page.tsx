@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,21 +25,23 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
+import { can } from '@/lib/permissions';
 import type { DashboardStats, ComplianceAlert } from '@/lib/types';
 
 const companyTiles = [
-  { href: '/guards', title: 'Guards', desc: 'Manage security guards & compliance', icon: Users, color: 'text-blue-600' },
-  { href: '/sites', title: 'Sites', desc: 'Manage deployment sites', icon: MapPin, color: 'text-green-600' },
-  { href: '/clients', title: 'Clients', desc: 'Manage client accounts', icon: Building2, color: 'text-purple-600' },
-  { href: '/assignments', title: 'Assignments', desc: 'Schedule guard shifts', icon: ClipboardList, color: 'text-orange-600' },
-  { href: '/rota', title: 'Rota', desc: 'View the guard rota', icon: Calendar, color: 'text-cyan-600' },
-  { href: '/attendance', title: 'Attendance', desc: 'Track guard attendance', icon: Clock, color: 'text-teal-600' },
-  { href: '/documents', title: 'Documents', desc: 'Guard documents & expiry', icon: FolderOpen, color: 'text-amber-600' },
-  { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600' },
-  { href: '/payroll', title: 'Payroll', desc: 'Calculate & manage payroll', icon: PoundSterling, color: 'text-emerald-600' },
-  { href: '/invoices', title: 'Invoices', desc: 'Client billing & invoices', icon: FileText, color: 'text-rose-600' },
-  { href: '/payments', title: 'Payments', desc: 'Track received payments', icon: CreditCard, color: 'text-violet-600' },
-  { href: '/allowances', title: 'Allowances', desc: 'Rates & allowance config', icon: Wallet, color: 'text-sky-600' },
+  { href: '/guards', title: 'Guards', desc: 'Manage security guards & compliance', icon: Users, color: 'text-blue-600', perm: 'guards.read' },
+  { href: '/sites', title: 'Sites', desc: 'Manage deployment sites', icon: MapPin, color: 'text-green-600', perm: 'sites.read' },
+  { href: '/clients', title: 'Clients', desc: 'Manage client accounts', icon: Building2, color: 'text-purple-600', perm: 'clients.read' },
+  { href: '/assignments', title: 'Assignments', desc: 'Schedule guard shifts', icon: ClipboardList, color: 'text-orange-600', perm: 'assign.read' },
+  { href: '/rota', title: 'Rota', desc: 'View the guard rota', icon: Calendar, color: 'text-cyan-600', perm: 'assign.read' },
+  { href: '/attendance', title: 'Attendance', desc: 'Track guard attendance', icon: Clock, color: 'text-teal-600', perm: 'attend.read' },
+  { href: '/documents', title: 'Documents', desc: 'Guard documents & expiry', icon: FolderOpen, color: 'text-amber-600', perm: 'doc.read' },
+  { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600', perm: 'subs.read' },
+  { href: '/payroll', title: 'Payroll', desc: 'Calculate & manage payroll', icon: PoundSterling, color: 'text-emerald-600', perm: 'payroll.read' },
+  { href: '/invoices', title: 'Invoices', desc: 'Client billing & invoices', icon: FileText, color: 'text-rose-600', perm: 'inv.read' },
+  { href: '/payments', title: 'Payments', desc: 'Track received payments', icon: CreditCard, color: 'text-violet-600', perm: 'pay.read' },
+  { href: '/allowances', title: 'Allowances', desc: 'Rates & allowance config', icon: Wallet, color: 'text-sky-600', perm: 'allow.read' },
+  { href: '/settings/roles', title: 'Roles & users', desc: 'Roles, permissions, and user assignment', icon: Shield, color: 'text-primary', perm: 'roles.read' },
 ];
 
 const adminTiles = [
@@ -59,7 +61,14 @@ export default function DashboardPage() {
     }
   }, [isSuperAdmin]);
 
-  const tiles = isSuperAdmin ? adminTiles : companyTiles;
+  const tiles = useMemo(() => {
+    if (isSuperAdmin) return adminTiles;
+    const showSubs = can(user, 'subs.read') && user?.plan?.features?.subcontractors === true;
+    return companyTiles.filter((t) => {
+      if (t.href === '/contractors') return showSubs;
+      return can(user, t.perm);
+    });
+  }, [user, isSuperAdmin]);
 
   return (
     <ProtectedRoute>

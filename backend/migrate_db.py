@@ -108,8 +108,39 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "companies") and not table_exists(cur, "roles"):
+        try:
+            cur.execute(
+                """CREATE TABLE roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                name TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                is_system INTEGER NOT NULL DEFAULT 0,
+                permissions_json TEXT NOT NULL DEFAULT '{}',
+                UNIQUE(company_id, slug)
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "users") and not column_exists(cur, "users", "role_id"):
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN role_id INTEGER REFERENCES roles(id)")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
+    try:
+        from app.database import SessionLocal
+        from app.services.role_service import backfill_user_roles
+
+        db = SessionLocal()
+        try:
+            backfill_user_roles(db)
+        finally:
+            db.close()
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     run()

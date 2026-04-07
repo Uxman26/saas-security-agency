@@ -11,18 +11,19 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Shield, Building2, Menu, X } from 'lucide-react';
 
 const companyNav = [
-  { href: '/guards', label: 'Guards' },
-  { href: '/sites', label: 'Sites' },
-  { href: '/clients', label: 'Clients' },
-  { href: '/assignments', label: 'Assignments' },
-  { href: '/rota', label: 'Rota' },
-  { href: '/attendance', label: 'Attendance' },
-  { href: '/documents', label: 'Documents' },
-  { href: '/contractors', label: 'Contractors' },
-  { href: '/payroll', label: 'Payroll' },
-  { href: '/invoices', label: 'Invoices' },
-  { href: '/payments', label: 'Payments' },
-  { href: '/allowances', label: 'Allowances' },
+  { href: '/guards', label: 'Guards', perm: 'guards.read' },
+  { href: '/sites', label: 'Sites', perm: 'sites.read' },
+  { href: '/clients', label: 'Clients', perm: 'clients.read' },
+  { href: '/assignments', label: 'Assignments', perm: 'assign.read' },
+  { href: '/rota', label: 'Rota', perm: 'assign.read' },
+  { href: '/attendance', label: 'Attendance', perm: 'attend.read' },
+  { href: '/documents', label: 'Documents', perm: 'doc.read' },
+  { href: '/contractors', label: 'Contractors', perm: 'subs.read' },
+  { href: '/payroll', label: 'Payroll', perm: 'payroll.read' },
+  { href: '/invoices', label: 'Invoices', perm: 'inv.read' },
+  { href: '/payments', label: 'Payments', perm: 'pay.read' },
+  { href: '/allowances', label: 'Allowances', perm: 'allow.read' },
+  { href: '/settings/roles', label: 'Roles', perm: 'roles.read' },
 ];
 
 export function Nav() {
@@ -32,7 +33,10 @@ export function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const linksNav = useMemo(() => {
     const showSubs = can(user, 'subs.read') && user?.plan?.features?.subcontractors === true;
-    return companyNav.filter((i) => i.href !== '/contractors' || showSubs);
+    return companyNav.filter((i) => {
+      if (i.href === '/contractors') return showSubs;
+      return can(user, i.perm);
+    });
   }, [user]);
 
   const isActive = (href: string) => pathname === href;

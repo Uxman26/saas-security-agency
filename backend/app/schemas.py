@@ -165,6 +165,27 @@ class ClientBase(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     contact_person: Optional[str] = None
+    double_rate_special_days: bool = False
+
+
+class SpecialDayCreate(BaseModel):
+    date: date
+    label: str
+
+
+class SpecialDayResponse(BaseModel):
+    id: int
+    company_id: int
+    date: date
+    label: str
+
+    class Config:
+        from_attributes = True
+
+
+class SeedUkYear(BaseModel):
+    year: int
+
 
 class ClientCreate(ClientBase):
     pass

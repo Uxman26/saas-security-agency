@@ -57,6 +57,12 @@ function ClientForm({
           <Label>Address</Label>
           <Input {...register('address')} placeholder="123 Business Park, London" />
         </div>
+        <div className="space-y-1 sm:col-span-2 flex items-center gap-2 pt-1">
+          <input type="checkbox" id="drsd" className="size-4 accent-primary" {...register('double_rate_special_days')} />
+          <Label htmlFor="drsd" className="font-normal cursor-pointer">
+            Double billing rate on bank holidays & special days (when defined in Settings)
+          </Label>
+        </div>
       </div>
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? 'Saving...' : submitLabel}
@@ -76,8 +82,16 @@ export default function ClientsPage() {
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
 
-  const addForm = useForm<ClientFormData>({ resolver: zodResolver(clientSchema) });
-  const editForm = useForm<ClientFormData>({ resolver: zodResolver(clientSchema) });
+  const clientDefaults: ClientFormData = {
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    contact_person: '',
+    double_rate_special_days: false,
+  };
+  const addForm = useForm<ClientFormData>({ resolver: zodResolver(clientSchema), defaultValues: clientDefaults });
+  const editForm = useForm<ClientFormData>({ resolver: zodResolver(clientSchema), defaultValues: clientDefaults });
 
   const handleCreate = async (data: ClientFormData) => {
     try {
@@ -95,6 +109,7 @@ export default function ClientsPage() {
       phone: client.phone ?? '',
       address: client.address ?? '',
       contact_person: client.contact_person ?? '',
+      double_rate_special_days: client.double_rate_special_days ?? false,
     });
     setEditOpen(true);
   };

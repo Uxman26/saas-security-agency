@@ -53,6 +53,7 @@ class Company(Base):
     payrolls = relationship("Payroll", back_populates="company", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="company", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="company", cascade="all, delete-orphan")
+    special_days = relationship("SpecialDay", back_populates="company", cascade="all, delete-orphan")
 
 class Guard(Base):
     __tablename__ = "guards"
@@ -104,11 +105,21 @@ class Client(Base):
     phone = Column(String)
     address = Column(String)
     contact_person = Column(String)
+    double_rate_special_days = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="clients")
     sites = relationship("Site", back_populates="client", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="client", cascade="all, delete-orphan")
+
+class SpecialDay(Base):
+    __tablename__ = "special_days"
+    __table_args__ = (UniqueConstraint("company_id", "date", name="uq_special_days_company_date"),)
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    label = Column(String, nullable=False)
+    company = relationship("Company", back_populates="special_days")
 
 class Site(Base):
     __tablename__ = "sites"

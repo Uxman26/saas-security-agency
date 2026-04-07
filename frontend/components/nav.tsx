@@ -23,6 +23,7 @@ const companyNav = [
   { href: '/invoices', label: 'Invoices', perm: 'inv.read' },
   { href: '/payments', label: 'Payments', perm: 'pay.read' },
   { href: '/allowances', label: 'Allowances', perm: 'allow.read' },
+  { href: '/settings/special-days', label: 'Special days', perm: 'allow.read' },
   { href: '/settings/roles', label: 'Roles', perm: 'roles.read' },
 ];
 

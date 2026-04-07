@@ -93,6 +93,7 @@ export default function RotaPage() {
   const { data: summary = [] } = useRotaSummary(filterParams);
   const { data: guards = [] } = useGuards();
   const { data: sites = [] } = useSites();
+  const [specialLabels, setSpecialLabels] = useState<Map<string, string>>(new Map());
   const createAssignment = useCreateAssignment();
   const updateAssignment = useUpdateAssignment();
   const deleteAssignment = useDeleteAssignment();
@@ -102,6 +103,17 @@ export default function RotaPage() {
   useEffect(() => {
     api.clients.list().then(setClients).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    api.specialDays
+      .list({ start_date: range.start, end_date: range.end })
+      .then((rows) => {
+        const m = new Map<string, string>();
+        for (const r of rows) m.set(r.date, r.label);
+        setSpecialLabels(m);
+      })
+      .catch(() => setSpecialLabels(new Map()));
+  }, [range.start, range.end]);
 
   const byCell = useMemo(() => {
     const m = new Map<string, RotaDetail[]>();
@@ -386,7 +398,10 @@ export default function RotaPage() {
           <Card>
             <CardHeader>
               <CardTitle>Schedule grid</CardTitle>
-              <CardDescription>Colours: day (sky), night (indigo), weekend (amber), absent (red), late (orange), pending (yellow).</CardDescription>
+              <CardDescription>
+                Colours: day (sky), night (indigo), weekend (amber), absent (red), late (orange), pending (yellow). Special
+                days (bank holidays etc.) show an amber header.
+              </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {isLoading ? (
@@ -398,9 +413,23 @@ export default function RotaPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="sticky left-0 bg-card z-10 min-w-[140px]">Guard</TableHead>
-                      {days.map((d) => (
-                        <TableHead key={d} className="text-xs text-center min-w-[100px] whitespace-nowrap">{d.slice(5)}</TableHead>
-                      ))}
+                      {days.map((d) => {
+                        const sp = specialLabels.get(d);
+                        return (
+                          <TableHead
+                            key={d}
+                            title={sp ? `${sp} (${d})` : d}
+                            className={`text-xs text-center min-w-[100px] whitespace-nowrap ${
+                              sp
+                                ? 'bg-amber-200/90 dark:bg-amber-950/50 text-amber-950 dark:text-amber-100 font-semibold border-b-2 border-amber-500/60'
+                                : ''
+                            }`}
+                          >
+                            {d.slice(5)}
+                            {sp ? <span className="block text-[9px] font-normal opacity-90 truncate max-w-[92px]">{sp}</span> : null}
+                          </TableHead>
+                        );
+                      })}
                     </TableRow>
                   </TableHeader>
                   <TableBody>

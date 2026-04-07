@@ -91,6 +91,24 @@ def run():
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
             except sqlite3.OperationalError:
                 pass
+    if table_exists(cur, "companies") and not table_exists(cur, "special_days"):
+        try:
+            cur.execute(
+                """CREATE TABLE special_days (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                date TEXT NOT NULL,
+                label TEXT NOT NULL,
+                UNIQUE(company_id, date)
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "clients") and not column_exists(cur, "clients", "double_rate_special_days"):
+        try:
+            cur.execute("ALTER TABLE clients ADD COLUMN double_rate_special_days INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
     if table_exists(cur, "invoices") and column_exists(cur, "invoices", "subtotal"):
         try:
             cur.execute(

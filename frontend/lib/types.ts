@@ -155,7 +155,15 @@ export interface Client {
   phone?: string;
   address?: string;
   contact_person?: string;
+  double_rate_special_days?: boolean;
   created_at: string;
+}
+
+export interface SpecialDay {
+  id: number;
+  company_id: number;
+  date: string;
+  label: string;
 }
 
 export interface MainContractor {

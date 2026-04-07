@@ -22,6 +22,7 @@ import {
   CreditCard,
   TrendingUp,
   Shield,
+  CalendarRange,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
@@ -41,6 +42,7 @@ const companyTiles = [
   { href: '/invoices', title: 'Invoices', desc: 'Client billing & invoices', icon: FileText, color: 'text-rose-600', perm: 'inv.read' },
   { href: '/payments', title: 'Payments', desc: 'Track received payments', icon: CreditCard, color: 'text-violet-600', perm: 'pay.read' },
   { href: '/allowances', title: 'Allowances', desc: 'Rates & allowance config', icon: Wallet, color: 'text-sky-600', perm: 'allow.read' },
+  { href: '/settings/special-days', title: 'Special days', desc: 'Bank holidays & double-rate dates', icon: CalendarRange, color: 'text-amber-600', perm: 'allow.read' },
   { href: '/settings/roles', title: 'Roles & users', desc: 'Roles, permissions, and user assignment', icon: Shield, color: 'text-primary', perm: 'roles.read' },
 ];
 

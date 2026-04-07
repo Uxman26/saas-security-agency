@@ -77,6 +77,7 @@ export const clientSchema = z.object({
   phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
   contact_person: z.string().max(100).optional().or(z.literal('')),
+  double_rate_special_days: z.coerce.boolean().optional().default(false),
 });
 
 export const mainContractorSchema = z.object({

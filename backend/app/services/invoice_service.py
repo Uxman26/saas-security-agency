@@ -7,6 +7,7 @@ from app.models import Invoice, InvoiceLine, Client, Site, Assignment, Company, 
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_billing_rate
+from app.services.special_day_service import special_date_set
 from app.services.rota_service import shift_hours
 from app.models import Allowance
 
@@ -241,8 +242,12 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
     allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
     total = 0.0
     anchor_site_id = site_ids[0]
+    special_dates = special_date_set(db, company.id)
+    double_client = bool(getattr(client, "double_rate_special_days", False))
     for a in assignments:
         r = resolve_billing_rate(db, company.id, a.guard_id, a.site_id, a.shift_type or "day", a.date)
+        if double_client and a.date in special_dates:
+            r = r * 2.0
         hrs = shift_hours(a)
         amt = hrs * r
         line = InvoiceLine(invoice_id=inv.id, site_id=a.site_id, guard_id=a.guard_id, hours=hrs, rate=r, amount=amt, allowance_amount=0)

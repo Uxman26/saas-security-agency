@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -308,6 +308,20 @@ export const api = {
     update: (id: number, data: Partial<Omit<Allowance, 'id' | 'company_id' | 'created_at'>>): Promise<Allowance> =>
       request<Allowance>(`/allowances/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/allowances/${id}`, { method: 'DELETE' }),
+  },
+  specialDays: {
+    list: (params?: { start_date?: string; end_date?: string }): Promise<SpecialDay[]> => {
+      const q = new URLSearchParams();
+      if (params?.start_date) q.append('start_date', params.start_date);
+      if (params?.end_date) q.append('end_date', params.end_date);
+      const qs = q.toString();
+      return request<SpecialDay[]>(`/special-days${qs ? `?${qs}` : ''}`);
+    },
+    create: (data: { date: string; label: string }): Promise<SpecialDay> =>
+      request<SpecialDay>('/special-days', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/special-days/${id}`, { method: 'DELETE' }),
+    seedUk: (year: number): Promise<{ added: number; year: number }> =>
+      request<{ added: number; year: number }>('/special-days/seed-uk', { method: 'POST', body: JSON.stringify({ year }) }),
   },
   admin: {
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),

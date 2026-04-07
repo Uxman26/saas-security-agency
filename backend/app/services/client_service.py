@@ -5,9 +5,14 @@ from app.models import Client
 from app.schemas import ClientCreate
 from app.services.company_service import get_company_by_user_id
 
+
+def _client_payload(c: ClientCreate) -> dict:
+    return c.model_dump() if hasattr(c, "model_dump") else c.dict()
+
+
 def create_client(db: Session, client: ClientCreate, user_id: int) -> Client:
     company = get_company_by_user_id(db, user_id)
-    db_client = Client(**client.dict(), company_id=company.id)
+    db_client = Client(**_client_payload(client), company_id=company.id)
     db.add(db_client)
     db.commit()
     db.refresh(db_client)
@@ -30,7 +35,7 @@ def update_client(db: Session, client_id: int, client: ClientCreate, user_id: in
     if not db_client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    for key, value in client.dict().items():
+    for key, value in _client_payload(client).items():
         setattr(db_client, key, value)
     
     db.commit()

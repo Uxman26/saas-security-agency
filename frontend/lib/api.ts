@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -194,6 +194,9 @@ export const api = {
       return request<Client>(`/clients/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
     },
     delete: (id: number): Promise<void> => request<void>(`/clients/${id}`, { method: 'DELETE' }),
+    renew: (id: number, data: { new_end_date: string; note?: string }): Promise<ClientContractRenewal> =>
+      request<ClientContractRenewal>(`/clients/${id}/renew`, { method: 'POST', body: JSON.stringify(data) }),
+    renewals: (id: number): Promise<ClientContractRenewal[]> => request<ClientContractRenewal[]>(`/clients/${id}/renewals`),
   },
   mainContractors: {
     list: (): Promise<MainContractor[]> => request<MainContractor[]>('/main-contractors'),
@@ -245,6 +248,8 @@ export const api = {
   reports: {
     dashboard: (): Promise<DashboardStats> => request<DashboardStats>('/reports/dashboard'),
     compliance: (days?: number): Promise<ComplianceAlert[]> => request<ComplianceAlert[]>(`/reports/compliance${days != null ? `?days=${days}` : ''}`),
+    contractsExpiring: (days?: number): Promise<ContractExpiryAlert[]> =>
+      request<ContractExpiryAlert[]>(`/reports/contracts-expiring${days != null ? `?days=${days}` : ''}`),
   },
   payroll: {
     list: (params?: { guard_id?: number; period_start?: string; period_end?: string }): Promise<Payroll[]> => {

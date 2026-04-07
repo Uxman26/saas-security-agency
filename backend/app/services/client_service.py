@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List
-from app.models import Client
-from app.schemas import ClientCreate
+from app.models import Client, ClientContractRenewal
+from app.schemas import ClientCreate, ClientRenewContract
 from app.services.company_service import get_company_by_user_id
 
 
@@ -50,3 +50,37 @@ def delete_client(db: Session, client_id: int, user_id: int) -> None:
     
     db.delete(client)
     db.commit()
+
+
+def renew_client_contract(db: Session, client_id: int, body: ClientRenewContract, user_id: int) -> ClientContractRenewal:
+    company = get_company_by_user_id(db, user_id)
+    client = db.query(Client).filter(Client.id == client_id, Client.company_id == company.id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    prev = client.contract_end_date
+    if prev is not None and body.new_end_date <= prev:
+        raise HTTPException(status_code=400, detail="New end date must be after the current contract end date")
+    renewal = ClientContractRenewal(
+        company_id=company.id,
+        client_id=client.id,
+        previous_end_date=prev,
+        new_end_date=body.new_end_date,
+        note=body.note,
+        user_id=user_id,
+    )
+    client.contract_end_date = body.new_end_date
+    client.contract_expiry_alert_sent_date = None
+    db.add(renewal)
+    db.commit()
+    db.refresh(renewal)
+    return renewal
+
+
+def list_client_renewals(db: Session, client_id: int, user_id: int) -> List[ClientContractRenewal]:
+    get_client_by_id(db, client_id, user_id)
+    return (
+        db.query(ClientContractRenewal)
+        .filter(ClientContractRenewal.client_id == client_id)
+        .order_by(ClientContractRenewal.created_at.desc())
+        .all()
+    )

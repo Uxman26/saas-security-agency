@@ -156,6 +156,18 @@ export interface Client {
   address?: string;
   contact_person?: string;
   double_rate_special_days?: boolean;
+  contract_start_date?: string;
+  contract_end_date?: string;
+  created_at: string;
+}
+
+export interface ClientContractRenewal {
+  id: number;
+  client_id: number;
+  previous_end_date?: string;
+  new_end_date: string;
+  note?: string;
+  user_id?: number;
   created_at: string;
 }
 
@@ -208,6 +220,13 @@ export interface DashboardStats {
   main_contractors_active: number;
   sub_contractors_total: number;
   sub_contractors_active: number;
+  contracts_expiring_soon: number;
+}
+
+export interface ContractExpiryAlert {
+  client_id: number;
+  client_name: string;
+  contract_end_date: string;
 }
 
 export interface ComplianceAlert {

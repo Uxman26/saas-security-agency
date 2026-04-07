@@ -23,11 +23,12 @@ import {
   TrendingUp,
   Shield,
   CalendarRange,
+  CalendarCheck,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
-import type { DashboardStats, ComplianceAlert } from '@/lib/types';
+import type { DashboardStats, ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
 
 const companyTiles = [
   { href: '/guards', title: 'Guards', desc: 'Manage security guards & compliance', icon: Users, color: 'text-blue-600', perm: 'guards.read' },
@@ -55,11 +56,13 @@ export default function DashboardPage() {
   const isSuperAdmin = user?.role === 'super_admin';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
+  const [contractAlerts, setContractAlerts] = useState<ContractExpiryAlert[]>([]);
 
   useEffect(() => {
     if (!isSuperAdmin) {
       api.reports.dashboard().then(setStats).catch(() => {});
       api.reports.compliance(30).then(setAlerts).catch(() => {});
+      api.reports.contractsExpiring(30).then(setContractAlerts).catch(() => {});
     }
   }, [isSuperAdmin]);
 
@@ -93,7 +96,7 @@ export default function DashboardPage() {
 
           {/* Stats row */}
           {!isSuperAdmin && stats && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 mb-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 mb-6">
               <Card className="border-border/60">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -113,6 +116,18 @@ export default function DashboardPage() {
                 <CardContent>
                   <span className={`text-3xl font-bold ${stats.expiring_documents > 0 ? 'text-amber-600' : ''}`}>
                     {stats.expiring_documents}
+                  </span>
+                </CardContent>
+              </Card>
+              <Card className={`border-border/60 ${(stats.contracts_expiring_soon ?? 0) > 0 ? 'border-amber-500/50' : ''}`}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <CalendarCheck className="size-4" /> Contracts expiring (30d)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <span className={`text-3xl font-bold ${(stats.contracts_expiring_soon ?? 0) > 0 ? 'text-amber-600' : ''}`}>
+                    {stats.contracts_expiring_soon ?? 0}
                   </span>
                 </CardContent>
               </Card>
@@ -175,6 +190,38 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {!isSuperAdmin && contractAlerts.length > 0 && (
+            <Card className="mb-8 border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                  <CalendarCheck className="size-4" />
+                  Contracts expiring soon — {contractAlerts.length} client{contractAlerts.length !== 1 ? 's' : ''} within 30 days
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-sm space-y-1">
+                  {contractAlerts.slice(0, 8).map((a) => (
+                    <li key={a.client_id} className="flex items-center gap-2 text-amber-900 dark:text-amber-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                      <span className="font-medium">{a.client_name}</span>
+                      <span className="text-amber-600 dark:text-amber-500 text-xs">ends {a.contract_end_date}</span>
+                    </li>
+                  ))}
+                  {contractAlerts.length > 8 && (
+                    <li className="text-amber-700 dark:text-amber-400 text-xs pl-3">
+                      + {contractAlerts.length - 8} more
+                    </li>
+                  )}
+                  <li className="text-xs pl-3 pt-1">
+                    <Link href="/clients" className="text-amber-800 dark:text-amber-400 underline hover:no-underline">
+                      Open Clients to renew
+                    </Link>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
           )}
 
           {/* Compliance alerts */}

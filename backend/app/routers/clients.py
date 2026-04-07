@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.schemas import ClientCreate, ClientResponse
+from app.schemas import ClientCreate, ClientResponse, ClientRenewContract, ClientContractRenewalResponse
 from app.rbac import require_perm, PERM_CLIENTS_READ, PERM_CLIENTS_WRITE, PERM_CLIENTS_DELETE
 from app.services import client_service
 
@@ -28,3 +28,22 @@ def update_client(client_id: int, client: ClientCreate, db: Session = Depends(ge
 def delete_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_CLIENTS_DELETE))):
     client_service.delete_client(db, client_id, current_user.id)
     return None
+
+
+@router.post("/{client_id}/renew", response_model=ClientContractRenewalResponse)
+def renew_client_contract(
+    client_id: int,
+    body: ClientRenewContract,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_CLIENTS_WRITE)),
+):
+    return client_service.renew_client_contract(db, client_id, body, current_user.id)
+
+
+@router.get("/{client_id}/renewals", response_model=list[ClientContractRenewalResponse])
+def list_client_renewals(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_CLIENTS_READ)),
+):
+    return client_service.list_client_renewals(db, client_id, current_user.id)

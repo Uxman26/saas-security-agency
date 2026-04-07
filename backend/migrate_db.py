@@ -109,6 +109,32 @@ def run():
             cur.execute("ALTER TABLE clients ADD COLUMN double_rate_special_days INTEGER NOT NULL DEFAULT 0")
         except sqlite3.OperationalError:
             pass
+    for col, spec in [
+        ("contract_start_date", "TEXT"),
+        ("contract_end_date", "TEXT"),
+        ("contract_expiry_alert_sent_date", "TEXT"),
+    ]:
+        if table_exists(cur, "clients") and not column_exists(cur, "clients", col):
+            try:
+                cur.execute(f"ALTER TABLE clients ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+    if table_exists(cur, "clients") and not table_exists(cur, "client_contract_renewals"):
+        try:
+            cur.execute(
+                """CREATE TABLE client_contract_renewals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                client_id INTEGER NOT NULL REFERENCES clients(id),
+                previous_end_date TEXT,
+                new_end_date TEXT NOT NULL,
+                note TEXT,
+                user_id INTEGER REFERENCES users(id),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     if table_exists(cur, "invoices") and column_exists(cur, "invoices", "subtotal"):
         try:
             cur.execute(

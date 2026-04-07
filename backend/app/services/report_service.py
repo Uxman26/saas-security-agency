@@ -4,6 +4,11 @@ from datetime import date, timedelta
 from app.models import Guard, GuardDocument, Payroll, Assignment, Attendance, MainContractor, SubContractor
 from app.schemas import DashboardStats, ComplianceAlert
 from app.services.company_service import get_company_by_user_id
+from app.services.contract_alert_service import (
+    count_contracts_expiring_soon,
+    notify_admin_contract_expiry,
+    list_contract_expiry_alerts,
+)
 
 def get_dashboard_stats(db: Session, user_id: int) -> DashboardStats:
     company = get_company_by_user_id(db, user_id)
@@ -29,6 +34,8 @@ def get_dashboard_stats(db: Session, user_id: int) -> DashboardStats:
     ma = db.query(MainContractor).filter(MainContractor.company_id == company.id, MainContractor.status == "active").count()
     st = db.query(SubContractor).filter(SubContractor.company_id == company.id).count()
     sa = db.query(SubContractor).filter(SubContractor.company_id == company.id, SubContractor.status == "active").count()
+    contracts_soon = count_contracts_expiring_soon(db, company.id, 30)
+    notify_admin_contract_expiry(db, company.id)
     return DashboardStats(
         active_guards=active_guards,
         expiring_documents=expiring,
@@ -39,7 +46,13 @@ def get_dashboard_stats(db: Session, user_id: int) -> DashboardStats:
         main_contractors_active=ma,
         sub_contractors_total=st,
         sub_contractors_active=sa,
+        contracts_expiring_soon=contracts_soon,
     )
+
+def get_contract_expiry_alerts(db: Session, user_id: int, days: int = 30):
+    company = get_company_by_user_id(db, user_id)
+    return list_contract_expiry_alerts(db, company.id, days)
+
 
 def get_compliance_alerts(db: Session, user_id: int, days: int = 30) -> list:
     company = get_company_by_user_id(db, user_id)

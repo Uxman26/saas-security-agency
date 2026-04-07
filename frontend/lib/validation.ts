@@ -77,7 +77,14 @@ export const clientSchema = z.object({
   phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
   contact_person: z.string().max(100).optional().or(z.literal('')),
-  double_rate_special_days: z.coerce.boolean().optional().default(false),
+  double_rate_special_days: z.boolean().default(false),
+  contract_start_date: z.string().optional().or(z.literal('')),
+  contract_end_date: z.string().optional().or(z.literal('')),
+});
+
+export const clientRenewSchema = z.object({
+  new_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'),
+  note: z.string().max(2000).optional().or(z.literal('')),
 });
 
 export const mainContractorSchema = z.object({

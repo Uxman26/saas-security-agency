@@ -166,6 +166,8 @@ class ClientBase(BaseModel):
     address: Optional[str] = None
     contact_person: Optional[str] = None
     double_rate_special_days: bool = False
+    contract_start_date: Optional[date] = None
+    contract_end_date: Optional[date] = None
 
 
 class SpecialDayCreate(BaseModel):
@@ -194,9 +196,33 @@ class ClientResponse(ClientBase):
     id: int
     company_id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
+
+
+class ClientRenewContract(BaseModel):
+    new_end_date: date
+    note: Optional[str] = None
+
+
+class ClientContractRenewalResponse(BaseModel):
+    id: int
+    client_id: int
+    previous_end_date: Optional[date] = None
+    new_end_date: date
+    note: Optional[str] = None
+    user_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ContractExpiryAlert(BaseModel):
+    client_id: int
+    client_name: str
+    contract_end_date: date
 
 class MainContractorBase(BaseModel):
     name: str
@@ -485,6 +511,7 @@ class DashboardStats(BaseModel):
     main_contractors_active: int = 0
     sub_contractors_total: int = 0
     sub_contractors_active: int = 0
+    contracts_expiring_soon: int = 0
 
 class ComplianceAlert(BaseModel):
     guard_id: int

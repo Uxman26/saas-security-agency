@@ -39,6 +39,7 @@ class Company(Base):
     subscription_tier = Column(String, default="basic")
     stripe_customer_id = Column(String)
     logo_path = Column(String)
+    contract_expiry_alert_sent_date = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     admin = relationship("User", back_populates="admin_company", foreign_keys=[admin_id])
@@ -106,11 +107,29 @@ class Client(Base):
     address = Column(String)
     contact_person = Column(String)
     double_rate_special_days = Column(Boolean, default=False)
+    contract_start_date = Column(Date, nullable=True)
+    contract_end_date = Column(Date, nullable=True)
+    contract_expiry_alert_sent_date = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="clients")
     sites = relationship("Site", back_populates="client", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="client", cascade="all, delete-orphan")
+    contract_renewals = relationship("ClientContractRenewal", back_populates="client", cascade="all, delete-orphan")
+
+class ClientContractRenewal(Base):
+    __tablename__ = "client_contract_renewals"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    previous_end_date = Column(Date, nullable=True)
+    new_end_date = Column(Date, nullable=False)
+    note = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    client = relationship("Client", back_populates="contract_renewals")
+    company = relationship("Company")
+    user = relationship("User")
 
 class SpecialDay(Base):
     __tablename__ = "special_days"

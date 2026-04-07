@@ -52,3 +52,24 @@ export function useDeleteClient() {
     },
   });
 }
+
+export function useClientRenewals(clientId: number | null) {
+  return useQuery({
+    queryKey: ['clients', clientId, 'renewals'],
+    queryFn: () => api.clients.renewals(clientId!),
+    enabled: clientId != null && clientId > 0,
+  });
+}
+
+export function useRenewClientContract() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { new_end_date: string; note?: string } }) =>
+      api.clients.renew(id, data),
+    onSuccess: (renewal) => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.invalidateQueries({ queryKey: ['clients', renewal.client_id, 'renewals'] });
+      queryClient.refetchQueries({ queryKey: ['clients'] });
+    },
+  });
+}

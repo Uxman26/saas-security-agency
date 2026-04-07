@@ -227,7 +227,7 @@ export const api = {
       );
       return request<SubContractor>('/sub-contractors', { method: 'POST', body: JSON.stringify(sanitized) });
     },
-    update: (id: number, data: Partial<Omit<SubContractor, 'id' | 'company_id' | 'created_at'>> & { main_contractor_id: number }): Promise<SubContractor> => {
+    update: (id: number, data: Partial<Omit<SubContractor, 'id' | 'company_id' | 'created_at'>>): Promise<SubContractor> => {
       const sanitized = Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])
       );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard } from '@/hooks/use-guards';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
-import { guardSchema } from '@/lib/validation';
+import { guardSchema, type GuardFormData } from '@/lib/validation';
 import type { Guard } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmailDialog } from '@/components/email-dialog';
@@ -24,10 +24,6 @@ import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Pencil, Trash2, Users } from 'lucide-react';
-import type { z } from 'zod';
-
-type GuardFormData = z.infer<typeof guardSchema>;
-
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
   const daysLeft = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
@@ -191,7 +187,7 @@ export default function GuardsPage() {
   const deleteGuard = useDeleteGuard();
 
   const addForm = useForm<GuardFormData>({
-    resolver: zodResolver(guardSchema),
+    resolver: zodResolver(guardSchema) as Resolver<GuardFormData>,
     defaultValues: {
       sia_expiry_date: '',
       employment_history: '',
@@ -201,7 +197,7 @@ export default function GuardsPage() {
     },
   });
 
-  const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSchema) });
+  const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSchema) as Resolver<GuardFormData> });
 
   const contractorLabel = useMemo(() => {
     const mm = new Map(mains.map((m) => [m.id, m.name]));

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { Nav } from '@/components/nav';
@@ -171,11 +171,11 @@ export default function SitesPage() {
   }, [mains, subs]);
 
   const addForm = useForm<SiteFormData>({
-    resolver: zodResolver(siteSchema),
+    resolver: zodResolver(siteSchema) as Resolver<SiteFormData>,
     defaultValues: { client_id: undefined, default_hourly_rate: undefined },
   });
 
-  const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) });
+  const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) as Resolver<SiteFormData> });
 
   const sanitize = (data: SiteFormData): Omit<Site, 'id' | 'company_id' | 'created_at'> => {
     const o: Omit<Site, 'id' | 'company_id' | 'created_at'> = {

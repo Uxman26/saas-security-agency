@@ -42,6 +42,7 @@ export const guardSchema = z
     message: 'Select a main contractor or a sub contractor (exactly one).',
     path: ['main_contractor_id'],
   });
+export type GuardFormData = z.infer<typeof guardSchema>;
 
 export const siteSchema = z
   .object({

@@ -5,6 +5,7 @@ from datetime import date
 from app.models import Assignment, Guard, Site
 from app.schemas import AssignmentCreate, RotaResponse
 from app.services.company_service import get_company_by_user_id
+from app.services.contractor_scope import guard_has_contractor, site_has_contractor
 
 def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -> Assignment:
     company = get_company_by_user_id(db, user_id)
@@ -16,7 +17,12 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
     site = db.query(Site).filter(Site.id == assignment.site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
-    
+    if not guard_has_contractor(guard) or not site_has_contractor(site):
+        raise HTTPException(
+            status_code=400,
+            detail="Assignments require both the guard and the site to have a main or sub contractor linked.",
+        )
+
     db_assignment = Assignment(**assignment.dict())
     db.add(db_assignment)
     db.commit()
@@ -111,7 +117,12 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
     site = db.query(Site).filter(Site.id == assignment.site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
-    
+    if not guard_has_contractor(guard) or not site_has_contractor(site):
+        raise HTTPException(
+            status_code=400,
+            detail="Assignments require both the guard and the site to have a main or sub contractor linked.",
+        )
+
     for key, value in assignment.dict().items():
         setattr(db_assignment, key, value)
     

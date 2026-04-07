@@ -12,15 +12,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard } from '@/hooks/use-guards';
+import { useMainContractors } from '@/hooks/use-main-contractors';
+import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { guardSchema } from '@/lib/validation';
 import type { Guard } from '@/lib/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EmailDialog } from '@/components/email-dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { formatDateUK } from '@/lib/date-format';
 import { Pencil, Trash2, Users } from 'lucide-react';
+import type { z } from 'zod';
 
-type GuardFormData = Omit<Guard, 'id' | 'company_id' | 'created_at'>;
+type GuardFormData = z.infer<typeof guardSchema>;
 
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
@@ -33,19 +37,76 @@ function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' 
 
 function GuardForm({
   form,
+  mains,
+  subs,
   onSubmit,
   isPending,
   submitLabel,
 }: {
   form: ReturnType<typeof useForm<GuardFormData>>;
+  mains: { id: number; name: string }[];
+  subs: { id: number; name: string }[];
   onSubmit: (data: GuardFormData) => void;
   isPending: boolean;
   submitLabel: string;
 }) {
-  const { register, handleSubmit, formState: { errors } } = form;
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = form;
+  const mid = watch('main_contractor_id');
+  const sid = watch('sub_contractor_id');
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1 sm:col-span-2 rounded-md border border-border p-3 bg-muted/30">
+          <p className="text-sm font-medium">Contractor <span className="text-destructive">*</span></p>
+          <p className="text-xs text-muted-foreground mb-2">Choose a main contractor or a sub contractor.</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Main contractor</Label>
+              <Select
+                value={mid != null && mid > 0 ? String(mid) : '__none__'}
+                onValueChange={(v) => {
+                  if (v === '__none__') {
+                    setValue('main_contractor_id', undefined);
+                    return;
+                  }
+                  setValue('main_contractor_id', parseInt(v, 10));
+                  setValue('sub_contractor_id', undefined);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Main" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {mains.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Sub contractor</Label>
+              <Select
+                value={sid != null && sid > 0 ? String(sid) : '__none__'}
+                onValueChange={(v) => {
+                  if (v === '__none__') {
+                    setValue('sub_contractor_id', undefined);
+                    return;
+                  }
+                  setValue('sub_contractor_id', parseInt(v, 10));
+                  setValue('main_contractor_id', undefined);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Sub" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {subs.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {errors.main_contractor_id && <p className="text-xs text-destructive">{errors.main_contractor_id.message}</p>}
+        </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Full Name <span className="text-destructive">*</span></Label>
           <Input {...register('full_name')} placeholder="John Smith" />
@@ -113,16 +174,34 @@ export default function GuardsPage() {
   const [search, setSearch] = useState('');
 
   const { data: guards = [], isLoading, refetch, isRefetching } = useGuards();
+  const { data: mains = [] } = useMainContractors();
+  const { data: subs = [] } = useSubContractors();
   const createGuard = useCreateGuard();
   const updateGuard = useUpdateGuard();
   const deleteGuard = useDeleteGuard();
 
   const addForm = useForm<GuardFormData>({
     resolver: zodResolver(guardSchema),
-    defaultValues: { sia_expiry_date: '', employment_history: '', visa_status: '', rtw_status: '', dbs_status: '' },
+    defaultValues: {
+      sia_expiry_date: '',
+      employment_history: '',
+      visa_status: '',
+      rtw_status: '',
+      dbs_status: '',
+    },
   });
 
   const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSchema) });
+
+  const contractorLabel = useMemo(() => {
+    const mm = new Map(mains.map((m) => [m.id, m.name]));
+    const sm = new Map(subs.map((s) => [s.id, s.name]));
+    return (g: Guard) => {
+      if (g.sub_contractor_id) return sm.get(g.sub_contractor_id) ?? `Sub #${g.sub_contractor_id}`;
+      if (g.main_contractor_id) return mm.get(g.main_contractor_id) ?? `Main #${g.main_contractor_id}`;
+      return '—';
+    };
+  }, [mains, subs]);
 
   const handleCreate = async (data: GuardFormData) => {
     try {
@@ -147,6 +226,8 @@ export default function GuardsPage() {
       employment_history: guard.employment_history ?? '',
       address: guard.address ?? '',
       dbs_status: guard.dbs_status ?? '',
+      main_contractor_id: guard.main_contractor_id ?? undefined,
+      sub_contractor_id: guard.sub_contractor_id ?? undefined,
     });
     setEditOpen(true);
   };
@@ -195,7 +276,7 @@ export default function GuardsPage() {
                   <DialogHeader>
                     <DialogTitle>Add New Guard</DialogTitle>
                   </DialogHeader>
-                  <GuardForm form={addForm} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create Guard" />
+                  <GuardForm form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create Guard" />
                 </DialogContent>
               </Dialog>
             </div>
@@ -209,6 +290,12 @@ export default function GuardsPage() {
               className="max-w-md"
             />
           </div>
+
+          {(mains.length === 0 && subs.length === 0) && (
+            <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+              Add a main or sub contractor under Contractors before you can link guards.
+            </div>
+          )}
 
           <Card>
             <CardHeader>
@@ -227,6 +314,7 @@ export default function GuardsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Name</TableHead>
+                        <TableHead>Contractor</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Phone</TableHead>
                         <TableHead>Badge</TableHead>
@@ -244,6 +332,7 @@ export default function GuardsPage() {
                         return (
                           <TableRow key={guard.id}>
                             <TableCell className="font-medium whitespace-nowrap">{guard.full_name}</TableCell>
+                            <TableCell className="text-sm max-w-[160px] truncate" title={contractorLabel(guard)}>{contractorLabel(guard)}</TableCell>
                             <TableCell className="text-sm">{guard.email || '-'}</TableCell>
                             <TableCell className="whitespace-nowrap">{guard.phone || '-'}</TableCell>
                             <TableCell>{guard.badge_number || '-'}</TableCell>
@@ -312,7 +401,7 @@ export default function GuardsPage() {
             <DialogHeader>
               <DialogTitle>Edit Guard — {editingGuard?.full_name}</DialogTitle>
             </DialogHeader>
-            <GuardForm form={editForm} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save Changes" />
+            <GuardForm form={editForm} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save Changes" />
           </DialogContent>
         </Dialog>
       </div>

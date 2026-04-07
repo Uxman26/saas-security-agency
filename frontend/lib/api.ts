@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, LoginResponse, Client, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate } from './types';
+import type { User, Guard, Site, Assignment, Rota, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -141,16 +141,36 @@ export const api = {
     },
     delete: (id: number): Promise<void> => request<void>(`/clients/${id}`, { method: 'DELETE' }),
   },
+  mainContractors: {
+    list: (): Promise<MainContractor[]> => request<MainContractor[]>('/main-contractors'),
+    get: (id: number): Promise<MainContractor> => request<MainContractor>(`/main-contractors/${id}`),
+    create: (data: Omit<MainContractor, 'id' | 'company_id' | 'created_at'>): Promise<MainContractor> => {
+      const sanitized = Object.fromEntries(
+        Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])
+      );
+      return request<MainContractor>('/main-contractors', { method: 'POST', body: JSON.stringify(sanitized) });
+    },
+    update: (id: number, data: Partial<Omit<MainContractor, 'id' | 'company_id' | 'created_at'>>): Promise<MainContractor> => {
+      const sanitized = Object.fromEntries(
+        Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])
+      );
+      return request<MainContractor>(`/main-contractors/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
+    },
+    delete: (id: number): Promise<void> => request<void>(`/main-contractors/${id}`, { method: 'DELETE' }),
+  },
   subContractors: {
-    list: (): Promise<SubContractor[]> => request<SubContractor[]>('/sub-contractors'),
+    list: (mainContractorId?: number): Promise<SubContractor[]> => {
+      const q = mainContractorId != null ? `?main_contractor_id=${mainContractorId}` : '';
+      return request<SubContractor[]>(`/sub-contractors${q}`);
+    },
     get: (id: number): Promise<SubContractor> => request<SubContractor>(`/sub-contractors/${id}`),
-    create: (data: Omit<SubContractor, 'id' | 'company_id' | 'created_at'>): Promise<SubContractor> => {
+    create: (data: Omit<SubContractor, 'id' | 'company_id' | 'created_at'> & { main_contractor_id: number }): Promise<SubContractor> => {
       const sanitized = Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])
       );
       return request<SubContractor>('/sub-contractors', { method: 'POST', body: JSON.stringify(sanitized) });
     },
-    update: (id: number, data: Partial<Omit<SubContractor, 'id' | 'company_id' | 'created_at'>>): Promise<SubContractor> => {
+    update: (id: number, data: Partial<Omit<SubContractor, 'id' | 'company_id' | 'created_at'>> & { main_contractor_id: number }): Promise<SubContractor> => {
       const sanitized = Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])
       );

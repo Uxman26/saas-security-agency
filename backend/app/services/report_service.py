@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date, timedelta
-from app.models import Guard, GuardDocument, Payroll, Assignment, Attendance
+from app.models import Guard, GuardDocument, Payroll, Assignment, Attendance, MainContractor, SubContractor
 from app.schemas import DashboardStats, ComplianceAlert
 from app.services.company_service import get_company_by_user_id
 
@@ -25,12 +25,20 @@ def get_dashboard_stats(db: Session, user_id: int) -> DashboardStats:
         Assignment.date >= today,
         Assignment.date <= today + timedelta(days=7)
     ).count()
+    mt = db.query(MainContractor).filter(MainContractor.company_id == company.id).count()
+    ma = db.query(MainContractor).filter(MainContractor.company_id == company.id, MainContractor.status == "active").count()
+    st = db.query(SubContractor).filter(SubContractor.company_id == company.id).count()
+    sa = db.query(SubContractor).filter(SubContractor.company_id == company.id, SubContractor.status == "active").count()
     return DashboardStats(
         active_guards=active_guards,
         expiring_documents=expiring,
         revenue_total=float(rev),
         late_count=late_count,
-        upcoming_shifts=upcoming
+        upcoming_shifts=upcoming,
+        main_contractors_total=mt,
+        main_contractors_active=ma,
+        sub_contractors_total=st,
+        sub_contractors_active=sa,
     )
 
 def get_compliance_alerts(db: Session, user_id: int, days: int = 30) -> list:

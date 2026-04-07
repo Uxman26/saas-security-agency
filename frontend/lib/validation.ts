@@ -12,29 +12,48 @@ export const signupSchema = z.object({
   company_name: z.string().min(2, 'Company name must be at least 2 characters').max(100),
 });
 
-export const guardSchema = z.object({
-  full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
-  badge_number: z.string().max(50).optional().or(z.literal('')),
-  license_number: z.string().max(50).optional().or(z.literal('')),
-  sia_number: z.string().max(50).optional().or(z.literal('')),
-  sia_expiry_date: z.string().optional().or(z.literal('')),
-  visa_status: z.string().max(100).optional().or(z.literal('')),
-  rtw_status: z.string().max(100).optional().or(z.literal('')),
-  employment_history: z.string().max(2000).optional().or(z.literal('')),
-  address: z.string().max(200).optional().or(z.literal('')),
-  dbs_status: z.string().max(100).optional().or(z.literal('')),
-});
+const optPosInt = z.preprocess(
+  (v) => (v === '' || v === null || v === undefined || Number(v) === 0 ? undefined : Number(v)),
+  z.number().int().positive().optional()
+);
 
-export const siteSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  client_id: z.number().int().optional().nullable(),
-  address: z.string().max(200).optional().or(z.literal('')),
-  contact_person: z.string().max(100).optional().or(z.literal('')),
-  contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
-  default_hourly_rate: z.number().min(0).optional().nullable(),
-});
+export const guardSchema = z
+  .object({
+    full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+    email: z.string().email('Invalid email address').optional().or(z.literal('')),
+    phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
+    badge_number: z.string().max(50).optional().or(z.literal('')),
+    license_number: z.string().max(50).optional().or(z.literal('')),
+    sia_number: z.string().max(50).optional().or(z.literal('')),
+    sia_expiry_date: z.string().optional().or(z.literal('')),
+    visa_status: z.string().max(100).optional().or(z.literal('')),
+    rtw_status: z.string().max(100).optional().or(z.literal('')),
+    employment_history: z.string().max(2000).optional().or(z.literal('')),
+    address: z.string().max(200).optional().or(z.literal('')),
+    dbs_status: z.string().max(100).optional().or(z.literal('')),
+    main_contractor_id: optPosInt,
+    sub_contractor_id: optPosInt,
+  })
+  .refine((d) => Boolean(d.main_contractor_id) !== Boolean(d.sub_contractor_id), {
+    message: 'Select a main contractor or a sub contractor (exactly one).',
+    path: ['main_contractor_id'],
+  });
+
+export const siteSchema = z
+  .object({
+    name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+    client_id: z.number().int().optional().nullable(),
+    address: z.string().max(200).optional().or(z.literal('')),
+    contact_person: z.string().max(100).optional().or(z.literal('')),
+    contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
+    default_hourly_rate: z.number().min(0).optional().nullable(),
+    main_contractor_id: optPosInt,
+    sub_contractor_id: optPosInt,
+  })
+  .refine((d) => Boolean(d.main_contractor_id) !== Boolean(d.sub_contractor_id), {
+    message: 'Select a main contractor or a sub contractor (exactly one).',
+    path: ['main_contractor_id'],
+  });
 export type SiteFormData = z.infer<typeof siteSchema>;
 
 export const assignmentSchema = z.object({
@@ -56,11 +75,18 @@ export const clientSchema = z.object({
   contact_person: z.string().max(100).optional().or(z.literal('')),
 });
 
-export const subContractorSchema = z.object({
+export const mainContractorSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
-  address: z.string().max(200).optional().or(z.literal('')),
   contact_person: z.string().max(100).optional().or(z.literal('')),
-  license_number: z.string().max(50).optional().or(z.literal('')),
+  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  address: z.string().max(200).optional().or(z.literal('')),
+  registration_number: z.string().max(80).optional().or(z.literal('')),
+  contract_start_date: z.string().optional().or(z.literal('')),
+  contract_end_date: z.string().optional().or(z.literal('')),
+  status: z.enum(['active', 'inactive']),
+});
+
+export const subContractorSchema = mainContractorSchema.extend({
+  main_contractor_id: z.number().int().positive('Select a main contractor'),
 });

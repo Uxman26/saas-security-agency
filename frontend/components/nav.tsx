@@ -18,7 +18,7 @@ const companyNav = [
   { href: '/rota', label: 'Rota' },
   { href: '/attendance', label: 'Attendance' },
   { href: '/documents', label: 'Documents' },
-  { href: '/sub-contractors', label: 'Sub-Contractors' },
+  { href: '/contractors', label: 'Contractors' },
   { href: '/payroll', label: 'Payroll' },
   { href: '/invoices', label: 'Invoices' },
   { href: '/payments', label: 'Payments' },
@@ -32,7 +32,7 @@ export function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const linksNav = useMemo(() => {
     const showSubs = can(user, 'subs.read') && user?.plan?.features?.subcontractors === true;
-    return companyNav.filter((i) => i.href !== '/sub-contractors' || showSubs);
+    return companyNav.filter((i) => i.href !== '/contractors' || showSubs);
   }, [user]);
 
   const isActive = (href: string) => pathname === href;

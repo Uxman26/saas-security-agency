@@ -119,12 +119,33 @@ function AssignmentForm({
 export default function AssignmentsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   const [search, setSearch] = useState('');
 
   const { data: assignments = [], isLoading, refetch, isRefetching } = useAssignments();
   const { data: guards = [] } = useGuards();
   const { data: sites = [] } = useSites();
+  const assignableGuards = useMemo(
+    () => guards.filter((g) => Boolean(g.main_contractor_id || g.sub_contractor_id)),
+    [guards],
+  );
+  const assignableSites = useMemo(
+    () => sites.filter((s) => Boolean(s.main_contractor_id || s.sub_contractor_id)),
+    [sites],
+  );
+  const canAssign = assignableGuards.length > 0 && assignableSites.length > 0;
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const guardsForEdit = useMemo(() => {
+    if (!editingAssignment) return assignableGuards;
+    const g = guards.find((x) => x.id === editingAssignment.guard_id);
+    if (!g || assignableGuards.some((x) => x.id === g.id)) return assignableGuards;
+    return [...assignableGuards, g];
+  }, [editingAssignment, assignableGuards, guards]);
+  const sitesForEdit = useMemo(() => {
+    if (!editingAssignment) return assignableSites;
+    const s = sites.find((x) => x.id === editingAssignment.site_id);
+    if (!s || assignableSites.some((x) => x.id === s.id)) return assignableSites;
+    return [...assignableSites, s];
+  }, [editingAssignment, assignableSites, sites]);
   const createAssignment = useCreateAssignment();
   const updateAssignment = useUpdateAssignment();
   const deleteAssignment = useDeleteAssignment();
@@ -194,7 +215,7 @@ export default function AssignmentsPage() {
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
-                  <Button>Add Assignment</Button>
+                  <Button disabled={!canAssign} title={!canAssign ? 'Link contractors to guards and sites first' : undefined}>Add Assignment</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
@@ -202,8 +223,8 @@ export default function AssignmentsPage() {
                   </DialogHeader>
                   <AssignmentForm
                     form={addForm}
-                    guards={guards}
-                    sites={sites}
+                    guards={assignableGuards}
+                    sites={assignableSites}
                     onSubmit={handleCreate}
                     isPending={createAssignment.isPending}
                     submitLabel="Create Assignment"
@@ -221,6 +242,12 @@ export default function AssignmentsPage() {
               className="max-w-md"
             />
           </div>
+
+          {!canAssign && (
+            <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+              Assignments need at least one guard and one site that each have a main or sub contractor linked. Add contractors, then link them on guard and site records.
+            </div>
+          )}
 
           <Card>
             <CardHeader>
@@ -303,8 +330,8 @@ export default function AssignmentsPage() {
             </DialogHeader>
             <AssignmentForm
               form={editForm}
-              guards={guards}
-              sites={sites}
+              guards={guardsForEdit}
+              sites={sitesForEdit}
               onSubmit={handleUpdate}
               isPending={updateAssignment.isPending}
               submitLabel="Save Changes"

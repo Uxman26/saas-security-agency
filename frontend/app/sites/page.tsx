@@ -12,28 +12,88 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSites, useCreateSite, useUpdateSite, useDeleteSite } from '@/hooks/use-sites';
+import { useMainContractors } from '@/hooks/use-main-contractors';
+import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { siteSchema, type SiteFormData } from '@/lib/validation';
 import type { Client, Site } from '@/lib/types';
 import { api } from '@/lib/api';
 import { MapPin, Pencil, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function SiteForm({
   form,
   clients,
+  mains,
+  subs,
   onSubmit,
   isPending,
   submitLabel,
 }: {
   form: ReturnType<typeof useForm<SiteFormData>>;
   clients: Client[];
+  mains: { id: number; name: string }[];
+  subs: { id: number; name: string }[];
   onSubmit: (data: SiteFormData) => void;
   isPending: boolean;
   submitLabel: string;
 }) {
-  const { register, handleSubmit, formState: { errors } } = form;
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = form;
+  const mid = watch('main_contractor_id');
+  const sid = watch('sub_contractor_id');
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1 sm:col-span-2 rounded-md border border-border p-3 bg-muted/30">
+          <p className="text-sm font-medium">Contractor <span className="text-destructive">*</span></p>
+          <p className="text-xs text-muted-foreground mb-2">Choose a main contractor or a sub contractor.</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>Main contractor</Label>
+              <Select
+                value={mid != null && mid > 0 ? String(mid) : '__none__'}
+                onValueChange={(v) => {
+                  if (v === '__none__') {
+                    setValue('main_contractor_id', undefined);
+                    return;
+                  }
+                  setValue('main_contractor_id', parseInt(v, 10));
+                  setValue('sub_contractor_id', undefined);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Main" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {mains.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Sub contractor</Label>
+              <Select
+                value={sid != null && sid > 0 ? String(sid) : '__none__'}
+                onValueChange={(v) => {
+                  if (v === '__none__') {
+                    setValue('sub_contractor_id', undefined);
+                    return;
+                  }
+                  setValue('sub_contractor_id', parseInt(v, 10));
+                  setValue('main_contractor_id', undefined);
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Sub" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {subs.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {errors.main_contractor_id && <p className="text-xs text-destructive">{errors.main_contractor_id.message}</p>}
+        </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Site Name <span className="text-destructive">*</span></Label>
           <Input {...register('name')} placeholder="City Centre Office" />
@@ -85,6 +145,8 @@ export default function SitesPage() {
   const [search, setSearch] = useState('');
 
   const { data: sites = [], isLoading, refetch, isRefetching } = useSites();
+  const { data: mains = [] } = useMainContractors();
+  const { data: subs = [] } = useSubContractors();
   const createSite = useCreateSite();
   const updateSite = useUpdateSite();
   const deleteSite = useDeleteSite();
@@ -92,6 +154,16 @@ export default function SitesPage() {
   useEffect(() => { api.clients.list().then(setClients).catch(() => {}); }, []);
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+
+  const contractorLabel = useMemo(() => {
+    const mm = new Map(mains.map((m) => [m.id, m.name]));
+    const sm = new Map(subs.map((s) => [s.id, s.name]));
+    return (site: Site) => {
+      if (site.sub_contractor_id) return sm.get(site.sub_contractor_id) ?? `Sub #${site.sub_contractor_id}`;
+      if (site.main_contractor_id) return mm.get(site.main_contractor_id) ?? `Main #${site.main_contractor_id}`;
+      return '—';
+    };
+  }, [mains, subs]);
 
   const addForm = useForm<SiteFormData>({
     resolver: zodResolver(siteSchema),
@@ -111,6 +183,13 @@ export default function SitesPage() {
     if (cid != null && !Number.isNaN(Number(cid))) o.client_id = cid;
     const rate = data.default_hourly_rate;
     if (rate != null && !Number.isNaN(Number(rate))) o.default_hourly_rate = rate;
+    if (data.main_contractor_id) {
+      o.main_contractor_id = data.main_contractor_id;
+      o.sub_contractor_id = null;
+    } else if (data.sub_contractor_id) {
+      o.sub_contractor_id = data.sub_contractor_id;
+      o.main_contractor_id = null;
+    }
     return o;
   };
 
@@ -131,6 +210,8 @@ export default function SitesPage() {
       address: site.address ?? '',
       contact_person: site.contact_person ?? '',
       contact_phone: site.contact_phone ?? '',
+      main_contractor_id: site.main_contractor_id ?? undefined,
+      sub_contractor_id: site.sub_contractor_id ?? undefined,
     });
     setEditOpen(true);
   };
@@ -178,7 +259,7 @@ export default function SitesPage() {
                   <DialogHeader>
                     <DialogTitle>Add New Site</DialogTitle>
                   </DialogHeader>
-                  <SiteForm form={addForm} clients={clients} onSubmit={handleCreate} isPending={createSite.isPending} submitLabel="Create Site" />
+                  <SiteForm form={addForm} clients={clients} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createSite.isPending} submitLabel="Create Site" />
                 </DialogContent>
               </Dialog>
             </div>
@@ -192,6 +273,12 @@ export default function SitesPage() {
               className="max-w-md"
             />
           </div>
+
+          {(mains.length === 0 && subs.length === 0) && (
+            <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+              Add a main or sub contractor under Contractors before you can link sites.
+            </div>
+          )}
 
           <Card>
             <CardHeader>
@@ -210,6 +297,7 @@ export default function SitesPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Site Name</TableHead>
+                        <TableHead>Contractor</TableHead>
                         <TableHead>Client</TableHead>
                         <TableHead>Default Rate</TableHead>
                         <TableHead>Address</TableHead>
@@ -222,6 +310,7 @@ export default function SitesPage() {
                       {filtered.map((site) => (
                         <TableRow key={site.id}>
                           <TableCell className="font-medium whitespace-nowrap">{site.name}</TableCell>
+                          <TableCell className="text-sm max-w-[160px] truncate" title={contractorLabel(site)}>{contractorLabel(site)}</TableCell>
                           <TableCell className="whitespace-nowrap">
                             {site.client_id ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
@@ -268,7 +357,7 @@ export default function SitesPage() {
             <DialogHeader>
               <DialogTitle>Edit Site — {editingSite?.name}</DialogTitle>
             </DialogHeader>
-            <SiteForm form={editForm} clients={clients} onSubmit={handleUpdate} isPending={updateSite.isPending} submitLabel="Save Changes" />
+            <SiteForm form={editForm} clients={clients} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateSite.isPending} submitLabel="Save Changes" />
           </DialogContent>
         </Dialog>
       </div>

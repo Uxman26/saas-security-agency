@@ -6,6 +6,7 @@ from app.schemas import GuardCreate
 from app.services.company_service import get_company_by_user_id
 from app.services.plan_enforcement import enforce_guard_quota
 from app.services import audit_service
+from app.services import contractor_scope
 
 
 def _payload(guard: GuardCreate) -> dict:
@@ -16,9 +17,12 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
     company = get_company_by_user_id(db, user_id)
     enforce_guard_quota(db, company)
     data = _payload(guard)
+    main_id = data.pop("main_contractor_id", None)
+    sub_id = data.pop("sub_contractor_id", None)
+    main_id, sub_id = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
     if data.get("badge_number") and db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
         raise HTTPException(status_code=400, detail="Badge number already exists")
-    db_guard = Guard(**data, company_id=company.id)
+    db_guard = Guard(**data, company_id=company.id, main_contractor_id=main_id, sub_contractor_id=sub_id)
     db.add(db_guard)
     db.flush()
     audit_service.log_action(
@@ -51,11 +55,16 @@ def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -
     if not db_guard:
         raise HTTPException(status_code=404, detail="Guard not found")
     data = _payload(guard)
+    main_id = data.pop("main_contractor_id", None)
+    sub_id = data.pop("sub_contractor_id", None)
+    main_id, sub_id = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
     if data.get("badge_number") and data["badge_number"] != db_guard.badge_number:
         if db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
             raise HTTPException(status_code=400, detail="Badge number already exists")
     for key, value in data.items():
         setattr(db_guard, key, value)
+    db_guard.main_contractor_id = main_id
+    db_guard.sub_contractor_id = sub_id
     audit_service.log_action(
         db,
         company_id=company.id,

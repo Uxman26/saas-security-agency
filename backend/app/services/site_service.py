@@ -6,6 +6,7 @@ from app.schemas import SiteCreate
 from app.services.company_service import get_company_by_user_id
 from app.services.plan_enforcement import enforce_site_quota
 from app.services import audit_service
+from app.services import contractor_scope
 
 
 def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
@@ -14,7 +15,10 @@ def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
     if site.client_id and not db.query(Client).filter(Client.id == site.client_id, Client.company_id == company.id).first():
         raise HTTPException(status_code=400, detail="Client not found")
     data = {k: v for k, v in (site.model_dump() if hasattr(site, "model_dump") else site.dict()).items()}
-    db_site = Site(**data, company_id=company.id)
+    main_id = data.pop("main_contractor_id", None)
+    sub_id = data.pop("sub_contractor_id", None)
+    main_id, sub_id = contractor_scope.apply_site_contractors(db, company.id, main_id, sub_id)
+    db_site = Site(**data, company_id=company.id, main_contractor_id=main_id, sub_contractor_id=sub_id)
     db.add(db_site)
     db.flush()
     audit_service.log_action(
@@ -49,8 +53,14 @@ def update_site(db: Session, site_id: int, site: SiteCreate, user_id: int) -> Si
     cid = getattr(site, "client_id", None)
     if cid and not db.query(Client).filter(Client.id == cid, Client.company_id == company.id).first():
         raise HTTPException(status_code=400, detail="Client not found")
-    for key, value in (site.model_dump() if hasattr(site, "model_dump") else site.dict()).items():
+    raw = site.model_dump() if hasattr(site, "model_dump") else site.dict()
+    main_id = raw.pop("main_contractor_id", None)
+    sub_id = raw.pop("sub_contractor_id", None)
+    main_id, sub_id = contractor_scope.apply_site_contractors(db, company.id, main_id, sub_id)
+    for key, value in raw.items():
         setattr(db_site, key, value)
+    db_site.main_contractor_id = main_id
+    db_site.sub_contractor_id = sub_id
     audit_service.log_action(
         db,
         company_id=company.id,

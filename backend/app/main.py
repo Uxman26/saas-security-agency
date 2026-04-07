@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, guards, sites, assignments, clients, sub_contractors, email
+from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin
 from app.database import engine, Base
 from app.config import settings
@@ -29,6 +29,7 @@ app.include_router(sites.router)
 app.include_router(assignments.router)
 app.include_router(clients.router)
 app.include_router(sub_contractors.router)
+app.include_router(main_contractors.router)
 app.include_router(email.router)
 app.include_router(subscriptions.router)
 app.include_router(documents.router)

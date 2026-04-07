@@ -42,6 +42,8 @@ export interface Guard {
   employment_history?: string;
   address?: string;
   dbs_status?: string;
+  main_contractor_id?: number | null;
+  sub_contractor_id?: number | null;
   created_at: string;
 }
 
@@ -54,6 +56,8 @@ export interface Site {
   contact_person?: string;
   contact_phone?: string;
   default_hourly_rate?: number;
+  main_contractor_id?: number | null;
+  sub_contractor_id?: number | null;
   created_at: string;
 }
 
@@ -95,15 +99,35 @@ export interface Client {
   created_at: string;
 }
 
+export interface MainContractor {
+  id: number;
+  company_id: number;
+  name: string;
+  contact_person?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  registration_number?: string;
+  contract_start_date?: string;
+  contract_end_date?: string;
+  status: string;
+  created_at: string;
+}
+
 export interface SubContractor {
   id: number;
   company_id: number;
+  main_contractor_id?: number | null;
   name: string;
   email?: string;
   phone?: string;
   address?: string;
   contact_person?: string;
   license_number?: string;
+  registration_number?: string;
+  contract_start_date?: string;
+  contract_end_date?: string;
+  status: string;
   created_at: string;
 }
 
@@ -113,6 +137,10 @@ export interface DashboardStats {
   revenue_total: number;
   late_count: number;
   upcoming_shifts: number;
+  main_contractors_total: number;
+  main_contractors_active: number;
+  sub_contractors_total: number;
+  sub_contractors_active: number;
 }
 
 export interface ComplianceAlert {

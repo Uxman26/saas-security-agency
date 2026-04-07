@@ -35,7 +35,7 @@ const companyTiles = [
   { href: '/rota', title: 'Rota', desc: 'View the guard rota', icon: Calendar, color: 'text-cyan-600' },
   { href: '/attendance', title: 'Attendance', desc: 'Track guard attendance', icon: Clock, color: 'text-teal-600' },
   { href: '/documents', title: 'Documents', desc: 'Guard documents & expiry', icon: FolderOpen, color: 'text-amber-600' },
-  { href: '/sub-contractors', title: 'Sub-Contractors', desc: 'Manage sub-contractors', icon: UserCog, color: 'text-indigo-600' },
+  { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600' },
   { href: '/payroll', title: 'Payroll', desc: 'Calculate & manage payroll', icon: PoundSterling, color: 'text-emerald-600' },
   { href: '/invoices', title: 'Invoices', desc: 'Client billing & invoices', icon: FileText, color: 'text-rose-600' },
   { href: '/payments', title: 'Payments', desc: 'Track received payments', icon: CreditCard, color: 'text-violet-600' },
@@ -82,7 +82,7 @@ export default function DashboardPage() {
 
           {/* Stats row */}
           {!isSuperAdmin && stats && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-8">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 mb-6">
               <Card className="border-border/60">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -135,6 +135,32 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <span className="text-3xl font-bold">{stats.upcoming_shifts}</span>
+                </CardContent>
+              </Card>
+              <Card className="border-border/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Building2 className="size-4" /> Main contractors
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                    <span><span className="text-2xl font-bold">{stats.main_contractors_active}</span> active</span>
+                    <span className="text-muted-foreground">of {stats.main_contractors_total} total</span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-border/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <UserCog className="size-4" /> Sub contractors
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                    <span><span className="text-2xl font-bold">{stats.sub_contractors_active}</span> active</span>
+                    <span className="text-muted-foreground">of {stats.sub_contractors_total} total</span>
+                  </div>
                 </CardContent>
               </Card>
             </div>

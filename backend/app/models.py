@@ -31,6 +31,7 @@ class Company(Base):
     guards = relationship("Guard", back_populates="company", cascade="all, delete-orphan")
     sites = relationship("Site", back_populates="company", cascade="all, delete-orphan")
     clients = relationship("Client", back_populates="company", cascade="all, delete-orphan")
+    main_contractors = relationship("MainContractor", back_populates="company", cascade="all, delete-orphan")
     sub_contractors = relationship("SubContractor", back_populates="company", cascade="all, delete-orphan")
     allowances = relationship("Allowance", back_populates="company", cascade="all, delete-orphan")
     payrolls = relationship("Payroll", back_populates="company", cascade="all, delete-orphan")
@@ -41,6 +42,8 @@ class Guard(Base):
     __tablename__ = "guards"
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    main_contractor_id = Column(Integer, ForeignKey("main_contractors.id"))
+    sub_contractor_id = Column(Integer, ForeignKey("sub_contractors.id"))
     full_name = Column(String, nullable=False)
     email = Column(String)
     phone = Column(String)
@@ -56,6 +59,8 @@ class Guard(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="guards")
+    main_contractor = relationship("MainContractor", back_populates="guards")
+    sub_contractor = relationship("SubContractor", back_populates="guards")
     assignments = relationship("Assignment", back_populates="guard", cascade="all, delete-orphan")
     documents = relationship("GuardDocument", back_populates="guard", cascade="all, delete-orphan")
     rates = relationship("GuardRate", back_populates="guard", cascade="all, delete-orphan")
@@ -92,6 +97,8 @@ class Site(Base):
     __tablename__ = "sites"
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    main_contractor_id = Column(Integer, ForeignKey("main_contractors.id"))
+    sub_contractor_id = Column(Integer, ForeignKey("sub_contractors.id"))
     client_id = Column(Integer, ForeignKey("clients.id"))
     name = Column(String, nullable=False)
     address = Column(String)
@@ -101,6 +108,8 @@ class Site(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="sites")
+    main_contractor = relationship("MainContractor", back_populates="sites")
+    sub_contractor = relationship("SubContractor", back_populates="sites")
     client = relationship("Client", back_populates="sites")
     assignments = relationship("Assignment", back_populates="site", cascade="all, delete-orphan")
     rates = relationship("SiteRate", back_populates="site", cascade="all, delete-orphan")
@@ -230,19 +239,48 @@ class Payment(Base):
     company = relationship("Company", back_populates="payments")
     invoice = relationship("Invoice", back_populates="payments")
 
+class MainContractor(Base):
+    __tablename__ = "main_contractors"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    name = Column(String, nullable=False)
+    contact_person = Column(String)
+    phone = Column(String)
+    email = Column(String)
+    address = Column(String)
+    registration_number = Column(String)
+    contract_start_date = Column(Date)
+    contract_end_date = Column(Date)
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="main_contractors")
+    sub_contractors = relationship("SubContractor", back_populates="main_contractor")
+    guards = relationship("Guard", back_populates="main_contractor")
+    sites = relationship("Site", back_populates="main_contractor")
+
+
 class SubContractor(Base):
     __tablename__ = "sub_contractors"
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    main_contractor_id = Column(Integer, ForeignKey("main_contractors.id"))
     name = Column(String, nullable=False)
     email = Column(String)
     phone = Column(String)
     address = Column(String)
     contact_person = Column(String)
     license_number = Column(String)
+    registration_number = Column(String)
+    contract_start_date = Column(Date)
+    contract_end_date = Column(Date)
+    status = Column(String, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="sub_contractors")
+    main_contractor = relationship("MainContractor", back_populates="sub_contractors")
+    guards = relationship("Guard", back_populates="sub_contractor")
+    sites = relationship("Site", back_populates="sub_contractor")
 
 
 class AuditLog(Base):

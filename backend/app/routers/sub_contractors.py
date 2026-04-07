@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, status
+from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
@@ -13,8 +14,12 @@ def create_sub_contractor(sub_contractor: SubContractorCreate, db: Session = Dep
     return sub_contractor_service.create_sub_contractor(db, sub_contractor, current_user.id)
 
 @router.get("", response_model=list[SubContractorResponse])
-def get_sub_contractors(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUBS_READ))):
-    return sub_contractor_service.get_sub_contractors(db, current_user.id)
+def get_sub_contractors(
+    main_contractor_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_SUBS_READ)),
+):
+    return sub_contractor_service.get_sub_contractors(db, current_user.id, main_contractor_id=main_contractor_id)
 
 @router.get("/{sub_contractor_id}", response_model=SubContractorResponse)
 def get_sub_contractor(sub_contractor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUBS_READ))):

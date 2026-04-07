@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from datetime import date, datetime
 from typing import Any, List, Optional
 
@@ -55,6 +55,8 @@ class GuardBase(BaseModel):
     employment_history: Optional[str] = None
     address: Optional[str] = None
     dbs_status: Optional[str] = None
+    main_contractor_id: Optional[int] = None
+    sub_contractor_id: Optional[int] = None
 
 class GuardCreate(GuardBase):
     pass
@@ -74,6 +76,8 @@ class SiteBase(BaseModel):
     contact_person: Optional[str] = None
     contact_phone: Optional[str] = None
     default_hourly_rate: Optional[float] = None
+    main_contractor_id: Optional[int] = None
+    sub_contractor_id: Optional[int] = None
 
 class SiteCreate(SiteBase):
     pass
@@ -137,22 +141,77 @@ class ClientResponse(ClientBase):
     class Config:
         from_attributes = True
 
+class MainContractorBase(BaseModel):
+    name: str
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    registration_number: Optional[str] = None
+    contract_start_date: Optional[date] = None
+    contract_end_date: Optional[date] = None
+    status: str = "active"
+
+
+class MainContractorCreate(MainContractorBase):
+    pass
+
+
+class MainContractorResponse(MainContractorBase):
+    id: int
+    company_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class SubContractorBase(BaseModel):
     name: str
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
     contact_person: Optional[str] = None
-    license_number: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    registration_number: Optional[str] = None
+    contract_start_date: Optional[date] = None
+    contract_end_date: Optional[date] = None
+    status: str = "active"
+
 
 class SubContractorCreate(SubContractorBase):
-    pass
+    main_contractor_id: int
+
 
 class SubContractorResponse(SubContractorBase):
     id: int
     company_id: int
+    main_contractor_id: Optional[int] = None
     created_at: datetime
-    
+
+    @model_validator(mode='before')
+    @classmethod
+    def _map_license(cls, data):
+        if isinstance(data, dict):
+            return data
+        if getattr(data, '__tablename__', None) == 'sub_contractors':
+            reg = getattr(data, 'registration_number', None) or getattr(data, 'license_number', None)
+            return {
+                'id': data.id,
+                'company_id': data.company_id,
+                'main_contractor_id': getattr(data, 'main_contractor_id', None),
+                'name': data.name,
+                'contact_person': data.contact_person,
+                'phone': data.phone,
+                'email': data.email,
+                'address': data.address,
+                'registration_number': reg,
+                'contract_start_date': getattr(data, 'contract_start_date', None),
+                'contract_end_date': getattr(data, 'contract_end_date', None),
+                'status': getattr(data, 'status', None) or 'active',
+                'created_at': data.created_at,
+            }
+        return data
+
     class Config:
         from_attributes = True
 
@@ -333,6 +392,10 @@ class DashboardStats(BaseModel):
     revenue_total: float
     late_count: int
     upcoming_shifts: int
+    main_contractors_total: int = 0
+    main_contractors_active: int = 0
+    sub_contractors_total: int = 0
+    sub_contractors_active: int = 0
 
 class ComplianceAlert(BaseModel):
     guard_id: int

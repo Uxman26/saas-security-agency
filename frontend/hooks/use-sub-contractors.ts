@@ -2,10 +2,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { SubContractor } from '@/lib/types';
 
-export function useSubContractors() {
+export function useSubContractors(mainContractorId?: number) {
   return useQuery({
-    queryKey: ['subContractors'],
-    queryFn: () => api.subContractors.list(),
+    queryKey: ['subContractors', mainContractorId ?? 'all'],
+    queryFn: () => api.subContractors.list(mainContractorId),
     refetchOnMount: true,
   });
 }
@@ -21,7 +21,8 @@ export function useSubContractor(id: number) {
 export function useCreateSubContractor() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: Omit<SubContractor, 'id' | 'company_id' | 'created_at'>) => api.subContractors.create(data),
+    mutationFn: (data: Omit<SubContractor, 'id' | 'company_id' | 'created_at'> & { main_contractor_id: number }) =>
+      api.subContractors.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subContractors'] });
       queryClient.refetchQueries({ queryKey: ['subContractors'] });

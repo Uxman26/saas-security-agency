@@ -25,6 +25,27 @@ def run():
         return
     conn = sqlite3.connect(path)
     cur = conn.cursor()
+    if table_exists(cur, "companies") and not table_exists(cur, "main_contractors"):
+        try:
+            cur.execute(
+                """CREATE TABLE main_contractors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                name TEXT NOT NULL,
+                contact_person TEXT,
+                phone TEXT,
+                email TEXT,
+                address TEXT,
+                registration_number TEXT,
+                contract_start_date TEXT,
+                contract_end_date TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     alters = [
         ("users", "role", "TEXT DEFAULT 'company_admin'"),
         ("users", "company_id", "INTEGER REFERENCES companies(id)"),
@@ -47,6 +68,15 @@ def run():
         ("assignments", "updated_at", "TEXT"),
         ("sub_contractors", "updated_at", "TEXT"),
         ("guards", "dbs_status", "TEXT"),
+        ("guards", "main_contractor_id", "INTEGER REFERENCES main_contractors(id)"),
+        ("guards", "sub_contractor_id", "INTEGER REFERENCES sub_contractors(id)"),
+        ("sites", "main_contractor_id", "INTEGER REFERENCES main_contractors(id)"),
+        ("sites", "sub_contractor_id", "INTEGER REFERENCES sub_contractors(id)"),
+        ("sub_contractors", "main_contractor_id", "INTEGER REFERENCES main_contractors(id)"),
+        ("sub_contractors", "registration_number", "TEXT"),
+        ("sub_contractors", "contract_start_date", "TEXT"),
+        ("sub_contractors", "contract_end_date", "TEXT"),
+        ("sub_contractors", "status", "TEXT DEFAULT 'active'"),
     ]
     for table, col, spec in alters:
         if table_exists(cur, table) and not column_exists(cur, table, col):
@@ -67,6 +97,13 @@ def run():
                 meta TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "sub_contractors") and column_exists(cur, "sub_contractors", "registration_number") and column_exists(cur, "sub_contractors", "license_number"):
+        try:
+            cur.execute(
+                "UPDATE sub_contractors SET registration_number = license_number WHERE (registration_number IS NULL OR registration_number = '') AND license_number IS NOT NULL"
             )
         except sqlite3.OperationalError:
             pass

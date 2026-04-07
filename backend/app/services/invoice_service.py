@@ -6,6 +6,7 @@ from app.models import Invoice, InvoiceLine, Client, Site, Assignment
 from app.schemas import InvoiceCreate, InvoiceLineBase
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_billing_rate
+from app.services.rota_service import shift_hours
 from app.models import Allowance
 
 def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
@@ -74,13 +75,7 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
     anchor_site_id = site_ids[0]
     for a in assignments:
         r = resolve_billing_rate(db, company.id, a.guard_id, a.site_id, a.shift_type or "day", a.date)
-        start = (a.shift_start or "0:0").strip().split(":")
-        end = (a.shift_end or "0:0").strip().split(":")
-        try:
-            mins = (int(end[0]) * 60 + (int(end[1]) if len(end) > 1 else 0)) - (int(start[0]) * 60 + (int(start[1]) if len(start) > 1 else 0)) - (a.break_minutes or 0)
-            hrs = max(0, mins / 60.0)
-        except (ValueError, IndexError):
-            hrs = 0.0
+        hrs = shift_hours(a)
         amt = hrs * r
         line = InvoiceLine(invoice_id=inv.id, site_id=a.site_id, guard_id=a.guard_id, hours=hrs, rate=r, amount=amt, allowance_amount=0)
         db.add(line)

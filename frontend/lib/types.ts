@@ -44,6 +44,7 @@ export interface Guard {
   dbs_status?: string;
   main_contractor_id?: number | null;
   sub_contractor_id?: number | null;
+  weekly_contracted_hours?: number | null;
   created_at: string;
 }
 
@@ -81,6 +82,35 @@ export interface Rota {
   date: string;
   shift_start?: string;
   shift_end?: string;
+  break_minutes?: number;
+  shift_type?: string;
+}
+
+export interface RotaDetail {
+  id: number;
+  guard_id: number;
+  guard_name: string;
+  site_id: number;
+  site_name: string;
+  client_id?: number | null;
+  client_name?: string | null;
+  date: string;
+  shift_start?: string;
+  shift_end?: string;
+  break_minutes: number;
+  shift_type: string;
+  hours: number;
+  attendance_status: string;
+  late_minutes?: number | null;
+}
+
+export interface RotaSummary {
+  guard_id: number;
+  guard_name: string;
+  total_hours: number;
+  late_arrivals: number;
+  overtime_hours: number;
+  committed_hours: number;
 }
 
 export interface LoginResponse {

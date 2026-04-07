@@ -31,6 +31,10 @@ export const guardSchema = z
     employment_history: z.string().max(2000).optional().or(z.literal('')),
     address: z.string().max(200).optional().or(z.literal('')),
     dbs_status: z.string().max(100).optional().or(z.literal('')),
+    weekly_contracted_hours: z.preprocess(
+      (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)),
+      z.number().min(0).max(168).optional()
+    ),
     main_contractor_id: optPosInt,
     sub_contractor_id: optPosInt,
   })
@@ -63,7 +67,7 @@ export const assignmentSchema = z.object({
   shift_start: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
   shift_end: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
   break_minutes: z.number().int().min(0).optional(),
-  shift_type: z.enum(['day', 'night', 'holiday']).optional(),
+  shift_type: z.enum(['day', 'night', 'weekend']).optional(),
 });
 export type AssignmentFormData = z.infer<typeof assignmentSchema>;
 

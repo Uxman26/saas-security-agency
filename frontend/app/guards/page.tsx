@@ -158,6 +158,11 @@ function GuardForm({
           <Label>Employment History (5 years)</Label>
           <Input {...register('employment_history')} placeholder="Brief employment summary" />
         </div>
+        <div className="space-y-1">
+          <Label>Weekly contracted hours</Label>
+          <Input type="number" step="0.5" min="0" max="168" {...register('weekly_contracted_hours', { valueAsNumber: true })} placeholder="40" />
+          {errors.weekly_contracted_hours && <p className="text-xs text-destructive">{errors.weekly_contracted_hours.message}</p>}
+        </div>
       </div>
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? 'Saving...' : submitLabel}
@@ -228,6 +233,7 @@ export default function GuardsPage() {
       dbs_status: guard.dbs_status ?? '',
       main_contractor_id: guard.main_contractor_id ?? undefined,
       sub_contractor_id: guard.sub_contractor_id ?? undefined,
+      weekly_contracted_hours: guard.weekly_contracted_hours ?? undefined,
     });
     setEditOpen(true);
   };

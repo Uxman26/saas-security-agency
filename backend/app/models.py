@@ -56,6 +56,7 @@ class Guard(Base):
     employment_history = Column(Text)
     address = Column(String)
     dbs_status = Column(String)
+    weekly_contracted_hours = Column(Float, default=40.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="guards")

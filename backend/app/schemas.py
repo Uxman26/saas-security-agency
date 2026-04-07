@@ -57,6 +57,7 @@ class GuardBase(BaseModel):
     dbs_status: Optional[str] = None
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
+    weekly_contracted_hours: Optional[float] = 40.0
 
 class GuardCreate(GuardBase):
     pass
@@ -122,6 +123,40 @@ class RotaResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RotaDetailResponse(BaseModel):
+    id: int
+    guard_id: int
+    guard_name: str
+    site_id: int
+    site_name: str
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
+    date: date
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    break_minutes: int = 0
+    shift_type: str = "day"
+    hours: float = 0
+    attendance_status: str
+    late_minutes: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class RotaSummaryRow(BaseModel):
+    guard_id: int
+    guard_name: str
+    total_hours: float
+    late_arrivals: int
+    overtime_hours: float
+    committed_hours: float
+
+    class Config:
+        from_attributes = True
+
 
 class ClientBase(BaseModel):
     name: str

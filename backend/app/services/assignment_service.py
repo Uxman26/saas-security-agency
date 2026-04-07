@@ -6,6 +6,7 @@ from app.models import Assignment, Guard, Site
 from app.schemas import AssignmentCreate, RotaResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.contractor_scope import guard_has_contractor, site_has_contractor
+from app.services.rota_service import normalize_shift_type
 
 def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -> Assignment:
     company = get_company_by_user_id(db, user_id)
@@ -23,7 +24,9 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
             detail="Assignments require both the guard and the site to have a main or sub contractor linked.",
         )
 
-    db_assignment = Assignment(**assignment.dict())
+    data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
+    data["shift_type"] = normalize_shift_type(data.get("shift_type"))
+    db_assignment = Assignment(**data)
     db.add(db_assignment)
     db.commit()
     db.refresh(db_assignment)
@@ -34,17 +37,20 @@ def get_assignments(
     user_id: int,
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
+    client_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ) -> List[Assignment]:
     company = get_company_by_user_id(db, user_id)
     
-    query = db.query(Assignment).join(Guard).filter(Guard.company_id == company.id)
+    query = db.query(Assignment).join(Guard).join(Site).filter(Guard.company_id == company.id)
     
     if guard_id:
         query = query.filter(Assignment.guard_id == guard_id)
     if site_id:
         query = query.filter(Assignment.site_id == site_id)
+    if client_id:
+        query = query.filter(Site.client_id == client_id)
     if start_date:
         query = query.filter(Assignment.date >= start_date)
     if end_date:
@@ -56,7 +62,10 @@ def get_rota(
     db: Session,
     user_id: int,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    client_id: Optional[int] = None,
 ) -> List[RotaResponse]:
     company = get_company_by_user_id(db, user_id)
     
@@ -71,6 +80,12 @@ def get_rota(
         Assignment.break_minutes,
         Assignment.shift_type
     ).join(Guard).join(Site).filter(Guard.company_id == company.id)
+    if guard_id:
+        query = query.filter(Assignment.guard_id == guard_id)
+    if site_id:
+        query = query.filter(Assignment.site_id == site_id)
+    if client_id:
+        query = query.filter(Site.client_id == client_id)
     if start_date:
         query = query.filter(Assignment.date >= start_date)
     if end_date:
@@ -123,7 +138,9 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
             detail="Assignments require both the guard and the site to have a main or sub contractor linked.",
         )
 
-    for key, value in assignment.dict().items():
+    data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
+    data["shift_type"] = normalize_shift_type(data.get("shift_type"))
+    for key, value in data.items():
         setattr(db_assignment, key, value)
     
     db.commit()

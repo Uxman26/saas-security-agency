@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -40,6 +40,28 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   }
 
   return response.json();
+}
+
+async function requestBlob(endpoint: string): Promise<Blob> {
+  const raw = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = raw ? raw.trim() : null;
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    throw new ApiError(401, 'Unauthorized');
+  }
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new ApiError(response.status, error.detail || 'Request failed');
+  }
+  return response.blob();
 }
 
 function sanitizeInput(input: string): string {
@@ -102,19 +124,51 @@ export const api = {
     delete: (id: number): Promise<void> => request<void>(`/sites/${id}`, { method: 'DELETE' }),
   },
   assignments: {
-    list: (params?: { guard_id?: number; site_id?: number; start_date?: string; end_date?: string }): Promise<Assignment[]> => {
+    list: (params?: { guard_id?: number; site_id?: number; client_id?: number; start_date?: string; end_date?: string }): Promise<Assignment[]> => {
       const query = new URLSearchParams();
       if (params?.guard_id) query.append('guard_id', params.guard_id.toString());
       if (params?.site_id) query.append('site_id', params.site_id.toString());
+      if (params?.client_id) query.append('client_id', params.client_id.toString());
       if (params?.start_date) query.append('start_date', params.start_date);
       if (params?.end_date) query.append('end_date', params.end_date);
       return request<Assignment[]>(`/assignments?${query.toString()}`);
     },
-    rota: (params?: { start_date?: string; end_date?: string }): Promise<Rota[]> => {
+    rota: (params?: { start_date?: string; end_date?: string; guard_id?: number; site_id?: number; client_id?: number }): Promise<Rota[]> => {
       const query = new URLSearchParams();
       if (params?.start_date) query.append('start_date', params.start_date);
       if (params?.end_date) query.append('end_date', params.end_date);
+      if (params?.guard_id) query.append('guard_id', params.guard_id.toString());
+      if (params?.site_id) query.append('site_id', params.site_id.toString());
+      if (params?.client_id) query.append('client_id', params.client_id.toString());
       return request<Rota[]>(`/assignments/rota?${query.toString()}`);
+    },
+    rotaDetail: (params: { start_date: string; end_date: string; guard_id?: number; site_id?: number; client_id?: number }): Promise<RotaDetail[]> => {
+      const query = new URLSearchParams();
+      query.append('start_date', params.start_date);
+      query.append('end_date', params.end_date);
+      if (params.guard_id) query.append('guard_id', params.guard_id.toString());
+      if (params.site_id) query.append('site_id', params.site_id.toString());
+      if (params.client_id) query.append('client_id', params.client_id.toString());
+      return request<RotaDetail[]>(`/assignments/rota/detail?${query.toString()}`);
+    },
+    rotaSummary: (params: { start_date: string; end_date: string; guard_id?: number; site_id?: number; client_id?: number }): Promise<RotaSummary[]> => {
+      const query = new URLSearchParams();
+      query.append('start_date', params.start_date);
+      query.append('end_date', params.end_date);
+      if (params.guard_id) query.append('guard_id', params.guard_id.toString());
+      if (params.site_id) query.append('site_id', params.site_id.toString());
+      if (params.client_id) query.append('client_id', params.client_id.toString());
+      return request<RotaSummary[]>(`/assignments/rota/summary?${query.toString()}`);
+    },
+    rotaExport: (params: { start_date: string; end_date: string; format?: 'xlsx' | 'pdf'; guard_id?: number; site_id?: number; client_id?: number }): Promise<Blob> => {
+      const query = new URLSearchParams();
+      query.append('start_date', params.start_date);
+      query.append('end_date', params.end_date);
+      query.append('format', params.format || 'xlsx');
+      if (params.guard_id) query.append('guard_id', params.guard_id.toString());
+      if (params.site_id) query.append('site_id', params.site_id.toString());
+      if (params.client_id) query.append('client_id', params.client_id.toString());
+      return requestBlob(`/assignments/rota/export?${query.toString()}`);
     },
     create: (data: Omit<Assignment, 'id' | 'created_at'>): Promise<Assignment> => {
       return request<Assignment>('/assignments', { method: 'POST', body: JSON.stringify(data) });

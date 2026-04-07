@@ -22,7 +22,7 @@ import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   day: 'Day',
   night: 'Night',
-  holiday: 'Holiday',
+  weekend: 'Weekend',
 };
 
 function AssignmentForm({
@@ -83,14 +83,14 @@ function AssignmentForm({
         </div>
         <div className="space-y-1">
           <Label>Shift Type</Label>
-          <Select value={shiftType || ''} onValueChange={(v) => setValue('shift_type', v as 'day' | 'night' | 'holiday')}>
+          <Select value={shiftType || ''} onValueChange={(v) => setValue('shift_type', v as 'day' | 'night' | 'weekend')}>
             <SelectTrigger>
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="day">Day</SelectItem>
               <SelectItem value="night">Night</SelectItem>
-              <SelectItem value="holiday">Holiday</SelectItem>
+              <SelectItem value="weekend">Weekend</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -173,7 +173,7 @@ export default function AssignmentsPage() {
       shift_start: a.shift_start ?? '',
       shift_end: a.shift_end ?? '',
       break_minutes: a.break_minutes ?? undefined,
-      shift_type: (a.shift_type as 'day' | 'night' | 'holiday') ?? undefined,
+      shift_type: (a.shift_type === 'holiday' ? 'weekend' : a.shift_type) as 'day' | 'night' | 'weekend' | undefined,
     });
     setEditOpen(true);
   };
@@ -284,7 +284,7 @@ export default function AssignmentsPage() {
                             {a.shift_type ? (
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                                 a.shift_type === 'night' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                a.shift_type === 'holiday' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+                                a.shift_type === 'weekend' || a.shift_type === 'holiday' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
                                 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
                               }`}>
                                 {SHIFT_TYPE_LABELS[a.shift_type] ?? a.shift_type}

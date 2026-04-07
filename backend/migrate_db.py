@@ -68,6 +68,7 @@ def run():
         ("assignments", "updated_at", "TEXT"),
         ("sub_contractors", "updated_at", "TEXT"),
         ("guards", "dbs_status", "TEXT"),
+        ("guards", "weekly_contracted_hours", "REAL DEFAULT 40"),
         ("guards", "main_contractor_id", "INTEGER REFERENCES main_contractors(id)"),
         ("guards", "sub_contractor_id", "INTEGER REFERENCES sub_contractors(id)"),
         ("sites", "main_contractor_id", "INTEGER REFERENCES main_contractors(id)"),

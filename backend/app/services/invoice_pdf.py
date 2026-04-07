@@ -1,0 +1,143 @@
+import os
+from io import BytesIO
+from typing import List
+
+from sqlalchemy.orm import Session
+
+from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard
+
+
+def _money(v: float) -> str:
+    return f"£{float(v):,.2f}"
+
+
+def render_invoice_pdf(
+    db: Session,
+    inv: Invoice,
+    company: Company,
+    client: Client,
+    lines: List[InvoiceLine],
+) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Image as RLImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        rightMargin=1.5 * cm,
+        leftMargin=1.5 * cm,
+        topMargin=1.2 * cm,
+        bottomMargin=1.2 * cm,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "InvTitle",
+        parent=styles["Heading1"],
+        fontSize=18,
+        spaceAfter=6,
+    )
+    story = []
+
+    logo_path = company.logo_path or ""
+    if logo_path and os.path.isfile(logo_path):
+        try:
+            img = RLImage(logo_path, width=4 * cm, height=2 * cm, kind="proportional")
+            story.append(img)
+            story.append(Spacer(1, 8))
+        except Exception:
+            pass
+
+    story.append(Paragraph(company.name or "Company", title_style))
+    story.append(Paragraph(f"<b>Invoice</b> #{inv.id}", styles["Heading2"]))
+    story.append(Spacer(1, 12))
+
+    meta_data = [
+        ["Bill to", client.name],
+        ["Address", client.address or "—"],
+        ["Email", client.email or "—"],
+        ["Period", f"{inv.period_start} – {inv.period_end}"],
+        ["Due date", str(inv.due_date) if inv.due_date else "—"],
+        ["Status", (inv.status or "draft").title()],
+    ]
+    t_meta = Table([[a, str(b)] for a, b in meta_data], colWidths=[3 * cm, 12 * cm])
+    t_meta.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(t_meta)
+    story.append(Spacer(1, 16))
+
+    site_ids = list({ln.site_id for ln in lines})
+    site_map = {s.id: s for s in db.query(Site).filter(Site.id.in_(site_ids)).all()} if site_ids else {}
+    guard_map = {}
+    gids = [ln.guard_id for ln in lines if ln.guard_id]
+    if gids:
+        for g in db.query(Guard).filter(Guard.id.in_(gids)).all():
+            guard_map[g.id] = g
+
+    hdr = ["Site", "Guard", "Hours", "Rate", "Allowance", "Amount"]
+    data = [hdr]
+    for ln in lines:
+        site = site_map.get(ln.site_id)
+        g = guard_map.get(ln.guard_id) if ln.guard_id else None
+        data.append(
+            [
+                (site.name if site else f"#{ln.site_id}")[:40],
+                (g.full_name if g else "—")[:32],
+                f"{ln.hours or 0:.2f}",
+                _money(ln.rate or 0),
+                _money(ln.allowance_amount or 0),
+                _money(ln.amount or 0),
+            ]
+        )
+
+    tw = [5 * cm, 4 * cm, 2 * cm, 2.2 * cm, 2.2 * cm, 2.4 * cm]
+    t_lines = Table(data, colWidths=tw, repeatRows=1)
+    t_lines.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8e8e8")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
+    story.append(t_lines)
+    story.append(Spacer(1, 16))
+
+    sums = [
+        ["Subtotal", _money(inv.subtotal or 0)],
+        [f"Tax ({inv.tax_rate or 0:.1f}%)", _money(inv.tax_amount or 0)],
+        ["Total", _money(inv.total or 0)],
+    ]
+    st = Table(sums, colWidths=[12 * cm, 4 * cm])
+    st.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("LINEABOVE", (0, -1), (-1, -1), 0.5, colors.black),
+                ("TOPPADDING", (0, -1), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(st)
+
+    if inv.notes:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("<b>Notes</b>", styles["Heading3"]))
+        story.append(Paragraph((inv.notes or "").replace("\n", "<br/>"), styles["Normal"]))
+
+    doc.build(story)
+    return buf.getvalue()

@@ -232,8 +232,16 @@ export interface Invoice {
   period_end: string;
   total: number;
   status: string;
+  due_date?: string | null;
+  notes?: string | null;
+  tax_rate: number;
+  subtotal: number;
+  tax_amount: number;
   pdf_path?: string;
   created_at: string;
+  updated_at?: string;
+  client_name?: string | null;
+  company_name?: string | null;
   lines?: InvoiceLine[];
 }
 
@@ -247,6 +255,17 @@ export interface InvoiceLine {
   amount: number;
   allowance_amount: number;
   created_at: string;
+  site_name?: string | null;
+  guard_name?: string | null;
+}
+
+export interface InvoiceAuditEntry {
+  id: number;
+  created_at: string;
+  user_id?: number | null;
+  user_name?: string | null;
+  action: string;
+  meta?: Record<string, unknown> | null;
 }
 
 export interface Allowance {

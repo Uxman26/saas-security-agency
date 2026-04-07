@@ -268,10 +268,36 @@ export const api = {
       return request<Invoice[]>(`/invoices?${q.toString()}`);
     },
     get: (id: number): Promise<Invoice> => request<Invoice>(`/invoices/${id}`),
+    pdf: (id: number): Promise<Blob> => requestBlob(`/invoices/${id}/pdf`),
+    audit: (id: number): Promise<import('./types').InvoiceAuditEntry[]> =>
+      request<import('./types').InvoiceAuditEntry[]>(`/invoices/${id}/audit`),
+    patch: (
+      id: number,
+      data: { due_date?: string | null; notes?: string | null; tax_rate?: number; status?: string }
+    ): Promise<Invoice> => request<Invoice>(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    updateLine: (
+      invoiceId: number,
+      lineId: number,
+      data: {
+        site_id?: number;
+        guard_id?: number | null;
+        hours?: number;
+        rate?: number;
+        allowance_amount?: number;
+      }
+    ): Promise<import('./types').InvoiceLine> =>
+      request<import('./types').InvoiceLine>(`/invoices/${invoiceId}/lines/${lineId}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteLine: (invoiceId: number, lineId: number): Promise<void> =>
+      request<void>(`/invoices/${invoiceId}/lines/${lineId}`, { method: 'DELETE' }),
     create: (data: Partial<Invoice>): Promise<Invoice> => request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
     generate: (client_id: number, period_start: string, period_end: string): Promise<Invoice> =>
       request<Invoice>(`/invoices/generate?client_id=${client_id}&period_start=${period_start}&period_end=${period_end}`, { method: 'POST' }),
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
+    addLine: (
+      invoiceId: number,
+      data: { site_id: number; guard_id?: number; hours: number; rate: number; allowance_amount?: number }
+    ): Promise<import('./types').InvoiceLine> =>
+      request<import('./types').InvoiceLine>(`/invoices/${invoiceId}/lines`, { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/invoices/${id}`, { method: 'DELETE' }),
   },
   allowances: {

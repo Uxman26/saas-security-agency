@@ -78,6 +78,12 @@ def run():
         ("sub_contractors", "contract_start_date", "TEXT"),
         ("sub_contractors", "contract_end_date", "TEXT"),
         ("sub_contractors", "status", "TEXT DEFAULT 'active'"),
+        ("companies", "logo_path", "TEXT"),
+        ("invoices", "due_date", "TEXT"),
+        ("invoices", "notes", "TEXT"),
+        ("invoices", "subtotal", "REAL DEFAULT 0"),
+        ("invoices", "tax_rate", "REAL DEFAULT 0"),
+        ("invoices", "tax_amount", "REAL DEFAULT 0"),
     ]
     for table, col, spec in alters:
         if table_exists(cur, table) and not column_exists(cur, table, col):
@@ -85,6 +91,13 @@ def run():
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
             except sqlite3.OperationalError:
                 pass
+    if table_exists(cur, "invoices") and column_exists(cur, "invoices", "subtotal"):
+        try:
+            cur.execute(
+                "UPDATE invoices SET subtotal = total WHERE (subtotal IS NULL OR subtotal = 0) AND total IS NOT NULL AND total != 0"
+            )
+        except sqlite3.OperationalError:
+            pass
     if table_exists(cur, "companies") and not table_exists(cur, "audit_logs"):
         try:
             cur.execute(

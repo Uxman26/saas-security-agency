@@ -10,9 +10,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { Invoice, Client } from '@/lib/types';
-import { FileText, Zap, Trash2 } from 'lucide-react';
+import { FileText, Zap, Trash2, Eye, Pencil } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
+import { can } from '@/lib/permissions';
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-secondary text-secondary-foreground',
@@ -25,6 +28,7 @@ const STATUS_STYLES: Record<string, string> = {
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
 
 export default function InvoicesPage() {
+  const { user } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -245,7 +249,7 @@ export default function InvoicesPage() {
                         <TableRow key={inv.id}>
                           <TableCell className="font-medium text-muted-foreground">#{inv.id}</TableCell>
                           <TableCell className="font-medium whitespace-nowrap">
-                            {clientMap.get(inv.client_id) ?? `Client #${inv.client_id}`}
+                            {inv.client_name ?? clientMap.get(inv.client_id) ?? `Client #${inv.client_id}`}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-sm">
                             {inv.period_start} – {inv.period_end}
@@ -272,15 +276,29 @@ export default function InvoicesPage() {
                             </Select>
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDelete(inv.id)}
-                              title="Delete invoice"
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
+                            <div className="flex items-center gap-0.5">
+                              <Button variant="ghost" size="sm" asChild title="View">
+                                <Link href={`/invoices/${inv.id}/view`}>
+                                  <Eye className="size-4" />
+                                </Link>
+                              </Button>
+                              {can(user, 'inv.write') && (
+                                <Button variant="ghost" size="sm" asChild title="Edit">
+                                  <Link href={`/invoices/${inv.id}/edit`}>
+                                    <Pencil className="size-4" />
+                                  </Link>
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(inv.id)}
+                                title="Delete invoice"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

@@ -378,9 +378,18 @@ class InvoiceLineResponse(InvoiceLineBase):
     id: int
     invoice_id: int
     created_at: datetime
+    site_name: Optional[str] = None
+    guard_name: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class InvoiceLineUpdate(BaseModel):
+    site_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    hours: Optional[float] = None
+    rate: Optional[float] = None
+    allowance_amount: Optional[float] = None
 
 class InvoiceBase(BaseModel):
     client_id: int
@@ -388,19 +397,42 @@ class InvoiceBase(BaseModel):
     period_end: date
     total: Optional[float] = 0
     status: Optional[str] = "draft"
+    due_date: Optional[date] = None
+    notes: Optional[str] = None
+    tax_rate: float = 0
+    subtotal: float = 0
+    tax_amount: float = 0
 
 class InvoiceCreate(InvoiceBase):
     pass
+
+class InvoiceUpdate(BaseModel):
+    due_date: Optional[date] = None
+    notes: Optional[str] = None
+    tax_rate: Optional[float] = None
+    status: Optional[str] = None
 
 class InvoiceResponse(InvoiceBase):
     id: int
     company_id: int
     pdf_path: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    client_name: Optional[str] = None
+    company_name: Optional[str] = None
     lines: list[InvoiceLineResponse] = []
 
     class Config:
         from_attributes = True
+
+
+class InvoiceAuditEntry(BaseModel):
+    id: int
+    created_at: datetime
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    action: str
+    meta: Optional[dict[str, Any]] = None
 
 class PaymentBase(BaseModel):
     invoice_id: Optional[int] = None

@@ -79,6 +79,7 @@ def run():
         ("sub_contractors", "contract_end_date", "TEXT"),
         ("sub_contractors", "status", "TEXT DEFAULT 'active'"),
         ("companies", "logo_path", "TEXT"),
+        ("companies", "contract_expiry_alert_sent_date", "TEXT"),
         ("invoices", "due_date", "TEXT"),
         ("invoices", "notes", "TEXT"),
         ("invoices", "subtotal", "REAL DEFAULT 0"),

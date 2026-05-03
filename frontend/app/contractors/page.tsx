@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
-import { Nav } from '@/components/nav';
+import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -432,8 +432,8 @@ export default function ContractorsPage() {
 
   return (
     <ProtectedRoute>
+      <AppShell>
       <div>
-        <Nav />
         <div className="container mx-auto px-4 py-8 space-y-10">
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
@@ -656,6 +656,7 @@ export default function ContractorsPage() {
           </DialogContent>
         </Dialog>
       </div>
+    </AppShell>
     </ProtectedRoute>
   );
 }

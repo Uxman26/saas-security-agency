@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
-import { Nav } from '@/components/nav';
+import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,8 +124,8 @@ export default function SpecialDaysSettingsPage() {
 
   return (
     <ProtectedRoute>
+      <AppShell>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <Nav />
         <div className="container mx-auto px-4 py-8 max-w-3xl">
           <div className="flex items-center gap-3 mb-6">
             <CalendarRange className="size-8 text-amber-600" />
@@ -257,6 +257,7 @@ export default function SpecialDaysSettingsPage() {
           </Dialog>
         </div>
       </div>
+    </AppShell>
     </ProtectedRoute>
   );
 }

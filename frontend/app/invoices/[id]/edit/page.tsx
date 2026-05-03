@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
-import { Nav } from '@/components/nav';
+import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -215,8 +215,8 @@ export default function InvoiceEditPage() {
 
   return (
     <ProtectedRoute>
+      <AppShell>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <Nav />
         <div className="container mx-auto px-4 py-8 max-w-5xl">
           <div className="flex flex-wrap items-center gap-3 mb-6">
             <Button variant="ghost" size="sm" asChild>
@@ -538,6 +538,7 @@ export default function InvoiceEditPage() {
           )}
         </div>
       </div>
+    </AppShell>
     </ProtectedRoute>
   );
 }

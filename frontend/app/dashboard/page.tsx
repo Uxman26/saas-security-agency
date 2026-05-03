@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
-import { Nav } from '@/components/nav';
+import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import {
@@ -35,7 +35,7 @@ const companyTiles = [
   { href: '/sites', title: 'Sites', desc: 'Manage deployment sites', icon: MapPin, color: 'text-green-600', perm: 'sites.read' },
   { href: '/clients', title: 'Clients', desc: 'Manage client accounts', icon: Building2, color: 'text-purple-600', perm: 'clients.read' },
   { href: '/assignments', title: 'Assignments', desc: 'Schedule guard shifts', icon: ClipboardList, color: 'text-orange-600', perm: 'assign.read' },
-  { href: '/rota', title: 'Rota', desc: 'View the guard rota', icon: Calendar, color: 'text-cyan-600', perm: 'assign.read' },
+  { href: '/rota', title: 'Rotas & Shifts', desc: 'Planner and assignment grid', icon: Calendar, color: 'text-cyan-600', perm: 'assign.read' },
   { href: '/attendance', title: 'Attendance', desc: 'Track guard attendance', icon: Clock, color: 'text-teal-600', perm: 'attend.read' },
   { href: '/documents', title: 'Documents', desc: 'Guard documents & expiry', icon: FolderOpen, color: 'text-amber-600', perm: 'doc.read' },
   { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600', perm: 'subs.read' },
@@ -77,8 +77,8 @@ export default function DashboardPage() {
 
   return (
     <ProtectedRoute>
+      <AppShell>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <Nav />
         <div className="container mx-auto px-4 py-8">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-1">
@@ -275,6 +275,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      </AppShell>
     </ProtectedRoute>
   );
 }

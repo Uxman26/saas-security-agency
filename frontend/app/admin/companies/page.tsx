@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
-import { Nav } from '@/components/nav';
+import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -74,8 +74,8 @@ export default function AdminCompaniesPage() {
 
   return (
     <ProtectedRoute>
+      <AppShell>
       <div>
-        <Nav />
         <div className="container mx-auto px-4 py-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">Platform – All Companies</h1>
@@ -142,6 +142,7 @@ export default function AdminCompaniesPage() {
           </Card>
         </div>
       </div>
+    </AppShell>
     </ProtectedRoute>
   );
 }

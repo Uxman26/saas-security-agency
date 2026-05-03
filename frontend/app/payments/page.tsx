@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
-import { Nav } from '@/components/nav';
+import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -143,8 +143,8 @@ export default function PaymentsPage() {
 
   return (
     <ProtectedRoute>
+      <AppShell>
       <div>
-        <Nav />
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
@@ -361,6 +361,7 @@ export default function PaymentsPage() {
           </Card>
         </div>
       </div>
+    </AppShell>
     </ProtectedRoute>
   );
 }

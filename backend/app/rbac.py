@@ -47,6 +47,9 @@ PERM_SUB_MANAGE = "sub.manage"
 PERM_ROLES_READ = "roles.read"
 PERM_ROLES_WRITE = "roles.write"
 PERM_ROLES_DELETE = "roles.delete"
+PERM_CONTRACTOR_VIEW = "contractor:view"
+PERM_CONTRACTOR_MANAGE = "contractor:manage"
+PERM_CONTRACTOR_ASSIGN = "contractor:assign"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -91,6 +94,9 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_ROLES_READ,
         PERM_ROLES_WRITE,
         PERM_ROLES_DELETE,
+        PERM_CONTRACTOR_VIEW,
+        PERM_CONTRACTOR_MANAGE,
+        PERM_CONTRACTOR_ASSIGN,
     }
 )
 
@@ -112,6 +118,7 @@ _SUPERVISOR = frozenset(
         PERM_DOC_READ,
         PERM_REP_READ,
         PERM_SUB_READ,
+        PERM_CONTRACTOR_VIEW,
     }
 )
 
@@ -135,10 +142,12 @@ _CLIENT_LEGACY = frozenset(
     }
 )
 
+_MANAGER = frozenset(set(ALL_PERMISSION_CODES) - {PERM_CONTRACTOR_MANAGE})
+
 _ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "super_admin": ALL_PERMISSION_CODES,
     "company_admin": ALL_PERMISSION_CODES,
-    "manager": ALL_PERMISSION_CODES,
+    "manager": _MANAGER,
     "supervisor": _SUPERVISOR,
     "guard": _GUARD_LEGACY,
     "client": _CLIENT_LEGACY,

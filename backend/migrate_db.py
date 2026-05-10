@@ -186,6 +186,52 @@ def run():
             cur.execute("ALTER TABLE users ADD COLUMN role_id INTEGER REFERENCES roles(id)")
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "companies") and not table_exists(cur, "contractors"):
+        try:
+            cur.execute(
+                """CREATE TABLE contractors (
+                id TEXT PRIMARY KEY NOT NULL,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                contact_email TEXT,
+                contact_phone TEXT,
+                address TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "contractors") and not table_exists(cur, "contractor_assignments"):
+        try:
+            cur.execute(
+                """CREATE TABLE contractor_assignments (
+                id TEXT PRIMARY KEY NOT NULL,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                main_contractor_id TEXT NOT NULL REFERENCES contractors(id),
+                sub_contractor_id TEXT NOT NULL REFERENCES contractors(id),
+                site_id INTEGER REFERENCES sites(id),
+                start_date TEXT,
+                end_date TEXT,
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(company_id, main_contractor_id, sub_contractor_id, site_id)
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "guards") and not column_exists(cur, "guards", "contractor_id"):
+        try:
+            cur.execute("ALTER TABLE guards ADD COLUMN contractor_id TEXT REFERENCES contractors(id)")
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "sites") and not column_exists(cur, "sites", "contractor_id"):
+        try:
+            cur.execute("ALTER TABLE sites ADD COLUMN contractor_id TEXT REFERENCES contractors(id)")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:

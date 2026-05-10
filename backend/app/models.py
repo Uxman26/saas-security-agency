@@ -1,7 +1,14 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Float, Text, UniqueConstraint
+import enum
+import uuid
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Float, Text, UniqueConstraint, Enum, Uuid
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+
+
+class ContractorKind(str, enum.Enum):
+    main = "main"
+    sub = "sub"
 
 class Role(Base):
     __tablename__ = "roles"
@@ -55,11 +62,68 @@ class Company(Base):
     invoices = relationship("Invoice", back_populates="company", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="company", cascade="all, delete-orphan")
     special_days = relationship("SpecialDay", back_populates="company", cascade="all, delete-orphan")
+    directory_contractors = relationship("Contractor", back_populates="company", cascade="all, delete-orphan")
+
+class Contractor(Base):
+    __tablename__ = "contractors"
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    type = Column(Enum(ContractorKind, values_callable=lambda x: [e.value for e in x], native_enum=False), nullable=False)
+    contact_email = Column(String)
+    contact_phone = Column(String)
+    address = Column(String)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="directory_contractors")
+    assignments_as_main = relationship(
+        "ContractorAssignment",
+        foreign_keys="ContractorAssignment.main_contractor_id",
+        back_populates="main_contractor",
+        cascade="all, delete-orphan",
+    )
+    assignments_as_sub = relationship(
+        "ContractorAssignment",
+        foreign_keys="ContractorAssignment.sub_contractor_id",
+        back_populates="sub_contractor",
+        cascade="all, delete-orphan",
+    )
+    guards = relationship("Guard", back_populates="contractor")
+    sites = relationship("Site", back_populates="contractor")
+
+
+class ContractorAssignment(Base):
+    __tablename__ = "contractor_assignments"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id",
+            "main_contractor_id",
+            "sub_contractor_id",
+            "site_id",
+            name="uq_contractor_assignment_company_main_sub_site",
+        ),
+    )
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    main_contractor_id = Column(Uuid(as_uuid=True), ForeignKey("contractors.id"), nullable=False)
+    sub_contractor_id = Column(Uuid(as_uuid=True), ForeignKey("contractors.id"), nullable=False)
+    site_id = Column(Integer, ForeignKey("sites.id"))
+    start_date = Column(Date)
+    end_date = Column(Date)
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company")
+    main_contractor = relationship("Contractor", foreign_keys=[main_contractor_id], back_populates="assignments_as_main")
+    sub_contractor = relationship("Contractor", foreign_keys=[sub_contractor_id], back_populates="assignments_as_sub")
+    site = relationship("Site", back_populates="contractor_assignments")
+
 
 class Guard(Base):
     __tablename__ = "guards"
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    contractor_id = Column(Uuid(as_uuid=True), ForeignKey("contractors.id"))
     main_contractor_id = Column(Integer, ForeignKey("main_contractors.id"))
     sub_contractor_id = Column(Integer, ForeignKey("sub_contractors.id"))
     full_name = Column(String, nullable=False)
@@ -78,6 +142,7 @@ class Guard(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="guards")
+    contractor = relationship("Contractor", foreign_keys=[contractor_id])
     main_contractor = relationship("MainContractor", back_populates="guards")
     sub_contractor = relationship("SubContractor", back_populates="guards")
     assignments = relationship("Assignment", back_populates="guard", cascade="all, delete-orphan")
@@ -144,6 +209,7 @@ class Site(Base):
     __tablename__ = "sites"
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    contractor_id = Column(Uuid(as_uuid=True), ForeignKey("contractors.id"))
     main_contractor_id = Column(Integer, ForeignKey("main_contractors.id"))
     sub_contractor_id = Column(Integer, ForeignKey("sub_contractors.id"))
     client_id = Column(Integer, ForeignKey("clients.id"))
@@ -155,10 +221,12 @@ class Site(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="sites")
+    contractor = relationship("Contractor", foreign_keys=[contractor_id])
     main_contractor = relationship("MainContractor", back_populates="sites")
     sub_contractor = relationship("SubContractor", back_populates="sites")
     client = relationship("Client", back_populates="sites")
     assignments = relationship("Assignment", back_populates="site", cascade="all, delete-orphan")
+    contractor_assignments = relationship("ContractorAssignment", back_populates="site", cascade="all, delete-orphan")
     rates = relationship("SiteRate", back_populates="site", cascade="all, delete-orphan")
     invoice_lines = relationship("InvoiceLine", back_populates="site", cascade="all, delete-orphan")
 

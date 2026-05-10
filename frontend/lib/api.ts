@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardStats, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -395,6 +395,75 @@ export const api = {
       request<SiteRate>(`/rates/sites/${site_id}`, { method: 'POST', body: JSON.stringify(data) }),
     deleteSiteRate: (site_id: number, rate_id: number): Promise<void> =>
       request<void>(`/rates/sites/${site_id}/${rate_id}`, { method: 'DELETE' }),
+  },
+  directoryContractors: {
+    getContractors: (params?: { type?: 'main' | 'sub'; is_active?: boolean }): Promise<DirectoryContractorList[]> => {
+      const q = new URLSearchParams();
+      if (params?.type) q.append('type', params.type);
+      if (params?.is_active !== undefined) q.append('is_active', String(params.is_active));
+      const qs = q.toString();
+      return request<DirectoryContractorList[]>(`/contractors${qs ? `?${qs}` : ''}`);
+    },
+    createContractor: (data: {
+      name: string;
+      type: 'main' | 'sub';
+      contact_email?: string;
+      contact_phone?: string;
+      address?: string;
+    }): Promise<DirectoryContractor> => {
+      const sanitized = {
+        ...data,
+        name: sanitizeInput(data.name),
+        contact_phone: data.contact_phone ? sanitizeInput(data.contact_phone) : undefined,
+        address: data.address ? sanitizeInput(data.address) : undefined,
+      };
+      return request<DirectoryContractor>('/contractors', { method: 'POST', body: JSON.stringify(sanitized) });
+    },
+    updateContractor: (
+      id: string,
+      data: Partial<{
+        name: string;
+        type: 'main' | 'sub';
+        contact_email?: string;
+        contact_phone?: string;
+        address?: string;
+        is_active?: boolean;
+      }>
+    ): Promise<DirectoryContractor> => {
+      const sanitized = Object.fromEntries(
+        Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])
+      );
+      return request<DirectoryContractor>(`/contractors/${id}`, { method: 'PATCH', body: JSON.stringify(sanitized) });
+    },
+    deactivateContractor: (id: string): Promise<DirectoryContractor> =>
+      request<DirectoryContractor>(`/contractors/${id}/deactivate`, { method: 'DELETE' }),
+    getContractor: (id: string): Promise<DirectoryContractor> => request<DirectoryContractor>(`/contractors/${id}`),
+    getAssignments: (params?: {
+      main_contractor_id?: string;
+      sub_contractor_id?: string;
+      site_id?: number;
+    }): Promise<DirectoryContractorAssignment[]> => {
+      const q = new URLSearchParams();
+      if (params?.main_contractor_id) q.append('main_contractor_id', params.main_contractor_id);
+      if (params?.sub_contractor_id) q.append('sub_contractor_id', params.sub_contractor_id);
+      if (params?.site_id != null) q.append('site_id', params.site_id.toString());
+      const qs = q.toString();
+      return request<DirectoryContractorAssignment[]>(`/contractors/assignments${qs ? `?${qs}` : ''}`);
+    },
+    createAssignment: (data: {
+      main_contractor_id: string;
+      sub_contractor_id: string;
+      site_id?: number;
+      start_date?: string;
+      end_date?: string;
+      notes?: string;
+    }): Promise<DirectoryContractorAssignment> =>
+      request<DirectoryContractorAssignment>('/contractors/assignments', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deleteAssignment: (id: string): Promise<void> =>
+      request<void>(`/contractors/assignments/${id}`, { method: 'DELETE' }),
   },
 };
 

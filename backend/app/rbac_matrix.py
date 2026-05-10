@@ -45,6 +45,9 @@ from app.rbac import (
     PERM_SUBS_DELETE,
     PERM_SUBS_READ,
     PERM_SUBS_WRITE,
+    PERM_CONTRACTOR_ASSIGN,
+    PERM_CONTRACTOR_MANAGE,
+    PERM_CONTRACTOR_VIEW,
 )
 
 MODULE_KEYS = (
@@ -56,6 +59,8 @@ MODULE_KEYS = (
     "contractors",
     "reports",
     "settings",
+    "contractor_registry",
+    "contractor_links",
 )
 
 
@@ -151,11 +156,27 @@ def matrix_to_codes(m: Optional[Dict[str, Any]]) -> FrozenSet[str]:
                 )
             if d:
                 out.update([PERM_ALLOW_DELETE, PERM_RATES_DELETE, PERM_DOC_DELETE, PERM_ROLES_DELETE])
+        elif mod == "contractor_registry":
+            if v:
+                out.add(PERM_CONTRACTOR_VIEW)
+            if c or e or d:
+                out.add(PERM_CONTRACTOR_MANAGE)
+        elif mod == "contractor_links":
+            if v:
+                out.add(PERM_CONTRACTOR_VIEW)
+            if c or e or d:
+                out.add(PERM_CONTRACTOR_ASSIGN)
     return frozenset(out)
 
 
 def default_matrix_admin() -> Dict[str, Any]:
     return {k: {"view": True, "create": True, "edit": True, "delete": True} for k in MODULE_KEYS}
+
+
+def default_matrix_manager() -> Dict[str, Any]:
+    m = {k: {"view": True, "create": True, "edit": True, "delete": True} for k in MODULE_KEYS}
+    m["contractor_registry"] = {"view": True, "create": False, "edit": False, "delete": False}
+    return m
 
 
 def default_matrix_supervisor() -> Dict[str, Any]:
@@ -168,6 +189,8 @@ def default_matrix_supervisor() -> Dict[str, Any]:
         "contractors": {"view": True, "create": False, "edit": False, "delete": False},
         "reports": {"view": True, "create": False, "edit": False, "delete": False},
         "settings": {"view": True, "create": False, "edit": False, "delete": False},
+        "contractor_registry": {"view": True, "create": False, "edit": False, "delete": False},
+        "contractor_links": {"view": True, "create": False, "edit": False, "delete": False},
     }
 
 
@@ -181,6 +204,8 @@ def default_matrix_guard() -> Dict[str, Any]:
         "contractors": {"view": False, "create": False, "edit": False, "delete": False},
         "reports": {"view": False, "create": False, "edit": False, "delete": False},
         "settings": {"view": False, "create": False, "edit": False, "delete": False},
+        "contractor_registry": {"view": False, "create": False, "edit": False, "delete": False},
+        "contractor_links": {"view": False, "create": False, "edit": False, "delete": False},
     }
 
 
@@ -194,6 +219,8 @@ def default_matrix_client_portal() -> Dict[str, Any]:
         "contractors": {"view": False, "create": False, "edit": False, "delete": False},
         "reports": {"view": False, "create": False, "edit": False, "delete": False},
         "settings": {"view": False, "create": False, "edit": False, "delete": False},
+        "contractor_registry": {"view": False, "create": False, "edit": False, "delete": False},
+        "contractor_links": {"view": False, "create": False, "edit": False, "delete": False},
     }
 
 

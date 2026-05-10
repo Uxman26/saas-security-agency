@@ -12,6 +12,8 @@ LIMITS: dict[str, dict[str, Any]] = {
         "features": {
             "subcontractors": False,
             "extended_reports": False,
+            "contractors": False,
+            "sub_contractors": False,
         },
     },
     "standard": {
@@ -20,6 +22,8 @@ LIMITS: dict[str, dict[str, Any]] = {
         "features": {
             "subcontractors": True,
             "extended_reports": False,
+            "contractors": False,
+            "sub_contractors": False,
         },
     },
     "premium": {
@@ -28,6 +32,8 @@ LIMITS: dict[str, dict[str, Any]] = {
         "features": {
             "subcontractors": True,
             "extended_reports": True,
+            "contractors": True,
+            "sub_contractors": False,
         },
     },
     "enterprise": {
@@ -36,6 +42,8 @@ LIMITS: dict[str, dict[str, Any]] = {
         "features": {
             "subcontractors": True,
             "extended_reports": True,
+            "contractors": True,
+            "sub_contractors": True,
         },
     },
 }

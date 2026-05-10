@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional, Tuple
-from app.models import MainContractor, SubContractor, Guard, Site
+from app.models import Contractor, ContractorKind, MainContractor, SubContractor, Guard, Site
 
 
 def require_one_contractor_ref(main_contractor_id: Optional[int], sub_contractor_id: Optional[int], msg: str) -> None:
@@ -61,3 +63,22 @@ def guard_has_contractor(g: Guard) -> bool:
 
 def site_has_contractor(s: Site) -> bool:
     return bool(s.main_contractor_id or s.sub_contractor_id)
+
+
+def assert_unified_main_sub_same_company(
+    db: Session,
+    company_id: int,
+    main_contractor_id: UUID,
+    sub_contractor_id: UUID,
+) -> tuple[Contractor, Contractor]:
+    main_c = db.query(Contractor).filter(Contractor.id == main_contractor_id).first()
+    sub_c = db.query(Contractor).filter(Contractor.id == sub_contractor_id).first()
+    if not main_c or not sub_c:
+        raise HTTPException(status_code=404, detail="Contractor not found")
+    if main_c.company_id != company_id or sub_c.company_id != company_id:
+        raise HTTPException(status_code=422, detail="Contractors must belong to your company.")
+    if main_c.type != ContractorKind.main:
+        raise HTTPException(status_code=422, detail="Selected main contractor must have type main")
+    if sub_c.type != ContractorKind.sub:
+        raise HTTPException(status_code=422, detail="Selected sub contractor must have type sub")
+    return main_c, sub_c

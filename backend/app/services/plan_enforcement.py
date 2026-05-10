@@ -4,6 +4,28 @@ from app.models import Company, Guard, Site
 from app.plan_config import LIMITS, feature_enabled, normalize_tier, quota_guards, quota_sites
 
 
+def check_contractors_feature(db: Session, company_id: int) -> None:
+    co = db.query(Company).filter(Company.id == company_id).first()
+    if not co:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if not feature_enabled(co.subscription_tier, "contractors"):
+        raise HTTPException(
+            status_code=422,
+            detail="Contractors are not available on your subscription tier.",
+        )
+
+
+def check_sub_contractors_feature(db: Session, company_id: int) -> None:
+    co = db.query(Company).filter(Company.id == company_id).first()
+    if not co:
+        raise HTTPException(status_code=404, detail="Company not found")
+    if not feature_enabled(co.subscription_tier, "sub_contractors"):
+        raise HTTPException(
+            status_code=422,
+            detail="Sub-contractors are not available on your subscription tier.",
+        )
+
+
 def enforce_guard_quota(db: Session, company: Company) -> None:
     tier = normalize_tier(company.subscription_tier)
     cap = quota_guards(tier)

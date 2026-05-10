@@ -350,3 +350,38 @@ export interface SiteRate {
   hourly_rate: number;
   created_at: string;
 }
+
+export interface DirectoryContractorList {
+  id: string;
+  name: string;
+  type: 'main' | 'sub';
+  is_active: boolean;
+  contact_email?: string | null;
+}
+
+export interface DirectoryContractor {
+  id: string;
+  company_id: number;
+  name: string;
+  type: 'main' | 'sub';
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  address?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DirectoryContractorAssignment {
+  id: string;
+  company_id: number;
+  main_contractor_id: string;
+  sub_contractor_id: string;
+  site_id?: number | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  notes?: string | null;
+  created_at: string;
+  main_contractor: DirectoryContractorList;
+  sub_contractor: DirectoryContractorList;
+}

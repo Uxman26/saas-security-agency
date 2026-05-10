@@ -13,6 +13,7 @@ from app.rbac import (
 from app.rbac_matrix import (
     default_matrix_admin,
     default_matrix_client_portal,
+    default_matrix_manager,
     default_matrix_supervisor,
     MODULE_KEYS,
     wrap_codes,
@@ -31,7 +32,7 @@ GUARD_CODES = [
 def _seed_rows():
     return [
         ("Admin", "admin", True, wrap_matrix(default_matrix_admin())),
-        ("Manager", "manager", True, wrap_matrix(default_matrix_admin())),
+        ("Manager", "manager", True, wrap_matrix(default_matrix_manager())),
         ("Supervisor", "supervisor", True, wrap_matrix(default_matrix_supervisor())),
         ("Guard", "guard", True, wrap_codes(GUARD_CODES)),
         ("Client", "client", True, wrap_matrix(default_matrix_client_portal())),

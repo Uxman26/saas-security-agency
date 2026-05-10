@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { can } from '@/lib/permissions';
+import { can, PERMS } from '@/lib/permissions';
 import {
   Building2,
   Calendar,
@@ -32,7 +32,7 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
   { href: '/rota', label: 'Rotas & Shifts', perm: 'assign.read', icon: Calendar },
   { href: '/attendance', label: 'Attendance', perm: 'attend.read', icon: Clock },
   { href: '/documents', label: 'Documents', perm: 'doc.read', icon: FolderOpen },
-  { href: '/contractors', label: 'Contractors', perm: 'subs.read', icon: UserCog },
+  { href: '/contractors', label: 'Contractors', perm: PERMS.contractorView, icon: UserCog },
   { href: '/payroll', label: 'Payroll', perm: 'payroll.read', icon: PoundSterling },
   { href: '/invoices', label: 'Invoices', perm: 'inv.read', icon: FileText },
   { href: '/payments', label: 'Payments', perm: 'pay.read', icon: CreditCard },
@@ -52,9 +52,10 @@ export function AppSidebar() {
   const pathname = usePathname();
   const isSuperAdmin = user?.role === 'super_admin';
   const links = useMemo(() => {
-    const showSubs = can(user, 'subs.read') && user?.plan?.features?.subcontractors === true;
+    const showDirectory =
+      can(user, PERMS.contractorView) && user?.plan?.features?.contractors === true;
     return items.filter((i) => {
-      if (i.href === '/contractors') return showSubs;
+      if (i.href === '/contractors') return showDirectory;
       return can(user, i.perm);
     });
   }, [user]);

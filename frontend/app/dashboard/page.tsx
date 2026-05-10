@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import { can } from '@/lib/permissions';
+import { can, isTenantAdmin, PERMS } from '@/lib/permissions';
 import type { DashboardStats, ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
 
 const companyTiles = [
@@ -38,7 +38,7 @@ const companyTiles = [
   { href: '/rota', title: 'Rotas & Shifts', desc: 'Planner and assignment grid', icon: Calendar, color: 'text-cyan-600', perm: 'assign.read' },
   { href: '/attendance', title: 'Attendance', desc: 'Track guard attendance', icon: Clock, color: 'text-teal-600', perm: 'attend.read' },
   { href: '/documents', title: 'Documents', desc: 'Guard documents & expiry', icon: FolderOpen, color: 'text-amber-600', perm: 'doc.read' },
-  { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600', perm: 'subs.read' },
+  { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600', perm: PERMS.contractorView },
   { href: '/payroll', title: 'Payroll', desc: 'Calculate & manage payroll', icon: PoundSterling, color: 'text-emerald-600', perm: 'payroll.read' },
   { href: '/invoices', title: 'Invoices', desc: 'Client billing & invoices', icon: FileText, color: 'text-rose-600', perm: 'inv.read' },
   { href: '/payments', title: 'Payments', desc: 'Track received payments', icon: CreditCard, color: 'text-violet-600', perm: 'pay.read' },
@@ -68,9 +68,11 @@ export default function DashboardPage() {
 
   const tiles = useMemo(() => {
     if (isSuperAdmin) return adminTiles;
-    const showSubs = can(user, 'subs.read') && user?.plan?.features?.subcontractors === true;
+    const showContractors =
+      can(user, PERMS.contractorView) &&
+      (user?.plan?.features?.contractors === true || isTenantAdmin(user));
     return companyTiles.filter((t) => {
-      if (t.href === '/contractors') return showSubs;
+      if (t.href === '/contractors') return showContractors;
       return can(user, t.perm);
     });
   }, [user, isSuperAdmin]);

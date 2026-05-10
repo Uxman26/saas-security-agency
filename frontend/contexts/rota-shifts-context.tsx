@@ -4,14 +4,16 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import { api } from '@/lib/api';
+import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { buildDayRange, attKey, calcHours } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
-import { EMPLOYEE_POOL } from '@/lib/rota-employee-pool';
 
 type InitPayload = {
   name: string;
@@ -26,11 +28,12 @@ function emptyShifts() {
   return {} as RotaJsState['shifts'];
 }
 
-function seedSampleShifts(days: string[]): RotaJsState['shifts'] {
+function seedSampleShifts(days: string[], pool: EmployeeRec[]): RotaJsState['shifts'] {
   const out = emptyShifts();
-  const e0 = EMPLOYEE_POOL[0].id;
-  const e1 = EMPLOYEE_POOL[1].id;
-  const e2 = EMPLOYEE_POOL[2].id;
+  if (pool.length < 3) return out;
+  const e0 = pool[0].id;
+  const e1 = pool[1].id;
+  const e2 = pool[2].id;
   if (days[0]) {
     out[e0] = { ...out[e0], [days[0]]: [mkShift('09:00', '17:00', 'The Hive', '#f59e0b')] };
   }
@@ -81,6 +84,7 @@ const defaultState = (): RotaJsState => ({
 type Ctx = {
   state: RotaJsState;
   pool: EmployeeRec[];
+  poolLoading: boolean;
   initRota: (p: InitPayload) => void;
   resetRota: () => void;
   setRotaView: (v: RotaViewMode) => void;
@@ -112,26 +116,49 @@ const RotaCtx = createContext<Ctx | null>(null);
 
 export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<RotaJsState>(defaultState);
+  const [pool, setPool] = useState<EmployeeRec[]>([]);
+  const [poolLoading, setPoolLoading] = useState(true);
 
-  const initRota = useCallback((p: InitPayload) => {
-    const days = buildDayRange(p.startDate, p.dayCount);
-    let employees: EmployeeRec[] = [];
-    let shifts = emptyShifts();
-    if (p.copySeed) {
-      employees = EMPLOYEE_POOL.slice(0, 5);
-      shifts = seedSampleShifts(days);
-    }
-    setState({
-      ...defaultState(),
-      rotaName: p.name,
-      rotaView: p.view,
-      days,
-      budget: p.budget,
-      employees,
-      shifts,
-      selectedColor: SHIFT_COLOR_OPTS[0],
-    });
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      setPoolLoading(true);
+      try {
+        const guards = await api.guards.list();
+        if (!cancelled) setPool(guardsToEmployees(guards));
+      } catch {
+        if (!cancelled) setPool([]);
+      } finally {
+        if (!cancelled) setPoolLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const initRota = useCallback(
+    (p: InitPayload) => {
+      const days = buildDayRange(p.startDate, p.dayCount);
+      let employees: EmployeeRec[] = [];
+      let shifts = emptyShifts();
+      if (p.copySeed && pool.length > 0) {
+        employees = pool.slice(0, Math.min(5, pool.length));
+        shifts = seedSampleShifts(days, pool);
+      }
+      setState({
+        ...defaultState(),
+        rotaName: p.name,
+        rotaView: p.view,
+        days,
+        budget: p.budget,
+        employees,
+        shifts,
+        selectedColor: SHIFT_COLOR_OPTS[0],
+      });
+    },
+    [pool]
+  );
 
   const resetRota = useCallback(() => setState(defaultState()), []);
 
@@ -160,15 +187,18 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const addEmployeesById = useCallback((ids: string[]) => {
-    setState((s) => {
-      const have = new Set(s.employees.map((e) => e.id));
-      const add = ids
-        .map((id) => EMPLOYEE_POOL.find((e) => e.id === id))
-        .filter((e): e is EmployeeRec => !!e && !have.has(e.id));
-      return { ...s, employees: [...s.employees, ...add] };
-    });
-  }, []);
+  const addEmployeesById = useCallback(
+    (ids: string[]) => {
+      setState((s) => {
+        const have = new Set(s.employees.map((e) => e.id));
+        const add = ids
+          .map((id) => pool.find((e) => e.id === id))
+          .filter((e): e is EmployeeRec => !!e && !have.has(e.id));
+        return { ...s, employees: [...s.employees, ...add] };
+      });
+    },
+    [pool]
+  );
 
   const removeEmployee = useCallback((id: string) => {
     setState((s) => {
@@ -345,7 +375,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       state,
-      pool: EMPLOYEE_POOL,
+      pool,
+      poolLoading,
       initRota,
       resetRota,
       setRotaView,
@@ -374,6 +405,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     }),
     [
       state,
+      pool,
+      poolLoading,
       initRota,
       resetRota,
       setRotaView,

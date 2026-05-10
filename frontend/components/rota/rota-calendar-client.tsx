@@ -26,6 +26,7 @@ export function RotaCalendarClient() {
   const {
     state,
     pool,
+    poolLoading,
     setRotaView,
     totalRotaHours,
     empTotalHours,
@@ -420,7 +421,7 @@ export function RotaCalendarClient() {
             onClick={() => setPickOpen(true)}
           >
             <Users className="size-4" />
-            Add employee
+            Add guard
           </button>
         </div>
       )}
@@ -463,7 +464,7 @@ export function RotaCalendarClient() {
             className="w-full py-3 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40"
             onClick={() => setPickOpen(true)}
           >
-            + Add employee
+            + Add guard
           </button>
         </div>
       )}
@@ -689,9 +690,16 @@ export function RotaCalendarClient() {
       <Dialog open={pickOpen} onOpenChange={setPickOpen}>
         <DialogContent showCloseButton className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Choose employees</DialogTitle>
+            <DialogTitle>Choose guards</DialogTitle>
           </DialogHeader>
           <Input placeholder="Search by name" value={pickSearch} onChange={(e) => setPickSearch(e.target.value)} className="mb-3" />
+          {poolLoading ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">Loading guards…</p>
+          ) : pool.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              No guards yet. Add them under <strong>Guards</strong> in the sidebar, then open this again.
+            </p>
+          ) : null}
           <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto">
             {filteredPool.map((p) => (
               <button
@@ -712,13 +720,14 @@ export function RotaCalendarClient() {
             <Button
               type="button"
               className="bg-pink-600 hover:bg-pink-700"
+              disabled={poolLoading || pool.length === 0}
               onClick={() => {
                 addEmployeesById([...pickSel]);
                 setPickOpen(false);
                 setPickSel(new Set());
               }}
             >
-              Add employees
+              Add to rota
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -92,7 +92,9 @@ export default function CreateRotaPage() {
                     Copy sample rota
                     {mode === 'copy' ? <Check className="size-4 text-primary" /> : null}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Prefill employees and a few sample shifts.</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Prefill with up to five guards and sample shifts (uses guards from your Guards list; needs at least three for the full sample).
+                  </p>
                 </div>
               </button>
             </div>

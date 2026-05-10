@@ -74,7 +74,7 @@ const defaultState = (): RotaJsState => ({
   ctxShift: null,
   ctxEmp: null,
   copyShift: null,
-  empModal_selected: [],
+  empModal_selected: new Set<string>(),
   orderDragIdx: null,
 });
 
@@ -295,8 +295,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, copyShift }));
   }, []);
 
-  const setEmpModalSelected = useCallback((empModal_selected: string[]) => {
-    setState((s) => ({ ...s, empModal_selected }));
+  const setEmpModalSelected = useCallback((ids: string[]) => {
+    setState((s) => ({ ...s, empModal_selected: new Set(ids) }));
   }, []);
 
   const setOrderDragIdx = useCallback((orderDragIdx: number | null) => {

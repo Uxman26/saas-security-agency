@@ -25,6 +25,7 @@ export function RotaCalendarClient() {
   const router = useRouter();
   const {
     state,
+    pool,
     setRotaView,
     totalRotaHours,
     empTotalHours,

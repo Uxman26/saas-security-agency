@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, ValidationInfo, field_validator
 
 
 class ContractorTypeSchema(str, Enum):
@@ -70,6 +70,23 @@ class ContractorRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def created_at_fallback(cls, v):
+        if v is not None:
+            return v
+        return datetime.now(timezone.utc)
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def updated_at_fallback(cls, v, info: ValidationInfo):
+        if v is not None:
+            return v
+        c = info.data.get("created_at")
+        if c is not None:
+            return c
+        return datetime.now(timezone.utc)
 
 
 class AssignmentCreate(BaseModel):

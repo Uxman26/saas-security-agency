@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column("address", sa.String(), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=True),
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"]),
         sa.PrimaryKeyConstraint("id"),
     )

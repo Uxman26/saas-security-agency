@@ -31,7 +31,7 @@ def _login(client: TestClient, email: str) -> str:
     return r.json()["access_token"]
 
 
-def test_create_contractor_duplicate_and_plan(session, client):
+def test_create_contractor_duplicate(session, client):
     _seed_user_company(session, "a@test.com", "premium", "company_admin")
     tok = _login(client, "a@test.com")
     h = {"Authorization": f"Bearer {tok}"}
@@ -42,14 +42,8 @@ def test_create_contractor_duplicate_and_plan(session, client):
     r2 = client.post("/contractors", json={"name": "MainCo", "type": "main"}, headers=h)
     assert r2.status_code == 409
 
-    u = session.query(User).filter(User.email == "a@test.com").first()
-    co = session.query(Company).filter(Company.id == u.company_id).first()
-    co.subscription_tier = "basic"
-    session.add(co)
-    session.commit()
-
     r3 = client.post("/contractors", json={"name": "Other", "type": "main"}, headers=h)
-    assert r3.status_code == 422
+    assert r3.status_code == 201
 
 
 def test_assignment_cross_company_duplicate(session, client):

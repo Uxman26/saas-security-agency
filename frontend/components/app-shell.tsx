@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const isSuperAdmin = user?.role === 'super_admin';
   const links = useMemo(() => {
-    const showSubs = can(user, 'subs.read') && user?.plan?.features?.subcontractors === true;
+    const showSubs = can(user, 'subs.read'); /* && user?.plan?.features?.subcontractors === true */
     return mobileLinks.filter((i) => {
       if (i.href === '/contractors') return showSubs;
       return can(user, i.perm);

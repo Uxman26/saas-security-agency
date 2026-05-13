@@ -13,13 +13,14 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 
-const VALID_TIERS = ['basic', 'standard', 'premium'];
+// const VALID_TIERS = ['basic', 'standard', 'premium'];
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tierParam = searchParams.get('tier');
-  const subscription_tier = tierParam && VALID_TIERS.includes(tierParam) ? tierParam : undefined;
+  // const subscription_tier = tierParam && VALID_TIERS.includes(tierParam) ? tierParam : undefined;
+  const subscription_tier = tierParam || undefined;
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 

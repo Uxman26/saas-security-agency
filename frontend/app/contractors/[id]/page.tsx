@@ -32,7 +32,7 @@ export default function ContractorDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const allowSub = user?.plan?.features?.sub_contractors === true;
+  const allowSub = true; // user?.plan?.features?.sub_contractors === true;
   const canManage = can(user, PERMS.contractorManage);
   const canAssign = can(user, PERMS.contractorAssign);
 

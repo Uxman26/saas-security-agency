@@ -35,7 +35,7 @@ export default function ContractorsDirectoryPage() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const allowSub = user?.plan?.features?.sub_contractors === true;
+  const allowSub = true; // user?.plan?.features?.sub_contractors === true;
 
   const load = useCallback(async () => {
     setLoading(true);

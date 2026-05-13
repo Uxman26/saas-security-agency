@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import { can, isTenantAdmin, PERMS } from '@/lib/permissions';
+import { can, PERMS } from '@/lib/permissions';
 import type { DashboardStats, ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
 
 const companyTiles = [
@@ -69,8 +69,8 @@ export default function DashboardPage() {
   const tiles = useMemo(() => {
     if (isSuperAdmin) return adminTiles;
     const showContractors =
-      can(user, PERMS.contractorView) &&
-      (user?.plan?.features?.contractors === true || isTenantAdmin(user));
+      can(user, PERMS.contractorView) /* &&
+      (user?.plan?.features?.contractors === true || isTenantAdmin(user)) */;
     return companyTiles.filter((t) => {
       if (t.href === '/contractors') return showContractors;
       return can(user, t.perm);

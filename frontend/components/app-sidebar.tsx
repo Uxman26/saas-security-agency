@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { can, isTenantAdmin, PERMS } from '@/lib/permissions';
+import { can, PERMS } from '@/lib/permissions';
 import {
   Building2,
   Calendar,
@@ -53,8 +53,8 @@ export function AppSidebar() {
   const isSuperAdmin = user?.role === 'super_admin';
   const links = useMemo(() => {
     const showDirectory =
-      can(user, PERMS.contractorView) &&
-      (user?.plan?.features?.contractors === true || isTenantAdmin(user));
+      can(user, PERMS.contractorView) /* &&
+      (user?.plan?.features?.contractors === true || isTenantAdmin(user)) */;
     return items.filter((i) => {
       if (i.href === '/contractors') return showDirectory;
       return can(user, i.perm);

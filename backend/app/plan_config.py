@@ -56,18 +56,22 @@ def normalize_tier(tier: Optional[str]) -> str:
 
 
 def limits_for_tier(tier: Optional[str]) -> dict[str, Any]:
-    return LIMITS[normalize_tier(tier)]
+    # return LIMITS[normalize_tier(tier)]
+    return LIMITS["enterprise"]
 
 
 def feature_enabled(tier: Optional[str], key: str) -> bool:
-    return bool(limits_for_tier(tier)["features"].get(key))
+    # return bool(limits_for_tier(tier)["features"].get(key))
+    return True
 
 
 def quota_guards(tier: Optional[str]) -> Optional[int]:
-    n = limits_for_tier(tier)["max_guards"]
-    return n
+    # n = limits_for_tier(tier)["max_guards"]
+    # return n
+    return None
 
 
 def quota_sites(tier: Optional[str]) -> Optional[int]:
-    n = limits_for_tier(tier)["max_sites"]
-    return n
+    # n = limits_for_tier(tier)["max_sites"]
+    # return n
+    return None

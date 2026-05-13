@@ -26,7 +26,7 @@ export function ContractorForm({
   initial,
   onSubmit,
   loading,
-  allowSubContractors,
+  allowSubContractors: _allowSubContractors,
   submitLabel,
 }: {
   initial?: Partial<ContractorFormValues>;
@@ -76,14 +76,19 @@ export function ContractorForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="main">Main contractor</SelectItem>
-              <SelectItem value="sub" disabled={!allowSubContractors} title={!allowSubContractors ? 'Upgrade plan' : undefined}>
+              <SelectItem
+                value="sub"
+                disabled={false}
+                // disabled={!allowSubContractors}
+                // title={!allowSubContractors ? 'Upgrade plan' : undefined}
+              >
                 Sub-contractor
               </SelectItem>
             </SelectContent>
           </Select>
-          {!allowSubContractors && (
+          {/* {!allowSubContractors && (
             <p className="text-xs text-muted-foreground">Sub-contractors require Enterprise.</p>
-          )}
+          )} */}
         </div>
         <div className="space-y-1">
           <Label>Contact email</Label>

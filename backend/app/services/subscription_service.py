@@ -19,8 +19,8 @@ def _company_scoped_user(db: Session, user_id: int) -> None:
 def update_subscription(db: Session, data: SubscriptionUpdate, user_id: int) -> Company:
     _company_scoped_user(db, user_id)
     company = get_company_by_user_id(db, user_id)
-    if data.subscription_tier not in TIERS:
-        raise HTTPException(status_code=400, detail="Invalid subscription tier")
+    # if data.subscription_tier not in TIERS:
+    #     raise HTTPException(status_code=400, detail="Invalid subscription tier")
     company.subscription_tier = data.subscription_tier
     db.commit()
     db.refresh(company)

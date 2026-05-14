@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from datetime import date, datetime
 from typing import Any, List, Optional
+from uuid import UUID
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -58,6 +59,7 @@ class GuardBase(BaseModel):
     dbs_status: Optional[str] = None
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
+    contractor_id: Optional[UUID] = None
     weekly_contracted_hours: Optional[float] = 40.0
 
 class GuardCreate(GuardBase):
@@ -80,6 +82,7 @@ class SiteBase(BaseModel):
     default_hourly_rate: Optional[float] = None
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
+    contractor_id: Optional[UUID] = None
 
 class SiteCreate(SiteBase):
     pass

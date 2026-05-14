@@ -73,6 +73,7 @@ export interface Guard {
   dbs_status?: string;
   main_contractor_id?: number | null;
   sub_contractor_id?: number | null;
+  contractor_id?: string | null;
   weekly_contracted_hours?: number | null;
   created_at: string;
 }
@@ -88,6 +89,7 @@ export interface Site {
   default_hourly_rate?: number;
   main_contractor_id?: number | null;
   sub_contractor_id?: number | null;
+  contractor_id?: string | null;
   created_at: string;
 }
 

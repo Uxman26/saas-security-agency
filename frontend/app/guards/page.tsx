@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard } from '@/hooks/use-guards';
+import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { guardSchema, type GuardFormData } from '@/lib/validation';
@@ -42,32 +44,34 @@ function GuardForm({
   submitLabel,
 }: {
   form: ReturnType<typeof useForm<GuardFormData>>;
-  mains: { id: number; name: string }[];
-  subs: { id: number; name: string }[];
+  mains: { id: string; name: string }[];
+  subs: { id: string; name: string }[];
   onSubmit: (data: GuardFormData) => void;
   isPending: boolean;
   submitLabel: string;
 }) {
   const { register, handleSubmit, setValue, watch, formState: { errors } } = form;
-  const mid = watch('main_contractor_id');
-  const sid = watch('sub_contractor_id');
+  const cid = watch('contractor_id');
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1 sm:col-span-2 rounded-md border border-border p-3 bg-muted/30">
           <p className="text-sm font-medium">Contractor <span className="text-destructive">*</span></p>
-          <p className="text-xs text-muted-foreground mb-2">Choose a main contractor or a sub contractor.</p>
+          <p className="text-xs text-muted-foreground mb-2">Choose a main contractor or a sub contractor from your directory.</p>
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Main contractor</Label>
               <Select
-                value={mid != null && mid > 0 ? String(mid) : '__none__'}
+                value={cid && mains.some((m) => m.id === cid) ? cid : '__none__'}
                 onValueChange={(v) => {
                   if (v === '__none__') {
-                    setValue('main_contractor_id', undefined);
+                    if (mains.some((m) => m.id === cid)) {
+                      setValue('contractor_id', undefined);
+                    }
                     return;
                   }
-                  setValue('main_contractor_id', parseInt(v, 10));
+                  setValue('contractor_id', v);
+                  setValue('main_contractor_id', undefined);
                   setValue('sub_contractor_id', undefined);
                 }}
               >
@@ -75,7 +79,7 @@ function GuardForm({
                 <SelectContent>
                   <SelectItem value="__none__">— None —</SelectItem>
                   {mains.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -83,21 +87,24 @@ function GuardForm({
             <div className="space-y-1">
               <Label>Sub contractor</Label>
               <Select
-                value={sid != null && sid > 0 ? String(sid) : '__none__'}
+                value={cid && subs.some((s) => s.id === cid) ? cid : '__none__'}
                 onValueChange={(v) => {
                   if (v === '__none__') {
-                    setValue('sub_contractor_id', undefined);
+                    if (subs.some((s) => s.id === cid)) {
+                      setValue('contractor_id', undefined);
+                    }
                     return;
                   }
-                  setValue('sub_contractor_id', parseInt(v, 10));
+                  setValue('contractor_id', v);
                   setValue('main_contractor_id', undefined);
+                  setValue('sub_contractor_id', undefined);
                 }}
               >
                 <SelectTrigger><SelectValue placeholder="Sub" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— None —</SelectItem>
                   {subs.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -180,8 +187,17 @@ export default function GuardsPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const { data: guards = [], isLoading, refetch, isRefetching } = useGuards();
-  const { data: mains = [] } = useMainContractors();
-  const { data: subs = [] } = useSubContractors();
+  const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
+  const { data: legMains = [] } = useMainContractors();
+  const { data: legSubs = [] } = useSubContractors();
+  const mains = useMemo(
+    () => dirRows.filter((c) => c.type === 'main').map((c) => ({ id: c.id, name: c.name })),
+    [dirRows],
+  );
+  const subs = useMemo(
+    () => dirRows.filter((c) => c.type === 'sub').map((c) => ({ id: c.id, name: c.name })),
+    [dirRows],
+  );
   const createGuard = useCreateGuard();
   const updateGuard = useUpdateGuard();
   const deleteGuard = useDeleteGuard();
@@ -194,20 +210,23 @@ export default function GuardsPage() {
       visa_status: '',
       rtw_status: '',
       dbs_status: '',
+      contractor_id: undefined,
     },
   });
 
   const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSchema) as Resolver<GuardFormData> });
 
   const contractorLabel = useMemo(() => {
-    const mm = new Map(mains.map((m) => [m.id, m.name]));
-    const sm = new Map(subs.map((s) => [s.id, s.name]));
+    const dirNames = new Map(dirRows.map((c) => [c.id, c.name]));
+    const mm = new Map(legMains.map((m) => [m.id, m.name]));
+    const sm = new Map(legSubs.map((s) => [s.id, s.name]));
     return (g: Guard) => {
+      if (g.contractor_id) return dirNames.get(g.contractor_id) ?? 'Contractor';
       if (g.sub_contractor_id) return sm.get(g.sub_contractor_id) ?? `Sub #${g.sub_contractor_id}`;
       if (g.main_contractor_id) return mm.get(g.main_contractor_id) ?? `Main #${g.main_contractor_id}`;
       return '—';
     };
-  }, [mains, subs]);
+  }, [dirRows, legMains, legSubs]);
 
   const handleCreate = async (data: GuardFormData) => {
     try {
@@ -234,6 +253,7 @@ export default function GuardsPage() {
       dbs_status: guard.dbs_status ?? '',
       main_contractor_id: guard.main_contractor_id ?? undefined,
       sub_contractor_id: guard.sub_contractor_id ?? undefined,
+      contractor_id: guard.contractor_id ?? undefined,
       weekly_contracted_hours: guard.weekly_contracted_hours ?? undefined,
     });
     setEditOpen(true);
@@ -361,7 +381,8 @@ export default function GuardsPage() {
 
           {(mains.length === 0 && subs.length === 0) && (
             <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-              Add a main or sub contractor under Contractors before you can link guards.
+              Add at least one main or sub contractor on the{' '}
+              <Link href="/contractors" className="font-medium underline">Contractors</Link> page before you can link guards.
             </div>
           )}
 

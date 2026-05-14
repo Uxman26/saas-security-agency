@@ -8,6 +8,23 @@ from typing import Optional, Tuple
 from app.models import Contractor, ContractorKind, MainContractor, SubContractor, Guard, Site
 
 
+def resolve_directory_contractor_link(db: Session, company_id: int, contractor_id: UUID) -> Contractor:
+    c = (
+        db.query(Contractor)
+        .filter(
+            Contractor.id == contractor_id,
+            Contractor.company_id == company_id,
+            Contractor.is_active.is_(True),
+        )
+        .first()
+    )
+    if not c:
+        raise HTTPException(status_code=400, detail="Contractor not found or inactive")
+    if c.type not in (ContractorKind.main, ContractorKind.sub):
+        raise HTTPException(status_code=400, detail="Invalid contractor type for guard or site link")
+    return c
+
+
 def require_one_contractor_ref(main_contractor_id: Optional[int], sub_contractor_id: Optional[int], msg: str) -> None:
     if main_contractor_id and sub_contractor_id:
         raise HTTPException(status_code=400, detail="Link either a main contractor or a sub contractor, not both.")
@@ -58,11 +75,11 @@ def apply_site_contractors(db: Session, company_id: int, main_id: Optional[int],
 
 
 def guard_has_contractor(g: Guard) -> bool:
-    return bool(g.main_contractor_id or g.sub_contractor_id)
+    return bool(g.contractor_id or g.main_contractor_id or g.sub_contractor_id)
 
 
 def site_has_contractor(s: Site) -> bool:
-    return bool(s.main_contractor_id or s.sub_contractor_id)
+    return bool(s.contractor_id or s.main_contractor_id or s.sub_contractor_id)
 
 
 def assert_unified_main_sub_same_company(

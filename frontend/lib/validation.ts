@@ -17,6 +17,11 @@ const optPosInt = z.preprocess(
   z.number().int().positive().optional()
 );
 
+const optUuid = z.preprocess(
+  (v) => (v === '' || v === null || v === undefined ? undefined : v),
+  z.string().uuid().optional()
+);
+
 export const guardSchema = z
   .object({
     full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
@@ -35,13 +40,21 @@ export const guardSchema = z
       (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)),
       z.number().min(0).max(168).optional()
     ),
+    contractor_id: optUuid,
     main_contractor_id: optPosInt,
     sub_contractor_id: optPosInt,
   })
-  .refine((d) => Boolean(d.main_contractor_id) !== Boolean(d.sub_contractor_id), {
-    message: 'Select a main contractor or a sub contractor (exactly one).',
-    path: ['main_contractor_id'],
-  });
+  .refine(
+    (d) => {
+      const hasDir = Boolean(d.contractor_id);
+      const hasLegacy = Boolean(d.main_contractor_id) !== Boolean(d.sub_contractor_id);
+      return (hasDir && !d.main_contractor_id && !d.sub_contractor_id) || (!hasDir && hasLegacy);
+    },
+    {
+      message: 'Select a main contractor or a sub contractor (exactly one).',
+      path: ['main_contractor_id'],
+    }
+  );
 export type GuardFormData = z.infer<typeof guardSchema>;
 
 export const siteSchema = z
@@ -52,13 +65,21 @@ export const siteSchema = z
     contact_person: z.string().max(100).optional().or(z.literal('')),
     contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
     default_hourly_rate: z.number().min(0).optional().nullable(),
+    contractor_id: optUuid,
     main_contractor_id: optPosInt,
     sub_contractor_id: optPosInt,
   })
-  .refine((d) => Boolean(d.main_contractor_id) !== Boolean(d.sub_contractor_id), {
-    message: 'Select a main contractor or a sub contractor (exactly one).',
-    path: ['main_contractor_id'],
-  });
+  .refine(
+    (d) => {
+      const hasDir = Boolean(d.contractor_id);
+      const hasLegacy = Boolean(d.main_contractor_id) !== Boolean(d.sub_contractor_id);
+      return (hasDir && !d.main_contractor_id && !d.sub_contractor_id) || (!hasDir && hasLegacy);
+    },
+    {
+      message: 'Select a main contractor or a sub contractor (exactly one).',
+      path: ['main_contractor_id'],
+    }
+  );
 export type SiteFormData = z.infer<typeof siteSchema>;
 
 export const assignmentSchema = z.object({

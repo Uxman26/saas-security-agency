@@ -131,11 +131,11 @@ export default function AssignmentsPage() {
   const { data: guards = [] } = useGuards();
   const { data: sites = [] } = useSites();
   const assignableGuards = useMemo(
-    () => guards.filter((g) => Boolean(g.main_contractor_id || g.sub_contractor_id)),
+    () => guards.filter((g) => Boolean(g.contractor_id || g.main_contractor_id || g.sub_contractor_id)),
     [guards],
   );
   const assignableSites = useMemo(
-    () => sites.filter((s) => Boolean(s.main_contractor_id || s.sub_contractor_id)),
+    () => sites.filter((s) => Boolean(s.contractor_id || s.main_contractor_id || s.sub_contractor_id)),
     [sites],
   );
   const canAssign = assignableGuards.length > 0 && assignableSites.length > 0;

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from typing import List
+from typing import List, Any
 from app.models import Guard
 from app.schemas import GuardCreate
 from app.services.company_service import get_company_by_user_id
@@ -9,7 +9,7 @@ from app.services import audit_service
 from app.services import contractor_scope
 
 
-def _payload(guard: GuardCreate) -> dict:
+def _payload(guard: GuardCreate) -> dict[str, Any]:
     return guard.model_dump() if hasattr(guard, "model_dump") else guard.dict()
 
 
@@ -17,12 +17,29 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
     company = get_company_by_user_id(db, user_id)
     enforce_guard_quota(db, company)
     data = _payload(guard)
+    cid = data.pop("contractor_id", None)
     main_id = data.pop("main_contractor_id", None)
     sub_id = data.pop("sub_contractor_id", None)
-    main_id, sub_id = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
+    if cid is not None:
+        if main_id is not None or sub_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Use either directory contractor (contractor_id) or legacy main/sub fields, not both.",
+            )
+        contractor_scope.resolve_directory_contractor_link(db, company.id, cid)
+        next_cid, next_main, next_sub = cid, None, None
+    else:
+        next_main, next_sub = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
+        next_cid = None
     if data.get("badge_number") and db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
         raise HTTPException(status_code=400, detail="Badge number already exists")
-    db_guard = Guard(**data, company_id=company.id, main_contractor_id=main_id, sub_contractor_id=sub_id)
+    db_guard = Guard(
+        **data,
+        company_id=company.id,
+        contractor_id=next_cid,
+        main_contractor_id=next_main,
+        sub_contractor_id=next_sub,
+    )
     db.add(db_guard)
     db.flush()
     audit_service.log_action(
@@ -38,9 +55,11 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
     db.refresh(db_guard)
     return db_guard
 
+
 def get_guards(db: Session, user_id: int) -> List[Guard]:
     company = get_company_by_user_id(db, user_id)
     return db.query(Guard).filter(Guard.company_id == company.id).all()
+
 
 def get_guard_by_id(db: Session, guard_id: int, user_id: int) -> Guard:
     company = get_company_by_user_id(db, user_id)
@@ -49,22 +68,36 @@ def get_guard_by_id(db: Session, guard_id: int, user_id: int) -> Guard:
         raise HTTPException(status_code=404, detail="Guard not found")
     return guard
 
+
 def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -> Guard:
     company = get_company_by_user_id(db, user_id)
     db_guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
     if not db_guard:
         raise HTTPException(status_code=404, detail="Guard not found")
     data = _payload(guard)
+    cid = data.pop("contractor_id", None)
     main_id = data.pop("main_contractor_id", None)
     sub_id = data.pop("sub_contractor_id", None)
-    main_id, sub_id = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
+    if cid is not None:
+        if main_id is not None or sub_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail="Use either directory contractor (contractor_id) or legacy main/sub fields, not both.",
+            )
+        contractor_scope.resolve_directory_contractor_link(db, company.id, cid)
+        db_guard.contractor_id = cid
+        db_guard.main_contractor_id = None
+        db_guard.sub_contractor_id = None
+    else:
+        next_main, next_sub = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
+        db_guard.contractor_id = None
+        db_guard.main_contractor_id = next_main
+        db_guard.sub_contractor_id = next_sub
     if data.get("badge_number") and data["badge_number"] != db_guard.badge_number:
         if db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
             raise HTTPException(status_code=400, detail="Badge number already exists")
     for key, value in data.items():
         setattr(db_guard, key, value)
-    db_guard.main_contractor_id = main_id
-    db_guard.sub_contractor_id = sub_id
     audit_service.log_action(
         db,
         company_id=company.id,
@@ -76,6 +109,7 @@ def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -
     db.commit()
     db.refresh(db_guard)
     return db_guard
+
 
 def delete_guard(db: Session, guard_id: int, user_id: int) -> None:
     company = get_company_by_user_id(db, user_id)

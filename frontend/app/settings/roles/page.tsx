@@ -52,7 +52,7 @@ const MODULE_KEYS = [
 const MODULE_LABELS: Record<string, string> = {
   clients: 'Clients',
   sites: 'Sites',
-  guards: 'Guards',
+  guards: 'Staff',
   rota: 'Rota',
   invoices: 'Invoices',
   contractors: 'Contractors',

@@ -160,20 +160,20 @@ export default function AttendancePage() {
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Book Guard Attendance</DialogTitle>
+                    <DialogTitle>Book staff attendance</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-2">
                     <p className="text-sm text-muted-foreground">
                       Records the current time as the book-on or book-off time for the selected assignment.
                     </p>
                     <div className="space-y-1">
-                      <Label>Filter by Guard</Label>
+                      <Label>Filter by staff</Label>
                       <Select value={bookGuardId || 'all'} onValueChange={(v) => setBookGuardId(v === 'all' ? '' : v)}>
                         <SelectTrigger>
                           <SelectValue placeholder="All guards" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All Guards</SelectItem>
+                          <SelectItem value="all">All staff</SelectItem>
                           {guards.map((g) => (
                             <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
                           ))}
@@ -292,7 +292,7 @@ export default function AttendancePage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Assignment ID" colKey="assignment" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />

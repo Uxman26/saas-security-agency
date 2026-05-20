@@ -458,7 +458,7 @@ export function RotaCalendarClient() {
             onClick={() => setPickOpen(true)}
           >
             <Users className="size-4" />
-            Add guard
+            Add staff
           </button>
         </div>
       )}
@@ -727,14 +727,14 @@ export function RotaCalendarClient() {
       <Dialog open={pickOpen} onOpenChange={setPickOpen}>
         <DialogContent showCloseButton className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Choose guards</DialogTitle>
+            <DialogTitle>Choose staff</DialogTitle>
           </DialogHeader>
           <Input placeholder="Search by name" value={pickSearch} onChange={(e) => setPickSearch(e.target.value)} className="mb-3" />
           {poolLoading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Loading guards…</p>
           ) : pool.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              No guards yet. Add them under <strong>Guards</strong> in the sidebar, then open this again.
+              No staff yet. Add them under <strong>Staff</strong> in the sidebar, then open this again.
             </p>
           ) : null}
           <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto">

@@ -18,6 +18,8 @@ import {
   ENTITLEMENT_UNITS,
   EMERGENCY_RELATIONSHIPS,
   LEAVE_MONTHS,
+  WEEKDAYS,
+  PAY_FREQUENCIES,
 } from '@/lib/guard-options';
 import { cn } from '@/lib/utils';
 
@@ -111,10 +113,17 @@ export function GuardFormWizard({
   const displayName = [first, last].filter(Boolean).join(' ') || 'New employee';
 
   const stepFields: (keyof GuardFormData)[][] = [
-    ['first_name', 'last_name', 'email', 'employment_start_date', 'main_contractor_id'],
-    ['holiday_jurisdiction', 'employee_type', 'entitlement_unit', 'working_time_pattern'],
+    ['first_name', 'last_name', 'phone', 'visa_status'],
+    [],
     [],
   ];
+  const selectedDays = (watch('available_days') || '').split(',').filter(Boolean);
+  const toggleDay = (v: string) => {
+    const set = new Set(selectedDays);
+    if (set.has(v)) set.delete(v);
+    else set.add(v);
+    setValue('available_days', [...set].join(','));
+  };
 
   const next = async () => {
     const ok = await trigger(stepFields[step]);
@@ -123,6 +132,11 @@ export function GuardFormWizard({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {Object.keys(errors).length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          Please fix the highlighted fields below before saving.
+        </div>
+      )}
       <div className="flex gap-0 text-sm font-medium">
         {STEPS.map((label, i) => (
           <div
@@ -142,7 +156,7 @@ export function GuardFormWizard({
       {step === 0 && (
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           <div className="rounded-md border p-3 bg-muted/30 space-y-3">
-            <p className="text-sm font-medium">Contractor <span className="text-destructive">*</span></p>
+            <p className="text-sm font-medium">Contractor (optional)</p>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Main contractor</Label>
@@ -235,13 +249,14 @@ export function GuardFormWizard({
                 <Input type="date" {...register('date_of_birth')} />
               </div>
               <div className="space-y-1">
-                <Label>Email <span className="text-destructive">*</span></Label>
+                <Label>Email</Label>
                 <Input type="email" {...register('email')} />
                 {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
               </div>
               <div className="space-y-1">
-                <Label>Mobile number</Label>
+                <Label>Mobile number <span className="text-destructive">*</span></Label>
                 <Input {...register('phone')} />
+                {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label>Work phone</Label>
@@ -252,9 +267,8 @@ export function GuardFormWizard({
                 <Input {...register('job_title')} />
               </div>
               <div className="space-y-1">
-                <Label>Employment start date <span className="text-destructive">*</span></Label>
+                <Label>Employment start date</Label>
                 <Input type="date" {...register('employment_start_date')} />
-                {errors.employment_start_date && <p className="text-xs text-destructive">{errors.employment_start_date.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label>Probation end date</Label>
@@ -270,7 +284,64 @@ export function GuardFormWizard({
               <div className="space-y-1 sm:col-span-2"><Label>Address 3</Label><Input {...register('address_line_3')} /></div>
               <div className="space-y-1"><Label>Town/City</Label><Input {...register('town_city')} /></div>
               <div className="space-y-1"><Label>County</Label><Input {...register('county')} /></div>
-              <div className="space-y-1"><Label>Postcode</Label><Input {...register('postcode')} /></div>
+              <div className="space-y-1"><Label>Postcode</Label><Input {...register('postcode')} placeholder="e.g. E15 2AB" /></div>
+            </div>
+          </Section>
+
+          <Section title="Area & availability">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Service area</Label>
+                <Input {...register('service_area')} placeholder="e.g. East London" />
+              </div>
+              <div className="space-y-1">
+                <Label>Nearby areas willing to work</Label>
+                <Input {...register('nearby_areas')} placeholder="e.g. Stratford, Hackney" />
+              </div>
+              <div className="space-y-1 sm:col-span-2 flex items-center gap-2 pt-1">
+                <input type="checkbox" id="has_car" className="size-4" {...register('has_car')} />
+                <Label htmlFor="has_car" className="font-normal cursor-pointer">Has car / can drive to sites</Label>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Available days</Label>
+                <div className="flex flex-wrap gap-2">
+                  {WEEKDAYS.map((d) => (
+                    <button
+                      key={d.value}
+                      type="button"
+                      onClick={() => toggleDay(d.value)}
+                      className={cn(
+                        'px-3 py-1 rounded-full text-xs border',
+                        selectedDays.includes(d.value) ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'
+                      )}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Preferred timing</Label>
+                <Input {...register('availability_timing')} placeholder="e.g. 06:00–14:00, nights only" />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Pay / contract period</Label>
+                <div className="flex gap-2">
+                  {PAY_FREQUENCIES.map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setValue('pay_frequency', p.value)}
+                      className={cn(
+                        'px-4 py-2 rounded-md border text-sm',
+                        watch('pay_frequency') === p.value ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </Section>
 
@@ -326,7 +397,11 @@ export function GuardFormWizard({
               <div className="space-y-1"><Label>Badge number</Label><Input {...register('badge_number')} /></div>
               <div className="space-y-1"><Label>SIA number</Label><Input {...register('sia_number')} /></div>
               <div className="space-y-1"><Label>SIA expiry</Label><Input type="date" {...register('sia_expiry_date')} /></div>
-              <div className="space-y-1"><Label>Visa status</Label><Input {...register('visa_status')} /></div>
+              <div className="space-y-1">
+                <Label>Visa status <span className="text-destructive">*</span></Label>
+                <Input {...register('visa_status')} placeholder="e.g. Indefinite leave, Skilled Worker" />
+                {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
+              </div>
               <div className="space-y-1"><Label>RTW status</Label><Input {...register('rtw_status')} /></div>
               <div className="space-y-1"><Label>DBS check</Label><Input {...register('dbs_status')} /></div>
               <div className="space-y-1 sm:col-span-2"><Label>Employment history (5 years)</Label><Input {...register('employment_history')} /></div>
@@ -339,7 +414,7 @@ export function GuardFormWizard({
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           <Section title="Location">
             <div className="space-y-1 max-w-md">
-              <Label>Public holidays observed for <span className="text-destructive">*</span></Label>
+              <Label>Public holidays observed for</Label>
               <Select value={watch('holiday_jurisdiction') || ''} onValueChange={(v) => setValue('holiday_jurisdiction', v)}>
                 <SelectTrigger><SelectValue placeholder="Select jurisdiction" /></SelectTrigger>
                 <SelectContent>
@@ -354,7 +429,7 @@ export function GuardFormWizard({
 
           <Section title="Employment details">
             <div className="space-y-3">
-              <Label>Employee type <span className="text-destructive">*</span></Label>
+              <Label>Employee type</Label>
               <RadioCards
                 value={employeeType}
                 onChange={(v) => setValue('employee_type', v as 'fixed' | 'variable')}
@@ -364,7 +439,7 @@ export function GuardFormWizard({
             </div>
             {employeeType === 'fixed' && (
               <div className="space-y-1 max-w-md mt-4">
-                <Label>Working time pattern <span className="text-destructive">*</span></Label>
+                <Label>Working time pattern</Label>
                 <Select value={watch('working_time_pattern') || ''} onValueChange={(v) => setValue('working_time_pattern', v)}>
                   <SelectTrigger><SelectValue placeholder="Select a working pattern" /></SelectTrigger>
                   <SelectContent>
@@ -383,7 +458,7 @@ export function GuardFormWizard({
 
           <Section title="Contract details">
             <div className="space-y-3">
-              <Label>Entitlement unit <span className="text-destructive">*</span></Label>
+              <Label>Entitlement unit</Label>
               <RadioCards
                 value={entitlementUnit}
                 onChange={(v) => setValue('entitlement_unit', v as 'days' | 'hours')}

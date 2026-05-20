@@ -51,7 +51,7 @@ function AssignmentForm({
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label>Guard <span className="text-destructive">*</span></Label>
+          <Label>Staff <span className="text-destructive">*</span></Label>
           <Select value={guardId?.toString() || ''} onValueChange={(v) => setValue('guard_id', parseInt(v))}>
             <SelectTrigger>
               <SelectValue placeholder="Select guard" />
@@ -339,7 +339,7 @@ export default function AssignmentsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Shift Type" colKey="shift_type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />

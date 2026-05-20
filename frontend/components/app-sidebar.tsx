@@ -17,15 +17,15 @@ import {
   LayoutDashboard,
   MapPin,
   PoundSterling,
-  Shield,
   UserCog,
   Users,
 } from 'lucide-react';
+import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
 
 const items: { href: string; label: string; perm: string; icon: typeof Users }[] = [
   { href: '/dashboard', label: 'Dashboard', perm: 'guards.read', icon: LayoutDashboard },
-  { href: '/guards', label: 'Guards', perm: 'guards.read', icon: Users },
+  { href: '/guards', label: 'Staff', perm: 'guards.read', icon: Users },
   { href: '/sites', label: 'Sites', perm: 'sites.read', icon: MapPin },
   { href: '/clients', label: 'Clients', perm: 'clients.read', icon: Building2 },
   { href: '/assignments', label: 'Assignments', perm: 'assign.read', icon: ClipboardList },
@@ -65,10 +65,7 @@ export function AppSidebar() {
     return (
       <aside className="hidden md:flex w-56 shrink-0 flex-col border-r bg-slate-900 text-slate-100">
         <div className="p-4 border-b border-slate-700/80">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-white">
-            <Shield className="size-5 text-sky-400" />
-            <span className="truncate">SecureForce</span>
-          </Link>
+          <CompanyBrand />
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
           <Link
@@ -89,10 +86,7 @@ export function AppSidebar() {
   return (
     <aside className="hidden md:flex w-56 shrink-0 flex-col border-r bg-slate-900 text-slate-100">
       <div className="p-4 border-b border-slate-700/80">
-        <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-white">
-          <Shield className="size-5 text-sky-400" />
-          <span className="truncate">SecureForce</span>
-        </Link>
+        <CompanyBrand />
       </div>
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {links.map(({ href, label, icon: Icon }) => (

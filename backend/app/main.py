@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors
 from app.database import engine, Base
@@ -46,6 +48,10 @@ app.include_router(admin.router)
 app.include_router(roles.router)
 app.include_router(users.router)
 app.include_router(contractors.router)
+
+_uploads = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+os.makedirs(_uploads, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads), name="uploads")
 
 @app.get("/")
 def root():

@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from fastapi import HTTPException
-from typing import List, Any
+from typing import List, Any, Optional
 from app.models import Guard
 from app.schemas import GuardCreate
 from app.services.company_service import get_company_by_user_id
@@ -74,9 +75,32 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
     return db_guard
 
 
-def get_guards(db: Session, user_id: int) -> List[Guard]:
+def get_guards(
+    db: Session,
+    user_id: int,
+    *,
+    area: Optional[str] = None,
+    postcode: Optional[str] = None,
+    nearby: Optional[str] = None,
+) -> List[Guard]:
     company = get_company_by_user_id(db, user_id)
-    return db.query(Guard).filter(Guard.company_id == company.id).all()
+    q = db.query(Guard).filter(Guard.company_id == company.id)
+    if area and area.strip():
+        pat = f"%{area.strip()}%"
+        q = q.filter(or_(Guard.service_area.ilike(pat), Guard.town_city.ilike(pat), Guard.postcode.ilike(pat)))
+    if postcode and postcode.strip():
+        q = q.filter(Guard.postcode.ilike(f"%{postcode.strip()}%"))
+    if nearby and nearby.strip():
+        pat = f"%{nearby.strip()}%"
+        q = q.filter(
+            or_(
+                Guard.nearby_areas.ilike(pat),
+                Guard.service_area.ilike(pat),
+                Guard.postcode.ilike(pat),
+                Guard.town_city.ilike(pat),
+            )
+        )
+    return q.order_by(Guard.full_name).all()
 
 
 def get_guard_by_id(db: Session, guard_id: int, user_id: int) -> Guard:

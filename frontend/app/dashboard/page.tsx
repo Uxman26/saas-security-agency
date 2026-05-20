@@ -31,13 +31,13 @@ import { can, PERMS } from '@/lib/permissions';
 import type { DashboardStats, ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
 
 const companyTiles = [
-  { href: '/guards', title: 'Guards', desc: 'Manage security guards & compliance', icon: Users, color: 'text-blue-600', perm: 'guards.read' },
+  { href: '/guards', title: 'Staff', desc: 'Manage staff & compliance', icon: Users, color: 'text-blue-600', perm: 'guards.read' },
   { href: '/sites', title: 'Sites', desc: 'Manage deployment sites', icon: MapPin, color: 'text-green-600', perm: 'sites.read' },
   { href: '/clients', title: 'Clients', desc: 'Manage client accounts', icon: Building2, color: 'text-purple-600', perm: 'clients.read' },
-  { href: '/assignments', title: 'Assignments', desc: 'Schedule guard shifts', icon: ClipboardList, color: 'text-orange-600', perm: 'assign.read' },
+  { href: '/assignments', title: 'Assignments', desc: 'Schedule staff shifts', icon: ClipboardList, color: 'text-orange-600', perm: 'assign.read' },
   { href: '/rota', title: 'Rotas & Shifts', desc: 'Planner and assignment grid', icon: Calendar, color: 'text-cyan-600', perm: 'assign.read' },
-  { href: '/attendance', title: 'Attendance', desc: 'Track guard attendance', icon: Clock, color: 'text-teal-600', perm: 'attend.read' },
-  { href: '/documents', title: 'Documents', desc: 'Guard documents & expiry', icon: FolderOpen, color: 'text-amber-600', perm: 'doc.read' },
+  { href: '/attendance', title: 'Attendance', desc: 'Track staff attendance', icon: Clock, color: 'text-teal-600', perm: 'attend.read' },
+  { href: '/documents', title: 'Documents', desc: 'Staff documents & expiry', icon: FolderOpen, color: 'text-amber-600', perm: 'doc.read' },
   { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600', perm: PERMS.contractorView },
   { href: '/payroll', title: 'Payroll', desc: 'Calculate & manage payroll', icon: PoundSterling, color: 'text-emerald-600', perm: 'payroll.read' },
   { href: '/invoices', title: 'Invoices', desc: 'Client billing & invoices', icon: FileText, color: 'text-rose-600', perm: 'inv.read' },
@@ -57,12 +57,18 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
   const [contractAlerts, setContractAlerts] = useState<ContractExpiryAlert[]>([]);
+  const [alertsError, setAlertsError] = useState('');
 
   useEffect(() => {
     if (!isSuperAdmin) {
-      api.reports.dashboard().then(setStats).catch(() => {});
-      api.reports.compliance(30).then(setAlerts).catch(() => {});
-      api.reports.contractsExpiring(30).then(setContractAlerts).catch(() => {});
+      setAlertsError('');
+      api.reports.dashboard().then(setStats).catch(() => setStats(null));
+      void Promise.all([api.reports.compliance(30), api.reports.contractsExpiring(30)])
+        .then(([a, c]) => {
+          setAlerts(a);
+          setContractAlerts(c);
+        })
+        .catch((e: Error) => setAlertsError(e.message || 'Could not load alerts'));
     }
   }, [isSuperAdmin]);
 
@@ -102,7 +108,7 @@ export default function DashboardPage() {
               <Card className="border-border/60">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Users className="size-4" /> Active Guards
+                    <Users className="size-4" /> Active staff
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -192,6 +198,12 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {!isSuperAdmin && alertsError && (
+            <Card className="mb-8 border-destructive/40 bg-destructive/10">
+              <CardContent className="pt-6 text-sm text-destructive">{alertsError}</CardContent>
+            </Card>
           )}
 
           {!isSuperAdmin && contractAlerts.length > 0 && (

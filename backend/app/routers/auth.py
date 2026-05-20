@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, status
+import os
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Company
@@ -22,9 +24,30 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     perms = permissions_for_user_db(db, current_user)
     plan = None
+    company_name = None
+    logo_url = None
     if current_user.company_id:
         co = db.query(Company).filter(Company.id == current_user.company_id).first()
         if co:
             plan = plan_summary(db, co)
+            company_name = co.name
+            if co.logo_path and os.path.isfile(co.logo_path):
+                logo_url = "/auth/company-logo"
     base = UserResponse.model_validate(current_user)
-    return UserMeResponse(**base.model_dump(), permissions=perms, plan=plan)
+    return UserMeResponse(
+        **base.model_dump(),
+        permissions=perms,
+        plan=plan,
+        company_name=company_name,
+        logo_url=logo_url,
+    )
+
+
+@router.get("/company-logo")
+def company_logo(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if not current_user.company_id:
+        raise HTTPException(status_code=404, detail="No company")
+    co = db.query(Company).filter(Company.id == current_user.company_id).first()
+    if not co or not co.logo_path or not os.path.isfile(co.logo_path):
+        raise HTTPException(status_code=404, detail="Logo not found")
+    return FileResponse(co.logo_path)

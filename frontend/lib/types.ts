@@ -46,6 +46,8 @@ export interface User {
   created_at: string;
   permissions?: string[];
   plan?: PlanSummary | null;
+  company_name?: string | null;
+  logo_url?: string | null;
 }
 
 export interface Company {
@@ -135,6 +137,12 @@ export interface Guard {
   sub_contractor_id?: number | null;
   contractor_id?: string | null;
   weekly_contracted_hours?: number | null;
+  service_area?: string;
+  nearby_areas?: string;
+  has_car?: boolean;
+  available_days?: string;
+  availability_timing?: string;
+  pay_frequency?: string;
   created_at: string;
 }
 

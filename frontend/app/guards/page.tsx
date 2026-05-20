@@ -41,11 +41,22 @@ export default function GuardsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingGuard, setEditingGuard] = useState<Guard | null>(null);
   const [search, setSearch] = useState('');
+  const [filterArea, setFilterArea] = useState('');
+  const [filterPostcode, setFilterPostcode] = useState('');
+  const [filterNearby, setFilterNearby] = useState('');
+  const [formError, setFormError] = useState('');
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
-  const { data: guards = [], isLoading, refetch, isRefetching } = useGuards();
+  const areaQ = filterArea.trim() || undefined;
+  const postcodeQ = filterPostcode.trim() || undefined;
+  const nearbyQ = filterNearby.trim() || undefined;
+  const { data: guards = [], isLoading, refetch, isRefetching, error: guardsError } = useGuards({
+    area: areaQ,
+    postcode: postcodeQ,
+    nearby: nearbyQ,
+  });
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
   const { data: legMains = [] } = useMainContractors();
   const { data: legSubs = [] } = useSubContractors();
@@ -81,11 +92,14 @@ export default function GuardsPage() {
   }, [dirRows, legMains, legSubs]);
 
   const handleCreate = async (data: GuardFormData) => {
+    setFormError('');
     try {
       await createGuard.mutateAsync(formToGuardPayload(data));
       setAddOpen(false);
       addForm.reset(guardFormDefaults);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to create staff member');
+    }
   };
 
   const openEdit = (guard: Guard) => {
@@ -96,16 +110,23 @@ export default function GuardsPage() {
 
   const handleUpdate = async (data: GuardFormData) => {
     if (!editingGuard) return;
+    setFormError('');
     try {
       await updateGuard.mutateAsync({ id: editingGuard.id, data: formToGuardPayload(data) });
       setEditOpen(false);
       setEditingGuard(null);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to update staff member');
+    }
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this guard? This cannot be undone.')) return;
-    try { await deleteGuard.mutateAsync(id); } catch (err) { console.error(err); }
+    if (!confirm('Delete this staff member? This cannot be undone.')) return;
+    try {
+      await deleteGuard.mutateAsync(id);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to delete');
+    }
   };
 
   const getSearchText = useCallback(
@@ -122,6 +143,13 @@ export default function GuardsPage() {
         g.dbs_status,
         contractorLabel(g),
         g.sia_expiry_date,
+        g.service_area,
+        g.postcode,
+        g.nearby_areas,
+        g.available_days,
+        g.availability_timing,
+        g.pay_frequency,
+        g.has_car ? 'car' : '',
       ]
         .filter(Boolean)
         .join(' '),
@@ -184,8 +212,8 @@ export default function GuardsPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><Users className="size-7" /> Guards</h1>
-              <p className="text-muted-foreground mt-1">{guards.length} guard{guards.length !== 1 ? 's' : ''} registered</p>
+              <h1 className="text-3xl font-bold flex items-center gap-2"><Users className="size-7" /> Staff</h1>
+              <p className="text-muted-foreground mt-1">{guards.length} staff member{guards.length !== 1 ? 's' : ''} registered</p>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
@@ -193,44 +221,53 @@ export default function GuardsPage() {
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
-                  <Button disabled={!can(user, 'guards.write')}>Add Guard</Button>
+                  <Button disabled={!can(user, 'guards.write')}>Add staff</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Add employee</DialogTitle>
+                    <DialogTitle>Add staff member</DialogTitle>
                   </DialogHeader>
-                  <GuardFormWizard form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create employee" />
+                  {formError && <p className="text-sm text-destructive">{formError}</p>}
+                  <GuardFormWizard form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create staff" />
                 </DialogContent>
               </Dialog>
             </div>
           </div>
 
-          <div className="mb-4">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Input
-              placeholder="Search guards (name, contractor, badges, SIA, status)..."
+              placeholder="Search staff (name, phone, area, postcode…)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
             />
+            <Input placeholder="Filter by area" value={filterArea} onChange={(e) => setFilterArea(e.target.value)} />
+            <Input placeholder="Filter by postcode" value={filterPostcode} onChange={(e) => setFilterPostcode(e.target.value)} />
+            <Input placeholder="Filter nearby areas" value={filterNearby} onChange={(e) => setFilterNearby(e.target.value)} />
           </div>
+          {guardsError && (
+            <p className="mb-4 text-sm text-destructive">{(guardsError as Error).message || 'Failed to load staff'}</p>
+          )}
+          {formError && !addOpen && !editOpen && (
+            <p className="mb-4 text-sm text-destructive">{formError}</p>
+          )}
 
           {(mains.length === 0 && subs.length === 0) && (
             <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
               Add at least one main or sub contractor on the{' '}
-              <Link href="/contractors" className="font-medium underline">Contractors</Link> page before you can link guards.
+              <Link href="/contractors" className="font-medium underline">Contractors</Link> page before you can link staff.
             </div>
           )}
 
           <Card>
             <CardHeader>
-              <CardTitle>All Guards</CardTitle>
+              <CardTitle>All staff</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading guards...</div>
+                <div className="text-center py-8 text-muted-foreground">Loading staff...</div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search ? 'No guards match your search.' : 'No guards yet. Click "Add Guard" to get started.'}
+                  {search || areaQ || postcodeQ || nearbyQ ? 'No staff match your filters.' : 'No staff yet. Click "Add staff" to get started.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -336,8 +373,9 @@ export default function GuardsPage() {
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Edit employee — {editingGuard?.full_name}</DialogTitle>
+              <DialogTitle>Edit staff — {editingGuard?.full_name}</DialogTitle>
             </DialogHeader>
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
             <GuardFormWizard form={editForm} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save changes" />
           </DialogContent>
         </Dialog>

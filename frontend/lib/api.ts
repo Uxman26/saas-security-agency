@@ -102,7 +102,14 @@ export const api = {
     me: (): Promise<User> => request<User>('/auth/me'),
   },
   guards: {
-    list: (): Promise<Guard[]> => request<Guard[]>('/guards'),
+    list: (params?: { area?: string; postcode?: string; nearby?: string }): Promise<Guard[]> => {
+      const q = new URLSearchParams();
+      if (params?.area) q.append('area', params.area);
+      if (params?.postcode) q.append('postcode', params.postcode);
+      if (params?.nearby) q.append('nearby', params.nearby);
+      const qs = q.toString();
+      return request<Guard[]>(`/guards${qs ? `?${qs}` : ''}`);
+    },
     get: (id: number): Promise<Guard> => request<Guard>(`/guards/${id}`),
     create: (data: Omit<Guard, 'id' | 'company_id' | 'created_at'>): Promise<Guard> => {
       const sanitized = Object.fromEntries(

@@ -2,10 +2,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Guard } from '@/lib/types';
 
-export function useGuards() {
+export function useGuards(params?: { area?: string; postcode?: string; nearby?: string }) {
   return useQuery({
-    queryKey: ['guards'],
-    queryFn: () => api.guards.list(),
+    queryKey: ['guards', params?.area ?? '', params?.postcode ?? '', params?.nearby ?? ''],
+    queryFn: () => api.guards.list(params),
     refetchOnMount: true,
   });
 }

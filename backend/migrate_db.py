@@ -260,6 +260,8 @@ def run():
         ("leave_year_start_day", "INTEGER"), ("leave_year_start_month", "INTEGER"),
         ("leave_entitlement_hrs", "INTEGER"), ("leave_entitlement_mins", "INTEGER"),
         ("leave_allowance_hrs", "INTEGER"), ("leave_allowance_mins", "INTEGER"),
+        ("service_area", "TEXT"), ("nearby_areas", "TEXT"), ("has_car", "INTEGER DEFAULT 0"),
+        ("available_days", "TEXT"), ("availability_timing", "TEXT"), ("pay_frequency", "TEXT DEFAULT 'weekly'"),
     ]
     if table_exists(cur, "guards"):
         for col, spec in guard_profile_cols:

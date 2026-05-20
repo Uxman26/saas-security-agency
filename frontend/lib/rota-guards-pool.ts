@@ -6,7 +6,7 @@ export function guardToEmployee(g: Guard, i: number): EmployeeRec {
   return {
     id: String(g.id),
     name: g.full_name,
-    role: 'Guard',
+    role: 'Staff',
     avatarColor: AVATAR_PALETTE[i % AVATAR_PALETTE.length],
   };
 }

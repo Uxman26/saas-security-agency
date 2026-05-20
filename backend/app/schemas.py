@@ -31,6 +31,8 @@ class UserResponse(UserBase):
 class UserMeResponse(UserResponse):
     permissions: List[str] = Field(default_factory=list)
     plan: Optional[dict[str, Any]] = None
+    company_name: Optional[str] = None
+    logo_url: Optional[str] = None
 
 class CompanyBase(BaseModel):
     name: str
@@ -121,6 +123,12 @@ class GuardBase(BaseModel):
     sub_contractor_id: Optional[int] = None
     contractor_id: Optional[UUID] = None
     weekly_contracted_hours: Optional[float] = 40.0
+    service_area: Optional[str] = None
+    nearby_areas: Optional[str] = None
+    has_car: Optional[bool] = False
+    available_days: Optional[str] = None
+    availability_timing: Optional[str] = None
+    pay_frequency: Optional[str] = "weekly"
 
     @model_validator(mode="before")
     @classmethod
@@ -150,7 +158,11 @@ class GuardBase(BaseModel):
     def require_identity(self) -> "GuardBase":
         if not (self.full_name or "").strip():
             if not ((self.first_name or "").strip() and (self.last_name or "").strip()):
-                raise ValueError("full_name or first_name and last_name required")
+                raise ValueError("First name and last name are required")
+        if not (self.phone or "").strip():
+            raise ValueError("Phone number is required")
+        if not (self.visa_status or "").strip():
+            raise ValueError("Visa status is required")
         return self
 
 class GuardCreate(GuardBase):

@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { EmailDialog } from '@/components/email-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AppSidebar } from '@/components/app-sidebar';
-import { Shield, Menu } from 'lucide-react';
+import { Menu } from 'lucide-react';
+import { CompanyBrand } from '@/components/company-brand';
+import { AlertsPanel } from '@/components/alerts-panel';
 import { usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { can } from '@/lib/permissions';
@@ -21,7 +23,7 @@ function mActive(pathname: string, href: string) {
 
 const mobileLinks = [
   { href: '/dashboard', label: 'Dashboard', perm: 'guards.read' },
-  { href: '/guards', label: 'Guards', perm: 'guards.read' },
+  { href: '/guards', label: 'Staff', perm: 'guards.read' },
   { href: '/sites', label: 'Sites', perm: 'sites.read' },
   { href: '/clients', label: 'Clients', perm: 'clients.read' },
   { href: '/assignments', label: 'Assignments', perm: 'assign.read' },
@@ -59,14 +61,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setDrawer(true)}>
               <Menu className="size-5" />
             </Button>
-            <Link href="/dashboard" className="flex items-center gap-1.5 font-semibold text-primary truncate text-sm">
-              <Shield className="size-4 shrink-0" />
-              SFM
-            </Link>
+            <CompanyBrand className="text-primary text-sm [&_span]:text-primary" />
           </div>
           <div className="hidden md:block flex-1" />
           <div className="flex items-center gap-1.5 shrink-0">
             <ThemeToggle />
+            <AlertsPanel />
             <EmailDialog />
             <Button variant="outline" size="sm" onClick={logout}>
               Logout
@@ -77,11 +77,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="fixed inset-0 z-50 md:hidden">
             <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close menu" onClick={() => setDrawer(false)} />
             <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
-              <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-                <span className="font-semibold">Menu</span>
-                <Button type="button" variant="ghost" size="sm" className="text-slate-300" onClick={() => setDrawer(false)}>
-                  ✕
-                </Button>
+              <div className="p-4 border-b border-slate-700">
+                <CompanyBrand className="mb-2" />
+                <div className="flex justify-end">
+                  <Button type="button" variant="ghost" size="sm" className="text-slate-300" onClick={() => setDrawer(false)}>
+                    ✕
+                  </Button>
+                </div>
               </div>
               <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
                 {isSuperAdmin ? (

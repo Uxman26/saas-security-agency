@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   MapPin,
   PoundSterling,
+  Shield,
   UserCog,
   Users,
 } from 'lucide-react';

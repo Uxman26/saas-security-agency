@@ -105,8 +105,8 @@ export function GuardFormWizard({
   const [step, setStep] = useState(0);
   const { register, handleSubmit, setValue, watch, trigger, formState: { errors } } = form;
   const cid = watch('contractor_id');
-  const employeeType = watch('employee_type');
-  const entitlementUnit = watch('entitlement_unit');
+  const employeeType = watch('employee_type') ?? '';
+  const entitlementUnit = watch('entitlement_unit') ?? '';
   const first = watch('first_name');
   const last = watch('last_name');
 

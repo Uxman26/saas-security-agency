@@ -22,6 +22,13 @@ type InitPayload = {
   dayCount: number;
   budget: number;
   copySeed?: boolean;
+  includeAllStaff?: boolean;
+};
+
+export type PublishRotaResult = {
+  created: number;
+  skipped: number;
+  errors: string[];
 };
 
 function emptyShifts() {
@@ -111,6 +118,7 @@ type Ctx = {
   setOrderDragIdx: (n: number | null) => void;
   setSelectedColor: (c: string) => void;
   setInclBreaks: (v: boolean) => void;
+  publishRota: () => Promise<PublishRotaResult>;
   totalRotaHours: number;
   empTotalHours: (empId: string) => number;
   dayTotalHours: (dk: string) => number;
@@ -156,6 +164,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       if (p.copySeed && pool.length > 0) {
         employees = pool.slice(0, Math.min(5, pool.length));
         shifts = seedSampleShifts(days, pool, siteNames);
+      } else if (p.includeAllStaff && pool.length > 0) {
+        employees = [...pool];
       }
       setState({
         ...defaultState(),
@@ -352,6 +362,43 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, inclBreaks }));
   }, []);
 
+  const publishRota = useCallback(async (): Promise<PublishRotaResult> => {
+    const sites = await api.sites.list();
+    const siteByName = new Map(sites.map((s) => [s.name.trim().toLowerCase(), s.id]));
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    for (const empId of Object.keys(state.shifts)) {
+      const guardId = parseInt(empId, 10);
+      if (!guardId) continue;
+      const byD = state.shifts[empId] || {};
+      for (const dk of Object.keys(byD)) {
+        for (const sh of byD[dk] || []) {
+          const siteKey = (sh.site || '').trim().toLowerCase();
+          const siteId = siteByName.get(siteKey);
+          if (!siteId) {
+            skipped++;
+            errors.push(
+              siteKey ? `No site named "${sh.site}" (${dk})` : `Missing site on ${dk} for ${empId}`
+            );
+            continue;
+          }
+          await api.assignments.create({
+            guard_id: guardId,
+            site_id: siteId,
+            date: dk,
+            shift_start: sh.start,
+            shift_end: sh.end,
+            break_minutes: (sh.breakH || 0) * 60 + (sh.breakM || 0),
+            shift_type: 'day',
+          });
+          created++;
+        }
+      }
+    }
+    return { created, skipped, errors };
+  }, [state.shifts]);
+
   const totalRotaHours = useMemo(() => {
     let t = 0;
     for (const empId of Object.keys(state.shifts)) {
@@ -415,6 +462,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setOrderDragIdx,
       setSelectedColor,
       setInclBreaks,
+      publishRota,
       totalRotaHours,
       empTotalHours,
       dayTotalHours,
@@ -446,6 +494,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setOrderDragIdx,
       setSelectedColor,
       setInclBreaks,
+      publishRota,
       totalRotaHours,
       empTotalHours,
       dayTotalHours,

@@ -39,6 +39,7 @@ export default function CreateRotaPage() {
       dayCount,
       budget: parseFloat(budget.replace(/,/g, '')) || 0,
       copySeed: mode === 'copy',
+      includeAllStaff: mode === 'new',
     });
     router.push('/rota/calendar');
   };

@@ -41,7 +41,19 @@ export function RotaCalendarClient() {
     addDaysDelta,
     setAttendance,
     setInclBreaks,
+    publishRota,
   } = useRotaShifts();
+
+  const [publishing, setPublishing] = useState(false);
+  const shiftCount = useMemo(() => {
+    let n = 0;
+    for (const empId of Object.keys(state.shifts)) {
+      for (const dk of Object.keys(state.shifts[empId] || {})) {
+        n += (state.shifts[empId][dk] || []).length;
+      }
+    }
+    return n;
+  }, [state.shifts]);
 
   const [empFilter, setEmpFilter] = useState('');
   const [shiftOpen, setShiftOpen] = useState(false);
@@ -154,8 +166,28 @@ export function RotaCalendarClient() {
     setAttOpen(false);
   };
 
-  const publish = () => {
-    window.alert('Rota published (demo).');
+  const publish = async () => {
+    if (shiftCount === 0) {
+      window.alert('Add shifts first: click + in a day cell, set times and site, then publish.');
+      return;
+    }
+    if (!window.confirm(`Publish ${shiftCount} shift(s) to assignments? They will appear in Assignments and the legacy rota grid.`)) {
+      return;
+    }
+    setPublishing(true);
+    try {
+      const { created, skipped, errors } = await publishRota();
+      const extra = errors.length ? `\n\nIssues:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n+${errors.length - 5} more` : ''}` : '';
+      if (created === 0) {
+        window.alert(`Nothing was saved.${skipped ? ` ${skipped} shift(s) skipped — check site names match your Sites list.` : ''}${extra}`);
+      } else {
+        window.alert(`Saved ${created} shift(s) to assignments.${skipped ? ` ${skipped} skipped.` : ''}${extra}`);
+      }
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Publish failed');
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const openReorder = () => {
@@ -258,11 +290,23 @@ export function RotaCalendarClient() {
           <Button variant="outline" size="sm" asChild>
             <Link href="/rota/attendance-report">Attendance report</Link>
           </Button>
-          <Button size="sm" className="bg-pink-600 hover:bg-pink-700" type="button" onClick={publish}>
-            Publish
+          <Button
+            size="sm"
+            className="bg-pink-600 hover:bg-pink-700"
+            type="button"
+            onClick={publish}
+            disabled={publishing}
+          >
+            {publishing ? 'Publishing…' : 'Publish'}
           </Button>
         </div>
       </div>
+
+      {shiftCount === 0 && state.employees.length > 0 && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+          This rota has staff but no shifts yet. Click <strong>+</strong> in a day cell to add a shift (times and site required), then click <strong>Publish</strong> to save to Assignments.
+        </div>
+      )}
 
       <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 flex-wrap">
         <div className="flex flex-wrap items-center gap-2">

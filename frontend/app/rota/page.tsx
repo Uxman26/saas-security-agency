@@ -28,7 +28,7 @@ export default function RotaHubPage() {
             <Card className="border-primary/20">
               <CardHeader>
                 <CardTitle className="text-lg">New planner</CardTitle>
-                <CardDescription>Create an in-memory rota with table, timeline, or drag-and-drop views.</CardDescription>
+                <CardDescription>Plan shifts in the planner, then publish to save assignments in the database.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-3">
                 <Button className="bg-pink-600 hover:bg-pink-700" asChild>

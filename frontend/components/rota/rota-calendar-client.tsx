@@ -35,7 +35,6 @@ export function RotaCalendarClient() {
     deleteShift,
     copyShiftToDates,
     addEmployeesById,
-    removeEmployee,
     reorderEmployees,
     copyAllShiftsBetweenEmployees,
     clearEmployeeShifts,
@@ -53,6 +52,8 @@ export function RotaCalendarClient() {
   const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
   const [xferOpen, setXferOpen] = useState(false);
   const [xferFrom, setXferFrom] = useState<string | null>(null);
+  const [viewShiftsOpen, setViewShiftsOpen] = useState(false);
+  const [viewShiftsEmpId, setViewShiftsEmpId] = useState<string | null>(null);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [orderDraft, setOrderDraft] = useState<string[]>([]);
   const [daysOpen, setDaysOpen] = useState(false);
@@ -181,6 +182,33 @@ export function RotaCalendarClient() {
     if (!q) return pool;
     return pool.filter((p) => p.name.toLowerCase().includes(q) || p.role.toLowerCase().includes(q));
   }, [pool, pickSearch]);
+
+  const viewShiftsEmp = viewShiftsEmpId ? state.employees.find((e) => e.id === viewShiftsEmpId) : null;
+
+  const viewShiftsList = useMemo(() => {
+    if (!viewShiftsEmpId) return [];
+    const byD = state.shifts[viewShiftsEmpId] || {};
+    const items: { dk: string; idx: number; sh: ShiftRec }[] = [];
+    for (const dk of state.days) {
+      (byD[dk] || []).forEach((sh, idx) => items.push({ dk, idx, sh }));
+    }
+    return items;
+  }, [viewShiftsEmpId, state.shifts, state.days]);
+
+  const openViewShifts = (empId: string) => {
+    setViewShiftsEmpId(empId);
+    setViewShiftsOpen(true);
+    setEmpMenu(null);
+  };
+
+  const deleteAllEmpShifts = (empId: string) => {
+    const emp = state.employees.find((e) => e.id === empId);
+    if (!emp) return;
+    if (!window.confirm(`Delete all shifts for ${emp.name}?`)) return;
+    clearEmployeeShifts(empId);
+    setEmpMenu(null);
+    if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
+  };
 
   const onDragStart = (e: React.DragEvent, empId: string) => {
     e.dataTransfer.setData('empId', empId);
@@ -324,37 +352,31 @@ export function RotaCalendarClient() {
                       <MoreHorizontal className="size-4 shrink-0 ml-auto text-muted-foreground" />
                     </button>
                     {empMenu === emp.id && (
-                      <div className="absolute z-30 left-2 top-full mt-1 w-56 rounded-md border bg-popover text-popover-foreground shadow-md py-1 text-xs">
+                      <div className="absolute z-30 left-2 top-full mt-1 w-64 rounded-md border bg-popover text-popover-foreground shadow-lg py-1 text-sm">
                         <button
                           type="button"
-                          className="w-full text-left px-3 py-2 hover:bg-muted"
+                          className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
                           onClick={() => {
                             setXferFrom(emp.id);
                             setXferOpen(true);
                             setEmpMenu(null);
                           }}
                         >
-                          Copy shifts to another employee…
+                          Copy shifts to another employee
                         </button>
                         <button
                           type="button"
-                          className="w-full text-left px-3 py-2 hover:bg-muted"
-                          onClick={() => {
-                            clearEmployeeShifts(emp.id);
-                            setEmpMenu(null);
-                          }}
+                          className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+                          onClick={() => openViewShifts(emp.id)}
                         >
-                          Remove employee shifts
+                          Edit/view employee shifts
                         </button>
                         <button
                           type="button"
-                          className="w-full text-left px-3 py-2 hover:bg-muted text-destructive"
-                          onClick={() => {
-                            removeEmployee(emp.id);
-                            setEmpMenu(null);
-                          }}
+                          className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium"
+                          onClick={() => deleteAllEmpShifts(emp.id)}
                         >
-                          Remove from rota
+                          Delete employee shifts
                         </button>
                       </div>
                     )}
@@ -748,10 +770,103 @@ export function RotaCalendarClient() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={viewShiftsOpen}
+        onOpenChange={(v) => {
+          setViewShiftsOpen(v);
+          if (!v) setViewShiftsEmpId(null);
+        }}
+      >
+        <DialogContent showCloseButton className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit/view employee shifts</DialogTitle>
+          </DialogHeader>
+          {viewShiftsEmp ? (
+            <p className="text-sm text-muted-foreground -mt-1">
+              {viewShiftsEmp.name} · {formatHoursDecimal(empTotalHours(viewShiftsEmp.id))}
+            </p>
+          ) : null}
+          {viewShiftsList.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No shifts scheduled for this employee.</p>
+          ) : (
+            <ul className="space-y-2 max-h-[50vh] overflow-y-auto">
+              {viewShiftsList.map(({ dk, idx, sh }) => (
+                <li key={`${dk}-${idx}`} className="flex items-center gap-2 rounded-lg border p-3 text-sm">
+                  <span className="h-8 w-1 rounded-full shrink-0" style={{ backgroundColor: sh.color }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">{fmtShortDate(dk)}</div>
+                    <div className="text-xs text-muted-foreground tabular-nums">
+                      {sh.start} – {sh.end} · {sh.site}
+                      {sh.label ? ` · ${sh.label}` : ''}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Break {(sh.breakH || 0) > 0 || (sh.breakM || 0) > 0 ? `${sh.breakH}h ${sh.breakM}m` : 'none'} ·{' '}
+                      {formatHoursDecimal(calcHours(sh, state.inclBreaks))}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-sky-600 border-sky-200"
+                      onClick={() => {
+                        setViewShiftsOpen(false);
+                        openEditShift(viewShiftsEmpId!, dk, idx);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-destructive border-destructive/30"
+                      onClick={() => {
+                        if (!window.confirm('Delete this shift?')) return;
+                        deleteShift(viewShiftsEmpId!, dk, idx);
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {viewShiftsEmpId && state.days[0] ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                setViewShiftsOpen(false);
+                openAddShift(state.days[0], viewShiftsEmpId);
+              }}
+            >
+              <Plus className="size-3.5 mr-1" />
+              Add shift
+            </Button>
+          ) : null}
+          <DialogFooter>
+            {viewShiftsEmpId ? (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => deleteAllEmpShifts(viewShiftsEmpId)}
+              >
+                Delete all shifts
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={xferOpen} onOpenChange={setXferOpen}>
         <DialogContent showCloseButton className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Copy shifts to employee</DialogTitle>
+            <DialogTitle>Copy shifts to another employee</DialogTitle>
           </DialogHeader>
           <div className="grid gap-2 max-h-64 overflow-y-auto">
             {xferFrom

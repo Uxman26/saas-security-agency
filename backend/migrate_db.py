@@ -232,6 +232,42 @@ def run():
             cur.execute("ALTER TABLE sites ADD COLUMN contractor_id TEXT REFERENCES contractors(id)")
         except sqlite3.OperationalError:
             pass
+    guard_profile_cols = [
+        ("title", "TEXT"), ("first_name", "TEXT"), ("middle_name", "TEXT"), ("last_name", "TEXT"),
+        ("gender", "TEXT"), ("ethnicity", "TEXT"), ("date_of_birth", "TEXT"),
+        ("work_phone", "TEXT"), ("job_title", "TEXT"),
+        ("employment_start_date", "TEXT"), ("probation_end_date", "TEXT"),
+        ("address_line_1", "TEXT"), ("address_line_2", "TEXT"), ("address_line_3", "TEXT"),
+        ("town_city", "TEXT"), ("county", "TEXT"), ("postcode", "TEXT"),
+        ("emergency_first_name", "TEXT"), ("emergency_last_name", "TEXT"),
+        ("emergency_mobile", "TEXT"), ("emergency_home_phone", "TEXT"), ("emergency_work_phone", "TEXT"),
+        ("emergency_relationship", "TEXT"),
+        ("emergency_address_line_1", "TEXT"), ("emergency_address_line_2", "TEXT"),
+        ("emergency_address_line_3", "TEXT"), ("emergency_town_city", "TEXT"),
+        ("emergency_county", "TEXT"), ("emergency_postcode", "TEXT"),
+        ("bank_account_name", "TEXT"), ("bank_name", "TEXT"), ("bank_branch", "TEXT"),
+        ("bank_account_number", "TEXT"), ("bank_sort_code", "TEXT"),
+        ("tax_code", "TEXT"), ("ni_number", "TEXT"),
+        ("passport_number", "TEXT"), ("passport_country", "TEXT"), ("passport_expiry_date", "TEXT"),
+        ("driving_licence_country", "TEXT"), ("driving_licence_class", "TEXT"),
+        ("driving_licence_expiry_date", "TEXT"),
+        ("holiday_jurisdiction", "TEXT"), ("employee_type", "TEXT"), ("working_time_pattern", "TEXT"),
+        ("company_full_time_week_hrs", "INTEGER"), ("company_full_time_week_mins", "INTEGER"),
+        ("entitlement_unit", "TEXT"),
+        ("contracted_week_hrs", "INTEGER"), ("contracted_week_mins", "INTEGER"),
+        ("average_day_hrs", "INTEGER"), ("average_day_mins", "INTEGER"),
+        ("annual_leave_equivalent_hrs", "INTEGER"), ("annual_leave_equivalent_mins", "INTEGER"),
+        ("leave_year_start_day", "INTEGER"), ("leave_year_start_month", "INTEGER"),
+        ("leave_entitlement_hrs", "INTEGER"), ("leave_entitlement_mins", "INTEGER"),
+        ("leave_allowance_hrs", "INTEGER"), ("leave_allowance_mins", "INTEGER"),
+    ]
+    if table_exists(cur, "guards"):
+        for col, spec in guard_profile_cols:
+            if not column_exists(cur, "guards", col):
+                try:
+                    cur.execute(f"ALTER TABLE guards ADD COLUMN {col} {spec}")
+                except sqlite3.OperationalError:
+                    pass
     conn.commit()
     conn.close()
     try:

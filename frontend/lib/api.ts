@@ -32,7 +32,13 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new ApiError(response.status, error.detail || 'Request failed');
+    const d = error.detail;
+    const msg = Array.isArray(d)
+      ? d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed'
+      : typeof d === 'string'
+        ? d
+        : 'Request failed';
+    throw new ApiError(response.status, msg);
   }
 
   if (response.status === 204) {
@@ -59,7 +65,13 @@ async function requestBlob(endpoint: string): Promise<Blob> {
   }
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new ApiError(response.status, error.detail || 'Request failed');
+    const d = error.detail;
+    const msg = Array.isArray(d)
+      ? d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed'
+      : typeof d === 'string'
+        ? d
+        : 'Request failed';
+    throw new ApiError(response.status, msg);
   }
   return response.blob();
 }

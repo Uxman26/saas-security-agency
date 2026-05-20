@@ -1,0 +1,187 @@
+import type { Guard } from '@/lib/types';
+import type { GuardFormData } from '@/lib/validation';
+
+export const guardFormDefaults: GuardFormData = {
+  title: '',
+  first_name: '',
+  middle_name: '',
+  last_name: '',
+  gender: 'Unspecified',
+  ethnicity: 'Unspecified',
+  date_of_birth: '',
+  email: '',
+  phone: '',
+  work_phone: '',
+  job_title: '',
+  employment_start_date: '',
+  probation_end_date: '',
+  address_line_1: '',
+  address_line_2: '',
+  address_line_3: '',
+  town_city: '',
+  county: '',
+  postcode: '',
+  address: '',
+  emergency_first_name: '',
+  emergency_last_name: '',
+  emergency_mobile: '',
+  emergency_home_phone: '',
+  emergency_work_phone: '',
+  emergency_relationship: '',
+  emergency_address_line_1: '',
+  emergency_address_line_2: '',
+  emergency_address_line_3: '',
+  emergency_town_city: '',
+  emergency_county: '',
+  emergency_postcode: '',
+  bank_account_name: '',
+  bank_name: '',
+  bank_branch: '',
+  bank_account_number: '',
+  bank_sort_code: '',
+  tax_code: '',
+  ni_number: '',
+  passport_number: '',
+  passport_country: '',
+  passport_expiry_date: '',
+  license_number: '',
+  driving_licence_country: '',
+  driving_licence_class: '',
+  driving_licence_expiry_date: '',
+  holiday_jurisdiction: '',
+  employee_type: '',
+  working_time_pattern: '',
+  company_full_time_week_hrs: 0,
+  company_full_time_week_mins: 0,
+  entitlement_unit: '',
+  contracted_week_hrs: 0,
+  contracted_week_mins: 0,
+  average_day_hrs: 0,
+  average_day_mins: 0,
+  annual_leave_equivalent_hrs: 0,
+  annual_leave_equivalent_mins: 0,
+  leave_year_start_day: 1,
+  leave_year_start_month: 1,
+  leave_entitlement_hrs: 0,
+  leave_entitlement_mins: 0,
+  leave_allowance_hrs: 0,
+  leave_allowance_mins: 0,
+  badge_number: '',
+  sia_number: '',
+  sia_expiry_date: '',
+  visa_status: '',
+  rtw_status: '',
+  employment_history: '',
+  dbs_status: '',
+  weekly_contracted_hours: 40,
+  contractor_id: undefined,
+  main_contractor_id: undefined,
+  sub_contractor_id: undefined,
+};
+
+const s = (v?: string | null) => v ?? '';
+const n = (v?: number | null) => v ?? 0;
+
+export function guardToForm(g: Guard): GuardFormData {
+  return {
+    ...guardFormDefaults,
+    title: s(g.title),
+    first_name: s(g.first_name) || g.full_name.split(' ')[0] || '',
+    middle_name: s(g.middle_name),
+    last_name: s(g.last_name) || g.full_name.split(' ').slice(1).join(' ') || '',
+    gender: s(g.gender) || 'Unspecified',
+    ethnicity: s(g.ethnicity) || 'Unspecified',
+    date_of_birth: s(g.date_of_birth),
+    email: s(g.email),
+    phone: s(g.phone),
+    work_phone: s(g.work_phone),
+    job_title: s(g.job_title),
+    employment_start_date: s(g.employment_start_date),
+    probation_end_date: s(g.probation_end_date),
+    address_line_1: s(g.address_line_1),
+    address_line_2: s(g.address_line_2),
+    address_line_3: s(g.address_line_3),
+    town_city: s(g.town_city),
+    county: s(g.county),
+    postcode: s(g.postcode),
+    address: s(g.address),
+    emergency_first_name: s(g.emergency_first_name),
+    emergency_last_name: s(g.emergency_last_name),
+    emergency_mobile: s(g.emergency_mobile),
+    emergency_home_phone: s(g.emergency_home_phone),
+    emergency_work_phone: s(g.emergency_work_phone),
+    emergency_relationship: s(g.emergency_relationship),
+    emergency_address_line_1: s(g.emergency_address_line_1),
+    emergency_address_line_2: s(g.emergency_address_line_2),
+    emergency_address_line_3: s(g.emergency_address_line_3),
+    emergency_town_city: s(g.emergency_town_city),
+    emergency_county: s(g.emergency_county),
+    emergency_postcode: s(g.emergency_postcode),
+    bank_account_name: s(g.bank_account_name),
+    bank_name: s(g.bank_name),
+    bank_branch: s(g.bank_branch),
+    bank_account_number: s(g.bank_account_number),
+    bank_sort_code: s(g.bank_sort_code),
+    tax_code: s(g.tax_code),
+    ni_number: s(g.ni_number),
+    passport_number: s(g.passport_number),
+    passport_country: s(g.passport_country),
+    passport_expiry_date: s(g.passport_expiry_date),
+    license_number: s(g.license_number),
+    driving_licence_country: s(g.driving_licence_country),
+    driving_licence_class: s(g.driving_licence_class),
+    driving_licence_expiry_date: s(g.driving_licence_expiry_date),
+    holiday_jurisdiction: s(g.holiday_jurisdiction),
+    employee_type: s(g.employee_type),
+    working_time_pattern: s(g.working_time_pattern),
+    company_full_time_week_hrs: n(g.company_full_time_week_hrs),
+    company_full_time_week_mins: n(g.company_full_time_week_mins),
+    entitlement_unit: s(g.entitlement_unit),
+    contracted_week_hrs: n(g.contracted_week_hrs),
+    contracted_week_mins: n(g.contracted_week_mins),
+    average_day_hrs: n(g.average_day_hrs),
+    average_day_mins: n(g.average_day_mins),
+    annual_leave_equivalent_hrs: n(g.annual_leave_equivalent_hrs),
+    annual_leave_equivalent_mins: n(g.annual_leave_equivalent_mins),
+    leave_year_start_day: g.leave_year_start_day ?? 1,
+    leave_year_start_month: g.leave_year_start_month ?? 1,
+    leave_entitlement_hrs: n(g.leave_entitlement_hrs),
+    leave_entitlement_mins: n(g.leave_entitlement_mins),
+    leave_allowance_hrs: n(g.leave_allowance_hrs),
+    leave_allowance_mins: n(g.leave_allowance_mins),
+    badge_number: s(g.badge_number),
+    sia_number: s(g.sia_number),
+    sia_expiry_date: s(g.sia_expiry_date),
+    visa_status: s(g.visa_status),
+    rtw_status: s(g.rtw_status),
+    employment_history: s(g.employment_history),
+    dbs_status: s(g.dbs_status),
+    weekly_contracted_hours: g.weekly_contracted_hours ?? 40,
+    contractor_id: g.contractor_id ?? undefined,
+    main_contractor_id: g.main_contractor_id ?? undefined,
+    sub_contractor_id: g.sub_contractor_id ?? undefined,
+  };
+}
+
+function cleanPayload(data: GuardFormData): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v === '' || v === undefined) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+export function formToGuardPayload(data: GuardFormData): Omit<Guard, 'id' | 'company_id' | 'created_at'> {
+  const parts = [data.title, data.first_name, data.middle_name, data.last_name].filter(Boolean);
+  const full_name = parts.join(' ').trim();
+  const hrs = data.contracted_week_hrs || 0;
+  const mins = data.contracted_week_mins || 0;
+  const weekly = hrs > 0 || mins > 0 ? hrs + mins / 60 : data.weekly_contracted_hours;
+  const base = cleanPayload(data);
+  const payload: Record<string, unknown> = { ...base, full_name, weekly_contracted_hours: weekly };
+  if (data.contractor_id) payload.contractor_id = data.contractor_id;
+  else if (data.main_contractor_id) payload.main_contractor_id = data.main_contractor_id;
+  else if (data.sub_contractor_id) payload.sub_contractor_id = data.sub_contractor_id;
+  return payload as Omit<Guard, 'id' | 'company_id' | 'created_at'>;
+}

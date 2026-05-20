@@ -45,22 +45,113 @@ class CompanyResponse(CompanyBase):
         from_attributes = True
 
 class GuardBase(BaseModel):
-    full_name: str
+    full_name: Optional[str] = None
+    title: Optional[str] = None
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
+    gender: Optional[str] = None
+    ethnicity: Optional[str] = None
+    date_of_birth: Optional[date] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
-    badge_number: Optional[str] = None
+    work_phone: Optional[str] = None
+    job_title: Optional[str] = None
+    employment_start_date: Optional[date] = None
+    probation_end_date: Optional[date] = None
+    address_line_1: Optional[str] = None
+    address_line_2: Optional[str] = None
+    address_line_3: Optional[str] = None
+    town_city: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    address: Optional[str] = None
+    emergency_first_name: Optional[str] = None
+    emergency_last_name: Optional[str] = None
+    emergency_mobile: Optional[str] = None
+    emergency_home_phone: Optional[str] = None
+    emergency_work_phone: Optional[str] = None
+    emergency_relationship: Optional[str] = None
+    emergency_address_line_1: Optional[str] = None
+    emergency_address_line_2: Optional[str] = None
+    emergency_address_line_3: Optional[str] = None
+    emergency_town_city: Optional[str] = None
+    emergency_county: Optional[str] = None
+    emergency_postcode: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_branch: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_sort_code: Optional[str] = None
+    tax_code: Optional[str] = None
+    ni_number: Optional[str] = None
+    passport_number: Optional[str] = None
+    passport_country: Optional[str] = None
+    passport_expiry_date: Optional[date] = None
     license_number: Optional[str] = None
+    driving_licence_country: Optional[str] = None
+    driving_licence_class: Optional[str] = None
+    driving_licence_expiry_date: Optional[date] = None
+    holiday_jurisdiction: Optional[str] = None
+    employee_type: Optional[str] = None
+    working_time_pattern: Optional[str] = None
+    company_full_time_week_hrs: Optional[int] = None
+    company_full_time_week_mins: Optional[int] = None
+    entitlement_unit: Optional[str] = None
+    contracted_week_hrs: Optional[int] = None
+    contracted_week_mins: Optional[int] = None
+    average_day_hrs: Optional[int] = None
+    average_day_mins: Optional[int] = None
+    annual_leave_equivalent_hrs: Optional[int] = None
+    annual_leave_equivalent_mins: Optional[int] = None
+    leave_year_start_day: Optional[int] = None
+    leave_year_start_month: Optional[int] = None
+    leave_entitlement_hrs: Optional[int] = None
+    leave_entitlement_mins: Optional[int] = None
+    leave_allowance_hrs: Optional[int] = None
+    leave_allowance_mins: Optional[int] = None
+    badge_number: Optional[str] = None
     sia_number: Optional[str] = None
     sia_expiry_date: Optional[date] = None
     visa_status: Optional[str] = None
     rtw_status: Optional[str] = None
     employment_history: Optional[str] = None
-    address: Optional[str] = None
     dbs_status: Optional[str] = None
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
     contractor_id: Optional[UUID] = None
     weekly_contracted_hours: Optional[float] = 40.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_guard(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        for k, v in list(d.items()):
+            if v == "":
+                d[k] = None
+        fn = (d.get("first_name") or "").strip()
+        ln = (d.get("last_name") or "").strip()
+        if fn or ln:
+            parts = [d.get("title"), fn, (d.get("middle_name") or "").strip() or None, ln]
+            d["full_name"] = " ".join(p for p in parts if p)
+        hrs = d.get("contracted_week_hrs")
+        mins = d.get("contracted_week_mins")
+        if (hrs or 0) > 0 or (mins or 0) > 0:
+            d["weekly_contracted_hours"] = float(hrs or 0) + float(mins or 0) / 60.0
+        lines = [d.get("address_line_1"), d.get("address_line_2"), d.get("address_line_3"), d.get("town_city"), d.get("county"), d.get("postcode")]
+        joined = ", ".join(x.strip() for x in lines if x and str(x).strip())
+        if joined and not d.get("address"):
+            d["address"] = joined
+        return d
+
+    @model_validator(mode="after")
+    def require_identity(self) -> "GuardBase":
+        if not (self.full_name or "").strip():
+            if not ((self.first_name or "").strip() and (self.last_name or "").strip()):
+                raise ValueError("full_name or first_name and last_name required")
+        return self
 
 class GuardCreate(GuardBase):
     pass
@@ -68,8 +159,9 @@ class GuardCreate(GuardBase):
 class GuardResponse(GuardBase):
     id: int
     company_id: int
+    full_name: str
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 

@@ -10,13 +10,21 @@ from app.services import contractor_scope
 
 
 def _payload(guard: GuardCreate) -> dict[str, Any]:
-    return guard.model_dump() if hasattr(guard, "model_dump") else guard.dict()
+    data = guard.model_dump(exclude_unset=False) if hasattr(guard, "model_dump") else guard.dict()
+    if not data.get("full_name"):
+        fn = (data.get("first_name") or "").strip()
+        ln = (data.get("last_name") or "").strip()
+        if fn and ln:
+            parts = [data.get("title"), fn, (data.get("middle_name") or "").strip() or None, ln]
+            data["full_name"] = " ".join(p for p in parts if p)
+    return data
 
 
-def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
-    company = get_company_by_user_id(db, user_id)
-    enforce_guard_quota(db, company)
-    data = _payload(guard)
+def _apply_contractor_fields(
+    db: Session,
+    company_id: int,
+    data: dict[str, Any],
+) -> tuple[Any, Any, Any]:
     cid = data.pop("contractor_id", None)
     main_id = data.pop("main_contractor_id", None)
     sub_id = data.pop("sub_contractor_id", None)
@@ -26,11 +34,17 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
                 status_code=400,
                 detail="Use either directory contractor (contractor_id) or legacy main/sub fields, not both.",
             )
-        contractor_scope.resolve_directory_contractor_link(db, company.id, cid)
-        next_cid, next_main, next_sub = cid, None, None
-    else:
-        next_main, next_sub = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
-        next_cid = None
+        contractor_scope.resolve_directory_contractor_link(db, company_id, cid)
+        return cid, None, None
+    next_main, next_sub = contractor_scope.apply_guard_contractors(db, company_id, main_id, sub_id)
+    return None, next_main, next_sub
+
+
+def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
+    company = get_company_by_user_id(db, user_id)
+    enforce_guard_quota(db, company)
+    data = _payload(guard)
+    next_cid, next_main, next_sub = _apply_contractor_fields(db, company.id, data)
     if data.get("badge_number") and db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
         raise HTTPException(status_code=400, detail="Badge number already exists")
     db_guard = Guard(
@@ -74,25 +88,16 @@ def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -
     db_guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
     if not db_guard:
         raise HTTPException(status_code=404, detail="Guard not found")
+    touched = guard.model_dump(exclude_unset=True) if hasattr(guard, "model_dump") else {}
     data = _payload(guard)
-    cid = data.pop("contractor_id", None)
-    main_id = data.pop("main_contractor_id", None)
-    sub_id = data.pop("sub_contractor_id", None)
-    if cid is not None:
-        if main_id is not None or sub_id is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="Use either directory contractor (contractor_id) or legacy main/sub fields, not both.",
-            )
-        contractor_scope.resolve_directory_contractor_link(db, company.id, cid)
-        db_guard.contractor_id = cid
-        db_guard.main_contractor_id = None
-        db_guard.sub_contractor_id = None
-    else:
-        next_main, next_sub = contractor_scope.apply_guard_contractors(db, company.id, main_id, sub_id)
-        db_guard.contractor_id = None
+    if any(k in touched for k in ("contractor_id", "main_contractor_id", "sub_contractor_id")):
+        next_cid, next_main, next_sub = _apply_contractor_fields(db, company.id, data)
+        db_guard.contractor_id = next_cid
         db_guard.main_contractor_id = next_main
         db_guard.sub_contractor_id = next_sub
+    else:
+        for k in ("contractor_id", "main_contractor_id", "sub_contractor_id"):
+            data.pop(k, None)
     if data.get("badge_number") and data["badge_number"] != db_guard.badge_number:
         if db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
             raise HTTPException(status_code=400, detail="Badge number already exists")

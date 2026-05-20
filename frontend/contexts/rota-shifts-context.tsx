@@ -28,26 +28,28 @@ function emptyShifts() {
   return {} as RotaJsState['shifts'];
 }
 
-function seedSampleShifts(days: string[], pool: EmployeeRec[]): RotaJsState['shifts'] {
+function seedSampleShifts(days: string[], pool: EmployeeRec[], siteNames: string[]): RotaJsState['shifts'] {
   const out = emptyShifts();
-  if (pool.length < 3) return out;
+  if (pool.length < 3 || siteNames.length === 0) return out;
+  const s0 = siteNames[0];
+  const s1 = siteNames[1] ?? s0;
   const e0 = pool[0].id;
   const e1 = pool[1].id;
   const e2 = pool[2].id;
   if (days[0]) {
-    out[e0] = { ...out[e0], [days[0]]: [mkShift('09:00', '17:00', 'The Hive', '#f59e0b')] };
+    out[e0] = { ...out[e0], [days[0]]: [mkShift('09:00', '17:00', s0, '#f59e0b')] };
   }
   if (days[2]) {
-    out[e2] = { ...out[e2], [days[2]]: [mkShift('09:00', '17:00', 'The Hive', '#10b981')] };
+    out[e2] = { ...out[e2], [days[2]]: [mkShift('09:00', '17:00', s0, '#10b981')] };
   }
   if (days[4]) {
     out[e2] = {
       ...out[e2],
-      [days[4]]: [...(out[e2]?.[days[4]] || []), mkShift('09:00', '17:00', 'Central Office', '#3b82f6')],
+      [days[4]]: [...(out[e2]?.[days[4]] || []), mkShift('09:00', '17:00', s1, '#3b82f6')],
     };
   }
   if (days[1]) {
-    out[e1] = { ...out[e1], [days[1]]: [mkShift('20:00', '08:00', 'Holiday Inn', '#ec4899')] };
+    out[e1] = { ...out[e1], [days[1]]: [mkShift('20:00', '08:00', s1, '#ec4899')] };
   }
   return out;
 }
@@ -118,16 +120,23 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<RotaJsState>(defaultState);
   const [pool, setPool] = useState<EmployeeRec[]>([]);
   const [poolLoading, setPoolLoading] = useState(true);
+  const [siteNames, setSiteNames] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       setPoolLoading(true);
       try {
-        const guards = await api.guards.list();
-        if (!cancelled) setPool(guardsToEmployees(guards));
+        const [guards, sites] = await Promise.all([api.guards.list(), api.sites.list()]);
+        if (!cancelled) {
+          setPool(guardsToEmployees(guards));
+          setSiteNames(sites.map((s) => s.name));
+        }
       } catch {
-        if (!cancelled) setPool([]);
+        if (!cancelled) {
+          setPool([]);
+          setSiteNames([]);
+        }
       } finally {
         if (!cancelled) setPoolLoading(false);
       }
@@ -144,7 +153,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       let shifts = emptyShifts();
       if (p.copySeed && pool.length > 0) {
         employees = pool.slice(0, Math.min(5, pool.length));
-        shifts = seedSampleShifts(days, pool);
+        shifts = seedSampleShifts(days, pool, siteNames);
       }
       setState({
         ...defaultState(),
@@ -157,7 +166,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         selectedColor: SHIFT_COLOR_OPTS[0],
       });
     },
-    [pool]
+    [pool, siteNames]
   );
 
   const resetRota = useCallback(() => setState(defaultState()), []);

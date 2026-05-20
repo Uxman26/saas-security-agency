@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { EmployeeRec, ShiftRec } from '@/lib/rota-shifts-types';
-import { ROTA_SITES, SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
+import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
+import { useSites } from '@/hooks/use-sites';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -20,10 +21,10 @@ type Props = {
   onApply: (assignees: string[], dk: string, shift: ShiftRec) => void;
 };
 
-const empty = (): ShiftRec => ({
+const empty = (site = ''): ShiftRec => ({
   start: '09:00',
   end: '17:00',
-  site: ROTA_SITES[0],
+  site,
   notes: '',
   breakH: 0,
   breakM: 30,
@@ -32,8 +33,11 @@ const empty = (): ShiftRec => ({
 });
 
 export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultEmpId, edit, onApply }: Props) {
+  const { data: sites = [] } = useSites();
+  const siteNames = sites.map((s) => s.name);
+  const defaultSite = siteNames[0] ?? '';
   const [dk, setDk] = useState(defaultDk);
-  const [shift, setShift] = useState<ShiftRec>(empty);
+  const [shift, setShift] = useState<ShiftRec>(() => empty());
   const [assignees, setAssignees] = useState<string[]>([defaultEmpId]);
 
   useEffect(() => {
@@ -43,16 +47,16 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
       setShift({ ...edit.shift });
       setAssignees([edit.empId]);
     } else {
-      setShift(empty());
+      setShift(empty(defaultSite));
       setAssignees(defaultEmpId ? [defaultEmpId] : employees[0] ? [employees[0].id] : []);
     }
-  }, [open, defaultDk, defaultEmpId, edit, employees]);
+  }, [open, defaultDk, defaultEmpId, edit, employees, defaultSite]);
 
   const toggleAsg = (id: string) => {
     setAssignees((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const reset = () => setShift(edit ? { ...edit.shift } : empty());
+  const reset = () => setShift(edit ? { ...edit.shift } : empty(defaultSite));
 
   const submit = () => {
     if (assignees.length === 0 || !dk) return;
@@ -104,12 +108,16 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
           </div>
           <div className="space-y-1">
             <Label>Site / location</Label>
-            <Select value={shift.site} onValueChange={(v) => setShift((s) => ({ ...s, site: v }))}>
+            <Select
+              value={shift.site || undefined}
+              onValueChange={(v) => setShift((s) => ({ ...s, site: v }))}
+              disabled={siteNames.length === 0}
+            >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder={siteNames.length ? 'Select site' : 'No sites configured'} />
               </SelectTrigger>
               <SelectContent>
-                {ROTA_SITES.map((s) => (
+                {siteNames.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
                   </SelectItem>
@@ -167,7 +175,12 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
           <Button type="button" variant="outline" onClick={reset}>
             Reset form
           </Button>
-          <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={submit} disabled={assignees.length === 0}>
+          <Button
+            type="button"
+            className="bg-pink-600 hover:bg-pink-700"
+            onClick={submit}
+            disabled={assignees.length === 0 || !shift.site}
+          >
             {edit ? 'Update shift' : 'Add shift'}
           </Button>
         </DialogFooter>

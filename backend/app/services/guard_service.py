@@ -9,8 +9,12 @@ from app.services import audit_service
 from app.services import contractor_scope
 
 
-def _payload(guard: GuardCreate) -> dict[str, Any]:
-    data = guard.model_dump(exclude_unset=False) if hasattr(guard, "model_dump") else guard.dict()
+def _payload(guard: GuardCreate, *, only_set: bool = False) -> dict[str, Any]:
+    data = (
+        guard.model_dump(exclude_unset=only_set)
+        if hasattr(guard, "model_dump")
+        else guard.dict(exclude_unset=only_set)
+    )
     if not data.get("full_name"):
         fn = (data.get("first_name") or "").strip()
         ln = (data.get("last_name") or "").strip()
@@ -89,7 +93,7 @@ def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -
     if not db_guard:
         raise HTTPException(status_code=404, detail="Guard not found")
     touched = guard.model_dump(exclude_unset=True) if hasattr(guard, "model_dump") else {}
-    data = _payload(guard)
+    data = _payload(guard, only_set=True)
     if any(k in touched for k in ("contractor_id", "main_contractor_id", "sub_contractor_id")):
         next_cid, next_main, next_sub = _apply_contractor_fields(db, company.id, data)
         db_guard.contractor_id = next_cid

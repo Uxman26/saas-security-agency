@@ -45,14 +45,6 @@ export type RotaJsState = {
   orderDragIdx: number | null;
 };
 
-export const ROTA_SITES = [
-  'The Hive',
-  'Holiday Inn',
-  'Central Office',
-  'City Tower',
-  'Airport Terminal',
-] as const;
-
 export const SHIFT_COLOR_OPTS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'] as const;
 
 export const AVATAR_PALETTE = [

@@ -43,6 +43,7 @@ export type RotaJsState = {
   copyShift: { empId: string; dk: string; idx: number } | null;
   empModal_selected: Set<string>;
   orderDragIdx: number | null;
+  inclBreaks: boolean;
 };
 
 export const SHIFT_COLOR_OPTS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'] as const;

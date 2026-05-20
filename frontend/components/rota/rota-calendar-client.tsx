@@ -41,6 +41,7 @@ export function RotaCalendarClient() {
     clearEmployeeShifts,
     addDaysDelta,
     setAttendance,
+    setInclBreaks,
   } = useRotaShifts();
 
   const [empFilter, setEmpFilter] = useState('');
@@ -256,6 +257,9 @@ export function RotaCalendarClient() {
           </div>
           <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
             Total {formatHoursDecimal(totalRotaHours)}
+            <span className="text-muted-foreground font-normal ml-1">
+              ({state.inclBreaks ? 'incl. breaks' : 'excl. breaks'})
+            </span>
           </span>
           <Button variant="outline" size="sm" type="button" onClick={openReorder}>
             <ArrowUpDown className="size-3.5 mr-1" />
@@ -284,7 +288,18 @@ export function RotaCalendarClient() {
                     {fmtShortDate(dk)}
                   </th>
                 ))}
-                <th className="p-2 text-center text-xs bg-sky-100/80 dark:bg-sky-950/40 border-l min-w-[88px]">Total</th>
+                <th className="p-2 text-center text-xs bg-sky-100/80 dark:bg-sky-950/40 border-l min-w-[100px] align-top">
+                  <div className="font-semibold">Total hours</div>
+                  <label className="mt-1.5 flex items-center justify-center gap-1.5 font-normal text-[10px] text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="size-3.5 rounded border-input"
+                      checked={state.inclBreaks}
+                      onChange={(e) => setInclBreaks(e.target.checked)}
+                    />
+                    Incl. breaks?
+                  </label>
+                </th>
               </tr>
             </thead>
             <tbody>

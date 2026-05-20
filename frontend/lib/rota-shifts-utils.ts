@@ -14,7 +14,7 @@ export function buildDayRange(startStr: string, count: number) {
   return Array.from({ length: count }, (_, i) => dateKey(addDays(start, i)));
 }
 
-export function calcHours(s: ShiftRec) {
+export function calcHours(s: ShiftRec, inclBreaks = false) {
   const [sh, sm] = s.start.split(':').map(Number);
   const [eh, em] = s.end.split(':').map(Number);
   let startM = sh * 60 + (sm || 0);
@@ -22,7 +22,8 @@ export function calcHours(s: ShiftRec) {
   let span = endM - startM;
   if (span <= 0) span += 24 * 60;
   const breakMin = (s.breakH || 0) * 60 + (s.breakM || 0);
-  return Math.max(0, span - breakMin) / 60;
+  const deduct = inclBreaks ? 0 : breakMin;
+  return Math.max(0, span - deduct) / 60;
 }
 
 export function fmtShortDate(dk: string) {

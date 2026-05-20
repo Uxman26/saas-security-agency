@@ -81,6 +81,7 @@ const defaultState = (): RotaJsState => ({
   copyShift: null,
   empModal_selected: new Set<string>(),
   orderDragIdx: null,
+  inclBreaks: false,
 });
 
 type Ctx = {
@@ -109,6 +110,7 @@ type Ctx = {
   setEmpModalSelected: (ids: string[]) => void;
   setOrderDragIdx: (n: number | null) => void;
   setSelectedColor: (c: string) => void;
+  setInclBreaks: (v: boolean) => void;
   totalRotaHours: number;
   empTotalHours: (empId: string) => number;
   dayTotalHours: (dk: string) => number;
@@ -346,16 +348,20 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, selectedColor }));
   }, []);
 
+  const setInclBreaks = useCallback((inclBreaks: boolean) => {
+    setState((s) => ({ ...s, inclBreaks }));
+  }, []);
+
   const totalRotaHours = useMemo(() => {
     let t = 0;
     for (const empId of Object.keys(state.shifts)) {
       const byD = state.shifts[empId];
       for (const dk of Object.keys(byD)) {
-        for (const sh of byD[dk] || []) t += calcHours(sh);
+        for (const sh of byD[dk] || []) t += calcHours(sh, state.inclBreaks);
       }
     }
     return t;
-  }, [state.shifts]);
+  }, [state.shifts, state.inclBreaks]);
 
   const empTotalHours = useCallback(
     (empId: string) => {
@@ -363,22 +369,22 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       if (!byD) return 0;
       let t = 0;
       for (const dk of Object.keys(byD)) {
-        for (const sh of byD[dk] || []) t += calcHours(sh);
+        for (const sh of byD[dk] || []) t += calcHours(sh, state.inclBreaks);
       }
       return t;
     },
-    [state.shifts]
+    [state.shifts, state.inclBreaks]
   );
 
   const dayTotalHours = useCallback(
     (dk: string) => {
       let t = 0;
       for (const empId of Object.keys(state.shifts)) {
-        for (const sh of state.shifts[empId]?.[dk] || []) t += calcHours(sh);
+        for (const sh of state.shifts[empId]?.[dk] || []) t += calcHours(sh, state.inclBreaks);
       }
       return t;
     },
-    [state.shifts]
+    [state.shifts, state.inclBreaks]
   );
 
   const value = useMemo(
@@ -408,6 +414,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setEmpModalSelected,
       setOrderDragIdx,
       setSelectedColor,
+      setInclBreaks,
       totalRotaHours,
       empTotalHours,
       dayTotalHours,
@@ -438,6 +445,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setEmpModalSelected,
       setOrderDragIdx,
       setSelectedColor,
+      setInclBreaks,
       totalRotaHours,
       empTotalHours,
       dayTotalHours,

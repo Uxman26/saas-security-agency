@@ -270,6 +270,32 @@ def run():
                     cur.execute(f"ALTER TABLE guards ADD COLUMN {col} {spec}")
                 except sqlite3.OperationalError:
                     pass
+    if not table_exists(cur, "rota_plans"):
+        try:
+            cur.execute(
+                """CREATE TABLE rota_plans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                name TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                day_count INTEGER NOT NULL,
+                view_mode TEXT DEFAULT 'table',
+                budget REAL DEFAULT 0,
+                status TEXT DEFAULT 'draft',
+                planner_data TEXT,
+                published_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "assignments") and not column_exists(cur, "assignments", "rota_plan_id"):
+        try:
+            cur.execute("ALTER TABLE assignments ADD COLUMN rota_plan_id INTEGER REFERENCES rota_plans(id)")
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:

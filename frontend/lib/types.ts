@@ -173,6 +173,31 @@ export interface Assignment {
   created_at: string;
 }
 
+export interface RotaPlanListItem {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  day_count: number;
+  view_mode: string;
+  budget: number;
+  status: string;
+  shift_count: number;
+  staff_count: number;
+  created_at: string;
+  published_at?: string | null;
+}
+
+export interface RotaPlanDetail extends RotaPlanListItem {
+  planner_data?: string | null;
+}
+
+export interface RotaPlanPublishResult {
+  created: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface Rota {
   guard_id: number;
   guard_name: string;

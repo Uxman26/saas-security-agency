@@ -207,6 +207,7 @@ class AssignmentBase(BaseModel):
     shift_end: Optional[str] = None
     break_minutes: Optional[int] = 0
     shift_type: Optional[str] = "day"
+    rota_plan_id: Optional[int] = None
 
 class AssignmentCreate(AssignmentBase):
     pass
@@ -217,6 +218,46 @@ class AssignmentResponse(AssignmentBase):
     
     class Config:
         from_attributes = True
+
+class RotaPlanCreate(BaseModel):
+    name: str
+    start_date: date
+    day_count: int
+    view_mode: str = "table"
+    budget: float = 0
+    planner_data: Optional[str] = None
+
+class RotaPlanUpdate(BaseModel):
+    name: Optional[str] = None
+    view_mode: Optional[str] = None
+    budget: Optional[float] = None
+    planner_data: Optional[str] = None
+    status: Optional[str] = None
+
+class RotaPlanListItem(BaseModel):
+    id: int
+    name: str
+    start_date: date
+    end_date: date
+    day_count: int
+    view_mode: str
+    budget: float
+    status: str
+    shift_count: int = 0
+    staff_count: int = 0
+    created_at: datetime
+    published_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class RotaPlanDetail(RotaPlanListItem):
+    planner_data: Optional[str] = None
+
+class RotaPlanPublishResult(BaseModel):
+    created: int
+    skipped: int
+    errors: List[str] = Field(default_factory=list)
 
 class RotaResponse(BaseModel):
     guard_id: int

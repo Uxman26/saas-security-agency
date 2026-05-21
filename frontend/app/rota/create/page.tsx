@@ -9,14 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useRotaShifts } from '@/contexts/rota-shifts-context';
+import { api } from '@/lib/api';
 import type { RotaViewMode } from '@/lib/rota-shifts-types';
-import { Calendar, Check, Copy, LayoutGrid, Layers, Timer } from 'lucide-react';
+import { Calendar, Check, Copy, LayoutGrid, Layers, Loader2, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function CreateRotaPage() {
   const router = useRouter();
-  const { initRota } = useRotaShifts();
   const [mode, setMode] = useState<'new' | 'copy'>('new');
   const [name, setName] = useState('');
   const [duration, setDuration] = useState<string>('7');
@@ -24,24 +23,33 @@ export default function CreateRotaPage() {
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [budget, setBudget] = useState('');
   const [view, setView] = useState<RotaViewMode>('table');
+  const [saving, setSaving] = useState(false);
 
   const dayCount =
     duration === 'custom' ? Math.max(1, Math.min(90, customDays)) : parseInt(duration, 10);
 
   const valid = name.trim().length > 0 && startDate.length > 0;
 
-  const submit = () => {
-    if (!valid) return;
-    initRota({
-      name: name.trim(),
-      view,
-      startDate,
-      dayCount,
-      budget: parseFloat(budget.replace(/,/g, '')) || 0,
-      copySeed: mode === 'copy',
-      includeAllStaff: mode === 'new',
-    });
-    router.push('/rota/calendar');
+  const submit = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      const plan = await api.rotaPlans.create({
+        name: name.trim(),
+        start_date: startDate,
+        day_count: dayCount,
+        view_mode: view,
+        budget: parseFloat(budget.replace(/,/g, '')) || 0,
+      });
+      const q = new URLSearchParams({
+        bootstrap: '1',
+        copy: mode === 'copy' ? '1' : '0',
+        allStaff: mode === 'new' ? '1' : '0',
+      });
+      router.push(`/rota/calendar?id=${plan.id}&${q.toString()}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -54,7 +62,7 @@ export default function CreateRotaPage() {
             </Button>
             <div>
               <h1 className="text-2xl font-bold">Create a rota</h1>
-              <p className="text-sm text-muted-foreground mt-1">Choose how you start, then open the calendar.</p>
+              <p className="text-sm text-muted-foreground mt-1">Saved to your rota list — open the planner to add shifts and publish.</p>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4">
@@ -74,7 +82,7 @@ export default function CreateRotaPage() {
                     Create new rota
                     {mode === 'new' ? <Check className="size-4 text-primary" /> : null}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Blank rota with your dates and view.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Blank rota with all staff on the planner.</p>
                 </div>
               </button>
               <button
@@ -93,9 +101,7 @@ export default function CreateRotaPage() {
                     Copy sample rota
                     {mode === 'copy' ? <Check className="size-4 text-primary" /> : null}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Prefill with up to five guards and sample shifts (uses guards from your Guards list; needs at least three for the full sample).
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Prefill sample shifts (needs at least three staff).</p>
                 </div>
               </button>
             </div>
@@ -175,7 +181,8 @@ export default function CreateRotaPage() {
             </div>
 
             <div className="flex justify-end">
-              <Button className="bg-pink-600 hover:bg-pink-700" disabled={!valid} type="button" onClick={submit}>
+              <Button className="bg-pink-600 hover:bg-pink-700" disabled={!valid || saving} type="button" onClick={submit}>
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null}
                 Create your rota
               </Button>
             </div>

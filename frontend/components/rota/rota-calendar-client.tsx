@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, calcHours, fmtShortDate, formatHoursDecimal, initials } from '@/lib/rota-shifts-utils';
-import type { AttendanceRec, ShiftRec } from '@/lib/rota-shifts-types';
+import type { AttendanceRec, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import {
   ArrowLeft,
@@ -16,6 +17,7 @@ import {
   CalendarPlus,
   GripVertical,
   MoreHorizontal,
+  Loader2,
   Plus,
   Users,
 } from 'lucide-react';
@@ -23,10 +25,14 @@ import { cn } from '@/lib/utils';
 
 export function RotaCalendarClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const planIdParam = searchParams.get('id');
+  const [planLoading, setPlanLoading] = useState(!!planIdParam);
   const {
     state,
     pool,
     poolLoading,
+    loadRotaPlan,
     setRotaView,
     totalRotaHours,
     empTotalHours,
@@ -45,6 +51,47 @@ export function RotaCalendarClient() {
   } = useRotaShifts();
 
   const [publishing, setPublishing] = useState(false);
+
+  useEffect(() => {
+    if (!planIdParam) {
+      setPlanLoading(false);
+      return;
+    }
+    const id = parseInt(planIdParam, 10);
+    if (!id) {
+      setPlanLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPlanLoading(true);
+    void api.rotaPlans
+      .get(id)
+      .then((plan) => {
+        if (cancelled) return;
+        const bootstrap = searchParams.get('bootstrap') === '1';
+        if (bootstrap) {
+          loadRotaPlan(plan, {
+            name: plan.name,
+            view: (plan.view_mode as RotaViewMode) || 'table',
+            startDate: plan.start_date,
+            dayCount: plan.day_count,
+            budget: plan.budget,
+            copySeed: searchParams.get('copy') === '1',
+            includeAllStaff: searchParams.get('allStaff') === '1',
+          });
+        } else {
+          loadRotaPlan(plan);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPlanLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [planIdParam, searchParams, loadRotaPlan]);
+
   const shiftCount = useMemo(() => {
     let n = 0;
     for (const empId of Object.keys(state.shifts)) {
@@ -263,6 +310,15 @@ export function RotaCalendarClient() {
       const x = new Date(d + 'T12:00:00').getDay();
       return x === 0 || x === 6;
     }));
+
+  if (planLoading) {
+    return (
+      <div className="container mx-auto px-4 py-16 flex items-center justify-center gap-2 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin" />
+        Loading rota…
+      </div>
+    );
+  }
 
   if (!state.days.length) {
     return (

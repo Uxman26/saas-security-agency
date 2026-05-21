@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -196,6 +196,27 @@ export const api = {
       return request<Assignment>(`/assignments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
     },
     delete: (id: number): Promise<void> => request<void>(`/assignments/${id}`, { method: 'DELETE' }),
+  },
+  rotaPlans: {
+    list: (): Promise<RotaPlanListItem[]> => request<RotaPlanListItem[]>('/rotas'),
+    get: (id: number): Promise<RotaPlanDetail> => request<RotaPlanDetail>(`/rotas/${id}`),
+    create: (data: {
+      name: string;
+      start_date: string;
+      day_count: number;
+      view_mode: string;
+      budget?: number;
+      planner_data?: string;
+    }): Promise<RotaPlanDetail> =>
+      request<RotaPlanDetail>('/rotas', { method: 'POST', body: JSON.stringify(data) }),
+    update: (
+      id: number,
+      data: Partial<{ name: string; view_mode: string; budget: number; planner_data: string }>
+    ): Promise<RotaPlanDetail> =>
+      request<RotaPlanDetail>(`/rotas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/rotas/${id}`, { method: 'DELETE' }),
+    publish: (id: number): Promise<RotaPlanPublishResult> =>
+      request<RotaPlanPublishResult>(`/rotas/${id}/publish`, { method: 'POST' }),
   },
   clients: {
     list: (): Promise<Client[]> => request<Client[]>('/clients'),

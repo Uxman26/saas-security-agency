@@ -69,6 +69,7 @@ class Company(Base):
     payments = relationship("Payment", back_populates="company", cascade="all, delete-orphan")
     special_days = relationship("SpecialDay", back_populates="company", cascade="all, delete-orphan")
     directory_contractors = relationship("Contractor", back_populates="company", cascade="all, delete-orphan")
+    rota_plans = relationship("RotaPlan", back_populates="company", cascade="all, delete-orphan")
 
 class Contractor(Base):
     __tablename__ = "contractors"
@@ -302,11 +303,30 @@ class Site(Base):
     rates = relationship("SiteRate", back_populates="site", cascade="all, delete-orphan")
     invoice_lines = relationship("InvoiceLine", back_populates="site", cascade="all, delete-orphan")
 
+class RotaPlan(Base):
+    __tablename__ = "rota_plans"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    name = Column(String, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    day_count = Column(Integer, nullable=False)
+    view_mode = Column(String, default="table")
+    budget = Column(Float, default=0)
+    status = Column(String, default="draft")
+    planner_data = Column(Text)
+    published_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="rota_plans")
+    assignments = relationship("Assignment", back_populates="rota_plan")
+
 class Assignment(Base):
     __tablename__ = "assignments"
     id = Column(Integer, primary_key=True, index=True)
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    rota_plan_id = Column(Integer, ForeignKey("rota_plans.id"))
     date = Column(Date, nullable=False)
     shift_start = Column(String)
     shift_end = Column(String)
@@ -316,6 +336,7 @@ class Assignment(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     guard = relationship("Guard", back_populates="assignments")
     site = relationship("Site", back_populates="assignments")
+    rota_plan = relationship("RotaPlan", back_populates="assignments")
     attendances = relationship("Attendance", back_populates="assignment", cascade="all, delete-orphan")
 
 class GuardRate(Base):

@@ -6,14 +6,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
+import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
 import { buildDayRange, attKey, calcHours } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
+import type { RotaPlanDetail } from '@/lib/types';
 
 type InitPayload = {
   name: string;
@@ -93,9 +96,13 @@ const defaultState = (): RotaJsState => ({
 
 type Ctx = {
   state: RotaJsState;
+  rotaPlanId: number | null;
   pool: EmployeeRec[];
   poolLoading: boolean;
   initRota: (p: InitPayload) => void;
+  loadRotaPlan: (plan: RotaPlanDetail, bootstrap?: InitPayload) => void;
+  setRotaPlanId: (id: number | null) => void;
+  saveRotaPlan: () => Promise<void>;
   resetRota: () => void;
   setRotaView: (v: RotaViewMode) => void;
   setBudget: (n: number) => void;
@@ -128,9 +135,11 @@ const RotaCtx = createContext<Ctx | null>(null);
 
 export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<RotaJsState>(defaultState);
+  const [rotaPlanId, setRotaPlanId] = useState<number | null>(null);
   const [pool, setPool] = useState<EmployeeRec[]>([]);
   const [poolLoading, setPoolLoading] = useState(true);
   const [siteNames, setSiteNames] = useState<string[]>([]);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +190,77 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     [pool, siteNames]
   );
 
-  const resetRota = useCallback(() => setState(defaultState()), []);
+  const resetRota = useCallback(() => {
+    setRotaPlanId(null);
+    setState(defaultState());
+  }, []);
+
+  const saveRotaPlan = useCallback(async () => {
+    if (!rotaPlanId || state.days.length === 0) return;
+    await api.rotaPlans.update(rotaPlanId, {
+      name: state.rotaName,
+      view_mode: state.rotaView,
+      budget: state.budget,
+      planner_data: serializePlannerState(state),
+    });
+  }, [rotaPlanId, state]);
+
+  useEffect(() => {
+    if (!rotaPlanId || state.days.length === 0) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      void api.rotaPlans
+        .update(rotaPlanId, {
+          name: state.rotaName,
+          view_mode: state.rotaView,
+          budget: state.budget,
+          planner_data: serializePlannerState(state),
+        })
+        .catch(() => {});
+    }, 1500);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [rotaPlanId, state]);
+
+  const loadRotaPlan = useCallback(
+    (plan: RotaPlanDetail, bootstrap?: InitPayload) => {
+      setRotaPlanId(plan.id);
+      if (plan.planner_data) {
+        setState((s) => applyPlannerPayload(s, plan.planner_data, plan.name));
+        return;
+      }
+      if (bootstrap) {
+        const days = buildDayRange(bootstrap.startDate, bootstrap.dayCount);
+        let employees: EmployeeRec[] = [];
+        let shifts = emptyShifts();
+        if (bootstrap.copySeed && pool.length > 0) {
+          employees = pool.slice(0, Math.min(5, pool.length));
+          shifts = seedSampleShifts(days, pool, siteNames);
+        } else if (bootstrap.includeAllStaff && pool.length > 0) {
+          employees = [...pool];
+        }
+        setState({
+          ...defaultState(),
+          rotaName: plan.name,
+          rotaView: (plan.view_mode as RotaViewMode) || bootstrap.view,
+          days,
+          budget: plan.budget ?? bootstrap.budget,
+          employees,
+          shifts,
+          selectedColor: SHIFT_COLOR_OPTS[0],
+        });
+      } else {
+        setState((s) => ({
+          ...applyPlannerPayload(s, null, plan.name),
+          rotaView: (plan.view_mode as RotaViewMode) || 'table',
+          days: buildDayRange(plan.start_date, plan.day_count),
+          budget: plan.budget ?? 0,
+        }));
+      }
+    },
+    [pool, siteNames]
+  );
 
   const setRotaView = useCallback((rotaView: RotaViewMode) => {
     setState((s) => ({ ...s, rotaView }));
@@ -363,6 +442,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const publishRota = useCallback(async (): Promise<PublishRotaResult> => {
+    if (rotaPlanId) {
+      await saveRotaPlan();
+      return api.rotaPlans.publish(rotaPlanId);
+    }
     const sites = await api.sites.list();
     const siteByName = new Map(sites.map((s) => [s.name.trim().toLowerCase(), s.id]));
     let created = 0;
@@ -397,7 +480,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       }
     }
     return { created, skipped, errors };
-  }, [state.shifts]);
+  }, [rotaPlanId, saveRotaPlan, state.shifts]);
 
   const totalRotaHours = useMemo(() => {
     let t = 0;
@@ -437,9 +520,13 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       state,
+      rotaPlanId,
       pool,
       poolLoading,
       initRota,
+      loadRotaPlan,
+      setRotaPlanId,
+      saveRotaPlan,
       resetRota,
       setRotaView,
       setBudget,
@@ -469,9 +556,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     }),
     [
       state,
+      rotaPlanId,
       pool,
       poolLoading,
       initRota,
+      loadRotaPlan,
+      saveRotaPlan,
       resetRota,
       setRotaView,
       setBudget,

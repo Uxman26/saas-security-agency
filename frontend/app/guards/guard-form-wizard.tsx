@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm, type Resolver } from 'react-hook-form';
+import { useForm, type FieldErrors, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { guardSchema, type GuardFormData } from '@/lib/validation';
+import { guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import {
   TITLES,
   GENDERS,
@@ -24,6 +24,33 @@ import {
 import { cn } from '@/lib/utils';
 
 const STEPS = ['Employee details', 'Employment details', 'Summary'] as const;
+
+const REQUIRED_KEYS: (keyof GuardFormData)[] = ['first_name', 'last_name', 'phone', 'visa_status'];
+
+const STEP0_KEYS: (keyof GuardFormData)[] = [
+  'first_name',
+  'last_name',
+  'phone',
+  'visa_status',
+  'work_phone',
+  'emergency_mobile',
+  'emergency_home_phone',
+  'emergency_work_phone',
+  'bank_account_number',
+];
+
+const STEP1_KEYS: (keyof GuardFormData)[] = [
+  'holiday_jurisdiction',
+  'employee_type',
+  'entitlement_unit',
+  'working_time_pattern',
+];
+
+function stepForField(key: string) {
+  if (STEP0_KEYS.includes(key as keyof GuardFormData)) return 0;
+  if (STEP1_KEYS.includes(key as keyof GuardFormData)) return 1;
+  return 0;
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -103,7 +130,7 @@ export function GuardFormWizard({
   submitLabel: string;
 }) {
   const [step, setStep] = useState(0);
-  const { register, handleSubmit, setValue, watch, trigger, formState: { errors } } = form;
+  const { register, handleSubmit, setValue, watch, trigger, clearErrors, getValues, formState: { errors } } = form;
   const cid = watch('contractor_id');
   const employeeType = watch('employee_type') ?? '';
   const entitlementUnit = watch('entitlement_unit') ?? '';
@@ -125,16 +152,62 @@ export function GuardFormWizard({
     setValue('available_days', [...set].join(','));
   };
 
+  const onInvalid = (errs: FieldErrors<GuardFormData>) => {
+    const keys = Object.keys(errs);
+    if (keys.length) setStep(stepForField(keys[0]));
+  };
+
+  const errorMessages = Object.entries(errors)
+    .map(([k, v]) => (v?.message ? `${k.replace(/_/g, ' ')}: ${v.message}` : null))
+    .filter(Boolean) as string[];
+
+  const goToSummary = async () => {
+    const ok = await trigger(REQUIRED_KEYS);
+    if (!ok) return;
+    clearErrors();
+    setStep(2);
+  };
+
   const next = async () => {
-    const ok = await trigger(stepFields[step]);
-    if (ok) setStep((s) => Math.min(s + 1, 2));
+    if (step === 0) {
+      const ok = await trigger(stepFields[0]);
+      if (ok) setStep(1);
+      return;
+    }
+    if (step === 1) {
+      await goToSummary();
+    }
+  };
+
+  const saveSummary = () => {
+    clearErrors();
+    const values = getValues();
+    const parsed = guardSubmitSchema.safeParse(values);
+    if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      if (first?.path[0]) setStep(stepForField(String(first.path[0])));
+      return;
+    }
+    onSubmit({ ...getValues(), ...parsed.data } as GuardFormData);
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {Object.keys(errors).length > 0 && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          Please fix the highlighted fields below before saving.
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (step === 2) saveSummary();
+        else handleSubmit(onSubmit, onInvalid)(e);
+      }}
+      className="space-y-4"
+    >
+      {step !== 2 && errorMessages.length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive space-y-1">
+          <p className="font-medium">Please fix these fields:</p>
+          <ul className="list-disc pl-4 text-xs">
+            {errorMessages.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
         </div>
       )}
       <div className="flex gap-0 text-sm font-medium">
@@ -231,6 +304,16 @@ export function GuardFormWizard({
                 {errors.last_name && <p className="text-xs text-destructive">{errors.last_name.message}</p>}
               </div>
               <div className="space-y-1">
+                <Label>Mobile number <span className="text-destructive">*</span></Label>
+                <Input {...register('phone')} placeholder="e.g. 07700900123" />
+                {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Visa status <span className="text-destructive">*</span></Label>
+                <Input {...register('visa_status')} placeholder="e.g. British citizen, Skilled Worker" />
+                {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
+              </div>
+              <div className="space-y-1">
                 <Label>Gender</Label>
                 <Select value={watch('gender') || 'Unspecified'} onValueChange={(v) => setValue('gender', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -252,11 +335,6 @@ export function GuardFormWizard({
                 <Label>Email</Label>
                 <Input type="email" {...register('email')} />
                 {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
-              </div>
-              <div className="space-y-1">
-                <Label>Mobile number <span className="text-destructive">*</span></Label>
-                <Input {...register('phone')} />
-                {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label>Work phone</Label>
@@ -397,11 +475,6 @@ export function GuardFormWizard({
               <div className="space-y-1"><Label>Badge number</Label><Input {...register('badge_number')} /></div>
               <div className="space-y-1"><Label>SIA number</Label><Input {...register('sia_number')} /></div>
               <div className="space-y-1"><Label>SIA expiry</Label><Input type="date" {...register('sia_expiry_date')} /></div>
-              <div className="space-y-1">
-                <Label>Visa status <span className="text-destructive">*</span></Label>
-                <Input {...register('visa_status')} placeholder="e.g. Indefinite leave, Skilled Worker" />
-                {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
-              </div>
               <div className="space-y-1"><Label>RTW status</Label><Input {...register('rtw_status')} /></div>
               <div className="space-y-1"><Label>DBS check</Label><Input {...register('dbs_status')} /></div>
               <div className="space-y-1 sm:col-span-2"><Label>Employment history (5 years)</Label><Input {...register('employment_history')} /></div>
@@ -498,6 +571,10 @@ export function GuardFormWizard({
       )}
 
       {step === 2 && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Required: first name, last name, mobile number, and visa status. Employee type and entitlement are optional.
+          </p>
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-muted">
@@ -518,6 +595,7 @@ export function GuardFormWizard({
             <p><span className="font-medium text-foreground">Employee type:</span> {EMPLOYEE_TYPES.find((e) => e.value === employeeType)?.label || '—'}</p>
             <p><span className="font-medium text-foreground">Entitlement:</span> {entitlementUnit || '—'}</p>
           </div>
+        </div>
         </div>
       )}
 

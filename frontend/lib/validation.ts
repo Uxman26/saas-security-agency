@@ -23,16 +23,31 @@ const optUuid = z.preprocess(
 );
 
 const optStr = z.string().max(200).optional().or(z.literal(''));
-const optPhone = z
+const phoneRequired = z
   .string()
-  .regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number')
-  .optional()
-  .or(z.literal(''));
+  .min(1, 'Phone number is required')
+  .min(7, 'Enter at least 7 digits')
+  .max(25, 'Phone number is too long');
 const optDate = z.string().optional().or(z.literal(''));
-const optInt = z.preprocess(
-  (v) => (v === '' || v === null || v === undefined ? 0 : Number(v)),
-  z.number().int().min(0).max(999)
-);
+const toOptInt = (v: unknown) => {
+  if (v === '' || v === null || v === undefined) return 0;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(999, Math.trunc(n)));
+};
+const optInt = z.preprocess(toOptInt, z.number().int().min(0).max(999));
+const toOptDay = (v: unknown) => {
+  if (v === '' || v === null || v === undefined) return 1;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.min(31, Math.trunc(n)));
+};
+const toOptMonth = (v: unknown) => {
+  if (v === '' || v === null || v === undefined) return 1;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 1;
+  return Math.max(1, Math.min(12, Math.trunc(n)));
+};
 
 export const guardSchema = z.object({
   title: optStr,
@@ -43,8 +58,8 @@ export const guardSchema = z.object({
   ethnicity: optStr,
   date_of_birth: optDate,
   email: optStr,
-  phone: z.string().min(1, 'Phone number is required').regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number'),
-  work_phone: optPhone,
+  phone: phoneRequired,
+  work_phone: optStr,
   job_title: optStr,
   employment_start_date: optDate,
   probation_end_date: optDate,
@@ -57,15 +72,18 @@ export const guardSchema = z.object({
   address: optStr,
   service_area: optStr,
   nearby_areas: optStr,
-  has_car: z.boolean().optional().default(false),
+  has_car: z.coerce.boolean().optional().default(false),
   available_days: optStr,
   availability_timing: optStr,
-  pay_frequency: z.enum(['weekly', 'monthly']).optional().default('weekly'),
+  pay_frequency: z.preprocess(
+    (v) => (v === 'monthly' ? 'monthly' : 'weekly'),
+    z.enum(['weekly', 'monthly'])
+  ),
   emergency_first_name: optStr,
   emergency_last_name: optStr,
-  emergency_mobile: optPhone,
-  emergency_home_phone: optPhone,
-  emergency_work_phone: optPhone,
+  emergency_mobile: optStr,
+  emergency_home_phone: optStr,
+  emergency_work_phone: optStr,
   emergency_relationship: optStr,
   emergency_address_line_1: optStr,
   emergency_address_line_2: optStr,
@@ -76,7 +94,7 @@ export const guardSchema = z.object({
   bank_account_name: z.string().max(60).optional().or(z.literal('')),
   bank_name: z.string().max(60).optional().or(z.literal('')),
   bank_branch: optStr,
-  bank_account_number: z.string().max(8).optional().or(z.literal('')),
+  bank_account_number: optStr,
   bank_sort_code: optStr,
   tax_code: optStr,
   ni_number: optStr,
@@ -99,14 +117,8 @@ export const guardSchema = z.object({
   average_day_mins: optInt,
   annual_leave_equivalent_hrs: optInt,
   annual_leave_equivalent_mins: optInt,
-  leave_year_start_day: z.preprocess(
-    (v) => (v === '' || v === null || v === undefined ? 1 : Number(v)),
-    z.number().int().min(1).max(31)
-  ),
-  leave_year_start_month: z.preprocess(
-    (v) => (v === '' || v === null || v === undefined ? 1 : Number(v)),
-    z.number().int().min(1).max(12)
-  ),
+  leave_year_start_day: z.preprocess(toOptDay, z.number().int().min(1).max(31)),
+  leave_year_start_month: z.preprocess(toOptMonth, z.number().int().min(1).max(12)),
   leave_entitlement_hrs: optInt,
   leave_entitlement_mins: optInt,
   leave_allowance_hrs: optInt,
@@ -126,6 +138,14 @@ export const guardSchema = z.object({
   main_contractor_id: optPosInt,
   sub_contractor_id: optPosInt,
 });
+
+export const guardSubmitSchema = guardSchema.partial().required({
+  first_name: true,
+  last_name: true,
+  phone: true,
+  visa_status: true,
+});
+
 export type GuardFormData = z.infer<typeof guardSchema>;
 
 export const siteSchema = z

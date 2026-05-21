@@ -15,7 +15,7 @@ import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard } from '@/hoo
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
-import { guardSchema, type GuardFormData } from '@/lib/validation';
+import { guardSchema, guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import { guardFormDefaults, guardToForm, formToGuardPayload } from '@/lib/guard-form-map';
 import type { Guard } from '@/lib/types';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
@@ -73,11 +73,11 @@ export default function GuardsPage() {
   const deleteGuard = useDeleteGuard();
 
   const addForm = useForm<GuardFormData>({
-    resolver: zodResolver(guardSchema) as Resolver<GuardFormData>,
+    resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData>,
     defaultValues: guardFormDefaults,
   });
 
-  const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSchema) as Resolver<GuardFormData> });
+  const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData> });
 
   const contractorLabel = useMemo(() => {
     const dirNames = new Map(dirRows.map((c) => [c.id, c.name]));

@@ -280,17 +280,39 @@ export interface SubContractor {
   created_at: string;
 }
 
+export interface ChartPoint {
+  label: string;
+  value: number;
+}
+
 export interface DashboardStats {
   active_guards: number;
+  sites_count: number;
+  clients_count: number;
   expiring_documents: number;
+  sia_expiring_30d: number;
   revenue_total: number;
+  payroll_mtd: number;
+  invoice_total: number;
+  invoice_outstanding: number;
   late_count: number;
+  present_count: number;
+  absent_count: number;
   upcoming_shifts: number;
+  shifts_today: number;
   main_contractors_total: number;
   main_contractors_active: number;
   sub_contractors_total: number;
   sub_contractors_active: number;
   contracts_expiring_soon: number;
+}
+
+export interface DashboardOverview {
+  stats: DashboardStats;
+  shifts_by_day: ChartPoint[];
+  attendance_by_status: ChartPoint[];
+  payroll_by_month: ChartPoint[];
+  operations_compare: ChartPoint[];
 }
 
 export interface ContractExpiryAlert {

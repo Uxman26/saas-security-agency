@@ -608,17 +608,39 @@ class PaymentResponse(PaymentBase):
 class SubscriptionUpdate(BaseModel):
     subscription_tier: str
 
+class ChartPoint(BaseModel):
+    label: str
+    value: float
+
+
 class DashboardStats(BaseModel):
     active_guards: int
+    sites_count: int = 0
+    clients_count: int = 0
     expiring_documents: int
+    sia_expiring_30d: int = 0
     revenue_total: float
+    payroll_mtd: float = 0
+    invoice_total: float = 0
+    invoice_outstanding: float = 0
     late_count: int
+    present_count: int = 0
+    absent_count: int = 0
     upcoming_shifts: int
+    shifts_today: int = 0
     main_contractors_total: int = 0
     main_contractors_active: int = 0
     sub_contractors_total: int = 0
     sub_contractors_active: int = 0
     contracts_expiring_soon: int = 0
+
+
+class DashboardOverview(BaseModel):
+    stats: DashboardStats
+    shifts_by_day: List[ChartPoint] = Field(default_factory=list)
+    attendance_by_status: List[ChartPoint] = Field(default_factory=list)
+    payroll_by_month: List[ChartPoint] = Field(default_factory=list)
+    operations_compare: List[ChartPoint] = Field(default_factory=list)
 
 class ComplianceAlert(BaseModel):
     guard_id: int

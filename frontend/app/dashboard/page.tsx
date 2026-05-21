@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { OverviewCharts } from '@/components/dashboard/overview-charts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
+import type { LucideIcon } from 'lucide-react';
 import {
   Users,
   MapPin,
@@ -20,15 +22,21 @@ import {
   Clock,
   FolderOpen,
   CreditCard,
-  TrendingUp,
   Shield,
   CalendarRange,
   CalendarCheck,
+  Activity,
+  BadgeCheck,
+  TrendingUp,
+  Loader2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can, PERMS } from '@/lib/permissions';
-import type { DashboardStats, ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
+import type { DashboardOverview, ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
+
+const gbp = (n: number) =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n);
 
 const companyTiles = [
   { href: '/guards', title: 'Staff', desc: 'Manage staff & compliance', icon: Users, color: 'text-blue-600', perm: 'guards.read' },
@@ -51,10 +59,44 @@ const adminTiles = [
   { href: '/admin/companies', title: 'Companies', desc: 'View all tenant companies', icon: Building2, color: 'text-primary' },
 ];
 
+function Kpi({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  warn,
+  accent,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: string;
+  icon: LucideIcon;
+  warn?: boolean;
+  accent?: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border bg-card/90 p-4 shadow-sm transition-shadow hover:shadow-md ${
+        warn ? 'border-amber-500/40' : 'border-border/60'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <div className="rounded-lg bg-primary/10 p-1.5">
+          <Icon className={`size-4 ${accent ?? 'text-primary'}`} />
+        </div>
+      </div>
+      <p className={`mt-2 text-2xl font-bold tabular-nums ${warn ? 'text-amber-600' : ''}`}>{value}</p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
   const [contractAlerts, setContractAlerts] = useState<ContractExpiryAlert[]>([]);
   const [alertsError, setAlertsError] = useState('');
@@ -62,7 +104,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isSuperAdmin) {
       setAlertsError('');
-      api.reports.dashboard().then(setStats).catch(() => setStats(null));
+      setLoading(true);
+      api.reports
+        .dashboard()
+        .then(setOverview)
+        .catch(() => setOverview(null))
+        .finally(() => setLoading(false));
       void Promise.all([api.reports.compliance(30), api.reports.contractsExpiring(30)])
         .then(([a, c]) => {
           setAlerts(a);
@@ -74,221 +121,263 @@ export default function DashboardPage() {
 
   const tiles = useMemo(() => {
     if (isSuperAdmin) return adminTiles;
-    const showContractors =
-      can(user, PERMS.contractorView) /* &&
-      (user?.plan?.features?.contractors === true || isTenantAdmin(user)) */;
+    const showContractors = can(user, PERMS.contractorView);
     return companyTiles.filter((t) => {
       if (t.href === '/contractors') return showContractors;
       return can(user, t.perm);
     });
   }, [user, isSuperAdmin]);
 
+  const stats = overview?.stats;
+
   return (
     <ProtectedRoute>
       <AppShell>
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <div className="container mx-auto px-4 py-8">
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-1">
-              <Shield className="size-8 text-primary" />
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                {isSuperAdmin ? 'Platform Admin' : 'Dashboard'}
-              </h1>
-            </div>
-            <p className="text-muted-foreground ml-11">
-              {isSuperAdmin
-                ? 'Manage platform and tenant companies'
-                : `Welcome back${user?.full_name ? `, ${user.full_name}` : ''}. Here's your security operations overview.`}
-            </p>
-          </div>
-
-          {/* Stats row */}
-          {!isSuperAdmin && stats && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 mb-6">
-              <Card className="border-border/60">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Users className="size-4" /> Active staff
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-3xl font-bold">{stats.active_guards}</span>
-                </CardContent>
-              </Card>
-              <Card className={`border-border/60 ${stats.expiring_documents > 0 ? 'border-amber-500/50' : ''}`}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <FolderOpen className="size-4" /> Expiring Docs (30d)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className={`text-3xl font-bold ${stats.expiring_documents > 0 ? 'text-amber-600' : ''}`}>
-                    {stats.expiring_documents}
-                  </span>
-                </CardContent>
-              </Card>
-              <Card className={`border-border/60 ${(stats.contracts_expiring_soon ?? 0) > 0 ? 'border-amber-500/50' : ''}`}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <CalendarCheck className="size-4" /> Contracts expiring (30d)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className={`text-3xl font-bold ${(stats.contracts_expiring_soon ?? 0) > 0 ? 'text-amber-600' : ''}`}>
-                    {stats.contracts_expiring_soon ?? 0}
-                  </span>
-                </CardContent>
-              </Card>
-              <Card className="border-border/60">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <TrendingUp className="size-4" /> Revenue Total
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-3xl font-bold text-green-600">£{stats.revenue_total.toFixed(0)}</span>
-                </CardContent>
-              </Card>
-              <Card className={`border-border/60 ${stats.late_count > 0 ? 'border-red-500/50' : ''}`}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Clock className="size-4" /> Late Arrivals
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className={`text-3xl font-bold ${stats.late_count > 0 ? 'text-red-600' : ''}`}>
-                    {stats.late_count}
-                  </span>
-                </CardContent>
-              </Card>
-              <Card className="border-border/60">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Calendar className="size-4" /> Shifts (7d)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-3xl font-bold">{stats.upcoming_shifts}</span>
-                </CardContent>
-              </Card>
-              <Card className="border-border/60">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Building2 className="size-4" /> Main contractors
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                    <span><span className="text-2xl font-bold">{stats.main_contractors_active}</span> active</span>
-                    <span className="text-muted-foreground">of {stats.main_contractors_total} total</span>
+        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.08),transparent_55%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.25))]">
+          <div className="container mx-auto px-4 py-8 max-w-[1600px]">
+            <div className="mb-8 rounded-2xl border border-primary/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-lg shadow-primary/10">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex size-12 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-white/10">
+                  <Shield className="size-7 text-primary" />
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                    {isSuperAdmin ? 'Platform Admin' : 'Operations Command Centre'}
+                  </h1>
+                  <p className="text-sm text-slate-300 mt-1">
+                    {isSuperAdmin
+                      ? 'Manage platform and tenant companies'
+                      : `Welcome back${user?.full_name ? `, ${user.full_name}` : ''} — live metrics for staffing, compliance, and finance.`}
+                  </p>
+                </div>
+                {!isSuperAdmin && stats && (
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <span className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/10">
+                      <span className="text-slate-400">Today&apos;s shifts</span>{' '}
+                      <strong className="text-white">{stats.shifts_today}</strong>
+                    </span>
+                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 ring-1 ring-emerald-400/30">
+                      <span className="text-emerald-200">Present</span>{' '}
+                      <strong>{stats.present_count}</strong>
+                    </span>
+                    <span className="rounded-full bg-red-500/20 px-3 py-1 ring-1 ring-red-400/30">
+                      <span className="text-red-200">Absent</span>{' '}
+                      <strong>{stats.absent_count}</strong>
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
-              <Card className="border-border/60">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <UserCog className="size-4" /> Sub contractors
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                    <span><span className="text-2xl font-bold">{stats.sub_contractors_active}</span> active</span>
-                    <span className="text-muted-foreground">of {stats.sub_contractors_total} total</span>
-                  </div>
-                </CardContent>
-              </Card>
+                )}
+              </div>
             </div>
-          )}
 
-          {!isSuperAdmin && alertsError && (
-            <Card className="mb-8 border-destructive/40 bg-destructive/10">
-              <CardContent className="pt-6 text-sm text-destructive">{alertsError}</CardContent>
-            </Card>
-          )}
+            {!isSuperAdmin && loading && (
+              <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+                <Loader2 className="size-5 animate-spin" />
+                Loading dashboard…
+              </div>
+            )}
 
-          {!isSuperAdmin && contractAlerts.length > 0 && (
-            <Card className="mb-8 border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-800 dark:text-amber-400">
-                  <CalendarCheck className="size-4" />
-                  Contracts expiring soon — {contractAlerts.length} client{contractAlerts.length !== 1 ? 's' : ''} within 30 days
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="text-sm space-y-1">
-                  {contractAlerts.slice(0, 8).map((a) => (
-                    <li key={a.client_id} className="flex items-center gap-2 text-amber-900 dark:text-amber-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                      <span className="font-medium">{a.client_name}</span>
-                      <span className="text-amber-600 dark:text-amber-500 text-xs">ends {a.contract_end_date}</span>
-                    </li>
-                  ))}
-                  {contractAlerts.length > 8 && (
-                    <li className="text-amber-700 dark:text-amber-400 text-xs pl-3">
-                      + {contractAlerts.length - 8} more
-                    </li>
-                  )}
-                  <li className="text-xs pl-3 pt-1">
-                    <Link href="/clients" className="text-amber-800 dark:text-amber-400 underline hover:no-underline">
-                      Open Clients to renew
-                    </Link>
-                  </li>
-                </ul>
-              </CardContent>
-            </Card>
-          )}
+            {!isSuperAdmin && !loading && stats && overview && (
+              <>
+                <section className="mb-6">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Workforce & compliance
+                  </h2>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                    <Kpi label="Staff" value={stats.active_guards} sub="Directory total" icon={Users} />
+                    <Kpi label="Sites" value={stats.sites_count} icon={MapPin} accent="text-green-600" />
+                    <Kpi label="Clients" value={stats.clients_count} icon={Building2} accent="text-purple-600" />
+                    <Kpi
+                      label="Docs expiring"
+                      value={stats.expiring_documents}
+                      sub="Within 30 days"
+                      icon={FolderOpen}
+                      warn={stats.expiring_documents > 0}
+                    />
+                    <Kpi
+                      label="SIA expiring"
+                      value={stats.sia_expiring_30d}
+                      sub="Within 30 days"
+                      icon={BadgeCheck}
+                      warn={stats.sia_expiring_30d > 0}
+                    />
+                    <Kpi
+                      label="Contracts"
+                      value={stats.contracts_expiring_soon}
+                      sub="Client contracts (30d)"
+                      icon={CalendarCheck}
+                      warn={stats.contracts_expiring_soon > 0}
+                    />
+                  </div>
+                </section>
 
-          {/* Compliance alerts */}
-          {!isSuperAdmin && alerts.length > 0 && (
-            <Card className="mb-8 border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-800 dark:text-amber-400">
-                  <AlertTriangle className="size-4" />
-                  Compliance Alerts — {alerts.length} document{alerts.length !== 1 ? 's' : ''} expiring within 30 days
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="text-sm space-y-1">
-                  {alerts.slice(0, 6).map((a, i) => (
-                    <li key={i} className="flex items-center gap-2 text-amber-900 dark:text-amber-300">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                      <span className="font-medium">{a.guard_name}</span>
-                      <span className="text-amber-700 dark:text-amber-400">—</span>
-                      <span>{a.document_type}</span>
-                      <span className="text-amber-600 dark:text-amber-500 text-xs">expires {a.expiry_date}</span>
-                    </li>
-                  ))}
-                  {alerts.length > 6 && (
-                    <li className="text-amber-700 dark:text-amber-400 text-xs pl-3">
-                      + {alerts.length - 6} more — <Link href="/documents" className="underline hover:no-underline">view all in Documents</Link>
-                    </li>
-                  )}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
+                <section className="mb-6">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Shifts & attendance
+                  </h2>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Kpi label="Shifts today" value={stats.shifts_today} icon={Calendar} accent="text-cyan-600" />
+                    <Kpi label="Shifts (7 days)" value={stats.upcoming_shifts} sub="From today" icon={Activity} />
+                    <Kpi
+                      label="Late (30d)"
+                      value={stats.late_count}
+                      icon={Clock}
+                      warn={stats.late_count > 0}
+                      accent="text-red-600"
+                    />
+                    <Kpi
+                      label="Present today"
+                      value={stats.present_count}
+                      icon={BadgeCheck}
+                      accent="text-emerald-600"
+                    />
+                  </div>
+                </section>
 
-          {/* Navigation tiles */}
-          <div className={`grid gap-4 ${isSuperAdmin ? 'sm:grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
-            {tiles.map(({ href, title, desc, icon: Icon, color }) => (
-              <Link key={href} href={href}>
-                <Card className="h-full transition-all duration-200 border-border/60 hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 group cursor-pointer">
-                  <CardHeader className="flex flex-row items-start gap-3 pb-2">
-                    <div className={`rounded-lg bg-primary/10 p-2 group-hover:bg-primary/15 transition-colors`}>
-                      <Icon className={`size-5 ${color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base leading-tight">{title}</CardTitle>
-                      <CardDescription className="text-xs mt-0.5 line-clamp-2">{desc}</CardDescription>
-                    </div>
-                    <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-0.5 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-                  </CardHeader>
-                </Card>
-              </Link>
-            ))}
+                <section className="mb-8">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Finance
+                  </h2>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Kpi
+                      label="Payroll (all time)"
+                      value={gbp(stats.revenue_total)}
+                      icon={PoundSterling}
+                      accent="text-emerald-600"
+                    />
+                    <Kpi label="Payroll MTD" value={gbp(stats.payroll_mtd)} icon={TrendingUp} />
+                    <Kpi label="Invoiced total" value={gbp(stats.invoice_total)} icon={FileText} accent="text-rose-600" />
+                    <Kpi
+                      label="Outstanding"
+                      value={gbp(stats.invoice_outstanding)}
+                      sub="Draft + sent"
+                      icon={FileText}
+                      warn={stats.invoice_outstanding > 0}
+                    />
+                  </div>
+                </section>
+
+                <div className="grid gap-6 xl:grid-cols-3 mb-8">
+                  <div className="xl:col-span-2">
+                    <OverviewCharts
+                      shifts={overview.shifts_by_day}
+                      attendance={overview.attendance_by_status}
+                      payroll={overview.payroll_by_month}
+                      operations={overview.operations_compare}
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    <Card className="border-border/60 bg-card/90">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-semibold">Contractors</CardTitle>
+                        <CardDescription>Main and sub directory</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4 text-sm">
+                        <div className="flex justify-between items-center rounded-lg bg-muted/40 px-3 py-2">
+                          <span className="text-muted-foreground">Main</span>
+                          <span>
+                            <strong>{stats.main_contractors_active}</strong>
+                            <span className="text-muted-foreground"> / {stats.main_contractors_total} active</span>
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center rounded-lg bg-muted/40 px-3 py-2">
+                          <span className="text-muted-foreground">Sub</span>
+                          <span>
+                            <strong>{stats.sub_contractors_active}</strong>
+                            <span className="text-muted-foreground"> / {stats.sub_contractors_total} active</span>
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {alertsError && (
+                      <Card className="border-destructive/40 bg-destructive/10">
+                        <CardContent className="pt-6 text-sm text-destructive">{alertsError}</CardContent>
+                      </Card>
+                    )}
+
+                    {contractAlerts.length > 0 && (
+                      <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                            <CalendarCheck className="size-4" />
+                            Contracts ({contractAlerts.length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="text-sm space-y-1 max-h-40 overflow-y-auto">
+                            {contractAlerts.slice(0, 6).map((a) => (
+                              <li key={a.client_id} className="text-amber-900 dark:text-amber-300 text-xs">
+                                <span className="font-medium">{a.client_name}</span> — {a.contract_end_date}
+                              </li>
+                            ))}
+                          </ul>
+                          <Link href="/clients" className="text-xs text-amber-800 dark:text-amber-400 underline mt-2 inline-block">
+                            Manage clients
+                          </Link>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {alerts.length > 0 && (
+                      <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                            <AlertTriangle className="size-4" />
+                            Compliance ({alerts.length})
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
+                            {alerts.slice(0, 8).map((a, i) => (
+                              <li key={i} className="text-xs text-amber-900 dark:text-amber-300">
+                                <span className="font-medium">{a.guard_name}</span> — {a.document_type}
+                              </li>
+                            ))}
+                          </ul>
+                          <Link href="/documents" className="text-xs text-amber-800 dark:text-amber-400 underline mt-2 inline-block">
+                            View documents
+                          </Link>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {!isSuperAdmin && !loading && !stats && (
+              <Card className="mb-8 border-destructive/30">
+                <CardContent className="pt-6 text-sm text-muted-foreground">
+                  Could not load dashboard metrics. Check your connection and try refreshing.
+                </CardContent>
+              </Card>
+            )}
+
+            <section>
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                {isSuperAdmin ? 'Admin' : 'Quick access'}
+              </h2>
+              <div className={`grid gap-3 ${isSuperAdmin ? 'sm:grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+                {tiles.map(({ href, title, desc, icon: Icon, color }) => (
+                  <Link key={href} href={href}>
+                    <Card className="h-full transition-all border-border/60 hover:border-primary/30 hover:shadow-md group">
+                      <CardHeader className="flex flex-row items-start gap-3 py-4">
+                        <div className="rounded-lg bg-primary/10 p-2 group-hover:bg-primary/15">
+                          <Icon className={`size-4 ${color}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-sm leading-tight">{title}</CardTitle>
+                          <CardDescription className="text-xs mt-0.5 line-clamp-1">{desc}</CardDescription>
+                        </div>
+                        <ArrowRight className="size-3.5 text-muted-foreground shrink-0 group-hover:text-primary" />
+                      </CardHeader>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </section>
           </div>
         </div>
-      </div>
       </AppShell>
     </ProtectedRoute>
   );

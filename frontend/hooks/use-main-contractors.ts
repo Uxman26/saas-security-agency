@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { toast, toastMutationError } from '@/lib/toast';
 import type { MainContractor } from '@/lib/types';
 
 export function useMainContractors() {
@@ -16,7 +17,9 @@ export function useCreateMainContractor() {
     mutationFn: (data: Omit<MainContractor, 'id' | 'company_id' | 'created_at'>) => api.mainContractors.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mainContractors'] });
+      toast.success('Main contractor created');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -27,7 +30,9 @@ export function useUpdateMainContractor() {
       api.mainContractors.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mainContractors'] });
+      toast.success('Main contractor updated');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -37,6 +42,8 @@ export function useDeleteMainContractor() {
     mutationFn: (id: number) => api.mainContractors.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mainContractors'] });
+      toast.success('Main contractor deleted');
     },
+    onError: (err) => toastMutationError(err),
   });
 }

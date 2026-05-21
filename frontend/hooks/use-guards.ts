@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { toast, toastMutationError } from '@/lib/toast';
 import type { Guard } from '@/lib/types';
 
 export function useGuards(params?: { area?: string; postcode?: string; nearby?: string }) {
@@ -25,7 +26,9 @@ export function useCreateGuard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guards'] });
       queryClient.refetchQueries({ queryKey: ['guards'] });
+      toast.success('Staff member created');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -37,7 +40,9 @@ export function useUpdateGuard() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['guards'] });
       queryClient.invalidateQueries({ queryKey: ['guards', variables.id] });
+      toast.success('Staff member updated');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -48,6 +53,8 @@ export function useDeleteGuard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['guards'] });
       queryClient.refetchQueries({ queryKey: ['guards'] });
+      toast.success('Staff member deleted');
     },
+    onError: (err) => toastMutationError(err),
   });
 }

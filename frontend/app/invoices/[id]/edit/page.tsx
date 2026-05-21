@@ -34,6 +34,7 @@ import {
 import { api } from '@/lib/api';
 import type { Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
 import { ArrowLeft, Eye, Plus, Save, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { can } from '@/lib/permissions';
 import { useAuth } from '@/contexts/auth-context';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -120,15 +121,19 @@ export default function InvoiceEditPage() {
     }
   };
 
-  const removeLine = async (lineId: number) => {
-    if (!confirm('Remove this line?')) return;
-    setSaving(true);
-    try {
-      await api.invoices.deleteLine(id, lineId);
-      await load();
-    } finally {
-      setSaving(false);
-    }
+  const removeLine = (lineId: number) => {
+    toast.confirm('Remove this line?', async () => {
+      setSaving(true);
+      try {
+        await api.invoices.deleteLine(id, lineId);
+        await load();
+        toast.success('Line removed');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Remove failed');
+      } finally {
+        setSaving(false);
+      }
+    }, { label: 'Remove' });
   };
 
   const addLineSubmit = async () => {

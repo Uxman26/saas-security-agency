@@ -26,6 +26,7 @@ import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Pencil, Trash2, Users } from 'lucide-react';
+import { toast } from '@/lib/toast';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
   const daysLeft = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
@@ -44,7 +45,6 @@ export default function GuardsPage() {
   const [filterArea, setFilterArea] = useState('');
   const [filterPostcode, setFilterPostcode] = useState('');
   const [filterNearby, setFilterNearby] = useState('');
-  const [formError, setFormError] = useState('');
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -72,6 +72,10 @@ export default function GuardsPage() {
   const updateGuard = useUpdateGuard();
   const deleteGuard = useDeleteGuard();
 
+  useEffect(() => {
+    if (guardsError) toast.error((guardsError as Error).message || 'Failed to load staff');
+  }, [guardsError]);
+
   const addForm = useForm<GuardFormData>({
     resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData>,
     defaultValues: guardFormDefaults,
@@ -92,13 +96,12 @@ export default function GuardsPage() {
   }, [dirRows, legMains, legSubs]);
 
   const handleCreate = async (data: GuardFormData) => {
-    setFormError('');
     try {
       await createGuard.mutateAsync(formToGuardPayload(data));
       setAddOpen(false);
       addForm.reset(guardFormDefaults);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to create staff member');
+    } catch {
+      /* toast via mutation hook */
     }
   };
 
@@ -110,23 +113,20 @@ export default function GuardsPage() {
 
   const handleUpdate = async (data: GuardFormData) => {
     if (!editingGuard) return;
-    setFormError('');
     try {
       await updateGuard.mutateAsync({ id: editingGuard.id, data: formToGuardPayload(data) });
       setEditOpen(false);
       setEditingGuard(null);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to update staff member');
+    } catch {
+      /* toast via mutation hook */
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this staff member? This cannot be undone.')) return;
-    try {
-      await deleteGuard.mutateAsync(id);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to delete');
-    }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this staff member?', async () => { await deleteGuard.mutateAsync(id); }, {
+      label: 'Delete',
+      description: 'This cannot be undone.',
+    });
   };
 
   const getSearchText = useCallback(
@@ -227,7 +227,6 @@ export default function GuardsPage() {
                   <DialogHeader>
                     <DialogTitle>Add staff member</DialogTitle>
                   </DialogHeader>
-                  {formError && <p className="text-sm text-destructive">{formError}</p>}
                   <GuardFormWizard form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create staff" />
                 </DialogContent>
               </Dialog>
@@ -244,13 +243,6 @@ export default function GuardsPage() {
             <Input placeholder="Filter by postcode" value={filterPostcode} onChange={(e) => setFilterPostcode(e.target.value)} />
             <Input placeholder="Filter nearby areas" value={filterNearby} onChange={(e) => setFilterNearby(e.target.value)} />
           </div>
-          {guardsError && (
-            <p className="mb-4 text-sm text-destructive">{(guardsError as Error).message || 'Failed to load staff'}</p>
-          )}
-          {formError && !addOpen && !editOpen && (
-            <p className="mb-4 text-sm text-destructive">{formError}</p>
-          )}
-
           {(mains.length === 0 && subs.length === 0) && (
             <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
               Add at least one main or sub contractor on the{' '}
@@ -375,7 +367,6 @@ export default function GuardsPage() {
             <DialogHeader>
               <DialogTitle>Edit staff — {editingGuard?.full_name}</DialogTitle>
             </DialogHeader>
-            {formError && <p className="text-sm text-destructive">{formError}</p>}
             <GuardFormWizard form={editForm} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save changes" />
           </DialogContent>
         </Dialog>

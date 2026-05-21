@@ -22,6 +22,7 @@ import {
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 
 export function RotaCalendarClient() {
   const router = useRouter();
@@ -213,28 +214,45 @@ export function RotaCalendarClient() {
     setAttOpen(false);
   };
 
-  const publish = async () => {
-    if (shiftCount === 0) {
-      window.alert('Add shifts first: click + in a day cell, set times and site, then publish.');
-      return;
-    }
-    if (!window.confirm(`Publish ${shiftCount} shift(s) to assignments? They will appear in Assignments and the legacy rota grid.`)) {
-      return;
-    }
+  const runPublish = async () => {
     setPublishing(true);
     try {
       const { created, skipped, errors } = await publishRota();
-      const extra = errors.length ? `\n\nIssues:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n+${errors.length - 5} more` : ''}` : '';
+      if (errors.length) {
+        errors.slice(0, 3).forEach((msg) => toast.warning(msg));
+        if (errors.length > 3) toast.warning(`+${errors.length - 3} more issues`);
+      }
       if (created === 0) {
-        window.alert(`Nothing was saved.${skipped ? ` ${skipped} shift(s) skipped — check site names match your Sites list.` : ''}${extra}`);
+        toast.warning(
+          skipped
+            ? `${skipped} shift(s) skipped — check site names match your Sites list`
+            : 'Nothing was saved'
+        );
       } else {
-        window.alert(`Saved ${created} shift(s) to assignments.${skipped ? ` ${skipped} skipped.` : ''}${extra}`);
+        toast.success(
+          `Saved ${created} shift(s) to assignments${skipped ? ` (${skipped} skipped)` : ''}`
+        );
       }
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Publish failed');
+      toast.error(e instanceof Error ? e.message : 'Publish failed');
     } finally {
       setPublishing(false);
     }
+  };
+
+  const publish = () => {
+    if (shiftCount === 0) {
+      toast.warning('Add shifts first: click + in a day cell, set times and site, then publish.');
+      return;
+    }
+    toast.confirm(
+      `Publish ${shiftCount} shift(s)?`,
+      runPublish,
+      {
+        description: 'They will appear in Assignments and the legacy rota grid.',
+        label: 'Publish',
+      }
+    );
   };
 
   const openReorder = () => {
@@ -283,10 +301,12 @@ export function RotaCalendarClient() {
   const deleteAllEmpShifts = (empId: string) => {
     const emp = state.employees.find((e) => e.id === empId);
     if (!emp) return;
-    if (!window.confirm(`Delete all shifts for ${emp.name}?`)) return;
-    clearEmployeeShifts(empId);
-    setEmpMenu(null);
-    if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
+    toast.confirm(`Delete all shifts for ${emp.name}?`, () => {
+      clearEmployeeShifts(empId);
+      setEmpMenu(null);
+      if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
+      toast.success('Shifts removed');
+    }, { label: 'Delete' });
   };
 
   const onDragStart = (e: React.DragEvent, empId: string) => {
@@ -923,8 +943,10 @@ export function RotaCalendarClient() {
                       size="sm"
                       className="h-8 text-destructive border-destructive/30"
                       onClick={() => {
-                        if (!window.confirm('Delete this shift?')) return;
-                        deleteShift(viewShiftsEmpId!, dk, idx);
+                        toast.confirm('Delete this shift?', () => {
+                          deleteShift(viewShiftsEmpId!, dk, idx);
+                          toast.success('Shift deleted');
+                        }, { label: 'Delete' });
                       }}
                     >
                       Delete

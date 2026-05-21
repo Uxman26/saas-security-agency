@@ -20,6 +20,7 @@ import type { Assignment } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   day: 'Day',
@@ -193,9 +194,11 @@ export default function AssignmentsPage() {
     } catch (err) { console.error(err); }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this assignment? This cannot be undone.')) return;
-    try { await deleteAssignment.mutateAsync(id); } catch (err) { console.error(err); }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this assignment?', async () => { await deleteAssignment.mutateAsync(id); }, {
+      label: 'Delete',
+      description: 'This cannot be undone.',
+    });
   };
 
   const byShift = useMemo(() => {

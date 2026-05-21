@@ -21,6 +21,7 @@ import type { Client, RotaDetail, RotaSummary } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Calendar, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 function fmt(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -197,14 +198,11 @@ export default function RotaPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this shift?')) return;
-    try {
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this shift?', async () => {
       await deleteAssignment.mutateAsync(id);
       refetch();
-    } catch (e) {
-      console.error(e);
-    }
+    }, { label: 'Delete' });
   };
 
   const exportFile = useCallback(

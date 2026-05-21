@@ -22,6 +22,7 @@ import { api } from '@/lib/api';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { MapPin, Pencil, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function SiteForm({
@@ -255,9 +256,11 @@ export default function SitesPage() {
     } catch (err) { console.error(err); }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this site? This cannot be undone.')) return;
-    try { await deleteSite.mutateAsync(id); } catch (err) { console.error(err); }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this site?', async () => { await deleteSite.mutateAsync(id); }, {
+      label: 'Delete',
+      description: 'This cannot be undone.',
+    });
   };
 
   const getSearchText = useCallback(

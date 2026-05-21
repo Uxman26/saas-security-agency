@@ -12,11 +12,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ThemeToggle } from '@/components/theme-toggle';
 import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
+import { toast } from '@/lib/toast';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const {
@@ -28,13 +28,12 @@ export default function LoginPage() {
   });
 
   const onSubmit = async (data: { email: string; password: string }) => {
-    setError('');
     setLoading(true);
     try {
       await login(data.email, data.password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -70,7 +69,6 @@ export default function LoginPage() {
               <Input id="password" type="password" {...register('password')} />
               {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>

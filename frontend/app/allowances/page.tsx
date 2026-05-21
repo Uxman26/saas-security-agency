@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Wallet, Pencil, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const allowanceSchema = z.object({
   name: z.string().min(2).max(100),
@@ -124,7 +125,10 @@ export default function AllowancesPage() {
       setAddOpen(false);
       addForm.reset();
       load();
-    } catch (err) { console.error(err); }
+      toast.success('Allowance created');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Create failed');
+    }
   };
 
   const openEdit = (a: Allowance) => {
@@ -152,15 +156,22 @@ export default function AllowancesPage() {
       setEditOpen(false);
       setEditingAllowance(null);
       load();
-    } catch (err) { console.error(err); }
+      toast.success('Allowance updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed');
+    }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this allowance? This cannot be undone.')) return;
-    try {
-      await api.allowances.delete(id);
-      load();
-    } catch (err) { console.error(err); }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this allowance?', async () => {
+      try {
+        await api.allowances.delete(id);
+        load();
+        toast.success('Allowance deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      }
+    }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
   const getSearchText = useCallback(

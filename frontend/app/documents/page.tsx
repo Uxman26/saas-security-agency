@@ -15,6 +15,7 @@ import type { GuardDocument, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { FolderOpen, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const DOCUMENT_TYPES = [
   'SIA Licence',
@@ -96,12 +97,16 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this document record? This cannot be undone.')) return;
-    try {
-      await api.documents.delete(id);
-      loadDocuments(filterGuardId ? parseInt(filterGuardId) : undefined);
-    } catch (err) { console.error(err); }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this document?', async () => {
+      try {
+        await api.documents.delete(id);
+        loadDocuments(filterGuardId ? parseInt(filterGuardId) : undefined);
+        toast.success('Document deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      }
+    }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
   const handleFilterGuard = (guardId: string) => {

@@ -21,6 +21,7 @@ import { can, PERMS } from '@/lib/permissions';
 import type { DirectoryContractor, DirectoryContractorAssignment } from '@/lib/types';
 import { ContractorForm } from '../contractor-form';
 import { ArrowLeft, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 export default function ContractorDetailPage() {
   const params = useParams();
@@ -115,10 +116,12 @@ export default function ContractorDetailPage() {
                 <Button
                   variant="destructive"
                   disabled={!row.is_active}
-                  onClick={async () => {
-                    if (!confirm('Deactivate this contractor?')) return;
-                    await api.directoryContractors.deactivateContractor(id);
-                    await load();
+                  onClick={() => {
+                    toast.confirm('Deactivate this contractor?', async () => {
+                      await api.directoryContractors.deactivateContractor(id);
+                      await load();
+                      toast.success('Contractor deactivated');
+                    }, { label: 'Deactivate' });
                   }}
                 >
                   Deactivate
@@ -183,10 +186,12 @@ export default function ContractorDetailPage() {
                                     variant="ghost"
                                     size="sm"
                                     className="text-destructive"
-                                    onClick={async () => {
-                                      if (!confirm('Remove assignment?')) return;
-                                      await api.directoryContractors.deleteAssignment(a.id);
-                                      await load();
+                                    onClick={() => {
+                                      toast.confirm('Remove assignment?', async () => {
+                                        await api.directoryContractors.deleteAssignment(a.id);
+                                        await load();
+                                        toast.success('Assignment removed');
+                                      }, { label: 'Remove' });
                                     }}
                                   >
                                     <Trash2 className="size-4" />

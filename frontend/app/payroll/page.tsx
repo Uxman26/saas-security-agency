@@ -15,6 +15,7 @@ import type { Payroll, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { PoundSterling, Calculator, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
   '100_bank': '100% Bank',
@@ -65,12 +66,16 @@ export default function PayrollPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this payroll record? This cannot be undone.')) return;
-    try {
-      await api.payroll.delete(id);
-      loadPayrolls();
-    } catch (err) { console.error(err); }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this payroll record?', async () => {
+      try {
+        await api.payroll.delete(id);
+        loadPayrolls();
+        toast.success('Payroll record deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      }
+    }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
   const getSearchText = useCallback(

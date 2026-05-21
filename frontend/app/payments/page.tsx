@@ -15,6 +15,7 @@ import type { Payment, Invoice } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { CreditCard, Plus, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'card', 'direct_debit', 'other'];
 const METHOD_LABELS: Record<string, string> = {
@@ -79,12 +80,16 @@ export default function PaymentsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this payment record? This cannot be undone.')) return;
-    try {
-      await api.payments.delete(id);
-      loadPayments();
-    } catch (err) { console.error(err); }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this payment record?', async () => {
+      try {
+        await api.payments.delete(id);
+        loadPayments();
+        toast.success('Payment deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      }
+    }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
   const forTable = useMemo(

@@ -26,6 +26,7 @@ import { EmailDialog } from '@/components/email-dialog';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Building2, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 type ClientFormData = z.output<typeof clientSchema>;
 type RenewFormData = z.output<typeof clientRenewSchema>;
@@ -221,13 +222,11 @@ export default function ClientsPage() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this client? This cannot be undone.')) return;
-    try {
-      await deleteClient.mutateAsync(id);
-    } catch (err) {
-      console.error(err);
-    }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this client?', async () => { await deleteClient.mutateAsync(id); }, {
+      label: 'Delete',
+      description: 'This cannot be undone.',
+    });
   };
 
   const openRenew = (c: Client) => {

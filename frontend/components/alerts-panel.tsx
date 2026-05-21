@@ -9,23 +9,21 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import type { ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
 import { formatDateUK } from '@/lib/date-format';
+import { toast } from '@/lib/toast';
 
 export function AlertsPanel() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
   const [contracts, setContracts] = useState<ContractExpiryAlert[]>([]);
-  const [err, setErr] = useState('');
-
   useEffect(() => {
     if (user?.role === 'super_admin' || !open) return;
-    setErr('');
     void Promise.all([api.reports.compliance(30), api.reports.contractsExpiring(30)])
       .then(([a, c]) => {
         setAlerts(a);
         setContracts(c);
       })
-      .catch((e: Error) => setErr(e.message || 'Could not load alerts'));
+      .catch((e: Error) => toast.error(e.message || 'Could not load alerts'));
   }, [open, user?.role]);
 
   if (user?.role === 'super_admin') return null;
@@ -48,9 +46,7 @@ export function AlertsPanel() {
         <DialogHeader>
           <DialogTitle>Alerts & messages</DialogTitle>
         </DialogHeader>
-        {err ? (
-          <p className="text-sm text-destructive">{err}</p>
-        ) : count === 0 ? (
+        {count === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">No alerts right now.</p>
         ) : (
           <div className="space-y-4 text-sm">

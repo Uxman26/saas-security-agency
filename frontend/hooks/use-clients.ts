@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { toast, toastMutationError } from '@/lib/toast';
 import type { Client } from '@/lib/types';
 
 export function useClients() {
@@ -25,7 +26,9 @@ export function useCreateClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.refetchQueries({ queryKey: ['clients'] });
+      toast.success('Client created');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -38,7 +41,9 @@ export function useUpdateClient() {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.invalidateQueries({ queryKey: ['clients', variables.id] });
       queryClient.refetchQueries({ queryKey: ['clients'] });
+      toast.success('Client updated');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -49,7 +54,9 @@ export function useDeleteClient() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.refetchQueries({ queryKey: ['clients'] });
+      toast.success('Client deleted');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -70,6 +77,8 @@ export function useRenewClientContract() {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.invalidateQueries({ queryKey: ['clients', renewal.client_id, 'renewals'] });
       queryClient.refetchQueries({ queryKey: ['clients'] });
+      toast.success('Contract renewed');
     },
+    onError: (err) => toastMutationError(err),
   });
 }

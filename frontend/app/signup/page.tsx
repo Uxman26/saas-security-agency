@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ThemeToggle } from '@/components/theme-toggle';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 
 // const VALID_TIERS = ['basic', 'standard', 'premium'];
 
@@ -21,7 +22,6 @@ function SignupForm() {
   const tierParam = searchParams.get('tier');
   // const subscription_tier = tierParam && VALID_TIERS.includes(tierParam) ? tierParam : undefined;
   const subscription_tier = tierParam || undefined;
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const {
@@ -33,13 +33,13 @@ function SignupForm() {
   });
 
   const onSubmit = async (data: { email: string; password: string; full_name: string; company_name: string }) => {
-    setError('');
     setLoading(true);
     try {
       await api.auth.signup({ ...data, subscription_tier });
+      toast.success('Account created — sign in to continue');
       router.push('/login');
-    } catch (err: any) {
-      setError(err.message || 'Signup failed');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Signup failed');
     } finally {
       setLoading(false);
     }
@@ -83,7 +83,6 @@ function SignupForm() {
               <Input id="password" type="password" {...register('password')} />
               {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Creating account...' : 'Create account'}
             </Button>

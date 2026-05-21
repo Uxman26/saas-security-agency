@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { toast, toastMutationError } from '@/lib/toast';
 import type { Site } from '@/lib/types';
 
 export function useSites() {
@@ -25,7 +26,9 @@ export function useCreateSite() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.refetchQueries({ queryKey: ['sites'] });
+      toast.success('Site created');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -37,7 +40,9 @@ export function useUpdateSite() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['sites', variables.id] });
+      toast.success('Site updated');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -48,6 +53,8 @@ export function useDeleteSite() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.refetchQueries({ queryKey: ['sites'] });
+      toast.success('Site deleted');
     },
+    onError: (err) => toastMutationError(err),
   });
 }

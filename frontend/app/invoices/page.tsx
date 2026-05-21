@@ -16,6 +16,7 @@ import type { Invoice, Client } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { FileText, Zap, Trash2, Eye, Pencil } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 
@@ -81,12 +82,16 @@ export default function InvoicesPage() {
     } catch (err) { console.error(err); }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this invoice? This cannot be undone.')) return;
-    try {
-      await api.invoices.delete(id);
-      loadInvoices(statusFilter || undefined);
-    } catch (err) { console.error(err); }
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this invoice?', async () => {
+      try {
+        await api.invoices.delete(id);
+        loadInvoices(statusFilter || undefined);
+        toast.success('Invoice deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      }
+    }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
   const getSearchText = useCallback(

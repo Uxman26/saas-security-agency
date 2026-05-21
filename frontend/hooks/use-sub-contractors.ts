@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { toast, toastMutationError } from '@/lib/toast';
 import type { SubContractor } from '@/lib/types';
 
 export function useSubContractors(mainContractorId?: number) {
@@ -26,7 +27,9 @@ export function useCreateSubContractor() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subContractors'] });
       queryClient.refetchQueries({ queryKey: ['subContractors'] });
+      toast.success('Sub contractor created');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -39,7 +42,9 @@ export function useUpdateSubContractor() {
       queryClient.invalidateQueries({ queryKey: ['subContractors'] });
       queryClient.invalidateQueries({ queryKey: ['subContractors', variables.id] });
       queryClient.refetchQueries({ queryKey: ['subContractors'] });
+      toast.success('Sub contractor updated');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -50,6 +55,8 @@ export function useDeleteSubContractor() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subContractors'] });
       queryClient.refetchQueries({ queryKey: ['subContractors'] });
+      toast.success('Sub contractor deleted');
     },
+    onError: (err) => toastMutationError(err),
   });
 }

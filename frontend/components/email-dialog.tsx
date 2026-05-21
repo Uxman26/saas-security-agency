@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { Mail } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const emailSchema = z.object({
   to_email: z.string().email('Invalid email address'),
@@ -19,7 +20,6 @@ const emailSchema = z.object({
 
 export function EmailDialog({ defaultEmail, defaultName }: { defaultEmail?: string; defaultName?: string }) {
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const {
@@ -37,14 +37,14 @@ export function EmailDialog({ defaultEmail, defaultName }: { defaultEmail?: stri
   });
 
   const onSubmit = async (data: { to_email: string; subject: string; body: string }) => {
-    setError('');
     setLoading(true);
     try {
       await api.email.send(data);
       setOpen(false);
       reset();
-    } catch (err: any) {
-      setError(err.message || 'Failed to send email');
+      toast.success('Email sent');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send email');
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,6 @@ export function EmailDialog({ defaultEmail, defaultName }: { defaultEmail?: stri
             />
             {errors.body && <p className="text-sm text-destructive">{errors.body.message}</p>}
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { toast, toastMutationError } from '@/lib/toast';
 import type { Assignment, Rota } from '@/lib/types';
 
 export function useAssignments(params?: { guard_id?: number; site_id?: number; client_id?: number; start_date?: string; end_date?: string }) {
@@ -57,7 +58,9 @@ export function useCreateAssignment() {
     mutationFn: (data: Omit<Assignment, 'id' | 'created_at'>) => api.assignments.create(data),
     onSuccess: () => {
       invalidateRotaQueries(queryClient);
+      toast.success('Assignment created');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -68,7 +71,9 @@ export function useUpdateAssignment() {
       api.assignments.update(id, data),
     onSuccess: () => {
       invalidateRotaQueries(queryClient);
+      toast.success('Assignment updated');
     },
+    onError: (err) => toastMutationError(err),
   });
 }
 
@@ -78,6 +83,8 @@ export function useDeleteAssignment() {
     mutationFn: (id: number) => api.assignments.delete(id),
     onSuccess: () => {
       invalidateRotaQueries(queryClient);
+      toast.success('Assignment deleted');
     },
+    onError: (err) => toastMutationError(err),
   });
 }

@@ -28,6 +28,7 @@ import type { SpecialDay } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { CalendarRange, Plus, Trash2, Sparkles } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { can } from '@/lib/permissions';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -87,15 +88,19 @@ export default function SpecialDaysSettingsPage() {
     }
   };
 
-  const remove = async (id: number) => {
-    if (!confirm('Remove this date?')) return;
-    setSaving(true);
-    try {
-      await api.specialDays.delete(id);
-      load();
-    } finally {
-      setSaving(false);
-    }
+  const remove = (id: number) => {
+    toast.confirm('Remove this date?', async () => {
+      setSaving(true);
+      try {
+        await api.specialDays.delete(id);
+        load();
+        toast.success('Date removed');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Remove failed');
+      } finally {
+        setSaving(false);
+      }
+    }, { label: 'Remove' });
   };
 
   const canWrite = user && can(user, 'allow.write');

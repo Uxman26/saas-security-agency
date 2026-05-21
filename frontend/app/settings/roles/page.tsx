@@ -37,6 +37,7 @@ import type { Role, CompanyUser, PermissionMatrix } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Shield, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const MODULE_KEYS = [
   'clients',
@@ -203,16 +204,20 @@ export default function RolesSettingsPage() {
     }
   };
 
-  const removeRole = async (id: number) => {
-    if (!confirm('Delete this role? Users must not be assigned to it.')) return;
-    setSaving(true);
-    try {
-      await api.roles.delete(id);
-      if (editId === id) setEditId(null);
-      await load();
-    } finally {
-      setSaving(false);
-    }
+  const removeRole = (id: number) => {
+    toast.confirm('Delete this role?', async () => {
+      setSaving(true);
+      try {
+        await api.roles.delete(id);
+        if (editId === id) setEditId(null);
+        await load();
+        toast.success('Role deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      } finally {
+        setSaving(false);
+      }
+    }, { label: 'Delete', description: 'Users must not be assigned to it.' });
   };
 
   const patchUserRole = async (userId: number, roleId: string) => {

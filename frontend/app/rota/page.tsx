@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, type SortDir } from '@/lib/use-table-list';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import type { RotaPlanListItem } from '@/lib/types';
 import { Calendar, CalendarDays, Grid3x3, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 
@@ -93,15 +94,23 @@ export default function RotaHubPage() {
 
   const rows = pageRows;
 
-  const onDelete = async (id: number, name: string) => {
-    if (!window.confirm(`Delete rota "${name}"? Published shifts linked to it will also be removed.`)) return;
-    setDeletingId(id);
-    try {
-      await api.rotaPlans.delete(id);
-      load();
-    } finally {
-      setDeletingId(null);
-    }
+  const onDelete = (id: number, name: string) => {
+    toast.confirm(
+      `Delete rota "${name}"?`,
+      async () => {
+        setDeletingId(id);
+        try {
+          await api.rotaPlans.delete(id);
+          toast.success('Rota deleted');
+          load();
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Delete failed');
+        } finally {
+          setDeletingId(null);
+        }
+      },
+      { label: 'Delete', description: 'Published shifts linked to it will also be removed.' }
+    );
   };
 
   return (

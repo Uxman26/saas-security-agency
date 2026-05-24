@@ -48,6 +48,67 @@ export interface User {
   plan?: PlanSummary | null;
   company_name?: string | null;
   logo_url?: string | null;
+  subscription_status?: string | null;
+  subscription_end?: string | null;
+  sidebar_modules?: string[] | null;
+}
+
+export interface SubscriptionReceipt {
+  id: number;
+  ref_id: string;
+  company_id: number;
+  company_name?: string | null;
+  user_email?: string | null;
+  subscription_tier: string;
+  amount: number;
+  period_days: number;
+  status: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+}
+
+export interface ReceiptPublic {
+  ref_id: string;
+  company_name: string;
+  subscription_tier: string;
+  amount: number;
+  period_days: number;
+  status: string;
+  created_at: string;
+}
+
+export interface SignupResponse {
+  user: User;
+  receipt: SubscriptionReceipt;
+}
+
+export interface PaymentPendingDetail {
+  code: string;
+  subscription_status: string;
+  receipt_ref?: string | null;
+  amount: number;
+  tier?: string;
+  company_name?: string;
+}
+
+export interface AdminUserDetail {
+  id: number;
+  email: string;
+  full_name: string;
+  role?: string | null;
+  is_active: boolean;
+  created_at: string;
+  company_id?: number | null;
+  company_name?: string | null;
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  subscription_start?: string | null;
+  subscription_end?: string | null;
+  subscription_days_left?: number | null;
+  sidebar_modules: string[];
+  receipts: SubscriptionReceipt[];
 }
 
 export interface Company {
@@ -55,6 +116,9 @@ export interface Company {
   name: string;
   admin_id: number;
   subscription_tier?: string;
+  subscription_status?: string;
+  subscription_start?: string;
+  subscription_end?: string;
   created_at: string;
 }
 

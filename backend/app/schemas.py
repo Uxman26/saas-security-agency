@@ -33,6 +33,69 @@ class UserMeResponse(UserResponse):
     plan: Optional[dict[str, Any]] = None
     company_name: Optional[str] = None
     logo_url: Optional[str] = None
+    subscription_status: Optional[str] = None
+    subscription_end: Optional[datetime] = None
+    sidebar_modules: Optional[List[str]] = None
+
+
+class SubscriptionReceiptResponse(BaseModel):
+    id: int
+    ref_id: str
+    company_id: int
+    company_name: Optional[str] = None
+    user_email: Optional[str] = None
+    subscription_tier: str
+    amount: float
+    period_days: int
+    status: str
+    period_start: Optional[datetime] = None
+    period_end: Optional[datetime] = None
+    paid_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SignupResponse(BaseModel):
+    user: UserResponse
+    receipt: SubscriptionReceiptResponse
+
+
+class ReceiptPublicResponse(BaseModel):
+    ref_id: str
+    company_name: str
+    subscription_tier: str
+    amount: float
+    period_days: int
+    status: str
+    created_at: datetime
+
+
+class AdminResetPassword(BaseModel):
+    new_password: str = Field(min_length=6)
+
+
+class AdminSidebarPatch(BaseModel):
+    sidebar_modules: List[str]
+
+
+class AdminUserDetail(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str
+    role: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    subscription_start: Optional[datetime] = None
+    subscription_end: Optional[datetime] = None
+    subscription_days_left: Optional[int] = None
+    sidebar_modules: List[str] = Field(default_factory=list)
+    receipts: List[SubscriptionReceiptResponse] = Field(default_factory=list)
 
 class CompanyBase(BaseModel):
     name: str
@@ -41,6 +104,9 @@ class CompanyResponse(CompanyBase):
     id: int
     admin_id: int
     subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    subscription_start: Optional[datetime] = None
+    subscription_end: Optional[datetime] = None
     created_at: datetime
 
     class Config:

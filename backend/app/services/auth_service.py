@@ -6,6 +6,8 @@ from app.auth import get_password_hash, create_access_token, SUPER_ADMIN_ROLE
 from datetime import timedelta
 from app.config import settings
 from app.services.role_service import ensure_roles_for_company, get_role_by_slug
+from app.services.receipt_service import company_subscription_blocked, create_receipt_for_signup
+from app.plan_config import normalize_tier
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if db.query(User).filter(User.email == user_data.email).first():
@@ -22,8 +24,13 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     db.flush()
     if not is_super:
         # tier = user_data.subscription_tier if user_data.subscription_tier and user_data.subscription_tier in TIERS else "basic"
-        tier = user_data.subscription_tier or "basic"
-        company = Company(name=user_data.company_name, admin_id=user.id, subscription_tier=tier)
+        tier = normalize_tier(user_data.subscription_tier)
+        company = Company(
+            name=user_data.company_name,
+            admin_id=user.id,
+            subscription_tier=tier,
+            subscription_status="pending",
+        )
         db.add(company)
         db.flush()
         user.company_id = company.id
@@ -33,9 +40,26 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         if ar:
             user.role_id = ar.id
         user.role = "admin"
+        create_receipt_for_signup(db, company, user, tier)
     db.commit()
     db.refresh(user)
     return user
+
+
+def signup_with_receipt(db: Session, user_data: UserCreate):
+    from app.models import SubscriptionReceipt
+    user = create_user_and_company(db, user_data)
+    if not user.company_id:
+        raise HTTPException(status_code=400, detail="Company signup required")
+    r = (
+        db.query(SubscriptionReceipt)
+        .filter(SubscriptionReceipt.user_id == user.id)
+        .order_by(SubscriptionReceipt.id.desc())
+        .first()
+    )
+    if not r:
+        raise HTTPException(status_code=500, detail="Receipt not created")
+    return user, r
 
 def authenticate_user(db: Session, email: str, password: str) -> dict:
     from app.auth import verify_password
@@ -43,7 +67,10 @@ def authenticate_user(db: Session, email: str, password: str) -> dict:
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
+    block = company_subscription_blocked(db, user)
+    if block:
+        raise HTTPException(status_code=402, detail=block)
+
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user.id}, expires_delta=access_token_expires

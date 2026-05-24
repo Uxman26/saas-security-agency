@@ -57,6 +57,8 @@ const companyTiles = [
 
 const adminTiles = [
   { href: '/admin/companies', title: 'Companies', desc: 'View all tenant companies', icon: Building2, color: 'text-primary' },
+  { href: '/admin/receipts', title: 'Receipts', desc: 'Subscription payments & mark paid', icon: CreditCard, color: 'text-emerald-600' },
+  { href: '/admin/admins', title: 'Admins', desc: 'Manage admins, modules & passwords', icon: Users, color: 'text-blue-600' },
 ];
 
 function Kpi({
@@ -357,7 +359,7 @@ export default function DashboardPage() {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 {isSuperAdmin ? 'Admin' : 'Quick access'}
               </h2>
-              <div className={`grid gap-3 ${isSuperAdmin ? 'sm:grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+              <div className={`grid gap-3 ${isSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-3 max-w-3xl' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
                 {tiles.map(({ href, title, desc, icon: Icon, color }) => (
                   <Link key={href} href={href}>
                     <Card className="h-full transition-all border-border/60 hover:border-primary/30 hover:shadow-md group">

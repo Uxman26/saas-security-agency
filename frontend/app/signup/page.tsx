@@ -35,9 +35,9 @@ function SignupForm() {
   const onSubmit = async (data: { email: string; password: string; full_name: string; company_name: string }) => {
     setLoading(true);
     try {
-      await api.auth.signup({ ...data, subscription_tier });
-      toast.success('Account created — sign in to continue');
-      router.push('/login');
+      const res = await api.auth.signup({ ...data, subscription_tier });
+      toast.success('Account created — complete payment to activate');
+      router.push(`/payment-pending?ref=${encodeURIComponent(res.receipt.ref_id)}`);
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Signup failed');
     } finally {

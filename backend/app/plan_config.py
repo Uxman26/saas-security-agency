@@ -75,3 +75,17 @@ def quota_sites(tier: Optional[str]) -> Optional[int]:
     # n = limits_for_tier(tier)["max_sites"]
     # return n
     return None
+
+
+PLAN_PRICES_GBP: dict[str, float] = {
+    "basic": 29.0,
+    "standard": 79.0,
+    "premium": 149.0,
+    "enterprise": 299.0,
+}
+
+SUBSCRIPTION_PERIOD_DAYS = 30
+
+
+def price_for_tier(tier: Optional[str]) -> float:
+    return float(PLAN_PRICES_GBP.get(normalize_tier(tier), PLAN_PRICES_GBP["basic"]))

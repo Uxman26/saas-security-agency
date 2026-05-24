@@ -13,6 +13,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
+import { parsePaymentPending } from '@/lib/sidebar-modules';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,6 +34,11 @@ export default function LoginPage() {
       await login(data.email, data.password);
       router.push('/dashboard');
     } catch (err: unknown) {
+      const pending = parsePaymentPending(err);
+      if (pending?.receipt_ref) {
+        router.push(`/payment-pending?ref=${encodeURIComponent(pending.receipt_ref)}`);
+        return;
+      }
       toast.error(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);

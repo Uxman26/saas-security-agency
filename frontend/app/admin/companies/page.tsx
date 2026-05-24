@@ -34,7 +34,10 @@ export default function AdminCompaniesPage() {
   }, [user, router]);
 
   const getSearchText = useCallback(
-    (c: Company) => [String(c.id), c.name, String(c.admin_id), c.subscription_tier ?? '', c.created_at].filter(Boolean).join(' '),
+    (c: Company) =>
+      [String(c.id), c.name, String(c.admin_id), c.subscription_tier ?? '', c.subscription_status ?? '', c.created_at]
+        .filter(Boolean)
+        .join(' '),
     []
   );
   const getSortValue = useCallback((c: Company, key: string) => {
@@ -47,6 +50,10 @@ export default function AdminCompaniesPage() {
         return c.admin_id;
       case 'tier':
         return c.subscription_tier || '';
+      case 'status':
+        return c.subscription_status || '';
+      case 'end':
+        return c.subscription_end || '';
       case 'created':
         return c.created_at || '';
       default:
@@ -107,7 +114,9 @@ export default function AdminCompaniesPage() {
                       <SortableHead label="ID" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableHead label="Admin ID" colKey="admin" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                      <SortableHead label="Subscription" colKey="tier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableHead label="Plan" colKey="tier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <SortableHead label="Ends" colKey="end" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableHead label="Created" colKey="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                     </TableRow>
                   </TableHeader>
@@ -117,7 +126,11 @@ export default function AdminCompaniesPage() {
                         <TableCell>{c.id}</TableCell>
                         <TableCell>{c.name}</TableCell>
                         <TableCell>{c.admin_id}</TableCell>
-                        <TableCell>{c.subscription_tier ?? '-'}</TableCell>
+                        <TableCell className="capitalize">{c.subscription_tier ?? '-'}</TableCell>
+                        <TableCell className="capitalize">{c.subscription_status ?? '-'}</TableCell>
+                        <TableCell>
+                          {c.subscription_end ? new Date(c.subscription_end).toLocaleDateString() : '-'}
+                        </TableCell>
                         <TableCell>{c.created_at}</TableCell>
                       </TableRow>
                     ))}

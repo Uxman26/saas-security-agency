@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { can } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import { sidebarPathAllowed } from '@/lib/sidebar-modules';
 
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
@@ -47,6 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links = useMemo(() => {
     const showSubs = can(user, 'subs.read'); /* && user?.plan?.features?.subcontractors === true */
     return mobileLinks.filter((i) => {
+      if (!sidebarPathAllowed(user?.sidebar_modules, i.href)) return false;
       if (i.href === '/contractors') return showSubs;
       return can(user, i.perm);
     });
@@ -87,16 +89,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
               <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
                 {isSuperAdmin ? (
-                  <Link
-                    href="/admin/companies"
-                    className={cn(
-                      'block rounded-md px-3 py-2 text-sm',
-                      pathname === '/admin/companies' ? 'bg-slate-800' : 'hover:bg-slate-800'
-                    )}
-                    onClick={() => setDrawer(false)}
-                  >
-                    Companies
-                  </Link>
+                  ['/admin/companies', '/admin/receipts', '/admin/admins'].map((href) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={cn(
+                        'block rounded-md px-3 py-2 text-sm',
+                        pathname === href ? 'bg-slate-800' : 'hover:bg-slate-800'
+                      )}
+                      onClick={() => setDrawer(false)}
+                    >
+                      {href === '/admin/companies' ? 'Companies' : href === '/admin/receipts' ? 'Receipts' : 'Admins'}
+                    </Link>
+                  ))
                 ) : (
                   links.map(({ href, label }) => (
                     <Link

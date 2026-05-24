@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -33,6 +33,9 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
     const d = error.detail;
+    if (response.status === 402 && d && typeof d === 'object' && d.code === 'payment_pending') {
+      throw new ApiError(402, JSON.stringify(d));
+    }
     const msg = Array.isArray(d)
       ? d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed'
       : typeof d === 'string'
@@ -82,7 +85,7 @@ function sanitizeInput(input: string): string {
 
 export const api = {
   auth: {
-    signup: (data: { email: string; password: string; full_name: string; company_name: string; subscription_tier?: string }): Promise<User> => {
+    signup: (data: { email: string; password: string; full_name: string; company_name: string; subscription_tier?: string }): Promise<SignupResponse> => {
       const sanitized = {
         email: sanitizeInput(data.email),
         password: data.password,
@@ -90,7 +93,7 @@ export const api = {
         company_name: sanitizeInput(data.company_name),
         ...(data.subscription_tier && { subscription_tier: sanitizeInput(data.subscription_tier) }),
       };
-      return request<User>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
+      return request<SignupResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
     },
     login: (data: { email: string; password: string }): Promise<LoginResponse> => {
       const sanitized = {
@@ -368,8 +371,27 @@ export const api = {
     seedUk: (year: number): Promise<{ added: number; year: number }> =>
       request<{ added: number; year: number }>('/special-days/seed-uk', { method: 'POST', body: JSON.stringify({ year }) }),
   },
+  receipts: {
+    public: (refId: string): Promise<ReceiptPublic> =>
+      request<ReceiptPublic>(`/receipts/public/${encodeURIComponent(refId)}`),
+  },
   admin: {
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),
+    receipts: (): Promise<SubscriptionReceipt[]> => request<SubscriptionReceipt[]>('/admin/receipts'),
+    markReceiptPaid: (id: number): Promise<SubscriptionReceipt> =>
+      request<SubscriptionReceipt>(`/admin/receipts/${id}/mark-paid`, { method: 'POST' }),
+    admins: (): Promise<AdminUserDetail[]> => request<AdminUserDetail[]>('/admin/admins'),
+    admin: (id: number): Promise<AdminUserDetail> => request<AdminUserDetail>(`/admin/admins/${id}`),
+    patchSidebar: (id: number, sidebar_modules: string[]): Promise<AdminUserDetail> =>
+      request<AdminUserDetail>(`/admin/admins/${id}/sidebar`, {
+        method: 'PATCH',
+        body: JSON.stringify({ sidebar_modules }),
+      }),
+    resetPassword: (id: number, new_password: string): Promise<AdminUserDetail> =>
+      request<AdminUserDetail>(`/admin/admins/${id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password }),
+      }),
   },
   roles: {
     list: (): Promise<Role[]> => request<Role[]>('/roles'),

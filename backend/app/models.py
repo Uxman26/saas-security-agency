@@ -38,6 +38,7 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     company_id = Column(Integer, ForeignKey("companies.id"))
+    sidebar_modules_json = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="users", foreign_keys=[company_id])
@@ -50,6 +51,9 @@ class Company(Base):
     name = Column(String, nullable=False)
     admin_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     subscription_tier = Column(String, default="basic")
+    subscription_status = Column(String, default="pending")
+    subscription_start = Column(DateTime(timezone=True))
+    subscription_end = Column(DateTime(timezone=True))
     stripe_customer_id = Column(String)
     logo_path = Column(String)
     contract_expiry_alert_sent_date = Column(Date, nullable=True)
@@ -70,6 +74,26 @@ class Company(Base):
     special_days = relationship("SpecialDay", back_populates="company", cascade="all, delete-orphan")
     directory_contractors = relationship("Contractor", back_populates="company", cascade="all, delete-orphan")
     rota_plans = relationship("RotaPlan", back_populates="company", cascade="all, delete-orphan")
+    subscription_receipts = relationship("SubscriptionReceipt", back_populates="company", cascade="all, delete-orphan")
+
+
+class SubscriptionReceipt(Base):
+    __tablename__ = "subscription_receipts"
+    id = Column(Integer, primary_key=True, index=True)
+    ref_id = Column(String, unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    subscription_tier = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    period_days = Column(Integer, default=30)
+    status = Column(String, default="pending")
+    period_start = Column(DateTime(timezone=True))
+    period_end = Column(DateTime(timezone=True))
+    paid_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="subscription_receipts")
+    user = relationship("User")
+
 
 class Contractor(Base):
     __tablename__ = "contractors"

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
+import { sidebarPathAllowed } from '@/lib/sidebar-modules';
 
 const items: { href: string; label: string; perm: string; icon: typeof Users }[] = [
   { href: '/dashboard', label: 'Dashboard', perm: 'guards.read', icon: LayoutDashboard },
@@ -57,6 +58,7 @@ export function AppSidebar() {
       can(user, PERMS.contractorView) /* &&
       (user?.plan?.features?.contractors === true || isTenantAdmin(user)) */;
     return items.filter((i) => {
+      if (!sidebarPathAllowed(user?.sidebar_modules, i.href)) return false;
       if (i.href === '/contractors') return showDirectory;
       return can(user, i.perm);
     });
@@ -69,16 +71,25 @@ export function AppSidebar() {
           <CompanyBrand />
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-          <Link
-            href="/admin/companies"
-            className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-              pathname === '/admin/companies' ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800/80'
-            )}
-          >
-            <Building2 className="size-4 shrink-0" />
-            Companies
-          </Link>
+          {[
+            { href: '/admin/companies', label: 'Companies', icon: Building2 },
+            { href: '/admin/receipts', label: 'Receipts', icon: CreditCard },
+            { href: '/admin/admins', label: 'Admins', icon: Users },
+          ].map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                pathname === href || pathname.startsWith(`${href}/`)
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-300 hover:bg-slate-800/80'
+              )}
+            >
+              <Icon className="size-4 shrink-0" />
+              {label}
+            </Link>
+          ))}
         </nav>
       </aside>
     );

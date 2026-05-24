@@ -52,6 +52,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise credentials_exception
+    if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
+        from app.services.receipt_service import company_subscription_blocked
+        block = company_subscription_blocked(db, user)
+        if block:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=block,
+            )
     return user
 
 def get_current_super_admin(user: User = Depends(get_current_user)) -> User:

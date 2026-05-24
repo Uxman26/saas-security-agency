@@ -296,6 +296,46 @@ def run():
             cur.execute("ALTER TABLE assignments ADD COLUMN rota_plan_id INTEGER REFERENCES rota_plans(id)")
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "companies") and not column_exists(cur, "companies", "subscription_status"):
+        try:
+            cur.execute("ALTER TABLE companies ADD COLUMN subscription_status TEXT DEFAULT 'pending'")
+            cur.execute("UPDATE companies SET subscription_status = 'active' WHERE subscription_status IS NULL OR subscription_status = 'pending'")
+        except sqlite3.OperationalError:
+            pass
+    for col, spec in [
+        ("subscription_start", "TEXT"),
+        ("subscription_end", "TEXT"),
+    ]:
+        if table_exists(cur, "companies") and not column_exists(cur, "companies", col):
+            try:
+                cur.execute(f"ALTER TABLE companies ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+    if table_exists(cur, "users") and not column_exists(cur, "users", "sidebar_modules_json"):
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN sidebar_modules_json TEXT")
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "companies") and not table_exists(cur, "subscription_receipts"):
+        try:
+            cur.execute(
+                """CREATE TABLE subscription_receipts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ref_id TEXT NOT NULL UNIQUE,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                subscription_tier TEXT NOT NULL,
+                amount REAL NOT NULL,
+                period_days INTEGER DEFAULT 30,
+                status TEXT DEFAULT 'pending',
+                period_start TEXT,
+                period_end TEXT,
+                paid_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:

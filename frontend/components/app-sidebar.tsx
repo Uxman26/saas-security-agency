@@ -74,7 +74,6 @@ export function AppSidebar() {
           {[
             { href: '/admin/companies', label: 'Companies', icon: Building2 },
             { href: '/admin/receipts', label: 'Receipts', icon: CreditCard },
-            { href: '/admin/admins', label: 'Admins', icon: Users },
           ].map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

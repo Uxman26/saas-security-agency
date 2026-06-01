@@ -403,6 +403,16 @@ export const api = {
   },
   users: {
     list: (): Promise<CompanyUser[]> => request<CompanyUser[]>('/users'),
+    create: (data: { email: string; password: string; full_name: string; role_id: number }): Promise<CompanyUser> =>
+      request<CompanyUser>('/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: sanitizeInput(data.email),
+          password: data.password,
+          full_name: sanitizeInput(data.full_name),
+          role_id: data.role_id,
+        }),
+      }),
     patchRole: (userId: number, role_id: number): Promise<CompanyUser> =>
       request<CompanyUser>(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role_id }) }),
   },

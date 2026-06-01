@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { companyUserSchema } from '@/lib/validation';
+import type { z } from 'zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +40,9 @@ import { can } from '@/lib/permissions';
 import type { Role, CompanyUser, PermissionMatrix } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Shield, Trash2 } from 'lucide-react';
+import { Shield, Trash2, UserPlus } from 'lucide-react';
+
+type CompanyUserFormData = z.infer<typeof companyUserSchema>;
 import { toast } from '@/lib/toast';
 
 const MODULE_KEYS = [
@@ -139,6 +145,23 @@ export default function RolesSettingsPage() {
   const userSort = useTableSort();
   const [userPage, setUserPage] = useState(1);
   const [userPageSize, setUserPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [addUserOpen, setAddUserOpen] = useState(false);
+
+  const userForm = useForm<CompanyUserFormData>({
+    resolver: zodResolver(companyUserSchema),
+    defaultValues: { email: '', password: '', full_name: '', role_id: 1 },
+  });
+
+  const openAddUser = () => {
+    const def = roles.find((r) => r.slug === 'manager') ?? roles.find((r) => r.slug === 'admin') ?? roles[0];
+    userForm.reset({
+      email: '',
+      password: '',
+      full_name: '',
+      role_id: def?.id ?? 1,
+    });
+    setAddUserOpen(true);
+  };
 
   const load = useCallback(async () => {
     const [r, u] = await Promise.all([api.roles.list(), api.users.list()]);
@@ -218,6 +241,21 @@ export default function RolesSettingsPage() {
         setSaving(false);
       }
     }, { label: 'Delete', description: 'Users must not be assigned to it.' });
+  };
+
+  const createUser = async (data: CompanyUserFormData) => {
+    setSaving(true);
+    try {
+      await api.users.create(data);
+      setAddUserOpen(false);
+      userForm.reset({ email: '', password: '', full_name: '', role_id: 0 });
+      await load();
+      toast.success('User created');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to create user');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const patchUserRole = async (userId: number, roleId: string) => {
@@ -456,9 +494,17 @@ export default function RolesSettingsPage() {
               </Card>
 
               <Card className="border-border/60">
-                <CardHeader>
-                  <CardTitle>Users</CardTitle>
-                  <CardDescription>Assign a role to each user in your organisation.</CardDescription>
+                <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+                  <div>
+                    <CardTitle>Users</CardTitle>
+                    <CardDescription>Create users and assign roles for app login access.</CardDescription>
+                  </div>
+                  {canWrite && (
+                    <Button size="sm" onClick={openAddUser}>
+                      <UserPlus className="size-4 mr-1" />
+                      Add user
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
@@ -542,6 +588,66 @@ export default function RolesSettingsPage() {
                   )}
                 </CardContent>
               </Card>
+
+              <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add user</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={userForm.handleSubmit(createUser)} className="space-y-4">
+                    <div className="space-y-1">
+                      <Label>Full name</Label>
+                      <Input {...userForm.register('full_name')} placeholder="Jane Smith" />
+                      {userForm.formState.errors.full_name && (
+                        <p className="text-xs text-destructive">{userForm.formState.errors.full_name.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Email</Label>
+                      <Input type="email" {...userForm.register('email')} placeholder="user@company.com" />
+                      {userForm.formState.errors.email && (
+                        <p className="text-xs text-destructive">{userForm.formState.errors.email.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Password</Label>
+                      <Input type="password" {...userForm.register('password')} />
+                      {userForm.formState.errors.password && (
+                        <p className="text-xs text-destructive">{userForm.formState.errors.password.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Role</Label>
+                      <Select
+                        value={userForm.watch('role_id') ? String(userForm.watch('role_id')) : undefined}
+                        onValueChange={(v) => userForm.setValue('role_id', parseInt(v, 10), { shouldValidate: true })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roles.map((r) => (
+                            <SelectItem key={r.id} value={String(r.id)}>
+                              {r.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {userForm.formState.errors.role_id && (
+                        <p className="text-xs text-destructive">{userForm.formState.errors.role_id.message}</p>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setAddUserOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={saving}>
+                        {saving ? 'Creating...' : 'Create user'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </>
           )}
 

@@ -58,7 +58,6 @@ const companyTiles = [
 const adminTiles = [
   { href: '/admin/companies', title: 'Companies', desc: 'View all tenant companies', icon: Building2, color: 'text-primary' },
   { href: '/admin/receipts', title: 'Receipts', desc: 'Subscription payments & mark paid', icon: CreditCard, color: 'text-emerald-600' },
-  { href: '/admin/admins', title: 'Admins', desc: 'Manage admins, modules & passwords', icon: Users, color: 'text-blue-600' },
 ];
 
 function Kpi({

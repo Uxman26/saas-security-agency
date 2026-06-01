@@ -89,7 +89,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
               <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
                 {isSuperAdmin ? (
-                  ['/admin/companies', '/admin/receipts', '/admin/admins'].map((href) => (
+                  [
+                    { href: '/admin/companies', label: 'Companies' },
+                    { href: '/admin/receipts', label: 'Receipts' },
+                  ].map(({ href, label }) => (
                     <Link
                       key={href}
                       href={href}
@@ -99,9 +102,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                       )}
                       onClick={() => setDrawer(false)}
                     >
-                      {href === '/admin/companies' ? 'Companies' : href === '/admin/receipts' ? 'Receipts' : 'Admins'}
+                      {label}
                     </Link>
-                  ))
+                  ))}
                 ) : (
                   links.map(({ href, label }) => (
                     <Link

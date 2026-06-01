@@ -5,7 +5,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Role
 from app.rbac import require_perm, PERM_ROLES_READ, PERM_ROLES_WRITE
-from app.schemas import CompanyUserOut, UserRolePatch
+from app.schemas import CompanyUserOut, UserRolePatch, CompanyUserCreate
+from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -36,6 +37,17 @@ def list_company_users(
     cid = _require_company(current_user)
     rows = db.query(User).filter(User.company_id == cid).order_by(User.email).all()
     return [_out(u) for u in rows]
+
+
+@router.post("", response_model=CompanyUserOut, status_code=status.HTTP_201_CREATED)
+def create_company_user(
+    body: CompanyUserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ROLES_WRITE)),
+):
+    cid = _require_company(current_user)
+    u = user_service.create_company_user(db, cid, body)
+    return _out(u)
 
 
 @router.patch("/{user_id}/role", response_model=CompanyUserOut)

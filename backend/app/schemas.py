@@ -787,3 +787,10 @@ class CompanyUserOut(BaseModel):
 
 class UserRolePatch(BaseModel):
     role_id: int
+
+
+class CompanyUserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+    full_name: str = Field(min_length=2, max_length=100)
+    role_id: int

@@ -16,18 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { ChartPoint } from '@/lib/types';
-
-const CHART = {
-  grid: 'hsl(var(--border) / 0.4)',
-  axis: 'hsl(var(--muted-foreground))',
-  primary: 'hsl(217 91% 60%)',
-  accent: 'hsl(187 85% 43%)',
-  warn: 'hsl(38 92% 50%)',
-  danger: 'hsl(0 72% 51%)',
-  muted: 'hsl(215 20% 65%)',
-};
-
-const PIE_COLORS = [CHART.primary, CHART.accent, CHART.warn, CHART.danger, CHART.muted];
+import { axisLineProps, chartTooltipStyle, tickProps, useChartTheme } from '@/lib/chart-theme';
 
 const fmtDay = (iso: string) => {
   const d = new Date(iso + 'T12:00:00');
@@ -42,7 +31,13 @@ type Props = {
 };
 
 export function OverviewCharts({ shifts, attendance, payroll, operations }: Props) {
+  const c = useChartTheme();
+  const pieColors = [c.primary, c.accent, c.warn, c.danger, c.muted];
   const shiftData = shifts.map((p) => ({ ...p, day: fmtDay(p.label) }));
+  const tooltip = chartTooltipStyle(c);
+  const tick = tickProps(c);
+  const tickSm = tickProps(c, 11);
+  const axisLine = axisLineProps(c);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -54,20 +49,17 @@ export function OverviewCharts({ shifts, attendance, payroll, operations }: Prop
             <AreaChart data={shiftData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="shiftFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={CHART.primary} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={CHART.primary} stopOpacity={0} />
+                  <stop offset="0%" stopColor={c.primary} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={c.primary} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
-              <XAxis dataKey="day" tick={{ fontSize: 10, fill: CHART.axis }} interval="preserveStartEnd" />
-              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: CHART.axis }} width={28} />
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
+              <XAxis dataKey="day" tick={tick} axisLine={axisLine} tickLine={axisLine} interval="preserveStartEnd" />
+              <YAxis allowDecimals={false} tick={tick} axisLine={axisLine} tickLine={axisLine} width={28} />
               <Tooltip
-                contentStyle={{
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
+                contentStyle={tooltip}
+                labelStyle={{ color: c.foreground }}
+                itemStyle={{ color: c.foreground }}
                 labelFormatter={(_, payload) => {
                   const row = payload?.[0]?.payload as { label?: string } | undefined;
                   return row?.label ? fmtDay(row.label) : '';
@@ -77,11 +69,11 @@ export function OverviewCharts({ shifts, attendance, payroll, operations }: Prop
                 type="monotone"
                 dataKey="value"
                 name="Shifts"
-                stroke={CHART.primary}
+                stroke={c.primary}
                 fill="url(#shiftFill)"
                 strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 5, fill: CHART.accent }}
+                activeDot={{ r: 5, fill: c.accent }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -94,19 +86,22 @@ export function OverviewCharts({ shifts, attendance, payroll, operations }: Prop
         <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={payroll} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: CHART.axis }} />
-              <YAxis tick={{ fontSize: 10, fill: CHART.axis }} width={40} tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`} />
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
+              <XAxis dataKey="label" tick={tick} axisLine={axisLine} tickLine={axisLine} />
+              <YAxis
+                tick={tick}
+                axisLine={axisLine}
+                tickLine={axisLine}
+                width={40}
+                tickFormatter={(v) => `£${(v / 1000).toFixed(0)}k`}
+              />
               <Tooltip
                 formatter={(v) => [`£${Number(v ?? 0).toLocaleString('en-GB')}`, 'Payroll']}
-                contentStyle={{
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
+                contentStyle={tooltip}
+                labelStyle={{ color: c.foreground }}
+                itemStyle={{ color: c.foreground }}
               />
-              <Bar dataKey="value" name="Payroll" fill={CHART.accent} radius={[6, 6, 0, 0]} maxBarSize={48} />
+              <Bar dataKey="value" name="Payroll" fill={c.accent} radius={[6, 6, 0, 0]} maxBarSize={48} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -132,18 +127,11 @@ export function OverviewCharts({ shifts, attendance, payroll, operations }: Prop
                   paddingAngle={2}
                 >
                   {attendance.map((_, i) => (
-                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    <Cell key={i} fill={pieColors[i % pieColors.length]} />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={{
-                    background: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: 8,
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Tooltip contentStyle={tooltip} labelStyle={{ color: c.foreground }} itemStyle={{ color: c.foreground }} />
+                <Legend wrapperStyle={{ fontSize: 11, color: c.axis }} formatter={(value) => <span style={{ color: c.axis }}>{value}</span>} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -156,18 +144,11 @@ export function OverviewCharts({ shifts, attendance, payroll, operations }: Prop
         <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={operations} layout="vertical" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} horizontal={false} />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: CHART.axis }} />
-              <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: CHART.axis }} width={72} />
-              <Tooltip
-                contentStyle={{
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-              />
-              <Bar dataKey="value" fill={CHART.primary} radius={[0, 6, 6, 0]} barSize={22} />
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} horizontal={false} />
+              <XAxis type="number" allowDecimals={false} tick={tick} axisLine={axisLine} tickLine={axisLine} />
+              <YAxis type="category" dataKey="label" tick={tickSm} axisLine={axisLine} tickLine={axisLine} width={72} />
+              <Tooltip contentStyle={tooltip} labelStyle={{ color: c.foreground }} itemStyle={{ color: c.foreground }} />
+              <Bar dataKey="value" fill={c.primary} radius={[0, 6, 6, 0]} barSize={22} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     >
                       {label}
                     </Link>
-                  ))}
+                  ))
                 ) : (
                   links.map(({ href, label }) => (
                     <Link

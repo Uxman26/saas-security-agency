@@ -62,8 +62,11 @@ export default function HomePage() {
             <Shield className="size-5 text-primary" />
             Security Agency
           </Link>
+          <div className="hidden sm:flex items-center gap-6 text-sm mr-2">
+            <Link href="/about" className="text-muted-foreground hover:text-foreground transition-colors">About</Link>
+            <Link href="/pricing" className="text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
+          </div>
           <div className="flex items-center gap-2">
-            <Link href="/pricing"><Button variant="ghost" size="sm">Pricing</Button></Link>
             <Link href="/login"><Button variant="ghost" size="sm">Sign in</Button></Link>
             <ThemeToggle />
           </div>
@@ -287,6 +290,7 @@ export default function HomePage() {
               Security Agency SAAS
             </div>
             <div className="flex items-center gap-8 text-sm text-muted-foreground">
+              <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
               <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
               <Link href="/signup" className="hover:text-foreground transition-colors">Sign up</Link>
               <Link href="/login" className="hover:text-foreground transition-colors">Sign in</Link>

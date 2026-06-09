@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/theme-toggle';
-import { Check, Shield } from 'lucide-react';
+import { MarketingNav } from '@/components/marketing/marketing-nav';
+import { MarketingFooter } from '@/components/marketing/marketing-footer';
+import { Check } from 'lucide-react';
 
 const tiers = [
   {
@@ -42,19 +43,10 @@ const tiers = [
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        <Link href="/">
-          <Button variant="ghost" size="sm">Home</Button>
-        </Link>
-        <Link href="/login">
-          <Button variant="ghost" size="sm">Sign in</Button>
-        </Link>
-        <ThemeToggle />
-      </div>
-      <div className="container mx-auto px-4 pt-24 pb-16 md:pt-32 md:pb-24">
+      <MarketingNav active="pricing" />
+      <div className="container mx-auto px-4 pt-16 pb-16 md:pt-24 md:pb-24">
         <div className="mx-auto max-w-2xl text-center mb-12">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary">
-            <Shield className="size-4" />
             Memberships
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
@@ -115,6 +107,7 @@ export default function PricingPage() {
           </Link>
         </p>
       </div>
+      <MarketingFooter />
     </div>
   );
 }

@@ -9,7 +9,7 @@ const init = async (engine: Parameters<typeof loadSlim>[0]) => {
   await loadSlim(engine);
 };
 
-function ParticlesCanvas({ className }: { className?: string }) {
+function ParticlesCanvas({ className, id = 'particles-canvas' }: { className?: string; id?: string }) {
   const options: ISourceOptions = useMemo(
     () => ({
       fullScreen: { enable: false },
@@ -52,17 +52,17 @@ function ParticlesCanvas({ className }: { className?: string }) {
 
   return (
     <div className={className}>
-      <Particles id="about-particles" className="absolute inset-0" options={options} />
+      <Particles id={id} className="absolute inset-0" options={options} />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,var(--primary)/12%,transparent)] pointer-events-none" />
       <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/70 to-background pointer-events-none" />
     </div>
   );
 }
 
-export function ParticlesBackground({ className }: { className?: string }) {
+export function ParticlesBackground({ className, id }: { className?: string; id?: string }) {
   return (
     <ParticlesProvider init={init}>
-      <ParticlesCanvas className={className} />
+      <ParticlesCanvas className={className} id={id} />
     </ParticlesProvider>
   );
 }

@@ -64,7 +64,7 @@ export default function AboutPage() {
       <MarketingNav active="about" />
 
       <header className="relative overflow-hidden border-b border-border/50 min-h-[85vh] flex items-center">
-        <ParticlesBackground className="absolute inset-0 -z-0" />
+        <ParticlesBackground className="absolute inset-0 -z-0" id="about-particles" />
         <div className="container relative z-10 mx-auto px-4 py-24 md:py-32">
           <div className="mx-auto max-w-4xl text-center">
             <ScrollReveal>

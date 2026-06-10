@@ -44,6 +44,7 @@ export function RotaCalendarClient() {
     addEmployeesById,
     reorderEmployees,
     copyAllShiftsBetweenEmployees,
+    moveShiftToEmployee,
     clearEmployeeShifts,
     addDaysDelta,
     setAttendance,
@@ -112,6 +113,8 @@ export function RotaCalendarClient() {
   const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
   const [xferOpen, setXferOpen] = useState(false);
   const [xferFrom, setXferFrom] = useState<string | null>(null);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveCtx, setMoveCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [viewShiftsOpen, setViewShiftsOpen] = useState(false);
   const [viewShiftsEmpId, setViewShiftsEmpId] = useState<string | null>(null);
   const [reorderOpen, setReorderOpen] = useState(false);
@@ -180,6 +183,12 @@ export function RotaCalendarClient() {
     setCopyCtx({ empId, dk, idx });
     setCopyTargets(new Set(state.days.filter((d) => d !== dk)));
     setCopyOpen(true);
+  };
+
+  const startMove = (empId: string, dk: string, idx: number) => {
+    setShiftMenu(null);
+    setMoveCtx({ empId, dk, idx });
+    setMoveOpen(true);
   };
 
   const doCopy = () => {
@@ -526,6 +535,9 @@ export function RotaCalendarClient() {
                                   </button>
                                   <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startCopy(emp.id, dk, idx)}>
                                     Copy to dates…
+                                  </button>
+                                  <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startMove(emp.id, dk, idx)}>
+                                    Move shift
                                   </button>
                                   <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => { setShiftMenu(null); openAddShift(dk, emp.id); }}>
                                     Add another shift
@@ -1004,6 +1016,47 @@ export function RotaCalendarClient() {
                         copyAllShiftsBetweenEmployees(xferFrom, e.id);
                         setXferOpen(false);
                         setXferFrom(null);
+                      }}
+                    >
+                      <span className="size-8 rounded-full mr-2 flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: e.avatarColor }}>
+                        {initials(e.name)}
+                      </span>
+                      <span className="text-left">
+                        <span className="font-medium block">{e.name}</span>
+                        <span className="text-xs text-muted-foreground">{e.role}</span>
+                      </span>
+                    </Button>
+                  ))
+              : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={moveOpen}
+        onOpenChange={(o) => {
+          setMoveOpen(o);
+          if (!o) setMoveCtx(null);
+        }}
+      >
+        <DialogContent showCloseButton className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Move shift to another employee</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2 max-h-64 overflow-y-auto">
+            {moveCtx
+              ? state.employees
+                  .filter((e) => e.id !== moveCtx.empId)
+                  .map((e) => (
+                    <Button
+                      key={e.id}
+                      type="button"
+                      variant="outline"
+                      className="justify-start h-auto py-2"
+                      onClick={() => {
+                        moveShiftToEmployee(moveCtx.empId, moveCtx.dk, moveCtx.idx, e.id);
+                        setMoveOpen(false);
+                        setMoveCtx(null);
                       }}
                     >
                       <span className="size-8 rounded-full mr-2 flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: e.avatarColor }}>

@@ -47,17 +47,15 @@ def assert_sub_in_company(db: Session, sub_id: int, company_id: int) -> SubContr
 
 
 def apply_guard_contractors(db: Session, company_id: int, main_id: Optional[int], sub_id: Optional[int]) -> Tuple[Optional[int], Optional[int]]:
-    require_one_contractor_ref(
-        main_id,
-        sub_id,
-        "A contractor (main or sub) is required for each guard.",
-    )
+    if main_id and sub_id:
+        raise HTTPException(status_code=400, detail="Link either a main contractor or a sub contractor, not both.")
     if main_id:
         assert_main_in_company(db, main_id, company_id)
         return main_id, None
-    assert sub_id
-    assert_sub_in_company(db, sub_id, company_id)
-    return None, sub_id
+    if sub_id:
+        assert_sub_in_company(db, sub_id, company_id)
+        return None, sub_id
+    return None, None
 
 
 def apply_site_contractors(db: Session, company_id: int, main_id: Optional[int], sub_id: Optional[int]) -> Tuple[Optional[int], Optional[int]]:

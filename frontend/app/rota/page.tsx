@@ -12,7 +12,7 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, type SortDir } from '@/lib/use-t
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { RotaPlanListItem } from '@/lib/types';
-import { Calendar, CalendarDays, Grid3x3, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Calendar, CalendarDays, Copy, Grid3x3, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 
 function fmtDate(iso: string) {
   return new Date(`${iso}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -165,7 +165,7 @@ export default function RotaHubPage() {
                             <SortableHead label="Shifts" colKey="shift_count" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <SortableHead label="Created" colKey="created_at" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <TableHead className="text-right w-[140px]">Actions</TableHead>
+                            <TableHead className="text-right w-[180px]">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -184,6 +184,11 @@ export default function RotaHubPage() {
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">
+                                  <Button variant="ghost" size="icon" className="size-8" asChild title="Copy to new rota">
+                                    <Link href={`/rota/create?from=${r.id}`}>
+                                      <Copy className="size-4" />
+                                    </Link>
+                                  </Button>
                                   <Button variant="ghost" size="icon" className="size-8" asChild title="Open planner">
                                     <Link href={`/rota/calendar?id=${r.id}`}>
                                       <Pencil className="size-4" />

@@ -230,6 +230,17 @@ export const api = {
     delete: (id: number): Promise<void> => request<void>(`/rotas/${id}`, { method: 'DELETE' }),
     publish: (id: number): Promise<RotaPlanPublishResult> =>
       request<RotaPlanPublishResult>(`/rotas/${id}/publish`, { method: 'POST' }),
+    copy: (
+      id: number,
+      data: {
+        name: string;
+        start_date: string;
+        day_count?: number;
+        view_mode?: string;
+        budget?: number;
+      }
+    ): Promise<RotaPlanDetail> =>
+      request<RotaPlanDetail>(`/rotas/${id}/copy`, { method: 'POST', body: JSON.stringify(data) }),
   },
   clients: {
     list: (): Promise<Client[]> => request<Client[]>('/clients'),

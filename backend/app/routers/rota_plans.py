@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.rbac import PERM_ASSIGN_DELETE, PERM_ASSIGN_READ, PERM_ASSIGN_WRITE, require_perm
-from app.schemas import RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
+from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
 from app.services import rota_plan_service
 
 router = APIRouter(prefix="/rotas", tags=["rotas"])
@@ -22,6 +22,16 @@ def create_rota(
     current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
 ):
     return rota_plan_service.create_rota_plan(db, current_user.id, body)
+
+
+@router.post("/{plan_id}/copy", response_model=RotaPlanDetail, status_code=status.HTTP_201_CREATED)
+def copy_rota(
+    plan_id: int,
+    body: RotaPlanCopy,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    return rota_plan_service.copy_rota_plan(db, current_user.id, plan_id, body)
 
 
 @router.get("/{plan_id}", response_model=RotaPlanDetail)

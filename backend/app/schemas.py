@@ -296,6 +296,13 @@ class RotaPlanCreate(BaseModel):
     budget: float = 0
     planner_data: Optional[str] = None
 
+class RotaPlanCopy(BaseModel):
+    name: str
+    start_date: date
+    day_count: Optional[int] = None
+    view_mode: Optional[str] = None
+    budget: Optional[float] = None
+
 class RotaPlanUpdate(BaseModel):
     name: Optional[str] = None
     view_mode: Optional[str] = None

@@ -4,10 +4,10 @@ from typing import List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Assignment, Guard, RotaPlan, Site
-from app.schemas import RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
+from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.rota_service import normalize_shift_type
 
@@ -86,6 +86,155 @@ def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
         raise HTTPException(status_code=404, detail="Rota not found")
     base = _to_list_item(db, plan)
     return RotaPlanDetail(**base.model_dump(), planner_data=plan.planner_data)
+
+
+_AVATAR_PALETTE = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#f97316"]
+_SHIFT_COLOR = "#3b82f6"
+
+
+def _day_keys(start: date, day_count: int) -> list[str]:
+    n = max(1, day_count)
+    return [(start + timedelta(days=i)).isoformat() for i in range(n)]
+
+
+def _payload_from_assignments(db: Session, plan: RotaPlan) -> dict:
+    rows = (
+        db.query(Assignment)
+        .options(joinedload(Assignment.guard), joinedload(Assignment.site))
+        .filter(Assignment.rota_plan_id == plan.id)
+        .order_by(Assignment.date, Assignment.id)
+        .all()
+    )
+    days = _day_keys(plan.start_date, plan.day_count)
+    employees: dict[str, dict] = {}
+    shifts: dict[str, dict[str, list]] = {}
+    for a in rows:
+        if not a.guard:
+            continue
+        eid = str(a.guard_id)
+        if eid not in employees:
+            idx = len(employees)
+            employees[eid] = {
+                "id": eid,
+                "name": a.guard.full_name,
+                "role": a.guard.job_title or "Staff",
+                "avatarColor": _AVATAR_PALETTE[idx % len(_AVATAR_PALETTE)],
+            }
+        dk = a.date.isoformat()
+        if dk not in days:
+            continue
+        bm = int(a.break_minutes or 0)
+        sh = {
+            "start": a.shift_start or "09:00",
+            "end": a.shift_end or "17:00",
+            "site": (a.site.name if a.site else "") or "",
+            "notes": "",
+            "breakH": bm // 60,
+            "breakM": bm % 60,
+            "color": _SHIFT_COLOR,
+            "label": "",
+        }
+        shifts.setdefault(eid, {}).setdefault(dk, []).append(sh)
+    return {
+        "rotaView": plan.view_mode or "table",
+        "days": days,
+        "employees": list(employees.values()),
+        "shifts": shifts,
+        "attendance": {},
+        "budget": float(plan.budget or 0),
+        "inclBreaks": False,
+    }
+
+
+def _extract_payload(db: Session, plan: RotaPlan) -> dict:
+    if plan.planner_data:
+        try:
+            data = json.loads(plan.planner_data)
+            if isinstance(data, dict) and (data.get("shifts") or data.get("employees") or data.get("days")):
+                return data
+        except json.JSONDecodeError:
+            pass
+    built = _payload_from_assignments(db, plan)
+    if built.get("shifts") or built.get("employees"):
+        return built
+    if plan.planner_data:
+        try:
+            data = json.loads(plan.planner_data)
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            pass
+    return built
+
+
+def _remap_payload(
+    data: dict,
+    old_start: date,
+    old_day_count: int,
+    new_start: date,
+    new_day_count: int,
+) -> dict:
+    old_days = data.get("days") or _day_keys(old_start, old_day_count)
+    new_days = _day_keys(new_start, new_day_count)
+    day_map = {old_days[i]: new_days[i] for i in range(min(len(old_days), len(new_days)))}
+
+    new_shifts: dict[str, dict[str, list]] = {}
+    for emp_id, by_d in (data.get("shifts") or {}).items():
+        emp_map: dict[str, list] = {}
+        for old_dk, blocks in (by_d or {}).items():
+            new_dk = day_map.get(old_dk)
+            if new_dk and blocks:
+                emp_map[new_dk] = [dict(b) for b in blocks]
+        if emp_map:
+            new_shifts[str(emp_id)] = emp_map
+
+    new_attendance: dict[str, dict] = {}
+    for key, rec in (data.get("attendance") or {}).items():
+        parts = str(key).split(":", 2)
+        if len(parts) != 3:
+            continue
+        emp_id, old_dk, si = parts[0], parts[1], parts[2]
+        new_dk = day_map.get(old_dk)
+        if not new_dk:
+            continue
+        entry = dict(rec) if isinstance(rec, dict) else {}
+        entry["dk"] = new_dk
+        entry["empId"] = emp_id
+        try:
+            entry["si"] = int(si)
+        except (TypeError, ValueError):
+            pass
+        new_attendance[f"{emp_id}:{new_dk}:{si}"] = entry
+
+    out = dict(data)
+    out["days"] = new_days
+    out["shifts"] = new_shifts
+    out["attendance"] = new_attendance
+    return out
+
+
+def copy_rota_plan(db: Session, user_id: int, source_id: int, data: RotaPlanCopy) -> RotaPlanDetail:
+    company = get_company_by_user_id(db, user_id)
+    source = db.query(RotaPlan).filter(RotaPlan.id == source_id, RotaPlan.company_id == company.id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source rota not found")
+
+    day_count = max(1, min(90, data.day_count if data.day_count is not None else source.day_count))
+    payload = _extract_payload(db, source)
+    remapped = _remap_payload(payload, source.start_date, source.day_count, data.start_date, day_count)
+
+    return create_rota_plan(
+        db,
+        user_id,
+        RotaPlanCreate(
+            name=data.name.strip(),
+            start_date=data.start_date,
+            day_count=day_count,
+            view_mode=data.view_mode or remapped.get("rotaView") or source.view_mode or "table",
+            budget=float(data.budget if data.budget is not None else source.budget or 0),
+            planner_data=json.dumps(remapped),
+        ),
+    )
 
 
 def create_rota_plan(db: Session, user_id: int, data: RotaPlanCreate) -> RotaPlanDetail:

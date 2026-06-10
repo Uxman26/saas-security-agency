@@ -232,10 +232,6 @@ class GuardBase(BaseModel):
         if not (self.full_name or "").strip():
             if not ((self.first_name or "").strip() and (self.last_name or "").strip()):
                 raise ValueError("First name and last name are required")
-        if not (self.phone or "").strip():
-            raise ValueError("Phone number is required")
-        if not (self.visa_status or "").strip():
-            raise ValueError("Visa status is required")
         return self
 
 class GuardCreate(GuardBase):

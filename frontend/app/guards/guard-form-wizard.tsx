@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 
 const STEPS = ['Employee details', 'Employment details', 'Summary'] as const;
 
-const REQUIRED_KEYS: (keyof GuardFormData)[] = ['first_name', 'last_name', 'phone', 'visa_status'];
+const REQUIRED_KEYS: (keyof GuardFormData)[] = ['first_name', 'last_name'];
 
 const STEP0_KEYS: (keyof GuardFormData)[] = [
   'first_name',
@@ -140,7 +140,7 @@ export function GuardFormWizard({
   const displayName = [first, last].filter(Boolean).join(' ') || 'New employee';
 
   const stepFields: (keyof GuardFormData)[][] = [
-    ['first_name', 'last_name', 'phone', 'visa_status'],
+    ['first_name', 'last_name'],
     [],
     [],
   ];
@@ -304,12 +304,12 @@ export function GuardFormWizard({
                 {errors.last_name && <p className="text-xs text-destructive">{errors.last_name.message}</p>}
               </div>
               <div className="space-y-1">
-                <Label>Mobile number <span className="text-destructive">*</span></Label>
+                <Label>Mobile number</Label>
                 <Input {...register('phone')} placeholder="e.g. 07700900123" />
                 {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <Label>Visa status <span className="text-destructive">*</span></Label>
+                <Label>Visa status</Label>
                 <Input {...register('visa_status')} placeholder="e.g. British citizen, Skilled Worker" />
                 {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
               </div>
@@ -573,7 +573,7 @@ export function GuardFormWizard({
       {step === 2 && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Required: first name, last name, mobile number, and visa status. Employee type and entitlement are optional.
+            Required: first name and last name. Mobile number, visa status, employee type and entitlement are optional.
           </p>
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full text-sm">

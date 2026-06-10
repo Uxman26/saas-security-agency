@@ -44,11 +44,11 @@ const optUuid = z.preprocess(
 );
 
 const optStr = z.string().max(200).optional().or(z.literal(''));
-const phoneRequired = z
+const optPhone = z
   .string()
-  .min(1, 'Phone number is required')
-  .min(7, 'Enter at least 7 digits')
-  .max(25, 'Phone number is too long');
+  .regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number')
+  .optional()
+  .or(z.literal(''));
 const optDate = z.string().optional().or(z.literal(''));
 const toOptInt = (v: unknown) => {
   if (v === '' || v === null || v === undefined) return 0;
@@ -79,7 +79,7 @@ export const guardSchema = z.object({
   ethnicity: optStr,
   date_of_birth: optDate,
   email: optStr,
-  phone: phoneRequired,
+  phone: optPhone,
   work_phone: optStr,
   job_title: optStr,
   employment_start_date: optDate,
@@ -147,7 +147,7 @@ export const guardSchema = z.object({
   badge_number: z.string().max(50).optional().or(z.literal('')),
   sia_number: z.string().max(50).optional().or(z.literal('')),
   sia_expiry_date: optDate,
-  visa_status: z.string().min(1, 'Visa status is required').max(100),
+  visa_status: z.string().max(100).optional().or(z.literal('')),
   rtw_status: z.string().max(100).optional().or(z.literal('')),
   employment_history: z.string().max(2000).optional().or(z.literal('')),
   dbs_status: z.string().max(100).optional().or(z.literal('')),
@@ -163,8 +163,6 @@ export const guardSchema = z.object({
 export const guardSubmitSchema = guardSchema.partial().required({
   first_name: true,
   last_name: true,
-  phone: true,
-  visa_status: true,
 });
 
 export type GuardFormData = z.infer<typeof guardSchema>;

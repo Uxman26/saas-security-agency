@@ -25,6 +25,20 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 
+const SHIFT_MENU_H = 196;
+const EMP_MENU_H = 132;
+
+function placeMenu(rect: DOMRect, w: number, menuH: number, preferUp: boolean) {
+  const width = Math.max(rect.width, w);
+  let x = rect.left;
+  if (x + width > window.innerWidth - 8) x = window.innerWidth - width - 8;
+  if (x < 8) x = 8;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const openUp = preferUp || spaceBelow < menuH;
+  const y = openUp ? Math.max(8, rect.top - menuH - 4) : rect.bottom + 4;
+  return { x, y, w: width };
+}
+
 export function RotaCalendarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -358,7 +372,7 @@ export function RotaCalendarClient() {
     if (empId) openAddShift(dk, empId);
   };
 
-  const toggleShiftMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string, dk: string, idx: number) => {
+  const toggleShiftMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string, dk: string, idx: number, shiftsBelow: number) => {
     const open = shiftMenu?.empId === empId && shiftMenu?.dk === dk && shiftMenu?.idx === idx;
     if (open) {
       closeShiftMenu();
@@ -367,7 +381,7 @@ export function RotaCalendarClient() {
     const rect = e.currentTarget.getBoundingClientRect();
     closeEmpMenu();
     setShiftMenu({ empId, dk, idx });
-    setShiftMenuAnchor({ x: rect.left, y: rect.bottom + 2, w: Math.max(rect.width, 192) });
+    setShiftMenuAnchor(placeMenu(rect, 192, SHIFT_MENU_H, shiftsBelow > 0));
   };
 
   const toggleEmpMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string) => {
@@ -379,7 +393,7 @@ export function RotaCalendarClient() {
     const rect = e.currentTarget.getBoundingClientRect();
     closeShiftMenu();
     setEmpMenu(empId);
-    setEmpMenuAnchor({ x: rect.left, y: rect.bottom + 4, w: 256 });
+    setEmpMenuAnchor(placeMenu(rect, 256, EMP_MENU_H, false));
   };
 
   const weekdayTargets = () =>
@@ -539,12 +553,17 @@ export function RotaCalendarClient() {
                     return (
                       <td key={dk} className="relative align-top p-1 border-l border-border/40 min-h-[56px] bg-muted/5">
                         <div className="flex flex-col gap-1 min-h-[48px]">
-                          {list.map((sh, idx) => (
+                          {list.map((sh, idx) => {
+                            const menuOpen = shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx;
+                            return (
                             <div key={idx}>
                               <button
                                 type="button"
-                                className="w-full rounded border bg-background px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:bg-muted/50"
-                                onClick={(e) => toggleShiftMenu(e, emp.id, dk, idx)}
+                                className={cn(
+                                  'w-full rounded border bg-background px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:bg-muted/50',
+                                  menuOpen && 'ring-2 ring-pink-500/60'
+                                )}
+                                onClick={(e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
                               >
                                 <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
                                 <div className="font-medium tabular-nums">
@@ -554,7 +573,8 @@ export function RotaCalendarClient() {
                                 {sh.site && sh.notes ? <div className="text-muted-foreground truncate text-[10px] italic">{sh.notes}</div> : null}
                               </button>
                             </div>
-                          ))}
+                            );
+                          })}
                           <Button type="button" variant="ghost" size="sm" className="h-7 text-muted-foreground" onClick={() => openAddShift(dk, emp.id)}>
                             <Plus className="size-3.5" />
                           </Button>
@@ -1115,7 +1135,7 @@ export function RotaCalendarClient() {
       {typeof document !== 'undefined' && shiftMenu && shiftMenuAnchor && createPortal(
         <div
           ref={shiftMenuPortalRef}
-          className="fixed z-[200] rounded-md border bg-popover text-popover-foreground shadow-lg py-1 text-xs"
+          className="fixed z-[200] rounded-md border border-border bg-background text-foreground shadow-xl overflow-hidden isolate py-1 text-xs"
           style={{ left: shiftMenuAnchor.x, top: shiftMenuAnchor.y, width: shiftMenuAnchor.w }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -1165,7 +1185,7 @@ export function RotaCalendarClient() {
       {typeof document !== 'undefined' && empMenu && empMenuAnchor && createPortal(
         <div
           ref={empMenuPortalRef}
-          className="fixed z-[200] rounded-md border bg-popover text-popover-foreground shadow-lg py-1 text-sm"
+          className="fixed z-[200] rounded-md border border-border bg-background text-foreground shadow-xl overflow-hidden isolate py-1 text-sm"
           style={{ left: empMenuAnchor.x, top: empMenuAnchor.y, width: empMenuAnchor.w }}
           onMouseDown={(e) => e.stopPropagation()}
         >

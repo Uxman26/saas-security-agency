@@ -750,6 +750,8 @@ class DashboardStats(BaseModel):
     sub_contractors_total: int = 0
     sub_contractors_active: int = 0
     contracts_expiring_soon: int = 0
+    rotas_total: int = 0
+    rotas_active: int = 0
 
 
 class DashboardOverview(BaseModel):

@@ -153,6 +153,14 @@ export default function DashboardPage() {
                 </div>
                 {!isSuperAdmin && stats && (
                   <div className="flex flex-wrap gap-3 text-sm">
+                    <Link
+                      href="/rota"
+                      className="rounded-full bg-cyan-500/20 px-3 py-1 ring-1 ring-cyan-400/30 hover:bg-cyan-500/30 transition-colors"
+                    >
+                      <span className="text-cyan-200">Active rotas</span>{' '}
+                      <strong className="text-white">{stats.rotas_active ?? 0}</strong>
+                      <span className="text-cyan-200/80"> / {stats.rotas_total ?? 0}</span>
+                    </Link>
                     <span className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/10">
                       <span className="text-slate-400">Today&apos;s shifts</span>{' '}
                       <strong className="text-white">{stats.shifts_today}</strong>
@@ -208,6 +216,32 @@ export default function DashboardPage() {
                       icon={CalendarCheck}
                       warn={stats.contracts_expiring_soon > 0}
                     />
+                  </div>
+                </section>
+
+                <section className="mb-6">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Rotas
+                  </h2>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Link href="/rota" className="block">
+                      <Kpi
+                        label="Total rotas"
+                        value={stats.rotas_total ?? 0}
+                        sub="All saved rotas"
+                        icon={CalendarRange}
+                        accent="text-cyan-600"
+                      />
+                    </Link>
+                    <Link href="/rota?tab=active" className="block">
+                      <Kpi
+                        label="Active rotas"
+                        value={stats.rotas_active ?? 0}
+                        sub="End date today or later"
+                        icon={Calendar}
+                        accent="text-cyan-600"
+                      />
+                    </Link>
                   </div>
                 </section>
 

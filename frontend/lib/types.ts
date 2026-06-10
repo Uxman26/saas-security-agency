@@ -394,6 +394,8 @@ export interface DashboardStats {
   sub_contractors_total: number;
   sub_contractors_active: number;
   contracts_expiring_soon: number;
+  rotas_total: number;
+  rotas_active: number;
 }
 
 export interface DashboardOverview {

@@ -14,6 +14,7 @@ from app.models import (
     Site,
     Client,
     Invoice,
+    RotaPlan,
 )
 from app.schemas import DashboardStats, ComplianceAlert, ChartPoint, DashboardOverview
 from app.services.company_service import get_company_by_user_id
@@ -222,6 +223,13 @@ def get_dashboard_stats(db: Session, user_id: int) -> DashboardStats:
     contracts_soon = count_contracts_expiring_soon(db, cid, 30)
     notify_admin_contract_expiry(db, cid)
 
+    rotas_total = db.query(RotaPlan).filter(RotaPlan.company_id == cid).count()
+    rotas_active = (
+        db.query(RotaPlan)
+        .filter(RotaPlan.company_id == cid, RotaPlan.end_date >= today)
+        .count()
+    )
+
     return DashboardStats(
         active_guards=active_guards,
         sites_count=sites_count,
@@ -242,6 +250,8 @@ def get_dashboard_stats(db: Session, user_id: int) -> DashboardStats:
         sub_contractors_total=st,
         sub_contractors_active=sa,
         contracts_expiring_soon=contracts_soon,
+        rotas_total=rotas_total,
+        rotas_active=rotas_active,
     )
 
 

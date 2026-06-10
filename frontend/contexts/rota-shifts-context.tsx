@@ -508,7 +508,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           if (!siteId) {
             skipped++;
             errors.push(
-              siteKey ? `No site named "${sh.site}" (${dk})` : `Missing site on ${dk} for ${empId}`
+              siteKey ? `No site named "${sh.site}" (${dk})` : `One-off shift on ${dk} (no site — skipped on publish)`
             );
             continue;
           }

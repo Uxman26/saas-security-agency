@@ -50,3 +50,7 @@ export function formatHoursDecimal(h: number) {
   if (m <= 0) return `${hrs} hrs`;
   return `${hrs} hrs ${m} mins`;
 }
+
+export function shiftSiteLine(sh: ShiftRec) {
+  return sh.site || sh.notes || 'One-off';
+}

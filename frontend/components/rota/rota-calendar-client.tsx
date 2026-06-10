@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, calcHours, fmtShortDate, formatHoursDecimal, initials } from '@/lib/rota-shifts-utils';
+import { attKey, calcHours, fmtShortDate, formatHoursDecimal, initials, shiftSiteLine } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import {
@@ -280,7 +280,7 @@ export function RotaCalendarClient() {
 
   const publish = () => {
     if (shiftCount === 0) {
-      toast.warning('Add shifts first: click + in a day cell, set times and site, then publish.');
+      toast.warning('Add shifts first: click + in a day cell, set times, then publish.');
       return;
     }
     toast.confirm(
@@ -442,7 +442,7 @@ export function RotaCalendarClient() {
 
       {shiftCount === 0 && state.employees.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
-          This rota has staff but no shifts yet. Click <strong>+</strong> in a day cell to add a shift (times and site required), then click <strong>Publish</strong> to save to Assignments.
+          This rota has staff but no shifts yet. Click <strong>+</strong> in a day cell to add a shift, then click <strong>Publish</strong> to save to Assignments.
         </div>
       )}
 
@@ -550,7 +550,8 @@ export function RotaCalendarClient() {
                                 <div className="font-medium tabular-nums">
                                   {sh.start} – {sh.end}
                                 </div>
-                                <div className="text-muted-foreground truncate text-[10px]">{sh.site}</div>
+                                <div className="text-muted-foreground truncate text-[10px]">{sh.site || sh.notes || 'One-off'}</div>
+                                {sh.site && sh.notes ? <div className="text-muted-foreground truncate text-[10px] italic">{sh.notes}</div> : null}
                               </button>
                             </div>
                           ))}
@@ -614,7 +615,8 @@ export function RotaCalendarClient() {
                       </span>
                       <span className="min-w-0">
                         <span className="font-medium block truncate">{emp.name}</span>
-                        <span className="text-muted-foreground tabular-nums">{sh.start} · {sh.site}</span>
+                        <span className="text-muted-foreground tabular-nums">{sh.start} · {sh.site || sh.notes || 'One-off'}</span>
+                        {sh.site && sh.notes ? <span className="text-muted-foreground block truncate italic">{sh.notes}</span> : null}
                       </span>
                       <span className="ml-auto h-3 w-1 rounded-full shrink-0 mt-1" style={{ backgroundColor: sh.color }} />
                     </button>
@@ -703,7 +705,7 @@ export function RotaCalendarClient() {
             <p className="text-xs text-muted-foreground">
               {fmtShortDate(copyCtx.dk)} · {state.employees.find((e) => e.id === copyCtx.empId)?.name ?? copyCtx.empId} ·{' '}
               {state.shifts[copyCtx.empId]?.[copyCtx.dk]?.[copyCtx.idx]
-                ? `${state.shifts[copyCtx.empId][copyCtx.dk][copyCtx.idx].start}–${state.shifts[copyCtx.empId][copyCtx.dk][copyCtx.idx].end} · ${state.shifts[copyCtx.empId][copyCtx.dk][copyCtx.idx].site}`
+                ? `${state.shifts[copyCtx.empId][copyCtx.dk][copyCtx.idx].start}–${state.shifts[copyCtx.empId][copyCtx.dk][copyCtx.idx].end} · ${shiftSiteLine(state.shifts[copyCtx.empId][copyCtx.dk][copyCtx.idx])}`
                 : ''}
             </p>
           ) : null}
@@ -923,9 +925,10 @@ export function RotaCalendarClient() {
                   <div className="min-w-0 flex-1">
                     <div className="font-medium">{fmtShortDate(dk)}</div>
                     <div className="text-xs text-muted-foreground tabular-nums">
-                      {sh.start} – {sh.end} · {sh.site}
+                      {sh.start} – {sh.end} · {sh.site || sh.notes || 'One-off'}
                       {sh.label ? ` · ${sh.label}` : ''}
                     </div>
+                    {sh.site && sh.notes ? <div className="text-[11px] text-muted-foreground italic truncate">{sh.notes}</div> : null}
                     <div className="text-[11px] text-muted-foreground">
                       Break {(sh.breakH || 0) > 0 || (sh.breakM || 0) > 0 ? `${sh.breakH}h ${sh.breakM}m` : 'none'} ·{' '}
                       {formatHoursDecimal(calcHours(sh, state.inclBreaks))}

@@ -15,6 +15,7 @@ services:
       - ./backend/.env
     environment:
       REDIS_URL: redis://redis:6379/0
+      FRONTEND_URL: https://security.paramountech.pk
     volumes:
       - backend_data:/app/data
     depends_on:

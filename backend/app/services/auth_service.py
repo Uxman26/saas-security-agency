@@ -1,13 +1,15 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from fastapi import HTTPException
 from app.models import User, Company
 from app.schemas import UserCreate
-from app.auth import get_password_hash, create_access_token, SUPER_ADMIN_ROLE
+from app.auth import get_password_hash, create_access_token, SUPER_ADMIN_ROLE, create_password_reset_token, verify_password_reset_token
 from datetime import timedelta
 from app.config import settings
 from app.services.role_service import ensure_roles_for_company, get_role_by_slug
 from app.services.receipt_service import company_subscription_blocked, create_receipt_for_signup
 from app.plan_config import normalize_tier
+from app.services import email_service
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if db.query(User).filter(User.email == user_data.email).first():
@@ -76,3 +78,28 @@ def authenticate_user(db: Session, email: str, password: str) -> dict:
         data={"sub": user.id}, expires_delta=access_token_expires
     )
     return {"access_token": str(access_token), "token_type": "bearer"}
+
+
+def request_password_reset(db: Session, email: str) -> None:
+    user = db.query(User).filter(func.lower(User.email) == email.lower().strip()).first()
+    if not user or not user.is_active:
+        return
+    token = create_password_reset_token(user.id)
+    link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
+    body = (
+        f"<p>Hi {user.full_name},</p>"
+        f"<p>Click the link below to reset your password. This link expires in 1 hour.</p>"
+        f'<p><a href="{link}">Reset password</a></p>'
+        f"<p>If you did not request this, you can ignore this email.</p>"
+    )
+    if settings.mail_username and settings.mail_password:
+        email_service.send_email(user.email, "Reset your password", body)
+
+
+def reset_password_with_token(db: Session, token: str, new_password: str) -> None:
+    user_id = verify_password_reset_token(token)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    user.password_hash = get_password_hash(new_password)
+    db.commit()

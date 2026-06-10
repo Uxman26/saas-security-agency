@@ -14,11 +14,13 @@ import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
 import { parsePaymentPending } from '@/lib/sidebar-modules';
+import { Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -71,8 +73,28 @@ export default function LoginPage() {
               {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" {...register('password')} />
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link href="/forgot-password" className="text-xs text-primary font-medium hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="pr-10"
+                  {...register('password')}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
               {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
@@ -80,9 +102,9 @@ export default function LoginPage() {
             </Button>
             <p className="text-sm text-center text-muted-foreground">
               Don't have an account?{' '}
-              <a href="/signup" className="text-primary font-medium hover:underline">
+              <Link href="/signup" className="text-primary font-medium hover:underline">
                 Sign up
-              </a>
+              </Link>
             </p>
           </form>
         </CardContent>

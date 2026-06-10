@@ -103,6 +103,16 @@ export const api = {
       return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
     },
     me: (): Promise<User> => request<User>('/auth/me'),
+    forgotPassword: (email: string): Promise<{ message: string }> =>
+      request<{ message: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: sanitizeInput(email) }),
+      }),
+    resetPassword: (token: string, new_password: string): Promise<{ message: string }> =>
+      request<{ message: string }>('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, new_password }),
+      }),
   },
   guards: {
     list: (params?: { area?: string; postcode?: string; nearby?: string }): Promise<Guard[]> => {

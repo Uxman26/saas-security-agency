@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Company
-from app.schemas import UserCreate, UserResponse, UserLogin, UserMeResponse, SignupResponse, SubscriptionReceiptResponse
+from app.schemas import UserCreate, UserResponse, UserLogin, UserMeResponse, SignupResponse, SubscriptionReceiptResponse, ForgotPasswordRequest, ResetPasswordRequest
 from app.auth import get_current_user, SUPER_ADMIN_ROLE
 from app.services import auth_service
 from app.rbac import permissions_for_user_db
@@ -38,6 +38,16 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
     return auth_service.authenticate_user(db, credentials.email, credentials.password)
+
+@router.post("/forgot-password")
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    auth_service.request_password_reset(db, body.email)
+    return {"message": "If an account exists for that email, a reset link has been sent."}
+
+@router.post("/reset-password")
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    auth_service.reset_password_with_token(db, body.token, body.new_password)
+    return {"message": "Password updated. You can sign in now."}
 
 @router.get("/me", response_model=UserMeResponse)
 def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

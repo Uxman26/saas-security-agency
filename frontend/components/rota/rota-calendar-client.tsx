@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -127,18 +128,46 @@ export function RotaCalendarClient() {
   const [attRec, setAttRec] = useState<AttendanceRec | null>(null);
   const [attCtx, setAttCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [shiftMenu, setShiftMenu] = useState<{ empId: string; dk: string; idx: number } | null>(null);
+  const [shiftMenuAnchor, setShiftMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
   const [empMenu, setEmpMenu] = useState<string | null>(null);
+  const [empMenuAnchor, setEmpMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const shiftMenuPortalRef = useRef<HTMLDivElement>(null);
+  const empMenuPortalRef = useRef<HTMLDivElement>(null);
+
+  const closeShiftMenu = () => {
+    setShiftMenu(null);
+    setShiftMenuAnchor(null);
+  };
+
+  const closeEmpMenu = () => {
+    setEmpMenu(null);
+    setEmpMenuAnchor(null);
+  };
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShiftMenu(null);
-        setEmpMenu(null);
-      }
+      const t = e.target as Node;
+      if (shiftMenuPortalRef.current?.contains(t) || empMenuPortalRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      closeShiftMenu();
+      closeEmpMenu();
     };
     document.addEventListener('mousedown', fn);
     return () => document.removeEventListener('mousedown', fn);
+  }, []);
+
+  useEffect(() => {
+    const fn = () => {
+      closeShiftMenu();
+      closeEmpMenu();
+    };
+    window.addEventListener('scroll', fn, true);
+    window.addEventListener('resize', fn);
+    return () => {
+      window.removeEventListener('scroll', fn, true);
+      window.removeEventListener('resize', fn);
+    };
   }, []);
 
   const rows = useMemo(() => {
@@ -179,14 +208,14 @@ export function RotaCalendarClient() {
   };
 
   const startCopy = (empId: string, dk: string, idx: number) => {
-    setShiftMenu(null);
+    closeShiftMenu();
     setCopyCtx({ empId, dk, idx });
     setCopyTargets(new Set(state.days.filter((d) => d !== dk)));
     setCopyOpen(true);
   };
 
   const startMove = (empId: string, dk: string, idx: number) => {
-    setShiftMenu(null);
+    closeShiftMenu();
     setMoveCtx({ empId, dk, idx });
     setMoveOpen(true);
   };
@@ -199,7 +228,7 @@ export function RotaCalendarClient() {
   };
 
   const startAtt = (empId: string, dk: string, idx: number) => {
-    setShiftMenu(null);
+    closeShiftMenu();
     const k = attKey(empId, dk, idx);
     const ex = state.attendance[k];
     setAttCtx({ empId, dk, idx });
@@ -304,7 +333,7 @@ export function RotaCalendarClient() {
   const openViewShifts = (empId: string) => {
     setViewShiftsEmpId(empId);
     setViewShiftsOpen(true);
-    setEmpMenu(null);
+    closeEmpMenu();
   };
 
   const deleteAllEmpShifts = (empId: string) => {
@@ -312,7 +341,7 @@ export function RotaCalendarClient() {
     if (!emp) return;
     toast.confirm(`Delete all shifts for ${emp.name}?`, () => {
       clearEmployeeShifts(empId);
-      setEmpMenu(null);
+      closeEmpMenu();
       if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
       toast.success('Shifts removed');
     }, { label: 'Delete' });
@@ -327,6 +356,30 @@ export function RotaCalendarClient() {
     e.preventDefault();
     const empId = e.dataTransfer.getData('empId');
     if (empId) openAddShift(dk, empId);
+  };
+
+  const toggleShiftMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string, dk: string, idx: number) => {
+    const open = shiftMenu?.empId === empId && shiftMenu?.dk === dk && shiftMenu?.idx === idx;
+    if (open) {
+      closeShiftMenu();
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    closeEmpMenu();
+    setShiftMenu({ empId, dk, idx });
+    setShiftMenuAnchor({ x: rect.left, y: rect.bottom + 2, w: Math.max(rect.width, 192) });
+  };
+
+  const toggleEmpMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string) => {
+    const open = empMenu === empId;
+    if (open) {
+      closeEmpMenu();
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    closeShiftMenu();
+    setEmpMenu(empId);
+    setEmpMenuAnchor({ x: rect.left, y: rect.bottom + 4, w: 256 });
   };
 
   const weekdayTargets = () =>
@@ -466,7 +519,7 @@ export function RotaCalendarClient() {
                     <button
                       type="button"
                       className="flex gap-2 text-left w-full rounded-md hover:bg-muted/60 p-1 -m-1"
-                      onClick={() => setEmpMenu(empMenu === emp.id ? null : emp.id)}
+                      onClick={(e) => toggleEmpMenu(e, emp.id)}
                     >
                       <span
                         className="size-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold text-white"
@@ -480,35 +533,6 @@ export function RotaCalendarClient() {
                       </span>
                       <MoreHorizontal className="size-4 shrink-0 ml-auto text-muted-foreground" />
                     </button>
-                    {empMenu === emp.id && (
-                      <div className="absolute z-30 left-2 top-full mt-1 w-64 rounded-md border bg-popover text-popover-foreground shadow-lg py-1 text-sm">
-                        <button
-                          type="button"
-                          className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
-                          onClick={() => {
-                            setXferFrom(emp.id);
-                            setXferOpen(true);
-                            setEmpMenu(null);
-                          }}
-                        >
-                          Copy shifts to another employee
-                        </button>
-                        <button
-                          type="button"
-                          className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
-                          onClick={() => openViewShifts(emp.id)}
-                        >
-                          Edit/view employee shifts
-                        </button>
-                        <button
-                          type="button"
-                          className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium"
-                          onClick={() => deleteAllEmpShifts(emp.id)}
-                        >
-                          Delete employee shifts
-                        </button>
-                      </div>
-                    )}
                   </td>
                   {state.days.map((dk) => {
                     const list = state.shifts[emp.id]?.[dk] || [];
@@ -516,11 +540,11 @@ export function RotaCalendarClient() {
                       <td key={dk} className="relative align-top p-1 border-l border-border/40 min-h-[56px] bg-muted/5">
                         <div className="flex flex-col gap-1 min-h-[48px]">
                           {list.map((sh, idx) => (
-                            <div key={idx} className="relative z-10">
+                            <div key={idx}>
                               <button
                                 type="button"
                                 className="w-full rounded border bg-background px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:bg-muted/50"
-                                onClick={() => setShiftMenu(shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu?.idx === idx ? null : { empId: emp.id, dk, idx })}
+                                onClick={(e) => toggleShiftMenu(e, emp.id, dk, idx)}
                               >
                                 <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
                                 <div className="font-medium tabular-nums">
@@ -528,35 +552,6 @@ export function RotaCalendarClient() {
                                 </div>
                                 <div className="text-muted-foreground truncate text-[10px]">{sh.site}</div>
                               </button>
-                              {shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx && (
-                                <div className="absolute left-0 top-full mt-0.5 z-30 w-48 rounded-md border bg-popover shadow-md py-1 text-xs">
-                                  <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => { setShiftMenu(null); openEditShift(emp.id, dk, idx); }}>
-                                    Info / Edit
-                                  </button>
-                                  <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startCopy(emp.id, dk, idx)}>
-                                    Copy to dates…
-                                  </button>
-                                  <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startMove(emp.id, dk, idx)}>
-                                    Move shift
-                                  </button>
-                                  <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => { setShiftMenu(null); openAddShift(dk, emp.id); }}>
-                                    Add another shift
-                                  </button>
-                                  <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startAtt(emp.id, dk, idx)}>
-                                    Mark attendance
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
-                                    onClick={() => {
-                                      deleteShift(emp.id, dk, idx);
-                                      setShiftMenu(null);
-                                    }}
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              )}
                             </div>
                           ))}
                           <Button type="button" variant="ghost" size="sm" className="h-7 text-muted-foreground" onClick={() => openAddShift(dk, emp.id)}>
@@ -1113,6 +1108,84 @@ export function RotaCalendarClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {typeof document !== 'undefined' && shiftMenu && shiftMenuAnchor && createPortal(
+        <div
+          ref={shiftMenuPortalRef}
+          className="fixed z-[200] rounded-md border bg-popover text-popover-foreground shadow-lg py-1 text-xs"
+          style={{ left: shiftMenuAnchor.x, top: shiftMenuAnchor.y, width: shiftMenuAnchor.w }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 hover:bg-muted"
+            onClick={() => {
+              closeShiftMenu();
+              openEditShift(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx);
+            }}
+          >
+            Info / Edit
+          </button>
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startCopy(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+            Copy to dates…
+          </button>
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startMove(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+            Move shift
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 hover:bg-muted"
+            onClick={() => {
+              closeShiftMenu();
+              openAddShift(shiftMenu.dk, shiftMenu.empId);
+            }}
+          >
+            Add another shift
+          </button>
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startAtt(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+            Mark attendance
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
+            onClick={() => {
+              deleteShift(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx);
+              closeShiftMenu();
+            }}
+          >
+            Delete
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {typeof document !== 'undefined' && empMenu && empMenuAnchor && createPortal(
+        <div
+          ref={empMenuPortalRef}
+          className="fixed z-[200] rounded-md border bg-popover text-popover-foreground shadow-lg py-1 text-sm"
+          style={{ left: empMenuAnchor.x, top: empMenuAnchor.y, width: empMenuAnchor.w }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+            onClick={() => {
+              setXferFrom(empMenu);
+              setXferOpen(true);
+              closeEmpMenu();
+            }}
+          >
+            Copy shifts to another employee
+          </button>
+          <button type="button" className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium" onClick={() => openViewShifts(empMenu)}>
+            Edit/view employee shifts
+          </button>
+          <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => deleteAllEmpShifts(empMenu)}>
+            Delete employee shifts
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

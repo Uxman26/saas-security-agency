@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -150,7 +150,7 @@ function RotaSection({
   );
 }
 
-export default function RotaHubPage() {
+function RotaHubPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') === 'old' ? 'old' : 'active';
 
@@ -469,5 +469,13 @@ export default function RotaHubPage() {
         </div>
       </AppShell>
     </ProtectedRoute>
+  );
+}
+
+export default function RotaHubPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>}>
+      <RotaHubPage />
+    </Suspense>
   );
 }

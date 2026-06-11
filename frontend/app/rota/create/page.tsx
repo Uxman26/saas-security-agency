@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
@@ -22,7 +22,7 @@ function fmtPeriod(r: RotaPlanListItem) {
   return `${a} – ${b}`;
 }
 
-export default function CreateRotaPage() {
+function CreateRotaPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromParam = searchParams.get('from');
@@ -308,5 +308,13 @@ export default function CreateRotaPage() {
         </div>
       </AppShell>
     </ProtectedRoute>
+  );
+}
+
+export default function CreateRotaPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>}>
+      <CreateRotaPage />
+    </Suspense>
   );
 }

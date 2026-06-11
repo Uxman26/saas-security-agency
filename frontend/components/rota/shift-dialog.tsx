@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,10 +39,12 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
   const createSite = useCreateSite();
   const { data: contractors = [] } = useDirectoryContractorsList({ is_active: true });
   const siteNames = sites.map((s) => s.name);
-  const siteOptions =
-    shift.site && !siteNames.includes(shift.site) ? [shift.site, ...siteNames] : siteNames;
   const [dk, setDk] = useState(defaultDk);
   const [shift, setShift] = useState<ShiftRec>(() => empty());
+  const siteOptions = useMemo(
+    () => (shift.site && !siteNames.includes(shift.site) ? [shift.site, ...siteNames] : siteNames),
+    [shift.site, siteNames]
+  );
   const [assignees, setAssignees] = useState<string[]>([defaultEmpId]);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');

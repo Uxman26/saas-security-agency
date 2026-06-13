@@ -316,6 +316,37 @@ def run():
             cur.execute("ALTER TABLE users ADD COLUMN sidebar_modules_json TEXT")
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "users") and not column_exists(cur, "users", "client_id"):
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN client_id INTEGER REFERENCES clients(id)")
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "staff_requests"):
+        try:
+            cur.execute(
+                """CREATE TABLE staff_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                client_id INTEGER NOT NULL REFERENCES clients(id),
+                site_id INTEGER NOT NULL REFERENCES sites(id),
+                requested_by_user_id INTEGER NOT NULL REFERENCES users(id),
+                shift_date TEXT NOT NULL,
+                shift_start TEXT NOT NULL,
+                shift_end TEXT NOT NULL,
+                break_minutes INTEGER DEFAULT 30,
+                staff_count INTEGER DEFAULT 1,
+                client_notes TEXT,
+                status TEXT DEFAULT 'pending',
+                reviewer_user_id INTEGER REFERENCES users(id),
+                reviewer_comment TEXT,
+                reviewed_at TEXT,
+                rota_plan_id INTEGER REFERENCES rota_plans(id),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     if table_exists(cur, "companies") and not table_exists(cur, "subscription_receipts"):
         try:
             cur.execute(
@@ -341,10 +372,20 @@ def run():
     try:
         from app.database import SessionLocal
         from app.services.role_service import backfill_user_roles
+        from app.models import Role
+        from app.rbac_matrix import default_matrix_client_portal, default_matrix_supervisor, parse_matrix_json, wrap_matrix, matrix_json_dumps
 
         db = SessionLocal()
         try:
             backfill_user_roles(db)
+            for role in db.query(Role).all():
+                if role.slug == "client":
+                    role.permissions_json = wrap_matrix(default_matrix_client_portal())
+                elif role.slug == "supervisor":
+                    m = parse_matrix_json(role.permissions_json) or default_matrix_supervisor()
+                    m["staff_requests"] = {"view": True, "create": False, "edit": True, "delete": False}
+                    role.permissions_json = matrix_json_dumps(m)
+            db.commit()
         finally:
             db.close()
     except Exception:

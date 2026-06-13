@@ -14,6 +14,9 @@ export const ALL_SIDEBAR_PATHS = [
   '/allowances',
   '/settings/special-days',
   '/settings/roles',
+  '/client-portal',
+  '/client-portal/request-staff',
+  '/requests',
 ] as const;
 
 export const SIDEBAR_LABELS: Record<string, string> = {
@@ -32,6 +35,9 @@ export const SIDEBAR_LABELS: Record<string, string> = {
   '/allowances': 'Allowances',
   '/settings/special-days': 'Special days',
   '/settings/roles': 'Roles',
+  '/client-portal': 'Client portal',
+  '/client-portal/request-staff': 'Request staff',
+  '/requests': 'Staff requests',
 };
 
 export function sidebarPathAllowed(modules: string[] | null | undefined, href: string): boolean {

@@ -115,6 +115,7 @@ type Ctx = {
   updateShift: (empId: string, dk: string, idx: number, s: ShiftRec) => void;
   deleteShift: (empId: string, dk: string, idx: number) => void;
   copyShiftToDates: (empId: string, dk: string, idx: number, targets: string[]) => void;
+  copyShiftToEmployee: (fromId: string, dk: string, idx: number, toId: string) => void;
   copyAllShiftsBetweenEmployees: (fromId: string, toId: string) => void;
   moveShiftToEmployee: (fromId: string, dk: string, idx: number, toId: string) => void;
   clearEmployeeShifts: (empId: string) => void;
@@ -384,6 +385,17 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const copyShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
+    if (fromId === toId) return;
+    setState((s) => {
+      const src = s.shifts[fromId]?.[dk]?.[idx];
+      if (!src) return s;
+      const toEmp = { ...(s.shifts[toId] || {}) } as Record<string, ShiftRec[]>;
+      toEmp[dk] = [...(toEmp[dk] || []), { ...src }];
+      return { ...s, shifts: { ...s.shifts, [toId]: toEmp } };
+    });
+  }, []);
+
   const copyAllShiftsBetweenEmployees = useCallback((fromId: string, toId: string) => {
     if (fromId === toId) return;
     setState((s) => {
@@ -585,6 +597,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       updateShift,
       deleteShift,
       copyShiftToDates,
+      copyShiftToEmployee,
       copyAllShiftsBetweenEmployees,
       moveShiftToEmployee,
       clearEmployeeShifts,
@@ -621,6 +634,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       updateShift,
       deleteShift,
       copyShiftToDates,
+      copyShiftToEmployee,
       copyAllShiftsBetweenEmployees,
       moveShiftToEmployee,
       clearEmployeeShifts,

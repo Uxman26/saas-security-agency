@@ -50,6 +50,9 @@ PERM_ROLES_DELETE = "roles.delete"
 PERM_CONTRACTOR_VIEW = "contractor:view"
 PERM_CONTRACTOR_MANAGE = "contractor:manage"
 PERM_CONTRACTOR_ASSIGN = "contractor:assign"
+PERM_STAFF_REQ_READ = "staff_req.read"
+PERM_STAFF_REQ_WRITE = "staff_req.write"
+PERM_STAFF_REQ_REVIEW = "staff_req.review"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -97,6 +100,9 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_CONTRACTOR_VIEW,
         PERM_CONTRACTOR_MANAGE,
         PERM_CONTRACTOR_ASSIGN,
+        PERM_STAFF_REQ_READ,
+        PERM_STAFF_REQ_WRITE,
+        PERM_STAFF_REQ_REVIEW,
     }
 )
 
@@ -119,6 +125,8 @@ _SUPERVISOR = frozenset(
         PERM_REP_READ,
         PERM_SUB_READ,
         PERM_CONTRACTOR_VIEW,
+        PERM_STAFF_REQ_READ,
+        PERM_STAFF_REQ_REVIEW,
     }
 )
 
@@ -139,6 +147,8 @@ _CLIENT_LEGACY = frozenset(
         PERM_ASSIGN_READ,
         PERM_INV_READ,
         PERM_PAY_READ,
+        PERM_STAFF_REQ_READ,
+        PERM_STAFF_REQ_WRITE,
     }
 )
 

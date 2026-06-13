@@ -56,6 +56,7 @@ export function RotaCalendarClient() {
     addShift,
     deleteShift,
     copyShiftToDates,
+    copyShiftToEmployee,
     addEmployeesById,
     reorderEmployees,
     copyAllShiftsBetweenEmployees,
@@ -126,6 +127,7 @@ export function RotaCalendarClient() {
   const [copyCtx, setCopyCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
+  const [copyToEmployeeId, setCopyToEmployeeId] = useState<string | null>(null);
   const [xferOpen, setXferOpen] = useState(false);
   const [xferFrom, setXferFrom] = useState<string | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -225,6 +227,7 @@ export function RotaCalendarClient() {
     closeShiftMenu();
     setCopyCtx({ empId, dk, idx });
     setCopyTargets(new Set(state.days.filter((d) => d !== dk)));
+    setCopyToEmployeeId(null);
     setCopyOpen(true);
   };
 
@@ -236,9 +239,17 @@ export function RotaCalendarClient() {
 
   const doCopy = () => {
     if (!copyCtx) return;
-    copyShiftToDates(copyCtx.empId, copyCtx.dk, copyCtx.idx, [...copyTargets]);
+    const dates = [...copyTargets];
+    if (!dates.length && !copyToEmployeeId) {
+      toast.warning('Select dates and/or an employee to copy to');
+      return;
+    }
+    if (dates.length) copyShiftToDates(copyCtx.empId, copyCtx.dk, copyCtx.idx, dates);
+    if (copyToEmployeeId) copyShiftToEmployee(copyCtx.empId, copyCtx.dk, copyCtx.idx, copyToEmployeeId);
     setCopyOpen(false);
     setCopyCtx(null);
+    setCopyToEmployeeId(null);
+    toast.success('Shift copied');
   };
 
   const startAtt = (empId: string, dk: string, idx: number) => {
@@ -714,12 +725,15 @@ export function RotaCalendarClient() {
         open={copyOpen}
         onOpenChange={(v) => {
           setCopyOpen(v);
-          if (!v) setCopyCtx(null);
+          if (!v) {
+            setCopyCtx(null);
+            setCopyToEmployeeId(null);
+          }
         }}
       >
         <DialogContent showCloseButton className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Copy shifts</DialogTitle>
+            <DialogTitle>Copy shift</DialogTitle>
           </DialogHeader>
           {copyCtx ? (
             <p className="text-xs text-muted-foreground">
@@ -729,6 +743,7 @@ export function RotaCalendarClient() {
                 : ''}
             </p>
           ) : null}
+          <p className="text-xs font-medium">Copy to dates (same employee)</p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => setCopyTargets(weekdayTargets())}>
               Weekdays
@@ -743,7 +758,7 @@ export function RotaCalendarClient() {
               Clear
             </Button>
           </div>
-          <div className="max-h-48 overflow-y-auto space-y-1 border rounded-md p-2">
+          <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-2">
             {state.days.map((dk) => (
               <label key={dk} className="flex items-center gap-2 text-xs">
                 <input
@@ -762,12 +777,42 @@ export function RotaCalendarClient() {
               </label>
             ))}
           </div>
+          <p className="text-xs font-medium pt-1">Copy to employee (same day)</p>
+          <div className="grid gap-1 max-h-36 overflow-y-auto">
+            {copyCtx
+              ? state.employees
+                  .filter((e) => e.id !== copyCtx.empId)
+                  .map((e) => (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => setCopyToEmployeeId((id) => (id === e.id ? null : e.id))}
+                      className={cn(
+                        'flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+                        copyToEmployeeId === e.id ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30' : 'hover:bg-muted'
+                      )}
+                    >
+                      <span className="size-7 rounded-full flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: e.avatarColor }}>
+                        {initials(e.name)}
+                      </span>
+                      <span className="truncate">{e.name}</span>
+                    </button>
+                  ))
+              : null}
+          </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setCopyTargets(new Set())}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setCopyTargets(new Set());
+                setCopyToEmployeeId(null);
+              }}
+            >
               Clear
             </Button>
             <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={doCopy}>
-              Copy shifts
+              Copy shift
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -955,6 +1000,18 @@ export function RotaCalendarClient() {
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => {
+                        setViewShiftsOpen(false);
+                        startCopy(viewShiftsEmpId!, dk, idx);
+                      }}
+                    >
+                      Copy
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
@@ -1150,7 +1207,7 @@ export function RotaCalendarClient() {
             Info / Edit
           </button>
           <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startCopy(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
-            Copy to dates…
+            Copy shift…
           </button>
           <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startMove(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
             Move shift

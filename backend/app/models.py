@@ -38,6 +38,7 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     company_id = Column(Integer, ForeignKey("companies.id"))
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     sidebar_modules_json = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -75,6 +76,7 @@ class Company(Base):
     directory_contractors = relationship("Contractor", back_populates="company", cascade="all, delete-orphan")
     rota_plans = relationship("RotaPlan", back_populates="company", cascade="all, delete-orphan")
     subscription_receipts = relationship("SubscriptionReceipt", back_populates="company", cascade="all, delete-orphan")
+    staff_requests = relationship("StaffRequest", back_populates="company", cascade="all, delete-orphan")
 
 
 class SubscriptionReceipt(Base):
@@ -278,6 +280,7 @@ class Client(Base):
     sites = relationship("Site", back_populates="client", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="client", cascade="all, delete-orphan")
     contract_renewals = relationship("ClientContractRenewal", back_populates="client", cascade="all, delete-orphan")
+    staff_requests = relationship("StaffRequest", back_populates="client", cascade="all, delete-orphan")
 
 class ClientContractRenewal(Base):
     __tablename__ = "client_contract_renewals"
@@ -344,6 +347,36 @@ class RotaPlan(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="rota_plans")
     assignments = relationship("Assignment", back_populates="rota_plan")
+    staff_requests = relationship("StaffRequest", back_populates="rota_plan")
+
+
+class StaffRequest(Base):
+    __tablename__ = "staff_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    requested_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    shift_date = Column(Date, nullable=False)
+    shift_start = Column(String, nullable=False)
+    shift_end = Column(String, nullable=False)
+    break_minutes = Column(Integer, default=30)
+    staff_count = Column(Integer, default=1)
+    client_notes = Column(Text)
+    status = Column(String, default="pending")
+    reviewer_user_id = Column(Integer, ForeignKey("users.id"))
+    reviewer_comment = Column(Text)
+    reviewed_at = Column(DateTime(timezone=True))
+    rota_plan_id = Column(Integer, ForeignKey("rota_plans.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="staff_requests")
+    client = relationship("Client", back_populates="staff_requests")
+    site = relationship("Site")
+    requested_by = relationship("User", foreign_keys=[requested_by_user_id])
+    reviewer = relationship("User", foreign_keys=[reviewer_user_id])
+    rota_plan = relationship("RotaPlan", back_populates="staff_requests")
+
 
 class Assignment(Base):
     __tablename__ = "assignments"

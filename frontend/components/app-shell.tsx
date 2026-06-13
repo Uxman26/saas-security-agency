@@ -19,6 +19,7 @@ import { sidebarPathAllowed } from '@/lib/sidebar-modules';
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
   if (href === '/rota') return pathname.startsWith('/rota');
+  if (href === '/client-portal') return pathname.startsWith('/client-portal');
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -29,6 +30,8 @@ const mobileLinks = [
   { href: '/clients', label: 'Clients', perm: 'clients.read' },
   { href: '/assignments', label: 'Assignments', perm: 'assign.read' },
   { href: '/rota', label: 'Rotas & Shifts', perm: 'assign.read' },
+  { href: '/client-portal', label: 'Client portal', perm: 'staff_req.write' },
+  { href: '/requests', label: 'Staff requests', perm: 'staff_req.review' },
   { href: '/attendance', label: 'Attendance', perm: 'attend.read' },
   { href: '/documents', label: 'Documents', perm: 'doc.read' },
   { href: '/contractors', label: 'Contractors', perm: 'subs.read' },

@@ -48,6 +48,9 @@ from app.rbac import (
     PERM_CONTRACTOR_ASSIGN,
     PERM_CONTRACTOR_MANAGE,
     PERM_CONTRACTOR_VIEW,
+    PERM_STAFF_REQ_READ,
+    PERM_STAFF_REQ_WRITE,
+    PERM_STAFF_REQ_REVIEW,
 )
 
 MODULE_KEYS = (
@@ -61,6 +64,7 @@ MODULE_KEYS = (
     "settings",
     "contractor_registry",
     "contractor_links",
+    "staff_requests",
 )
 
 
@@ -166,6 +170,15 @@ def matrix_to_codes(m: Optional[Dict[str, Any]]) -> FrozenSet[str]:
                 out.add(PERM_CONTRACTOR_VIEW)
             if c or e or d:
                 out.add(PERM_CONTRACTOR_ASSIGN)
+        elif mod == "staff_requests":
+            if v:
+                out.add(PERM_STAFF_REQ_READ)
+            if c:
+                out.add(PERM_STAFF_REQ_WRITE)
+            if e:
+                out.add(PERM_STAFF_REQ_REVIEW)
+            if d:
+                out.add(PERM_STAFF_REQ_REVIEW)
     return frozenset(out)
 
 
@@ -191,6 +204,7 @@ def default_matrix_supervisor() -> Dict[str, Any]:
         "settings": {"view": True, "create": False, "edit": False, "delete": False},
         "contractor_registry": {"view": True, "create": False, "edit": False, "delete": False},
         "contractor_links": {"view": True, "create": False, "edit": False, "delete": False},
+        "staff_requests": {"view": True, "create": False, "edit": True, "delete": False},
     }
 
 
@@ -206,6 +220,7 @@ def default_matrix_guard() -> Dict[str, Any]:
         "settings": {"view": False, "create": False, "edit": False, "delete": False},
         "contractor_registry": {"view": False, "create": False, "edit": False, "delete": False},
         "contractor_links": {"view": False, "create": False, "edit": False, "delete": False},
+        "staff_requests": {"view": False, "create": False, "edit": False, "delete": False},
     }
 
 
@@ -221,10 +236,8 @@ def default_matrix_client_portal() -> Dict[str, Any]:
         "settings": {"view": False, "create": False, "edit": False, "delete": False},
         "contractor_registry": {"view": False, "create": False, "edit": False, "delete": False},
         "contractor_links": {"view": False, "create": False, "edit": False, "delete": False},
+        "staff_requests": {"view": True, "create": True, "edit": False, "delete": False},
     }
-
-
-def parse_matrix_json(raw: Optional[str]) -> Dict[str, Any]:
     if not raw:
         return {}
     try:

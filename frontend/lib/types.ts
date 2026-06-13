@@ -51,6 +51,31 @@ export interface User {
   subscription_status?: string | null;
   subscription_end?: string | null;
   sidebar_modules?: string[] | null;
+  client_id?: number | null;
+}
+
+export interface StaffRequest {
+  id: number;
+  company_id: number;
+  client_id: number;
+  client_name: string;
+  site_id: number;
+  site_name: string;
+  requested_by_user_id: number;
+  requested_by_name: string;
+  shift_date: string;
+  shift_start: string;
+  shift_end: string;
+  break_minutes: number;
+  staff_count: number;
+  client_notes?: string | null;
+  status: 'pending' | 'approved' | 'rejected' | string;
+  reviewer_user_id?: number | null;
+  reviewer_name?: string | null;
+  reviewer_comment?: string | null;
+  reviewed_at?: string | null;
+  rota_plan_id?: number | null;
+  created_at: string;
 }
 
 export interface SubscriptionReceipt {

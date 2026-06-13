@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans
+from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts
 from app.database import engine, Base
 from app.config import settings
@@ -30,6 +30,7 @@ app.include_router(guards.router)
 app.include_router(sites.router)
 app.include_router(assignments.router)
 app.include_router(rota_plans.router)
+app.include_router(staff_requests.router)
 app.include_router(clients.router)
 app.include_router(sub_contractors.router)
 app.include_router(main_contractors.router)

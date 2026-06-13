@@ -28,6 +28,7 @@ class UserResponse(UserBase):
     role: Optional[str] = None
     role_id: Optional[int] = None
     company_id: Optional[int] = None
+    client_id: Optional[int] = None
     is_active: bool
     created_at: datetime
 
@@ -806,3 +807,46 @@ class CompanyUserCreate(BaseModel):
     password: str = Field(min_length=6)
     full_name: str = Field(min_length=2, max_length=100)
     role_id: int
+    client_id: Optional[int] = None
+
+
+class StaffRequestCreate(BaseModel):
+    client_id: Optional[int] = None
+    site_id: int
+    shift_date: date
+    shift_start: str
+    shift_end: str
+    break_minutes: int = 30
+    staff_count: int = Field(default=1, ge=1, le=50)
+    client_notes: Optional[str] = None
+
+
+class StaffRequestReview(BaseModel):
+    comment: Optional[str] = None
+
+
+class StaffRequestResponse(BaseModel):
+    id: int
+    company_id: int
+    client_id: int
+    client_name: str
+    site_id: int
+    site_name: str
+    requested_by_user_id: int
+    requested_by_name: str
+    shift_date: date
+    shift_start: str
+    shift_end: str
+    break_minutes: int
+    staff_count: int
+    client_notes: Optional[str] = None
+    status: str
+    reviewer_user_id: Optional[int] = None
+    reviewer_name: Optional[str] = None
+    reviewer_comment: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    rota_plan_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

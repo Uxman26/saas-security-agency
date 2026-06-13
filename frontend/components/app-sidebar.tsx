@@ -32,6 +32,8 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
   { href: '/clients', label: 'Clients', perm: 'clients.read', icon: Building2 },
   { href: '/assignments', label: 'Assignments', perm: 'assign.read', icon: ClipboardList },
   { href: '/rota', label: 'Rotas & Shifts', perm: 'assign.read', icon: Calendar },
+  { href: '/client-portal', label: 'Client portal', perm: 'staff_req.write', icon: Building2 },
+  { href: '/requests', label: 'Staff requests', perm: 'staff_req.review', icon: ClipboardList },
   { href: '/attendance', label: 'Attendance', perm: 'attend.read', icon: Clock },
   { href: '/documents', label: 'Documents', perm: 'doc.read', icon: FolderOpen },
   { href: '/contractors', label: 'Contractors', perm: PERMS.contractorView, icon: UserCog },
@@ -46,6 +48,7 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
 function active(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
   if (href === '/rota') return pathname.startsWith('/rota');
+  if (href === '/client-portal') return pathname.startsWith('/client-portal');
   return pathname === href;
 }
 

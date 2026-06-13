@@ -22,6 +22,7 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
         role=role.slug,
         role_id=role.id,
         company_id=company_id,
+        client_id=data.client_id,
         is_active=True,
     )
     db.add(user)

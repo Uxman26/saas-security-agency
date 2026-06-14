@@ -46,7 +46,26 @@ export type RotaJsState = {
   inclBreaks: boolean;
 };
 
-export const SHIFT_COLOR_OPTS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'] as const;
+export const SHIFT_COLOR_OPTS = [
+  '#3b82f6',
+  '#8b5cf6',
+  '#6366f1',
+  '#06b6d4',
+  '#0ea5e9',
+  '#14b8a6',
+  '#10b981',
+  '#22c55e',
+  '#84cc16',
+  '#eab308',
+  '#f59e0b',
+  '#f97316',
+  '#ef4444',
+  '#ec4899',
+  '#d946ef',
+  '#a855f7',
+  '#64748b',
+  '#78716f',
+] as const;
 
 export const AVATAR_PALETTE = [
   '#3b82f6',

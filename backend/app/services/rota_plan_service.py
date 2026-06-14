@@ -89,7 +89,26 @@ def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
 
 
 _AVATAR_PALETTE = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#f97316"]
-_SHIFT_COLOR_OPTS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"]
+_SHIFT_COLOR_OPTS = [
+    "#3b82f6",
+    "#8b5cf6",
+    "#6366f1",
+    "#06b6d4",
+    "#0ea5e9",
+    "#14b8a6",
+    "#10b981",
+    "#22c55e",
+    "#84cc16",
+    "#eab308",
+    "#f59e0b",
+    "#f97316",
+    "#ef4444",
+    "#ec4899",
+    "#d946ef",
+    "#a855f7",
+    "#64748b",
+    "#78716f",
+]
 _SHIFT_COLOR = _SHIFT_COLOR_OPTS[0]
 
 

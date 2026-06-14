@@ -372,14 +372,28 @@ export function RotaCalendarClient() {
     }, { label: 'Delete' });
   };
 
+  const [dragEmpId, setDragEmpId] = useState<string | null>(null);
+
   const onDragStart = (e: React.DragEvent, empId: string) => {
-    e.dataTransfer.setData('empId', empId);
+    e.dataTransfer.setData('text/plain', empId);
     e.dataTransfer.effectAllowed = 'copy';
+    setDragEmpId(empId);
+  };
+
+  const onDragEnd = () => {
+    setDragEmpId(null);
+  };
+
+  const onDayDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
   };
 
   const onDropDay = (e: React.DragEvent, dk: string) => {
     e.preventDefault();
-    const empId = e.dataTransfer.getData('empId');
+    e.stopPropagation();
+    const empId = e.dataTransfer.getData('text/plain');
+    setDragEmpId(null);
     if (empId) openAddShift(dk, empId);
   };
 
@@ -669,13 +683,20 @@ export function RotaCalendarClient() {
       {state.rotaView === 'dnd' && (
         <div className="grid lg:grid-cols-[220px_1fr] gap-4">
           <div className="rounded-lg border bg-card p-3 space-y-2 max-h-[480px] overflow-y-auto">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Drag to a day</p>
+            <p className="text-xs font-medium text-muted-foreground mb-2">Drag staff to a day column →</p>
+            {state.employees.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">Add staff first, then drag them onto days.</p>
+            ) : null}
             {state.employees.map((emp) => (
               <div
                 key={emp.id}
                 draggable
                 onDragStart={(e) => onDragStart(e, emp.id)}
-                className="flex items-center gap-2 rounded-md border bg-background p-2 cursor-grab active:cursor-grabbing text-xs"
+                onDragEnd={onDragEnd}
+                className={cn(
+                  'flex items-center gap-2 rounded-md border bg-background p-2 cursor-grab active:cursor-grabbing text-xs select-none',
+                  dragEmpId === emp.id && 'opacity-50 ring-2 ring-pink-500/50'
+                )}
               >
                 <span className="size-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: emp.avatarColor }}>
                   {initials(emp.name)}
@@ -684,21 +705,27 @@ export function RotaCalendarClient() {
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7 gap-2 min-w-[640px]">
+          <div
+            className="grid gap-2 min-w-[640px]"
+            style={{ gridTemplateColumns: `repeat(${Math.min(state.days.length, 7)}, minmax(0, 1fr))` }}
+          >
             {state.days.map((dk) => (
               <div
                 key={dk}
-                className="rounded-lg border-2 border-dashed border-muted min-h-[160px] p-2 flex flex-col gap-1"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => onDropDay(e, dk)}
+                className={cn(
+                  'rounded-lg border-2 border-dashed min-h-[160px] p-2 flex flex-col gap-1 transition-colors',
+                  dragEmpId ? 'border-pink-400/70 bg-pink-50/20 dark:bg-pink-950/15' : 'border-muted'
+                )}
+                onDragOverCapture={onDayDragOver}
+                onDropCapture={(e) => onDropDay(e, dk)}
               >
-                <span className="text-[10px] font-semibold text-center border-b pb-1">{fmtShortDate(dk)}</span>
+                <span className="text-[10px] font-semibold text-center border-b pb-1 pointer-events-none">{fmtShortDate(dk)}</span>
                 {state.employees.flatMap((emp) =>
                   (state.shifts[emp.id]?.[dk] || []).map((sh, idx) => (
                     <button
                       key={`${emp.id}-${idx}`}
                       type="button"
-                      className="text-[10px] rounded bg-muted/60 px-1 py-0.5 truncate"
+                      className="text-[10px] rounded bg-muted/60 px-1 py-0.5 truncate pointer-events-auto"
                       onClick={() => openEditShift(emp.id, dk, idx)}
                     >
                       {initials(emp.name)} {sh.start}

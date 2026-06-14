@@ -120,6 +120,22 @@ class CompanyResponse(CompanyBase):
     class Config:
         from_attributes = True
 
+
+class CompanyProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+class CompanyProfileResponse(BaseModel):
+    id: int
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    logo_url: Optional[str] = None
+
 class GuardBase(BaseModel):
     full_name: Optional[str] = None
     title: Optional[str] = None
@@ -693,6 +709,14 @@ class InvoiceResponse(InvoiceBase):
     updated_at: Optional[datetime] = None
     client_name: Optional[str] = None
     company_name: Optional[str] = None
+    company_email: Optional[str] = None
+    company_phone: Optional[str] = None
+    company_address: Optional[str] = None
+    company_logo_url: Optional[str] = None
+    client_email: Optional[str] = None
+    client_phone: Optional[str] = None
+    client_address: Optional[str] = None
+    client_contact_person: Optional[str] = None
     lines: list[InvoiceLineResponse] = []
 
     class Config:

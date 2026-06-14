@@ -42,6 +42,7 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
   { href: '/payments', label: 'Payments', perm: 'pay.read', icon: CreditCard },
   { href: '/allowances', label: 'Allowances', perm: 'allow.read', icon: Gift },
   { href: '/settings/special-days', label: 'Special days', perm: 'allow.read', icon: Calendar },
+  { href: '/settings/company', label: 'Company', perm: 'sub.read', icon: Building2 },
   { href: '/settings/roles', label: 'Roles', perm: 'roles.read', icon: Shield },
 ];
 

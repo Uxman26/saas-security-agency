@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from datetime import date
 from app.database import get_db
 from app.models import User, Invoice, InvoiceLine
-from app.schemas import (
     InvoiceCreate,
     InvoiceResponse,
     InvoiceLineBase,
@@ -19,11 +18,12 @@ from app.schemas import (
 from app.rbac import require_perm, PERM_INV_READ, PERM_INV_WRITE, PERM_INV_DELETE
 from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
+from app.services.company_profile_service import company_logo_url
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 
-def _serialize_invoice(inv: Invoice, include_lines: bool) -> InvoiceResponse:
+def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = None) -> InvoiceResponse:
     lines_out: list[InvoiceLineResponse] = []
     if include_lines:
         for ln in sorted(inv.lines, key=lambda x: x.id):
@@ -44,6 +44,20 @@ def _serialize_invoice(inv: Invoice, include_lines: bool) -> InvoiceResponse:
                     guard_name=g.full_name if g else None,
                 )
             )
+    co = inv.company
+    cl = inv.client
+    admin = None
+    if db and co:
+        admin = db.query(User).filter(User.id == co.admin_id).first()
+    company_email = None
+    company_phone = None
+    company_address = None
+    company_logo_url_val = None
+    if co:
+        company_email = (co.email or "").strip() or (admin.email if admin else None)
+        company_phone = co.phone
+        company_address = co.address
+        company_logo_url_val = company_logo_url(co)
     return InvoiceResponse(
         id=inv.id,
         company_id=inv.company_id,
@@ -60,8 +74,16 @@ def _serialize_invoice(inv: Invoice, include_lines: bool) -> InvoiceResponse:
         pdf_path=inv.pdf_path,
         created_at=inv.created_at,
         updated_at=inv.updated_at,
-        client_name=inv.client.name if inv.client else None,
-        company_name=inv.company.name if inv.company else None,
+        client_name=cl.name if cl else None,
+        company_name=co.name if co else None,
+        company_email=company_email,
+        company_phone=company_phone,
+        company_address=company_address,
+        company_logo_url=company_logo_url_val,
+        client_email=cl.email if cl else None,
+        client_phone=cl.phone if cl else None,
+        client_address=cl.address if cl else None,
+        client_contact_person=cl.contact_person if cl else None,
         lines=lines_out,
     )
 
@@ -74,7 +96,7 @@ def create_invoice(
 ):
     inv = invoice_service.create_invoice(db, data, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
-    return _serialize_invoice(inv, True)
+    return _serialize_invoice(inv, True, db)
 
 
 @router.post("/generate", response_model=InvoiceResponse)
@@ -87,7 +109,7 @@ def generate_invoice(
 ):
     inv = invoice_service.generate_from_assignments(db, client_id, period_start, period_end, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
-    return _serialize_invoice(inv, True)
+    return _serialize_invoice(inv, True, db)
 
 
 @router.get("", response_model=List[InvoiceResponse])
@@ -98,7 +120,7 @@ def list_invoices(
     current_user: User = Depends(require_perm(PERM_INV_READ)),
 ):
     rows = invoice_service.get_invoices(db, current_user.id, client_id, status)
-    return [_serialize_invoice(inv, False) for inv in rows]
+    return [_serialize_invoice(inv, False, db) for inv in rows]
 
 
 @router.get("/{invoice_id}/audit", response_model=List[InvoiceAuditEntry])
@@ -119,11 +141,12 @@ def invoice_pdf(
 ):
     inv = invoice_service.get_invoice(db, invoice_id, current_user.id)
     lines = sorted(inv.lines, key=lambda x: x.id)
-    body = render_invoice_pdf(db, inv, inv.company, inv.client, list(lines))
+    admin = db.query(User).filter(User.id == inv.company.admin_id).first() if inv.company else None
+    body = render_invoice_pdf(db, inv, inv.company, inv.client, list(lines), admin)
     return Response(
         content=body,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="invoice-{invoice_id}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="invoice-{invoice_id}.pdf"'},
     )
 
 
@@ -136,7 +159,7 @@ def patch_invoice(
 ):
     inv = invoice_service.update_invoice(db, invoice_id, data, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
-    return _serialize_invoice(inv, True)
+    return _serialize_invoice(inv, True, db)
 
 
 @router.put("/{invoice_id}/lines/{line_id}", response_model=InvoiceLineResponse)
@@ -183,7 +206,7 @@ def get_invoice(
     current_user: User = Depends(require_perm(PERM_INV_READ)),
 ):
     inv = invoice_service.get_invoice(db, invoice_id, current_user.id)
-    return _serialize_invoice(inv, True)
+    return _serialize_invoice(inv, True, db)
 
 
 @router.patch("/{invoice_id}/status", response_model=InvoiceResponse)
@@ -195,7 +218,7 @@ def update_status(
 ):
     inv = invoice_service.update_invoice_status(db, invoice_id, status, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
-    return _serialize_invoice(inv, True)
+    return _serialize_invoice(inv, True, db)
 
 
 @router.post("/{invoice_id}/lines", response_model=InvoiceLineResponse, status_code=status.HTTP_201_CREATED)

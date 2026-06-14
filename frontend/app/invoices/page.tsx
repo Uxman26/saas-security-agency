@@ -15,7 +15,7 @@ import { api } from '@/lib/api';
 import type { Invoice, Client } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Trash2, Eye, Pencil } from 'lucide-react';
+import { FileText, Zap, Trash2, Eye, Pencil, Download } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
@@ -92,6 +92,20 @@ export default function InvoicesPage() {
         toast.error(e instanceof Error ? e.message : 'Delete failed');
       }
     }, { label: 'Delete', description: 'This cannot be undone.' });
+  };
+
+  const downloadPdf = async (id: number) => {
+    try {
+      const blob = await api.invoices.pdf(id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Download failed');
+    }
   };
 
   const getSearchText = useCallback(
@@ -337,6 +351,9 @@ export default function InvoicesPage() {
                                 <Link href={`/invoices/${inv.id}/view`}>
                                   <Eye className="size-4" />
                                 </Link>
+                              </Button>
+                              <Button variant="ghost" size="sm" title="Download PDF" onClick={() => void downloadPdf(inv.id)}>
+                                <Download className="size-4" />
                               </Button>
                               {can(user, 'inv.write') && (
                                 <Button variant="ghost" size="sm" asChild title="Edit">

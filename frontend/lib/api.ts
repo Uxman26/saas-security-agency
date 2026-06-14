@@ -396,6 +396,28 @@ export const api = {
       request<import('./types').InvoiceLine>(`/invoices/${invoiceId}/lines`, { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/invoices/${id}`, { method: 'DELETE' }),
   },
+  company: {
+    profile: (): Promise<import('./types').CompanyProfile> => request<import('./types').CompanyProfile>('/company/profile'),
+    updateProfile: (data: Partial<import('./types').CompanyProfile>): Promise<import('./types').CompanyProfile> =>
+      request<import('./types').CompanyProfile>('/company/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+    uploadLogo: async (file: File): Promise<import('./types').CompanyProfile> => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch(`${API_URL}/company/logo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        const d = error.detail;
+        const msg = typeof d === 'string' ? d : 'Upload failed';
+        throw new ApiError(response.status, msg);
+      }
+      return response.json();
+    },
+  },
   allowances: {
     list: (): Promise<Allowance[]> => request<Allowance[]>('/allowances'),
     get: (id: number): Promise<Allowance> => request<Allowance>(`/allowances/${id}`),

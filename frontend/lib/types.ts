@@ -136,6 +136,15 @@ export interface AdminUserDetail {
   receipts: SubscriptionReceipt[];
 }
 
+export interface CompanyProfile {
+  id: number;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  logo_url?: string | null;
+}
+
 export interface Company {
   id: number;
   name: string;
@@ -478,6 +487,14 @@ export interface Invoice {
   updated_at?: string;
   client_name?: string | null;
   company_name?: string | null;
+  company_email?: string | null;
+  company_phone?: string | null;
+  company_address?: string | null;
+  company_logo_url?: string | null;
+  client_email?: string | null;
+  client_phone?: string | null;
+  client_address?: string | null;
+  client_contact_person?: string | null;
   lines?: InvoiceLine[];
 }
 

@@ -1,14 +1,21 @@
-import os
 from io import BytesIO
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard
+from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard, User
+from app.storage_paths import resolve_storage_path
 
 
 def _money(v: float) -> str:
     return f"£{float(v):,.2f}"
+
+
+def _company_contact(company: Company, admin: Optional[User]) -> tuple[str, str, str]:
+    email = (company.email or "").strip() or (admin.email if admin else "") or "—"
+    phone = (company.phone or "").strip() or "—"
+    address = (company.address or "").strip() or "—"
+    return email, phone, address
 
 
 def render_invoice_pdf(
@@ -17,6 +24,7 @@ def render_invoice_pdf(
     company: Company,
     client: Client,
     lines: List[InvoiceLine],
+    admin: Optional[User] = None,
 ) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -42,23 +50,30 @@ def render_invoice_pdf(
     )
     story = []
 
-    logo_path = company.logo_path or ""
-    if logo_path and os.path.isfile(logo_path):
+    logo_resolved = resolve_storage_path(company.logo_path)
+    if logo_resolved:
         try:
-            img = RLImage(logo_path, width=4 * cm, height=2 * cm, kind="proportional")
+            img = RLImage(logo_resolved, width=4 * cm, height=2 * cm, kind="proportional")
             story.append(img)
             story.append(Spacer(1, 8))
         except Exception:
             pass
 
+    email, phone, address = _company_contact(company, admin)
     story.append(Paragraph(company.name or "Company", title_style))
+    contact_lines = [x for x in [email if email != "—" else None, phone if phone != "—" else None, address if address != "—" else None] if x]
+    for line in contact_lines:
+        story.append(Paragraph(line.replace("\n", "<br/>"), styles["Normal"]))
+    story.append(Spacer(1, 10))
     story.append(Paragraph(f"<b>Invoice</b> #{inv.id}", styles["Heading2"]))
     story.append(Spacer(1, 12))
 
     meta_data = [
         ["Bill to", client.name],
+        ["Contact", client.contact_person or "—"],
         ["Address", client.address or "—"],
         ["Email", client.email or "—"],
+        ["Phone", client.phone or "—"],
         ["Period", f"{inv.period_start} – {inv.period_end}"],
         ["Due date", str(inv.due_date) if inv.due_date else "—"],
         ["Status", (inv.status or "draft").title()],

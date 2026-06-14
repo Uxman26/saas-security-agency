@@ -10,7 +10,10 @@ from app.services import auth_service
 from app.rbac import permissions_for_user_db
 from app.services.plan_enforcement import plan_summary
 from app.services.receipt_service import parse_sidebar_modules
+from app.storage_paths import resolve_storage_path
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
@@ -35,19 +38,23 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
         ),
     )
 
+
 @router.post("/login")
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
     return auth_service.authenticate_user(db, credentials.email, credentials.password)
+
 
 @router.post("/forgot-password")
 def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
     auth_service.request_password_reset(db, body.email)
     return {"message": "If an account exists for that email, a reset link has been sent."}
 
+
 @router.post("/reset-password")
 def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     auth_service.reset_password_with_token(db, body.token, body.new_password)
     return {"message": "Password updated. You can sign in now."}
+
 
 @router.get("/me", response_model=UserMeResponse)
 def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -61,7 +68,7 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         if co:
             plan = plan_summary(db, co)
             company_name = co.name
-            if co.logo_path and os.path.isfile(co.logo_path):
+            if resolve_storage_path(co.logo_path):
                 logo_url = "/auth/company-logo"
     sub_status = None
     sub_end = None
@@ -89,6 +96,7 @@ def company_logo(db: Session = Depends(get_db), current_user: User = Depends(get
     if not current_user.company_id:
         raise HTTPException(status_code=404, detail="No company")
     co = db.query(Company).filter(Company.id == current_user.company_id).first()
-    if not co or not co.logo_path or not os.path.isfile(co.logo_path):
+    path = resolve_storage_path(co.logo_path) if co else None
+    if not path:
         raise HTTPException(status_code=404, detail="Logo not found")
-    return FileResponse(co.logo_path)
+    return FileResponse(path)

@@ -24,7 +24,10 @@ def test_remap_payload_shifts_and_attendance():
     out = _remap_payload(payload, date(2026, 6, 9), 3, date(2026, 7, 1), 3)
     assert out["days"] == ["2026-07-01", "2026-07-02", "2026-07-03"]
     assert out["shifts"]["1"]["2026-07-01"][0]["notes"] == "temp"
+    assert out["shifts"]["1"]["2026-07-01"][0]["color"] == "#3b82f6"
     assert out["shifts"]["1"]["2026-07-03"][0]["notes"] == "one-off"
+    assert out["shifts"]["1"]["2026-07-03"][0]["color"] == "#10b981"
+    assert out["employees"][0]["avatarColor"] == "#3b82f6"
     assert "1:2026-07-01:0" in out["attendance"]
     assert out["attendance"]["1:2026-07-01:0"]["dk"] == "2026-07-01"
 
@@ -42,3 +45,21 @@ def test_remap_payload_truncates_extra_days():
     out = _remap_payload(payload, date(2026, 6, 9), 4, date(2026, 8, 1), 2)
     assert out["days"] == ["2026-08-01", "2026-08-02"]
     assert "2" not in out["shifts"]
+
+
+def test_remap_payload_fills_missing_shift_color():
+    payload = {
+        "days": ["2026-06-09"],
+        "shifts": {"1": {"2026-06-09": [{"start": "09:00", "end": "17:00", "site": "X", "notes": "n", "breakH": 0, "breakM": 0, "label": ""}]}},
+        "employees": [{"id": "1", "name": "Alex", "role": "Staff"}],
+        "attendance": {},
+        "budget": 50,
+        "inclBreaks": True,
+        "rotaView": "dnd",
+    }
+    out = _remap_payload(payload, date(2026, 6, 9), 1, date(2026, 8, 1), 1)
+    assert out["shifts"]["1"]["2026-08-01"][0]["color"] == "#3b82f6"
+    assert out["shifts"]["1"]["2026-08-01"][0]["notes"] == "n"
+    assert out["employees"][0]["avatarColor"] == "#3b82f6"
+    assert out["inclBreaks"] is True
+    assert out["rotaView"] == "dnd"

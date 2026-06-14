@@ -1,5 +1,6 @@
 import { buildDayRange } from './rota-shifts-utils';
-import type { RotaJsState } from './rota-shifts-types';
+import type { RotaJsState, ShiftRec } from './rota-shifts-types';
+import { SHIFT_COLOR_OPTS, AVATAR_PALETTE } from './rota-shifts-types';
 
 export type PlannerPayload = {
   rotaView: RotaJsState['rotaView'];
@@ -10,6 +11,32 @@ export type PlannerPayload = {
   budget: number;
   inclBreaks: boolean;
 };
+
+function normalizeShift(sh: Partial<ShiftRec>, idx: number): ShiftRec {
+  return {
+    start: sh.start ?? '09:00',
+    end: sh.end ?? '17:00',
+    site: sh.site ?? '',
+    notes: sh.notes ?? '',
+    breakH: sh.breakH ?? 0,
+    breakM: sh.breakM ?? 0,
+    color: sh.color?.trim() || SHIFT_COLOR_OPTS[idx % SHIFT_COLOR_OPTS.length],
+    label: sh.label ?? '',
+  };
+}
+
+function normalizeShifts(shifts: PlannerPayload['shifts']): PlannerPayload['shifts'] {
+  const out: PlannerPayload['shifts'] = {};
+  let idx = 0;
+  for (const [empId, byD] of Object.entries(shifts || {})) {
+    const mapped: Record<string, ShiftRec[]> = {};
+    for (const [dk, blocks] of Object.entries(byD || {})) {
+      mapped[dk] = (blocks || []).map((b) => normalizeShift(b, idx++));
+    }
+    if (Object.keys(mapped).length) out[empId] = mapped;
+  }
+  return out;
+}
 
 export function serializePlannerState(state: RotaJsState): string {
   const payload: PlannerPayload = {
@@ -39,7 +66,7 @@ export function remapPlannerPayload(
 
   const shifts: PlannerPayload['shifts'] = {};
   for (const [empId, byD] of Object.entries(payload.shifts || {})) {
-    const mapped: Record<string, PlannerPayload['shifts'][string][string]> = {};
+    const mapped: Record<string, ShiftRec[]> = {};
     for (const [oldDk, blocks] of Object.entries(byD || {})) {
       const newDk = dayMap[oldDk];
       if (newDk && blocks?.length) mapped[newDk] = blocks.map((b) => ({ ...b }));
@@ -55,23 +82,40 @@ export function remapPlannerPayload(
     attendance[`${empId}:${newDk}:${si}`] = { ...rec, dk: newDk, empId };
   }
 
-  return { ...payload, days: newDays, shifts, attendance };
+  return normalizePayload({ ...payload, days: newDays, shifts, attendance });
+}
+
+function normalizePayload(p: PlannerPayload): PlannerPayload {
+  return {
+    rotaView: p.rotaView ?? 'table',
+    days: p.days ?? [],
+    employees: (p.employees ?? []).map((e, i) => ({
+      id: e.id,
+      name: e.name ?? '',
+      role: e.role ?? 'Staff',
+      avatarColor: e.avatarColor?.trim() || AVATAR_PALETTE[i % AVATAR_PALETTE.length],
+    })),
+    shifts: normalizeShifts(p.shifts),
+    attendance: p.attendance ?? {},
+    budget: p.budget ?? 0,
+    inclBreaks: p.inclBreaks ?? false,
+  };
 }
 
 export function applyPlannerPayload(state: RotaJsState, raw: string | null | undefined, rotaName: string): RotaJsState {
   if (!raw) return { ...state, rotaName };
   try {
-    const p = JSON.parse(raw) as PlannerPayload;
+    const p = normalizePayload(JSON.parse(raw) as PlannerPayload);
     return {
       ...state,
       rotaName,
-      rotaView: p.rotaView ?? state.rotaView,
-      days: p.days ?? [],
-      employees: p.employees ?? [],
-      shifts: p.shifts ?? {},
-      attendance: p.attendance ?? {},
-      budget: p.budget ?? 0,
-      inclBreaks: p.inclBreaks ?? false,
+      rotaView: p.rotaView,
+      days: p.days,
+      employees: p.employees,
+      shifts: p.shifts,
+      attendance: p.attendance,
+      budget: p.budget,
+      inclBreaks: p.inclBreaks,
       selectedColor: state.selectedColor,
     };
   } catch {

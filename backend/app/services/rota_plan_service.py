@@ -89,7 +89,166 @@ def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
 
 
 _AVATAR_PALETTE = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#f97316"]
-_SHIFT_COLOR = "#3b82f6"
+_SHIFT_COLOR_OPTS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"]
+_SHIFT_COLOR = _SHIFT_COLOR_OPTS[0]
+
+
+def _parse_planner(raw: Optional[str]) -> Optional[dict]:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def _shift_count(shifts: Optional[dict]) -> int:
+    n = 0
+    for by_d in (shifts or {}).values():
+        for blocks in (by_d or {}).values():
+            n += len(blocks or [])
+    return n
+
+
+def _normalize_shift(block: dict, idx: int = 0) -> dict:
+    b = dict(block or {})
+    color = (b.get("color") or "").strip()
+    if not color:
+        color = _SHIFT_COLOR_OPTS[idx % len(_SHIFT_COLOR_OPTS)]
+    return {
+        "start": b.get("start") or "09:00",
+        "end": b.get("end") or "17:00",
+        "site": b.get("site") or "",
+        "notes": b.get("notes") or "",
+        "breakH": int(b.get("breakH") or 0),
+        "breakM": int(b.get("breakM") or 0),
+        "color": color,
+        "label": b.get("label") or "",
+    }
+
+
+def _normalize_employee(emp: dict, idx: int) -> dict:
+    e = dict(emp or {})
+    eid = str(e.get("id") or "")
+    color = (e.get("avatarColor") or "").strip()
+    if not color:
+        color = _AVATAR_PALETTE[idx % len(_AVATAR_PALETTE)]
+    return {
+        "id": eid,
+        "name": e.get("name") or "",
+        "role": e.get("role") or "Staff",
+        "avatarColor": color,
+    }
+
+
+def _normalize_shifts_tree(shifts: Optional[dict]) -> dict[str, dict[str, list]]:
+    out: dict[str, dict[str, list]] = {}
+    for emp_id, by_d in (shifts or {}).items():
+        emp_map: dict[str, list] = {}
+        for dk, blocks in (by_d or {}).items():
+            emp_map[str(dk)] = [_normalize_shift(b, i) for i, b in enumerate(blocks or []) if isinstance(b, dict)]
+        if emp_map:
+            out[str(emp_id)] = emp_map
+    return out
+
+
+def _planner_shift_lookup(planner: Optional[dict]) -> dict[tuple[str, str, str, str], dict]:
+    lookup: dict[tuple[str, str, str, str], dict] = {}
+    for emp_id, by_d in (planner.get("shifts") or {}).items() if planner else {}:
+        for dk, blocks in (by_d or {}).items():
+            for b in blocks or []:
+                if not isinstance(b, dict):
+                    continue
+                key = (str(emp_id), str(dk), str(b.get("start") or ""), str(b.get("end") or ""))
+                lookup[key] = b
+    return lookup
+
+
+def _normalize_payload(data: dict, plan: RotaPlan) -> dict:
+    employees_raw = data.get("employees") or []
+    employees = [_normalize_employee(e, i) for i, e in enumerate(employees_raw) if isinstance(e, dict)]
+    emp_by_id = {e["id"]: e for e in employees}
+    for i, e in enumerate(employees):
+        if not e["id"]:
+            continue
+        emp_by_id[e["id"]] = e
+
+    attendance = {}
+    for key, rec in (data.get("attendance") or {}).items():
+        if isinstance(rec, dict):
+            attendance[str(key)] = dict(rec)
+
+    return {
+        "rotaView": data.get("rotaView") or plan.view_mode or "table",
+        "days": list(data.get("days") or _day_keys(plan.start_date, plan.day_count)),
+        "employees": employees,
+        "shifts": _normalize_shifts_tree(data.get("shifts")),
+        "attendance": attendance,
+        "budget": float(data.get("budget") if data.get("budget") is not None else plan.budget or 0),
+        "inclBreaks": bool(data.get("inclBreaks", False)),
+    }
+
+
+def _merge_planner_with_assignments(planner: dict, built: dict, plan: RotaPlan) -> dict:
+    lookup = _planner_shift_lookup(planner)
+    p_shifts = _normalize_shifts_tree(planner.get("shifts"))
+    merged_shifts = dict(p_shifts)
+
+    for emp_id, by_d in (built.get("shifts") or {}).items():
+        for dk, blocks in (by_d or {}).items():
+            for i, b in enumerate(blocks or []):
+                if not isinstance(b, dict):
+                    continue
+                key = (str(emp_id), str(dk), str(b.get("start") or ""), str(b.get("end") or ""))
+                if key in lookup:
+                    merged_shifts.setdefault(str(emp_id), {}).setdefault(str(dk), []).append(
+                        _normalize_shift(lookup[key], i)
+                    )
+                elif str(emp_id) not in merged_shifts or str(dk) not in merged_shifts.get(str(emp_id), {}):
+                    merged_shifts.setdefault(str(emp_id), {}).setdefault(str(dk), []).append(_normalize_shift(b, i))
+
+    p_emps = {
+        str(e["id"]): _normalize_employee(e, i)
+        for i, e in enumerate(planner.get("employees") or [])
+        if isinstance(e, dict) and e.get("id")
+    }
+    b_emps = {
+        str(e["id"]): _normalize_employee(e, i)
+        for i, e in enumerate(built.get("employees") or [])
+        if isinstance(e, dict) and e.get("id")
+    }
+    employees = []
+    seen: set[str] = set()
+    for src in (planner.get("employees") or []) + (built.get("employees") or []):
+        if not isinstance(src, dict) or not src.get("id"):
+            continue
+        eid = str(src["id"])
+        if eid in seen:
+            continue
+        seen.add(eid)
+        pe = p_emps.get(eid, {})
+        be = b_emps.get(eid, {})
+        employees.append(
+            {
+                "id": eid,
+                "name": pe.get("name") or be.get("name") or "",
+                "role": pe.get("role") or be.get("role") or "Staff",
+                "avatarColor": pe.get("avatarColor") or be.get("avatarColor") or _AVATAR_PALETTE[len(employees) % len(_AVATAR_PALETTE)],
+            }
+        )
+
+    return {
+        "rotaView": planner.get("rotaView") or built.get("rotaView") or plan.view_mode or "table",
+        "days": list(planner.get("days") or built.get("days") or _day_keys(plan.start_date, plan.day_count)),
+        "employees": employees,
+        "shifts": merged_shifts if merged_shifts else _normalize_shifts_tree(built.get("shifts")),
+        "attendance": dict(planner.get("attendance") or {}),
+        "budget": float(
+            planner.get("budget") if planner.get("budget") is not None else built.get("budget") if built.get("budget") is not None else plan.budget or 0
+        ),
+        "inclBreaks": bool(planner.get("inclBreaks", built.get("inclBreaks", False))),
+    }
 
 
 def _day_keys(start: date, day_count: int) -> list[str]:
@@ -97,7 +256,8 @@ def _day_keys(start: date, day_count: int) -> list[str]:
     return [(start + timedelta(days=i)).isoformat() for i in range(n)]
 
 
-def _payload_from_assignments(db: Session, plan: RotaPlan) -> dict:
+def _payload_from_assignments(db: Session, plan: RotaPlan, planner: Optional[dict] = None) -> dict:
+    lookup = _planner_shift_lookup(planner)
     rows = (
         db.query(Assignment)
         .options(joinedload(Assignment.guard), joinedload(Assignment.site))
@@ -108,63 +268,74 @@ def _payload_from_assignments(db: Session, plan: RotaPlan) -> dict:
     days = _day_keys(plan.start_date, plan.day_count)
     employees: dict[str, dict] = {}
     shifts: dict[str, dict[str, list]] = {}
+    shift_idx = 0
     for a in rows:
         if not a.guard:
             continue
         eid = str(a.guard_id)
         if eid not in employees:
             idx = len(employees)
-            employees[eid] = {
-                "id": eid,
-                "name": a.guard.full_name,
-                "role": a.guard.job_title or "Staff",
-                "avatarColor": _AVATAR_PALETTE[idx % len(_AVATAR_PALETTE)],
-            }
+            pe = None
+            if planner:
+                for e in planner.get("employees") or []:
+                    if isinstance(e, dict) and str(e.get("id")) == eid:
+                        pe = e
+                        break
+            employees[eid] = _normalize_employee(
+                {
+                    "id": eid,
+                    "name": a.guard.full_name,
+                    "role": a.guard.job_title or "Staff",
+                    "avatarColor": (pe or {}).get("avatarColor"),
+                },
+                idx,
+            )
         dk = a.date.isoformat()
         if dk not in days:
             continue
         bm = int(a.break_minutes or 0)
-        sh = {
+        base = {
             "start": a.shift_start or "09:00",
             "end": a.shift_end or "17:00",
             "site": (a.site.name if a.site else "") or "",
             "notes": "",
             "breakH": bm // 60,
             "breakM": bm % 60,
-            "color": _SHIFT_COLOR,
+            "color": "",
             "label": "",
         }
-        shifts.setdefault(eid, {}).setdefault(dk, []).append(sh)
+        matched = lookup.get((eid, dk, base["start"], base["end"]))
+        if matched:
+            base = {**base, **matched}
+        shifts.setdefault(eid, {}).setdefault(dk, []).append(_normalize_shift(base, shift_idx))
+        shift_idx += 1
     return {
-        "rotaView": plan.view_mode or "table",
-        "days": days,
+        "rotaView": (planner or {}).get("rotaView") or plan.view_mode or "table",
+        "days": list((planner or {}).get("days") or days),
         "employees": list(employees.values()),
         "shifts": shifts,
-        "attendance": {},
-        "budget": float(plan.budget or 0),
-        "inclBreaks": False,
+        "attendance": dict((planner or {}).get("attendance") or {}),
+        "budget": float((planner or {}).get("budget") if (planner or {}).get("budget") is not None else plan.budget or 0),
+        "inclBreaks": bool((planner or {}).get("inclBreaks", False)),
     }
 
 
 def _extract_payload(db: Session, plan: RotaPlan) -> dict:
-    if plan.planner_data:
-        try:
-            data = json.loads(plan.planner_data)
-            if isinstance(data, dict) and (data.get("shifts") or data.get("employees") or data.get("days")):
-                return data
-        except json.JSONDecodeError:
-            pass
-    built = _payload_from_assignments(db, plan)
-    if built.get("shifts") or built.get("employees"):
-        return built
-    if plan.planner_data:
-        try:
-            data = json.loads(plan.planner_data)
-            if isinstance(data, dict):
-                return data
-        except json.JSONDecodeError:
-            pass
-    return built
+    planner = _parse_planner(plan.planner_data)
+    built = _payload_from_assignments(db, plan, planner)
+
+    if planner and _shift_count(planner.get("shifts")) > 0:
+        return _normalize_payload(planner, plan)
+
+    if _shift_count(built.get("shifts")) > 0:
+        if planner:
+            return _merge_planner_with_assignments(planner, built, plan)
+        return _normalize_payload(built, plan)
+
+    if planner:
+        return _normalize_payload(planner, plan)
+
+    return _normalize_payload(built, plan)
 
 
 def _remap_payload(
@@ -184,7 +355,7 @@ def _remap_payload(
         for old_dk, blocks in (by_d or {}).items():
             new_dk = day_map.get(old_dk)
             if new_dk and blocks:
-                emp_map[new_dk] = [dict(b) for b in blocks]
+                emp_map[new_dk] = [_normalize_shift(b, i) for i, b in enumerate(blocks) if isinstance(b, dict)]
         if emp_map:
             new_shifts[str(emp_id)] = emp_map
 
@@ -210,6 +381,7 @@ def _remap_payload(
     out["days"] = new_days
     out["shifts"] = new_shifts
     out["attendance"] = new_attendance
+    out["employees"] = [_normalize_employee(e, i) for i, e in enumerate(out.get("employees") or []) if isinstance(e, dict)]
     return out
 
 
@@ -222,6 +394,10 @@ def copy_rota_plan(db: Session, user_id: int, source_id: int, data: RotaPlanCopy
     day_count = max(1, min(90, data.day_count if data.day_count is not None else source.day_count))
     payload = _extract_payload(db, source)
     remapped = _remap_payload(payload, source.start_date, source.day_count, data.start_date, day_count)
+    if data.view_mode:
+        remapped["rotaView"] = data.view_mode
+    if data.budget is not None:
+        remapped["budget"] = float(data.budget)
 
     return create_rota_plan(
         db,

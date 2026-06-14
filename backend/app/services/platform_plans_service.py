@@ -51,7 +51,7 @@ def get_limits(tier: str) -> dict[str, Any]:
 
 def list_tiers() -> list[dict[str, Any]]:
     out = []
-    for tier in sorted(VALID_TIERS):
+    for tier in VALID_TIERS:
         lim = get_limits(tier)
         out.append(
             {
@@ -62,6 +62,7 @@ def list_tiers() -> list[dict[str, Any]]:
                 "features": lim.get("features") or {},
             }
         )
+    out.sort(key=lambda x: x["price_gbp"])
     return out
 
 

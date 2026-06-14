@@ -445,6 +445,9 @@ export const api = {
     public: (refId: string): Promise<ReceiptPublic> =>
       request<ReceiptPublic>(`/receipts/public/${encodeURIComponent(refId)}`),
   },
+  packages: {
+    list: (): Promise<PlanTier[]> => request<PlanTier[]>('/subscriptions/packages'),
+  },
   admin: {
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),
     patchCompany: (

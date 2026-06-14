@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -447,6 +447,39 @@ export const api = {
   },
   admin: {
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),
+    patchCompany: (
+      id: number,
+      data: { name?: string; subscription_tier?: string; subscription_status?: string; subscription_end?: string }
+    ): Promise<import('./types').Company> =>
+      request<import('./types').Company>(`/admin/companies/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    users: (): Promise<AdminUserListItem[]> => request<AdminUserListItem[]>('/admin/users'),
+    patchUserActive: (id: number, is_active: boolean): Promise<AdminUserListItem> =>
+      request<AdminUserListItem>(`/admin/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active }) }),
+    invoices: (params?: { company_id?: number; status?: string }): Promise<Invoice[]> => {
+      const q = new URLSearchParams();
+      if (params?.company_id) q.append('company_id', params.company_id.toString());
+      if (params?.status) q.append('status', params.status);
+      const qs = q.toString();
+      return request<Invoice[]>(`/admin/invoices${qs ? `?${qs}` : ''}`);
+    },
+    invoice: (id: number): Promise<Invoice> => request<Invoice>(`/admin/invoices/${id}`),
+    patchInvoice: (
+      id: number,
+      data: { due_date?: string | null; notes?: string | null; tax_rate?: number; status?: string }
+    ): Promise<Invoice> => request<Invoice>(`/admin/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    patchInvoiceStatus: (id: number, status: string): Promise<Invoice> =>
+      request<Invoice>(`/admin/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
+    invoicePdf: (id: number): Promise<Blob> => requestBlob(`/admin/invoices/${id}/pdf`),
+    payments: (company_id?: number): Promise<AdminPayment[]> => {
+      const q = company_id ? `?company_id=${company_id}` : '';
+      return request<AdminPayment[]>(`/admin/payments${q}`);
+    },
+    packages: (): Promise<PlanTier[]> => request<PlanTier[]>('/admin/packages'),
+    patchPackage: (
+      tier: string,
+      data: { price_gbp?: number; max_guards?: number; max_sites?: number; features?: Record<string, boolean> }
+    ): Promise<PlanTier> =>
+      request<PlanTier>(`/admin/packages/${tier}`, { method: 'PATCH', body: JSON.stringify(data) }),
     receipts: (): Promise<SubscriptionReceipt[]> => request<SubscriptionReceipt[]>('/admin/receipts'),
     markReceiptPaid: (id: number): Promise<SubscriptionReceipt> =>
       request<SubscriptionReceipt>(`/admin/receipts/${id}/mark-paid`, { method: 'POST' }),

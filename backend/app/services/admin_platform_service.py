@@ -1,12 +1,14 @@
 import json
 from datetime import datetime, timezone
+from typing import Any, Optional
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth import get_password_hash
-from app.models import Company, SubscriptionReceipt, User
+from app.auth import get_password_hash, SUPER_ADMIN_ROLE
+from app.models import Company, Invoice, InvoiceLine, Payment, SubscriptionReceipt, User
 from app.services.receipt_service import SIDEBAR_DEFAULT_PATHS, dump_sidebar_modules, parse_sidebar_modules
+from app.schemas import InvoiceUpdate
 
 ADMIN_ROLES = frozenset({"admin", "company_admin"})
 
@@ -28,6 +30,124 @@ def list_tenant_admins(db: Session) -> list[User]:
     admin_ids = {c.admin_id for c in db.query(Company).all()}
     rows = db.query(User).filter(User.company_id.isnot(None)).order_by(User.id.desc()).all()
     return [u for u in rows if u.id in admin_ids or (u.role or "").lower() in ADMIN_ROLES]
+
+
+def list_all_users(db: Session) -> list[dict[str, Any]]:
+    companies = {c.id: c for c in db.query(Company).all()}
+    rows = db.query(User).order_by(User.id.desc()).all()
+    out = []
+    for u in rows:
+        co = companies.get(u.company_id) if u.company_id else None
+        out.append(
+            {
+                "id": u.id,
+                "email": u.email,
+                "full_name": u.full_name,
+                "role": u.role,
+                "is_active": u.is_active,
+                "created_at": u.created_at,
+                "company_id": u.company_id,
+                "company_name": co.name if co else None,
+                "subscription_tier": co.subscription_tier if co else None,
+                "subscription_status": co.subscription_status if co else None,
+            }
+        )
+    return out
+
+
+def set_user_active(db: Session, user_id: int, is_active: bool) -> User:
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    if getattr(u, "role", None) == SUPER_ADMIN_ROLE and not is_active:
+        raise HTTPException(status_code=400, detail="Cannot deactivate super admin")
+    u.is_active = is_active
+    db.commit()
+    db.refresh(u)
+    return u
+
+
+def update_company(db: Session, company_id: int, payload: dict[str, Any]) -> Company:
+    co = db.query(Company).filter(Company.id == company_id).first()
+    if not co:
+        raise HTTPException(status_code=404, detail="Company not found")
+    for k, v in payload.items():
+        if hasattr(co, k) and v is not None:
+            setattr(co, k, v)
+    db.commit()
+    db.refresh(co)
+    return co
+
+
+def list_all_invoices(db: Session, company_id: Optional[int] = None, status: Optional[str] = None) -> list[Invoice]:
+    q = (
+        db.query(Invoice)
+        .options(joinedload(Invoice.client), joinedload(Invoice.company))
+        .order_by(Invoice.created_at.desc())
+    )
+    if company_id:
+        q = q.filter(Invoice.company_id == company_id)
+    if status:
+        q = q.filter(Invoice.status == status)
+    return q.all()
+
+
+def get_invoice_admin(db: Session, invoice_id: int) -> Invoice:
+    inv = (
+        db.query(Invoice)
+        .options(
+            joinedload(Invoice.lines).joinedload(InvoiceLine.site),
+            joinedload(Invoice.lines).joinedload(InvoiceLine.guard),
+            joinedload(Invoice.client),
+            joinedload(Invoice.company),
+        )
+        .filter(Invoice.id == invoice_id)
+        .first()
+    )
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return inv
+
+
+def update_invoice_admin(db: Session, invoice_id: int, data: InvoiceUpdate) -> Invoice:
+    from app.services import invoice_service
+
+    inv = get_invoice_admin(db, invoice_id)
+    admin = db.query(User).filter(User.id == inv.company.admin_id).first() if inv.company else None
+    user_id = admin.id if admin else inv.company.admin_id
+    return invoice_service.update_invoice(db, invoice_id, data, user_id)
+
+
+def set_invoice_status_admin(db: Session, invoice_id: int, status: str) -> Invoice:
+    from app.services import invoice_service
+
+    inv = get_invoice_admin(db, invoice_id)
+    admin = db.query(User).filter(User.id == inv.company.admin_id).first() if inv.company else None
+    user_id = admin.id if admin else inv.company.admin_id
+    return invoice_service.update_invoice_status(db, invoice_id, status, user_id)
+
+
+def list_all_payments(db: Session, company_id: Optional[int] = None) -> list[dict[str, Any]]:
+    q = db.query(Payment).options(joinedload(Payment.invoice), joinedload(Payment.company)).order_by(Payment.paid_at.desc())
+    if company_id:
+        q = q.filter(Payment.company_id == company_id)
+    rows = q.all()
+    out = []
+    for p in rows:
+        out.append(
+            {
+                "id": p.id,
+                "company_id": p.company_id,
+                "invoice_id": p.invoice_id,
+                "amount": p.amount,
+                "method": p.method,
+                "paid_at": p.paid_at,
+                "created_at": p.created_at,
+                "company_name": p.company.name if p.company else None,
+                "invoice_total": p.invoice.total if p.invoice else None,
+            }
+        )
+    return out
 
 
 def get_admin_detail(db: Session, user_id: int) -> tuple[User, Company | None, list[SubscriptionReceipt]]:

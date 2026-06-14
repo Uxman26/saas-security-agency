@@ -136,6 +136,32 @@ export interface AdminUserDetail {
   receipts: SubscriptionReceipt[];
 }
 
+export interface AdminUserListItem {
+  id: number;
+  email: string;
+  full_name: string;
+  role?: string | null;
+  is_active: boolean;
+  created_at: string;
+  company_id?: number | null;
+  company_name?: string | null;
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+}
+
+export interface PlanTier {
+  tier: string;
+  price_gbp: number;
+  max_guards?: number | null;
+  max_sites?: number | null;
+  features: Record<string, boolean>;
+}
+
+export interface AdminPayment extends Payment {
+  company_name?: string | null;
+  invoice_total?: number | null;
+}
+
 export interface CompanyProfile {
   id: number;
   name: string;

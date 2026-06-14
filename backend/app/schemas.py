@@ -88,6 +88,45 @@ class AdminSidebarPatch(BaseModel):
     sidebar_modules: List[str]
 
 
+class AdminUserActivePatch(BaseModel):
+    is_active: bool
+
+
+class AdminUserListItem(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str
+    role: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+
+
+class AdminCompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    subscription_end: Optional[datetime] = None
+
+
+class PlanTierOut(BaseModel):
+    tier: str
+    price_gbp: float
+    max_guards: Optional[int] = None
+    max_sites: Optional[int] = None
+    features: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlanTierUpdate(BaseModel):
+    price_gbp: Optional[float] = None
+    max_guards: Optional[int] = None
+    max_sites: Optional[int] = None
+    features: Optional[dict[str, Any]] = None
+
+
 class AdminUserDetail(BaseModel):
     id: int
     email: EmailStr
@@ -744,6 +783,17 @@ class PaymentResponse(PaymentBase):
     id: int
     company_id: int
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminPaymentResponse(PaymentBase):
+    id: int
+    company_id: int
+    created_at: datetime
+    company_name: Optional[str] = None
+    invoice_total: Optional[float] = None
 
     class Config:
         from_attributes = True

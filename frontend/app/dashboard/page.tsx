@@ -56,8 +56,13 @@ const companyTiles = [
 ];
 
 const adminTiles = [
-  { href: '/admin/companies', title: 'Companies', desc: 'View all tenant companies', icon: Building2, color: 'text-primary' },
-  { href: '/admin/receipts', title: 'Receipts', desc: 'Subscription payments & mark paid', icon: CreditCard, color: 'text-emerald-600' },
+  { href: '/admin/companies', title: 'Companies', desc: 'View and edit tenant companies', icon: Building2, color: 'text-primary' },
+  { href: '/admin/users', title: 'Users', desc: 'All platform users — activate or deactivate', icon: Users, color: 'text-blue-600' },
+  { href: '/admin/admins', title: 'Admins', desc: 'Tenant admin accounts & sidebar access', icon: UserCog, color: 'text-indigo-600' },
+  { href: '/admin/invoices', title: 'Invoices', desc: 'All tenant invoices across the platform', icon: FileText, color: 'text-rose-600' },
+  { href: '/admin/payments', title: 'Payments', desc: 'All payment records', icon: CreditCard, color: 'text-violet-600' },
+  { href: '/admin/receipts', title: 'Receipts', desc: 'Subscription payments & mark paid', icon: Wallet, color: 'text-emerald-600' },
+  { href: '/admin/packages', title: 'Packages', desc: 'Subscription plan pricing & limits', icon: Shield, color: 'text-amber-600' },
 ];
 
 function Kpi({
@@ -147,7 +152,7 @@ export default function DashboardPage() {
                   </h1>
                   <p className="text-sm text-slate-300 mt-1">
                     {isSuperAdmin
-                      ? 'Manage platform and tenant companies'
+                      ? 'Full platform control — companies, users, invoices, payments, and packages'
                       : `Welcome back${user?.full_name ? `, ${user.full_name}` : ''} — live metrics for staffing, compliance, and finance.`}
                   </p>
                 </div>

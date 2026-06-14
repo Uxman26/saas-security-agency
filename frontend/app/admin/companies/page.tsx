@@ -6,12 +6,21 @@ import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import type { Company } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+
+import { toast } from '@/lib/toast';
+
+const TIERS = ['basic', 'standard', 'premium', 'enterprise'];
+const STATUSES = ['active', 'pending', 'expired', 'cancelled'];
 
 export default function AdminCompaniesPage() {
   const { user } = useAuth();
@@ -19,6 +28,12 @@ export default function AdminCompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Company | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editTier, setEditTier] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+  const [editEnd, setEditEnd] = useState('');
+  const [saving, setSaving] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -79,6 +94,34 @@ export default function AdminCompaniesPage() {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
 
+  const openEdit = (c: Company) => {
+    setSelected(c);
+    setEditName(c.name);
+    setEditTier(c.subscription_tier ?? 'basic');
+    setEditStatus(c.subscription_status ?? 'active');
+    setEditEnd(c.subscription_end?.slice(0, 10) ?? '');
+  };
+
+  const saveCompany = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      const updated = await api.admin.patchCompany(selected.id, {
+        name: editName,
+        subscription_tier: editTier,
+        subscription_status: editStatus,
+        subscription_end: editEnd ? `${editEnd}T23:59:59Z` : undefined,
+      });
+      setCompanies((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setSelected(updated);
+      toast.success('Company updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -118,6 +161,7 @@ export default function AdminCompaniesPage() {
                       <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableHead label="Ends" colKey="end" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                       <SortableHead label="Created" colKey="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                      <TableCell />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -132,6 +176,11 @@ export default function AdminCompaniesPage() {
                           {c.subscription_end ? new Date(c.subscription_end).toLocaleDateString() : '-'}
                         </TableCell>
                         <TableCell>{c.created_at}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                            Edit
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -155,6 +204,59 @@ export default function AdminCompaniesPage() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit company</DialogTitle>
+          </DialogHeader>
+          {selected && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="cname">Name</Label>
+                <Input id="cname" value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Plan tier</Label>
+                <Select value={editTier} onValueChange={setEditTier}>
+                  <SelectTrigger className="mt-1 capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIERS.map((t) => (
+                      <SelectItem key={t} value={t} className="capitalize">
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select value={editStatus} onValueChange={setEditStatus}>
+                  <SelectTrigger className="mt-1 capitalize">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map((s) => (
+                      <SelectItem key={s} value={s} className="capitalize">
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="cend">Subscription end</Label>
+                <Input id="cend" type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} className="mt-1" />
+              </div>
+              <Button onClick={saveCompany} disabled={saving}>
+                {saving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppShell>
     </ProtectedRoute>
   );

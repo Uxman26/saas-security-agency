@@ -94,7 +94,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {isSuperAdmin ? (
                   [
                     { href: '/admin/companies', label: 'Companies' },
+                    { href: '/admin/users', label: 'Users' },
+                    { href: '/admin/admins', label: 'Admins' },
+                    { href: '/admin/invoices', label: 'Invoices' },
+                    { href: '/admin/payments', label: 'Payments' },
                     { href: '/admin/receipts', label: 'Receipts' },
+                    { href: '/admin/packages', label: 'Packages' },
                   ].map(({ href, label }) => (
                     <Link
                       key={href}

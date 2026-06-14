@@ -20,6 +20,7 @@ import {
   Shield,
   UserCog,
   Users,
+  Wallet,
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
@@ -77,7 +78,12 @@ export function AppSidebar() {
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
           {[
             { href: '/admin/companies', label: 'Companies', icon: Building2 },
-            { href: '/admin/receipts', label: 'Receipts', icon: CreditCard },
+            { href: '/admin/users', label: 'Users', icon: Users },
+            { href: '/admin/admins', label: 'Admins', icon: UserCog },
+            { href: '/admin/invoices', label: 'Invoices', icon: FileText },
+            { href: '/admin/payments', label: 'Payments', icon: CreditCard },
+            { href: '/admin/receipts', label: 'Receipts', icon: Wallet },
+            { href: '/admin/packages', label: 'Packages', icon: Gift },
           ].map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

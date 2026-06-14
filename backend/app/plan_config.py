@@ -56,8 +56,8 @@ def normalize_tier(tier: Optional[str]) -> str:
 
 
 def limits_for_tier(tier: Optional[str]) -> dict[str, Any]:
-    # return LIMITS[normalize_tier(tier)]
-    return LIMITS["enterprise"]
+    from app.services.platform_plans_service import get_limits
+    return get_limits(tier or "basic")
 
 
 def feature_enabled(tier: Optional[str], key: str) -> bool:
@@ -66,15 +66,13 @@ def feature_enabled(tier: Optional[str], key: str) -> bool:
 
 
 def quota_guards(tier: Optional[str]) -> Optional[int]:
-    # n = limits_for_tier(tier)["max_guards"]
-    # return n
-    return None
+    n = limits_for_tier(tier)["max_guards"]
+    return n
 
 
 def quota_sites(tier: Optional[str]) -> Optional[int]:
-    # n = limits_for_tier(tier)["max_sites"]
-    # return n
-    return None
+    n = limits_for_tier(tier)["max_sites"]
+    return n
 
 
 PLAN_PRICES_GBP: dict[str, float] = {
@@ -88,4 +86,5 @@ SUBSCRIPTION_PERIOD_DAYS = 30
 
 
 def price_for_tier(tier: Optional[str]) -> float:
-    return float(PLAN_PRICES_GBP.get(normalize_tier(tier), PLAN_PRICES_GBP["basic"]))
+    from app.services.platform_plans_service import get_price
+    return get_price(tier or "basic")

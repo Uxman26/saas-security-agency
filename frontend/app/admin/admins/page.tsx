@@ -80,6 +80,19 @@ export default function AdminAdminsPage() {
     }
   };
 
+  const toggleActive = async () => {
+    if (!selected) return;
+    try {
+      await api.admin.patchUserActive(selected.id, !selected.is_active);
+      const refreshed = await api.admin.admin(selected.id);
+      setSelected(refreshed);
+      load();
+      toast.success(refreshed.is_active ? 'Admin activated' : 'Admin deactivated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed');
+    }
+  };
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -109,6 +122,7 @@ export default function AdminAdminsPage() {
                       <TableCell>Plan</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Days left</TableCell>
+                      <TableCell>Active</TableCell>
                       <TableCell />
                     </TableRow>
                   </TableHeader>
@@ -121,6 +135,11 @@ export default function AdminAdminsPage() {
                         <TableCell className="capitalize">{a.subscription_tier ?? '-'}</TableCell>
                         <TableCell className="capitalize">{a.subscription_status ?? '-'}</TableCell>
                         <TableCell>{a.subscription_days_left ?? '-'}</TableCell>
+                        <TableCell>
+                          <span className={a.is_active ? 'text-green-600' : 'text-red-600'}>
+                            {a.is_active ? 'Yes' : 'No'}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           <Button size="sm" variant="outline" onClick={() => openDetail(a)}>
                             Manage
@@ -159,6 +178,20 @@ export default function AdminAdminsPage() {
                   </span>
                   <span className="text-muted-foreground">Days left</span>
                   <span>{selected.subscription_days_left ?? '-'}</span>
+                  <span className="text-muted-foreground">Account active</span>
+                  <span className={selected.is_active ? 'text-green-600' : 'text-red-600'}>
+                    {selected.is_active ? 'Yes' : 'No'}
+                  </span>
+                </div>
+
+                <div>
+                  <Button
+                    size="sm"
+                    variant={selected.is_active ? 'destructive' : 'default'}
+                    onClick={toggleActive}
+                  >
+                    {selected.is_active ? 'Deactivate account' : 'Activate account'}
+                  </Button>
                 </div>
 
                 <div>

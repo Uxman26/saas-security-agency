@@ -10,6 +10,7 @@ import type { EmployeeRec, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
 import { useCreateSite, useSites } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
+import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { cn } from '@/lib/utils';
 import { Plus } from 'lucide-react';
 
@@ -38,6 +39,7 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
   const { data: sites = [] } = useSites();
   const createSite = useCreateSite();
   const { data: contractors = [] } = useDirectoryContractorsList({ is_active: true });
+  const siteByName = useMemo(() => new Map(sites.map((s) => [s.name, s])), [sites]);
   const siteNames = sites.map((s) => s.name);
   const [dk, setDk] = useState(defaultDk);
   const [shift, setShift] = useState<ShiftRec>(() => empty());
@@ -49,6 +51,16 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteContractor, setNewSiteContractor] = useState('');
+  const [newSiteColor, setNewSiteColor] = useState(DEFAULT_SITE_COLOR);
+
+  const applySite = (siteName: string) => {
+    const rec = siteName ? siteByName.get(siteName) : undefined;
+    setShift((s) => ({
+      ...s,
+      site: siteName,
+      color: rec?.color || DEFAULT_SITE_COLOR,
+    }));
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -77,14 +89,15 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
   const openAddSite = () => {
     setNewSiteName('');
     setNewSiteContractor(contractors[0]?.id ?? '');
+    setNewSiteColor(shift.color || DEFAULT_SITE_COLOR);
     setAddSiteOpen(true);
   };
 
   const saveNewSite = async () => {
     const name = newSiteName.trim();
     if (name.length < 2 || !newSiteContractor) return;
-    const site = await createSite.mutateAsync({ name, contractor_id: newSiteContractor });
-    setShift((s) => ({ ...s, site: site.name }));
+    const site = await createSite.mutateAsync({ name, contractor_id: newSiteContractor, color: newSiteColor });
+    setShift((s) => ({ ...s, site: site.name, color: site.color || newSiteColor }));
     setAddSiteOpen(false);
   };
 
@@ -143,18 +156,25 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
               </div>
               <Select
                 value={siteValue}
-                onValueChange={(v) => setShift((s) => ({ ...s, site: v === '__none__' ? '' : v }))}
+                onValueChange={(v) => applySite(v === '__none__' ? '' : v)}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Optional — select site" />
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-[250]">
                   <SelectItem value="__none__">No site (one-off / temporary)</SelectItem>
-                  {siteOptions.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
+                  {siteOptions.map((name) => {
+                    const rec = siteByName.get(name);
+                    const c = rec?.color || DEFAULT_SITE_COLOR;
+                    return (
+                      <SelectItem key={name} value={name}>
+                        <span className="flex items-center gap-2">
+                          <span className="size-3 rounded-full shrink-0 border border-border/50" style={{ backgroundColor: c }} />
+                          {name}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -240,6 +260,10 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Site colour</Label>
+              <SiteColorPicker value={newSiteColor} onChange={setNewSiteColor} />
             </div>
           </div>
           <DialogFooter>

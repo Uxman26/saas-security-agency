@@ -24,6 +24,7 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-t
 import { MapPin, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 
 function SiteForm({
   form,
@@ -44,6 +45,7 @@ function SiteForm({
 }) {
   const { register, handleSubmit, setValue, watch, formState: { errors } } = form;
   const cid = watch('contractor_id');
+  const color = watch('color') || DEFAULT_SITE_COLOR;
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -126,6 +128,10 @@ function SiteForm({
           <Input type="number" step="0.01" min="0" {...register('default_hourly_rate', { valueAsNumber: true })} placeholder="12.50" />
         </div>
         <div className="space-y-1 sm:col-span-2">
+          <Label>Site colour</Label>
+          <SiteColorPicker value={color} onChange={(c) => setValue('color', c)} />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
           <Label>Address</Label>
           <Input {...register('address')} placeholder="123 High Street, London" />
           {errors.address && <p className="text-xs text-destructive">{errors.address.message}</p>}
@@ -191,7 +197,7 @@ export default function SitesPage() {
 
   const addForm = useForm<SiteFormData>({
     resolver: zodResolver(siteSchema) as Resolver<SiteFormData>,
-    defaultValues: { client_id: undefined, default_hourly_rate: undefined, contractor_id: undefined },
+    defaultValues: { client_id: undefined, default_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
   });
 
   const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) as Resolver<SiteFormData> });
@@ -199,6 +205,7 @@ export default function SitesPage() {
   const sanitize = (data: SiteFormData): Omit<Site, 'id' | 'company_id' | 'created_at'> => {
     const o: Omit<Site, 'id' | 'company_id' | 'created_at'> = {
       name: data.name,
+      color: data.color || DEFAULT_SITE_COLOR,
       address: data.address,
       contact_person: data.contact_person,
       contact_phone: data.contact_phone,
@@ -235,6 +242,7 @@ export default function SitesPage() {
     setEditingSite(site);
     editForm.reset({
       name: site.name,
+      color: site.color || DEFAULT_SITE_COLOR,
       client_id: site.client_id ?? undefined,
       default_hourly_rate: site.default_hourly_rate ?? undefined,
       address: site.address ?? '',
@@ -375,6 +383,7 @@ export default function SitesPage() {
                     <TableHeader>
                       <TableRow>
                         <SortableHead label="Site Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead>Colour</TableHead>
                         <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Default Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -388,6 +397,13 @@ export default function SitesPage() {
                       {pageRows.map((site) => (
                         <TableRow key={site.id}>
                           <TableCell className="font-medium whitespace-nowrap">{site.name}</TableCell>
+                          <TableCell>
+                            <span
+                              className="inline-block size-4 rounded-full border border-border"
+                              style={{ backgroundColor: site.color || DEFAULT_SITE_COLOR }}
+                              title={site.color || DEFAULT_SITE_COLOR}
+                            />
+                          </TableCell>
                           <TableCell className="text-sm max-w-[160px] truncate" title={contractorLabel(site)}>{contractorLabel(site)}</TableCell>
                           <TableCell className="whitespace-nowrap">
                             {site.client_id ? (

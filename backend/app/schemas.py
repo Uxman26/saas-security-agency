@@ -249,6 +249,7 @@ class GuardResponse(GuardBase):
 
 class SiteBase(BaseModel):
     name: str
+    color: Optional[str] = "#3b82f6"
     client_id: Optional[int] = None
     address: Optional[str] = None
     contact_person: Optional[str] = None

@@ -240,6 +240,7 @@ export interface Site {
   company_id: number;
   client_id?: number;
   name: string;
+  color?: string;
   address?: string;
   contact_person?: string;
   contact_phone?: string;

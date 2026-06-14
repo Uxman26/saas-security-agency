@@ -314,6 +314,7 @@ class Site(Base):
     sub_contractor_id = Column(Integer, ForeignKey("sub_contractors.id"))
     client_id = Column(Integer, ForeignKey("clients.id"))
     name = Column(String, nullable=False)
+    color = Column(String, default="#3b82f6")
     address = Column(String)
     contact_person = Column(String)
     contact_phone = Column(String)

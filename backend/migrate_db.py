@@ -73,6 +73,7 @@ def run():
         ("guards", "sub_contractor_id", "INTEGER REFERENCES sub_contractors(id)"),
         ("sites", "main_contractor_id", "INTEGER REFERENCES main_contractors(id)"),
         ("sites", "sub_contractor_id", "INTEGER REFERENCES sub_contractors(id)"),
+        ("sites", "color", "TEXT DEFAULT '#3b82f6'"),
         ("sub_contractors", "main_contractor_id", "INTEGER REFERENCES main_contractors(id)"),
         ("sub_contractors", "registration_number", "TEXT"),
         ("sub_contractors", "contract_start_date", "TEXT"),

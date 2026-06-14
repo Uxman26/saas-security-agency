@@ -170,6 +170,7 @@ export type GuardFormData = z.infer<typeof guardSchema>;
 export const siteSchema = z
   .object({
     name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     client_id: z.number().int().optional().nullable(),
     address: z.string().max(200).optional().or(z.literal('')),
     contact_person: z.string().max(100).optional().or(z.literal('')),

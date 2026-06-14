@@ -51,7 +51,7 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteContractor, setNewSiteContractor] = useState('');
-  const [newSiteColor, setNewSiteColor] = useState(DEFAULT_SITE_COLOR);
+  const [newSiteColor, setNewSiteColor] = useState<string>(DEFAULT_SITE_COLOR);
 
   const applySite = (siteName: string) => {
     const rec = siteName ? siteByName.get(siteName) : undefined;

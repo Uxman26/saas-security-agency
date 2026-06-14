@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 from app.database import get_db
 from app.models import User, Invoice, InvoiceLine
+from app.schemas import (
     InvoiceCreate,
     InvoiceResponse,
     InvoiceLineBase,

@@ -3,14 +3,13 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
-from app.models import Invoice, Payment
+from app.models import Allowance, Assignment, AuditLog, Client, Invoice, InvoiceLine, Payment, Site, User
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_assignment_billing_rate
 from app.services.special_day_service import special_date_set
 from app.services.rota_service import shift_hours
-from app.models import Allowance
 
 
 def recalc_invoice_totals(db: Session, inv: Invoice) -> None:

@@ -911,6 +911,9 @@ class PaymentResponse(PaymentBase):
         from_attributes = True
 
 
+InvoiceResponse.model_rebuild()
+
+
 class AdminPaymentResponse(PaymentBase):
     id: int
     company_id: int

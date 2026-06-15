@@ -21,8 +21,11 @@ def table_exists(cursor, table):
 
 def run():
     path = get_db_path()
-    if not path or not os.path.exists(path):
+    if not path:
         return
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     conn = sqlite3.connect(path)
     cur = conn.cursor()
     if table_exists(cur, "companies") and not table_exists(cur, "main_contractors"):

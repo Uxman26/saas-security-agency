@@ -8,12 +8,20 @@ from app.middleware.api_usage import ApiUsageMiddleware
 from app.database import engine, Base
 from app.config import settings
 
-try:
+def _ensure_db():
+    if settings.database_url.startswith("sqlite"):
+        path = settings.database_url.replace("sqlite:///", "").split("?")[0]
+        if path and not os.path.isabs(path):
+            path = os.path.abspath(path)
+        if path:
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+    Base.metadata.create_all(bind=engine)
     from migrate_db import run as run_migrate
     run_migrate()
-except Exception:
-    pass
-Base.metadata.create_all(bind=engine)
+
+_ensure_db()
 
 app = FastAPI(title="SecureForce Manager", version="1.0.0")
 app.add_middleware(ApiUsageMiddleware)

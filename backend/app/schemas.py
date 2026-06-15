@@ -245,6 +245,9 @@ class GuardBase(BaseModel):
     sia_number: Optional[str] = None
     sia_expiry_date: Optional[date] = None
     visa_status: Optional[str] = None
+    visa_expiry_date: Optional[date] = None
+    share_code: Optional[str] = None
+    share_code_expiry_date: Optional[date] = None
     rtw_status: Optional[str] = None
     employment_history: Optional[str] = None
     dbs_status: Optional[str] = None

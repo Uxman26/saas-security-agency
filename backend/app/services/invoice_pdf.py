@@ -99,7 +99,7 @@ def render_invoice_pdf(
         for g in db.query(Guard).filter(Guard.id.in_(gids)).all():
             guard_map[g.id] = g
 
-    hdr = ["Site", "Guard", "Hours", "Rate", "Allowance", "Amount"]
+    hdr = ["Site", "Guard", "Hours", "Rate", "Amount"]
     data = [hdr]
     for ln in lines:
         site = site_map.get(ln.site_id)
@@ -110,12 +110,11 @@ def render_invoice_pdf(
                 (g.full_name if g else "—")[:32],
                 f"{ln.hours or 0:.2f}",
                 _money(ln.rate or 0),
-                _money(ln.allowance_amount or 0),
                 _money(ln.amount or 0),
             ]
         )
 
-    tw = [5 * cm, 4 * cm, 2 * cm, 2.2 * cm, 2.2 * cm, 2.4 * cm]
+    tw = [5 * cm, 4 * cm, 2 * cm, 2.5 * cm, 2.5 * cm]
     t_lines = Table(data, colWidths=tw, repeatRows=1)
     t_lines.setStyle(
         TableStyle(

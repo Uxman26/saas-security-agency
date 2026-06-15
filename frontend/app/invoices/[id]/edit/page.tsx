@@ -62,7 +62,6 @@ export default function InvoiceEditPage() {
     guard_id: '',
     hours: '0',
     rate: '0',
-    allowance: '0',
   });
   const [lineSearch, setLineSearch] = useState('');
   const lineSort = useTableSort();
@@ -145,10 +144,10 @@ export default function InvoiceEditPage() {
         guard_id: newLine.guard_id ? parseInt(newLine.guard_id, 10) : undefined,
         hours: parseFloat(newLine.hours) || 0,
         rate: parseFloat(newLine.rate) || 0,
-        allowance_amount: parseFloat(newLine.allowance) || 0,
+        allowance_amount: 0,
       });
       setAddOpen(false);
-      setNewLine({ site_id: '', guard_id: '', hours: '0', rate: '0', allowance: '0' });
+      setNewLine({ site_id: '', guard_id: '', hours: '0', rate: '0' });
       await load();
     } finally {
       setSaving(false);
@@ -181,7 +180,6 @@ export default function InvoiceEditPage() {
         guardName(line),
         String(line.hours),
         String(line.rate),
-        String(line.allowance_amount),
         String(line.amount),
         String(line.id),
       ].join(' '),
@@ -198,8 +196,6 @@ export default function InvoiceEditPage() {
           return line.hours;
         case 'rate':
           return line.rate;
-        case 'allowance':
-          return line.allowance_amount;
         case 'amount':
           return line.amount;
         default:
@@ -324,7 +320,6 @@ export default function InvoiceEditPage() {
                         <SortableHead label="Guard" colKey="guard" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} />
                         <SortableHead label="Hours" colKey="hours" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
                         <SortableHead label="Rate" colKey="rate" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
-                        <SortableHead label="Allowance" colKey="allowance" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
                         <SortableHead label="Amount" colKey="amount" sortKey={lineSort.sortKey} sortDir={lineSort.sortDir} onSort={lineSort.toggleSort} className="text-right" />
                         <TableHead />
                       </TableRow>
@@ -395,19 +390,6 @@ export default function InvoiceEditPage() {
                               onChange={(e) =>
                                 updateLocalLine(line.id, {
                                   rate: parseFloat(e.target.value) || 0,
-                                })
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              className="w-24"
-                              type="number"
-                              step="0.01"
-                              value={line.allowance_amount}
-                              onChange={(e) =>
-                                updateLocalLine(line.id, {
-                                  allowance_amount: parseFloat(e.target.value) || 0,
                                 })
                               }
                             />
@@ -499,7 +481,7 @@ export default function InvoiceEditPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <Label>Hours</Label>
                         <Input
@@ -516,15 +498,6 @@ export default function InvoiceEditPage() {
                           step="0.01"
                           value={newLine.rate}
                           onChange={(e) => setNewLine((p) => ({ ...p, rate: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Allowance</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={newLine.allowance}
-                          onChange={(e) => setNewLine((p) => ({ ...p, allowance: e.target.value }))}
                         />
                       </div>
                     </div>

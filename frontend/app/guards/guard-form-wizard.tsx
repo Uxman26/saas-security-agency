@@ -314,6 +314,10 @@ export function GuardFormWizard({
                 {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
               </div>
               <div className="space-y-1">
+                <Label>Visa expiry</Label>
+                <Input type="date" {...register('visa_expiry_date')} />
+              </div>
+              <div className="space-y-1">
                 <Label>Gender</Label>
                 <Select value={watch('gender') || 'Unspecified'} onValueChange={(v) => setValue('gender', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -476,6 +480,8 @@ export function GuardFormWizard({
               <div className="space-y-1"><Label>SIA number</Label><Input {...register('sia_number')} /></div>
               <div className="space-y-1"><Label>SIA expiry</Label><Input type="date" {...register('sia_expiry_date')} /></div>
               <div className="space-y-1"><Label>RTW status</Label><Input {...register('rtw_status')} /></div>
+              <div className="space-y-1"><Label>Share code</Label><Input {...register('share_code')} placeholder="e.g. W12 345 67A" /></div>
+              <div className="space-y-1"><Label>Share code expiry</Label><Input type="date" {...register('share_code_expiry_date')} /></div>
               <div className="space-y-1"><Label>DBS check</Label><Input {...register('dbs_status')} /></div>
               <div className="space-y-1 sm:col-span-2"><Label>Employment history (5 years)</Label><Input {...register('employment_history')} /></div>
             </div>

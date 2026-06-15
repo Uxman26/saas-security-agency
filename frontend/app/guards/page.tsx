@@ -25,7 +25,7 @@ import { can } from '@/lib/permissions';
 import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Pencil, Trash2, Users } from 'lucide-react';
+import { Pencil, Trash2, Users, Eye } from 'lucide-react';
 import { toast } from '@/lib/toast';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
@@ -143,6 +143,10 @@ export default function GuardsPage() {
         g.dbs_status,
         contractorLabel(g),
         g.sia_expiry_date,
+        g.visa_expiry_date,
+        g.date_of_birth,
+        g.share_code,
+        g.share_code_expiry_date,
         g.service_area,
         g.postcode,
         g.nearby_areas,
@@ -173,6 +177,14 @@ export default function GuardsPage() {
           return g.sia_number || '';
         case 'sia_expiry':
           return g.sia_expiry_date || '';
+        case 'dob':
+          return g.date_of_birth || '';
+        case 'visa_expiry':
+          return g.visa_expiry_date || '';
+        case 'postcode':
+          return g.postcode || '';
+        case 'car':
+          return g.has_car ? 1 : 0;
         case 'rtw':
           return g.rtw_status || '';
         case 'visa':
@@ -267,29 +279,42 @@ export default function GuardsPage() {
                     <TableHeader>
                       <TableRow>
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="DOB" colKey="dob" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Visa Expiry" colKey="visa_expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Postcode" colKey="postcode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Car" colKey="car" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Email" colKey="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Phone" colKey="phone" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Badge" colKey="badge" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="SIA Number" colKey="sia_number" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="SIA Expiry" colKey="sia_expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="RTW" colKey="rtw" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Visa" colKey="visa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="DBS" colKey="dbs" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((guard) => {
                         const siaStatus = getSiaStatus(guard.sia_expiry_date);
+                        const visaStatus = getSiaStatus(guard.visa_expiry_date);
                         return (
                           <TableRow key={guard.id}>
                             <TableCell className="font-medium whitespace-nowrap">{guard.full_name}</TableCell>
+                            <TableCell className="whitespace-nowrap text-sm">{guard.date_of_birth ? formatDateUK(guard.date_of_birth) : '-'}</TableCell>
+                            <TableCell className="whitespace-nowrap text-sm">
+                              {guard.visa_expiry_date ? (
+                                <span className={
+                                  visaStatus === 'expired' ? 'text-destructive font-semibold' :
+                                  visaStatus === 'critical' ? 'text-orange-600 font-semibold' :
+                                  visaStatus === 'warning' ? 'text-amber-600 font-medium' : ''
+                                }>
+                                  {formatDateUK(guard.visa_expiry_date)}
+                                </span>
+                              ) : '-'}
+                            </TableCell>
+                            <TableCell className="text-sm">{guard.postcode || '-'}</TableCell>
+                            <TableCell>{guard.has_car ? 'Yes' : 'No'}</TableCell>
                             <TableCell className="text-sm max-w-[160px] truncate" title={contractorLabel(guard)}>{contractorLabel(guard)}</TableCell>
                             <TableCell className="text-sm">{guard.email || '-'}</TableCell>
                             <TableCell className="whitespace-nowrap">{guard.phone || '-'}</TableCell>
-                            <TableCell>{guard.badge_number || '-'}</TableCell>
-                            <TableCell>{guard.sia_number || '-'}</TableCell>
                             <TableCell className="whitespace-nowrap">
                               {guard.sia_expiry_date ? (
                                 <span className={
@@ -298,9 +323,6 @@ export default function GuardsPage() {
                                   siaStatus === 'warning' ? 'text-amber-600 font-medium' : ''
                                 }>
                                   {formatDateUK(guard.sia_expiry_date)}
-                                  {siaStatus === 'expired' && ' ⚠ Expired'}
-                                  {siaStatus === 'critical' && ' ⚠ <30d'}
-                                  {siaStatus === 'warning' && ' ⚠ <90d'}
                                 </span>
                               ) : '-'}
                             </TableCell>
@@ -315,11 +337,14 @@ export default function GuardsPage() {
                                 </span>
                               ) : '-'}
                             </TableCell>
-                            <TableCell>{guard.visa_status || '-'}</TableCell>
-                            <TableCell className="text-sm max-w-[120px] truncate" title={guard.dbs_status || ''}>{guard.dbs_status || '-'}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(guard)} title="Edit guard" disabled={!can(user, 'guards.write')}>
+                                <Button variant="ghost" size="sm" asChild title="View staff">
+                                  <Link href={`/guards/${guard.id}`}>
+                                    <Eye className="size-4" />
+                                  </Link>
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(guard)} title="Edit staff" disabled={!can(user, 'guards.write')}>
                                   <Pencil className="size-4" />
                                 </Button>
                                 {guard.email && (

@@ -254,6 +254,9 @@ export interface Guard {
   sia_number?: string;
   sia_expiry_date?: string;
   visa_status?: string;
+  visa_expiry_date?: string;
+  share_code?: string;
+  share_code_expiry_date?: string;
   rtw_status?: string;
   employment_history?: string;
   dbs_status?: string;

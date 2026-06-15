@@ -92,14 +92,13 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
               <th className="p-2.5 font-semibold border border-slate-200">Guard</th>
               <th className="p-2.5 font-semibold border border-slate-200 text-right">Hours</th>
               <th className="p-2.5 font-semibold border border-slate-200 text-right">Rate</th>
-              <th className="p-2.5 font-semibold border border-slate-200 text-right">Allowance</th>
               <th className="p-2.5 font-semibold border border-slate-200 text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
             {lines.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-slate-500 border border-slate-200">
+                <td colSpan={5} className="p-4 text-center text-slate-500 border border-slate-200">
                   No line items
                 </td>
               </tr>
@@ -110,7 +109,6 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
                   <td className="p-2.5 border border-slate-200">{ln.guard_name ?? '—'}</td>
                   <td className="p-2.5 border border-slate-200 text-right tabular-nums">{ln.hours.toFixed(2)}</td>
                   <td className="p-2.5 border border-slate-200 text-right tabular-nums">{fmtMoney(ln.rate)}</td>
-                  <td className="p-2.5 border border-slate-200 text-right tabular-nums">{fmtMoney(ln.allowance_amount)}</td>
                   <td className="p-2.5 border border-slate-200 text-right tabular-nums font-medium">{fmtMoney(ln.amount)}</td>
                 </tr>
               ))

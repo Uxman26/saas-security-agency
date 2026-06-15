@@ -170,6 +170,10 @@ export default function InvoicesPage() {
   const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
   const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.total, 0);
   const outstanding = invoices.filter((i) => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + i.total, 0);
+  const draftInvoices = invoices.filter((i) => i.status === 'draft');
+  const sentInvoices = invoices.filter((i) => i.status === 'sent');
+  const draftTotal = draftInvoices.reduce((sum, i) => sum + i.total, 0);
+  const sentTotal = sentInvoices.reduce((sum, i) => sum + i.total, 0);
 
   return (
     <ProtectedRoute>
@@ -238,13 +242,31 @@ export default function InvoicesPage() {
 
           {/* Summary cards */}
           {invoices.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-3 mb-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Total Invoiced</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <span className="text-2xl font-bold">£{totalAmount.toFixed(2)}</span>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Draft</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <span className="text-2xl font-bold">£{draftTotal.toFixed(2)}</span>
+                  <p className="text-xs text-muted-foreground mt-1">{draftInvoices.length} invoice{draftInvoices.length !== 1 ? 's' : ''}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Sent</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <span className="text-2xl font-bold text-blue-600">£{sentTotal.toFixed(2)}</span>
+                  <p className="text-xs text-muted-foreground mt-1">{sentInvoices.length} invoice{sentInvoices.length !== 1 ? 's' : ''}</p>
                 </CardContent>
               </Card>
               <Card>

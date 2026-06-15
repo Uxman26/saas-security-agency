@@ -4,6 +4,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard, User
+from app.services.company_profile_service import account_bank_lines, has_account_bank_details
 from app.storage_paths import resolve_storage_path
 
 
@@ -153,21 +154,22 @@ def render_invoice_pdf(
         story.append(Paragraph("<b>Notes</b>", styles["Heading3"]))
         story.append(Paragraph((inv.notes or "").replace("\n", "<br/>"), styles["Normal"]))
 
-    if co.account_name or co.account_details or resolve_storage_path(co.account_logo_path):
+    if has_account_bank_details(co):
         story.append(Spacer(1, 20))
         story.append(Paragraph("<b>Account details — please pay to</b>", styles["Heading3"]))
-        account_logo = resolve_storage_path(co.account_logo_path)
-        if account_logo:
-            try:
-                img = RLImage(account_logo, width=3.5 * cm, height=1.75 * cm, kind="proportional")
-                story.append(img)
-                story.append(Spacer(1, 6))
-            except Exception:
-                pass
-        if co.account_name:
-            story.append(Paragraph(f"<b>{co.account_name}</b>", styles["Normal"]))
-        if co.account_details:
-            story.append(Paragraph((co.account_details or "").replace("\n", "<br/>"), styles["Normal"]))
+        bank_data = [[label, value] for label, value in account_bank_lines(co)]
+        t_bank = Table(bank_data, colWidths=[4 * cm, 11 * cm])
+        t_bank.setStyle(
+            TableStyle(
+                [
+                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+        story.append(t_bank)
 
     doc.build(story)
     return buf.getvalue()

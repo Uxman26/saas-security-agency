@@ -19,10 +19,25 @@ def company_logo_url(company: Company) -> Optional[str]:
     return None
 
 
-def account_logo_url(company: Company) -> Optional[str]:
-    if resolve_storage_path(company.account_logo_path):
-        return "/auth/account-logo"
-    return None
+def account_bank_lines(company: Company) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    if (company.account_name or "").strip():
+        rows.append(("Account name", company.account_name.strip()))
+    if (company.bank_name or "").strip():
+        rows.append(("Bank", company.bank_name.strip()))
+    if (company.sort_code or "").strip():
+        rows.append(("Sort code", company.sort_code.strip()))
+    if (company.account_number or "").strip():
+        rows.append(("Account number", company.account_number.strip()))
+    if (company.iban or "").strip():
+        rows.append(("IBAN", company.iban.strip()))
+    if (company.swift_code or "").strip():
+        rows.append(("SWIFT / BIC", company.swift_code.strip()))
+    return rows
+
+
+def has_account_bank_details(company: Company) -> bool:
+    return bool(account_bank_lines(company))
 
 
 def get_company_profile(db: Session, user_id: int) -> dict:
@@ -36,8 +51,11 @@ def get_company_profile(db: Session, user_id: int) -> dict:
         "address": company.address,
         "logo_url": company_logo_url(company),
         "account_name": company.account_name,
-        "account_details": company.account_details,
-        "account_logo_url": account_logo_url(company),
+        "bank_name": company.bank_name,
+        "sort_code": company.sort_code,
+        "account_number": company.account_number,
+        "iban": company.iban,
+        "swift_code": company.swift_code,
     }
 
 
@@ -70,29 +88,6 @@ def save_company_logo(db: Session, user_id: int, file: UploadFile) -> dict:
     with open(dest, "wb") as out:
         shutil.copyfileobj(file.file, out)
     company.logo_path = dest
-    db.commit()
-    db.refresh(company)
-    return get_company_profile(db, user_id)
-
-
-def save_account_logo(db: Session, user_id: int, file: UploadFile) -> dict:
-    company = get_company_by_user_id(db, user_id)
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file")
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_LOGO_EXT:
-        raise HTTPException(status_code=400, detail="Use PNG, JPG, WEBP or GIF")
-    ensure_upload_dirs()
-    dest = os.path.join(LOGOS_DIR, f"company_{company.id}_account{ext}")
-    old = resolve_storage_path(company.account_logo_path)
-    if old and old != dest and os.path.isfile(old):
-        try:
-            os.remove(old)
-        except OSError:
-            pass
-    with open(dest, "wb") as out:
-        shutil.copyfileobj(file.file, out)
-    company.account_logo_path = dest
     db.commit()
     db.refresh(company)
     return get_company_profile(db, user_id)

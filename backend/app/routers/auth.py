@@ -100,14 +100,3 @@ def company_logo(db: Session = Depends(get_db), current_user: User = Depends(get
     if not path:
         raise HTTPException(status_code=404, detail="Logo not found")
     return FileResponse(path)
-
-
-@router.get("/account-logo")
-def account_logo(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if not current_user.company_id:
-        raise HTTPException(status_code=404, detail="No company")
-    co = db.query(Company).filter(Company.id == current_user.company_id).first()
-    path = resolve_storage_path(co.account_logo_path) if co else None
-    if not path:
-        raise HTTPException(status_code=404, detail="Account logo not found")
-    return FileResponse(path)

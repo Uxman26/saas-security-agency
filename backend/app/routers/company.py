@@ -31,12 +31,3 @@ def upload_logo(
     current_user: User = Depends(require_perm(PERM_SUB_MANAGE)),
 ):
     return company_profile_service.save_company_logo(db, current_user.id, file)
-
-
-@router.post("/account-logo", response_model=CompanyProfileResponse)
-def upload_account_logo(
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_SUB_MANAGE)),
-):
-    return company_profile_service.save_account_logo(db, current_user.id, file)

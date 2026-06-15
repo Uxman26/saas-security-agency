@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Invoice } from '@/lib/types';
+import { hasInvoiceAccountDetails, invoiceAccountLines } from '@/lib/invoice-account';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -16,7 +17,6 @@ type Props = {
 
 export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
-  const [accountLogoSrc, setAccountLogoSrc] = useState<string | null>(null);
 
   useEffect(() => {
     if (!invoice.company_logo_url) {
@@ -42,32 +42,9 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
     };
   }, [invoice.company_logo_url]);
 
-  useEffect(() => {
-    if (!invoice.account_logo_url) {
-      setAccountLogoSrc(null);
-      return;
-    }
-    let cancelled = false;
-    let blobUrl: string | null = null;
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
-    void fetch(`${API_URL}${invoice.account_logo_url}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((r) => (r.ok ? r.blob() : null))
-      .then((blob) => {
-        if (cancelled || !blob) return;
-        blobUrl = URL.createObjectURL(blob);
-        setAccountLogoSrc(blobUrl);
-      })
-      .catch(() => setAccountLogoSrc(null));
-    return () => {
-      cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [invoice.account_logo_url]);
-
   const lines = invoice.lines ?? [];
-  const showAccountFooter = !!(invoice.account_name || invoice.account_details || invoice.account_logo_url);
+  const accountLines = invoiceAccountLines(invoice);
+  const showAccountFooter = hasInvoiceAccountDetails(invoice);
 
   return (
     <div
@@ -170,19 +147,14 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
       {showAccountFooter ? (
         <div className="mt-8 pt-6 border-t-2 border-slate-300">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Account details — please pay to</p>
-          <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-            {accountLogoSrc ? (
-              <img src={accountLogoSrc} alt="" className="h-12 max-w-[140px] object-contain shrink-0" />
-            ) : null}
-            <div className="space-y-1 min-w-0">
-              {invoice.account_name ? (
-                <p className="font-semibold text-slate-900">{invoice.account_name}</p>
-              ) : null}
-              {invoice.account_details ? (
-                <p className="text-sm text-slate-700 whitespace-pre-line font-mono">{invoice.account_details}</p>
-              ) : null}
-            </div>
-          </div>
+          <dl className="grid gap-2 text-sm max-w-md">
+            {accountLines.map(({ label, value }) => (
+              <div key={label} className="grid grid-cols-[7.5rem_1fr] gap-2">
+                <dt className="text-slate-500 font-medium">{label}</dt>
+                <dd className="text-slate-900 font-mono break-all">{value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       ) : null}
     </div>

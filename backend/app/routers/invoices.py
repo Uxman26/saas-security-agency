@@ -19,7 +19,7 @@ from app.schemas import (
 from app.rbac import require_perm, PERM_INV_READ, PERM_INV_WRITE, PERM_INV_DELETE
 from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
-from app.services.company_profile_service import company_logo_url, account_logo_url
+from app.services.company_profile_service import company_logo_url
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -55,16 +55,22 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
     company_address = None
     company_logo_url_val = None
     account_name = None
-    account_details = None
-    account_logo_url_val = None
+    bank_name = None
+    sort_code = None
+    account_number = None
+    iban = None
+    swift_code = None
     if co:
         company_email = (co.email or "").strip() or (admin.email if admin else None)
         company_phone = co.phone
         company_address = co.address
         company_logo_url_val = company_logo_url(co)
         account_name = co.account_name
-        account_details = co.account_details
-        account_logo_url_val = account_logo_url(co)
+        bank_name = co.bank_name
+        sort_code = co.sort_code
+        account_number = co.account_number
+        iban = co.iban
+        swift_code = co.swift_code
     return InvoiceResponse(
         id=inv.id,
         company_id=inv.company_id,
@@ -88,8 +94,11 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         company_address=company_address,
         company_logo_url=company_logo_url_val,
         account_name=account_name,
-        account_details=account_details,
-        account_logo_url=account_logo_url_val,
+        bank_name=bank_name,
+        sort_code=sort_code,
+        account_number=account_number,
+        iban=iban,
+        swift_code=swift_code,
         client_email=cl.email if cl else None,
         client_phone=cl.phone if cl else None,
         client_address=cl.address if cl else None,

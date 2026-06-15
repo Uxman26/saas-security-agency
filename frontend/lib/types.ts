@@ -170,8 +170,11 @@ export interface CompanyProfile {
   address?: string | null;
   logo_url?: string | null;
   account_name?: string | null;
-  account_details?: string | null;
-  account_logo_url?: string | null;
+  bank_name?: string | null;
+  sort_code?: string | null;
+  account_number?: string | null;
+  iban?: string | null;
+  swift_code?: string | null;
 }
 
 export interface Company {
@@ -525,8 +528,11 @@ export interface Invoice {
   company_address?: string | null;
   company_logo_url?: string | null;
   account_name?: string | null;
-  account_details?: string | null;
-  account_logo_url?: string | null;
+  bank_name?: string | null;
+  sort_code?: string | null;
+  account_number?: string | null;
+  iban?: string | null;
+  swift_code?: string | null;
   client_email?: string | null;
   client_phone?: string | null;
   client_address?: string | null;

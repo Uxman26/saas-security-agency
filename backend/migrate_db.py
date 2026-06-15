@@ -322,6 +322,10 @@ def run():
         ("billing_cycle", "TEXT DEFAULT 'monthly'"),
         ("max_users", "INTEGER"),
         ("enabled_modules_json", "TEXT"),
+        ("twilio_account_sid", "TEXT"),
+        ("twilio_auth_token", "TEXT"),
+        ("twilio_phone_number", "TEXT"),
+        ("sms_templates_json", "TEXT"),
     ]:
         if table_exists(cur, "companies") and not column_exists(cur, "companies", col):
             try:
@@ -446,6 +450,23 @@ def run():
                 ip_address TEXT,
                 user_agent TEXT,
                 status TEXT NOT NULL
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "sms_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE sms_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                recipient TEXT NOT NULL,
+                body TEXT NOT NULL,
+                template_key TEXT,
+                status TEXT DEFAULT 'sent',
+                error_message TEXT,
+                twilio_sid TEXT,
+                sent_at TEXT DEFAULT CURRENT_TIMESTAMP
             )"""
             )
         except sqlite3.OperationalError:

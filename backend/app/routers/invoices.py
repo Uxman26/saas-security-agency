@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from datetime import date
 from app.database import get_db
-from app.models import User, Invoice, InvoiceLine
+from app.models import User, Invoice, InvoiceLine, Payment
 from app.schemas import (
     InvoiceCreate,
     InvoiceResponse,
@@ -15,6 +15,7 @@ from app.schemas import (
     InvoiceUpdate,
     InvoiceLineUpdate,
     InvoiceAuditEntry,
+    PaymentResponse,
 )
 from app.rbac import require_perm, PERM_INV_READ, PERM_INV_WRITE, PERM_INV_DELETE
 from app.services import invoice_service
@@ -71,6 +72,22 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         account_number = co.account_number
         iban = co.iban
         swift_code = co.swift_code
+    paid = invoice_amount_paid(db, inv.id) if db else 0
+    payments_out = []
+    if db and include_lines:
+        for p in db.query(Payment).filter(Payment.invoice_id == inv.id).order_by(Payment.paid_at.desc()).all():
+            payments_out.append(
+                PaymentResponse(
+                    id=p.id,
+                    company_id=p.company_id,
+                    invoice_id=p.invoice_id,
+                    amount=p.amount,
+                    method=p.method,
+                    paid_at=p.paid_at,
+                    created_at=p.created_at,
+                )
+            )
+    total = float(inv.total or 0)
     return InvoiceResponse(
         id=inv.id,
         company_id=inv.company_id,
@@ -104,6 +121,9 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         client_address=cl.address if cl else None,
         client_contact_person=cl.contact_person if cl else None,
         lines=lines_out,
+        amount_paid=paid,
+        balance_due=round(max(0, total - paid), 2),
+        payments=payments_out,
     )
 
 

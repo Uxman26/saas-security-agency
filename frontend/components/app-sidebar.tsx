@@ -20,6 +20,7 @@ import {
   Shield,
   UserCog,
   Users,
+  MessageSquare,
   Receipt,
   Wallet,
 } from 'lucide-react';
@@ -40,12 +41,14 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
   { href: '/documents', label: 'Documents', perm: 'doc.read', icon: FolderOpen },
   { href: '/contractors', label: 'Contractors', perm: PERMS.contractorView, icon: UserCog },
   { href: '/payroll', label: 'Payroll', perm: 'payroll.read', icon: PoundSterling },
+  { href: '/reports', label: 'Reports', perm: 'rep.read', icon: ClipboardList },
   { href: '/invoices', label: 'Invoices', perm: 'inv.read', icon: FileText },
   { href: '/expenses', label: 'Expenses', perm: 'exp.read', icon: Receipt },
   { href: '/payments', label: 'Payments', perm: 'pay.read', icon: CreditCard },
   { href: '/allowances', label: 'Allowances', perm: 'allow.read', icon: Gift },
   { href: '/settings/special-days', label: 'Special days', perm: 'allow.read', icon: Calendar },
   { href: '/settings/company', label: 'Company', perm: 'sub.read', icon: Building2 },
+  { href: '/settings/sms', label: 'SMS', perm: 'email.send', icon: MessageSquare },
   { href: '/settings/roles', label: 'Roles', perm: 'roles.read', icon: Shield },
 ];
 

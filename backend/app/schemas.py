@@ -868,6 +868,9 @@ class InvoiceResponse(InvoiceBase):
     client_address: Optional[str] = None
     client_contact_person: Optional[str] = None
     lines: list[InvoiceLineResponse] = []
+    amount_paid: float = 0
+    balance_due: float = 0
+    payments: list["PaymentResponse"] = []
 
     class Config:
         from_attributes = True
@@ -1119,3 +1122,78 @@ class ExpenseDashboardResponse(BaseModel):
     category_summary: List[dict]
     recent_expenses: List[ExpenseResponse]
     quarterly_vat: List[dict]
+
+
+class ReportsHubResponse(BaseModel):
+    period_start: date
+    period_end: date
+    total_revenue: float
+    outstanding_invoices: float
+    total_expenses: float
+    expense_vat: float
+    invoice_vat: float
+    net_vat: float
+    active_users: int
+    staff_hours: float
+    sms_usage: int
+    email_usage: int
+
+
+class StaffIndividualReportResponse(BaseModel):
+    guard_id: int
+    guard_name: str
+    period_start: date
+    period_end: date
+    total_shifts: int
+    scheduled_shifts: int
+    completed_shifts: int
+    total_hours: float
+    overtime_hours: float
+    attendance_summary: dict
+    shifts: List[dict] = Field(default_factory=list)
+
+
+class StaffMonthlyReportResponse(BaseModel):
+    period_start: date
+    period_end: date
+    group_by: str
+    by_employee: List[dict]
+    grouped_summary: List[dict]
+    workforce_total_hours: float
+    total_employees: int
+
+
+class SmsConfigResponse(BaseModel):
+    account_sid_set: bool
+    auth_token_set: bool
+    phone_number: Optional[str] = None
+    templates: dict[str, str] = Field(default_factory=dict)
+    enabled: bool = True
+
+
+class SmsConfigUpdate(BaseModel):
+    twilio_account_sid: Optional[str] = None
+    twilio_auth_token: Optional[str] = None
+    twilio_phone_number: Optional[str] = None
+    templates: Optional[dict[str, str]] = None
+
+
+class SmsSendRequest(BaseModel):
+    recipient: str
+    body: str
+    template_key: Optional[str] = None
+
+
+class SmsLogResponse(BaseModel):
+    id: int
+    company_id: int
+    recipient: str
+    body: str
+    template_key: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+    twilio_sid: Optional[str] = None
+    sent_at: datetime
+
+    class Config:
+        from_attributes = True

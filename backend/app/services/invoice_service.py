@@ -3,7 +3,8 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
-from app.models import Invoice, InvoiceLine, Client, Site, Assignment, Company, User, AuditLog
+from app.models import Invoice, Payment
+from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_assignment_billing_rate
@@ -25,9 +26,14 @@ def recalc_invoice_totals(db: Session, inv: Invoice) -> None:
 
 
 def maybe_mark_overdue(db: Session, inv: Invoice) -> bool:
-    if inv.status == "sent" and inv.due_date and inv.due_date < date.today():
+    from app.services.invoice_payment_service import sync_invoice_payment_status
+    if inv.status in ("paid", "partial", "cancelled", "draft"):
+        sync_invoice_payment_status(db, inv)
+        return False
+    if inv.due_date and inv.due_date < date.today() and inv.status in ("sent", "unpaid"):
         inv.status = "overdue"
         return True
+    sync_invoice_payment_status(db, inv)
     return False
 
 

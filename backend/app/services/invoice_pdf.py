@@ -3,8 +3,9 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard, User
+from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard, User, Payment
 from app.services.company_profile_service import account_bank_lines, has_account_bank_details
+from app.services.invoice_payment_service import invoice_amount_paid
 from app.storage_paths import resolve_storage_path
 
 
@@ -131,11 +132,15 @@ def render_invoice_pdf(
     story.append(t_lines)
     story.append(Spacer(1, 16))
 
+    paid = invoice_amount_paid(db, inv.id)
+    balance = round(max(0, float(inv.total or 0) - paid), 2)
     sums = [
         ["Subtotal", _money(inv.subtotal or 0)],
         [f"Tax ({inv.tax_rate or 0:.1f}%)", _money(inv.tax_amount or 0)],
         ["Total", _money(inv.total or 0)],
     ]
+    if paid > 0:
+        sums.extend([["Amount paid", _money(paid)], ["Balance due", _money(balance)]])
     st = Table(sums, colWidths=[12 * cm, 4 * cm])
     st.setStyle(
         TableStyle(
@@ -149,15 +154,47 @@ def render_invoice_pdf(
     )
     story.append(st)
 
+    payments = (
+        db.query(Payment)
+        .filter(Payment.invoice_id == inv.id)
+        .order_by(Payment.paid_at.desc())
+        .all()
+    )
+    if payments:
+        story.append(Spacer(1, 14))
+        story.append(Paragraph("<b>Payment history</b>", styles["Heading3"]))
+        pay_data = [["Date", "Method", "Amount"]]
+        for p in payments:
+            pay_data.append(
+                [
+                    str(p.paid_at) if p.paid_at else "—",
+                    (p.method or "—").title(),
+                    _money(p.amount or 0),
+                ]
+            )
+        t_pay = Table(pay_data, colWidths=[4 * cm, 4 * cm, 4 * cm])
+        t_pay.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("ALIGN", (2, 1), (2, -1), "RIGHT"),
+                ]
+            )
+        )
+        story.append(t_pay)
+
     if inv.notes:
         story.append(Spacer(1, 14))
         story.append(Paragraph("<b>Notes</b>", styles["Heading3"]))
         story.append(Paragraph((inv.notes or "").replace("\n", "<br/>"), styles["Normal"]))
 
-    if has_account_bank_details(co):
+    if has_account_bank_details(company):
         story.append(Spacer(1, 20))
         story.append(Paragraph("<b>Account details — please pay to</b>", styles["Heading3"]))
-        bank_data = [[label, value] for label, value in account_bank_lines(co)]
+        bank_data = [[label, value] for label, value in account_bank_lines(company)]
         t_bank = Table(bank_data, colWidths=[4 * cm, 11 * cm])
         t_bank.setStyle(
             TableStyle(

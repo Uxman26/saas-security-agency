@@ -624,6 +624,58 @@ export interface Invoice {
   client_address?: string | null;
   client_contact_person?: string | null;
   lines?: InvoiceLine[];
+  amount_paid?: number;
+  balance_due?: number;
+  payments?: Payment[];
+}
+
+export interface ReportsHub {
+  period_start: string;
+  period_end: string;
+  total_revenue: number;
+  outstanding_invoices: number;
+  total_expenses: number;
+  expense_vat: number;
+  invoice_vat: number;
+  net_vat: number;
+  active_users: number;
+  staff_hours: number;
+  sms_usage: number;
+  email_usage: number;
+}
+
+export interface StaffIndividualReport {
+  guard_id: number;
+  guard_name: string;
+  period_start: string;
+  period_end: string;
+  total_shifts: number;
+  scheduled_shifts: number;
+  completed_shifts: number;
+  total_hours: number;
+  overtime_hours: number;
+  attendance_summary: Record<string, number>;
+  shifts: Record<string, unknown>[];
+}
+
+export interface SmsConfig {
+  account_sid_set: boolean;
+  auth_token_set: boolean;
+  phone_number?: string | null;
+  templates: Record<string, string>;
+  enabled: boolean;
+}
+
+export interface SmsLog {
+  id: number;
+  company_id: number;
+  recipient: string;
+  body: string;
+  template_key?: string | null;
+  status: string;
+  error_message?: string | null;
+  twilio_sid?: string | null;
+  sent_at: string;
 }
 
 export interface InvoiceLine {

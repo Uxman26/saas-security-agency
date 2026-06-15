@@ -10,6 +10,16 @@ function fmtMoney(n: number) {
   return `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  draft: 'bg-slate-100 text-slate-700',
+  sent: 'bg-blue-100 text-blue-800',
+  paid: 'bg-green-100 text-green-800',
+  partial: 'bg-amber-100 text-amber-800',
+  unpaid: 'bg-orange-100 text-orange-800',
+  overdue: 'bg-red-100 text-red-800',
+  cancelled: 'bg-gray-100 text-gray-600',
+};
+
 type Props = {
   invoice: Invoice;
   printId?: string;
@@ -45,6 +55,9 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
   const lines = invoice.lines ?? [];
   const accountLines = invoiceAccountLines(invoice);
   const showAccountFooter = hasInvoiceAccountDetails(invoice);
+  const paid = invoice.amount_paid ?? 0;
+  const balance = invoice.balance_due ?? Math.max(0, invoice.total - paid);
+  const statusStyle = STATUS_STYLES[invoice.status] || 'bg-slate-100 text-slate-700';
 
   return (
     <div
@@ -64,8 +77,8 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
         <div className="text-left sm:text-right shrink-0">
           <p className="text-2xl font-bold tracking-tight text-slate-900">INVOICE</p>
           <p className="text-sm text-slate-500 mt-1">#{invoice.id}</p>
-          <p className="text-sm text-slate-600 mt-2 capitalize">Status: {invoice.status}</p>
-          {invoice.due_date ? <p className="text-sm text-slate-600">Due: {invoice.due_date}</p> : null}
+          <span className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusStyle}`}>{invoice.status.replace('_', ' ')}</span>
+          {invoice.due_date ? <p className="text-sm text-slate-600 mt-2">Due: {invoice.due_date}</p> : null}
         </div>
       </div>
 
@@ -134,8 +147,38 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
             <span>Total</span>
             <span className="tabular-nums">{fmtMoney(invoice.total)}</span>
           </div>
+          {paid > 0 && (
+            <>
+              <div className="flex justify-between text-green-700"><span>Amount paid</span><span className="tabular-nums">{fmtMoney(paid)}</span></div>
+              <div className="flex justify-between font-semibold text-red-700"><span>Balance due</span><span className="tabular-nums">{fmtMoney(balance)}</span></div>
+            </>
+          )}
         </div>
       </div>
+
+      {(invoice.payments?.length ?? 0) > 0 && (
+        <div className="mt-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Payment history</p>
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="p-2 text-left border border-slate-200">Date</th>
+                <th className="p-2 text-left border border-slate-200">Method</th>
+                <th className="p-2 text-right border border-slate-200">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.payments!.map((p) => (
+                <tr key={p.id}>
+                  <td className="p-2 border border-slate-200">{p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB') : '—'}</td>
+                  <td className="p-2 border border-slate-200 capitalize">{p.method || '—'}</td>
+                  <td className="p-2 border border-slate-200 text-right tabular-nums">{fmtMoney(p.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {invoice.notes ? (
         <div className="mt-8 pt-6 border-t border-slate-200">

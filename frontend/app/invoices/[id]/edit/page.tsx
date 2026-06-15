@@ -40,7 +40,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 
-const STATUSES = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
+const STATUSES = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
 
 export default function InvoiceEditPage() {
   const params = useParams();
@@ -286,6 +286,12 @@ export default function InvoiceEditPage() {
                     <span className="font-semibold text-foreground">
                       Total £{(inv.total ?? 0).toFixed(2)}
                     </span>
+                    {(inv.amount_paid ?? 0) > 0 && (
+                      <>
+                        <span className="text-green-700">Paid £{(inv.amount_paid ?? 0).toFixed(2)}</span>
+                        <span className="font-semibold text-red-700">Balance £{(inv.balance_due ?? 0).toFixed(2)}</span>
+                      </>
+                    )}
                   </div>
                   <Button onClick={saveHeader} disabled={saving}>
                     <Save className="size-4 mr-1" /> Save details

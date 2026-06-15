@@ -341,6 +341,32 @@ export const api = {
     compliance: (days?: number): Promise<ComplianceAlert[]> => request<ComplianceAlert[]>(`/reports/compliance${days != null ? `?days=${days}` : ''}`),
     contractsExpiring: (days?: number): Promise<ContractExpiryAlert[]> =>
       request<ContractExpiryAlert[]>(`/reports/contracts-expiring${days != null ? `?days=${days}` : ''}`),
+    hub: (start_date: string, end_date: string): Promise<import('./types').ReportsHub> =>
+      request<import('./types').ReportsHub>(`/reports/hub?start_date=${start_date}&end_date=${end_date}`),
+    staffIndividual: (guard_id: number, start_date: string, end_date: string): Promise<import('./types').StaffIndividualReport> =>
+      request<import('./types').StaffIndividualReport>(`/reports/staff/${guard_id}?start_date=${start_date}&end_date=${end_date}`),
+    staffMonthly: (start_date: string, end_date: string, group_by = 'guard') =>
+      request<import('./types').StaffIndividualReport>(`/reports/staff/monthly?start_date=${start_date}&end_date=${end_date}&group_by=${group_by}`),
+    attendance: (start_date: string, end_date: string, guard_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (guard_id) q.append('guard_id', String(guard_id));
+      return request<Record<string, unknown>[]>(`/reports/attendance?${q}`);
+    },
+    financialInvoices: (start_date: string, end_date: string) =>
+      request<Record<string, unknown>[]>(`/reports/financial/invoices?start_date=${start_date}&end_date=${end_date}`),
+    export: async (report_type: string, start_date: string, end_date: string, format: string, guard_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date, format });
+      if (guard_id) q.append('guard_id', String(guard_id));
+      return requestBlob(`/reports/export/${report_type}?${q}`);
+    },
+  },
+  sms: {
+    config: (): Promise<import('./types').SmsConfig> => request<import('./types').SmsConfig>('/sms/config'),
+    updateConfig: (data: Partial<{ twilio_account_sid: string; twilio_auth_token: string; twilio_phone_number: string; templates: Record<string, string> }>) =>
+      request<import('./types').SmsConfig>('/sms/config', { method: 'PATCH', body: JSON.stringify(data) }),
+    send: (recipient: string, body: string, template_key?: string) =>
+      request<import('./types').SmsLog>('/sms/send', { method: 'POST', body: JSON.stringify({ recipient, body, template_key }) }),
+    logs: (): Promise<import('./types').SmsLog[]> => request<import('./types').SmsLog[]>('/sms/logs'),
   },
   payroll: {
     list: (params?: { guard_id?: number; period_start?: string; period_end?: string }): Promise<Payroll[]> => {

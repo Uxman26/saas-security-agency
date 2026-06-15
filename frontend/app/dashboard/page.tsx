@@ -48,6 +48,7 @@ const companyTiles = [
   { href: '/documents', title: 'Documents', desc: 'Staff documents & expiry', icon: FolderOpen, color: 'text-amber-600', perm: 'doc.read' },
   { href: '/contractors', title: 'Contractors', desc: 'Main & sub contractor onboarding', icon: UserCog, color: 'text-indigo-600', perm: PERMS.contractorView },
   { href: '/payroll', title: 'Payroll', desc: 'Calculate & manage payroll', icon: PoundSterling, color: 'text-emerald-600', perm: 'payroll.read' },
+  { href: '/reports', title: 'Reports', desc: 'Staff, financial & usage reports', icon: ClipboardList, color: 'text-indigo-600', perm: 'rep.read' },
   { href: '/invoices', title: 'Invoices', desc: 'Client billing & invoices', icon: FileText, color: 'text-rose-600', perm: 'inv.read' },
   { href: '/payments', title: 'Payments', desc: 'Track received payments', icon: CreditCard, color: 'text-violet-600', perm: 'pay.read' },
   { href: '/allowances', title: 'Allowances', desc: 'Rates & allowance config', icon: Wallet, color: 'text-sky-600', perm: 'allow.read' },

@@ -69,6 +69,10 @@ class Company(Base):
     email = Column(String)
     phone = Column(String)
     address = Column(String)
+    twilio_account_sid = Column(String)
+    twilio_auth_token = Column(String)
+    twilio_phone_number = Column(String)
+    sms_templates_json = Column(Text)
     contract_expiry_alert_sent_date = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -91,6 +95,21 @@ class Company(Base):
     subscription_invoices = relationship("SubscriptionInvoice", back_populates="company", cascade="all, delete-orphan")
     staff_requests = relationship("StaffRequest", back_populates="company", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="company", cascade="all, delete-orphan")
+    sms_logs = relationship("SmsLog", back_populates="company", cascade="all, delete-orphan")
+
+
+class SmsLog(Base):
+    __tablename__ = "sms_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    recipient = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    template_key = Column(String)
+    status = Column(String, default="sent")
+    error_message = Column(String)
+    twilio_sid = Column(String)
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="sms_logs")
 
 
 class SubscriptionReceipt(Base):

@@ -26,11 +26,13 @@ const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-secondary text-secondary-foreground',
   sent: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  partial: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  unpaid: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
   overdue: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
 };
 
-const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
+const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
 
 export default function InvoicesPage() {
   const { user } = useAuth();
@@ -168,8 +170,10 @@ export default function InvoicesPage() {
   }, [pageCount]);
 
   const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.total, 0);
-  const outstanding = invoices.filter((i) => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + i.total, 0);
+  const paidAmount = invoices.reduce((sum, i) => sum + (i.amount_paid ?? (i.status === 'paid' ? i.total : 0)), 0);
+  const outstanding = invoices
+    .filter((i) => !['draft', 'paid', 'cancelled'].includes(i.status))
+    .reduce((sum, i) => sum + (i.balance_due ?? (i.status === 'paid' ? 0 : i.total)), 0);
   const draftInvoices = invoices.filter((i) => i.status === 'draft');
   const sentInvoices = invoices.filter((i) => i.status === 'sent');
   const draftTotal = draftInvoices.reduce((sum, i) => sum + i.total, 0);

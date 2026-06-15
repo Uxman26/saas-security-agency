@@ -36,6 +36,7 @@ const mobileLinks = [
   { href: '/documents', label: 'Documents', perm: 'doc.read' },
   { href: '/contractors', label: 'Contractors', perm: 'subs.read' },
   { href: '/payroll', label: 'Payroll', perm: 'payroll.read' },
+  { href: '/reports', label: 'Reports', perm: 'rep.read' },
   { href: '/invoices', label: 'Invoices', perm: 'inv.read' },
   { href: '/expenses', label: 'Expenses', perm: 'exp.read' },
   { href: '/payments', label: 'Payments', perm: 'pay.read' },

@@ -12,8 +12,11 @@ import { api } from '@/lib/api';
 import type { CompanyProfile } from '@/lib/types';
 import { Building2, Upload, Wallet } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+type Tab = 'logo' | 'contact' | 'banking';
 
 function useLogoUrl(url?: string | null) {
   const [src, setSrc] = useState<string | null>(null);
@@ -44,6 +47,7 @@ function useLogoUrl(url?: string | null) {
 }
 
 export default function CompanySettingsPage() {
+  const [tab, setTab] = useState<Tab>('logo');
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -126,115 +130,147 @@ export default function CompanySettingsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 max-w-2xl">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Building2 className="size-7" /> Company profile
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">Logo and contact details appear at the top of invoices. Bank account details appear at the bottom for payment.</p>
+        <div className="container mx-auto px-4 py-8 space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Building2 className="size-7" /> Company profile
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">Logo and contact details appear on invoices. Bank details appear at the bottom for payment.</p>
+            </div>
+            {tab !== 'logo' && (
+              <div className="flex gap-2">
+                <Button onClick={() => void save()} disabled={saving || !name.trim()}>
+                  {saving ? 'Saving…' : 'Save'}
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/invoices">Back to invoices</Link>
+                </Button>
+              </div>
+            )}
           </div>
 
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-base">Logo</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center gap-4">
-              {logoSrc ? (
-                <img src={logoSrc} alt="" className="h-16 max-w-[180px] object-contain rounded border bg-white p-2" />
-              ) : (
-                <div className="h-16 w-32 rounded border border-dashed flex items-center justify-center text-xs text-muted-foreground">No logo</div>
-              )}
-              <label className="inline-flex">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="hidden"
-                  onChange={(e) => void onLogo(e.target.files?.[0] ?? null)}
-                />
-                <span className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-sm font-medium hover:bg-muted cursor-pointer">
-                  <Upload className="size-4 mr-1" />
-                  {uploading ? 'Uploading…' : 'Upload logo'}
-                </span>
-              </label>
-            </CardContent>
-          </Card>
-
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-base">Contact details</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="space-y-1">
-                <Label>Company name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label>Email</Label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="billing@company.com" />
-              </div>
-              <div className="space-y-1">
-                <Label>Phone</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 20 0000 0000" />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <Label>Address</Label>
-                <textarea
-                  className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street, city"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Postcode</Label>
-                <Input value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="e.g. E15 2AB" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Wallet className="size-4" /> Account details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <p className="text-sm text-muted-foreground -mt-2 sm:col-span-2">Bank details shown at the bottom of invoices so clients know where to pay.</p>
-              <div className="space-y-1 sm:col-span-2">
-                <Label>Account name</Label>
-                <Input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Name on the bank account" />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <Label>Bank name</Label>
-                <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Barclays, HSBC" />
-              </div>
-              <div className="space-y-1">
-                <Label>Sort code</Label>
-                <Input value={sortCode} onChange={(e) => setSortCode(e.target.value)} placeholder="00-00-00" />
-              </div>
-              <div className="space-y-1">
-                <Label>Account number</Label>
-                <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="12345678" />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <Label>IBAN</Label>
-                <Input value={iban} onChange={(e) => setIban(e.target.value)} placeholder="GB00 XXXX 0000 0000 0000 00" className="font-mono" />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <Label>SWIFT / BIC</Label>
-                <Input value={swiftCode} onChange={(e) => setSwiftCode(e.target.value)} placeholder="BARCGB22" className="font-mono" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-2">
-            <Button onClick={() => void save()} disabled={saving || !name.trim()}>
-              {saving ? 'Saving…' : 'Save'}
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href="/invoices">Back to invoices</Link>
-            </Button>
+          <div className="flex gap-1 border-b">
+            {([
+              ['logo', 'Logo'],
+              ['contact', 'Contact'],
+              ['banking', 'Banking'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                  tab === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
+
+          {tab === 'logo' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Logo</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-6">
+                {logoSrc ? (
+                  <img src={logoSrc} alt="" className="h-24 max-w-[240px] object-contain rounded border bg-white p-3" />
+                ) : (
+                  <div className="h-24 w-48 rounded border border-dashed flex items-center justify-center text-sm text-muted-foreground">No logo</div>
+                )}
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">PNG, JPEG, WebP or GIF. Shown at the top of invoices.</p>
+                  <label className="inline-flex">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => void onLogo(e.target.files?.[0] ?? null)}
+                    />
+                    <span className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 h-9 text-sm font-medium hover:bg-muted cursor-pointer">
+                      <Upload className="size-4 mr-2" />
+                      {uploading ? 'Uploading…' : 'Upload logo'}
+                    </span>
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'contact' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Contact details</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+                  <Label>Company name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Email</Label>
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="billing@company.com" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Phone</Label>
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 20 0000 0000" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Postcode</Label>
+                  <Input value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="e.g. E15 2AB" />
+                </div>
+                <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+                  <Label>Address</Label>
+                  <textarea
+                    className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Street, city"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'banking' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Wallet className="size-4" /> Account details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <p className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">Bank details shown at the bottom of invoices so clients know where to pay.</p>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>Account name</Label>
+                  <Input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Name on the bank account" />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>Bank name</Label>
+                  <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Barclays, HSBC" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Sort code</Label>
+                  <Input value={sortCode} onChange={(e) => setSortCode(e.target.value)} placeholder="00-00-00" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Account number</Label>
+                  <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="12345678" />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>IBAN</Label>
+                  <Input value={iban} onChange={(e) => setIban(e.target.value)} placeholder="GB00 XXXX 0000 0000 0000 00" className="font-mono" />
+                </div>
+                <div className="space-y-1">
+                  <Label>SWIFT / BIC</Label>
+                  <Input value={swiftCode} onChange={(e) => setSwiftCode(e.target.value)} placeholder="BARCGB22" className="font-mono" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </AppShell>
     </ProtectedRoute>

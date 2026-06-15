@@ -19,6 +19,8 @@ import { FileText, Zap, Trash2, Eye, Pencil, Download } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
+import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
+import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-secondary text-secondary-foreground',
@@ -116,6 +118,7 @@ export default function InvoicesPage() {
         inv.status,
         inv.period_start,
         inv.period_end,
+        inv.due_date,
         String(inv.total),
       ]
         .filter(Boolean)
@@ -132,6 +135,8 @@ export default function InvoicesPage() {
           return inv.client_name ?? clientMap.get(inv.client_id) ?? '';
         case 'period':
           return inv.period_start;
+        case 'due':
+          return inv.due_date ?? '';
         case 'total':
           return inv.total;
         case 'status':
@@ -308,6 +313,7 @@ export default function InvoicesPage() {
                         <SortableHead label="Inv #" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Due Date" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Change Status</TableHead>
@@ -315,14 +321,25 @@ export default function InvoicesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageRows.map((inv) => (
-                        <TableRow key={inv.id}>
+                      {pageRows.map((inv) => {
+                        const pastDue = isInvoicePastDue(inv);
+                        return (
+                        <TableRow
+                          key={inv.id}
+                          className={cn(
+                            pastDue && 'bg-red-50 dark:bg-red-950/25 border-l-2 border-l-red-500'
+                          )}
+                        >
                           <TableCell className="font-medium text-muted-foreground">#{inv.id}</TableCell>
                           <TableCell className="font-medium whitespace-nowrap">
                             {inv.client_name ?? clientMap.get(inv.client_id) ?? `Client #${inv.client_id}`}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-sm">
                             {inv.period_start} – {inv.period_end}
+                          </TableCell>
+                          <TableCell className={cn('whitespace-nowrap text-sm', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
+                            {formatDueDate(inv.due_date)}
+                            {pastDue ? <span className="ml-1.5 text-xs uppercase tracking-wide">Overdue</span> : null}
                           </TableCell>
                           <TableCell className="font-bold whitespace-nowrap">£{inv.total.toFixed(2)}</TableCell>
                           <TableCell>
@@ -374,7 +391,8 @@ export default function InvoicesPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                   <TablePaginationBar

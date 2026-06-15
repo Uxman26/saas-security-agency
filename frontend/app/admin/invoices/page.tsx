@@ -17,6 +17,8 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Eye, Download } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
+import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-secondary text-secondary-foreground',
@@ -90,6 +92,7 @@ export default function AdminInvoicesPage() {
         inv.status,
         inv.period_start,
         inv.period_end,
+        inv.due_date,
         String(inv.total),
       ]
         .filter(Boolean)
@@ -106,6 +109,8 @@ export default function AdminInvoicesPage() {
         return inv.client_name || '';
       case 'period':
         return inv.period_start;
+      case 'due':
+        return inv.due_date ?? '';
       case 'total':
         return inv.total;
       case 'status':
@@ -181,19 +186,31 @@ export default function AdminInvoicesPage() {
                         <SortableHead label="Company" colKey="company" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Due Date" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableCell>Actions</TableCell>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageRows.map((inv) => (
-                        <TableRow key={inv.id}>
+                      {pageRows.map((inv) => {
+                        const pastDue = isInvoicePastDue(inv);
+                        return (
+                        <TableRow
+                          key={inv.id}
+                          className={cn(
+                            pastDue && 'bg-red-50 dark:bg-red-950/25 border-l-2 border-l-red-500'
+                          )}
+                        >
                           <TableCell>{inv.id}</TableCell>
                           <TableCell>{inv.company_name ?? '-'}</TableCell>
                           <TableCell>{inv.client_name ?? inv.client_id}</TableCell>
                           <TableCell className="text-sm">
                             {inv.period_start} – {inv.period_end}
+                          </TableCell>
+                          <TableCell className={cn('text-sm whitespace-nowrap', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
+                            {formatDueDate(inv.due_date)}
+                            {pastDue ? <span className="ml-1.5 text-xs uppercase tracking-wide">Overdue</span> : null}
                           </TableCell>
                           <TableCell>£{inv.total.toFixed(2)}</TableCell>
                           <TableCell>
@@ -223,7 +240,8 @@ export default function AdminInvoicesPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                   <TablePaginationBar

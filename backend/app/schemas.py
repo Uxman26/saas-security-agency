@@ -44,6 +44,7 @@ class UserMeResponse(UserResponse):
     subscription_status: Optional[str] = None
     subscription_end: Optional[datetime] = None
     sidebar_modules: Optional[List[str]] = None
+    enabled_modules: Optional[dict[str, bool]] = None
 
 
 class SubscriptionReceiptResponse(BaseModel):
@@ -110,6 +111,13 @@ class AdminCompanyUpdate(BaseModel):
     subscription_tier: Optional[str] = None
     subscription_status: Optional[str] = None
     subscription_end: Optional[datetime] = None
+    billing_cycle: Optional[str] = None
+    max_users: Optional[int] = None
+    enabled_modules: Optional[dict[str, bool]] = None
+
+
+class AdminModulesPatch(BaseModel):
+    enabled_modules: dict[str, bool]
 
 
 class PlanTierOut(BaseModel):
@@ -117,6 +125,7 @@ class PlanTierOut(BaseModel):
     price_gbp: float
     max_guards: Optional[int] = None
     max_sites: Optional[int] = None
+    max_users: Optional[int] = None
     features: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -124,6 +133,7 @@ class PlanTierUpdate(BaseModel):
     price_gbp: Optional[float] = None
     max_guards: Optional[int] = None
     max_sites: Optional[int] = None
+    max_users: Optional[int] = None
     features: Optional[dict[str, Any]] = None
 
 
@@ -141,11 +151,73 @@ class AdminUserDetail(BaseModel):
     subscription_start: Optional[datetime] = None
     subscription_end: Optional[datetime] = None
     subscription_days_left: Optional[int] = None
+    billing_cycle: Optional[str] = None
+    max_users: Optional[int] = None
+    user_count: Optional[int] = None
+    enabled_modules: dict[str, bool] = Field(default_factory=dict)
+    usage: dict[str, Any] = Field(default_factory=dict)
     sidebar_modules: List[str] = Field(default_factory=list)
     receipts: List[SubscriptionReceiptResponse] = Field(default_factory=list)
 
+
+class SubscriptionInvoiceResponse(BaseModel):
+    id: int
+    invoice_number: str
+    company_id: int
+    company_name: Optional[str] = None
+    tenant_email: Optional[str] = None
+    subscription_tier: str
+    billing_cycle: str
+    period_start: Optional[datetime] = None
+    period_end: Optional[datetime] = None
+    due_date: date
+    amount_ex_vat: float
+    vat_amount: float
+    total_amount: float
+    amount_paid: float = 0
+    status: str
+    email_sent: bool = False
+    sent_at: Optional[datetime] = None
+    paid_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class SubscriptionInvoiceStatusPatch(BaseModel):
+    status: str
+
+
+class SubscriptionInvoicePaymentPatch(BaseModel):
+    amount: float
+
+
+class LoginLogResponse(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    company_id: Optional[int] = None
+    login_at: datetime
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    status: str
+
+
+class AdminDashboardResponse(BaseModel):
+    total_companies: int
+    active_subscriptions: int
+    total_invoices: int
+    paid_invoices: int
+    unpaid_invoices: int
+    overdue_invoices: int
+    partial_invoices: int
+    outstanding_balance: float
+    total_collected: float
+    platform_usage: dict[str, Any] = Field(default_factory=dict)
+
+
 class CompanyBase(BaseModel):
     name: str
+
 
 class CompanyResponse(CompanyBase):
     id: int
@@ -154,10 +226,27 @@ class CompanyResponse(CompanyBase):
     subscription_status: Optional[str] = None
     subscription_start: Optional[datetime] = None
     subscription_end: Optional[datetime] = None
+    billing_cycle: Optional[str] = None
+    max_users: Optional[int] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class CompanyAdminResponse(CompanyBase):
+    id: int
+    admin_id: int
+    subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    subscription_start: Optional[datetime] = None
+    subscription_end: Optional[datetime] = None
+    billing_cycle: Optional[str] = None
+    max_users: Optional[int] = None
+    user_count: Optional[int] = None
+    enabled_modules: dict[str, bool] = Field(default_factory=dict)
+    usage: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
 
 
 class CompanyProfileUpdate(BaseModel):

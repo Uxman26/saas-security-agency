@@ -517,30 +517,56 @@ export const api = {
     list: (): Promise<PlanTier[]> => request<PlanTier[]>('/subscriptions/packages'),
   },
   admin: {
+    dashboard: (): Promise<import('./types').AdminDashboard> => request<import('./types').AdminDashboard>('/admin/dashboard'),
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),
+    company: (id: number): Promise<import('./types').Company> => request<import('./types').Company>(`/admin/companies/${id}`),
     patchCompany: (
       id: number,
-      data: { name?: string; subscription_tier?: string; subscription_status?: string; subscription_end?: string }
+      data: {
+        name?: string;
+        subscription_tier?: string;
+        subscription_status?: string;
+        subscription_end?: string;
+        billing_cycle?: string;
+        max_users?: number | null;
+        enabled_modules?: Record<string, boolean>;
+      }
     ): Promise<import('./types').Company> =>
       request<import('./types').Company>(`/admin/companies/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    patchCompanyModules: (id: number, enabled_modules: Record<string, boolean>): Promise<import('./types').Company> =>
+      request<import('./types').Company>(`/admin/companies/${id}/modules`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled_modules }),
+      }),
     users: (): Promise<AdminUserListItem[]> => request<AdminUserListItem[]>('/admin/users'),
     patchUserActive: (id: number, is_active: boolean): Promise<AdminUserListItem> =>
       request<AdminUserListItem>(`/admin/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active }) }),
-    invoices: (params?: { company_id?: number; status?: string }): Promise<Invoice[]> => {
+    invoices: (params?: { company_id?: number; status?: string }): Promise<import('./types').SubscriptionInvoice[]> => {
       const q = new URLSearchParams();
       if (params?.company_id) q.append('company_id', params.company_id.toString());
       if (params?.status) q.append('status', params.status);
       const qs = q.toString();
-      return request<Invoice[]>(`/admin/invoices${qs ? `?${qs}` : ''}`);
+      return request<import('./types').SubscriptionInvoice[]>(`/admin/invoices${qs ? `?${qs}` : ''}`);
     },
-    invoice: (id: number): Promise<Invoice> => request<Invoice>(`/admin/invoices/${id}`),
-    patchInvoice: (
-      id: number,
-      data: { due_date?: string | null; notes?: string | null; tax_rate?: number; status?: string }
-    ): Promise<Invoice> => request<Invoice>(`/admin/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    patchInvoiceStatus: (id: number, status: string): Promise<Invoice> =>
-      request<Invoice>(`/admin/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
-    invoicePdf: (id: number): Promise<Blob> => requestBlob(`/admin/invoices/${id}/pdf`),
+    invoice: (id: number): Promise<import('./types').SubscriptionInvoice> =>
+      request<import('./types').SubscriptionInvoice>(`/admin/invoices/${id}`),
+    patchInvoiceStatus: (id: number, status: string): Promise<import('./types').SubscriptionInvoice> =>
+      request<import('./types').SubscriptionInvoice>(`/admin/invoices/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    recordInvoicePayment: (id: number, amount: number): Promise<import('./types').SubscriptionInvoice> =>
+      request<import('./types').SubscriptionInvoice>(`/admin/invoices/${id}/payment`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      }),
+    sendInvoiceEmail: (id: number): Promise<import('./types').SubscriptionInvoice> =>
+      request<import('./types').SubscriptionInvoice>(`/admin/invoices/${id}/send-email`, { method: 'POST' }),
+    generateInvoices: (): Promise<{ created: number }> => request<{ created: number }>('/admin/invoices/generate', { method: 'POST' }),
+    loginLogs: (company_id?: number): Promise<import('./types').LoginLog[]> => {
+      const q = company_id ? `?company_id=${company_id}` : '';
+      return request<import('./types').LoginLog[]>(`/admin/login-logs${q}`);
+    },
     payments: (company_id?: number): Promise<AdminPayment[]> => {
       const q = company_id ? `?company_id=${company_id}` : '';
       return request<AdminPayment[]>(`/admin/payments${q}`);
@@ -548,7 +574,7 @@ export const api = {
     packages: (): Promise<PlanTier[]> => request<PlanTier[]>('/admin/packages'),
     patchPackage: (
       tier: string,
-      data: { price_gbp?: number; max_guards?: number; max_sites?: number; features?: Record<string, boolean> }
+      data: { price_gbp?: number; max_guards?: number; max_sites?: number; max_users?: number; features?: Record<string, boolean> }
     ): Promise<PlanTier> =>
       request<PlanTier>(`/admin/packages/${tier}`, { method: 'PATCH', body: JSON.stringify(data) }),
     receipts: (): Promise<SubscriptionReceipt[]> => request<SubscriptionReceipt[]>('/admin/receipts'),

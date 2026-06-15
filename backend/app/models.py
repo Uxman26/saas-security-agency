@@ -55,6 +55,9 @@ class Company(Base):
     subscription_status = Column(String, default="pending")
     subscription_start = Column(DateTime(timezone=True))
     subscription_end = Column(DateTime(timezone=True))
+    billing_cycle = Column(String, default="monthly")
+    max_users = Column(Integer)
+    enabled_modules_json = Column(Text)
     stripe_customer_id = Column(String)
     logo_path = Column(String)
     account_name = Column(String)
@@ -85,6 +88,7 @@ class Company(Base):
     directory_contractors = relationship("Contractor", back_populates="company", cascade="all, delete-orphan")
     rota_plans = relationship("RotaPlan", back_populates="company", cascade="all, delete-orphan")
     subscription_receipts = relationship("SubscriptionReceipt", back_populates="company", cascade="all, delete-orphan")
+    subscription_invoices = relationship("SubscriptionInvoice", back_populates="company", cascade="all, delete-orphan")
     staff_requests = relationship("StaffRequest", back_populates="company", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="company", cascade="all, delete-orphan")
 
@@ -105,6 +109,41 @@ class SubscriptionReceipt(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     company = relationship("Company", back_populates="subscription_receipts")
     user = relationship("User")
+
+
+class SubscriptionInvoice(Base):
+    __tablename__ = "subscription_invoices"
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_number = Column(String, unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    subscription_tier = Column(String, nullable=False)
+    billing_cycle = Column(String, default="monthly")
+    period_start = Column(DateTime(timezone=True))
+    period_end = Column(DateTime(timezone=True))
+    due_date = Column(Date, nullable=False)
+    amount_ex_vat = Column(Float, nullable=False)
+    vat_amount = Column(Float, nullable=False)
+    total_amount = Column(Float, nullable=False)
+    amount_paid = Column(Float, default=0)
+    status = Column(String, default="unpaid")
+    email_sent = Column(Boolean, default=False)
+    sent_at = Column(DateTime(timezone=True))
+    paid_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="subscription_invoices")
+
+
+class LoginLog(Base):
+    __tablename__ = "login_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    email = Column(String)
+    full_name = Column(String)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    login_at = Column(DateTime(timezone=True), server_default=func.now())
+    ip_address = Column(String)
+    user_agent = Column(String)
+    status = Column(String, nullable=False)
 
 
 class Contractor(Base):

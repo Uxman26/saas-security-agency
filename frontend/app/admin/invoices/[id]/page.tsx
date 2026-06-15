@@ -1,36 +1,36 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api';
-import type { Invoice } from '@/lib/types';
-import { InvoiceDocument } from '@/components/invoices/invoice-document';
-import { ArrowLeft, Download, Printer } from 'lucide-react';
+import type { SubscriptionInvoice } from '@/lib/types';
+import { ArrowLeft, Mail } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
-const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
+const fmt = (n: number) => `£${n.toFixed(2)}`;
 
-export default function AdminInvoiceDetailPage() {
-  const params = useParams();
-  const router = useRouter();
+const STATUS_STYLES: Record<string, string> = {
+  paid: 'text-green-600',
+  unpaid: 'text-blue-600',
+  overdue: 'text-red-600',
+  partial: 'text-amber-600',
+  cancelled: 'text-gray-500',
+};
+
+export default function AdminSubscriptionInvoicePage() {
   const { user } = useAuth();
-  const rawId = params.id;
-  const id = Number(Array.isArray(rawId) ? rawId[0] : rawId);
-  const [inv, setInv] = useState<Invoice | null>(null);
-  const [dueDate, setDueDate] = useState('');
-  const [notes, setNotes] = useState('');
-  const [taxRate, setTaxRate] = useState('');
-  const [status, setStatus] = useState('');
-  const [saving, setSaving] = useState(false);
+  const router = useRouter();
+  const params = useParams();
+  const id = Number(params.id);
+  const [inv, setInv] = useState<SubscriptionInvoice | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -38,142 +38,127 @@ export default function AdminInvoiceDetailPage() {
       router.replace('/dashboard');
       return;
     }
-    if (!id || Number.isNaN(id)) return;
     api.admin
       .invoice(id)
-      .then((data) => {
-        setInv(data);
-        setDueDate(data.due_date?.slice(0, 10) ?? '');
-        setNotes(data.notes ?? '');
-        setTaxRate(String(data.tax_rate ?? 0));
-        setStatus(data.status);
-      })
-      .catch(() => toast.error('Failed to load invoice'));
+      .then(setInv)
+      .catch(() => toast.error('Invoice not found'))
+      .finally(() => setLoading(false));
   }, [user, router, id]);
 
-  const save = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const updated = await api.admin.patchInvoice(id, {
-        due_date: dueDate || null,
-        notes: notes || null,
-        tax_rate: parseFloat(taxRate) || 0,
-        status,
-      });
-      setInv(updated);
-      toast.success('Invoice updated');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Save failed');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const markPaid = async () => {
-    if (!id) return;
     try {
       const updated = await api.admin.patchInvoiceStatus(id, 'paid');
       setInv(updated);
-      setStatus('paid');
       toast.success('Marked as paid');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Update failed');
+    } catch {
+      toast.error('Update failed');
     }
   };
 
-  const downloadPdf = async () => {
-    if (!id) return;
+  const sendEmail = async () => {
     try {
-      const blob = await api.admin.invoicePdf(id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice-${id}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Download failed');
+      const updated = await api.admin.sendInvoiceEmail(id);
+      setInv(updated);
+      toast.success('Invoice emailed to tenant');
+    } catch {
+      toast.error('Email failed — check SMTP settings');
     }
   };
+
+  if (loading || !inv) {
+    return (
+      <ProtectedRoute>
+        <AppShell>
+          <div className="container mx-auto px-4 py-8 text-muted-foreground">{loading ? 'Loading...' : 'Invoice not found'}</div>
+        </AppShell>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
       <AppShell>
-        <style>{`
-          @media print {
-            body * { visibility: hidden !important; }
-            #invoice-print, #invoice-print * { visibility: visible !important; }
-            #invoice-print { position: absolute; left: 0; top: 0; width: 100%; }
-          }
-        `}</style>
-        <div className="container mx-auto px-4 py-8 max-w-5xl">
-          <div className="flex flex-wrap items-center gap-3 mb-6 print:hidden">
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/admin/invoices">
-                <ArrowLeft className="size-4 mr-1" />
-                Back
-              </Link>
-            </Button>
-            <h1 className="text-2xl font-bold flex-1">Invoice #{id}</h1>
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <Printer className="size-4 mr-1" />
-              Print
-            </Button>
-            <Button variant="outline" size="sm" onClick={downloadPdf}>
-              <Download className="size-4 mr-1" />
-              PDF
-            </Button>
-            {status !== 'paid' && (
-              <Button size="sm" onClick={markPaid}>
-                Mark paid
-              </Button>
-            )}
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-3 print:block">
-            <Card className="lg:col-span-1 print:hidden">
-              <CardHeader>
-                <CardTitle>Edit invoice</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger className="mt-1 capitalize">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map((s) => (
-                        <SelectItem key={s} value={s} className="capitalize">
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="due">Due date</Label>
-                  <Input id="due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="mt-1" />
-                </div>
-                <div>
-                  <Label htmlFor="tax">Tax rate (%)</Label>
-                  <Input id="tax" type="number" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} className="mt-1" />
-                </div>
-                <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1" />
-                </div>
-                <Button onClick={save} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save changes'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <div className="lg:col-span-2" id="invoice-print">
-              {inv ? <InvoiceDocument invoice={inv} /> : <div className="text-muted-foreground">Loading...</div>}
+        <div className="container mx-auto px-4 py-8 max-w-3xl">
+          <div className="flex items-center justify-between mb-6">
+            <Link href="/admin/invoices">
+              <Button variant="outline" size="sm"><ArrowLeft className="size-4 mr-1" />Back</Button>
+            </Link>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={sendEmail}><Mail className="size-4 mr-1" />Send email</Button>
+              {inv.status !== 'paid' && <Button size="sm" onClick={markPaid}>Mark paid</Button>}
             </div>
           </div>
+
+          <Card className="overflow-hidden shadow-lg border-0">
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white px-8 py-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-slate-400">SecureForce Manager</p>
+                  <h1 className="text-2xl font-bold mt-1">Subscription Invoice</h1>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono text-sm">{inv.invoice_number}</p>
+                  <p className={cn('text-sm capitalize font-medium mt-1', STATUS_STYLES[inv.status])}>{inv.status}</p>
+                </div>
+              </div>
+            </div>
+            <CardContent className="p-8 space-y-6">
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-xs uppercase text-muted-foreground mb-1">Bill to</p>
+                  <p className="font-semibold text-lg">{inv.company_name}</p>
+                  <p className="text-sm text-muted-foreground">{inv.tenant_email}</p>
+                </div>
+                <div className="sm:text-right">
+                  <p className="text-xs uppercase text-muted-foreground mb-1">Invoice date</p>
+                  <p>{new Date(inv.created_at).toLocaleDateString('en-GB')}</p>
+                  <p className="text-xs uppercase text-muted-foreground mt-3 mb-1">Due date</p>
+                  <p className="font-semibold">{new Date(inv.due_date).toLocaleDateString('en-GB')}</p>
+                </div>
+              </div>
+
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-3">Description</th>
+                      <th className="text-left p-3">Period</th>
+                      <th className="text-right p-3">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t">
+                      <td className="p-3">
+                        <p className="font-medium capitalize">{inv.subscription_tier} plan</p>
+                        <p className="text-muted-foreground capitalize">{inv.billing_cycle} billing</p>
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {inv.period_start ? new Date(inv.period_start).toLocaleDateString('en-GB') : '—'}
+                        {' — '}
+                        {inv.period_end ? new Date(inv.period_end).toLocaleDateString('en-GB') : '—'}
+                      </td>
+                      <td className="p-3 text-right">{fmt(inv.amount_ex_vat)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end">
+                <div className="w-64 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal (ex VAT)</span><span>{fmt(inv.amount_ex_vat)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAT (20%)</span><span>{fmt(inv.vat_amount)}</span></div>
+                  <div className="flex justify-between border-t pt-2 font-bold text-base"><span>Total payable</span><span>{fmt(inv.total_amount)}</span></div>
+                  {inv.amount_paid > 0 && (
+                    <div className="flex justify-between text-green-600"><span>Paid</span><span>{fmt(inv.amount_paid)}</span></div>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground text-center pt-4 border-t">
+                Thank you for your subscription. Payment is due by the date shown above.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </AppShell>
     </ProtectedRoute>

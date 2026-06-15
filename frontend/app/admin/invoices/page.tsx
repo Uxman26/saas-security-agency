@@ -10,30 +10,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import type { Invoice } from '@/lib/types';
+import type { SubscriptionInvoice } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Eye, Download } from 'lucide-react';
+import { Eye, Mail, Zap } from 'lucide-react';
 import { toast } from '@/lib/toast';
-import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-secondary text-secondary-foreground',
-  sent: 'bg-blue-100 text-blue-800',
   paid: 'bg-green-100 text-green-800',
+  unpaid: 'bg-blue-100 text-blue-800',
   overdue: 'bg-red-100 text-red-800',
+  partial: 'bg-amber-100 text-amber-800',
   cancelled: 'bg-gray-100 text-gray-600',
 };
 
-const STATUS_OPTIONS = ['', 'draft', 'sent', 'paid', 'overdue', 'cancelled'];
+const STATUS_OPTIONS = ['', 'unpaid', 'paid', 'overdue', 'partial', 'cancelled'];
+
+const fmt = (n: number) => `£${n.toFixed(2)}`;
 
 export default function AdminInvoicesPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoices, setInvoices] = useState<SubscriptionInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -69,50 +70,36 @@ export default function AdminInvoicesPage() {
     }
   };
 
-  const downloadPdf = async (id: number) => {
+  const generateInvoices = async () => {
     try {
-      const blob = await api.admin.invoicePdf(id);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invoice-${id}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Download failed');
+      const res = await api.admin.generateInvoices();
+      toast.success(`Generated ${res.created} invoice(s)`);
+      load(statusFilter || undefined);
+    } catch {
+      toast.error('Generation failed');
     }
   };
 
   const getSearchText = useCallback(
-    (inv: Invoice) =>
-      [
-        String(inv.id),
-        inv.company_name,
-        inv.client_name,
-        inv.status,
-        inv.period_start,
-        inv.period_end,
-        inv.due_date,
-        String(inv.total),
-      ]
+    (inv: SubscriptionInvoice) =>
+      [inv.invoice_number, inv.company_name, inv.tenant_email, inv.subscription_tier, inv.billing_cycle, inv.status]
         .filter(Boolean)
         .join(' '),
     []
   );
-  const getSortValue = useCallback((inv: Invoice, key: string) => {
+
+  const getSortValue = useCallback((inv: SubscriptionInvoice, key: string) => {
     switch (key) {
-      case 'id':
-        return inv.id;
-      case 'company':
+      case 'number':
+        return inv.invoice_number;
+      case 'tenant':
         return inv.company_name || '';
-      case 'client':
-        return inv.client_name || '';
-      case 'period':
-        return inv.period_start;
+      case 'plan':
+        return inv.subscription_tier;
       case 'due':
-        return inv.due_date ?? '';
+        return inv.due_date;
       case 'total':
-        return inv.total;
+        return inv.total_amount;
       case 'status':
         return inv.status;
       default:
@@ -131,132 +118,99 @@ export default function AdminInvoicesPage() {
     getSortValue
   );
 
+  const outstanding = invoices
+    .filter((i) => !['paid', 'cancelled'].includes(i.status))
+    .reduce((s, i) => s + Math.max(0, i.total_amount - i.amount_paid), 0);
+
   return (
     <ProtectedRoute>
       <AppShell>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">All invoices</h1>
-            <Button variant="outline" size="sm" onClick={() => load(statusFilter || undefined)}>
-              Refresh
-            </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold">Subscription invoices</h1>
+              <p className="text-muted-foreground mt-1">Platform billing — auto-generated per tenant subscription cycle</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => load(statusFilter || undefined)} disabled={loading}>Refresh</Button>
+              <Button onClick={generateInvoices}><Zap className="size-4 mr-1" />Generate due</Button>
+            </div>
           </div>
-          <div className="flex gap-4 mb-4 flex-wrap">
-            <Input
-              placeholder="Search invoices..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
-            />
-            <Select
-              value={statusFilter || 'all'}
-              onValueChange={(v) => {
-                const s = v === 'all' ? '' : v;
-                setStatusFilter(s);
-                load(s || undefined);
-              }}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+
+          <div className="grid gap-4 sm:grid-cols-3 mb-6">
+            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Total invoices</p><p className="text-2xl font-bold">{invoices.length}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Outstanding</p><p className="text-2xl font-bold text-red-600">{fmt(outstanding)}</p></CardContent></Card>
+            <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Collected</p><p className="text-2xl font-bold text-green-600">{fmt(invoices.reduce((s, i) => s + i.amount_paid, 0))}</p></CardContent></Card>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Input placeholder="Search invoices..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
+            <Select value={statusFilter || 'all'} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); load(v === 'all' ? undefined : v); }}>
+              <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s || 'all'} value={s || 'all'}>
-                    {s ? s.charAt(0).toUpperCase() + s.slice(1) : 'All statuses'}
-                  </SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
+                {STATUS_OPTIONS.filter(Boolean).map((s) => (
+                  <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+
           <Card>
-            <CardHeader>
-              <CardTitle>Platform invoices</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Subscription billing</CardTitle></CardHeader>
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading...</div>
               ) : total === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No invoices.</div>
+                <div className="text-center py-8 text-muted-foreground">No subscription invoices yet.</div>
               ) : (
                 <>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <SortableHead label="ID" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Company" colKey="company" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Due Date" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Invoice" colKey="number" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Tenant" colKey="tenant" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Plan" colKey="plan" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead>Cycle</TableHead>
+                        <SortableHead label="Due" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableCell>Actions</TableCell>
+                        <TableHead>Email</TableHead>
+                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageRows.map((inv) => {
-                        const pastDue = isInvoicePastDue(inv);
-                        return (
-                        <TableRow
-                          key={inv.id}
-                          className={cn(
-                            pastDue && 'bg-red-50 dark:bg-red-950/25 border-l-2 border-l-red-500'
-                          )}
-                        >
-                          <TableCell>{inv.id}</TableCell>
-                          <TableCell>{inv.company_name ?? '-'}</TableCell>
-                          <TableCell>{inv.client_name ?? inv.client_id}</TableCell>
-                          <TableCell className="text-sm">
-                            {inv.period_start} – {inv.period_end}
-                          </TableCell>
-                          <TableCell className={cn('text-sm whitespace-nowrap', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
-                            {formatDueDate(inv.due_date)}
-                            {pastDue ? <span className="ml-1.5 text-xs uppercase tracking-wide">Overdue</span> : null}
-                          </TableCell>
-                          <TableCell>£{inv.total.toFixed(2)}</TableCell>
+                      {pageRows.map((inv) => (
+                        <TableRow key={inv.id}>
+                          <TableCell className="font-mono text-xs">{inv.invoice_number}</TableCell>
+                          <TableCell>{inv.company_name}</TableCell>
+                          <TableCell className="capitalize">{inv.subscription_tier}</TableCell>
+                          <TableCell className="capitalize">{inv.billing_cycle}</TableCell>
+                          <TableCell>{inv.due_date}</TableCell>
+                          <TableCell className="font-medium">{fmt(inv.total_amount)}</TableCell>
                           <TableCell>
                             <Select value={inv.status} onValueChange={(v) => handleStatusChange(inv.id, v)}>
-                              <SelectTrigger className={`h-8 w-28 text-xs capitalize ${STATUS_STYLES[inv.status] ?? ''}`}>
+                              <SelectTrigger className={cn('w-28 h-8 text-xs capitalize', STATUS_STYLES[inv.status])}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
                                 {STATUS_OPTIONS.filter(Boolean).map((s) => (
-                                  <SelectItem key={s} value={s} className="capitalize">
-                                    {s}
-                                  </SelectItem>
+                                  <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </TableCell>
+                          <TableCell>{inv.email_sent ? <Mail className="size-4 text-green-600" /> : '—'}</TableCell>
                           <TableCell>
-                            <div className="flex gap-1">
-                              <Button size="sm" variant="ghost" asChild>
-                                <Link href={`/admin/invoices/${inv.id}`}>
-                                  <Eye className="size-4" />
-                                </Link>
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => downloadPdf(inv.id)}>
-                                <Download className="size-4" />
-                              </Button>
-                            </div>
+                            <Link href={`/admin/invoices/${inv.id}`}>
+                              <Button size="sm" variant="outline"><Eye className="size-4" /></Button>
+                            </Link>
                           </TableCell>
                         </TableRow>
-                        );
-                      })}
+                      ))}
                     </TableBody>
                   </Table>
-                  <TablePaginationBar
-                    safePage={safePage}
-                    pageCount={pageCount}
-                    total={total}
-                    pageSize={pageSize}
-                    rangeStart={rangeStart}
-                    rangeEnd={rangeEnd}
-                    onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
-                  />
+                  <TablePaginationBar safePage={safePage} pageCount={pageCount} total={total} pageSize={pageSize} rangeStart={rangeStart} rangeEnd={rangeEnd} onPageChange={setPage} onPageSizeChange={setPageSize} />
                 </>
               )}
             </CardContent>

@@ -67,6 +67,7 @@ export function AppSidebar() {
     return items.filter((i) => {
       if (!sidebarPathAllowed(user?.sidebar_modules, i.href)) return false;
       if (i.href === '/contractors') return showDirectory;
+      if (i.href === '/expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
       return can(user, i.perm);
     });
   }, [user]);
@@ -82,10 +83,11 @@ export function AppSidebar() {
             { href: '/admin/companies', label: 'Companies', icon: Building2 },
             { href: '/admin/users', label: 'Users', icon: Users },
             { href: '/admin/admins', label: 'Admins', icon: UserCog },
-            { href: '/admin/invoices', label: 'Invoices', icon: FileText },
+            { href: '/admin/invoices', label: 'Sub invoices', icon: FileText },
             { href: '/admin/payments', label: 'Payments', icon: CreditCard },
             { href: '/admin/receipts', label: 'Receipts', icon: Wallet },
             { href: '/admin/packages', label: 'Packages', icon: Gift },
+            { href: '/admin/logs', label: 'Activity logs', icon: Clock },
           ].map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

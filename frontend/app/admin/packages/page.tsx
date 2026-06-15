@@ -24,10 +24,12 @@ export default function AdminPackagesPage() {
   const [price, setPrice] = useState('');
   const [maxGuards, setMaxGuards] = useState('');
   const [maxSites, setMaxSites] = useState('');
+  const [maxUsers, setMaxUsers] = useState('');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
-    api.admin.packages().then(setTiers).catch(() => toast.error('Failed to load packages'));
+    setLoading(true);
+    api.admin.packages().then(setTiers).catch(() => toast.error('Failed to load packages')).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -37,7 +39,6 @@ export default function AdminPackagesPage() {
       return;
     }
     load();
-    setLoading(false);
   }, [user, router, load]);
 
   const openEdit = (t: PlanTier) => {
@@ -45,6 +46,7 @@ export default function AdminPackagesPage() {
     setPrice(String(t.price_gbp));
     setMaxGuards(t.max_guards != null ? String(t.max_guards) : '');
     setMaxSites(t.max_sites != null ? String(t.max_sites) : '');
+    setMaxUsers(t.max_users != null ? String(t.max_users) : '');
   };
 
   const save = async () => {
@@ -55,6 +57,7 @@ export default function AdminPackagesPage() {
         price_gbp: parseFloat(price),
         max_guards: maxGuards ? parseInt(maxGuards, 10) : undefined,
         max_sites: maxSites ? parseInt(maxSites, 10) : undefined,
+        max_users: maxUsers ? parseInt(maxUsers, 10) : undefined,
       });
       setTiers((prev) => prev.map((t) => (t.tier === updated.tier ? updated : t)));
       setSelected(updated);
@@ -135,6 +138,10 @@ export default function AdminPackagesPage() {
                 <div>
                   <Label htmlFor="sites">Max sites</Label>
                   <Input id="sites" type="number" value={maxSites} onChange={(e) => setMaxSites(e.target.value)} className="mt-1" placeholder="Unlimited" />
+                </div>
+                <div>
+                  <Label htmlFor="users">Max users</Label>
+                  <Input id="users" type="number" value={maxUsers} onChange={(e) => setMaxUsers(e.target.value)} className="mt-1" placeholder="Unlimited" />
                 </div>
                 <Button onClick={save} disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}

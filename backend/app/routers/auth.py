@@ -1,5 +1,5 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -10,6 +10,7 @@ from app.services import auth_service
 from app.rbac import permissions_for_user_db
 from app.services.plan_enforcement import plan_summary
 from app.services.receipt_service import parse_sidebar_modules
+from app.services.module_service import parse_modules, path_allowed_by_modules
 from app.storage_paths import resolve_storage_path
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -40,8 +41,10 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    return auth_service.authenticate_user(db, credentials.email, credentials.password)
+def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    return auth_service.authenticate_user(db, credentials.email, credentials.password, ip_address=ip, user_agent=ua)
 
 
 @router.post("/forgot-password")
@@ -73,11 +76,15 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
     sub_status = None
     sub_end = None
     sidebar_modules = None
+    enabled_modules = None
     if current_user.company_id and co:
         sub_status = co.subscription_status
         sub_end = co.subscription_end
+        enabled_modules = parse_modules(co.enabled_modules_json)
     if getattr(current_user, "role", None) != SUPER_ADMIN_ROLE:
         sidebar_modules = parse_sidebar_modules(current_user.sidebar_modules_json)
+        if sidebar_modules and co:
+            sidebar_modules = [p for p in sidebar_modules if path_allowed_by_modules(co, p)]
     base = UserResponse.model_validate(current_user)
     return UserMeResponse(
         **base.model_dump(),
@@ -88,6 +95,7 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         subscription_status=sub_status,
         subscription_end=sub_end,
         sidebar_modules=sidebar_modules,
+        enabled_modules=enabled_modules,
     )
 
 

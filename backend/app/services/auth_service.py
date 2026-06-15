@@ -63,16 +63,23 @@ def signup_with_receipt(db: Session, user_data: UserCreate):
         raise HTTPException(status_code=500, detail="Receipt not created")
     return user, r
 
-def authenticate_user(db: Session, email: str, password: str) -> dict:
+def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None) -> dict:
     from app.auth import verify_password
-    
+    from app.services import login_log_service
+
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.password_hash):
+        login_log_service.log_login(db, email=email, status="failed", ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if not user.is_active:
+        login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
+        raise HTTPException(status_code=403, detail="Account is deactivated")
     block = company_subscription_blocked(db, user)
     if block:
+        login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=402, detail=block)
 
+    login_log_service.log_login(db, email=email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user.id}, expires_delta=access_token_expires

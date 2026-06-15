@@ -54,6 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return mobileLinks.filter((i) => {
       if (!sidebarPathAllowed(user?.sidebar_modules, i.href)) return false;
       if (i.href === '/contractors') return showSubs;
+      if (i.href === '/expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
       return can(user, i.perm);
     });
   }, [user]);
@@ -101,6 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     { href: '/admin/payments', label: 'Payments' },
                     { href: '/admin/receipts', label: 'Receipts' },
                     { href: '/admin/packages', label: 'Packages' },
+                    { href: '/admin/logs', label: 'Activity logs' },
                   ].map(({ href, label }) => (
                     <Link
                       key={href}

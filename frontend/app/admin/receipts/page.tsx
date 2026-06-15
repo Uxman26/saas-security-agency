@@ -26,7 +26,8 @@ export default function AdminReceiptsPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const load = useCallback(() => {
-    api.admin.receipts().then(setRows).catch(() => toast.error('Failed to load receipts'));
+    setLoading(true);
+    api.admin.receipts().then(setRows).catch(() => toast.error('Failed to load receipts')).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -36,7 +37,6 @@ export default function AdminReceiptsPage() {
       return;
     }
     load();
-    setLoading(false);
   }, [user, router, load]);
 
   const markPaid = async (id: number) => {

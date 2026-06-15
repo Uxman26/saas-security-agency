@@ -319,6 +319,9 @@ def run():
     for col, spec in [
         ("subscription_start", "TEXT"),
         ("subscription_end", "TEXT"),
+        ("billing_cycle", "TEXT DEFAULT 'monthly'"),
+        ("max_users", "INTEGER"),
+        ("enabled_modules_json", "TEXT"),
     ]:
         if table_exists(cur, "companies") and not column_exists(cur, "companies", col):
             try:
@@ -401,6 +404,48 @@ def run():
                 document_mime TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "companies") and not table_exists(cur, "subscription_invoices"):
+        try:
+            cur.execute(
+                """CREATE TABLE subscription_invoices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_number TEXT NOT NULL UNIQUE,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                subscription_tier TEXT NOT NULL,
+                billing_cycle TEXT DEFAULT 'monthly',
+                period_start TEXT,
+                period_end TEXT,
+                due_date TEXT NOT NULL,
+                amount_ex_vat REAL NOT NULL,
+                vat_amount REAL NOT NULL,
+                total_amount REAL NOT NULL,
+                amount_paid REAL DEFAULT 0,
+                status TEXT DEFAULT 'unpaid',
+                email_sent INTEGER DEFAULT 0,
+                sent_at TEXT,
+                paid_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "login_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE login_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                email TEXT,
+                full_name TEXT,
+                company_id INTEGER REFERENCES companies(id),
+                login_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                ip_address TEXT,
+                user_agent TEXT,
+                status TEXT NOT NULL
             )"""
             )
         except sqlite3.OperationalError:

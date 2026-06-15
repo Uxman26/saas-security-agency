@@ -20,10 +20,15 @@ SIDEBAR_DEFAULT_PATHS = [
     "/contractors",
     "/payroll",
     "/invoices",
+    "/expenses",
     "/payments",
     "/allowances",
     "/settings/special-days",
     "/settings/roles",
+    "/settings/company",
+    "/client-portal",
+    "/client-portal/request-staff",
+    "/requests",
 ]
 
 
@@ -88,6 +93,10 @@ def mark_receipt_paid(db: Session, receipt_id: int) -> SubscriptionReceipt:
         co.subscription_end = end
     db.commit()
     db.refresh(r)
+    if co:
+        from app.services import subscription_invoice_service
+        subscription_invoice_service.create_invoice(db, co, status="paid", period_start=now, send_email=False)
+        subscription_invoice_service.ensure_renewal_invoices(db)
     return r
 
 

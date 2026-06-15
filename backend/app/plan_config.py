@@ -9,6 +9,7 @@ LIMITS: dict[str, dict[str, Any]] = {
     "basic": {
         "max_guards": 10,
         "max_sites": 5,
+        "max_users": 5,
         "features": {
             "subcontractors": False,
             "extended_reports": False,
@@ -19,6 +20,7 @@ LIMITS: dict[str, dict[str, Any]] = {
     "standard": {
         "max_guards": 50,
         "max_sites": 25,
+        "max_users": 15,
         "features": {
             "subcontractors": True,
             "extended_reports": False,
@@ -29,6 +31,7 @@ LIMITS: dict[str, dict[str, Any]] = {
     "premium": {
         "max_guards": None,
         "max_sites": None,
+        "max_users": 50,
         "features": {
             "subcontractors": True,
             "extended_reports": True,
@@ -39,6 +42,7 @@ LIMITS: dict[str, dict[str, Any]] = {
     "enterprise": {
         "max_guards": None,
         "max_sites": None,
+        "max_users": None,
         "features": {
             "subcontractors": True,
             "extended_reports": True,
@@ -72,6 +76,11 @@ def quota_guards(tier: Optional[str]) -> Optional[int]:
 
 def quota_sites(tier: Optional[str]) -> Optional[int]:
     n = limits_for_tier(tier)["max_sites"]
+    return n
+
+
+def quota_users(tier: Optional[str]) -> Optional[int]:
+    n = limits_for_tier(tier).get("max_users")
     return n
 
 

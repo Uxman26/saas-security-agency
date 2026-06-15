@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ const emailSchema = z.object({
 });
 
 export function EmailDialog({ defaultEmail, defaultName }: { defaultEmail?: string; defaultName?: string }) {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -35,6 +37,8 @@ export function EmailDialog({ defaultEmail, defaultName }: { defaultEmail?: stri
       body: '',
     },
   });
+
+  if (user?.enabled_modules && user.enabled_modules.email === false) return null;
 
   const onSubmit = async (data: { to_email: string; subject: string; body: string }) => {
     setLoading(true);

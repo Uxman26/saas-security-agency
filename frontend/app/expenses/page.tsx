@@ -411,6 +411,9 @@ export default function ExpensesPage() {
   return (
     <ProtectedRoute>
       <AppShell>
+        {user?.enabled_modules?.expenses === false ? (
+          <div className="p-8 text-center text-muted-foreground">Expenses module is not enabled for your account.</div>
+        ) : (
         <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -780,6 +783,7 @@ export default function ExpensesPage() {
             </div>
           )}
         </div>
+        )}
       </AppShell>
     </ProtectedRoute>
   );

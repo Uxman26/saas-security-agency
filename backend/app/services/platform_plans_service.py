@@ -59,6 +59,7 @@ def list_tiers() -> list[dict[str, Any]]:
                 "price_gbp": get_price(tier),
                 "max_guards": lim.get("max_guards"),
                 "max_sites": lim.get("max_sites"),
+                "max_users": lim.get("max_users"),
                 "features": lim.get("features") or {},
             }
         )
@@ -80,6 +81,8 @@ def update_tier(tier: str, payload: dict[str, Any]) -> dict[str, Any]:
         entry["max_guards"] = payload["max_guards"]
     if payload.get("max_sites") is not None:
         entry["max_sites"] = payload["max_sites"]
+    if payload.get("max_users") is not None:
+        entry["max_users"] = payload["max_users"]
     if payload.get("features") is not None:
         entry["features"] = {**entry.get("features", {}), **payload["features"]}
     limits[t] = entry
@@ -92,5 +95,6 @@ def update_tier(tier: str, payload: dict[str, Any]) -> dict[str, Any]:
         "price_gbp": get_price(t),
         "max_guards": lim.get("max_guards"),
         "max_sites": lim.get("max_sites"),
+        "max_users": lim.get("max_users"),
         "features": lim.get("features") or {},
     }

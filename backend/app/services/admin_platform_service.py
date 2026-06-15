@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import get_password_hash, SUPER_ADMIN_ROLE
 from app.models import Company, Invoice, InvoiceLine, Payment, SubscriptionReceipt, User
 from app.services.receipt_service import SIDEBAR_DEFAULT_PATHS, dump_sidebar_modules, parse_sidebar_modules
+from app.services.module_service import dump_modules, parse_modules
 from app.schemas import InvoiceUpdate
 
 ADMIN_ROLES = frozenset({"admin", "company_admin"})
@@ -71,12 +72,37 @@ def update_company(db: Session, company_id: int, payload: dict[str, Any]) -> Com
     co = db.query(Company).filter(Company.id == company_id).first()
     if not co:
         raise HTTPException(status_code=404, detail="Company not found")
+    modules = payload.pop("enabled_modules", None)
+    if modules is not None:
+        co.enabled_modules_json = dump_modules(modules)
     for k, v in payload.items():
         if hasattr(co, k) and v is not None:
             setattr(co, k, v)
     db.commit()
     db.refresh(co)
     return co
+
+
+def company_admin_out(db: Session, co: Company) -> dict:
+    from app.services.tenant_usage_service import company_usage, user_limit_for_company
+    from sqlalchemy import func
+
+    user_count = db.query(func.count(User.id)).filter(User.company_id == co.id, User.is_active == True).scalar()
+    return {
+        "id": co.id,
+        "name": co.name,
+        "admin_id": co.admin_id,
+        "subscription_tier": co.subscription_tier,
+        "subscription_status": co.subscription_status,
+        "subscription_start": co.subscription_start,
+        "subscription_end": co.subscription_end,
+        "billing_cycle": co.billing_cycle or "monthly",
+        "max_users": user_limit_for_company(co),
+        "user_count": int(user_count or 0),
+        "enabled_modules": parse_modules(co.enabled_modules_json),
+        "usage": company_usage(db, co.id),
+        "created_at": co.created_at,
+    }
 
 
 def list_all_invoices(db: Session, company_id: Optional[int] = None, status: Optional[str] = None) -> list[Invoice]:
@@ -154,6 +180,8 @@ def get_admin_detail(db: Session, user_id: int) -> tuple[User, Company | None, l
     u = db.query(User).filter(User.id == user_id).first()
     if not u or not u.company_id:
         raise HTTPException(status_code=404, detail="Admin not found")
+    if u.id not in {c.admin_id for c in db.query(Company).all()} and (u.role or "").lower() not in ADMIN_ROLES:
+        raise HTTPException(status_code=404, detail="Admin not found")
     co = db.query(Company).filter(Company.id == u.company_id).first()
     receipts = (
         db.query(SubscriptionReceipt)
@@ -191,6 +219,16 @@ def admin_out(db: Session, u: User, co: Company | None, receipts: list[Subscript
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
         days_left = max(0, (end - _utcnow()).days)
+    from app.services.tenant_usage_service import company_usage, user_limit_for_company
+    from app.services.module_service import parse_modules
+    from sqlalchemy import func
+
+    usage = company_usage(db, co.id) if co else {}
+    user_count = (
+        db.query(func.count(User.id)).filter(User.company_id == co.id, User.is_active == True).scalar()
+        if co
+        else 0
+    )
     return {
         "id": u.id,
         "email": u.email,
@@ -205,13 +243,22 @@ def admin_out(db: Session, u: User, co: Company | None, receipts: list[Subscript
         "subscription_start": co.subscription_start if co else None,
         "subscription_end": co.subscription_end if co else None,
         "subscription_days_left": days_left,
+        "billing_cycle": co.billing_cycle if co else None,
+        "max_users": user_limit_for_company(co) if co else None,
+        "user_count": int(user_count or 0),
+        "enabled_modules": parse_modules(co.enabled_modules_json) if co else {},
+        "usage": usage,
         "sidebar_modules": parse_sidebar_modules(u.sidebar_modules_json) or SIDEBAR_DEFAULT_PATHS,
         "receipts": [
             {
                 "id": r.id,
                 "ref_id": r.ref_id,
-                "amount": r.amount,
+                "company_id": r.company_id,
+                "company_name": co.name if co else None,
+                "user_email": u.email,
                 "subscription_tier": r.subscription_tier,
+                "amount": r.amount,
+                "period_days": r.period_days,
                 "status": r.status,
                 "period_start": r.period_start,
                 "period_end": r.period_end,

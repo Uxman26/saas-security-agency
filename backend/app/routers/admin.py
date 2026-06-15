@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User, Invoice, SubscriptionReceipt, Company
+from app.models import User, SubscriptionReceipt, Company
 from app.schemas import (
-    CompanyResponse,
+    CompanyAdminResponse,
     SubscriptionReceiptResponse,
     AdminResetPassword,
     AdminSidebarPatch,
@@ -17,18 +16,23 @@ from app.schemas import (
     AdminUserListItem,
     AdminUserActivePatch,
     AdminCompanyUpdate,
-    InvoiceResponse,
-    InvoiceUpdate,
+    AdminModulesPatch,
     AdminPaymentResponse,
     PlanTierOut,
     PlanTierUpdate,
+    SubscriptionInvoiceResponse,
+    SubscriptionInvoiceStatusPatch,
+    SubscriptionInvoicePaymentPatch,
+    LoginLogResponse,
+    AdminDashboardResponse,
 )
 from app.auth import get_current_super_admin
 from app.services import admin_platform_service as ap
 from app.services import platform_plans_service
+from app.services import subscription_invoice_service as sub_inv
+from app.services import login_log_service
+from app.services import tenant_usage_service
 from app.services.receipt_service import mark_receipt_paid
-from app.routers.invoices import _serialize_invoice
-from app.services.invoice_pdf import render_invoice_pdf
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -53,12 +57,29 @@ def _receipt_row(r: SubscriptionReceipt, db: Session) -> SubscriptionReceiptResp
     )
 
 
-@router.get("/companies", response_model=List[CompanyResponse])
+@router.get("/dashboard", response_model=AdminDashboardResponse)
+def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    sub_inv.ensure_renewal_invoices(db)
+    stats = sub_inv.dashboard_stats(db)
+    stats["platform_usage"] = tenant_usage_service.platform_usage_summary(db)
+    return AdminDashboardResponse(**stats)
+
+
+@router.get("/companies", response_model=List[CompanyAdminResponse])
 def list_all_companies(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
-    return db.query(Company).order_by(Company.id).all()
+    return [CompanyAdminResponse(**ap.company_admin_out(db, c)) for c in db.query(Company).order_by(Company.id).all()]
 
 
-@router.patch("/companies/{company_id}", response_model=CompanyResponse)
+@router.get("/companies/{company_id}", response_model=CompanyAdminResponse)
+def get_company(company_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    co = db.query(Company).filter(Company.id == company_id).first()
+    if not co:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Company not found")
+    return CompanyAdminResponse(**ap.company_admin_out(db, co))
+
+
+@router.patch("/companies/{company_id}", response_model=CompanyAdminResponse)
 def patch_company(
     company_id: int,
     body: AdminCompanyUpdate,
@@ -66,7 +87,19 @@ def patch_company(
     _: User = Depends(get_current_super_admin),
 ):
     payload = body.model_dump(exclude_unset=True)
-    return ap.update_company(db, company_id, payload)
+    co = ap.update_company(db, company_id, payload)
+    return CompanyAdminResponse(**ap.company_admin_out(db, co))
+
+
+@router.patch("/companies/{company_id}/modules", response_model=CompanyAdminResponse)
+def patch_company_modules(
+    company_id: int,
+    body: AdminModulesPatch,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_super_admin),
+):
+    co = ap.update_company(db, company_id, {"enabled_modules": body.enabled_modules})
+    return CompanyAdminResponse(**ap.company_admin_out(db, co))
 
 
 @router.get("/users", response_model=List[AdminUserListItem])
@@ -97,58 +130,60 @@ def patch_user_active(
     )
 
 
-@router.get("/invoices", response_model=List[InvoiceResponse])
+@router.get("/invoices", response_model=List[SubscriptionInvoiceResponse])
 def list_invoices(
     company_id: Optional[int] = None,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_super_admin),
 ):
-    rows = ap.list_all_invoices(db, company_id, status)
-    return [_serialize_invoice(inv, False, db) for inv in rows]
+    return [SubscriptionInvoiceResponse(**row) for row in sub_inv.list_invoices(db, company_id, status)]
 
 
-@router.get("/invoices/{invoice_id}", response_model=InvoiceResponse)
+@router.get("/invoices/{invoice_id}", response_model=SubscriptionInvoiceResponse)
 def get_invoice(invoice_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
-    inv = ap.get_invoice_admin(db, invoice_id)
-    return _serialize_invoice(inv, True, db)
+    return SubscriptionInvoiceResponse(**sub_inv.get_invoice(db, invoice_id))
 
 
-@router.patch("/invoices/{invoice_id}", response_model=InvoiceResponse)
-def patch_invoice(
-    invoice_id: int,
-    body: InvoiceUpdate,
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
-):
-    inv = ap.update_invoice_admin(db, invoice_id, body)
-    inv = ap.get_invoice_admin(db, inv.id)
-    return _serialize_invoice(inv, True, db)
-
-
-@router.patch("/invoices/{invoice_id}/status", response_model=InvoiceResponse)
+@router.patch("/invoices/{invoice_id}/status", response_model=SubscriptionInvoiceResponse)
 def patch_invoice_status(
     invoice_id: int,
-    status: str,
+    body: SubscriptionInvoiceStatusPatch,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_super_admin),
 ):
-    inv = ap.set_invoice_status_admin(db, invoice_id, status)
-    inv = ap.get_invoice_admin(db, inv.id)
-    return _serialize_invoice(inv, True, db)
+    return SubscriptionInvoiceResponse(**sub_inv.set_invoice_status(db, invoice_id, body.status))
 
 
-@router.get("/invoices/{invoice_id}/pdf")
-def invoice_pdf(invoice_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
-    inv = ap.get_invoice_admin(db, invoice_id)
-    lines = sorted(inv.lines, key=lambda x: x.id)
-    admin = db.query(User).filter(User.id == inv.company.admin_id).first() if inv.company else None
-    body = render_invoice_pdf(db, inv, inv.company, inv.client, list(lines), admin)
-    return Response(
-        content=body,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="invoice-{invoice_id}.pdf"'},
-    )
+@router.post("/invoices/{invoice_id}/payment", response_model=SubscriptionInvoiceResponse)
+def record_invoice_payment(
+    invoice_id: int,
+    body: SubscriptionInvoicePaymentPatch,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_super_admin),
+):
+    return SubscriptionInvoiceResponse(**sub_inv.record_payment(db, invoice_id, body.amount))
+
+
+@router.post("/invoices/{invoice_id}/send-email", response_model=SubscriptionInvoiceResponse)
+def send_invoice_email(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_super_admin),
+):
+    from app.models import SubscriptionInvoice
+    inv = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.id == invoice_id).first()
+    if not inv:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    sub_inv.send_invoice_email(db, inv)
+    return SubscriptionInvoiceResponse(**sub_inv.get_invoice(db, invoice_id))
+
+
+@router.post("/invoices/generate")
+def generate_invoices(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    created = sub_inv.ensure_renewal_invoices(db)
+    return {"created": created}
 
 
 @router.get("/payments", response_model=List[AdminPaymentResponse])
@@ -157,7 +192,28 @@ def list_payments(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_super_admin),
 ):
-    return [AdminPaymentResponse(**row) for row in ap.list_all_payments(db, company_id)]
+    from app.models import SubscriptionInvoice
+    q = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.amount_paid > 0).order_by(SubscriptionInvoice.paid_at.desc())
+    if company_id:
+        q = q.filter(SubscriptionInvoice.company_id == company_id)
+    rows = q.all()
+    out = []
+    for inv in rows:
+        co = db.query(Company).filter(Company.id == inv.company_id).first()
+        out.append(
+            AdminPaymentResponse(
+                id=inv.id,
+                company_id=inv.company_id,
+                invoice_id=inv.id,
+                amount=inv.amount_paid or 0,
+                method="subscription",
+                paid_at=inv.paid_at or inv.created_at,
+                created_at=inv.created_at,
+                company_name=co.name if co else None,
+                invoice_total=inv.total_amount,
+            )
+        )
+    return out
 
 
 @router.get("/packages", response_model=List[PlanTierOut])
@@ -181,6 +237,16 @@ def list_receipts(db: Session = Depends(get_db), _: User = Depends(get_current_s
 def mark_paid(receipt_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
     r = mark_receipt_paid(db, receipt_id)
     return _receipt_row(r, db)
+
+
+@router.get("/login-logs", response_model=List[LoginLogResponse])
+def login_logs(
+    company_id: Optional[int] = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_super_admin),
+):
+    return [LoginLogResponse.model_validate(r) for r in login_log_service.list_login_logs(db, limit, company_id)]
 
 
 @router.get("/admins", response_model=List[AdminUserDetail])

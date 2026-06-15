@@ -33,7 +33,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can, PERMS } from '@/lib/permissions';
-import type { DashboardOverview, ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
+import type { DashboardOverview, ComplianceAlert, ContractExpiryAlert, AdminDashboard } from '@/lib/types';
 
 const gbp = (n: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(n);
@@ -56,13 +56,15 @@ const companyTiles = [
 ];
 
 const adminTiles = [
-  { href: '/admin/companies', title: 'Companies', desc: 'View and edit tenant companies', icon: Building2, color: 'text-primary' },
+  { href: '/dashboard', title: 'Dashboard', desc: 'Platform overview & billing stats', icon: Shield, color: 'text-primary' },
+  { href: '/admin/companies', title: 'Companies', desc: 'Tenants, modules & user limits', icon: Building2, color: 'text-primary' },
   { href: '/admin/users', title: 'Users', desc: 'All platform users — activate or deactivate', icon: Users, color: 'text-blue-600' },
-  { href: '/admin/admins', title: 'Admins', desc: 'Tenant admin accounts & sidebar access', icon: UserCog, color: 'text-indigo-600' },
-  { href: '/admin/invoices', title: 'Invoices', desc: 'All tenant invoices across the platform', icon: FileText, color: 'text-rose-600' },
-  { href: '/admin/payments', title: 'Payments', desc: 'All payment records', icon: CreditCard, color: 'text-violet-600' },
-  { href: '/admin/receipts', title: 'Receipts', desc: 'Subscription payments & mark paid', icon: Wallet, color: 'text-emerald-600' },
-  { href: '/admin/packages', title: 'Packages', desc: 'Subscription plan pricing & limits', icon: Shield, color: 'text-amber-600' },
+  { href: '/admin/admins', title: 'Admins', desc: 'Tenant admin accounts & module access', icon: UserCog, color: 'text-indigo-600' },
+  { href: '/admin/invoices', title: 'Subscription invoices', desc: 'Auto-generated platform billing', icon: FileText, color: 'text-rose-600' },
+  { href: '/admin/payments', title: 'Payments', desc: 'Subscription payment records', icon: CreditCard, color: 'text-violet-600' },
+  { href: '/admin/receipts', title: 'Receipts', desc: 'Signup payments & mark paid', icon: Wallet, color: 'text-emerald-600' },
+  { href: '/admin/packages', title: 'Packages', desc: 'Plan pricing, limits & features', icon: Shield, color: 'text-amber-600' },
+  { href: '/admin/logs', title: 'Activity logs', desc: 'Login history & audit trail', icon: Activity, color: 'text-cyan-600' },
 ];
 
 function Kpi({
@@ -102,27 +104,31 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [adminStats, setAdminStats] = useState<AdminDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
   const [contractAlerts, setContractAlerts] = useState<ContractExpiryAlert[]>([]);
   const [alertsError, setAlertsError] = useState('');
 
   useEffect(() => {
-    if (!isSuperAdmin) {
-      setAlertsError('');
+    if (isSuperAdmin) {
       setLoading(true);
-      api.reports
-        .dashboard()
-        .then(setOverview)
-        .catch(() => setOverview(null))
-        .finally(() => setLoading(false));
-      void Promise.all([api.reports.compliance(30), api.reports.contractsExpiring(30)])
-        .then(([a, c]) => {
-          setAlerts(a);
-          setContractAlerts(c);
-        })
-        .catch((e: Error) => setAlertsError(e.message || 'Could not load alerts'));
+      api.admin.dashboard().then(setAdminStats).catch(() => setAdminStats(null)).finally(() => setLoading(false));
+      return;
     }
+    setAlertsError('');
+    setLoading(true);
+    api.reports
+      .dashboard()
+      .then(setOverview)
+      .catch(() => setOverview(null))
+      .finally(() => setLoading(false));
+    void Promise.all([api.reports.compliance(30), api.reports.contractsExpiring(30)])
+      .then(([a, c]) => {
+        setAlerts(a);
+        setContractAlerts(c);
+      })
+      .catch((e: Error) => setAlertsError(e.message || 'Could not load alerts'));
   }, [isSuperAdmin]);
 
   const tiles = useMemo(() => {
@@ -393,11 +399,25 @@ export default function DashboardPage() {
               </Card>
             )}
 
+            {isSuperAdmin && adminStats && (
+              <section className="mb-6">
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Platform overview</h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                  <Kpi label="Companies" value={adminStats.total_companies} sub={`${adminStats.active_subscriptions} active`} icon={Building2} />
+                  <Kpi label="Invoices" value={adminStats.total_invoices} sub={`${adminStats.unpaid_invoices} unpaid`} icon={FileText} />
+                  <Kpi label="Overdue" value={adminStats.overdue_invoices} icon={AlertTriangle} warn={adminStats.overdue_invoices > 0} />
+                  <Kpi label="Outstanding" value={gbp(adminStats.outstanding_balance)} icon={TrendingUp} accent="text-red-600" />
+                  <Kpi label="Collected" value={gbp(adminStats.total_collected)} icon={Wallet} accent="text-green-600" />
+                  <Kpi label="Active users" value={adminStats.platform_usage.total_active_users} sub={`${adminStats.platform_usage.storage_mb} MB storage`} icon={Users} />
+                </div>
+              </section>
+            )}
+
             <section>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 {isSuperAdmin ? 'Admin' : 'Quick access'}
               </h2>
-              <div className={`grid gap-3 ${isSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-3 max-w-3xl' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
+              <div className={`grid gap-3 ${isSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
                 {tiles.map(({ href, title, desc, icon: Icon, color }) => (
                   <Link key={href} href={href}>
                     <Card className="h-full transition-all border-border/60 hover:border-primary/30 hover:shadow-md group">

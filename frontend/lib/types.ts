@@ -2,8 +2,10 @@ export interface PlanSummary {
   tier: string;
   max_guards: number | null;
   max_sites: number | null;
+  max_users?: number | null;
   guards_used: number;
   sites_used: number;
+  users_used?: number;
   features: Record<string, boolean>;
 }
 
@@ -51,6 +53,7 @@ export interface User {
   subscription_status?: string | null;
   subscription_end?: string | null;
   sidebar_modules?: string[] | null;
+  enabled_modules?: Record<string, boolean> | null;
   client_id?: number | null;
 }
 
@@ -132,8 +135,85 @@ export interface AdminUserDetail {
   subscription_start?: string | null;
   subscription_end?: string | null;
   subscription_days_left?: number | null;
+  billing_cycle?: string | null;
+  max_users?: number | null;
+  user_count?: number | null;
+  enabled_modules?: Record<string, boolean>;
+  usage?: TenantUsage;
   sidebar_modules: string[];
   receipts: SubscriptionReceipt[];
+}
+
+export interface TenantUsage {
+  company_id: number;
+  active_users: number;
+  max_users?: number | null;
+  user_slots_remaining?: number | null;
+  guards_count: number;
+  storage_bytes: number;
+  storage_mb: number;
+  database_records: number;
+  api_requests: number;
+  email_sent: number;
+  whatsapp_sent: number;
+  mobile_app_sessions: number;
+  enabled_modules: Record<string, boolean>;
+  billing_cycle: string;
+}
+
+export interface SubscriptionInvoice {
+  id: number;
+  invoice_number: string;
+  company_id: number;
+  company_name?: string | null;
+  tenant_email?: string | null;
+  subscription_tier: string;
+  billing_cycle: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  due_date: string;
+  amount_ex_vat: number;
+  vat_amount: number;
+  total_amount: number;
+  amount_paid: number;
+  status: string;
+  email_sent: boolean;
+  sent_at?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+}
+
+export interface LoginLog {
+  id: number;
+  user_id?: number | null;
+  email?: string | null;
+  full_name?: string | null;
+  company_id?: number | null;
+  login_at: string;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  status: string;
+}
+
+export interface AdminDashboard {
+  total_companies: number;
+  active_subscriptions: number;
+  total_invoices: number;
+  paid_invoices: number;
+  unpaid_invoices: number;
+  overdue_invoices: number;
+  partial_invoices: number;
+  outstanding_balance: number;
+  total_collected: number;
+  platform_usage: {
+    total_companies: number;
+    total_active_users: number;
+    storage_mb: number;
+    api_requests: number;
+    email_sent: number;
+    whatsapp_sent: number;
+    mobile_app_sessions: number;
+  };
 }
 
 export interface AdminUserListItem {
@@ -154,6 +234,7 @@ export interface PlanTier {
   price_gbp: number;
   max_guards?: number | null;
   max_sites?: number | null;
+  max_users?: number | null;
   features: Record<string, boolean>;
 }
 
@@ -185,6 +266,11 @@ export interface Company {
   subscription_status?: string;
   subscription_start?: string;
   subscription_end?: string;
+  billing_cycle?: string;
+  max_users?: number | null;
+  user_count?: number;
+  enabled_modules?: Record<string, boolean>;
+  usage?: TenantUsage;
   created_at: string;
 }
 

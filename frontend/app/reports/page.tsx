@@ -9,18 +9,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ReportsHubCharts } from '@/components/reports/hub-charts';
+import { ReportResultView } from '@/components/reports/report-result-view';
 import { api } from '@/lib/api';
-import type { Guard, ReportsHub, StaffIndividualReport } from '@/lib/types';
+import type {
+  Guard,
+  ReportsHub,
+  StaffIndividualReport,
+  StaffMonthlyReport,
+  SubscriptionReportSummary,
+  UsageSummary,
+} from '@/lib/types';
 import {
   BarChart3,
   Clock,
   FileSpreadsheet,
   FileText,
-  PoundSterling,
   Users,
   Calendar,
   Receipt,
   MessageSquare,
+  CreditCard,
+  Activity,
+  LogIn,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
@@ -34,6 +45,7 @@ type ReportDef = {
   icon: typeof Clock;
   exportType: string;
   needsGuard?: boolean;
+  noExport?: boolean;
 };
 
 const REPORTS: ReportDef[] = [
@@ -42,9 +54,20 @@ const REPORTS: ReportDef[] = [
   { id: 'overtime', title: 'Overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
   { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly' },
   { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices' },
-  { id: 'expenses', title: 'Expense & VAT', desc: 'Business expenses and VAT breakdown by category or period.', category: 'financial', icon: Receipt, exportType: 'expenses' },
+  { id: 'expenses', title: 'Expense & VAT', desc: 'Business expenses and VAT breakdown by category or period.', category: 'financial', icon: Receipt, exportType: 'expenses', noExport: true },
+  { id: 'subscription', title: 'Subscription billing', desc: 'Your platform subscription status, invoices, and outstanding balance.', category: 'subscription', icon: CreditCard, exportType: 'subscription' },
+  { id: 'subscription-active', title: 'Active subscription', desc: 'Current plan, billing cycle, and renewal date.', category: 'subscription', icon: CreditCard, exportType: 'subscription', noExport: true },
+  { id: 'login-logs', title: 'Login activity', desc: 'User login attempts with IP address and status.', category: 'usage', icon: LogIn, exportType: 'login-logs' },
+  { id: 'usage-summary', title: 'Resource usage', desc: 'SMS, email, API requests, logins, and storage for the period.', category: 'usage', icon: Activity, exportType: 'usage', noExport: true },
   { id: 'sms-logs', title: 'SMS logs', desc: 'Outbound SMS delivery records and status.', category: 'usage', icon: MessageSquare, exportType: 'sms' },
 ];
+
+type ReportView =
+  | { kind: 'individual'; data: StaffIndividualReport }
+  | { kind: 'monthly'; data: StaffMonthlyReport }
+  | { kind: 'subscription'; summary: SubscriptionReportSummary; rows: Record<string, unknown>[] }
+  | { kind: 'usage'; data: UsageSummary }
+  | { kind: 'rows'; columns: { key: string; label: string; fmt?: (v: unknown) => string }[]; rows: Record<string, unknown>[] };
 
 function monthRange() {
   const now = new Date();
@@ -61,7 +84,7 @@ export default function ReportsPage() {
   const [guards, setGuards] = useState<Guard[]>([]);
   const [selected, setSelected] = useState<ReportDef | null>(null);
   const [guardId, setGuardId] = useState('');
-  const [result, setResult] = useState<StaffIndividualReport | Record<string, unknown>[] | null>(null);
+  const [result, setResult] = useState<ReportView | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<'library' | 'custom'>('library');
   const [category, setCategory] = useState('all');
@@ -85,24 +108,81 @@ export default function ReportsPage() {
     setLoading(true);
     setResult(null);
     try {
-      if (selected.id === 'shifts' && guardId) {
-        const data = await api.reports.staffIndividual(parseInt(guardId), startDate, endDate);
-        setResult(data);
-      } else if (selected.id === 'attendance') {
-        const data = await api.reports.attendance(startDate, endDate, guardId ? parseInt(guardId) : undefined);
-        setResult(data);
-      } else if (selected.id === 'invoices') {
-        const data = await api.reports.financialInvoices(startDate, endDate);
-        setResult(data);
-      } else if (selected.id === 'expenses') {
+      if (selected.id === 'shifts' && !guardId) {
+        toast.warning('Select a staff member for shift hours report');
+        setLoading(false);
+        return;
+      }
+      if (selected.id === 'expenses') {
         window.location.href = '/expenses';
         return;
-      } else if (selected.id === 'sms-logs') {
-        window.location.href = '/settings/sms';
-        return;
-      } else {
+      }
+      if (selected.id === 'sms-logs') {
+        const data = await api.sms.logs();
+        setResult({
+          kind: 'rows',
+          columns: [
+            { key: 'sent_at', label: 'Sent', fmt: (v) => (v ? new Date(String(v)).toLocaleString() : '—') },
+            { key: 'recipient', label: 'Recipient' },
+            { key: 'status', label: 'Status' },
+            { key: 'body', label: 'Message' },
+          ],
+          rows: data as unknown as Record<string, unknown>[],
+        });
+      } else if (selected.id === 'shifts' && guardId) {
+        const data = await api.reports.staffIndividual(parseInt(guardId), startDate, endDate);
+        setResult({ kind: 'individual', data });
+      } else if (selected.id === 'attendance') {
+        const data = await api.reports.attendance(startDate, endDate, guardId ? parseInt(guardId) : undefined);
+        setResult({
+          kind: 'rows',
+          columns: [
+            { key: 'guard', label: 'Guard' },
+            { key: 'site', label: 'Site' },
+            { key: 'date', label: 'Date' },
+            { key: 'hours', label: 'Hours' },
+            { key: 'status', label: 'Status' },
+          ],
+          rows: data,
+        });
+      } else if (selected.id === 'invoices') {
+        const data = await api.reports.financialInvoices(startDate, endDate);
+        setResult({
+          kind: 'rows',
+          columns: [
+            { key: 'invoice_id', label: 'Invoice' },
+            { key: 'total', label: 'Total', fmt: (v) => gbp(Number(v)) },
+            { key: 'amount_paid', label: 'Paid', fmt: (v) => gbp(Number(v)) },
+            { key: 'balance', label: 'Balance', fmt: (v) => gbp(Number(v)) },
+            { key: 'status', label: 'Status' },
+          ],
+          rows: data,
+        });
+      } else if (selected.id === 'subscription' || selected.id === 'subscription-active') {
+        const [summary, rows] = await Promise.all([
+          api.reports.subscriptionSummary(),
+          selected.id === 'subscription' ? api.reports.subscriptionInvoices(startDate, endDate) : Promise.resolve([]),
+        ]);
+        setResult({ kind: 'subscription', summary, rows });
+      } else if (selected.id === 'login-logs') {
+        const data = await api.reports.usageLogins(startDate, endDate);
+        setResult({
+          kind: 'rows',
+          columns: [
+            { key: 'login_at', label: 'Login at', fmt: (v) => (v ? new Date(String(v)).toLocaleString() : '—') },
+            { key: 'email', label: 'Email' },
+            { key: 'full_name', label: 'Name' },
+            { key: 'status', label: 'Status' },
+            { key: 'ip_address', label: 'IP' },
+          ],
+          rows: data,
+        });
+      } else if (selected.id === 'usage-summary') {
+        const data = await api.reports.usageSummary(startDate, endDate);
+        setResult({ kind: 'usage', data });
+      } else if (selected.id === 'overtime' || selected.id === 'staff-monthly') {
         const data = await api.reports.staffMonthly(startDate, endDate);
-        setResult(data as unknown as Record<string, unknown>[]);
+        setResult({ kind: 'monthly', data });
       }
       toast.success('Report generated');
     } catch {
@@ -113,7 +193,7 @@ export default function ReportsPage() {
   };
 
   const exportFmt = async (format: string) => {
-    if (!selected?.exportType || selected.exportType === 'sms' || selected.exportType === 'expenses') return;
+    if (!selected?.exportType || selected.noExport || selected.exportType === 'expenses' || selected.exportType === 'usage') return;
     try {
       const blob = await api.reports.export(
         selected.exportType,
@@ -133,13 +213,22 @@ export default function ReportsPage() {
     }
   };
 
+  const monthlyChart = useMemo(
+    () => (hub?.monthly_trends ?? []).map((p) => ({ label: p.label, revenue: p.revenue, expenses: p.expenses, staff_hours: p.staff_hours })),
+    [hub]
+  );
+  const subChart = useMemo(
+    () => (hub?.subscription_trend ?? []).map((p) => ({ label: p.label, amount: p.amount, invoices: p.invoices })),
+    [hub]
+  );
+
   return (
     <ProtectedRoute>
       <AppShell>
         <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
           <div>
             <h1 className="text-3xl font-bold">Reports</h1>
-            <p className="text-muted-foreground mt-1">Generate and export staff, financial, and usage reports</p>
+            <p className="text-muted-foreground mt-1">Generate and export staff, financial, subscription, and usage reports</p>
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
@@ -155,16 +244,19 @@ export default function ReportsPage() {
           </div>
 
           {hub && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Revenue collected</p><p className="text-xl font-bold">{gbp(hub.total_revenue)}</p></CardContent></Card>
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Outstanding</p><p className="text-xl font-bold text-red-600">{gbp(hub.outstanding_invoices)}</p></CardContent></Card>
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Staff hours</p><p className="text-xl font-bold">{hub.staff_hours}h</p></CardContent></Card>
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Net VAT</p><p className="text-xl font-bold">{gbp(hub.net_vat)}</p></CardContent></Card>
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Expenses</p><p className="text-xl font-bold">{gbp(hub.total_expenses)}</p></CardContent></Card>
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Active users</p><p className="text-xl font-bold">{hub.active_users}</p></CardContent></Card>
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">SMS sent</p><p className="text-xl font-bold">{hub.sms_usage}</p></CardContent></Card>
-              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Email usage</p><p className="text-xl font-bold">{hub.email_usage}</p></CardContent></Card>
-            </div>
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Revenue collected</p><p className="text-xl font-bold">{gbp(hub.total_revenue)}</p></CardContent></Card>
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Outstanding</p><p className="text-xl font-bold text-red-600">{gbp(hub.outstanding_invoices)}</p></CardContent></Card>
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Staff hours</p><p className="text-xl font-bold">{hub.staff_hours}h</p></CardContent></Card>
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Net VAT</p><p className="text-xl font-bold">{gbp(hub.net_vat)}</p></CardContent></Card>
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Expenses</p><p className="text-xl font-bold">{gbp(hub.total_expenses)}</p></CardContent></Card>
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Active users</p><p className="text-xl font-bold">{hub.active_users}</p></CardContent></Card>
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">SMS sent</p><p className="text-xl font-bold">{hub.sms_usage}</p></CardContent></Card>
+                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Email usage</p><p className="text-xl font-bold">{hub.email_usage}</p></CardContent></Card>
+              </div>
+              <ReportsHubCharts monthly={monthlyChart} subscription={subChart} />
+            </>
           )}
 
           <div className="flex gap-1 border-b">
@@ -178,11 +270,12 @@ export default function ReportsPage() {
           {tab === 'library' && (
             <>
               <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="w-44"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectTrigger className="w-48"><SelectValue placeholder="Category" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All reports</SelectItem>
                   <SelectItem value="staff">Staff reports</SelectItem>
                   <SelectItem value="financial">Financial</SelectItem>
+                  <SelectItem value="subscription">Subscription</SelectItem>
                   <SelectItem value="usage">Resource usage</SelectItem>
                 </SelectContent>
               </Select>
@@ -220,7 +313,7 @@ export default function ReportsPage() {
         </div>
 
         <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-          <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{selected?.title}</DialogTitle></DialogHeader>
             {selected && (
               <div className="space-y-4">
@@ -239,7 +332,7 @@ export default function ReportsPage() {
                 )}
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={generate} disabled={loading}>{loading ? 'Generating…' : 'Generate'}</Button>
-                  {selected.exportType !== 'sms' && selected.exportType !== 'expenses' && (
+                  {!selected.noExport && selected.exportType !== 'expenses' && selected.exportType !== 'usage' && (
                     <>
                       <Button variant="outline" size="sm" onClick={() => exportFmt('csv')}><FileSpreadsheet className="size-4 mr-1" />CSV</Button>
                       <Button variant="outline" size="sm" onClick={() => exportFmt('xlsx')}><FileSpreadsheet className="size-4 mr-1" />Excel</Button>
@@ -247,9 +340,7 @@ export default function ReportsPage() {
                     </>
                   )}
                 </div>
-                {result && (
-                  <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-48">{JSON.stringify(result, null, 2)}</pre>
-                )}
+                {result && <ReportResultView view={result} />}
               </div>
             )}
           </DialogContent>

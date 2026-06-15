@@ -4,11 +4,12 @@ from typing import Any, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Invoice, User, SmsLog
+from app.models import Invoice, User, SmsLog, EmailLog
 from app.services.company_service import get_company_by_user_id
 from app.services.expense_service import _expense_totals, _invoice_vat_total
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.services.rota_service import rota_summary
+from app.services import reports_extended_service
 
 
 def reports_hub(db: Session, user_id: int, start_date: date, end_date: date) -> dict[str, Any]:
@@ -27,6 +28,7 @@ def reports_hub(db: Session, user_id: int, start_date: date, end_date: date) -> 
     staff_hours = round(sum(r.total_hours for r in rota_summary(db, user_id, start_date, end_date)), 2)
     active_users = db.query(func.count(User.id)).filter(User.company_id == company.id, User.is_active == True).scalar()
     sms_count = db.query(func.count(SmsLog.id)).filter(SmsLog.company_id == company.id).scalar()
+    email_count = db.query(func.count(EmailLog.id)).filter(EmailLog.company_id == company.id).scalar()
     return {
         "period_start": start_date,
         "period_end": end_date,
@@ -39,7 +41,9 @@ def reports_hub(db: Session, user_id: int, start_date: date, end_date: date) -> 
         "active_users": int(active_users or 0),
         "staff_hours": staff_hours,
         "sms_usage": int(sms_count or 0),
-        "email_usage": 0,
+        "email_usage": int(email_count or 0),
+        "monthly_trends": reports_extended_service.monthly_trends(db, user_id),
+        "subscription_trend": reports_extended_service.subscription_trend(db, user_id),
     }
 
 

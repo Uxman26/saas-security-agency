@@ -97,6 +97,8 @@ class Company(Base):
     staff_requests = relationship("StaffRequest", back_populates="company", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="company", cascade="all, delete-orphan")
     sms_logs = relationship("SmsLog", back_populates="company", cascade="all, delete-orphan")
+    email_logs = relationship("EmailLog", back_populates="company", cascade="all, delete-orphan")
+    api_usage_logs = relationship("ApiUsageLog", back_populates="company", cascade="all, delete-orphan")
 
 
 class SmsLog(Base):
@@ -111,6 +113,27 @@ class SmsLog(Base):
     twilio_sid = Column(String)
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
     company = relationship("Company", back_populates="sms_logs")
+
+
+class EmailLog(Base):
+    __tablename__ = "email_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    recipient = Column(String, nullable=False)
+    subject = Column(String)
+    status = Column(String, default="sent")
+    sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="email_logs")
+
+
+class ApiUsageLog(Base):
+    __tablename__ = "api_usage_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    path = Column(String)
+    method = Column(String, default="GET")
+    logged_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    company = relationship("Company", back_populates="api_usage_logs")
 
 
 class SubscriptionReceipt(Base):

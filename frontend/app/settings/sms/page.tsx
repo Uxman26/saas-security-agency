@@ -13,12 +13,29 @@ import type { SmsConfig, SmsLog } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
+const TEMPLATE_LABELS: Record<string, string> = {
+  shift_reminder: 'Shift reminder',
+  invoice_sent: 'Invoice sent',
+  payment_reminder: 'Payment reminder',
+  appointment: 'Appointment reminder',
+  alert: 'System alert',
+};
+
+const TEMPLATE_VARS: Record<string, string> = {
+  shift_reminder: '{date}, {site}, {shift}',
+  invoice_sent: '{invoice_id}, {amount}, {due_date}',
+  payment_reminder: '{invoice_id}, {amount}',
+  appointment: '{date}, {time}',
+  alert: '{message}',
+};
+
 export default function SmsSettingsPage() {
   const [config, setConfig] = useState<SmsConfig | null>(null);
   const [logs, setLogs] = useState<SmsLog[]>([]);
   const [sid, setSid] = useState('');
   const [token, setToken] = useState('');
   const [phone, setPhone] = useState('');
+  const [templates, setTemplates] = useState<Record<string, string>>({});
   const [testTo, setTestTo] = useState('');
   const [testBody, setTestBody] = useState('Test message from SecureForce Manager');
   const [saving, setSaving] = useState(false);
@@ -27,6 +44,7 @@ export default function SmsSettingsPage() {
     api.sms.config().then((c) => {
       setConfig(c);
       setPhone(c.phone_number || '');
+      setTemplates(c.templates || {});
     }).catch(() => {});
     api.sms.logs().then(setLogs).catch(() => {});
   };
@@ -40,8 +58,10 @@ export default function SmsSettingsPage() {
         twilio_account_sid: sid || undefined,
         twilio_auth_token: token || undefined,
         twilio_phone_number: phone || undefined,
+        templates,
       });
       setConfig(updated);
+      setTemplates(updated.templates || {});
       setSid('');
       setToken('');
       toast.success('SMS configuration saved');
@@ -89,6 +109,32 @@ export default function SmsSettingsPage() {
             </CardContent>
           </Card>
           <Card>
+            <CardHeader><CardTitle>Message templates</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">Automatic SMS uses these templates for shift reminders, invoice notifications, and payment reminders.</p>
+              {Object.keys(TEMPLATE_LABELS).map((key) => (
+                <div key={key} className="space-y-1">
+                  <Label>{TEMPLATE_LABELS[key]}</Label>
+                  <p className="text-xs text-muted-foreground">Variables: {TEMPLATE_VARS[key]}</p>
+                  <textarea
+                    className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={templates[key] ?? ''}
+                    onChange={(e) => setTemplates((t) => ({ ...t, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              <Button variant="outline" onClick={save} disabled={saving}>Save templates</Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Automatic triggers</CardTitle></CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-2">
+              <p>• <strong>Shift reminder</strong> — sent when a shift is created for today or tomorrow.</p>
+              <p>• <strong>Invoice sent</strong> — sent when an invoice status changes to Sent.</p>
+              <p>• <strong>Payment reminder</strong> — sent when an invoice becomes overdue.</p>
+            </CardContent>
+          </Card>
+          <Card>
             <CardHeader><CardTitle>Send test SMS</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="Recipient +44..." />
@@ -106,6 +152,7 @@ export default function SmsSettingsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Recipient</TableHead>
+                      <TableHead>Template</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Sent</TableHead>
                     </TableRow>
@@ -114,6 +161,7 @@ export default function SmsSettingsPage() {
                     {logs.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell className="font-mono text-xs">{l.recipient}</TableCell>
+                        <TableCell className="text-xs capitalize">{l.template_key?.replace(/_/g, ' ') || '—'}</TableCell>
                         <TableCell>
                           <span className={cn('text-xs capitalize', l.status === 'sent' ? 'text-green-600' : 'text-red-600')}>{l.status}</span>
                         </TableCell>

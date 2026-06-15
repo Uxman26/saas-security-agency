@@ -648,6 +648,43 @@ export interface ReportsHub {
   staff_hours: number;
   sms_usage: number;
   email_usage: number;
+  monthly_trends: { label: string; revenue: number; expenses: number; staff_hours: number }[];
+  subscription_trend: { label: string; amount: number; invoices: number }[];
+}
+
+export interface StaffMonthlyReport {
+  period_start: string;
+  period_end: string;
+  group_by: string;
+  by_employee: Record<string, unknown>[];
+  grouped_summary: Record<string, unknown>[];
+  workforce_total_hours: number;
+  total_employees: number;
+}
+
+export interface SubscriptionReportSummary {
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  billing_cycle: string;
+  subscription_end?: string | null;
+  days_until_expiry?: number | null;
+  is_active: boolean;
+  is_expiring: boolean;
+  invoice_count: number;
+  total_billed: number;
+  total_paid: number;
+  outstanding: number;
+}
+
+export interface UsageSummary {
+  period_start: string;
+  period_end: string;
+  sms_sent: number;
+  emails_sent: number;
+  successful_logins: number;
+  api_requests: number;
+  active_users: number;
+  storage_mb: number;
 }
 
 export interface StaffIndividualReport {

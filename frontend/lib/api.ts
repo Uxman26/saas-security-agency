@@ -346,7 +346,7 @@ export const api = {
     staffIndividual: (guard_id: number, start_date: string, end_date: string): Promise<import('./types').StaffIndividualReport> =>
       request<import('./types').StaffIndividualReport>(`/reports/staff/${guard_id}?start_date=${start_date}&end_date=${end_date}`),
     staffMonthly: (start_date: string, end_date: string, group_by = 'guard') =>
-      request<import('./types').StaffIndividualReport>(`/reports/staff/monthly?start_date=${start_date}&end_date=${end_date}&group_by=${group_by}`),
+      request<import('./types').StaffMonthlyReport>(`/reports/staff/monthly?start_date=${start_date}&end_date=${end_date}&group_by=${group_by}`),
     attendance: (start_date: string, end_date: string, guard_id?: number) => {
       const q = new URLSearchParams({ start_date, end_date });
       if (guard_id) q.append('guard_id', String(guard_id));
@@ -354,6 +354,17 @@ export const api = {
     },
     financialInvoices: (start_date: string, end_date: string) =>
       request<Record<string, unknown>[]>(`/reports/financial/invoices?start_date=${start_date}&end_date=${end_date}`),
+    subscriptionSummary: () => request<import('./types').SubscriptionReportSummary>('/reports/subscription/summary'),
+    subscriptionInvoices: (start_date: string, end_date: string) =>
+      request<Record<string, unknown>[]>(`/reports/subscription/invoices?start_date=${start_date}&end_date=${end_date}`),
+    usageLogins: (start_date: string, end_date: string) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      return request<Record<string, unknown>[]>(`/reports/usage/logins?${q}`);
+    },
+    usageSummary: (start_date: string, end_date: string) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      return request<import('./types').UsageSummary>(`/reports/usage/summary?${q}`);
+    },
     export: async (report_type: string, start_date: string, end_date: string, format: string, guard_id?: number) => {
       const q = new URLSearchParams({ start_date, end_date, format });
       if (guard_id) q.append('guard_id', String(guard_id));

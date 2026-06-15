@@ -21,7 +21,7 @@ def create_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
     db.add(pay)
     db.flush()
     if inv:
-        sync_invoice_payment_status(db, inv)
+        sync_invoice_payment_status(db, inv, user_id)
         log_invoice_audit(db, company.id, user_id, inv.id, "payment_recorded", {"amount": pay.amount, "payment_id": pay.id})
     db.commit()
     db.refresh(pay)
@@ -52,6 +52,6 @@ def delete_payment(db: Session, payment_id: int, user_id: int) -> None:
     if inv_id:
         inv = db.query(Invoice).filter(Invoice.id == inv_id, Invoice.company_id == company.id).first()
         if inv:
-            sync_invoice_payment_status(db, inv)
+            sync_invoice_payment_status(db, inv, user_id)
             log_invoice_audit(db, company.id, user_id, inv.id, "payment_deleted", {"payment_id": payment_id})
     db.commit()

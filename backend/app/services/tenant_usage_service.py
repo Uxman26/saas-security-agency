@@ -4,7 +4,7 @@ from typing import Any, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Company, Guard, User
+from app.models import Company, Guard, User, SmsLog, EmailLog, ApiUsageLog, LoginLog
 from app.plan_config import quota_users
 from app.services.module_service import parse_modules
 from app.storage_paths import UPLOADS_DIR
@@ -41,6 +41,10 @@ def company_usage(db: Session, company_id: int) -> dict[str, Any]:
     guards = db.query(func.count(Guard.id)).filter(Guard.company_id == company_id).scalar()
     limit = user_limit_for_company(co)
     storage_bytes = _dir_size(UPLOADS_DIR)
+    sms = db.query(func.count(SmsLog.id)).filter(SmsLog.company_id == company_id).scalar()
+    emails = db.query(func.count(EmailLog.id)).filter(EmailLog.company_id == company_id).scalar()
+    api = db.query(func.count(ApiUsageLog.id)).filter(ApiUsageLog.company_id == company_id).scalar()
+    logins = db.query(func.count(LoginLog.id)).filter(LoginLog.company_id == company_id, LoginLog.status == "success").scalar()
     return {
         "company_id": company_id,
         "active_users": int(active_users or 0),
@@ -50,10 +54,10 @@ def company_usage(db: Session, company_id: int) -> dict[str, Any]:
         "storage_bytes": storage_bytes,
         "storage_mb": round(storage_bytes / (1024 * 1024), 2),
         "database_records": int(active_users or 0) + int(guards or 0),
-        "api_requests": 0,
-        "email_sent": 0,
-        "whatsapp_sent": 0,
-        "mobile_app_sessions": 0,
+        "api_requests": int(api or 0),
+        "email_sent": int(emails or 0),
+        "whatsapp_sent": int(sms or 0),
+        "mobile_app_sessions": int(logins or 0),
         "enabled_modules": parse_modules(co.enabled_modules_json),
         "billing_cycle": co.billing_cycle or "monthly",
     }

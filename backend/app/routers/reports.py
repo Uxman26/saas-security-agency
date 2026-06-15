@@ -15,8 +15,10 @@ from app.schemas import (
     ReportsHubResponse,
     StaffIndividualReportResponse,
     StaffMonthlyReportResponse,
+    SubscriptionReportSummary,
+    UsageSummaryResponse,
 )
-from app.services import report_service, staff_report_service, reports_hub_service, export_service
+from app.services import report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -66,6 +68,26 @@ def financial_invoices(start_date: date, end_date: date, db: Session = Depends(g
     return reports_hub_service.financial_invoice_rows(db, current_user.id, start_date, end_date)
 
 
+@router.get("/subscription/summary", response_model=SubscriptionReportSummary)
+def subscription_summary(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return SubscriptionReportSummary(**reports_extended_service.subscription_summary(db, current_user.id))
+
+
+@router.get("/subscription/invoices")
+def subscription_invoices(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return reports_extended_service.subscription_invoice_rows(db, current_user.id, start_date, end_date)
+
+
+@router.get("/usage/logins")
+def usage_logins(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return reports_extended_service.login_report_rows(db, current_user.id, start_date, end_date)
+
+
+@router.get("/usage/summary", response_model=UsageSummaryResponse)
+def usage_summary(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return UsageSummaryResponse(**reports_extended_service.usage_summary(db, current_user.id, start_date, end_date))
+
+
 def _export_response(data: bytes, fmt: str, filename: str):
     media = {"csv": "text/csv", "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "pdf": "application/pdf"}
     return Response(data, media_type=media.get(fmt, "application/octet-stream"), headers={"Content-Disposition": f'attachment; filename="{filename}"'})
@@ -99,6 +121,24 @@ def export_report(
         rows = data["by_employee"]
         columns = [("guard_name", "Employee"), ("total_hours", "Hours"), ("late_arrivals", "Late"), ("overtime_hours", "Overtime"), ("committed_hours", "Committed")]
         title = "Monthly staff summary"
+    elif report_type == "login-logs":
+        rows = reports_extended_service.login_report_rows(db, current_user.id, start_date, end_date)
+        columns = [("login_at", "Login at"), ("email", "Email"), ("full_name", "Name"), ("status", "Status"), ("ip_address", "IP")]
+        title = "Login activity"
+    elif report_type == "subscription":
+        rows = reports_extended_service.subscription_invoice_rows(db, current_user.id, start_date, end_date)
+        columns = [("invoice_number", "Invoice"), ("tier", "Plan"), ("total", "Total"), ("amount_paid", "Paid"), ("status", "Status"), ("due_date", "Due")]
+        title = "Subscription invoices"
+    elif report_type == "sms":
+        from app.services import sms_service
+        logs = sms_service.list_sms_logs(db, current_user.id, 500)
+        rows = [
+            {"recipient": l.recipient, "status": l.status, "sent_at": l.sent_at.isoformat() if l.sent_at else "", "body": (l.body or "")[:80]}
+            for l in logs
+            if l.sent_at and start_date <= l.sent_at.date() <= end_date
+        ]
+        columns = [("sent_at", "Sent"), ("recipient", "Recipient"), ("status", "Status"), ("body", "Message")]
+        title = "SMS logs"
     else:
         raise HTTPException(status_code=404, detail="Unknown report type")
     if fmt == "csv":

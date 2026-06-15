@@ -487,6 +487,33 @@ def run():
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
             except sqlite3.OperationalError:
                 pass
+    if not table_exists(cur, "email_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE email_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                recipient TEXT NOT NULL,
+                subject TEXT,
+                status TEXT DEFAULT 'sent',
+                sent_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "api_usage_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE api_usage_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                path TEXT,
+                method TEXT DEFAULT 'GET',
+                logged_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:

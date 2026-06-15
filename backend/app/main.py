@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms
+from app.middleware.api_usage import ApiUsageMiddleware
 from app.database import engine, Base
 from app.config import settings
 
@@ -15,6 +16,7 @@ except Exception:
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="SecureForce Manager", version="1.0.0")
+app.add_middleware(ApiUsageMiddleware)
 
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(

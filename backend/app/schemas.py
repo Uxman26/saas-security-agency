@@ -1146,6 +1146,33 @@ class ReportsHubResponse(BaseModel):
     staff_hours: float
     sms_usage: int
     email_usage: int
+    monthly_trends: List[dict] = Field(default_factory=list)
+    subscription_trend: List[dict] = Field(default_factory=list)
+
+
+class SubscriptionReportSummary(BaseModel):
+    subscription_tier: Optional[str] = None
+    subscription_status: Optional[str] = None
+    billing_cycle: str = "monthly"
+    subscription_end: Optional[str] = None
+    days_until_expiry: Optional[int] = None
+    is_active: bool = False
+    is_expiring: bool = False
+    invoice_count: int = 0
+    total_billed: float = 0
+    total_paid: float = 0
+    outstanding: float = 0
+
+
+class UsageSummaryResponse(BaseModel):
+    period_start: date
+    period_end: date
+    sms_sent: int = 0
+    emails_sent: int = 0
+    successful_logins: int = 0
+    api_requests: int = 0
+    active_users: int = 0
+    storage_mb: float = 0
 
 
 class StaffIndividualReportResponse(BaseModel):

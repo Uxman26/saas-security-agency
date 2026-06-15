@@ -293,6 +293,9 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
     db.refresh(inv)
     log_invoice_audit(db, company.id, user_id, inv.id, "status_changed", {"from": prev, "to": status})
     db.commit()
+    if status == "sent" and prev != "sent":
+        from app.services import sms_trigger_service
+        sms_trigger_service.notify_invoice_sent(db, user_id, inv)
     return inv
 
 

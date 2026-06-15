@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
@@ -27,14 +27,20 @@ import { api } from '@/lib/api';
 import type { SpecialDay } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { CalendarRange, Plus, Trash2, Sparkles } from 'lucide-react';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { StatusBarChart } from '@/components/charts/status-chart';
 import { toast } from '@/lib/toast';
 import { can } from '@/lib/permissions';
 import { useAuth } from '@/contexts/auth-context';
 
+import { CalendarRange, Plus, Trash2, Sparkles } from 'lucide-react';
+
+type Tab = 'holidays' | 'dates';
+
 export default function SpecialDaysSettingsPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const [tab, setTab] = useState<Tab>('dates');
   const [rows, setRows] = useState<SpecialDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -127,44 +133,62 @@ export default function SpecialDaysSettingsPage() {
   }, [pageCount]);
   const canDelete = user && can(user, 'allow.delete');
 
+  const monthChart = useMemo(() => {
+    const byMonth: Record<string, number> = {};
+    rows.forEach((r) => {
+      const m = r.date.slice(0, 7);
+      byMonth[m] = (byMonth[m] || 0) + 1;
+    });
+    return Object.entries(byMonth).map(([name, value]) => ({ name, value }));
+  }, [rows]);
+
   return (
     <ProtectedRoute>
       <AppShell>
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <div className="container mx-auto px-4 py-8 max-w-3xl">
-          <div className="flex items-center gap-3 mb-6">
-            <CalendarRange className="size-8 text-amber-600" />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Special days & bank holidays</h1>
-              <p className="text-muted-foreground text-sm">
-                Dates listed here are highlighted on the rota. For clients with “double rate on special days” enabled,
-                invoice generation applies 2× the billing rate for shifts on these dates.
-              </p>
-            </div>
-          </div>
+        <ModulePage>
+          <ModuleHeader
+            title={<span className="flex items-center gap-2"><CalendarRange className="size-7 text-amber-600" /> Special days & bank holidays</span>}
+            description="Dates listed here are highlighted on the rota. Clients with double-rate on special days get 2× billing for shifts on these dates."
+          />
 
-          <Card className="mb-6 border-border/60">
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4">
-              <div>
-                <CardTitle className="text-base">UK bank holidays (England & Wales)</CardTitle>
-                <CardDescription>Add preset dates for a year (skips duplicates).</CardDescription>
-              </div>
-              {canWrite && (
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    className="w-24"
-                    value={yearSeed}
-                    onChange={(e) => setYearSeed(parseInt(e.target.value, 10) || new Date().getFullYear())}
-                  />
-                  <Button size="sm" variant="secondary" onClick={seedUk} disabled={saving}>
-                    <Sparkles className="size-4 mr-1" /> Seed year
-                  </Button>
+          {monthChart.length > 0 && (
+            <StatusBarChart data={monthChart} title="Special dates by month" />
+          )}
+
+          <ModuleTabs
+            tabs={[
+              { id: 'holidays', label: 'Bank holidays' },
+              { id: 'dates', label: 'All dates' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+
+          {tab === 'holidays' && (
+            <Card className="border-border/60">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-base">UK bank holidays (England & Wales)</CardTitle>
+                  <CardDescription>Add preset dates for a year (skips duplicates).</CardDescription>
                 </div>
-              )}
-            </CardHeader>
-          </Card>
+                {canWrite && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      className="w-24"
+                      value={yearSeed}
+                      onChange={(e) => setYearSeed(parseInt(e.target.value, 10) || new Date().getFullYear())}
+                    />
+                    <Button size="sm" variant="secondary" onClick={seedUk} disabled={saving}>
+                      <Sparkles className="size-4 mr-1" /> Seed year
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+            </Card>
+          )}
 
+          {tab === 'dates' && (
           <Card className="border-border/60">
             <CardHeader className="flex flex-row items-center justify-between gap-4">
               <div>
@@ -234,6 +258,7 @@ export default function SpecialDaysSettingsPage() {
               )}
             </CardContent>
           </Card>
+          )}
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent>
@@ -260,9 +285,8 @@ export default function SpecialDaysSettingsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
-    </AppShell>
+        </ModulePage>
+      </AppShell>
     </ProtectedRoute>
   );
 }

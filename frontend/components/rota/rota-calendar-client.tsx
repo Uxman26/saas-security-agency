@@ -453,7 +453,7 @@ export function RotaCalendarClient() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-4 max-w-[1600px]">
+    <div className="container mx-auto px-4 py-8 space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="space-y-1 min-w-0">
           <Button variant="ghost" size="sm" className="-ml-2 h-8" type="button" onClick={() => router.push('/rota')}>

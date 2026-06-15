@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { companyUserSchema } from '@/lib/validation';
 import type { z } from 'zod';
 import { ProtectedRoute } from '@/components/protected-route';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -146,6 +147,7 @@ export default function RolesSettingsPage() {
   const [userPage, setUserPage] = useState(1);
   const [userPageSize, setUserPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
   const [addUserOpen, setAddUserOpen] = useState(false);
+  const [tab, setTab] = useState<'roles' | 'users'>('roles');
 
   const userForm = useForm<CompanyUserFormData>({
     resolver: zodResolver(companyUserSchema),
@@ -360,23 +362,27 @@ export default function RolesSettingsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
-          <div className="flex items-center gap-3 mb-6">
-            <Shield className="size-8 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Roles & permissions</h1>
-              <p className="text-muted-foreground text-sm">
-                System roles are fixed; create custom roles with a permission matrix and assign them to users.
-              </p>
-            </div>
-          </div>
+      <ModulePage>
+          <ModuleHeader
+            title={<span className="flex items-center gap-2"><Shield className="size-7 text-primary" /> Roles & permissions</span>}
+            description="System roles are fixed; create custom roles with a permission matrix and assign them to users."
+          />
 
           {loading ? (
             <p className="text-muted-foreground">Loading…</p>
           ) : (
             <>
-              <Card className="mb-8 border-border/60">
+              <ModuleTabs
+                tabs={[
+                  { id: 'roles', label: 'Roles' },
+                  { id: 'users', label: 'Users' },
+                ]}
+                value={tab}
+                onChange={setTab}
+              />
+
+              {tab === 'roles' && (
+              <Card className="border-border/60">
                 <CardHeader className="flex flex-row items-center justify-between gap-4">
                   <div>
                     <CardTitle>Roles</CardTitle>
@@ -492,7 +498,9 @@ export default function RolesSettingsPage() {
                   )}
                 </CardContent>
               </Card>
+              )}
 
+              {tab === 'users' && (
               <Card className="border-border/60">
                 <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
                   <div>
@@ -588,6 +596,7 @@ export default function RolesSettingsPage() {
                   )}
                 </CardContent>
               </Card>
+              )}
 
               <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
                 <DialogContent className="sm:max-w-md">
@@ -682,8 +691,7 @@ export default function RolesSettingsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      </div>
+      </ModulePage>
     </AppShell>
     </ProtectedRoute>
   );

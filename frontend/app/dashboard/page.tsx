@@ -147,7 +147,7 @@ export default function DashboardPage() {
     <ProtectedRoute>
       <AppShell>
         <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.08),transparent_55%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.25))]">
-          <div className="container mx-auto px-4 py-8 max-w-[1600px]">
+          <div className="container mx-auto px-4 py-8 space-y-6">
             <div className="mb-8 rounded-2xl border border-primary/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-lg shadow-primary/10">
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex size-12 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-white/10">

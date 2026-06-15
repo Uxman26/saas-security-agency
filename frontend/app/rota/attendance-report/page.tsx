@@ -112,7 +112,7 @@ export default function RotaAttendanceReportPage() {
     <ProtectedRoute>
       <AppShell>
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-          <div className="container mx-auto px-4 py-8 space-y-6 max-w-4xl">
+          <div className="container mx-auto px-4 py-8 space-y-6">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/rota/calendar">
                 <ArrowLeft className="size-4 mr-1" />

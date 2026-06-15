@@ -14,6 +14,8 @@ import { api } from '@/lib/api';
 import type { Attendance, Guard, Assignment } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { StatusPieChart } from '@/components/charts/status-chart';
 import { Clock, Plus } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -30,7 +32,7 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [bookOpen, setBookOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [lateView, setLateView] = useState(false);
+  const [tab, setTab] = useState<'overview' | 'all' | 'late'>('all');
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -76,8 +78,8 @@ export default function AttendancePage() {
   };
 
   const baseRows = useMemo(
-    () => (lateView ? attendance.filter((a) => a.status === 'late') : attendance),
-    [attendance, lateView]
+    () => (tab === 'late' ? attendance.filter((a) => a.status === 'late') : attendance),
+    [attendance, tab]
   );
 
   const getSearchText = useCallback(
@@ -129,7 +131,7 @@ export default function AttendancePage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, lateView]);
+  }, [search, tab]);
   useEffect(() => {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
@@ -140,24 +142,22 @@ export default function AttendancePage() {
   return (
     <ProtectedRoute>
       <AppShell>
-      <div>
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><Clock className="size-7" /> Attendance</h1>
-              <p className="text-muted-foreground mt-1">{attendance.length} attendance record{attendance.length !== 1 ? 's' : ''}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={loadAttendance} disabled={loading}>
-                {loading ? 'Loading...' : 'Refresh'}
-              </Button>
-              <Dialog open={bookOpen} onOpenChange={setBookOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="size-4 mr-2" />
-                    Book Attendance
-                  </Button>
-                </DialogTrigger>
+        <ModulePage>
+          <ModuleHeader
+            title={<span className="flex items-center gap-2"><Clock className="size-7" /> Attendance</span>}
+            description={`${attendance.length} attendance record${attendance.length !== 1 ? 's' : ''}`}
+            actions={
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={loadAttendance} disabled={loading}>
+                  {loading ? 'Loading...' : 'Refresh'}
+                </Button>
+                <Dialog open={bookOpen} onOpenChange={setBookOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="size-4 mr-2" />
+                      Book Attendance
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Book staff attendance</DialogTitle>
@@ -226,12 +226,23 @@ export default function AttendancePage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
-          </div>
+              </div>
+            }
+          />
 
-          {/* Summary */}
-          {attendance.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-3 mb-6">
+          <ModuleTabs
+            tabs={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'all', label: 'All records' },
+              { id: 'late', label: `Late (${lateCount})` },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+
+          {tab === 'overview' && attendance.length > 0 && (
+            <>
+            <div className="grid gap-4 sm:grid-cols-3">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Total Records</CardTitle>
@@ -257,23 +268,26 @@ export default function AttendancePage() {
                 </CardContent>
               </Card>
             </div>
+            <StatusPieChart
+              data={[
+                { name: 'On time', value: onTimeCount },
+                { name: 'Late', value: lateCount },
+                { name: 'Other', value: attendance.length - onTimeCount - lateCount },
+              ]}
+              title="Attendance breakdown"
+            />
+            </>
           )}
 
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          {tab !== 'overview' && (
+          <>
+          <div className="flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Search by guard name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-sm"
             />
-            <Button
-              variant={lateView ? 'default' : 'outline'}
-              onClick={() => setLateView(!lateView)}
-              size="sm"
-            >
-              {lateView ? 'Show All' : `Late Only (${lateCount})`}
-            </Button>
           </div>
 
           <Card>
@@ -285,7 +299,7 @@ export default function AttendancePage() {
                 <div className="text-center py-8 text-muted-foreground">Loading attendance records...</div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search || lateView ? 'No records match your filter.' : 'No attendance records yet. Click "Book Attendance" to get started.'}
+                  {search || tab === 'late' ? 'No records match your filter.' : 'No attendance records yet. Click "Book Attendance" to get started.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -348,8 +362,9 @@ export default function AttendancePage() {
               )}
             </CardContent>
           </Card>
-        </div>
-      </div>
+          </>
+          )}
+        </ModulePage>
     </AppShell>
     </ProtectedRoute>
   );

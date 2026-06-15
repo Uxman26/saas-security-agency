@@ -20,6 +20,8 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { StatusPieChart } from '@/components/charts/status-chart';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -44,6 +46,7 @@ export default function InvoicesPage() {
   const [genStart, setGenStart] = useState('');
   const [genEnd, setGenEnd] = useState('');
   const [genLoading, setGenLoading] = useState(false);
+  const [pageTab, setPageTab] = useState<'overview' | 'invoices'>('overview');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const { sortKey, sortDir, toggleSort } = useTableSort();
@@ -179,27 +182,30 @@ export default function InvoicesPage() {
   const draftTotal = draftInvoices.reduce((sum, i) => sum + i.total, 0);
   const sentTotal = sentInvoices.reduce((sum, i) => sum + i.total, 0);
 
+  const statusChart = STATUS_OPTIONS.map((s) => ({
+    name: s.charAt(0).toUpperCase() + s.slice(1),
+    value: invoices.filter((i) => i.status === s).length,
+  }));
+
   return (
     <ProtectedRoute>
       <AppShell>
-      <div>
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><FileText className="size-7" /> Invoices</h1>
-              <p className="text-muted-foreground mt-1">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => loadInvoices(statusFilter || undefined)} disabled={loading}>
-                {loading ? 'Loading...' : 'Refresh'}
-              </Button>
-              <Dialog open={genOpen} onOpenChange={setGenOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Zap className="size-4 mr-2" />
-                    Generate Invoice
-                  </Button>
-                </DialogTrigger>
+        <ModulePage>
+          <ModuleHeader
+            title={<span className="flex items-center gap-2"><FileText className="size-7" /> Invoices</span>}
+            description={`${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}`}
+            actions={
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => loadInvoices(statusFilter || undefined)} disabled={loading}>
+                  {loading ? 'Loading...' : 'Refresh'}
+                </Button>
+                <Dialog open={genOpen} onOpenChange={setGenOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Zap className="size-4 mr-2" />
+                      Generate Invoice
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Generate Invoice from Assignments</DialogTitle>
@@ -241,12 +247,22 @@ export default function InvoicesPage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
-          </div>
+              </div>
+            }
+          />
 
-          {/* Summary cards */}
-          {invoices.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+          <ModuleTabs
+            tabs={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'invoices', label: 'All invoices' },
+            ]}
+            value={pageTab}
+            onChange={setPageTab}
+          />
+
+          {pageTab === 'overview' && invoices.length > 0 && (
+            <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Total Invoiced</CardTitle>
@@ -290,10 +306,14 @@ export default function InvoicesPage() {
                 </CardContent>
               </Card>
             </div>
+            <StatusPieChart data={statusChart} title="Invoices by status" />
+            </>
           )}
 
+          {pageTab === 'invoices' && (
+          <>
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Search by client, status or period..."
               value={search}
@@ -438,8 +458,9 @@ export default function InvoicesPage() {
               )}
             </CardContent>
           </Card>
-        </div>
-      </div>
+          </>
+          )}
+        </ModulePage>
     </AppShell>
     </ProtectedRoute>
   );

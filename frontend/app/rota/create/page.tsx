@@ -118,7 +118,7 @@ function CreateRotaPage() {
     <ProtectedRoute>
       <AppShell>
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-          <div className="container mx-auto px-4 py-8 max-w-2xl space-y-8">
+          <div className="container mx-auto px-4 py-8 space-y-6">
             <Button variant="ghost" size="sm" className="-ml-2 mb-2" type="button" onClick={() => router.push('/rota')}>
               ← Back
             </Button>

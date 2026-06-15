@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +13,6 @@ import { api } from '@/lib/api';
 import type { CompanyProfile } from '@/lib/types';
 import { Building2, Upload, Wallet } from 'lucide-react';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -130,45 +130,33 @@ export default function CompanySettingsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Building2 className="size-7" /> Company profile
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">Logo and contact details appear on invoices. Bank details appear at the bottom for payment.</p>
-            </div>
-            {tab !== 'logo' && (
-              <div className="flex gap-2">
-                <Button onClick={() => void save()} disabled={saving || !name.trim()}>
-                  {saving ? 'Saving…' : 'Save'}
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href="/invoices">Back to invoices</Link>
-                </Button>
-              </div>
-            )}
-          </div>
+      <ModulePage>
+          <ModuleHeader
+            title={<span className="flex items-center gap-2"><Building2 className="size-7" /> Company profile</span>}
+            description="Logo and contact details appear on invoices. Bank details appear at the bottom for payment."
+            actions={
+              tab !== 'logo' ? (
+                <div className="flex gap-2">
+                  <Button onClick={() => void save()} disabled={saving || !name.trim()}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/invoices">Back to invoices</Link>
+                  </Button>
+                </div>
+              ) : undefined
+            }
+          />
 
-          <div className="flex gap-1 border-b">
-            {([
-              ['logo', 'Logo'],
-              ['contact', 'Contact'],
-              ['banking', 'Banking'],
-            ] as const).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                className={cn(
-                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                  tab === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <ModuleTabs
+            tabs={[
+              { id: 'logo', label: 'Logo' },
+              { id: 'contact', label: 'Contact' },
+              { id: 'banking', label: 'Banking' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === 'logo' && (
             <Card>
@@ -271,7 +259,7 @@ export default function CompanySettingsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
+        </ModulePage>
       </AppShell>
     </ProtectedRoute>
   );

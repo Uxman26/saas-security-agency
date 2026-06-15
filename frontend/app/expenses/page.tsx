@@ -14,6 +14,8 @@ import { api } from '@/lib/api';
 import type { Expense, ExpenseDashboard, ExpenseMeta, ExpenseReport, VatReport } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { StatusBarChart } from '@/components/charts/status-chart';
 import { Download, Pencil, Plus, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
@@ -414,36 +416,33 @@ export default function ExpensesPage() {
         {user?.enabled_modules?.expenses === false ? (
           <div className="p-8 text-center text-muted-foreground">Expenses module is not enabled for your account.</div>
         ) : (
-        <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Receipt className="size-8 text-primary" />
-                Expenses
-              </h1>
-              <p className="text-muted-foreground mt-1">Record business expenses, VAT, and supporting documents</p>
-            </div>
-            {canWrite && (
-              <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button onClick={() => { resetForm(); setAddOpen(true); }}>
-                    <Plus className="size-4 mr-1" />
-                    Add expense
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>{editId ? 'Edit expense' : 'Add expense'}</DialogTitle>
-                  </DialogHeader>
-                  {FormFields}
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => { setAddOpen(false); resetForm(); }}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={submitting}>{submitting ? 'Saving…' : editId ? 'Update' : 'Save'}</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
+        <ModulePage>
+          <ModuleHeader
+            title={<span className="flex items-center gap-2"><Receipt className="size-7 text-primary" /> Expenses</span>}
+            description="Record business expenses, VAT, and supporting documents"
+            actions={
+              canWrite ? (
+                <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
+                  <DialogTrigger asChild>
+                    <Button onClick={() => { resetForm(); setAddOpen(true); }}>
+                      <Plus className="size-4 mr-1" />
+                      Add expense
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>{editId ? 'Edit expense' : 'Add expense'}</DialogTitle>
+                    </DialogHeader>
+                    {FormFields}
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="outline" onClick={() => { setAddOpen(false); resetForm(); }}>Cancel</Button>
+                      <Button onClick={handleSubmit} disabled={submitting}>{submitting ? 'Saving…' : editId ? 'Update' : 'Save'}</Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              ) : undefined
+            }
+          />
 
           <Card>
             <CardContent className="pt-6">
@@ -504,21 +503,15 @@ export default function ExpensesPage() {
             </div>
           )}
 
-          <div className="flex gap-1 border-b">
-            {(['expenses', 'reports', 'vat'] as Tab[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className={cn(
-                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                  tab === t ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {t === 'expenses' ? 'Expenses' : t === 'reports' ? 'Reports' : 'VAT'}
-              </button>
-            ))}
-          </div>
+          <ModuleTabs
+            tabs={[
+              { id: 'expenses', label: 'Expenses' },
+              { id: 'reports', label: 'Reports' },
+              { id: 'vat', label: 'VAT' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === 'expenses' && (
             <>
@@ -678,6 +671,13 @@ export default function ExpensesPage() {
                   <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Total VAT</p><p className="text-lg font-bold">{fmt(report.totals.total_vat)}</p></div>
                   <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Total inc VAT</p><p className="text-lg font-bold">{fmt(report.totals.total_inc_vat)}</p></div>
                 </div>
+                <StatusBarChart
+                  data={report.breakdown.map((row) => ({
+                    name: groupBy === 'category' ? (CAT_LABELS[row.key] || row.key) : row.key,
+                    value: row.total_inc_vat,
+                  }))}
+                  title="Expense breakdown"
+                />
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -782,7 +782,7 @@ export default function ExpensesPage() {
               )}
             </div>
           )}
-        </div>
+        </ModulePage>
         )}
       </AppShell>
     </ProtectedRoute>

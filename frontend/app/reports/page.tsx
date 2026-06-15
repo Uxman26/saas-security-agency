@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { ReportsHubCharts } from '@/components/reports/hub-charts';
 import { ReportResultView } from '@/components/reports/report-result-view';
 import { api } from '@/lib/api';
@@ -225,12 +226,8 @@ export default function ReportsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">Reports</h1>
-            <p className="text-muted-foreground mt-1">Generate and export staff, financial, subscription, and usage reports</p>
-          </div>
-
+        <ModulePage>
+          <ModuleHeader title="Reports" description="Generate and export staff, financial, subscription, and usage reports" />
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <Label className="text-xs">From</Label>
@@ -259,13 +256,14 @@ export default function ReportsPage() {
             </>
           )}
 
-          <div className="flex gap-1 border-b">
-            {(['library', 'custom'] as const).map((t) => (
-              <button key={t} type="button" onClick={() => setTab(t)} className={`px-4 py-2 text-sm border-b-2 -mb-px capitalize ${tab === t ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground'}`}>
-                {t === 'library' ? 'Report library' : 'Custom reports'}
-              </button>
-            ))}
-          </div>
+          <ModuleTabs
+            tabs={[
+              { id: 'library', label: 'Report library' },
+              { id: 'custom', label: 'Custom reports' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === 'library' && (
             <>
@@ -310,7 +308,7 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
+        </ModulePage>
 
         <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
           <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">

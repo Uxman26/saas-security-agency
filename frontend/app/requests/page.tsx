@@ -1,15 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { StatusPieChart } from '@/components/charts/status-chart';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
@@ -17,6 +18,8 @@ import type { StaffRequest } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { Check, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+type Tab = 'pending' | 'approved' | 'rejected' | 'all';
 
 function statusBadge(status: string) {
   const s = status.toLowerCase();
@@ -31,9 +34,10 @@ function statusBadge(status: string) {
 
 export default function StaffRequestsReviewPage() {
   const { user } = useAuth();
+  const [tab, setTab] = useState<Tab>('pending');
   const [requests, setRequests] = useState<StaffRequest[]>([]);
+  const [allRequests, setAllRequests] = useState<StaffRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('pending');
   const [actionId, setActionId] = useState<number | null>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [comment, setComment] = useState('');
@@ -42,15 +46,30 @@ export default function StaffRequestsReviewPage() {
   const load = useCallback(() => {
     setLoading(true);
     api.staffRequests
-      .list(filter === 'all' ? undefined : filter)
+      .list(tab === 'all' ? undefined : tab)
       .then(setRequests)
       .catch(() => setRequests([]))
       .finally(() => setLoading(false));
-  }, [filter]);
+  }, [tab]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    api.staffRequests.list().then(setAllRequests).catch(() => setAllRequests([]));
+  }, []);
+
+  const chartData = useMemo(() => {
+    const pending = allRequests.filter((r) => r.status === 'pending').length;
+    const approved = allRequests.filter((r) => r.status === 'approved').length;
+    const rejected = allRequests.filter((r) => r.status === 'rejected').length;
+    return [
+      { name: 'Pending', value: pending },
+      { name: 'Approved', value: approved },
+      { name: 'Rejected', value: rejected },
+    ];
+  }, [allRequests]);
 
   const openAction = (id: number, type: 'approve' | 'reject') => {
     setActionId(id);
@@ -72,6 +91,7 @@ export default function StaffRequestsReviewPage() {
       setActionId(null);
       setActionType(null);
       load();
+      api.staffRequests.list().then(setAllRequests).catch(() => {});
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Action failed');
     } finally {
@@ -83,9 +103,9 @@ export default function StaffRequestsReviewPage() {
     return (
       <ProtectedRoute>
         <AppShell>
-          <div className="container mx-auto px-4 py-12 text-center text-muted-foreground">
-            You do not have permission to view staff requests.
-          </div>
+          <ModulePage>
+            <p className="text-center text-muted-foreground py-12">You do not have permission to view staff requests.</p>
+          </ModulePage>
         </AppShell>
       </ProtectedRoute>
     );
@@ -96,29 +116,37 @@ export default function StaffRequestsReviewPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold">Staff requests</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {canReview
+        <ModulePage>
+          <ModuleHeader
+            title="Staff requests"
+            description={
+              canReview
                 ? 'Review client shift requests. Approved shifts are added to the rota under Open shifts.'
-                : 'View staff request status.'}
-            </p>
-          </div>
+                : 'View staff request status.'
+            }
+          />
 
-          <div className="flex flex-wrap gap-3 items-center">
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" className="z-[200]">
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {allRequests.length > 0 && (
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Total</p><p className="text-2xl font-bold">{allRequests.length}</p></CardContent></Card>
+              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Pending</p><p className="text-2xl font-bold text-amber-600">{chartData[0].value}</p></CardContent></Card>
+              <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Approved</p><p className="text-2xl font-bold text-emerald-600">{chartData[1].value}</p></CardContent></Card>
+              <div className="lg:col-span-3">
+                <StatusPieChart data={chartData} title="Request status breakdown" />
+              </div>
+            </div>
+          )}
+
+          <ModuleTabs
+            tabs={[
+              { id: 'pending', label: 'Pending' },
+              { id: 'approved', label: 'Approved' },
+              { id: 'rejected', label: 'Rejected' },
+              { id: 'all', label: 'All' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {loading ? (
             <div className="flex justify-center py-12 text-muted-foreground gap-2">
@@ -130,7 +158,7 @@ export default function StaffRequestsReviewPage() {
               <CardContent className="py-12 text-center text-sm text-muted-foreground">No requests found.</CardContent>
             </Card>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-3 lg:grid-cols-2">
               {requests.map((r) => (
                 <Card key={r.id}>
                   <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
@@ -179,7 +207,7 @@ export default function StaffRequestsReviewPage() {
               ))}
             </div>
           )}
-        </div>
+        </ModulePage>
 
         <Dialog open={!!actionId} onOpenChange={(o) => !o && setActionId(null)}>
           <DialogContent showCloseButton className="sm:max-w-md">
@@ -196,9 +224,7 @@ export default function StaffRequestsReviewPage() {
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setActionId(null)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => setActionId(null)}>Cancel</Button>
               <Button
                 className={actionType === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
                 variant={actionType === 'reject' ? 'destructive' : 'default'}

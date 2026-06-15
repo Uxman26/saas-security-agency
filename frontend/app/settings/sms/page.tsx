@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
+import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -88,35 +89,20 @@ export default function SmsSettingsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6">
-          <div>
-            <h1 className="text-2xl font-bold">SMS (Twilio)</h1>
-            {!config?.enabled && (
-              <p className="text-sm text-amber-600 mt-1">SMS module is disabled for your account. Contact your administrator.</p>
-            )}
-          </div>
+        <ModulePage>
+          <ModuleHeader title="SMS (Twilio)" description={!config?.enabled ? 'SMS module is disabled for your account. Contact your administrator.' : undefined} />
 
-          <div className="flex flex-wrap gap-1 border-b">
-            {([
-              ['config', 'Configuration'],
-              ['templates', 'Templates'],
-              ['triggers', 'Triggers'],
-              ['test', 'Test send'],
-              ['logs', 'Logs'],
-            ] as const).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                className={cn(
-                  'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
-                  tab === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <ModuleTabs
+            tabs={[
+              { id: 'config', label: 'Configuration' },
+              { id: 'templates', label: 'Templates' },
+              { id: 'triggers', label: 'Triggers' },
+              { id: 'test', label: 'Test send' },
+              { id: 'logs', label: 'Logs' },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
 
           {tab === 'config' && (
             <Card>
@@ -189,7 +175,7 @@ export default function SmsSettingsPage() {
           {tab === 'test' && (
             <Card>
               <CardHeader><CardTitle>Send test SMS</CardTitle></CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2 max-w-2xl">
+              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-1">
                   <Label>Recipient</Label>
                   <Input value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="+44..." />
@@ -238,7 +224,7 @@ export default function SmsSettingsPage() {
               </CardContent>
             </Card>
           )}
-        </div>
+        </ModulePage>
       </AppShell>
     </ProtectedRoute>
   );

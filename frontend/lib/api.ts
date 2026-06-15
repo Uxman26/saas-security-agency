@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -395,6 +395,74 @@ export const api = {
     ): Promise<import('./types').InvoiceLine> =>
       request<import('./types').InvoiceLine>(`/invoices/${invoiceId}/lines`, { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/invoices/${id}`, { method: 'DELETE' }),
+  },
+  expenses: {
+    meta: (): Promise<ExpenseMeta> => request<ExpenseMeta>('/expenses/meta'),
+    list: (params?: {
+      start_date?: string;
+      end_date?: string;
+      category?: string;
+      payment_status?: string;
+    }): Promise<Expense[]> => {
+      const q = new URLSearchParams();
+      if (params?.start_date) q.append('start_date', params.start_date);
+      if (params?.end_date) q.append('end_date', params.end_date);
+      if (params?.category) q.append('category', params.category);
+      if (params?.payment_status) q.append('payment_status', params.payment_status);
+      const qs = q.toString();
+      return request<Expense[]>(`/expenses${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: number): Promise<Expense> => request<Expense>(`/expenses/${id}`),
+    create: (data: {
+      expense_date: string;
+      category: string;
+      vendor_name?: string;
+      reference_number?: string;
+      description?: string;
+      amount_ex_vat: number;
+      payment_method?: string;
+      payment_status?: string;
+    }): Promise<Expense> => request<Expense>('/expenses', { method: 'POST', body: JSON.stringify(data) }),
+    update: (
+      id: number,
+      data: Partial<{
+        expense_date: string;
+        category: string;
+        vendor_name: string;
+        reference_number: string;
+        description: string;
+        amount_ex_vat: number;
+        payment_method: string;
+        payment_status: string;
+      }>
+    ): Promise<Expense> => request<Expense>(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/expenses/${id}`, { method: 'DELETE' }),
+    dashboard: (start_date: string, end_date: string): Promise<ExpenseDashboard> =>
+      request<ExpenseDashboard>(`/expenses/dashboard?start_date=${start_date}&end_date=${end_date}`),
+    expenseReport: (start_date: string, end_date: string, group_by: string): Promise<ExpenseReport> =>
+      request<ExpenseReport>(`/expenses/reports/expenses?start_date=${start_date}&end_date=${end_date}&group_by=${group_by}`),
+    vatReport: (start_date: string, end_date: string): Promise<VatReport> =>
+      request<VatReport>(`/expenses/reports/vat?start_date=${start_date}&end_date=${end_date}`),
+    uploadDocument: async (id: number, file: File): Promise<Expense> => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch(`${API_URL}/expenses/${id}/document`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        const d = error.detail;
+        const msg = typeof d === 'string' ? d : 'Upload failed';
+        throw new ApiError(response.status, msg);
+      }
+      return response.json();
+    },
+    documentUrl: (id: number) => `${API_URL}/expenses/${id}/document`,
+    deleteDocument: (id: number): Promise<Expense> =>
+      request<Expense>(`/expenses/${id}/document`, { method: 'DELETE' }),
   },
   company: {
     profile: (): Promise<import('./types').CompanyProfile> => request<import('./types').CompanyProfile>('/company/profile'),

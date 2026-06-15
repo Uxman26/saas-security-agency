@@ -381,6 +381,30 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "companies") and not table_exists(cur, "expenses"):
+        try:
+            cur.execute(
+                """CREATE TABLE expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                expense_date TEXT NOT NULL,
+                category TEXT NOT NULL,
+                vendor_name TEXT,
+                reference_number TEXT,
+                description TEXT,
+                amount_ex_vat REAL NOT NULL DEFAULT 0,
+                vat_amount REAL NOT NULL DEFAULT 0,
+                total_amount REAL NOT NULL DEFAULT 0,
+                payment_method TEXT,
+                payment_status TEXT DEFAULT 'pending',
+                document_path TEXT,
+                document_mime TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:

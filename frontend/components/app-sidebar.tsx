@@ -20,6 +20,7 @@ import {
   Shield,
   UserCog,
   Users,
+  Receipt,
   Wallet,
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
@@ -40,6 +41,7 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
   { href: '/contractors', label: 'Contractors', perm: PERMS.contractorView, icon: UserCog },
   { href: '/payroll', label: 'Payroll', perm: 'payroll.read', icon: PoundSterling },
   { href: '/invoices', label: 'Invoices', perm: 'inv.read', icon: FileText },
+  { href: '/expenses', label: 'Expenses', perm: 'exp.read', icon: Receipt },
   { href: '/payments', label: 'Payments', perm: 'pay.read', icon: CreditCard },
   { href: '/allowances', label: 'Allowances', perm: 'allow.read', icon: Gift },
   { href: '/settings/special-days', label: 'Special days', perm: 'allow.read', icon: Calendar },

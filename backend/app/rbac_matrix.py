@@ -119,11 +119,11 @@ def matrix_to_codes(m: Optional[Dict[str, Any]]) -> FrozenSet[str]:
                 out.add(PERM_ASSIGN_DELETE)
         elif mod == "invoices":
             if v:
-                out.update([PERM_INV_READ, PERM_PAY_READ, PERM_PAYROLL_READ])
+                out.update([PERM_INV_READ, PERM_PAY_READ, PERM_PAYROLL_READ, PERM_EXP_READ])
             if c or e:
-                out.update([PERM_INV_WRITE, PERM_PAY_WRITE, PERM_PAYROLL_WRITE])
+                out.update([PERM_INV_WRITE, PERM_PAY_WRITE, PERM_PAYROLL_WRITE, PERM_EXP_WRITE])
             if d:
-                out.update([PERM_INV_DELETE, PERM_PAY_DELETE])
+                out.update([PERM_INV_DELETE, PERM_PAY_DELETE, PERM_EXP_DELETE])
         elif mod == "contractors":
             if v:
                 out.add(PERM_SUBS_READ)

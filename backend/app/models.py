@@ -86,6 +86,7 @@ class Company(Base):
     rota_plans = relationship("RotaPlan", back_populates="company", cascade="all, delete-orphan")
     subscription_receipts = relationship("SubscriptionReceipt", back_populates="company", cascade="all, delete-orphan")
     staff_requests = relationship("StaffRequest", back_populates="company", cascade="all, delete-orphan")
+    expenses = relationship("Expense", back_populates="company", cascade="all, delete-orphan")
 
 
 class SubscriptionReceipt(Base):
@@ -565,6 +566,27 @@ class SubContractor(Base):
     main_contractor = relationship("MainContractor", back_populates="sub_contractors")
     guards = relationship("Guard", back_populates="sub_contractor")
     sites = relationship("Site", back_populates="sub_contractor")
+
+
+class Expense(Base):
+    __tablename__ = "expenses"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    expense_date = Column(Date, nullable=False)
+    category = Column(String, nullable=False)
+    vendor_name = Column(String)
+    reference_number = Column(String)
+    description = Column(Text)
+    amount_ex_vat = Column(Float, nullable=False, default=0)
+    vat_amount = Column(Float, nullable=False, default=0)
+    total_amount = Column(Float, nullable=False, default=0)
+    payment_method = Column(String)
+    payment_status = Column(String, default="pending")
+    document_path = Column(String)
+    document_mime = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="expenses")
 
 
 class AuditLog(Base):

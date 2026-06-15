@@ -653,3 +653,79 @@ export interface DirectoryContractorAssignment {
   main_contractor: DirectoryContractorList;
   sub_contractor: DirectoryContractorList;
 }
+
+export interface Expense {
+  id: number;
+  company_id: number;
+  expense_date: string;
+  category: string;
+  vendor_name?: string | null;
+  reference_number?: string | null;
+  description?: string | null;
+  amount_ex_vat: number;
+  vat_amount: number;
+  total_amount: number;
+  payment_method?: string | null;
+  payment_status: string;
+  has_document: boolean;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface ExpenseMeta {
+  categories: string[];
+  payment_methods: string[];
+  payment_statuses: string[];
+  vat_rate: number;
+  max_document_bytes: number;
+}
+
+export interface ExpenseBreakdownItem {
+  key: string;
+  count: number;
+  total_ex_vat: number;
+  total_vat: number;
+  total_inc_vat: number;
+}
+
+export interface ExpenseReport {
+  period_start: string;
+  period_end: string;
+  group_by: string;
+  totals: { total_ex_vat: number; total_vat: number; total_inc_vat: number };
+  breakdown: ExpenseBreakdownItem[];
+}
+
+export interface VatReport {
+  period_start: string;
+  period_end: string;
+  expense_vat_total: number;
+  invoice_vat_total: number;
+  net_vat_summary: number;
+  total_vat_report: {
+    collected_on_invoices: number;
+    paid_on_expenses: number;
+    net_payable_or_refundable: number;
+  };
+  expense_totals: { total_ex_vat: number; total_vat: number; total_inc_vat: number };
+}
+
+export interface ExpenseDashboard {
+  period_start: string;
+  period_end: string;
+  total_expenses_ex_vat: number;
+  total_expense_vat: number;
+  total_invoice_vat: number;
+  net_vat_payable: number;
+  total_expenses_inc_vat: number;
+  category_summary: { category: string; total_inc_vat: number; vat_amount: number; count: number }[];
+  recent_expenses: Expense[];
+  quarterly_vat: {
+    quarter: string;
+    start_date: string;
+    end_date: string;
+    expense_vat: number;
+    invoice_vat: number;
+    net_vat: number;
+  }[];
+}

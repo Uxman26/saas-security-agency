@@ -53,6 +53,9 @@ PERM_CONTRACTOR_ASSIGN = "contractor:assign"
 PERM_STAFF_REQ_READ = "staff_req.read"
 PERM_STAFF_REQ_WRITE = "staff_req.write"
 PERM_STAFF_REQ_REVIEW = "staff_req.review"
+PERM_EXP_READ = "exp.read"
+PERM_EXP_WRITE = "exp.write"
+PERM_EXP_DELETE = "exp.delete"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -103,6 +106,9 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_STAFF_REQ_READ,
         PERM_STAFF_REQ_WRITE,
         PERM_STAFF_REQ_REVIEW,
+        PERM_EXP_READ,
+        PERM_EXP_WRITE,
+        PERM_EXP_DELETE,
     }
 )
 
@@ -120,6 +126,7 @@ _SUPERVISOR = frozenset(
         PERM_INV_READ,
         PERM_PAY_READ,
         PERM_ALLOW_READ,
+        PERM_EXP_READ,
         PERM_RATES_READ,
         PERM_DOC_READ,
         PERM_REP_READ,

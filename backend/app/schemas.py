@@ -947,3 +947,86 @@ class StaffRequestResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ExpenseBase(BaseModel):
+    expense_date: date
+    category: str
+    vendor_name: Optional[str] = None
+    reference_number: Optional[str] = None
+    description: Optional[str] = None
+    amount_ex_vat: float
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = "pending"
+
+
+class ExpenseCreate(ExpenseBase):
+    pass
+
+
+class ExpenseUpdate(BaseModel):
+    expense_date: Optional[date] = None
+    category: Optional[str] = None
+    vendor_name: Optional[str] = None
+    reference_number: Optional[str] = None
+    description: Optional[str] = None
+    amount_ex_vat: Optional[float] = None
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+
+
+class ExpenseResponse(BaseModel):
+    id: int
+    company_id: int
+    expense_date: date
+    category: str
+    vendor_name: Optional[str] = None
+    reference_number: Optional[str] = None
+    description: Optional[str] = None
+    amount_ex_vat: float
+    vat_amount: float
+    total_amount: float
+    payment_method: Optional[str] = None
+    payment_status: str
+    has_document: bool = False
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class ExpenseBreakdownItem(BaseModel):
+    key: str
+    count: int
+    total_ex_vat: float
+    total_vat: float
+    total_inc_vat: float
+
+
+class ExpenseReportResponse(BaseModel):
+    period_start: date
+    period_end: date
+    group_by: str
+    totals: dict
+    breakdown: List[ExpenseBreakdownItem]
+
+
+class VatReportResponse(BaseModel):
+    period_start: date
+    period_end: date
+    expense_vat_total: float
+    invoice_vat_total: float
+    net_vat_summary: float
+    total_vat_report: dict
+    expense_totals: dict
+
+
+class ExpenseDashboardResponse(BaseModel):
+    period_start: date
+    period_end: date
+    total_expenses_ex_vat: float
+    total_expense_vat: float
+    total_invoice_vat: float
+    net_vat_payable: float
+    total_expenses_inc_vat: float
+    category_summary: List[dict]
+    recent_expenses: List[ExpenseResponse]
+    quarterly_vat: List[dict]

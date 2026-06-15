@@ -95,6 +95,10 @@ function ClientForm({
           <Label>Address</Label>
           <Input {...register('address')} placeholder="123 Business Park, London" />
         </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Postcode</Label>
+          <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
+        </div>
         <div className="space-y-1">
           <Label>Contract start</Label>
           <Input type="date" {...register('contract_start_date')} />
@@ -168,6 +172,7 @@ export default function ClientsPage() {
     email: '',
     phone: '',
     address: '',
+    postcode: '',
     contact_person: '',
     double_rate_special_days: false,
     contract_start_date: '',
@@ -203,6 +208,7 @@ export default function ClientsPage() {
       email: client.email ?? '',
       phone: client.phone ?? '',
       address: client.address ?? '',
+      postcode: client.postcode ?? '',
       contact_person: client.contact_person ?? '',
       double_rate_special_days: client.double_rate_special_days ?? false,
       contract_start_date: client.contract_start_date ?? '',

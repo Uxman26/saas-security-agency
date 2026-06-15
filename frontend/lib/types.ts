@@ -249,6 +249,7 @@ export interface CompanyProfile {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  postcode?: string | null;
   logo_url?: string | null;
   account_name?: string | null;
   bank_name?: string | null;
@@ -368,12 +369,16 @@ export interface Guard {
 export interface Site {
   id: number;
   company_id: number;
-  client_id?: number;
+  client_id?: number | null;
   name: string;
   color?: string;
   address?: string;
+  postcode?: string;
   contact_person?: string;
+  contact_email?: string;
   contact_phone?: string;
+  contract_start_date?: string;
+  contract_end_date?: string;
   default_hourly_rate?: number;
   main_contractor_id?: number | null;
   sub_contractor_id?: number | null;
@@ -470,6 +475,7 @@ export interface Client {
   email?: string;
   phone?: string;
   address?: string;
+  postcode?: string;
   contact_person?: string;
   double_rate_special_days?: boolean;
   contract_start_date?: string;
@@ -773,6 +779,7 @@ export interface DirectoryContractor {
   contact_email?: string | null;
   contact_phone?: string | null;
   address?: string | null;
+  postcode?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

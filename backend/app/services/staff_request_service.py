@@ -174,11 +174,11 @@ def create_staff_request(db: Session, user: User, data: StaffRequestCreate) -> S
     client_id = _resolve_client_id(db, user, data)
     site = (
         db.query(Site)
-        .filter(Site.id == data.site_id, Site.company_id == company.id, Site.client_id == client_id)
+        .filter(Site.id == data.site_id, Site.company_id == company.id)
         .first()
     )
     if not site:
-        raise HTTPException(status_code=404, detail="Site not found for this client")
+        raise HTTPException(status_code=404, detail="Site not found")
     req = StaffRequest(
         company_id=company.id,
         client_id=client_id,

@@ -224,7 +224,10 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
     sites = db.query(Site).filter(Site.company_id == company.id, Site.client_id == client_id).all()
     site_ids = [s.id for s in sites]
     if not site_ids:
-        raise HTTPException(status_code=400, detail="No sites linked to client")
+        sites = db.query(Site).filter(Site.company_id == company.id).all()
+        site_ids = [s.id for s in sites]
+    if not site_ids:
+        raise HTTPException(status_code=400, detail="No sites configured")
     assignments = db.query(Assignment).filter(
         Assignment.site_id.in_(site_ids),
         Assignment.date >= period_start,

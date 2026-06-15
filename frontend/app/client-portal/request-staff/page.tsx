@@ -71,11 +71,7 @@ function RequestStaffPage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  const clientSites = useMemo(() => {
-    const cid = parseInt(clientId, 10);
-    if (!cid) return sites;
-    return sites.filter((s) => s.client_id === cid);
-  }, [sites, clientId]);
+  const clientSites = useMemo(() => sites, [sites]);
 
   const submit = async () => {
     const sid = parseInt(siteId, 10);

@@ -49,6 +49,7 @@ def get_company_profile(db: Session, user_id: int) -> dict:
         "email": company.email or (admin.email if admin else None),
         "phone": company.phone,
         "address": company.address,
+        "postcode": company.postcode,
         "logo_url": company_logo_url(company),
         "account_name": company.account_name,
         "bank_name": company.bank_name,

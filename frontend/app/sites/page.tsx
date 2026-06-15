@@ -112,20 +112,31 @@ function SiteForm({
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
         <div className="space-y-1">
-          <Label>Client</Label>
-          <select
-            className="w-full border rounded-md px-3 py-2 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            {...register('client_id', { valueAsNumber: true })}
+          <Label>Client <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Select
+            value={watch('client_id') ? String(watch('client_id')) : '__none__'}
+            onValueChange={(v) => setValue('client_id', v === '__none__' ? null : parseInt(v, 10))}
           >
-            <option value="">— None —</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            <SelectTrigger><SelectValue placeholder="— None —" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">— None —</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1">
           <Label>Default Hourly Rate (£)</Label>
           <Input type="number" step="0.01" min="0" {...register('default_hourly_rate', { valueAsNumber: true })} placeholder="12.50" />
+        </div>
+        <div className="space-y-1">
+          <Label>Contract start</Label>
+          <Input type="date" {...register('contract_start_date')} />
+        </div>
+        <div className="space-y-1">
+          <Label>Contract expiry</Label>
+          <Input type="date" {...register('contract_end_date')} />
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Site colour</Label>
@@ -136,11 +147,20 @@ function SiteForm({
           <Input {...register('address')} placeholder="123 High Street, London" />
           {errors.address && <p className="text-xs text-destructive">{errors.address.message}</p>}
         </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Postcode</Label>
+          <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
+        </div>
         <div className="space-y-1">
           <Label>Contact Person</Label>
           <Input {...register('contact_person')} placeholder="John Smith" />
         </div>
         <div className="space-y-1">
+          <Label>Contact Email</Label>
+          <Input type="email" {...register('contact_email')} placeholder="john@example.com" />
+          {errors.contact_email && <p className="text-xs text-destructive">{errors.contact_email.message}</p>}
+        </div>
+        <div className="space-y-1 sm:col-span-2">
           <Label>Contact Phone</Label>
           <Input {...register('contact_phone')} placeholder="+44 20 0000 0000" />
           {errors.contact_phone && <p className="text-xs text-destructive">{errors.contact_phone.message}</p>}
@@ -197,7 +217,7 @@ export default function SitesPage() {
 
   const addForm = useForm<SiteFormData>({
     resolver: zodResolver(siteSchema) as Resolver<SiteFormData>,
-    defaultValues: { client_id: undefined, default_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
+    defaultValues: { client_id: null, default_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
   });
 
   const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) as Resolver<SiteFormData> });
@@ -206,12 +226,15 @@ export default function SitesPage() {
     const o: Omit<Site, 'id' | 'company_id' | 'created_at'> = {
       name: data.name,
       color: data.color || DEFAULT_SITE_COLOR,
-      address: data.address,
-      contact_person: data.contact_person,
-      contact_phone: data.contact_phone,
+      client_id: data.client_id ?? null,
+      address: data.address || undefined,
+      postcode: data.postcode || undefined,
+      contact_person: data.contact_person || undefined,
+      contact_email: data.contact_email || undefined,
+      contact_phone: data.contact_phone || undefined,
+      contract_start_date: data.contract_start_date?.trim() || undefined,
+      contract_end_date: data.contract_end_date?.trim() || undefined,
     };
-    const cid = data.client_id;
-    if (cid != null && !Number.isNaN(Number(cid))) o.client_id = cid;
     const rate = data.default_hourly_rate;
     if (rate != null && !Number.isNaN(Number(rate))) o.default_hourly_rate = rate;
     if (data.contractor_id) {
@@ -243,11 +266,15 @@ export default function SitesPage() {
     editForm.reset({
       name: site.name,
       color: site.color || DEFAULT_SITE_COLOR,
-      client_id: site.client_id ?? undefined,
+      client_id: site.client_id ?? null,
       default_hourly_rate: site.default_hourly_rate ?? undefined,
       address: site.address ?? '',
+      postcode: site.postcode ?? '',
       contact_person: site.contact_person ?? '',
+      contact_email: site.contact_email ?? '',
       contact_phone: site.contact_phone ?? '',
+      contract_start_date: site.contract_start_date ?? '',
+      contract_end_date: site.contract_end_date ?? '',
       main_contractor_id: site.main_contractor_id ?? undefined,
       sub_contractor_id: site.sub_contractor_id ?? undefined,
       contractor_id: site.contractor_id ?? undefined,
@@ -273,7 +300,7 @@ export default function SitesPage() {
 
   const getSearchText = useCallback(
     (s: Site) =>
-      [s.name, s.address, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_phone, String(s.default_hourly_rate ?? '')]
+      [s.name, s.address, s.postcode, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_email, s.contact_phone, String(s.default_hourly_rate ?? '')]
         .filter(Boolean)
         .join(' '),
     [clientMap, contractorLabel]
@@ -292,8 +319,12 @@ export default function SitesPage() {
           return s.default_hourly_rate ?? 0;
         case 'address':
           return s.address || '';
+        case 'postcode':
+          return s.postcode || '';
         case 'contact_person':
           return s.contact_person || '';
+        case 'contact_email':
+          return s.contact_email || '';
         case 'contact_phone':
           return s.contact_phone || '';
         default:
@@ -388,7 +419,9 @@ export default function SitesPage() {
                         <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Default Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Address" colKey="address" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Postcode" colKey="postcode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Contact Person" colKey="contact_person" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Contact Email" colKey="contact_email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Contact Phone" colKey="contact_phone" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Actions</TableHead>
                       </TableRow>
@@ -416,7 +449,9 @@ export default function SitesPage() {
                             {site.default_hourly_rate != null ? `£${Number(site.default_hourly_rate).toFixed(2)}/hr` : '-'}
                           </TableCell>
                           <TableCell className="max-w-[200px] truncate">{site.address || '-'}</TableCell>
+                          <TableCell>{site.postcode || '-'}</TableCell>
                           <TableCell>{site.contact_person || '-'}</TableCell>
+                          <TableCell>{site.contact_email || '-'}</TableCell>
                           <TableCell>{site.contact_phone || '-'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">

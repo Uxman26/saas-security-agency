@@ -49,6 +49,7 @@ export default function CompanySettingsPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [postcode, setPostcode] = useState('');
   const [accountName, setAccountName] = useState('');
   const [bankName, setBankName] = useState('');
   const [sortCode, setSortCode] = useState('');
@@ -68,6 +69,7 @@ export default function CompanySettingsPage() {
         setEmail(p.email ?? '');
         setPhone(p.phone ?? '');
         setAddress(p.address ?? '');
+        setPostcode(p.postcode ?? '');
         setAccountName(p.account_name ?? '');
         setBankName(p.bank_name ?? '');
         setSortCode(p.sort_code ?? '');
@@ -90,6 +92,7 @@ export default function CompanySettingsPage() {
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
         address: address.trim() || undefined,
+        postcode: postcode.trim() || undefined,
         account_name: accountName.trim() || undefined,
         bank_name: bankName.trim() || undefined,
         sort_code: sortCode.trim() || undefined,
@@ -173,14 +176,18 @@ export default function CompanySettingsPage() {
                 <Label>Phone</Label>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 20 0000 0000" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 sm:col-span-2">
                 <Label>Address</Label>
                 <textarea
                   className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Street, city, postcode"
+                  placeholder="Street, city"
                 />
+              </div>
+              <div className="space-y-1">
+                <Label>Postcode</Label>
+                <Input value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="e.g. E15 2AB" />
               </div>
             </CardContent>
           </Card>

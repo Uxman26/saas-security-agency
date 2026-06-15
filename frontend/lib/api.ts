@@ -708,12 +708,14 @@ export const api = {
       contact_email?: string;
       contact_phone?: string;
       address?: string;
+      postcode?: string;
     }): Promise<DirectoryContractor> => {
       const sanitized = {
         ...data,
         name: sanitizeInput(data.name),
         contact_phone: data.contact_phone ? sanitizeInput(data.contact_phone) : undefined,
         address: data.address ? sanitizeInput(data.address) : undefined,
+        postcode: data.postcode ? sanitizeInput(data.postcode) : undefined,
       };
       return request<DirectoryContractor>('/contractors', { method: 'POST', body: JSON.stringify(sanitized) });
     },
@@ -725,6 +727,7 @@ export const api = {
         contact_email?: string;
         contact_phone?: string;
         address?: string;
+        postcode?: string;
         is_active?: boolean;
       }>
     ): Promise<DirectoryContractor> => {

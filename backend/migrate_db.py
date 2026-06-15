@@ -471,6 +471,22 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    for table, col, spec in [
+        ("sites", "postcode", "TEXT"),
+        ("sites", "contact_email", "TEXT"),
+        ("sites", "contract_start_date", "TEXT"),
+        ("sites", "contract_end_date", "TEXT"),
+        ("clients", "postcode", "TEXT"),
+        ("contractors", "postcode", "TEXT"),
+        ("main_contractors", "postcode", "TEXT"),
+        ("sub_contractors", "postcode", "TEXT"),
+        ("companies", "postcode", "TEXT"),
+    ]:
+        if table_exists(cur, table) and not column_exists(cur, table, col):
+            try:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
     conn.commit()
     conn.close()
     try:

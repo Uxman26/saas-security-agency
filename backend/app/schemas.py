@@ -254,6 +254,7 @@ class CompanyProfileUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    postcode: Optional[str] = None
     account_name: Optional[str] = None
     bank_name: Optional[str] = None
     sort_code: Optional[str] = None
@@ -268,6 +269,7 @@ class CompanyProfileResponse(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    postcode: Optional[str] = None
     logo_url: Optional[str] = None
     account_name: Optional[str] = None
     bank_name: Optional[str] = None
@@ -411,8 +413,12 @@ class SiteBase(BaseModel):
     color: Optional[str] = "#3b82f6"
     client_id: Optional[int] = None
     address: Optional[str] = None
+    postcode: Optional[str] = None
     contact_person: Optional[str] = None
+    contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
+    contract_start_date: Optional[date] = None
+    contract_end_date: Optional[date] = None
     default_hourly_rate: Optional[float] = None
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
@@ -550,6 +556,7 @@ class ClientBase(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    postcode: Optional[str] = None
     contact_person: Optional[str] = None
     double_rate_special_days: bool = False
     contract_start_date: Optional[date] = None
@@ -616,6 +623,7 @@ class MainContractorBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
+    postcode: Optional[str] = None
     registration_number: Optional[str] = None
     contract_start_date: Optional[date] = None
     contract_end_date: Optional[date] = None
@@ -641,6 +649,7 @@ class SubContractorBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
+    postcode: Optional[str] = None
     registration_number: Optional[str] = None
     contract_start_date: Optional[date] = None
     contract_end_date: Optional[date] = None

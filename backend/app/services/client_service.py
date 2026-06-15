@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List
-from app.models import Client, ClientContractRenewal
+from app.models import Client, ClientContractRenewal, Site
 from app.schemas import ClientCreate, ClientRenewContract
 from app.services.company_service import get_company_by_user_id
 
@@ -48,6 +48,7 @@ def delete_client(db: Session, client_id: int, user_id: int) -> None:
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
+    db.query(Site).filter(Site.client_id == client_id, Site.company_id == company.id).update({Site.client_id: None}, synchronize_session=False)
     db.delete(client)
     db.commit()
 

@@ -165,6 +165,8 @@ class CompanyProfileUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    account_name: Optional[str] = None
+    account_details: Optional[str] = None
 
 
 class CompanyProfileResponse(BaseModel):
@@ -174,6 +176,9 @@ class CompanyProfileResponse(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     logo_url: Optional[str] = None
+    account_name: Optional[str] = None
+    account_details: Optional[str] = None
+    account_logo_url: Optional[str] = None
 
 class GuardBase(BaseModel):
     full_name: Optional[str] = None
@@ -756,6 +761,9 @@ class InvoiceResponse(InvoiceBase):
     company_phone: Optional[str] = None
     company_address: Optional[str] = None
     company_logo_url: Optional[str] = None
+    account_name: Optional[str] = None
+    account_details: Optional[str] = None
+    account_logo_url: Optional[str] = None
     client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_address: Optional[str] = None

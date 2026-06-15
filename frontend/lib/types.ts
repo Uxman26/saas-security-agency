@@ -169,6 +169,9 @@ export interface CompanyProfile {
   phone?: string | null;
   address?: string | null;
   logo_url?: string | null;
+  account_name?: string | null;
+  account_details?: string | null;
+  account_logo_url?: string | null;
 }
 
 export interface Company {
@@ -521,6 +524,9 @@ export interface Invoice {
   company_phone?: string | null;
   company_address?: string | null;
   company_logo_url?: string | null;
+  account_name?: string | null;
+  account_details?: string | null;
+  account_logo_url?: string | null;
   client_email?: string | null;
   client_phone?: string | null;
   client_address?: string | null;

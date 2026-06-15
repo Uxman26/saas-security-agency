@@ -417,6 +417,23 @@ export const api = {
       }
       return response.json();
     },
+    uploadAccountLogo: async (file: File): Promise<import('./types').CompanyProfile> => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch(`${API_URL}/company/account-logo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        const d = error.detail;
+        const msg = typeof d === 'string' ? d : 'Upload failed';
+        throw new ApiError(response.status, msg);
+      }
+      return response.json();
+    },
   },
   allowances: {
     list: (): Promise<Allowance[]> => request<Allowance[]>('/allowances'),

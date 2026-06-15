@@ -153,5 +153,21 @@ def render_invoice_pdf(
         story.append(Paragraph("<b>Notes</b>", styles["Heading3"]))
         story.append(Paragraph((inv.notes or "").replace("\n", "<br/>"), styles["Normal"]))
 
+    if co.account_name or co.account_details or resolve_storage_path(co.account_logo_path):
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("<b>Account details — please pay to</b>", styles["Heading3"]))
+        account_logo = resolve_storage_path(co.account_logo_path)
+        if account_logo:
+            try:
+                img = RLImage(account_logo, width=3.5 * cm, height=1.75 * cm, kind="proportional")
+                story.append(img)
+                story.append(Spacer(1, 6))
+            except Exception:
+                pass
+        if co.account_name:
+            story.append(Paragraph(f"<b>{co.account_name}</b>", styles["Normal"]))
+        if co.account_details:
+            story.append(Paragraph((co.account_details or "").replace("\n", "<br/>"), styles["Normal"]))
+
     doc.build(story)
     return buf.getvalue()

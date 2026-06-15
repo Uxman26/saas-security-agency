@@ -10,10 +10,38 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import type { CompanyProfile } from '@/lib/types';
-import { Building2, Upload } from 'lucide-react';
+import { Building2, Upload, Wallet } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+function useLogoUrl(url?: string | null) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!url) {
+      setSrc(null);
+      return;
+    }
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    const token = localStorage.getItem('token')?.trim();
+    void fetch(`${API_URL}${url}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        blobUrl = URL.createObjectURL(blob);
+        setSrc(blobUrl);
+      })
+      .catch(() => setSrc(null));
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [url]);
+  return src;
+}
 
 export default function CompanySettingsPage() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
@@ -21,9 +49,13 @@ export default function CompanySettingsPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  const [accountName, setAccountName] = useState('');
+  const [accountDetails, setAccountDetails] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingAccount, setUploadingAccount] = useState(false);
+  const logoSrc = useLogoUrl(profile?.logo_url);
+  const accountLogoSrc = useLogoUrl(profile?.account_logo_url);
 
   const load = () => {
     api.company
@@ -34,6 +66,8 @@ export default function CompanySettingsPage() {
         setEmail(p.email ?? '');
         setPhone(p.phone ?? '');
         setAddress(p.address ?? '');
+        setAccountName(p.account_name ?? '');
+        setAccountDetails(p.account_details ?? '');
       })
       .catch(() => toast.error('Failed to load company profile'));
   };
@@ -42,34 +76,17 @@ export default function CompanySettingsPage() {
     load();
   }, []);
 
-  useEffect(() => {
-    if (!profile?.logo_url) {
-      setLogoSrc(null);
-      return;
-    }
-    let cancelled = false;
-    let blobUrl: string | null = null;
-    const token = localStorage.getItem('token')?.trim();
-    void fetch(`${API_URL}${profile.logo_url}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((r) => (r.ok ? r.blob() : null))
-      .then((blob) => {
-        if (cancelled || !blob) return;
-        blobUrl = URL.createObjectURL(blob);
-        setLogoSrc(blobUrl);
-      })
-      .catch(() => setLogoSrc(null));
-    return () => {
-      cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [profile?.logo_url]);
-
   const save = async () => {
     setSaving(true);
     try {
-      const p = await api.company.updateProfile({ name: name.trim(), email: email.trim() || undefined, phone: phone.trim() || undefined, address: address.trim() || undefined });
+      const p = await api.company.updateProfile({
+        name: name.trim(),
+        email: email.trim() || undefined,
+        phone: phone.trim() || undefined,
+        address: address.trim() || undefined,
+        account_name: accountName.trim() || undefined,
+        account_details: accountDetails.trim() || undefined,
+      });
       setProfile(p);
       toast.success('Company details saved');
     } catch (e) {
@@ -93,6 +110,20 @@ export default function CompanySettingsPage() {
     }
   };
 
+  const onAccountLogo = async (file: File | null) => {
+    if (!file) return;
+    setUploadingAccount(true);
+    try {
+      const p = await api.company.uploadAccountLogo(file);
+      setProfile(p);
+      toast.success('Account logo uploaded');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploadingAccount(false);
+    }
+  };
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -101,7 +132,7 @@ export default function CompanySettingsPage() {
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Building2 className="size-7" /> Company profile
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">Logo and contact details appear on invoices.</p>
+            <p className="text-sm text-muted-foreground mt-1">Logo and contact details appear at the top of invoices. Account details appear at the bottom for payment.</p>
           </div>
 
           <Card className="mb-6">
@@ -129,7 +160,7 @@ export default function CompanySettingsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="mb-6">
             <CardHeader>
               <CardTitle className="text-base">Contact details</CardTitle>
             </CardHeader>
@@ -155,16 +186,63 @@ export default function CompanySettingsPage() {
                   placeholder="Street, city, postcode"
                 />
               </div>
-              <div className="flex gap-2">
-                <Button onClick={() => void save()} disabled={saving || !name.trim()}>
-                  {saving ? 'Saving…' : 'Save'}
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link href="/invoices">Back to invoices</Link>
-                </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wallet className="size-4" /> Account details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <p className="text-sm text-muted-foreground -mt-2">Shown at the bottom of invoices so clients know where to pay.</p>
+              <div className="space-y-1">
+                <Label>Account / company name</Label>
+                <Input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="e.g. Paramount Security Ltd" />
+              </div>
+              <div className="space-y-1">
+                <Label>Account logo</Label>
+                <div className="flex flex-wrap items-center gap-4">
+                  {accountLogoSrc ? (
+                    <img src={accountLogoSrc} alt="" className="h-14 max-w-[160px] object-contain rounded border bg-white p-2" />
+                  ) : (
+                    <div className="h-14 w-28 rounded border border-dashed flex items-center justify-center text-xs text-muted-foreground">No logo</div>
+                  )}
+                  <label className="inline-flex">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => void onAccountLogo(e.target.files?.[0] ?? null)}
+                    />
+                    <span className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-sm font-medium hover:bg-muted cursor-pointer">
+                      <Upload className="size-4 mr-1" />
+                      {uploadingAccount ? 'Uploading…' : 'Upload account logo'}
+                    </span>
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Bank / payment details</Label>
+                <textarea
+                  className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                  value={accountDetails}
+                  onChange={(e) => setAccountDetails(e.target.value)}
+                  placeholder={'Bank: Example Bank\nSort code: 00-00-00\nAccount number: 12345678\nReference: Invoice number'}
+                />
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex gap-2">
+            <Button onClick={() => void save()} disabled={saving || !name.trim()}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/invoices">Back to invoices</Link>
+            </Button>
+          </div>
         </div>
       </AppShell>
     </ProtectedRoute>

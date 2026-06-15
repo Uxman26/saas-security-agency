@@ -33,6 +33,7 @@ const empty = (): ShiftRec => ({
   breakM: 30,
   color: SHIFT_COLOR_OPTS[0],
   label: '',
+  shiftRate: null,
 });
 
 export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultEmpId, edit, onApply }: Props) {
@@ -177,6 +178,23 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
                   })}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Shift rate (£/hr, optional)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                placeholder="e.g. 12.50"
+                value={shift.shiftRate ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setShift((s) => ({
+                    ...s,
+                    shiftRate: v === '' ? null : parseFloat(v) || null,
+                  }));
+                }}
+              />
             </div>
             <div className="space-y-1">
               <Label>Notes</Label>

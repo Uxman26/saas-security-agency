@@ -9,6 +9,7 @@ export type ShiftRec = {
   breakM: number;
   color: string;
   label: string;
+  shiftRate?: number | null;
 };
 
 export type EmployeeRec = {

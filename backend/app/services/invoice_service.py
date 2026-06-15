@@ -6,7 +6,7 @@ from typing import List, Optional, Any, Dict
 from app.models import Invoice, InvoiceLine, Client, Site, Assignment, Company, User, AuditLog
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
-from app.services.rate_service import resolve_billing_rate
+from app.services.rate_service import resolve_assignment_billing_rate
 from app.services.special_day_service import special_date_set
 from app.services.rota_service import shift_hours
 from app.models import Allowance
@@ -245,7 +245,7 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
     special_dates = special_date_set(db, company.id)
     double_client = bool(getattr(client, "double_rate_special_days", False))
     for a in assignments:
-        r = resolve_billing_rate(db, company.id, a.guard_id, a.site_id, a.shift_type or "day", a.date)
+        r = resolve_assignment_billing_rate(db, a, company.id)
         if double_client and a.date in special_dates:
             r = r * 2.0
         hrs = shift_hours(a)

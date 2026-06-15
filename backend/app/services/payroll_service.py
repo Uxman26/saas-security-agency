@@ -5,7 +5,7 @@ from datetime import date
 from app.models import Payroll, Guard
 from app.schemas import PayrollCreate, PayrollResponse
 from app.services.company_service import get_company_by_user_id
-from app.services.rate_service import resolve_pay_rate
+from app.services.rate_service import resolve_assignment_pay_rate
 from app.models import Assignment, Allowance
 from app.services.rota_service import shift_hours
 
@@ -55,7 +55,7 @@ def calculate_payroll(db: Session, guard_id: int, period_start: date, period_end
     for a in assignments:
         hrs = shift_hours(a)
         total_hours += hrs
-        r = resolve_pay_rate(db, company.id, guard_id, a.site_id, a.shift_type or "day", a.date)
+        r = resolve_assignment_pay_rate(db, a, company.id)
         rate_sum += r * hrs
     allowances = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_payroll == True).all()
     allowance_total = sum(al.amount for al in allowances)

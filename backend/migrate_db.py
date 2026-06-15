@@ -65,6 +65,7 @@ def run():
         ("sites", "updated_at", "TEXT"),
         ("assignments", "break_minutes", "INTEGER DEFAULT 0"),
         ("assignments", "shift_type", "TEXT DEFAULT 'day'"),
+        ("assignments", "shift_rate", "REAL"),
         ("assignments", "updated_at", "TEXT"),
         ("sub_contractors", "updated_at", "TEXT"),
         ("guards", "dbs_status", "TEXT"),

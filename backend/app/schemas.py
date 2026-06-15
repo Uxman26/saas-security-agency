@@ -333,6 +333,7 @@ class AssignmentBase(BaseModel):
     shift_end: Optional[str] = None
     break_minutes: Optional[int] = 0
     shift_type: Optional[str] = "day"
+    shift_rate: Optional[float] = None
     rota_plan_id: Optional[int] = None
 
 class AssignmentCreate(AssignmentBase):

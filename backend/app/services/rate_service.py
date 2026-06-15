@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import GuardRate, SiteRate, Guard, Site
+from app.models import GuardRate, SiteRate, Guard, Site, Assignment
 from app.schemas import GuardRateCreate, SiteRateCreate
 from app.services.company_service import get_company_by_user_id
 
@@ -44,6 +44,20 @@ def resolve_pay_rate(db: Session, company_id: int, guard_id: int, site_id: int, 
         return site.default_hourly_rate
     gr = db.query(GuardRate).filter(GuardRate.guard_id == guard_id).order_by(GuardRate.effective_from.desc()).first()
     return gr.hourly_rate if gr else 0.0
+
+def resolve_assignment_pay_rate(db: Session, assignment: Assignment, company_id: int) -> float:
+    if assignment.shift_rate is not None:
+        return assignment.shift_rate
+    return resolve_pay_rate(
+        db, company_id, assignment.guard_id, assignment.site_id, assignment.shift_type or "day", assignment.date
+    )
+
+def resolve_assignment_billing_rate(db: Session, assignment: Assignment, company_id: int) -> float:
+    if assignment.shift_rate is not None:
+        return assignment.shift_rate
+    return resolve_billing_rate(
+        db, company_id, assignment.guard_id, assignment.site_id, assignment.shift_type or "day", assignment.date
+    )
 
 def resolve_billing_rate(db: Session, company_id: int, guard_id: int, site_id: int, shift_type: str, d: date) -> float:
     r = _billing_rate_for_site(db, company_id, site_id, shift_type or "day")

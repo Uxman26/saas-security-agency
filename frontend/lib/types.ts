@@ -295,6 +295,7 @@ export interface Assignment {
   shift_end?: string;
   break_minutes?: number;
   shift_type?: string;
+  shift_rate?: number | null;
   created_at: string;
 }
 

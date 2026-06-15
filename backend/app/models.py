@@ -393,6 +393,7 @@ class Assignment(Base):
     shift_end = Column(String)
     break_minutes = Column(Integer, default=0)
     shift_type = Column(String, default="day")
+    shift_rate = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     guard = relationship("Guard", back_populates="assignments")

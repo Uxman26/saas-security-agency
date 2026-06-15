@@ -1024,6 +1024,7 @@ export function RotaCalendarClient() {
                     <div className="text-[11px] text-muted-foreground">
                       Break {(sh.breakH || 0) > 0 || (sh.breakM || 0) > 0 ? `${sh.breakH}h ${sh.breakM}m` : 'none'} ·{' '}
                       {formatHoursDecimal(calcHours(sh, state.inclBreaks))}
+                      {sh.shiftRate != null ? ` · £${Number(sh.shiftRate).toFixed(2)}/hr` : ''}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">

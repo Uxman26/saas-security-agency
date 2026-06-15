@@ -130,6 +130,16 @@ def _shift_count(shifts: Optional[dict]) -> int:
     return n
 
 
+def _parse_shift_rate(raw) -> Optional[float]:
+    if raw is None or raw == "":
+        return None
+    try:
+        v = float(raw)
+        return v if v >= 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _normalize_shift(block: dict, idx: int = 0) -> dict:
     b = dict(block or {})
     color = (b.get("color") or "").strip()
@@ -144,6 +154,7 @@ def _normalize_shift(block: dict, idx: int = 0) -> dict:
         "breakM": int(b.get("breakM") or 0),
         "color": color,
         "label": b.get("label") or "",
+        "shiftRate": _parse_shift_rate(b.get("shiftRate")),
     }
 
 
@@ -322,6 +333,7 @@ def _payload_from_assignments(db: Session, plan: RotaPlan, planner: Optional[dic
             "breakM": bm % 60,
             "color": "",
             "label": "",
+            "shiftRate": a.shift_rate,
         }
         matched = lookup.get((eid, dk, base["start"], base["end"]))
         if matched:
@@ -538,6 +550,7 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                         shift_end=sh.get("end"),
                         break_minutes=break_m,
                         shift_type=normalize_shift_type("day"),
+                        shift_rate=_parse_shift_rate(sh.get("shiftRate")),
                     )
                 )
                 created += 1

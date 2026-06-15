@@ -74,6 +74,7 @@ function mkShift(start: string, end: string, site: string, color: string): Shift
     breakM: 30,
     color,
     label: '',
+    shiftRate: null,
   };
 }
 
@@ -532,6 +533,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
             shift_end: sh.end,
             break_minutes: (sh.breakH || 0) * 60 + (sh.breakM || 0),
             shift_type: 'day',
+            ...(sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate)) ? { shift_rate: Number(sh.shiftRate) } : {}),
           });
           created++;
         }

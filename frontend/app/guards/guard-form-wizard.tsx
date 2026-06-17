@@ -309,7 +309,7 @@ export function GuardFormWizard({
                 {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <Label>Visa status</Label>
+                <Label>Visa type</Label>
                 <Input {...register('visa_status')} placeholder="e.g. British citizen, Skilled Worker" />
                 {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
               </div>
@@ -380,9 +380,13 @@ export function GuardFormWizard({
                 <Label>Nearby areas willing to work</Label>
                 <Input {...register('nearby_areas')} placeholder="e.g. Stratford, Hackney" />
               </div>
-              <div className="space-y-1 sm:col-span-2 flex items-center gap-2 pt-1">
-                <input type="checkbox" id="has_car" className="size-4" {...register('has_car')} />
-                <Label htmlFor="has_car" className="font-normal cursor-pointer">Has car / can drive to sites</Label>
+              <div className="sm:col-span-2 rounded-md border bg-muted/30 px-3 py-3">
+                <div className="flex items-start gap-3">
+                  <input type="checkbox" id="has_car" className="size-4 mt-0.5 shrink-0" {...register('has_car')} />
+                  <Label htmlFor="has_car" className="font-normal cursor-pointer leading-snug">
+                    Has car / can drive to sites
+                  </Label>
+                </div>
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Available days</Label>
@@ -477,7 +481,7 @@ export function GuardFormWizard({
           <Section title="Security & compliance">
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1"><Label>Badge number</Label><Input {...register('badge_number')} /></div>
-              <div className="space-y-1"><Label>SIA number</Label><Input {...register('sia_number')} /></div>
+              <div className="space-y-1"><Label>SIA badge number</Label><Input {...register('sia_number')} /></div>
               <div className="space-y-1"><Label>SIA expiry</Label><Input type="date" {...register('sia_expiry_date')} /></div>
               <div className="space-y-1"><Label>RTW status</Label><Input {...register('rtw_status')} /></div>
               <div className="space-y-1"><Label>Share code</Label><Input {...register('share_code')} placeholder="e.g. W12 345 67A" /></div>

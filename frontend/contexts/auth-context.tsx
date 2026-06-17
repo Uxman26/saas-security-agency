@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -35,8 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const response = await api.auth.login({ email, password });
+  const login = async (email: string, password: string, rememberMe = true) => {
+    const response = await api.auth.login({ email, password, remember_me: rememberMe });
     const token = (response.access_token || '').trim();
     if (!token) throw new Error('No token received');
     localStorage.setItem('token', token);

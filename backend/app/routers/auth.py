@@ -44,7 +44,9 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
-    return auth_service.authenticate_user(db, credentials.email, credentials.password, ip_address=ip, user_agent=ua)
+    return auth_service.authenticate_user(
+        db, credentials.email, credentials.password, ip_address=ip, user_agent=ua, remember_me=bool(credentials.remember_me)
+    )
 
 
 @router.post("/forgot-password")

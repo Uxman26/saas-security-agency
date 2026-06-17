@@ -28,12 +28,17 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      remember_me: true,
+    },
   });
 
-  const onSubmit = async (data: { email: string; password: string }) => {
+  const onSubmit = async (data: { email: string; password: string; remember_me?: boolean }) => {
     setLoading(true);
     try {
-      await login(data.email, data.password);
+      await login(data.email, data.password, data.remember_me ?? true);
       router.push('/dashboard');
     } catch (err: unknown) {
       const pending = parsePaymentPending(err);
@@ -97,6 +102,10 @@ export default function LoginPage() {
               </div>
               {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
             </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="size-4 rounded border-input" {...register('remember_me')} />
+              <span>Keep me signed in for 30 days</span>
+            </label>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>

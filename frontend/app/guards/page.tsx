@@ -83,18 +83,6 @@ export default function GuardsPage() {
 
   const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData> });
 
-  const contractorLabel = useMemo(() => {
-    const dirNames = new Map(dirRows.map((c) => [c.id, c.name]));
-    const mm = new Map(legMains.map((m) => [m.id, m.name]));
-    const sm = new Map(legSubs.map((s) => [s.id, s.name]));
-    return (g: Guard) => {
-      if (g.contractor_id) return dirNames.get(g.contractor_id) ?? 'Contractor';
-      if (g.sub_contractor_id) return sm.get(g.sub_contractor_id) ?? `Sub #${g.sub_contractor_id}`;
-      if (g.main_contractor_id) return mm.get(g.main_contractor_id) ?? `Main #${g.main_contractor_id}`;
-      return '—';
-    };
-  }, [dirRows, legMains, legSubs]);
-
   const handleCreate = async (data: GuardFormData) => {
     try {
       await createGuard.mutateAsync(formToGuardPayload(data));
@@ -141,7 +129,7 @@ export default function GuardsPage() {
         g.rtw_status,
         g.visa_status,
         g.dbs_status,
-        contractorLabel(g),
+        g.sia_number,
         g.sia_expiry_date,
         g.visa_expiry_date,
         g.date_of_birth,
@@ -157,7 +145,7 @@ export default function GuardsPage() {
       ]
         .filter(Boolean)
         .join(' '),
-    [contractorLabel]
+    []
   );
 
   const getSortValue = useCallback(
@@ -165,8 +153,8 @@ export default function GuardsPage() {
       switch (key) {
         case 'name':
           return g.full_name;
-        case 'contractor':
-          return contractorLabel(g);
+        case 'visa_type':
+          return g.visa_status || '';
         case 'email':
           return g.email || '';
         case 'phone':
@@ -195,7 +183,7 @@ export default function GuardsPage() {
           return '';
       }
     },
-    [contractorLabel]
+    []
   );
 
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
@@ -280,15 +268,16 @@ export default function GuardsPage() {
                       <TableRow>
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="DOB" colKey="dob" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Visa Type" colKey="visa_type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Visa Expiry" colKey="visa_expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Postcode" colKey="postcode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Car" colKey="car" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Car" colKey="car" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="w-14 whitespace-nowrap" />
                         <SortableHead label="Email" colKey="email" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Phone" colKey="phone" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="SIA Badge Number" colKey="sia_number" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="SIA Expiry" colKey="sia_expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="RTW" colKey="rtw" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead>Actions</TableHead>
+                        <TableHead className="whitespace-nowrap min-w-[140px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -299,6 +288,9 @@ export default function GuardsPage() {
                           <TableRow key={guard.id}>
                             <TableCell className="font-medium whitespace-nowrap">{guard.full_name}</TableCell>
                             <TableCell className="whitespace-nowrap text-sm">{guard.date_of_birth ? formatDateUK(guard.date_of_birth) : '-'}</TableCell>
+                            <TableCell className="text-sm max-w-[140px] truncate" title={guard.visa_status || undefined}>
+                              {guard.visa_status || '-'}
+                            </TableCell>
                             <TableCell className="whitespace-nowrap text-sm">
                               {guard.visa_expiry_date ? (
                                 <span className={
@@ -310,11 +302,11 @@ export default function GuardsPage() {
                                 </span>
                               ) : '-'}
                             </TableCell>
-                            <TableCell className="text-sm">{guard.postcode || '-'}</TableCell>
-                            <TableCell>{guard.has_car ? 'Yes' : 'No'}</TableCell>
-                            <TableCell className="text-sm max-w-[160px] truncate" title={contractorLabel(guard)}>{contractorLabel(guard)}</TableCell>
-                            <TableCell className="text-sm">{guard.email || '-'}</TableCell>
-                            <TableCell className="whitespace-nowrap">{guard.phone || '-'}</TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">{guard.postcode || '-'}</TableCell>
+                            <TableCell className="whitespace-nowrap text-center w-14">{guard.has_car ? 'Yes' : 'No'}</TableCell>
+                            <TableCell className="text-sm max-w-[160px] truncate" title={guard.email || undefined}>{guard.email || '-'}</TableCell>
+                            <TableCell className="whitespace-nowrap text-sm">{guard.phone || '-'}</TableCell>
+                            <TableCell className="text-sm whitespace-nowrap font-mono">{guard.sia_number || '-'}</TableCell>
                             <TableCell className="whitespace-nowrap">
                               {guard.sia_expiry_date ? (
                                 <span className={
@@ -337,23 +329,23 @@ export default function GuardsPage() {
                                 </span>
                               ) : '-'}
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" asChild title="View staff">
+                            <TableCell className="whitespace-nowrap">
+                              <div className="flex items-center gap-0.5 flex-nowrap">
+                                <Button variant="ghost" size="sm" className="size-8 p-0" asChild title="View staff">
                                   <Link href={`/guards/${guard.id}`}>
                                     <Eye className="size-4" />
                                   </Link>
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(guard)} title="Edit staff" disabled={!can(user, 'guards.write')}>
+                                <Button variant="ghost" size="sm" className="size-8 p-0" onClick={() => openEdit(guard)} title="Edit staff" disabled={!can(user, 'guards.write')}>
                                   <Pencil className="size-4" />
                                 </Button>
                                 {guard.email && (
-                                  <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} />
+                                  <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} compact />
                                 )}
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  className="size-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                                   onClick={() => handleDelete(guard.id)}
                                   disabled={deleteGuard.isPending || !can(user, 'guards.delete')}
                                   title="Delete guard"

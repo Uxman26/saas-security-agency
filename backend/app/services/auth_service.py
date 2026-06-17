@@ -65,7 +65,7 @@ def signup_with_receipt(db: Session, user_data: UserCreate):
         raise HTTPException(status_code=500, detail="Receipt not created")
     return user, r
 
-def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None) -> dict:
+def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None, remember_me: bool = False) -> dict:
     from app.auth import verify_password
     from app.services import login_log_service
 
@@ -82,7 +82,10 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
         raise HTTPException(status_code=402, detail=block)
 
     login_log_service.log_login(db, email=email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
-    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    if remember_me:
+        access_token_expires = timedelta(days=settings.remember_me_expire_days)
+    else:
+        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user.id}, expires_delta=access_token_expires
     )

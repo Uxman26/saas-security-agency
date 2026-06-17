@@ -103,7 +103,7 @@ export default function GuardViewPage() {
               </Section>
 
               <Section title="Visa & right to work">
-                <Field label="Visa status" value={guard.visa_status} />
+                <Field label="Visa type" value={guard.visa_status} />
                 <Field label="Visa expiry" value={guard.visa_expiry_date ? formatDateUK(guard.visa_expiry_date) : null} />
                 <Field label="RTW status" value={guard.rtw_status} />
                 <Field label="Share code" value={guard.share_code} />
@@ -112,7 +112,7 @@ export default function GuardViewPage() {
 
               <Section title="Security & compliance">
                 <Field label="Badge number" value={guard.badge_number} />
-                <Field label="SIA number" value={guard.sia_number} />
+                <Field label="SIA badge number" value={guard.sia_number} />
                 <Field label="SIA expiry" value={guard.sia_expiry_date ? formatDateUK(guard.sia_expiry_date) : null} />
                 <Field label="DBS status" value={guard.dbs_status} />
               </Section>

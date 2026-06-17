@@ -19,7 +19,15 @@ const emailSchema = z.object({
   body: z.string().min(1, 'Message is required'),
 });
 
-export function EmailDialog({ defaultEmail, defaultName }: { defaultEmail?: string; defaultName?: string }) {
+export function EmailDialog({
+  defaultEmail,
+  defaultName,
+  compact,
+}: {
+  defaultEmail?: string;
+  defaultName?: string;
+  compact?: boolean;
+}) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -57,9 +65,9 @@ export function EmailDialog({ defaultEmail, defaultName }: { defaultEmail?: stri
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Mail className="h-4 w-4 mr-2" />
-          Send Email
+        <Button variant={compact ? 'ghost' : 'outline'} size="sm" title="Send email" className={compact ? 'size-8 p-0' : undefined}>
+          <Mail className={compact ? 'size-4' : 'h-4 w-4 mr-2'} />
+          {!compact && 'Send Email'}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

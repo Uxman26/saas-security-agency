@@ -95,10 +95,11 @@ export const api = {
       };
       return request<SignupResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
     },
-    login: (data: { email: string; password: string }): Promise<LoginResponse> => {
+    login: (data: { email: string; password: string; remember_me?: boolean }): Promise<LoginResponse> => {
       const sanitized = {
         email: sanitizeInput(data.email),
         password: data.password,
+        remember_me: data.remember_me ?? true,
       };
       return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
     },

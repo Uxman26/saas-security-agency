@@ -51,7 +51,7 @@ type ReportDef = {
 
 const REPORTS: ReportDef[] = [
   { id: 'attendance', title: 'Attendance', desc: 'Shift attendance with on-time, late, and absent status per employee.', category: 'staff', icon: Clock, exportType: 'attendance' },
-  { id: 'shifts', title: 'Shift hours', desc: 'Individual staff shift and hours breakdown for any date range.', category: 'staff', icon: Calendar, exportType: 'attendance', needsGuard: true },
+  { id: 'shifts', title: 'Shift hours', desc: 'Hours breakdown for all staff, or one employee when selected.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
   { id: 'overtime', title: 'Overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
   { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly' },
   { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices' },
@@ -109,16 +109,17 @@ export default function ReportsPage() {
     setLoading(true);
     setResult(null);
     try {
-      if (selected.id === 'shifts' && !guardId) {
-        toast.warning('Select a staff member for shift hours report');
-        setLoading(false);
-        return;
-      }
       if (selected.id === 'expenses') {
         window.location.href = '/expenses';
         return;
       }
-      if (selected.id === 'sms-logs') {
+      if (selected.id === 'shifts' && guardId) {
+        const data = await api.reports.staffIndividual(parseInt(guardId), startDate, endDate);
+        setResult({ kind: 'individual', data });
+      } else if (selected.id === 'shifts') {
+        const data = await api.reports.staffMonthly(startDate, endDate);
+        setResult({ kind: 'monthly', data });
+      } else if (selected.id === 'sms-logs') {
         const data = await api.sms.logs();
         setResult({
           kind: 'rows',
@@ -130,9 +131,6 @@ export default function ReportsPage() {
           ],
           rows: data as unknown as Record<string, unknown>[],
         });
-      } else if (selected.id === 'shifts' && guardId) {
-        const data = await api.reports.staffIndividual(parseInt(guardId), startDate, endDate);
-        setResult({ kind: 'individual', data });
       } else if (selected.id === 'attendance') {
         const data = await api.reports.attendance(startDate, endDate, guardId ? parseInt(guardId) : undefined);
         setResult({
@@ -316,7 +314,7 @@ export default function ReportsPage() {
             {selected && (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">{selected.desc}</p>
-                {(selected.needsGuard || selected.id === 'attendance') && (
+                {(selected.id === 'shifts' || selected.id === 'attendance') && (
                   <div>
                     <Label>Staff (optional)</Label>
                     <Select value={guardId || 'all'} onValueChange={(v) => setGuardId(v === 'all' ? '' : v)}>

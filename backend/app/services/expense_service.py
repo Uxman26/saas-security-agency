@@ -33,8 +33,10 @@ PAYMENT_METHODS = ["bank_transfer", "card", "cash", "direct_debit", "cheque", "o
 PAYMENT_STATUSES = ["pending", "paid", "overdue", "cancelled"]
 
 
-def calc_vat(amount_ex_vat: float) -> tuple[float, float]:
+def calc_vat(amount_ex_vat: float, vat_exempt: bool = False) -> tuple[float, float, float]:
     ex = round(max(0.0, float(amount_ex_vat)), 2)
+    if vat_exempt:
+        return ex, 0.0, ex
     vat = round(ex * VAT_RATE, 2)
     return ex, vat, round(ex + vat, 2)
 
@@ -51,6 +53,7 @@ def _to_response(exp: Expense) -> dict:
         "amount_ex_vat": exp.amount_ex_vat,
         "vat_amount": exp.vat_amount,
         "total_amount": exp.total_amount,
+        "vat_exempt": bool(exp.vat_exempt),
         "payment_method": exp.payment_method,
         "payment_status": exp.payment_status,
         "has_document": bool(resolve_storage_path(exp.document_path)),
@@ -95,7 +98,8 @@ def get_expense(db: Session, expense_id: int, user_id: int) -> dict:
 
 def create_expense(db: Session, data: ExpenseCreate, user_id: int) -> dict:
     company = get_company_by_user_id(db, user_id)
-    ex, vat, total = calc_vat(data.amount_ex_vat)
+    exempt = bool(data.vat_exempt)
+    ex, vat, total = calc_vat(data.amount_ex_vat, exempt)
     exp = Expense(
         company_id=company.id,
         expense_date=data.expense_date,
@@ -106,6 +110,7 @@ def create_expense(db: Session, data: ExpenseCreate, user_id: int) -> dict:
         amount_ex_vat=ex,
         vat_amount=vat,
         total_amount=total,
+        vat_exempt=exempt,
         payment_method=data.payment_method,
         payment_status=data.payment_status or "pending",
     )
@@ -118,11 +123,15 @@ def create_expense(db: Session, data: ExpenseCreate, user_id: int) -> dict:
 def update_expense(db: Session, expense_id: int, data: ExpenseUpdate, user_id: int) -> dict:
     exp = _get_expense(db, expense_id, user_id)
     payload = data.model_dump(exclude_unset=True)
-    if "amount_ex_vat" in payload:
-        ex, vat, total = calc_vat(payload["amount_ex_vat"])
+    exempt = payload.pop("vat_exempt", None)
+    if "amount_ex_vat" in payload or exempt is not None:
+        ex_val = payload.get("amount_ex_vat", exp.amount_ex_vat)
+        is_exempt = bool(exempt) if exempt is not None else bool(exp.vat_exempt)
+        ex, vat, total = calc_vat(ex_val, is_exempt)
         payload["amount_ex_vat"] = ex
         payload["vat_amount"] = vat
         payload["total_amount"] = total
+        payload["vat_exempt"] = is_exempt
     for k, v in payload.items():
         setattr(exp, k, v)
     db.commit()
@@ -222,9 +231,9 @@ def _invoice_vat_total(db: Session, company_id: int, start: date, end: date) -> 
         db.query(func.coalesce(func.sum(Invoice.tax_amount), 0))
         .filter(
             Invoice.company_id == company_id,
+            Invoice.period_start <= end,
             Invoice.period_end >= start,
-            Invoice.period_end <= end,
-            Invoice.status.notin_(["draft", "cancelled"]),
+            Invoice.status != "cancelled",
         )
         .scalar()
     )

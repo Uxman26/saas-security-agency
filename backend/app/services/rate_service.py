@@ -53,8 +53,6 @@ def resolve_assignment_pay_rate(db: Session, assignment: Assignment, company_id:
     )
 
 def resolve_assignment_billing_rate(db: Session, assignment: Assignment, company_id: int) -> float:
-    if assignment.shift_rate is not None:
-        return assignment.shift_rate
     return resolve_billing_rate(
         db, company_id, assignment.guard_id, assignment.site_id, assignment.shift_type or "day", assignment.date
     )

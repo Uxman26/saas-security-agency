@@ -841,7 +841,7 @@ class InvoiceBase(BaseModel):
     status: Optional[str] = "draft"
     due_date: Optional[date] = None
     notes: Optional[str] = None
-    tax_rate: float = 0
+    tax_rate: float = 20
     subtotal: float = 0
     tax_amount: float = 0
 
@@ -1060,6 +1060,7 @@ class ExpenseBase(BaseModel):
     reference_number: Optional[str] = None
     description: Optional[str] = None
     amount_ex_vat: float
+    vat_exempt: bool = False
     payment_method: Optional[str] = None
     payment_status: Optional[str] = "pending"
 
@@ -1075,6 +1076,7 @@ class ExpenseUpdate(BaseModel):
     reference_number: Optional[str] = None
     description: Optional[str] = None
     amount_ex_vat: Optional[float] = None
+    vat_exempt: Optional[bool] = None
     payment_method: Optional[str] = None
     payment_status: Optional[str] = None
 
@@ -1090,6 +1092,7 @@ class ExpenseResponse(BaseModel):
     amount_ex_vat: float
     vat_amount: float
     total_amount: float
+    vat_exempt: bool = False
     payment_method: Optional[str] = None
     payment_status: str
     has_document: bool = False

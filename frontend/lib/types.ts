@@ -847,6 +847,7 @@ export interface Expense {
   amount_ex_vat: number;
   vat_amount: number;
   total_amount: number;
+  vat_exempt?: boolean;
   payment_method?: string | null;
   payment_status: string;
   has_document: boolean;

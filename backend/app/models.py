@@ -670,6 +670,7 @@ class Expense(Base):
     amount_ex_vat = Column(Float, nullable=False, default=0)
     vat_amount = Column(Float, nullable=False, default=0)
     total_amount = Column(Float, nullable=False, default=0)
+    vat_exempt = Column(Boolean, default=False, nullable=False)
     payment_method = Column(String)
     payment_status = Column(String, default="pending")
     document_path = Column(String)

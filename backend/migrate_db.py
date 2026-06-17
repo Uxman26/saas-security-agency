@@ -405,6 +405,7 @@ def run():
                 amount_ex_vat REAL NOT NULL DEFAULT 0,
                 vat_amount REAL NOT NULL DEFAULT 0,
                 total_amount REAL NOT NULL DEFAULT 0,
+                vat_exempt INTEGER NOT NULL DEFAULT 0,
                 payment_method TEXT,
                 payment_status TEXT DEFAULT 'pending',
                 document_path TEXT,
@@ -484,6 +485,7 @@ def run():
         ("main_contractors", "postcode", "TEXT"),
         ("sub_contractors", "postcode", "TEXT"),
         ("companies", "postcode", "TEXT"),
+        ("expenses", "vat_exempt", "INTEGER NOT NULL DEFAULT 0"),
     ]:
         if table_exists(cur, table) and not column_exists(cur, table, col):
             try:

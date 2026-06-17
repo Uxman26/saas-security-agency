@@ -63,10 +63,12 @@ function fmt(n: number) {
   return `£${n.toFixed(2)}`;
 }
 
-function calcVat(ex: number) {
+function calcVat(ex: number, exempt = false) {
   const amount = Math.max(0, ex);
+  const exRounded = Math.round(amount * 100) / 100;
+  if (exempt) return { ex: exRounded, vat: 0, total: exRounded };
   const vat = Math.round(amount * VAT_RATE * 100) / 100;
-  return { ex: Math.round(amount * 100) / 100, vat, total: Math.round((amount + vat) * 100) / 100 };
+  return { ex: exRounded, vat, total: Math.round((amount + vat) * 100) / 100 };
 }
 
 function quarterRange(year: number, q: number) {
@@ -93,6 +95,7 @@ const emptyForm = () => ({
   reference_number: '',
   description: '',
   amount_ex_vat: '',
+  vat_exempt: false,
   payment_method: 'bank_transfer',
   payment_status: 'pending',
 });
@@ -126,8 +129,8 @@ export default function ExpensesPage() {
   const vatPreview = useMemo(() => {
     const n = parseFloat(form.amount_ex_vat);
     if (!Number.isFinite(n)) return { ex: 0, vat: 0, total: 0 };
-    return calcVat(n);
-  }, [form.amount_ex_vat]);
+    return calcVat(n, form.vat_exempt);
+  }, [form.amount_ex_vat, form.vat_exempt]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -178,6 +181,7 @@ export default function ExpensesPage() {
       reference_number: e.reference_number || '',
       description: e.description || '',
       amount_ex_vat: String(e.amount_ex_vat),
+      vat_exempt: e.vat_exempt ?? false,
       payment_method: e.payment_method || 'bank_transfer',
       payment_status: e.payment_status,
     });
@@ -213,6 +217,7 @@ export default function ExpensesPage() {
         reference_number: form.reference_number || undefined,
         description: form.description || undefined,
         amount_ex_vat: amount,
+        vat_exempt: form.vat_exempt,
         payment_method: form.payment_method || undefined,
         payment_status: form.payment_status,
       };
@@ -362,9 +367,19 @@ export default function ExpensesPage() {
         <Label>Amount (ex VAT)</Label>
         <Input type="number" min="0" step="0.01" value={form.amount_ex_vat} onChange={(ev) => setForm((f) => ({ ...f, amount_ex_vat: ev.target.value }))} />
       </div>
+      <div className="sm:col-span-2 flex items-center gap-2 pt-6">
+        <input
+          id="vat_exempt"
+          type="checkbox"
+          checked={form.vat_exempt}
+          onChange={(ev) => setForm((f) => ({ ...f, vat_exempt: ev.target.checked }))}
+          className="size-4 rounded border"
+        />
+        <Label htmlFor="vat_exempt" className="cursor-pointer">No VAT on this expense</Label>
+      </div>
       <div>
         <Label>VAT (20%)</Label>
-        <Input readOnly value={fmt(vatPreview.vat)} className="bg-muted" />
+        <Input readOnly value={form.vat_exempt ? '£0.00' : fmt(vatPreview.vat)} className="bg-muted" />
       </div>
       <div>
         <Label>Total (inc VAT)</Label>

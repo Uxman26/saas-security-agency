@@ -1,4 +1,3 @@
-import json
 from datetime import date
 from typing import Optional
 
@@ -7,6 +6,35 @@ from sqlalchemy.orm import Session
 from app.models import Guard
 from app.services.company_service import get_company_by_user_id
 from app.services.rota_service import list_rota_details, rota_summary
+
+
+def _committed_hours(guard: Optional[Guard], start_date: date, end_date: date) -> float:
+    days = (end_date - start_date).days + 1
+    if days < 1:
+        days = 1
+    wh = float(guard.weekly_contracted_hours) if guard and guard.weekly_contracted_hours is not None else 40.0
+    return round(wh * (days / 7.0), 2)
+
+
+def _all_employee_rows(db: Session, company_id: int, start_date: date, end_date: date, summary_rows) -> list[dict]:
+    summary_map = {r.guard_id: r.model_dump() for r in summary_rows}
+    guards = db.query(Guard).filter(Guard.company_id == company_id).order_by(Guard.full_name).all()
+    rows = []
+    for g in guards:
+        if g.id in summary_map:
+            rows.append(summary_map[g.id])
+        else:
+            rows.append(
+                {
+                    "guard_id": g.id,
+                    "guard_name": g.full_name,
+                    "total_hours": 0.0,
+                    "late_arrivals": 0,
+                    "overtime_hours": 0.0,
+                    "committed_hours": _committed_hours(g, start_date, end_date),
+                }
+            )
+    return rows
 
 
 def staff_individual_report(db: Session, user_id: int, guard_id: int, start_date: date, end_date: date) -> dict:
@@ -50,9 +78,10 @@ def staff_monthly_report(
     end_date: date,
     group_by: str = "guard",
 ) -> dict:
+    company = get_company_by_user_id(db, user_id)
     details = list_rota_details(db, user_id, start_date, end_date)
     summary_rows = rota_summary(db, user_id, start_date, end_date)
-    by_guard = {r.guard_id: r.model_dump() for r in summary_rows}
+    by_employee = _all_employee_rows(db, company.id, start_date, end_date, summary_rows)
     site_map: dict[str, dict] = {}
     client_map: dict[str, dict] = {}
     for d in details:
@@ -62,10 +91,10 @@ def staff_monthly_report(
             key = d.client_name or "Unknown"
         else:
             continue
-        if key not in (site_map if group_by == "site" else client_map):
-            bucket = {"key": key, "total_shifts": 0, "total_hours": 0.0, "guards": set()}
-            (site_map if group_by == "site" else client_map)[key] = bucket
-        bucket = (site_map if group_by == "site" else client_map)[key]
+        bucket_store = site_map if group_by == "site" else client_map
+        if key not in bucket_store:
+            bucket_store[key] = {"key": key, "total_shifts": 0, "total_hours": 0.0, "guards": set()}
+        bucket = bucket_store[key]
         bucket["total_shifts"] += 1
         bucket["total_hours"] = round(bucket["total_hours"] + d.hours, 2)
         bucket["guards"].add(d.guard_name)
@@ -73,15 +102,42 @@ def staff_monthly_report(
     for v in (site_map if group_by == "site" else client_map).values():
         grouped.append({**v, "guard_count": len(v["guards"]), "guards": sorted(v["guards"])})
     grouped.sort(key=lambda x: x["total_hours"], reverse=True)
-    workforce_hours = round(sum(r.total_hours for r in summary_rows), 2)
+    workforce_hours = round(sum(r["total_hours"] for r in by_employee), 2)
     return {
         "period_start": start_date,
         "period_end": end_date,
         "group_by": group_by,
-        "by_employee": list(by_guard.values()),
+        "by_employee": by_employee,
         "grouped_summary": grouped,
         "workforce_total_hours": workforce_hours,
-        "total_employees": len(summary_rows),
+        "total_employees": len(by_employee),
+    }
+
+
+def shift_hours_report(db: Session, user_id: int, start_date: date, end_date: date) -> dict:
+    company = get_company_by_user_id(db, user_id)
+    details = list_rota_details(db, user_id, start_date, end_date)
+    summary_rows = rota_summary(db, user_id, start_date, end_date)
+    by_employee = _all_employee_rows(db, company.id, start_date, end_date, summary_rows)
+    shift_rows = [
+        {
+            "guard": d.guard_name,
+            "site": d.site_name,
+            "date": d.date.isoformat(),
+            "shift": f"{d.shift_start}-{d.shift_end}",
+            "hours": d.hours,
+            "status": d.attendance_status,
+        }
+        for d in details
+    ]
+    return {
+        "period_start": start_date,
+        "period_end": end_date,
+        "by_employee": by_employee,
+        "shifts": shift_rows,
+        "total_shifts": len(shift_rows),
+        "workforce_total_hours": round(sum(r["total_hours"] for r in by_employee), 2),
+        "total_employees": len(by_employee),
     }
 
 

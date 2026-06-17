@@ -51,6 +51,11 @@ def staff_individual(guard_id: int, start_date: date, end_date: date, db: Sessio
     return StaffIndividualReportResponse(**data)
 
 
+@router.get("/staff/shift-hours")
+def staff_shift_hours(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return staff_report_service.shift_hours_report(db, current_user.id, start_date, end_date)
+
+
 @router.get("/staff/monthly", response_model=StaffMonthlyReportResponse)
 def staff_monthly(start_date: date, end_date: date, group_by: str = "guard", db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
     if group_by not in ("guard", "site", "client"):
@@ -121,6 +126,11 @@ def export_report(
         rows = data["by_employee"]
         columns = [("guard_name", "Employee"), ("total_hours", "Hours"), ("late_arrivals", "Late"), ("overtime_hours", "Overtime"), ("committed_hours", "Committed")]
         title = "Monthly staff summary"
+    elif report_type == "shift-hours":
+        data = staff_report_service.shift_hours_report(db, current_user.id, start_date, end_date)
+        rows = data["by_employee"]
+        columns = [("guard_name", "Employee"), ("total_hours", "Hours"), ("late_arrivals", "Late"), ("overtime_hours", "Overtime"), ("committed_hours", "Committed")]
+        title = "Shift hours summary"
     elif report_type == "login-logs":
         rows = reports_extended_service.login_report_rows(db, current_user.id, start_date, end_date)
         columns = [("login_at", "Login at"), ("email", "Email"), ("full_name", "Name"), ("status", "Status"), ("ip_address", "IP")]

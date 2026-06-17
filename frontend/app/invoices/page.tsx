@@ -75,8 +75,9 @@ export default function InvoicesPage() {
       setGenStart('');
       setGenEnd('');
       loadInvoices();
+      toast.success('Invoice generated');
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Invoice generation failed');
     } finally {
       setGenLoading(false);
     }

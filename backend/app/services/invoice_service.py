@@ -7,10 +7,12 @@ from app.models import Allowance, Assignment, AuditLog, Client, Invoice, Invoice
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
-from app.services.rate_service import resolve_assignment_billing_rate
+from app.services.rate_service import resolve_billing_rate
 from app.services.special_day_service import special_date_set
-from app.services.rota_service import shift_hours
+from app.services.rota_service import list_rota_details
 
+
+DEFAULT_INVOICE_VAT_RATE = 20.0
 
 def recalc_invoice_totals(db: Session, inv: Invoice) -> None:
     lines = db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv.id).all()
@@ -221,17 +223,15 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     sites = db.query(Site).filter(Site.company_id == company.id, Site.client_id == client_id).all()
-    site_ids = [s.id for s in sites]
-    if not site_ids:
-        sites = db.query(Site).filter(Site.company_id == company.id).all()
-        site_ids = [s.id for s in sites]
-    if not site_ids:
-        raise HTTPException(status_code=400, detail="No sites configured")
-    assignments = db.query(Assignment).filter(
-        Assignment.site_id.in_(site_ids),
-        Assignment.date >= period_start,
-        Assignment.date <= period_end,
-    ).all()
+    if not sites:
+        raise HTTPException(status_code=400, detail="No sites linked to this client")
+    details = list_rota_details(db, user_id, period_start, period_end, client_id=client_id)
+    allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
+    if not details and not allowance_inv:
+        raise HTTPException(
+            status_code=400,
+            detail="No shifts found for this client in the selected period. Publish the rota or add assignments first.",
+        )
     due = period_end + timedelta(days=30)
     inv = Invoice(
         company_id=company.id,
@@ -241,41 +241,44 @@ def generate_from_assignments(db: Session, client_id: int, period_start: date, p
         due_date=due,
         total=0,
         subtotal=0,
-        tax_rate=0,
+        tax_rate=DEFAULT_INVOICE_VAT_RATE,
         tax_amount=0,
         status="draft",
     )
     db.add(inv)
     db.flush()
-    allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
-    total = 0.0
-    anchor_site_id = site_ids[0]
+    anchor_site_id = sites[0].id
     special_dates = special_date_set(db, company.id)
     double_client = bool(getattr(client, "double_rate_special_days", False))
-    for a in assignments:
-        r = resolve_assignment_billing_rate(db, a, company.id)
-        if double_client and a.date in special_dates:
+    for d in details:
+        r = resolve_billing_rate(db, company.id, d.guard_id, d.site_id, d.shift_type or "day", d.date)
+        if double_client and d.date in special_dates:
             r = r * 2.0
-        hrs = shift_hours(a)
-        amt = hrs * r
-        line = InvoiceLine(invoice_id=inv.id, site_id=a.site_id, guard_id=a.guard_id, hours=hrs, rate=r, amount=amt, allowance_amount=0)
-        db.add(line)
-        total += amt
-    for al in allowance_inv:
-        line = InvoiceLine(
-            invoice_id=inv.id,
-            site_id=anchor_site_id,
-            guard_id=None,
-            hours=0,
-            rate=0,
-            amount=al.amount,
-            allowance_amount=al.amount,
+        amt = round(d.hours * r, 2)
+        db.add(
+            InvoiceLine(
+                invoice_id=inv.id,
+                site_id=d.site_id,
+                guard_id=d.guard_id,
+                hours=d.hours,
+                rate=r,
+                amount=amt,
+                allowance_amount=0,
+            )
         )
-        db.add(line)
-        total += al.amount
-    inv.subtotal = total
-    inv.tax_amount = 0
-    inv.total = total
+    for al in allowance_inv:
+        db.add(
+            InvoiceLine(
+                invoice_id=inv.id,
+                site_id=anchor_site_id,
+                guard_id=None,
+                hours=0,
+                rate=0,
+                amount=al.amount,
+                allowance_amount=al.amount,
+            )
+        )
+    recalc_invoice_totals(db, inv)
     db.commit()
     db.refresh(inv)
     log_invoice_audit(db, company.id, user_id, inv.id, "invoice_generated", {"client_id": client_id, "period_start": str(period_start), "period_end": str(period_end)})

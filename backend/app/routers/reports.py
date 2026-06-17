@@ -18,7 +18,7 @@ from app.schemas import (
     SubscriptionReportSummary,
     UsageSummaryResponse,
 )
-from app.services import report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service
+from app.services import report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service, shift_adjustment_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -66,6 +66,16 @@ def staff_monthly(start_date: date, end_date: date, group_by: str = "guard", db:
 @router.get("/attendance")
 def attendance_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
     return staff_report_service.attendance_report_rows(db, current_user.id, start_date, end_date, guard_id)
+
+
+@router.get("/shift-overtime")
+def shift_overtime_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return shift_adjustment_service.overtime_report_rows(db, current_user.id, start_date, end_date, guard_id)
+
+
+@router.get("/shift-early-finish")
+def shift_early_finish_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return shift_adjustment_service.early_finish_report_rows(db, current_user.id, start_date, end_date, guard_id)
 
 
 @router.get("/financial/invoices")
@@ -131,6 +141,36 @@ def export_report(
         rows = data["by_employee"]
         columns = [("guard_name", "Employee"), ("total_hours", "Hours"), ("late_arrivals", "Late"), ("overtime_hours", "Overtime"), ("committed_hours", "Committed")]
         title = "Shift hours summary"
+    elif report_type == "shift-overtime":
+        rows = shift_adjustment_service.overtime_report_rows(db, current_user.id, start_date, end_date, guard_id)
+        columns = [
+            ("date", "Date"),
+            ("guard", "Employee"),
+            ("site", "Site"),
+            ("shift_start", "Start"),
+            ("scheduled_end", "Scheduled end"),
+            ("new_end", "New end"),
+            ("extra_minutes", "Extra mins"),
+            ("reason", "Reason"),
+            ("recorded_by", "Recorded by"),
+            ("recorded_at", "Recorded at"),
+        ]
+        title = "Overtime report"
+    elif report_type == "shift-early-finish":
+        rows = shift_adjustment_service.early_finish_report_rows(db, current_user.id, start_date, end_date, guard_id)
+        columns = [
+            ("date", "Date"),
+            ("guard", "Employee"),
+            ("site", "Site"),
+            ("shift_start", "Start"),
+            ("scheduled_end", "Scheduled end"),
+            ("actual_end", "Actual end"),
+            ("early_minutes", "Early mins"),
+            ("reason", "Reason"),
+            ("recorded_by", "Recorded by"),
+            ("recorded_at", "Recorded at"),
+        ]
+        title = "Finished early report"
     elif report_type == "login-logs":
         rows = reports_extended_service.login_report_rows(db, current_user.id, start_date, end_date)
         columns = [("login_at", "Login at"), ("email", "Email"), ("full_name", "Name"), ("status", "Status"), ("ip_address", "IP")]

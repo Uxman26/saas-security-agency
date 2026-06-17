@@ -401,6 +401,34 @@ export interface Assignment {
   created_at: string;
 }
 
+export interface ShiftOvertimeLog {
+  id: number;
+  assignment_id?: number | null;
+  guard_id: number;
+  site_id?: number | null;
+  shift_date: string;
+  shift_start?: string | null;
+  scheduled_end: string;
+  new_end: string;
+  reason: string;
+  recorded_by?: number | null;
+  created_at: string;
+}
+
+export interface ShiftEarlyFinishLog {
+  id: number;
+  assignment_id?: number | null;
+  guard_id: number;
+  site_id?: number | null;
+  shift_date: string;
+  shift_start?: string | null;
+  scheduled_end: string;
+  actual_end: string;
+  reason: string;
+  recorded_by?: number | null;
+  created_at: string;
+}
+
 export interface RotaPlanListItem {
   id: number;
   name: string;

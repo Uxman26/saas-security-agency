@@ -1,5 +1,14 @@
 export type RotaViewMode = 'table' | 'timeline' | 'dnd';
 
+export type ShiftAdjustment = {
+  type: 'overtime' | 'early_finish';
+  scheduledEnd: string;
+  actualEnd: string;
+  reason: string;
+  at: string;
+  synced?: boolean;
+};
+
 export type ShiftRec = {
   start: string;
   end: string;
@@ -10,6 +19,8 @@ export type ShiftRec = {
   color: string;
   label: string;
   shiftRate?: number | null;
+  scheduledEnd?: string;
+  adjustments?: ShiftAdjustment[];
 };
 
 export type EmployeeRec = {

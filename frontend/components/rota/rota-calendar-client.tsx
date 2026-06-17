@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, calcHours, fmtShortDate, formatHoursDecimal, initials, shiftSiteLine } from '@/lib/rota-shifts-utils';
-import type { AttendanceRec, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
+import type { AttendanceRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import {
   ArrowLeft,
@@ -25,7 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 
-const SHIFT_MENU_H = 196;
+const SHIFT_MENU_H = 268;
 const EMP_MENU_H = 132;
 
 function placeMenu(rect: DOMRect, w: number, menuH: number, preferUp: boolean) {
@@ -55,6 +55,7 @@ export function RotaCalendarClient() {
     dayTotalHours,
     addShift,
     deleteShift,
+    updateShift,
     copyShiftToDates,
     copyShiftToEmployee,
     addEmployeesById,
@@ -69,6 +70,7 @@ export function RotaCalendarClient() {
   } = useRotaShifts();
 
   const [publishing, setPublishing] = useState(false);
+  const [planPublished, setPlanPublished] = useState(false);
 
   useEffect(() => {
     if (!planIdParam) {
@@ -86,6 +88,7 @@ export function RotaCalendarClient() {
       .get(id)
       .then((plan) => {
         if (cancelled) return;
+        setPlanPublished(plan.status === 'published');
         const bootstrap = searchParams.get('bootstrap') === '1';
         if (bootstrap) {
           loadRotaPlan(plan, {
@@ -143,6 +146,15 @@ export function RotaCalendarClient() {
   const [attOpen, setAttOpen] = useState(false);
   const [attRec, setAttRec] = useState<AttendanceRec | null>(null);
   const [attCtx, setAttCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
+  const [otOpen, setOtOpen] = useState(false);
+  const [otCtx, setOtCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
+  const [otEnd, setOtEnd] = useState('');
+  const [otReason, setOtReason] = useState('');
+  const [efOpen, setEfOpen] = useState(false);
+  const [efCtx, setEfCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
+  const [efEnd, setEfEnd] = useState('');
+  const [efReason, setEfReason] = useState('');
+  const [adjSaving, setAdjSaving] = useState(false);
   const [shiftMenu, setShiftMenu] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [shiftMenuAnchor, setShiftMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
   const [empMenu, setEmpMenu] = useState<string | null>(null);
@@ -277,6 +289,117 @@ export function RotaCalendarClient() {
     setAttOpen(false);
   };
 
+  const startOvertime = (empId: string, dk: string, idx: number) => {
+    closeShiftMenu();
+    const sh = state.shifts[empId]?.[dk]?.[idx];
+    if (!sh) return;
+    setOtCtx({ empId, dk, idx });
+    setOtEnd(sh.end);
+    setOtReason('');
+    setOtOpen(true);
+  };
+
+  const startEarlyFinish = (empId: string, dk: string, idx: number) => {
+    closeShiftMenu();
+    const sh = state.shifts[empId]?.[dk]?.[idx];
+    if (!sh) return;
+    setEfCtx({ empId, dk, idx });
+    setEfEnd(sh.end);
+    setEfReason('');
+    setEfOpen(true);
+  };
+
+  const applyShiftAdjustment = async (
+    ctx: { empId: string; dk: string; idx: number },
+    kind: 'overtime' | 'early_finish',
+    actualEnd: string,
+    reason: string
+  ) => {
+    const sh = state.shifts[ctx.empId]?.[ctx.dk]?.[ctx.idx];
+    if (!sh) return false;
+    const scheduled = sh.scheduledEnd || sh.end;
+    if (planPublished) {
+      try {
+        const payload = {
+          guard_id: parseInt(ctx.empId, 10),
+          date: ctx.dk,
+          shift_start: sh.start,
+          site_name: sh.site,
+          reason: reason.trim(),
+        };
+        if (kind === 'overtime') {
+          await api.assignments.overtimeByShift({ ...payload, new_end: actualEnd });
+        } else {
+          await api.assignments.earlyFinishByShift({ ...payload, actual_end: actualEnd });
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to record adjustment');
+        return false;
+      }
+    }
+    const adj: ShiftAdjustment = {
+      type: kind,
+      scheduledEnd: scheduled,
+      actualEnd,
+      reason: reason.trim(),
+      at: new Date().toISOString(),
+      synced: planPublished || undefined,
+    };
+    updateShift(ctx.empId, ctx.dk, ctx.idx, {
+      ...sh,
+      scheduledEnd: scheduled,
+      end: actualEnd,
+      adjustments: [...(sh.adjustments || []), adj],
+    });
+    return true;
+  };
+
+  const saveOvertime = async () => {
+    if (!otCtx) return;
+    const sh = state.shifts[otCtx.empId]?.[otCtx.dk]?.[otCtx.idx];
+    if (!sh) return;
+    const scheduled = sh.scheduledEnd || sh.end;
+    const reason = otReason.trim();
+    if (!reason) {
+      toast.warning('Reason is required');
+      return;
+    }
+    if (timeMins(otEnd) <= timeMins(scheduled)) {
+      toast.warning('New end time must be after scheduled end');
+      return;
+    }
+    setAdjSaving(true);
+    const ok = await applyShiftAdjustment(otCtx, 'overtime', otEnd, reason);
+    setAdjSaving(false);
+    if (ok) {
+      setOtOpen(false);
+      toast.success('Overtime recorded');
+    }
+  };
+
+  const saveEarlyFinish = async () => {
+    if (!efCtx) return;
+    const sh = state.shifts[efCtx.empId]?.[efCtx.dk]?.[efCtx.idx];
+    if (!sh) return;
+    const scheduled = sh.scheduledEnd || sh.end;
+    const reason = efReason.trim();
+    if (!reason) {
+      toast.warning('Reason is required');
+      return;
+    }
+    if (timeMins(efEnd) >= timeMins(scheduled)) {
+      toast.warning('Actual end time must be before scheduled end');
+      return;
+    }
+    setAdjSaving(true);
+    const ok = await applyShiftAdjustment(efCtx, 'early_finish', efEnd, reason);
+    setAdjSaving(false);
+    if (ok) {
+      setEfOpen(false);
+      toast.success('Early finish recorded');
+    }
+  };
+
   const runPublish = async () => {
     setPublishing(true);
     try {
@@ -295,6 +418,7 @@ export function RotaCalendarClient() {
         toast.success(
           `Saved ${created} shift(s) to assignments${skipped ? ` (${skipped} skipped)` : ''}`
         );
+        setPlanPublished(true);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Publish failed');
@@ -1217,6 +1341,60 @@ export function RotaCalendarClient() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={otOpen} onOpenChange={setOtOpen}>
+        <DialogContent showCloseButton className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Overtime</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="space-y-1">
+              <LabelMini>New end time</LabelMini>
+              <Input type="time" value={otEnd} onChange={(e) => setOtEnd(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <LabelMini>Reason (required)</LabelMini>
+              <textarea
+                className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={otReason}
+                onChange={(e) => setOtReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" className="bg-pink-600 hover:bg-pink-700" disabled={adjSaving} onClick={() => void saveOvertime()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={efOpen} onOpenChange={setEfOpen}>
+        <DialogContent showCloseButton className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Finished early</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="space-y-1">
+              <LabelMini>Actual end time</LabelMini>
+              <Input type="time" value={efEnd} onChange={(e) => setEfEnd(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <LabelMini>Reason (required)</LabelMini>
+              <textarea
+                className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={efReason}
+                onChange={(e) => setEfReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" className="bg-pink-600 hover:bg-pink-700" disabled={adjSaving} onClick={() => void saveEarlyFinish()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {typeof document !== 'undefined' && shiftMenu && shiftMenuAnchor && createPortal(
         <div
           ref={shiftMenuPortalRef}
@@ -1252,6 +1430,12 @@ export function RotaCalendarClient() {
           </button>
           <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startAtt(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
             Mark attendance
+          </button>
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startOvertime(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+            Overtime
+          </button>
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startEarlyFinish(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+            Finished early
           </button>
           <button
             type="button"
@@ -1296,6 +1480,11 @@ export function RotaCalendarClient() {
       )}
     </div>
   );
+}
+
+function timeMins(t: string) {
+  const parts = t.split(':');
+  return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
 }
 
 function LabelMini({ children }: { children: React.ReactNode }) {

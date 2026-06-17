@@ -1296,3 +1296,47 @@ class SmsLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ShiftOvertimeRequest(BaseModel):
+    new_end: str
+    reason: str
+
+
+class ShiftEarlyFinishRequest(BaseModel):
+    actual_end: str
+    reason: str
+
+
+class ShiftAdjustmentByShiftRequest(BaseModel):
+    guard_id: int
+    date: date
+    shift_start: str
+    site_name: str
+    new_end: Optional[str] = None
+    actual_end: Optional[str] = None
+    reason: str
+
+
+class ShiftAdjustmentLogResponse(BaseModel):
+    id: int
+    assignment_id: Optional[int] = None
+    guard_id: int
+    site_id: Optional[int] = None
+    shift_date: date
+    shift_start: Optional[str] = None
+    scheduled_end: str
+    reason: str
+    recorded_by: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ShiftOvertimeLogResponse(ShiftAdjustmentLogResponse):
+    new_end: str
+
+
+class ShiftEarlyFinishLogResponse(ShiftAdjustmentLogResponse):
+    actual_end: str

@@ -47,7 +47,9 @@ type ReportDef = {
 const REPORTS: ReportDef[] = [
   { id: 'attendance', title: 'Attendance', desc: 'Shift attendance with on-time, late, and absent status per employee.', category: 'staff', icon: Clock, exportType: 'attendance' },
   { id: 'shifts', title: 'Shift hours', desc: 'Individual staff shift and hours breakdown for any date range.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
-  { id: 'overtime', title: 'Overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
+  { id: 'shift-overtime', title: 'Overtime report', desc: 'Shift extensions with reasons recorded from the rota.', category: 'staff', icon: BarChart3, exportType: 'shift-overtime' },
+  { id: 'shift-early-finish', title: 'Finished early report', desc: 'Shifts ended before schedule with recorded reasons.', category: 'staff', icon: Clock, exportType: 'shift-early-finish' },
+  { id: 'overtime', title: 'Contract overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
   { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly' },
   { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices' },
   { id: 'expenses', title: 'Expense & VAT', desc: 'Business expenses and VAT breakdown by category or period.', category: 'financial', icon: Receipt, exportType: 'expenses', noExport: true },
@@ -183,6 +185,40 @@ export default function ReportsPage() {
       } else if (selected.id === 'usage-summary') {
         const data = await api.reports.usageSummary(startDate, endDate);
         view = { kind: 'usage', data };
+      } else if (selected.id === 'shift-overtime') {
+        const data = await api.reports.shiftOvertime(startDate, endDate, guardId ? parseInt(guardId) : undefined);
+        view = {
+          kind: 'rows',
+          columns: [
+            { key: 'date', label: 'Date' },
+            { key: 'guard', label: 'Employee' },
+            { key: 'site', label: 'Site' },
+            { key: 'shift_start', label: 'Start' },
+            { key: 'scheduled_end', label: 'Scheduled end' },
+            { key: 'new_end', label: 'New end' },
+            { key: 'extra_minutes', label: 'Extra mins' },
+            { key: 'reason', label: 'Reason' },
+            { key: 'recorded_by', label: 'Recorded by' },
+          ],
+          rows: data,
+        };
+      } else if (selected.id === 'shift-early-finish') {
+        const data = await api.reports.shiftEarlyFinish(startDate, endDate, guardId ? parseInt(guardId) : undefined);
+        view = {
+          kind: 'rows',
+          columns: [
+            { key: 'date', label: 'Date' },
+            { key: 'guard', label: 'Employee' },
+            { key: 'site', label: 'Site' },
+            { key: 'shift_start', label: 'Start' },
+            { key: 'scheduled_end', label: 'Scheduled end' },
+            { key: 'actual_end', label: 'Actual end' },
+            { key: 'early_minutes', label: 'Early mins' },
+            { key: 'reason', label: 'Reason' },
+            { key: 'recorded_by', label: 'Recorded by' },
+          ],
+          rows: data,
+        };
       } else if (selected.id === 'overtime' || selected.id === 'staff-monthly') {
         const data = await api.reports.staffMonthly(startDate, endDate);
         view = { kind: 'monthly', data };

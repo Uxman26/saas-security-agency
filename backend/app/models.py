@@ -504,6 +504,44 @@ class Assignment(Base):
     rota_plan = relationship("RotaPlan", back_populates="assignments")
     attendances = relationship("Attendance", back_populates="assignment", cascade="all, delete-orphan")
 
+class ShiftOvertimeLog(Base):
+    __tablename__ = "shift_overtime_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
+    site_id = Column(Integer, ForeignKey("sites.id"))
+    shift_date = Column(Date, nullable=False)
+    shift_start = Column(String)
+    scheduled_end = Column(String, nullable=False)
+    new_end = Column(String, nullable=False)
+    reason = Column(Text, nullable=False)
+    recorded_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    guard = relationship("Guard")
+    site = relationship("Site")
+    assignment = relationship("Assignment")
+    recorder = relationship("User", foreign_keys=[recorded_by])
+
+class ShiftEarlyFinishLog(Base):
+    __tablename__ = "shift_early_finish_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
+    site_id = Column(Integer, ForeignKey("sites.id"))
+    shift_date = Column(Date, nullable=False)
+    shift_start = Column(String)
+    scheduled_end = Column(String, nullable=False)
+    actual_end = Column(String, nullable=False)
+    reason = Column(Text, nullable=False)
+    recorded_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    guard = relationship("Guard")
+    site = relationship("Site")
+    assignment = relationship("Assignment")
+    recorder = relationship("User", foreign_keys=[recorded_by])
+
 class GuardRate(Base):
     __tablename__ = "guard_rates"
     id = Column(Integer, primary_key=True, index=True)

@@ -475,6 +475,46 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    if not table_exists(cur, "shift_overtime_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE shift_overtime_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                assignment_id INTEGER REFERENCES assignments(id),
+                guard_id INTEGER NOT NULL REFERENCES guards(id),
+                site_id INTEGER REFERENCES sites(id),
+                shift_date TEXT NOT NULL,
+                shift_start TEXT,
+                scheduled_end TEXT NOT NULL,
+                new_end TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                recorded_by INTEGER REFERENCES users(id),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "shift_early_finish_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE shift_early_finish_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                assignment_id INTEGER REFERENCES assignments(id),
+                guard_id INTEGER NOT NULL REFERENCES guards(id),
+                site_id INTEGER REFERENCES sites(id),
+                shift_date TEXT NOT NULL,
+                shift_start TEXT,
+                scheduled_end TEXT NOT NULL,
+                actual_end TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                recorded_by INTEGER REFERENCES users(id),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     for table, col, spec in [
         ("sites", "postcode", "TEXT"),
         ("sites", "contact_email", "TEXT"),

@@ -155,6 +155,8 @@ def _normalize_shift(block: dict, idx: int = 0) -> dict:
         "color": color,
         "label": b.get("label") or "",
         "shiftRate": _parse_shift_rate(b.get("shiftRate")),
+        "scheduledEnd": b.get("scheduledEnd") or "",
+        "adjustments": b.get("adjustments") or [],
     }
 
 
@@ -481,6 +483,9 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
     if "status" in payload and payload["status"]:
         plan.status = payload["status"]
     db.commit()
+    if "planner_data" in payload:
+        from app.services import shift_adjustment_service
+        shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
     db.refresh(plan)
     return get_rota_plan(db, user_id, plan.id)
 
@@ -540,8 +545,7 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                     )
                     continue
                 break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
-                db.add(
-                    Assignment(
+                assignment = Assignment(
                         guard_id=guard_id,
                         site_id=site_id,
                         rota_plan_id=plan.id,
@@ -552,6 +556,11 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                         shift_type=normalize_shift_type("day"),
                         shift_rate=_parse_shift_rate(sh.get("shiftRate")),
                     )
+                db.add(assignment)
+                db.flush()
+                from app.services import shift_adjustment_service
+                shift_adjustment_service.apply_planner_adjustments(
+                    db, user_id, company.id, assignment, sh.get("adjustments") or []
                 )
                 created += 1
 

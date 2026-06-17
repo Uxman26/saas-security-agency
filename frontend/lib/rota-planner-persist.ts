@@ -15,6 +15,14 @@ export type PlannerPayload = {
 function normalizeShift(sh: Partial<ShiftRec>, idx: number): ShiftRec {
   const rate = sh.shiftRate;
   const shiftRate = rate != null && !Number.isNaN(Number(rate)) && Number(rate) >= 0 ? Number(rate) : null;
+  const adjustments = (sh.adjustments || []).map((a) => ({
+    type: a.type,
+    scheduledEnd: a.scheduledEnd,
+    actualEnd: a.actualEnd,
+    reason: a.reason,
+    at: a.at,
+    synced: a.synced,
+  }));
   return {
     start: sh.start ?? '09:00',
     end: sh.end ?? '17:00',
@@ -25,6 +33,8 @@ function normalizeShift(sh: Partial<ShiftRec>, idx: number): ShiftRec {
     color: sh.color?.trim() || SHIFT_COLOR_OPTS[idx % SHIFT_COLOR_OPTS.length],
     label: sh.label ?? '',
     shiftRate,
+    scheduledEnd: sh.scheduledEnd || undefined,
+    adjustments: adjustments.length ? adjustments : undefined,
   };
 }
 

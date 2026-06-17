@@ -1,17 +1,29 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import date
 from app.database import get_db
 from app.models import User
-from app.schemas import AssignmentCreate, AssignmentResponse, RotaResponse, RotaDetailResponse, RotaSummaryRow
 from app.rbac import require_perm, PERM_ASSIGN_READ, PERM_ASSIGN_WRITE, PERM_ASSIGN_DELETE
 from app.services import assignment_service
 from app.services import rota_service
 from app.services import rota_export
+from app.services import shift_adjustment_service
+from app.schemas import (
+    AssignmentCreate,
+    AssignmentResponse,
+    RotaResponse,
+    RotaDetailResponse,
+    RotaSummaryRow,
+    ShiftAdjustmentByShiftRequest,
+    ShiftEarlyFinishLogResponse,
+    ShiftEarlyFinishRequest,
+    ShiftOvertimeLogResponse,
+    ShiftOvertimeRequest,
+)
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
 
@@ -104,6 +116,32 @@ def get_rota(
     return assignment_service.get_rota(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
 
 
+@router.post("/by-shift/overtime", response_model=ShiftOvertimeLogResponse)
+def record_shift_overtime(
+    body: ShiftAdjustmentByShiftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    if not body.new_end:
+        raise HTTPException(status_code=400, detail="new_end is required")
+    return shift_adjustment_service.record_overtime_by_shift(
+        db, current_user.id, body.guard_id, body.date, body.shift_start, body.site_name, body.new_end, body.reason
+    )
+
+
+@router.post("/by-shift/early-finish", response_model=ShiftEarlyFinishLogResponse)
+def record_shift_early_finish(
+    body: ShiftAdjustmentByShiftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    if not body.actual_end:
+        raise HTTPException(status_code=400, detail="actual_end is required")
+    return shift_adjustment_service.record_early_finish_by_shift(
+        db, current_user.id, body.guard_id, body.date, body.shift_start, body.site_name, body.actual_end, body.reason
+    )
+
+
 @router.get("/{assignment_id}", response_model=AssignmentResponse)
 def get_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_READ))):
     return assignment_service.get_assignment_by_id(db, assignment_id, current_user.id)
@@ -118,3 +156,23 @@ def update_assignment(assignment_id: int, assignment: AssignmentCreate, db: Sess
 def delete_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_DELETE))):
     assignment_service.delete_assignment(db, assignment_id, current_user.id)
     return None
+
+
+@router.post("/{assignment_id}/overtime", response_model=ShiftOvertimeLogResponse)
+def record_assignment_overtime(
+    assignment_id: int,
+    body: ShiftOvertimeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    return shift_adjustment_service.record_overtime(db, current_user.id, assignment_id, body.new_end, body.reason)
+
+
+@router.post("/{assignment_id}/early-finish", response_model=ShiftEarlyFinishLogResponse)
+def record_assignment_early_finish(
+    assignment_id: int,
+    body: ShiftEarlyFinishRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    return shift_adjustment_service.record_early_finish(db, current_user.id, assignment_id, body.actual_end, body.reason)

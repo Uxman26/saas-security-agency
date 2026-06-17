@@ -210,6 +210,14 @@ export const api = {
       return request<Assignment>(`/assignments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
     },
     delete: (id: number): Promise<void> => request<void>(`/assignments/${id}`, { method: 'DELETE' }),
+    overtime: (id: number, data: { new_end: string; reason: string }) =>
+      request<import('./types').ShiftOvertimeLog>(`/assignments/${id}/overtime`, { method: 'POST', body: JSON.stringify(data) }),
+    earlyFinish: (id: number, data: { actual_end: string; reason: string }) =>
+      request<import('./types').ShiftEarlyFinishLog>(`/assignments/${id}/early-finish`, { method: 'POST', body: JSON.stringify(data) }),
+    overtimeByShift: (data: { guard_id: number; date: string; shift_start: string; site_name: string; new_end: string; reason: string }) =>
+      request<import('./types').ShiftOvertimeLog>('/assignments/by-shift/overtime', { method: 'POST', body: JSON.stringify(data) }),
+    earlyFinishByShift: (data: { guard_id: number; date: string; shift_start: string; site_name: string; actual_end: string; reason: string }) =>
+      request<import('./types').ShiftEarlyFinishLog>('/assignments/by-shift/early-finish', { method: 'POST', body: JSON.stringify(data) }),
   },
   rotaPlans: {
     list: (): Promise<RotaPlanListItem[]> => request<RotaPlanListItem[]>('/rotas'),
@@ -358,6 +366,16 @@ export const api = {
       const q = new URLSearchParams({ start_date, end_date });
       if (guard_id) q.append('guard_id', String(guard_id));
       return request<Record<string, unknown>[]>(`/reports/attendance?${q}`);
+    },
+    shiftOvertime: (start_date: string, end_date: string, guard_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (guard_id) q.append('guard_id', String(guard_id));
+      return request<Record<string, unknown>[]>(`/reports/shift-overtime?${q}`);
+    },
+    shiftEarlyFinish: (start_date: string, end_date: string, guard_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (guard_id) q.append('guard_id', String(guard_id));
+      return request<Record<string, unknown>[]>(`/reports/shift-early-finish?${q}`);
     },
     financialInvoices: (start_date: string, end_date: string) =>
       request<Record<string, unknown>[]>(`/reports/financial/invoices?start_date=${start_date}&end_date=${end_date}`),

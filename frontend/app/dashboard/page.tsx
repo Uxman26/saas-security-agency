@@ -64,7 +64,8 @@ const adminTiles = [
   { href: '/admin/invoices', title: 'Subscription invoices', desc: 'Auto-generated platform billing', icon: FileText, color: 'text-rose-600' },
   { href: '/admin/payments', title: 'Payments', desc: 'Subscription payment records', icon: CreditCard, color: 'text-violet-600' },
   { href: '/admin/receipts', title: 'Receipts', desc: 'Signup payments & mark paid', icon: Wallet, color: 'text-emerald-600' },
-  { href: '/admin/packages', title: 'Packages', desc: 'Plan pricing, limits & features', icon: Shield, color: 'text-amber-600' },
+  { href: '/admin/packages', title: 'Packages', desc: 'Plan pricing, limits & SMS/email features', icon: Shield, color: 'text-amber-600' },
+  { href: '/admin/email', title: 'SMTP email', desc: 'Platform mail server for system emails', icon: Shield, color: 'text-blue-600' },
   { href: '/admin/logs', title: 'Activity logs', desc: 'Login history & audit trail', icon: Activity, color: 'text-cyan-600' },
 ];
 

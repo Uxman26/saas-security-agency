@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import get_password_hash, SUPER_ADMIN_ROLE
 from app.models import Company, Invoice, InvoiceLine, Payment, SubscriptionReceipt, User
 from app.services.receipt_service import SIDEBAR_DEFAULT_PATHS, dump_sidebar_modules, parse_sidebar_modules
-from app.services.module_service import dump_modules, parse_modules
+from app.services.module_service import dump_modules, parse_modules, apply_plan_module_flags
 from app.schemas import InvoiceUpdate
 
 ADMIN_ROLES = frozenset({"admin", "company_admin"})
@@ -75,9 +75,12 @@ def update_company(db: Session, company_id: int, payload: dict[str, Any]) -> Com
     modules = payload.pop("enabled_modules", None)
     if modules is not None:
         co.enabled_modules_json = dump_modules(modules)
+    tier = payload.get("subscription_tier")
     for k, v in payload.items():
         if hasattr(co, k) and v is not None:
             setattr(co, k, v)
+    if tier is not None:
+        apply_plan_module_flags(co, tier)
     db.commit()
     db.refresh(co)
     return co

@@ -54,6 +54,8 @@ export default function CompanySettingsPage() {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [postcode, setPostcode] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [vatNumber, setVatNumber] = useState('');
   const [accountName, setAccountName] = useState('');
   const [bankName, setBankName] = useState('');
   const [sortCode, setSortCode] = useState('');
@@ -74,6 +76,8 @@ export default function CompanySettingsPage() {
         setPhone(p.phone ?? '');
         setAddress(p.address ?? '');
         setPostcode(p.postcode ?? '');
+        setRegistrationNumber(p.registration_number ?? '');
+        setVatNumber(p.vat_number ?? '');
         setAccountName(p.account_name ?? '');
         setBankName(p.bank_name ?? '');
         setSortCode(p.sort_code ?? '');
@@ -97,6 +101,8 @@ export default function CompanySettingsPage() {
         phone: phone.trim() || undefined,
         address: address.trim() || undefined,
         postcode: postcode.trim() || undefined,
+        registration_number: registrationNumber.trim() || undefined,
+        vat_number: vatNumber.trim() || undefined,
         account_name: accountName.trim() || undefined,
         bank_name: bankName.trim() || undefined,
         sort_code: sortCode.trim() || undefined,
@@ -133,7 +139,7 @@ export default function CompanySettingsPage() {
       <ModulePage>
           <ModuleHeader
             title={<span className="flex items-center gap-2"><Building2 className="size-7" /> Company profile</span>}
-            description="Logo and contact details appear on invoices. Bank details appear at the bottom for payment."
+            description="Logo, contact details, and registration numbers appear on invoices. Bank details appear at the bottom for payment."
             actions={
               tab !== 'logo' ? (
                 <div className="flex gap-2">
@@ -218,6 +224,14 @@ export default function CompanySettingsPage() {
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="Street, city"
                   />
+                </div>
+                <div className="space-y-1">
+                  <Label>Company registration number</Label>
+                  <Input value={registrationNumber} onChange={(e) => setRegistrationNumber(e.target.value)} placeholder="e.g. 12345678" />
+                </div>
+                <div className="space-y-1">
+                  <Label>VAT registration number</Label>
+                  <Input value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} placeholder="e.g. 123 4567 89" />
                 </div>
               </CardContent>
             </Card>

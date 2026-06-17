@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Receipt,
   Wallet,
+  Mail,
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
@@ -49,6 +50,7 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
   { href: '/settings/special-days', label: 'Special days', perm: 'allow.read', icon: Calendar },
   { href: '/settings/company', label: 'Company', perm: 'sub.read', icon: Building2 },
   { href: '/settings/sms', label: 'SMS', perm: 'email.send', icon: MessageSquare },
+  { href: '/settings/email', label: 'Email', perm: 'email.send', icon: Mail },
   { href: '/settings/roles', label: 'Roles', perm: 'roles.read', icon: Shield },
 ];
 
@@ -71,6 +73,8 @@ export function AppSidebar() {
       if (!sidebarPathAllowed(user?.sidebar_modules, i.href)) return false;
       if (i.href === '/contractors') return showDirectory;
       if (i.href === '/expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
+      if (i.href === '/settings/sms' && user?.enabled_modules && user.enabled_modules.whatsapp === false) return false;
+      if (i.href === '/settings/email' && user?.enabled_modules && user.enabled_modules.email === false) return false;
       return can(user, i.perm);
     });
   }, [user]);
@@ -90,6 +94,7 @@ export function AppSidebar() {
             { href: '/admin/payments', label: 'Payments', icon: CreditCard },
             { href: '/admin/receipts', label: 'Receipts', icon: Wallet },
             { href: '/admin/packages', label: 'Packages', icon: Gift },
+            { href: '/admin/email', label: 'SMTP email', icon: Mail },
             { href: '/admin/logs', label: 'Activity logs', icon: Clock },
           ].map(({ href, label, icon: Icon }) => (
             <Link

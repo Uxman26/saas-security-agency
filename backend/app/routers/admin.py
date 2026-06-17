@@ -25,6 +25,8 @@ from app.schemas import (
     SubscriptionInvoicePaymentPatch,
     LoginLogResponse,
     AdminDashboardResponse,
+    SmtpConfigResponse,
+    SmtpConfigUpdate,
 )
 from app.auth import get_current_super_admin
 from app.services import admin_platform_service as ap
@@ -225,6 +227,18 @@ def list_packages(_: User = Depends(get_current_super_admin)):
 def patch_package(tier: str, body: PlanTierUpdate, _: User = Depends(get_current_super_admin)):
     payload = body.model_dump(exclude_unset=True)
     return PlanTierOut(**platform_plans_service.update_tier(tier, payload))
+
+
+@router.get("/smtp", response_model=SmtpConfigResponse)
+def get_smtp(_: User = Depends(get_current_super_admin)):
+    from app.services.platform_smtp_service import smtp_status
+    return SmtpConfigResponse(**smtp_status())
+
+
+@router.patch("/smtp", response_model=SmtpConfigResponse)
+def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(get_current_super_admin)):
+    from app.services.platform_smtp_service import update_smtp_config
+    return SmtpConfigResponse(**update_smtp_config(body.model_dump(exclude_unset=True)))
 
 
 @router.get("/receipts", response_model=List[SubscriptionReceiptResponse])

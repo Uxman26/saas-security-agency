@@ -327,14 +327,20 @@ export const api = {
     delete: (id: number): Promise<void> => request<void>(`/sub-contractors/${id}`, { method: 'DELETE' }),
   },
   email: {
-    send: (data: { to_email: string; subject: string; body: string }): Promise<{ message: string }> => {
+    config: (): Promise<import('./types').EmailConfig> => request<import('./types').EmailConfig>('/email/config'),
+    updateConfig: (data: { templates?: Record<string, string> }) =>
+      request<import('./types').EmailConfig>('/email/config', { method: 'PATCH', body: JSON.stringify(data) }),
+    send: (data: { to_email: string; subject: string; body: string }): Promise<import('./types').EmailLog> => {
       const sanitized = {
         to_email: sanitizeInput(data.to_email),
         subject: sanitizeInput(data.subject),
         body: data.body,
       };
-      return request<{ message: string }>('/email/send', { method: 'POST', body: JSON.stringify(sanitized) });
+      return request<import('./types').EmailLog>('/email/send', { method: 'POST', body: JSON.stringify(sanitized) });
     },
+    test: (data: { to_email: string; subject?: string; body?: string }) =>
+      request<import('./types').EmailLog>('/email/test', { method: 'POST', body: JSON.stringify(data) }),
+    logs: (): Promise<import('./types').EmailLog[]> => request<import('./types').EmailLog[]>('/email/logs'),
   },
   reports: {
     dashboard: (): Promise<DashboardOverview> => request<DashboardOverview>('/reports/dashboard'),
@@ -614,6 +620,15 @@ export const api = {
       data: { price_gbp?: number; max_guards?: number; max_sites?: number; max_users?: number; features?: Record<string, boolean> }
     ): Promise<PlanTier> =>
       request<PlanTier>(`/admin/packages/${tier}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    smtp: (): Promise<import('./types').SmtpConfig> => request<import('./types').SmtpConfig>('/admin/smtp'),
+    patchSmtp: (data: {
+      mail_server?: string;
+      mail_port?: number;
+      mail_username?: string;
+      mail_password?: string;
+      mail_from?: string;
+      mail_from_name?: string;
+    }) => request<import('./types').SmtpConfig>('/admin/smtp', { method: 'PATCH', body: JSON.stringify(data) }),
     receipts: (): Promise<SubscriptionReceipt[]> => request<SubscriptionReceipt[]>('/admin/receipts'),
     markReceiptPaid: (id: number): Promise<SubscriptionReceipt> =>
       request<SubscriptionReceipt>(`/admin/receipts/${id}/mark-paid`, { method: 'POST' }),

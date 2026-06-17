@@ -50,6 +50,8 @@ def get_company_profile(db: Session, user_id: int) -> dict:
         "phone": company.phone,
         "address": company.address,
         "postcode": company.postcode,
+        "registration_number": company.registration_number,
+        "vat_number": company.vat_number,
         "logo_url": company_logo_url(company),
         "account_name": company.account_name,
         "bank_name": company.bank_name,

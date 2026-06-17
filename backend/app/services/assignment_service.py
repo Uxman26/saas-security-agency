@@ -30,8 +30,9 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
     db.add(db_assignment)
     db.commit()
     db.refresh(db_assignment)
-    from app.services import sms_trigger_service
+    from app.services import sms_trigger_service, email_trigger_service
     sms_trigger_service.notify_shift_assignment(db, user_id, db_assignment)
+    email_trigger_service.notify_shift_assignment(db, user_id, db_assignment)
     return db_assignment
 
 def get_assignments(

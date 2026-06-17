@@ -103,6 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     { href: '/admin/payments', label: 'Payments' },
                     { href: '/admin/receipts', label: 'Receipts' },
                     { href: '/admin/packages', label: 'Packages' },
+                    { href: '/admin/email', label: 'SMTP email' },
                     { href: '/admin/logs', label: 'Activity logs' },
                   ].map(({ href, label }) => (
                     <Link

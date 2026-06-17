@@ -6,7 +6,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import Company, SubscriptionReceipt, User
-from app.plan_config import SUBSCRIPTION_PERIOD_DAYS, normalize_tier, price_for_tier
+from app.plan_config import normalize_tier, price_for_tier
+from app.services.module_service import apply_plan_module_flags
 
 SIDEBAR_DEFAULT_PATHS = [
     "/dashboard",
@@ -28,6 +29,7 @@ SIDEBAR_DEFAULT_PATHS = [
     "/settings/roles",
     "/settings/company",
     "/settings/sms",
+    "/settings/email",
     "/client-portal",
     "/client-portal/request-staff",
     "/requests",
@@ -93,6 +95,7 @@ def mark_receipt_paid(db: Session, receipt_id: int) -> SubscriptionReceipt:
         co.subscription_tier = r.subscription_tier
         co.subscription_start = now
         co.subscription_end = end
+        apply_plan_module_flags(co, r.subscription_tier)
     db.commit()
     db.refresh(r)
     if co:

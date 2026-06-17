@@ -37,7 +37,8 @@ def sync_invoice_payment_status(db: Session, inv: Invoice, user_id: Optional[int
     elif inv.status not in ("sent", "unpaid", "overdue", "partial") and inv.status != "draft":
         inv.status = "unpaid" if inv.status not in ("sent",) else inv.status
     if user_id and inv.status == "overdue" and prev != "overdue":
-        from app.services import sms_trigger_service
+        from app.services import sms_trigger_service, email_trigger_service
         balance = round(max(0, total - paid), 2)
         sms_trigger_service.notify_payment_reminder(db, user_id, inv, balance)
+        email_trigger_service.notify_payment_reminder(db, user_id, inv, balance)
     return inv.status

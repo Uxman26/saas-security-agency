@@ -39,6 +39,26 @@ def is_module_enabled(company, module: str) -> bool:
     return mods.get(module, True)
 
 
+def modules_from_plan(tier: str) -> dict[str, bool]:
+    from app.plan_config import limits_for_tier
+
+    feats = limits_for_tier(tier).get("features", {})
+    return {
+        "whatsapp": bool(feats.get("sms", False)),
+        "email": bool(feats.get("email", True)),
+    }
+
+
+def apply_plan_module_flags(company, tier: str) -> None:
+    from app.plan_config import normalize_tier
+
+    plan_mods = modules_from_plan(normalize_tier(tier))
+    mods = parse_modules(getattr(company, "enabled_modules_json", None))
+    mods["whatsapp"] = plan_mods["whatsapp"]
+    mods["email"] = plan_mods["email"]
+    company.enabled_modules_json = dump_modules(mods)
+
+
 def path_allowed_by_modules(company, path: str) -> bool:
     mod = PATH_MODULE_MAP.get(path)
     if not mod:

@@ -73,6 +73,12 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
           {invoice.company_email ? <p className="text-sm text-slate-600">{invoice.company_email}</p> : null}
           {invoice.company_phone ? <p className="text-sm text-slate-600">{invoice.company_phone}</p> : null}
           {invoice.company_address ? <p className="text-sm text-slate-600 whitespace-pre-line">{invoice.company_address}</p> : null}
+          {invoice.company_registration_number ? (
+            <p className="text-sm text-slate-600">Registered in England &amp; Wales No. {invoice.company_registration_number}</p>
+          ) : null}
+          {invoice.company_vat_number ? (
+            <p className="text-sm text-slate-600">VAT Registration No. {invoice.company_vat_number}</p>
+          ) : null}
         </div>
         <div className="text-left sm:text-right shrink-0">
           <p className="text-2xl font-bold tracking-tight text-slate-900">INVOICE</p>

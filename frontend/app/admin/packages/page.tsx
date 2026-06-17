@@ -25,6 +25,8 @@ export default function AdminPackagesPage() {
   const [maxGuards, setMaxGuards] = useState('');
   const [maxSites, setMaxSites] = useState('');
   const [maxUsers, setMaxUsers] = useState('');
+  const [featSms, setFeatSms] = useState(false);
+  const [featEmail, setFeatEmail] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
@@ -47,6 +49,8 @@ export default function AdminPackagesPage() {
     setMaxGuards(t.max_guards != null ? String(t.max_guards) : '');
     setMaxSites(t.max_sites != null ? String(t.max_sites) : '');
     setMaxUsers(t.max_users != null ? String(t.max_users) : '');
+    setFeatSms(!!t.features?.sms);
+    setFeatEmail(!!t.features?.email);
   };
 
   const save = async () => {
@@ -58,9 +62,12 @@ export default function AdminPackagesPage() {
         max_guards: maxGuards ? parseInt(maxGuards, 10) : undefined,
         max_sites: maxSites ? parseInt(maxSites, 10) : undefined,
         max_users: maxUsers ? parseInt(maxUsers, 10) : undefined,
+        features: { sms: featSms, email: featEmail },
       });
       setTiers((prev) => prev.map((t) => (t.tier === updated.tier ? updated : t)));
       setSelected(updated);
+      setFeatSms(!!updated.features?.sms);
+      setFeatEmail(!!updated.features?.email);
       toast.success('Package updated');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed');
@@ -96,6 +103,8 @@ export default function AdminPackagesPage() {
                       <TableCell>Price (GBP/mo)</TableCell>
                       <TableCell>Max guards</TableCell>
                       <TableCell>Max sites</TableCell>
+                      <TableCell>SMS</TableCell>
+                      <TableCell>Email</TableCell>
                       <TableCell />
                     </TableRow>
                   </TableHeader>
@@ -106,6 +115,8 @@ export default function AdminPackagesPage() {
                         <TableCell>£{t.price_gbp.toFixed(2)}</TableCell>
                         <TableCell>{t.max_guards ?? '∞'}</TableCell>
                         <TableCell>{t.max_sites ?? '∞'}</TableCell>
+                        <TableCell>{t.features?.sms ? 'Yes' : 'No'}</TableCell>
+                        <TableCell>{t.features?.email ? 'Yes' : 'No'}</TableCell>
                         <TableCell>
                           <Button size="sm" variant="outline" onClick={() => openEdit(t)}>
                             Edit
@@ -142,6 +153,16 @@ export default function AdminPackagesPage() {
                 <div>
                   <Label htmlFor="users">Max users</Label>
                   <Input id="users" type="number" value={maxUsers} onChange={(e) => setMaxUsers(e.target.value)} className="mt-1" placeholder="Unlimited" />
+                </div>
+                <div className="flex flex-col gap-3 pt-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={featSms} onChange={(e) => setFeatSms(e.target.checked)} />
+                    SMS (Twilio) enabled on this plan
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={featEmail} onChange={(e) => setFeatEmail(e.target.checked)} />
+                    Email enabled on this plan
+                  </label>
                 </div>
                 <Button onClick={save} disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}

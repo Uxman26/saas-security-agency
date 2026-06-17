@@ -250,6 +250,8 @@ export interface CompanyProfile {
   phone?: string | null;
   address?: string | null;
   postcode?: string | null;
+  registration_number?: string | null;
+  vat_number?: string | null;
   logo_url?: string | null;
   account_name?: string | null;
   bank_name?: string | null;
@@ -618,6 +620,8 @@ export interface Invoice {
   company_email?: string | null;
   company_phone?: string | null;
   company_address?: string | null;
+  company_registration_number?: string | null;
+  company_vat_number?: string | null;
   company_logo_url?: string | null;
   account_name?: string | null;
   bank_name?: string | null;
@@ -719,6 +723,33 @@ export interface SmsLog {
   error_message?: string | null;
   twilio_sid?: string | null;
   sent_at: string;
+}
+
+export interface EmailConfig {
+  smtp_configured: boolean;
+  mail_from?: string | null;
+  mail_from_name?: string | null;
+  templates: Record<string, string>;
+  enabled: boolean;
+}
+
+export interface EmailLog {
+  id: number;
+  recipient: string;
+  subject?: string | null;
+  template_key?: string | null;
+  status: string;
+  sent_at: string;
+}
+
+export interface SmtpConfig {
+  mail_server: string;
+  mail_port: number;
+  mail_from: string;
+  mail_from_name: string;
+  username_set: boolean;
+  password_set: boolean;
+  configured: boolean;
 }
 
 export interface InvoiceLine {

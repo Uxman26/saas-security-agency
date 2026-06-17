@@ -10,6 +10,7 @@ from app.services.role_service import ensure_roles_for_company, get_role_by_slug
 from app.services.receipt_service import company_subscription_blocked, create_receipt_for_signup
 from app.plan_config import normalize_tier
 from app.services import email_service
+from app.services.module_service import modules_from_plan, dump_modules
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if db.query(User).filter(User.email == user_data.email).first():
@@ -32,6 +33,7 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
             admin_id=user.id,
             subscription_tier=tier,
             subscription_status="pending",
+            enabled_modules_json=dump_modules(modules_from_plan(tier)),
         )
         db.add(company)
         db.flush()

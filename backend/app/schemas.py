@@ -255,6 +255,8 @@ class CompanyProfileUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     postcode: Optional[str] = None
+    registration_number: Optional[str] = None
+    vat_number: Optional[str] = None
     account_name: Optional[str] = None
     bank_name: Optional[str] = None
     sort_code: Optional[str] = None
@@ -270,6 +272,8 @@ class CompanyProfileResponse(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     postcode: Optional[str] = None
+    registration_number: Optional[str] = None
+    vat_number: Optional[str] = None
     logo_url: Optional[str] = None
     account_name: Optional[str] = None
     bank_name: Optional[str] = None
@@ -698,6 +702,55 @@ class EmailRequest(BaseModel):
     subject: str
     body: str
 
+
+class EmailTestRequest(BaseModel):
+    to_email: str
+    subject: Optional[str] = None
+    body: Optional[str] = None
+
+
+class EmailConfigResponse(BaseModel):
+    smtp_configured: bool
+    mail_from: Optional[str] = None
+    mail_from_name: Optional[str] = None
+    templates: dict[str, str] = Field(default_factory=dict)
+    enabled: bool = True
+
+
+class EmailConfigUpdate(BaseModel):
+    templates: Optional[dict[str, str]] = None
+
+
+class EmailLogResponse(BaseModel):
+    id: int
+    recipient: str
+    subject: Optional[str] = None
+    template_key: Optional[str] = None
+    status: str
+    sent_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SmtpConfigResponse(BaseModel):
+    mail_server: str
+    mail_port: int
+    mail_from: str
+    mail_from_name: str
+    username_set: bool
+    password_set: bool
+    configured: bool
+
+
+class SmtpConfigUpdate(BaseModel):
+    mail_server: Optional[str] = None
+    mail_port: Optional[int] = None
+    mail_username: Optional[str] = None
+    mail_password: Optional[str] = None
+    mail_from: Optional[str] = None
+    mail_from_name: Optional[str] = None
+
 class GuardDocumentBase(BaseModel):
     document_type: str
     file_path: Optional[str] = None
@@ -865,6 +918,8 @@ class InvoiceResponse(InvoiceBase):
     company_email: Optional[str] = None
     company_phone: Optional[str] = None
     company_address: Optional[str] = None
+    company_registration_number: Optional[str] = None
+    company_vat_number: Optional[str] = None
     company_logo_url: Optional[str] = None
     account_name: Optional[str] = None
     bank_name: Optional[str] = None

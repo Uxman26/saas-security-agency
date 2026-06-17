@@ -485,7 +485,11 @@ def run():
         ("main_contractors", "postcode", "TEXT"),
         ("sub_contractors", "postcode", "TEXT"),
         ("companies", "postcode", "TEXT"),
+        ("companies", "registration_number", "TEXT"),
+        ("companies", "vat_number", "TEXT"),
+        ("companies", "email_templates_json", "TEXT"),
         ("expenses", "vat_exempt", "INTEGER NOT NULL DEFAULT 0"),
+        ("email_logs", "template_key", "TEXT"),
     ]:
         if table_exists(cur, table) and not column_exists(cur, table, col):
             try:

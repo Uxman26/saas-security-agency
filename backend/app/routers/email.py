@@ -1,24 +1,49 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import EmailLog, User
-from app.rbac import require_perm, PERM_EMAIL_SEND
-from app.schemas import EmailRequest
-from app.services import email_service
-from app.services.company_service import get_company_by_user_id
+from app.models import User
+from app.rbac import PERM_EMAIL_SEND, require_perm
+from app.schemas import (
+    EmailConfigResponse,
+    EmailConfigUpdate,
+    EmailLogResponse,
+    EmailRequest,
+    EmailTestRequest,
+)
+from app.services import email_config_service
 
 router = APIRouter(prefix="/email", tags=["email"])
 
-@router.post("/send", status_code=status.HTTP_200_OK)
+
+@router.get("/config", response_model=EmailConfigResponse)
+def get_config(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_EMAIL_SEND))):
+    return EmailConfigResponse(**email_config_service.get_email_config(db, current_user.id))
+
+
+@router.patch("/config", response_model=EmailConfigResponse)
+def patch_config(body: EmailConfigUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_EMAIL_SEND))):
+    return EmailConfigResponse(**email_config_service.update_email_config(db, current_user.id, body.model_dump(exclude_unset=True)))
+
+
+@router.post("/send", status_code=status.HTTP_200_OK, response_model=EmailLogResponse)
 def send_email(email_data: EmailRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_EMAIL_SEND))):
-    try:
-        company = get_company_by_user_id(db, current_user.id)
-        email_service.send_email(email_data.to_email, email_data.subject, email_data.body)
-        db.add(EmailLog(company_id=company.id, recipient=email_data.to_email, subject=email_data.subject, status="sent"))
-        db.commit()
-        return {"message": "Email sent successfully"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+    log = email_config_service.send_tenant_email(
+        db, current_user.id, email_data.to_email, email_data.subject, email_data.body
+    )
+    return EmailLogResponse.model_validate(log)
+
+
+@router.post("/test", response_model=EmailLogResponse)
+def test_email(body: EmailTestRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_EMAIL_SEND))):
+    subject = body.subject or "Test email"
+    content = body.body or "<p>This is a test email from SecureForce Manager.</p>"
+    log = email_config_service.send_tenant_email(db, current_user.id, body.to_email, subject, content, "alert")
+    return EmailLogResponse.model_validate(log)
+
+
+@router.get("/logs", response_model=List[EmailLogResponse])
+def email_logs(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_EMAIL_SEND))):
+    return [EmailLogResponse.model_validate(r) for r in email_config_service.list_email_logs(db, current_user.id)]

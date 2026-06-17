@@ -66,6 +66,10 @@ def render_invoice_pdf(
     contact_lines = [x for x in [email if email != "—" else None, phone if phone != "—" else None, address if address != "—" else None] if x]
     for line in contact_lines:
         story.append(Paragraph(line.replace("\n", "<br/>"), styles["Normal"]))
+    if (company.registration_number or "").strip():
+        story.append(Paragraph(f"Registered in England &amp; Wales No. {company.registration_number.strip()}", styles["Normal"]))
+    if (company.vat_number or "").strip():
+        story.append(Paragraph(f"VAT Registration No. {company.vat_number.strip()}", styles["Normal"]))
     story.append(Spacer(1, 10))
     story.append(Paragraph(f"<b>Invoice</b> #{inv.id}", styles["Heading2"]))
     story.append(Spacer(1, 12))

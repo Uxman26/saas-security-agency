@@ -29,19 +29,19 @@ export function ReportsHubCharts({ monthly, subscription }: Props) {
   const axisLine = axisLineProps(c);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-xl border border-border/60 bg-card p-4">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border/60 bg-card p-5 shadow-sm">
         <p className="text-sm font-semibold mb-1">Monthly trends</p>
-        <p className="text-xs text-muted-foreground mb-4">Revenue, expenses & staff hours (6 months)</p>
-        <div className="h-[260px]">
+        <p className="text-xs text-muted-foreground mb-4">Revenue, expenses & staff hours</p>
+        <div className="h-[280px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={monthly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+            <LineChart data={monthly} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
               <XAxis dataKey="label" tick={tick} axisLine={axisLine} tickLine={false} />
-              <YAxis yAxisId="l" tick={tick} axisLine={axisLine} tickLine={false} width={48} />
-              <YAxis yAxisId="r" orientation="right" tick={tick} axisLine={axisLine} tickLine={false} width={40} />
+              <YAxis yAxisId="l" tick={tick} axisLine={axisLine} tickLine={false} width={52} />
+              <YAxis yAxisId="r" orientation="right" tick={tick} axisLine={axisLine} tickLine={false} width={44} />
               <Tooltip contentStyle={tooltip} />
-              <Legend />
+              <Legend verticalAlign="bottom" height={36} />
               <Line yAxisId="l" type="monotone" dataKey="revenue" name="Revenue" stroke={c.primary} strokeWidth={2} dot={false} />
               <Line yAxisId="l" type="monotone" dataKey="expenses" name="Expenses" stroke={c.warn} strokeWidth={2} dot={false} />
               <Line yAxisId="r" type="monotone" dataKey="staff_hours" name="Hours" stroke={c.accent} strokeWidth={2} dot={false} />
@@ -49,13 +49,14 @@ export function ReportsHubCharts({ monthly, subscription }: Props) {
           </ResponsiveContainer>
         </div>
       </div>
-      <div className="rounded-xl border border-border/60 bg-card p-4">
+      {subscription.some((p) => p.amount > 0) && (
+      <div className="rounded-xl border border-border/60 bg-card p-5 shadow-sm">
         <p className="text-sm font-semibold mb-1">Subscription billing</p>
-        <p className="text-xs text-muted-foreground mb-4">Platform subscription invoices (6 months)</p>
-        <div className="h-[260px]">
+        <p className="text-xs text-muted-foreground mb-4">Platform subscription invoices</p>
+        <div className="h-[220px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={subscription} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
               <XAxis dataKey="label" tick={tick} axisLine={axisLine} tickLine={false} />
               <YAxis tick={tick} axisLine={axisLine} tickLine={false} width={48} />
               <Tooltip contentStyle={tooltip} />
@@ -64,6 +65,7 @@ export function ReportsHubCharts({ monthly, subscription }: Props) {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
     </div>
   );
 }

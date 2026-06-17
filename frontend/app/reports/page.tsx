@@ -4,15 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { ReportsHubCharts } from '@/components/reports/hub-charts';
-import { ReportResultView } from '@/components/reports/report-result-view';
-import { api } from '@/lib/api';
+import { ReportCard } from '@/components/reports/report-card';
+import { ReportGenerateDialog } from '@/components/reports/report-generate-dialog';
+import { api, ApiError } from '@/lib/api';
 import type {
   Guard,
   ReportsHub,
@@ -24,8 +21,6 @@ import type {
 import {
   BarChart3,
   Clock,
-  FileSpreadsheet,
-  FileText,
   Users,
   Calendar,
   Receipt,
@@ -33,6 +28,7 @@ import {
   CreditCard,
   Activity,
   LogIn,
+  FileText,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
@@ -45,13 +41,12 @@ type ReportDef = {
   category: string;
   icon: typeof Clock;
   exportType: string;
-  needsGuard?: boolean;
   noExport?: boolean;
 };
 
 const REPORTS: ReportDef[] = [
   { id: 'attendance', title: 'Attendance', desc: 'Shift attendance with on-time, late, and absent status per employee.', category: 'staff', icon: Clock, exportType: 'attendance' },
-  { id: 'shifts', title: 'Shift hours', desc: 'Hours breakdown for all staff, or one employee when selected.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
+  { id: 'shifts', title: 'Shift hours', desc: 'Individual staff shift and hours breakdown for any date range.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
   { id: 'overtime', title: 'Overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
   { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly' },
   { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices' },
@@ -91,8 +86,8 @@ export default function ReportsPage() {
   const [category, setCategory] = useState('all');
 
   const loadHub = useCallback(() => {
-    api.reports.hub(startDate, endDate).then(setHub).catch(() => {});
-  }, [startDate, endDate]);
+    api.reports.hub(start, end).then(setHub).catch(() => {});
+  }, [start, end]);
 
   useEffect(() => {
     loadHub();
@@ -104,24 +99,33 @@ export default function ReportsPage() {
     return REPORTS.filter((r) => r.category === category);
   }, [category]);
 
+  const openReport = (r: ReportDef) => {
+    setSelected(r);
+    setResult(null);
+    setGuardId('');
+    setStartDate(start);
+    setEndDate(end);
+  };
+
   const generate = async () => {
     if (!selected) return;
+    if (selected.id === 'expenses') {
+      window.location.href = '/expenses';
+      return;
+    }
     setLoading(true);
     setResult(null);
     try {
-      if (selected.id === 'expenses') {
-        window.location.href = '/expenses';
-        return;
-      }
+      let view: ReportView | null = null;
       if (selected.id === 'shifts' && guardId) {
         const data = await api.reports.staffIndividual(parseInt(guardId), startDate, endDate);
-        setResult({ kind: 'individual', data });
+        view = { kind: 'individual', data };
       } else if (selected.id === 'shifts') {
         const data = await api.reports.staffMonthly(startDate, endDate);
-        setResult({ kind: 'monthly', data });
+        view = { kind: 'monthly', data };
       } else if (selected.id === 'sms-logs') {
         const data = await api.sms.logs();
-        setResult({
+        view = {
           kind: 'rows',
           columns: [
             { key: 'sent_at', label: 'Sent', fmt: (v) => (v ? new Date(String(v)).toLocaleString() : '—') },
@@ -130,10 +134,10 @@ export default function ReportsPage() {
             { key: 'body', label: 'Message' },
           ],
           rows: data as unknown as Record<string, unknown>[],
-        });
+        };
       } else if (selected.id === 'attendance') {
         const data = await api.reports.attendance(startDate, endDate, guardId ? parseInt(guardId) : undefined);
-        setResult({
+        view = {
           kind: 'rows',
           columns: [
             { key: 'guard', label: 'Guard' },
@@ -143,10 +147,10 @@ export default function ReportsPage() {
             { key: 'status', label: 'Status' },
           ],
           rows: data,
-        });
+        };
       } else if (selected.id === 'invoices') {
         const data = await api.reports.financialInvoices(startDate, endDate);
-        setResult({
+        view = {
           kind: 'rows',
           columns: [
             { key: 'invoice_id', label: 'Invoice' },
@@ -156,16 +160,16 @@ export default function ReportsPage() {
             { key: 'status', label: 'Status' },
           ],
           rows: data,
-        });
+        };
       } else if (selected.id === 'subscription' || selected.id === 'subscription-active') {
         const [summary, rows] = await Promise.all([
           api.reports.subscriptionSummary(),
           selected.id === 'subscription' ? api.reports.subscriptionInvoices(startDate, endDate) : Promise.resolve([]),
         ]);
-        setResult({ kind: 'subscription', summary, rows });
+        view = { kind: 'subscription', summary, rows };
       } else if (selected.id === 'login-logs') {
         const data = await api.reports.usageLogins(startDate, endDate);
-        setResult({
+        view = {
           kind: 'rows',
           columns: [
             { key: 'login_at', label: 'Login at', fmt: (v) => (v ? new Date(String(v)).toLocaleString() : '—') },
@@ -175,17 +179,21 @@ export default function ReportsPage() {
             { key: 'ip_address', label: 'IP' },
           ],
           rows: data,
-        });
+        };
       } else if (selected.id === 'usage-summary') {
         const data = await api.reports.usageSummary(startDate, endDate);
-        setResult({ kind: 'usage', data });
+        view = { kind: 'usage', data };
       } else if (selected.id === 'overtime' || selected.id === 'staff-monthly') {
         const data = await api.reports.staffMonthly(startDate, endDate);
-        setResult({ kind: 'monthly', data });
+        view = { kind: 'monthly', data };
       }
-      toast.success('Report generated');
-    } catch {
-      toast.error('Failed to generate report');
+      if (view) {
+        setResult(view);
+        toast.success('Report generated');
+      }
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Failed to generate report';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -207,8 +215,10 @@ export default function ReportsPage() {
       a.download = `${selected.exportType}-${startDate}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Export failed');
+      toast.success('Export downloaded');
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Export failed';
+      toast.error(msg);
     }
   };
 
@@ -225,33 +235,10 @@ export default function ReportsPage() {
     <ProtectedRoute>
       <AppShell>
         <ModulePage>
-          <ModuleHeader title="Reports" description="Generate and export staff, financial, subscription, and usage reports" />
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <Label className="text-xs">From</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-40" />
-            </div>
-            <div>
-              <Label className="text-xs">To</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-40" />
-            </div>
-            <Button variant="outline" size="sm" onClick={loadHub}>Refresh</Button>
-          </div>
+          <ModuleHeader title="Reports" />
 
           {hub && (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Revenue collected</p><p className="text-xl font-bold">{gbp(hub.total_revenue)}</p></CardContent></Card>
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Outstanding</p><p className="text-xl font-bold text-red-600">{gbp(hub.outstanding_invoices)}</p></CardContent></Card>
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Staff hours</p><p className="text-xl font-bold">{hub.staff_hours}h</p></CardContent></Card>
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Net VAT</p><p className="text-xl font-bold">{gbp(hub.net_vat)}</p></CardContent></Card>
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Expenses</p><p className="text-xl font-bold">{gbp(hub.total_expenses)}</p></CardContent></Card>
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Active users</p><p className="text-xl font-bold">{hub.active_users}</p></CardContent></Card>
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">SMS sent</p><p className="text-xl font-bold">{hub.sms_usage}</p></CardContent></Card>
-                <Card><CardContent className="pt-6"><p className="text-xs text-muted-foreground">Email usage</p><p className="text-xl font-bold">{hub.email_usage}</p></CardContent></Card>
-              </div>
-              <ReportsHubCharts monthly={monthlyChart} subscription={subChart} />
-            </>
+            <ReportsHubCharts monthly={monthlyChart} subscription={subChart} />
           )}
 
           <ModuleTabs
@@ -264,9 +251,9 @@ export default function ReportsPage() {
           />
 
           {tab === 'library' && (
-            <>
+            <div className="space-y-4">
               <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectTrigger className="w-48"><SelectValue placeholder="All reports" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All reports</SelectItem>
                   <SelectItem value="staff">Staff reports</SelectItem>
@@ -276,71 +263,38 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
               <div className="grid gap-4 sm:grid-cols-2">
-                {filtered.map((r) => {
-                  const Icon = r.icon;
-                  return (
-                    <Card key={r.id} className="hover:border-primary/40 transition-colors">
-                      <CardContent className="pt-6 flex gap-4">
-                        <div className="rounded-lg bg-primary/10 p-3 h-fit">
-                          <Icon className="size-6 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold">{r.title}</h3>
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{r.desc}</p>
-                          <Button variant="link" className="px-0 mt-2 h-auto" onClick={() => { setSelected(r); setResult(null); setGuardId(''); }}>
-                            Generate new report
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                {filtered.map((r) => (
+                  <ReportCard key={r.id} title={r.title} desc={r.desc} icon={r.icon} onGenerate={() => openReport(r)} />
+                ))}
               </div>
-            </>
+            </div>
           )}
 
           {tab === 'custom' && (
             <Card>
               <CardContent className="pt-6 text-sm text-muted-foreground">
-                Use the report library to generate reports with date range and staff filters. Export to Excel, CSV, or PDF from the generate dialog.
+                Pick a report from the library, set your date range in the dialog, then generate or export to CSV, Excel, or PDF.
               </CardContent>
             </Card>
           )}
         </ModulePage>
 
-        <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>{selected?.title}</DialogTitle></DialogHeader>
-            {selected && (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{selected.desc}</p>
-                {(selected.id === 'shifts' || selected.id === 'attendance') && (
-                  <div>
-                    <Label>Staff (optional)</Label>
-                    <Select value={guardId || 'all'} onValueChange={(v) => setGuardId(v === 'all' ? '' : v)}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="All staff" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All staff</SelectItem>
-                        {guards.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={generate} disabled={loading}>{loading ? 'Generating…' : 'Generate'}</Button>
-                  {!selected.noExport && selected.exportType !== 'expenses' && selected.exportType !== 'usage' && (
-                    <>
-                      <Button variant="outline" size="sm" onClick={() => exportFmt('csv')}><FileSpreadsheet className="size-4 mr-1" />CSV</Button>
-                      <Button variant="outline" size="sm" onClick={() => exportFmt('xlsx')}><FileSpreadsheet className="size-4 mr-1" />Excel</Button>
-                      <Button variant="outline" size="sm" onClick={() => exportFmt('pdf')}><FileText className="size-4 mr-1" />PDF</Button>
-                    </>
-                  )}
-                </div>
-                {result && <ReportResultView view={result} />}
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        <ReportGenerateDialog
+          open={!!selected}
+          report={selected}
+          startDate={startDate}
+          endDate={endDate}
+          guardId={guardId}
+          guards={guards}
+          loading={loading}
+          result={result}
+          onClose={() => setSelected(null)}
+          onStartDate={setStartDate}
+          onEndDate={setEndDate}
+          onGuardId={setGuardId}
+          onGenerate={generate}
+          onExport={exportFmt}
+        />
       </AppShell>
     </ProtectedRoute>
   );

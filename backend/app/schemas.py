@@ -755,6 +755,7 @@ class SmtpConfigUpdate(BaseModel):
 class GuardDocumentBase(BaseModel):
     document_type: str
     file_path: Optional[str] = None
+    file_name: Optional[str] = None
     expiry_date: Optional[date] = None
 
 class GuardDocumentCreate(GuardDocumentBase):

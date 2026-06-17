@@ -670,15 +670,46 @@ export const api = {
       request<CompanyUser>(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role_id }) }),
   },
   documents: {
-    // Flat /documents endpoint — guard_id optional for filtering
     list: (guard_id?: number): Promise<GuardDocument[]> => {
       const q = new URLSearchParams();
       if (guard_id) q.append('guard_id', guard_id.toString());
       return request<GuardDocument[]>(`/documents?${q.toString()}`);
     },
-    // guard_id is in the body via GuardDocumentCreateFlat
-    create: (data: { guard_id: number; document_type: string; file_path?: string; expiry_date?: string }): Promise<GuardDocument> =>
+    create: (data: { guard_id: number; document_type: string; file_path?: string; file_name?: string; expiry_date?: string }): Promise<GuardDocument> =>
       request<GuardDocument>('/documents', { method: 'POST', body: JSON.stringify(data) }),
+    upload: async (
+      guard_id: number,
+      document_type: string,
+      files: File[],
+      expiry_date?: string
+    ): Promise<GuardDocument[]> => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const form = new FormData();
+      form.append('guard_id', String(guard_id));
+      form.append('document_type', document_type);
+      if (expiry_date) form.append('expiry_date', expiry_date);
+      files.forEach((f) => form.append('files', f));
+      const response = await fetch(`${API_URL}/documents/upload`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (response.status === 401) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+        }
+        throw new ApiError(401, 'Unauthorized');
+      }
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        const d = error.detail;
+        const msg = typeof d === 'string' ? d : 'Upload failed';
+        throw new ApiError(response.status, msg);
+      }
+      return response.json();
+    },
+    downloadUrl: (id: number) => `${API_URL}/documents/${id}/file`,
     delete: (id: number): Promise<void> => request<void>(`/documents/${id}`, { method: 'DELETE' }),
   },
   attendance: {

@@ -490,6 +490,7 @@ def run():
         ("companies", "email_templates_json", "TEXT"),
         ("expenses", "vat_exempt", "INTEGER NOT NULL DEFAULT 0"),
         ("email_logs", "template_key", "TEXT"),
+        ("guard_documents", "file_name", "TEXT"),
     ]:
         if table_exists(cur, table) and not column_exists(cur, table, col):
             try:

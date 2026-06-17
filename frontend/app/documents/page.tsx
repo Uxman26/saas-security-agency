@@ -14,7 +14,7 @@ import { api } from '@/lib/api';
 import type { GuardDocument, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FolderOpen, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, AlertTriangle, Upload, Download, X, FileText } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 const DOCUMENT_TYPES = [
@@ -32,6 +32,8 @@ const DOCUMENT_TYPES = [
   'Other',
 ];
 
+const ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx';
+
 function getExpiryStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
   const daysLeft = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
@@ -39,6 +41,31 @@ function getExpiryStatus(date?: string): 'expired' | 'critical' | 'warning' | 'o
   if (daysLeft <= 30) return 'critical';
   if (daysLeft <= 90) return 'warning';
   return 'ok';
+}
+
+function fmtSize(n: number) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function displayName(doc: GuardDocument) {
+  return doc.file_name || doc.file_path?.split('/').pop() || '—';
+}
+
+async function downloadDoc(doc: GuardDocument) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+  const res = await fetch(api.documents.downloadUrl(doc.id), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Download failed');
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = displayName(doc);
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function DocumentsPage() {
@@ -52,15 +79,20 @@ export default function DocumentsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
-  // Form state
   const [formGuardId, setFormGuardId] = useState('');
   const [formDocType, setFormDocType] = useState('');
   const [formCustomDocType, setFormCustomDocType] = useState('');
   const [formExpiry, setFormExpiry] = useState('');
-  const [formFilePath, setFormFilePath] = useState('');
+  const [formFiles, setFormFiles] = useState<File[]>([]);
+  const [formRef, setFormRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
+  const guardDocCounts = useMemo(() => {
+    const m = new Map<number, number>();
+    documents.forEach((d) => m.set(d.guard_id, (m.get(d.guard_id) ?? 0) + 1));
+    return m;
+  }, [documents]);
 
   const loadDocuments = (guardId?: number) => {
     setLoading(true);
@@ -72,26 +104,59 @@ export default function DocumentsPage() {
     api.guards.list().then(setGuards).catch(() => {});
   }, []);
 
+  const resetForm = () => {
+    setFormGuardId('');
+    setFormDocType('');
+    setFormCustomDocType('');
+    setFormExpiry('');
+    setFormFiles([]);
+    setFormRef('');
+  };
+
+  const onFilesPicked = (list: FileList | null) => {
+    if (!list?.length) return;
+    setFormFiles((prev) => {
+      const names = new Set(prev.map((f) => `${f.name}-${f.size}`));
+      const next = [...prev];
+      Array.from(list).forEach((f) => {
+        const key = `${f.name}-${f.size}`;
+        if (!names.has(key)) next.push(f);
+      });
+      return next;
+    });
+  };
+
   const handleAdd = async () => {
     if (!formGuardId || !formDocType) return;
+    const docType = formDocType === 'Other' ? (formCustomDocType || 'Other') : formDocType;
+    if (!formFiles.length && !formRef.trim()) {
+      toast.error('Add at least one file or a reference URL');
+      return;
+    }
     setSubmitting(true);
     try {
-      const docType = formDocType === 'Other' ? (formCustomDocType || 'Other') : formDocType;
-      await api.documents.create({
-        guard_id: parseInt(formGuardId),
-        document_type: docType,
-        expiry_date: formExpiry || undefined,
-        file_path: formFilePath || undefined,
-      });
+      const guardId = parseInt(formGuardId);
+      let created = 0;
+      if (formFiles.length) {
+        const rows = await api.documents.upload(guardId, docType, formFiles, formExpiry || undefined);
+        created += rows.length;
+      }
+      if (formRef.trim()) {
+        await api.documents.create({
+          guard_id: guardId,
+          document_type: docType,
+          file_path: formRef.trim(),
+          file_name: formRef.trim().split('/').pop(),
+          expiry_date: formExpiry || undefined,
+        });
+        created += 1;
+      }
       setAddOpen(false);
-      setFormGuardId('');
-      setFormDocType('');
-      setFormCustomDocType('');
-      setFormExpiry('');
-      setFormFilePath('');
+      resetForm();
       loadDocuments(filterGuardId ? parseInt(filterGuardId) : undefined);
-    } catch (err) {
-      console.error(err);
+      toast.success(`${created} document${created !== 1 ? 's' : ''} added`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setSubmitting(false);
     }
@@ -116,7 +181,7 @@ export default function DocumentsPage() {
 
   const getSearchText = useCallback(
     (d: GuardDocument) =>
-      [guardMap.get(d.guard_id), d.document_type, d.expiry_date, d.file_path, d.created_at].filter(Boolean).join(' '),
+      [guardMap.get(d.guard_id), d.document_type, d.expiry_date, d.file_path, d.file_name, d.created_at].filter(Boolean).join(' '),
     [guardMap]
   );
   const getSortValue = useCallback(
@@ -131,7 +196,7 @@ export default function DocumentsPage() {
         case 'status':
           return getExpiryStatus(d.expiry_date) || '';
         case 'file':
-          return d.file_path || '';
+          return displayName(d);
         case 'added':
           return d.created_at || '';
         default:
@@ -159,7 +224,7 @@ export default function DocumentsPage() {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
 
-  const expiringCount = documents.filter(d => {
+  const expiringCount = documents.filter((d) => {
     const s = getExpiryStatus(d.expiry_date);
     return s === 'expired' || s === 'critical';
   }).length;
@@ -167,35 +232,34 @@ export default function DocumentsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-      <div>
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2"><FolderOpen className="size-7" /> Documents</h1>
-              <p className="text-muted-foreground mt-1">{documents.length} document{documents.length !== 1 ? 's' : ''} on record</p>
+              <p className="text-muted-foreground mt-1">
+                {documents.length} document{documents.length !== 1 ? 's' : ''} across {guardDocCounts.size} staff member{guardDocCounts.size !== 1 ? 's' : ''}
+              </p>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => loadDocuments(filterGuardId ? parseInt(filterGuardId) : undefined)} disabled={loading}>
                 {loading ? 'Loading...' : 'Refresh'}
               </Button>
-              <Dialog open={addOpen} onOpenChange={setAddOpen}>
+              <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="size-4 mr-2" />
-                    Add Document
+                    Add Documents
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Add Guard Document</DialogTitle>
+                    <DialogTitle>Add guard documents</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-2">
                     <div className="space-y-1">
                       <Label>Guard <span className="text-destructive">*</span></Label>
                       <Select value={formGuardId} onValueChange={setFormGuardId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select guard" />
-                        </SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Select guard" /></SelectTrigger>
                         <SelectContent>
                           {guards.map((g) => (
                             <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
@@ -204,11 +268,9 @@ export default function DocumentsPage() {
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label>Document Type <span className="text-destructive">*</span></Label>
+                      <Label>Document type <span className="text-destructive">*</span></Label>
                       <Select value={formDocType} onValueChange={setFormDocType}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select document type" />
-                        </SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Select document type" /></SelectTrigger>
                         <SelectContent>
                           {DOCUMENT_TYPES.map((t) => (
                             <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -218,21 +280,51 @@ export default function DocumentsPage() {
                     </div>
                     {formDocType === 'Other' && (
                       <div className="space-y-1">
-                        <Label>Custom Document Type</Label>
+                        <Label>Custom document type</Label>
                         <Input value={formCustomDocType} onChange={(e) => setFormCustomDocType(e.target.value)} placeholder="Specify document type" />
                       </div>
                     )}
                     <div className="space-y-1">
-                      <Label>Expiry Date</Label>
+                      <Label>Expiry date</Label>
                       <Input type="date" value={formExpiry} onChange={(e) => setFormExpiry(e.target.value)} />
+                      <p className="text-xs text-muted-foreground">Applied to all files in this upload</p>
                     </div>
+
+                    <div className="space-y-2">
+                      <Label>Files</Label>
+                      <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 px-4 py-8 cursor-pointer hover:border-primary/40 hover:bg-muted/40 transition-colors">
+                        <Upload className="size-8 text-muted-foreground" />
+                        <span className="text-sm font-medium">Click to select files</span>
+                        <span className="text-xs text-muted-foreground text-center">PDF, images, Word — up to 10 MB each. Select multiple files at once.</span>
+                        <input type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => onFilesPicked(e.target.files)} />
+                      </label>
+                      {formFiles.length > 0 && (
+                        <ul className="rounded-md border divide-y max-h-40 overflow-y-auto">
+                          {formFiles.map((f, i) => (
+                            <li key={`${f.name}-${i}`} className="flex items-center gap-2 px-3 py-2 text-sm">
+                              <FileText className="size-4 shrink-0 text-muted-foreground" />
+                              <span className="flex-1 truncate">{f.name}</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{fmtSize(f.size)}</span>
+                              <button type="button" onClick={() => setFormFiles((prev) => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
+                                <X className="size-4" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
                     <div className="space-y-1">
-                      <Label>File Path / Reference</Label>
-                      <Input value={formFilePath} onChange={(e) => setFormFilePath(e.target.value)} placeholder="/docs/guard123/sia-cert.pdf" />
-                      <p className="text-xs text-muted-foreground">Document storage path or external reference URL</p>
+                      <Label>Or reference URL / path (optional)</Label>
+                      <Input value={formRef} onChange={(e) => setFormRef(e.target.value)} placeholder="https://… or external reference" />
                     </div>
-                    <Button className="w-full" onClick={handleAdd} disabled={submitting || !formGuardId || !formDocType}>
-                      {submitting ? 'Adding...' : 'Add Document'}
+
+                    <Button
+                      className="w-full"
+                      onClick={handleAdd}
+                      disabled={submitting || !formGuardId || !formDocType || (!formFiles.length && !formRef.trim())}
+                    >
+                      {submitting ? 'Uploading…' : `Add ${formFiles.length + (formRef.trim() ? 1 : 0) || ''} document${formFiles.length + (formRef.trim() ? 1 : 0) !== 1 ? 's' : ''}`}
                     </Button>
                   </div>
                 </DialogContent>
@@ -249,7 +341,6 @@ export default function DocumentsPage() {
             </div>
           )}
 
-          {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <Input
               placeholder="Search by guard or document type..."
@@ -258,9 +349,7 @@ export default function DocumentsPage() {
               className="max-w-sm"
             />
             <Select value={filterGuardId || 'all'} onValueChange={handleFilterGuard}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="All Guards" />
-              </SelectTrigger>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Guards" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Guards</SelectItem>
                 {guards.map((g) => (
@@ -272,14 +361,14 @@ export default function DocumentsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Document Records</CardTitle>
+              <CardTitle>Document records</CardTitle>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading documents...</div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search ? 'No documents match your search.' : 'No documents on record. Click "Add Document" to get started.'}
+                  {search ? 'No documents match your search.' : 'No documents on record. Click "Add Documents" to get started.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -287,21 +376,25 @@ export default function DocumentsPage() {
                     <TableHeader>
                       <TableRow>
                         <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Document Type" colKey="type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Expiry Date" colKey="expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Document type" colKey="type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Expiry date" colKey="expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="File Reference" colKey="file" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="File" colKey="file" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Added" colKey="added" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead>Actions</TableHead>
+                        <TableHead className="whitespace-nowrap">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((doc) => {
                         const status = getExpiryStatus(doc.expiry_date);
+                        const isStored = doc.file_path && !doc.file_path.startsWith('http');
                         return (
                           <TableRow key={doc.id}>
                             <TableCell className="font-medium whitespace-nowrap">
-                              {guardMap.get(doc.guard_id) ?? `Guard #${doc.guard_id}`}
+                              <div>{guardMap.get(doc.guard_id) ?? `Guard #${doc.guard_id}`}</div>
+                              {(guardDocCounts.get(doc.guard_id) ?? 0) > 1 && (
+                                <span className="text-xs text-muted-foreground">{guardDocCounts.get(doc.guard_id)} docs</span>
+                              )}
                             </TableCell>
                             <TableCell>{doc.document_type}</TableCell>
                             <TableCell className="whitespace-nowrap">
@@ -333,22 +426,41 @@ export default function DocumentsPage() {
                                 </span>
                               )}
                             </TableCell>
-                            <TableCell className="max-w-[180px] truncate text-sm text-muted-foreground">
-                              {doc.file_path || '—'}
+                            <TableCell className="max-w-[200px] truncate text-sm" title={displayName(doc)}>
+                              {displayName(doc)}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                               {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '—'}
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDelete(doc.id)}
-                                title="Delete document"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
+                              <div className="flex items-center gap-0.5">
+                                {(isStored || doc.file_path?.startsWith('http')) && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="size-8 p-0"
+                                    title="Download"
+                                    onClick={() => {
+                                      if (doc.file_path?.startsWith('http')) {
+                                        window.open(doc.file_path, '_blank');
+                                        return;
+                                      }
+                                      downloadDoc(doc).catch(() => toast.error('Download failed'));
+                                    }}
+                                  >
+                                    <Download className="size-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="size-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDelete(doc.id)}
+                                  title="Delete document"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -373,8 +485,7 @@ export default function DocumentsPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </AppShell>
+      </AppShell>
     </ProtectedRoute>
   );
 }

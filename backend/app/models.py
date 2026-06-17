@@ -356,6 +356,7 @@ class GuardDocument(Base):
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
     document_type = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
+    file_name = Column(String)
     expiry_date = Column(Date)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

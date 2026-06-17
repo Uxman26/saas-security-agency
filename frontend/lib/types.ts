@@ -791,6 +791,7 @@ export interface GuardDocument {
   guard_id: number;
   document_type: string;
   file_path?: string;
+  file_name?: string;
   expiry_date?: string;
   created_at: string;
 }

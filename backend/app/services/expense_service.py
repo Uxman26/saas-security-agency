@@ -226,25 +226,39 @@ def _expense_totals(db: Session, company_id: int, start: date, end: date) -> dic
     }
 
 
-def _invoice_vat_total(db: Session, company_id: int, start: date, end: date) -> float:
-    val = (
-        db.query(func.coalesce(func.sum(Invoice.tax_amount), 0))
+_ISSUED_INVOICE_STATUSES = ("sent", "paid", "partial", "unpaid", "overdue")
+
+
+def _invoice_vat_summary(db: Session, company_id: int, start: date, end: date) -> dict:
+    row = (
+        db.query(
+            func.coalesce(func.sum(Invoice.tax_amount), 0),
+            func.count(Invoice.id),
+        )
         .filter(
             Invoice.company_id == company_id,
             Invoice.period_start <= end,
             Invoice.period_end >= start,
-            Invoice.status != "cancelled",
+            Invoice.status.in_(_ISSUED_INVOICE_STATUSES),
         )
-        .scalar()
+        .first()
     )
-    return round(float(val or 0), 2)
+    return {
+        "vat": round(float(row[0] or 0), 2),
+        "count": int(row[1] or 0),
+    }
+
+
+def _invoice_vat_total(db: Session, company_id: int, start: date, end: date) -> float:
+    return _invoice_vat_summary(db, company_id, start, end)["vat"]
 
 
 def dashboard_summary(db: Session, user_id: int, start_date: date, end_date: date) -> dict:
     company = get_company_by_user_id(db, user_id)
     totals = _expense_totals(db, company.id, start_date, end_date)
     expense_vat = totals["total_vat"]
-    invoice_vat = _invoice_vat_total(db, company.id, start_date, end_date)
+    inv = _invoice_vat_summary(db, company.id, start_date, end_date)
+    invoice_vat = inv["vat"]
     net_vat = round(invoice_vat - expense_vat, 2)
 
     by_cat = (
@@ -307,6 +321,7 @@ def dashboard_summary(db: Session, user_id: int, start_date: date, end_date: dat
         "total_expenses_ex_vat": totals["total_ex_vat"],
         "total_expense_vat": expense_vat,
         "total_invoice_vat": invoice_vat,
+        "issued_invoice_count": inv["count"],
         "net_vat_payable": net_vat,
         "total_expenses_inc_vat": totals["total_inc_vat"],
         "category_summary": category_summary,
@@ -371,12 +386,14 @@ def vat_report(db: Session, user_id: int, start_date: date, end_date: date) -> d
     expense_totals = _expense_totals(db, company.id, start_date, end_date)
     expense_vat = expense_totals["total_vat"]
     invoice_vat = _invoice_vat_total(db, company.id, start_date, end_date)
+    inv_count = _invoice_vat_summary(db, company.id, start_date, end_date)["count"]
     net_vat = round(invoice_vat - expense_vat, 2)
     return {
         "period_start": start_date,
         "period_end": end_date,
         "expense_vat_total": expense_vat,
         "invoice_vat_total": invoice_vat,
+        "issued_invoice_count": inv_count,
         "net_vat_summary": net_vat,
         "total_vat_report": {
             "collected_on_invoices": invoice_vat,

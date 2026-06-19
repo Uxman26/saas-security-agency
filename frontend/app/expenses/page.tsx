@@ -503,7 +503,14 @@ export default function ExpensesPage() {
               </Card>
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Invoice VAT</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold text-blue-600">{fmt(dashboard.total_invoice_vat)}</p><p className="text-xs text-muted-foreground">VAT collected on invoices</p></CardContent>
+                <CardContent>
+                  <p className="text-2xl font-bold text-blue-600">{fmt(dashboard.total_invoice_vat)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {(dashboard.issued_invoice_count ?? 0) === 0
+                      ? 'No issued invoices in this period'
+                      : `VAT on ${dashboard.issued_invoice_count} issued invoice${dashboard.issued_invoice_count === 1 ? '' : 's'}`}
+                  </p>
+                </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Net VAT</CardTitle></CardHeader>
@@ -728,7 +735,14 @@ export default function ExpensesPage() {
                 </Card>
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Invoice VAT total</CardTitle></CardHeader>
-                  <CardContent><p className="text-2xl font-bold text-blue-600">{fmt(vatReport.invoice_vat_total)}</p></CardContent>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-blue-600">{fmt(vatReport.invoice_vat_total)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(vatReport.issued_invoice_count ?? 0) === 0
+                        ? 'No issued invoices in this period'
+                        : `From ${vatReport.issued_invoice_count} issued invoice${vatReport.issued_invoice_count === 1 ? '' : 's'}`}
+                    </p>
+                  </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Net VAT summary</CardTitle></CardHeader>

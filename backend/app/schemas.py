@@ -1184,6 +1184,7 @@ class VatReportResponse(BaseModel):
     period_end: date
     expense_vat_total: float
     invoice_vat_total: float
+    issued_invoice_count: int = 0
     net_vat_summary: float
     total_vat_report: dict
     expense_totals: dict
@@ -1195,6 +1196,7 @@ class ExpenseDashboardResponse(BaseModel):
     total_expenses_ex_vat: float
     total_expense_vat: float
     total_invoice_vat: float
+    issued_invoice_count: int = 0
     net_vat_payable: float
     total_expenses_inc_vat: float
     category_summary: List[dict]

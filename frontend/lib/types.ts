@@ -947,6 +947,7 @@ export interface VatReport {
   period_end: string;
   expense_vat_total: number;
   invoice_vat_total: number;
+  issued_invoice_count?: number;
   net_vat_summary: number;
   total_vat_report: {
     collected_on_invoices: number;
@@ -962,6 +963,7 @@ export interface ExpenseDashboard {
   total_expenses_ex_vat: number;
   total_expense_vat: number;
   total_invoice_vat: number;
+  issued_invoice_count?: number;
   net_vat_payable: number;
   total_expenses_inc_vat: number;
   category_summary: { category: string; total_inc_vat: number; vat_amount: number; count: number }[];

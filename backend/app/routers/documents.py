@@ -56,8 +56,8 @@ def download_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_perm(PERM_DOC_READ)),
 ):
-    path, mime = guard_document_service.get_document_file_path(db, doc_id, current_user.id)
-    return FileResponse(path, media_type=mime)
+    path, mime, filename = guard_document_service.get_document_file_path(db, doc_id, current_user.id)
+    return FileResponse(path, media_type=mime, filename=filename)
 
 
 @router.delete("/{doc_id}", status_code=status.HTTP_204_NO_CONTENT)

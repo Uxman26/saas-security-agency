@@ -33,6 +33,7 @@ const DOCUMENT_TYPES = [
 ];
 
 const ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx';
+const MAX_TOTAL_BYTES = 5 * 1024 * 1024;
 
 function getExpiryStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
@@ -84,8 +85,9 @@ export default function DocumentsPage() {
   const [formCustomDocType, setFormCustomDocType] = useState('');
   const [formExpiry, setFormExpiry] = useState('');
   const [formFiles, setFormFiles] = useState<File[]>([]);
-  const [formRef, setFormRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const totalFileBytes = useMemo(() => formFiles.reduce((n, f) => n + f.size, 0), [formFiles]);
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
   const guardDocCounts = useMemo(() => {
@@ -110,51 +112,46 @@ export default function DocumentsPage() {
     setFormCustomDocType('');
     setFormExpiry('');
     setFormFiles([]);
-    setFormRef('');
   };
 
   const onFilesPicked = (list: FileList | null) => {
     if (!list?.length) return;
-    setFormFiles((prev) => {
-      const names = new Set(prev.map((f) => `${f.name}-${f.size}`));
-      const next = [...prev];
-      Array.from(list).forEach((f) => {
-        const key = `${f.name}-${f.size}`;
-        if (!names.has(key)) next.push(f);
-      });
-      return next;
-    });
+    const incoming = Array.from(list);
+    const merged = [...formFiles];
+    const keys = new Set(merged.map((f) => `${f.name}-${f.size}`));
+    for (const f of incoming) {
+      const key = `${f.name}-${f.size}`;
+      if (keys.has(key)) continue;
+      merged.push(f);
+      keys.add(key);
+    }
+    const total = merged.reduce((n, f) => n + f.size, 0);
+    if (total > MAX_TOTAL_BYTES) {
+      toast.error('Total upload size must be 5 MB or less for all files combined');
+      return;
+    }
+    setFormFiles(merged);
   };
 
   const handleAdd = async () => {
     if (!formGuardId || !formDocType) return;
     const docType = formDocType === 'Other' ? (formCustomDocType || 'Other') : formDocType;
-    if (!formFiles.length && !formRef.trim()) {
-      toast.error('Add at least one file or a reference URL');
+    if (!formFiles.length) {
+      toast.error('Select at least one file');
+      return;
+    }
+    if (totalFileBytes > MAX_TOTAL_BYTES) {
+      toast.error('Total upload size must be 5 MB or less');
       return;
     }
     setSubmitting(true);
     try {
       const guardId = parseInt(formGuardId);
-      let created = 0;
-      if (formFiles.length) {
-        const rows = await api.documents.upload(guardId, docType, formFiles, formExpiry || undefined);
-        created += rows.length;
-      }
-      if (formRef.trim()) {
-        await api.documents.create({
-          guard_id: guardId,
-          document_type: docType,
-          file_path: formRef.trim(),
-          file_name: formRef.trim().split('/').pop(),
-          expiry_date: formExpiry || undefined,
-        });
-        created += 1;
-      }
+      await api.documents.upload(guardId, docType, formFiles, formExpiry || undefined);
       setAddOpen(false);
       resetForm();
       loadDocuments(filterGuardId ? parseInt(filterGuardId) : undefined);
-      toast.success(`${created} document${created !== 1 ? 's' : ''} added`);
+      toast.success(formFiles.length > 1 ? 'Documents uploaded as a bundle' : 'Document added');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -195,8 +192,6 @@ export default function DocumentsPage() {
           return d.expiry_date || '';
         case 'status':
           return getExpiryStatus(d.expiry_date) || '';
-        case 'file':
-          return displayName(d);
         case 'added':
           return d.created_at || '';
         default:
@@ -295,7 +290,7 @@ export default function DocumentsPage() {
                       <label className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 px-4 py-8 cursor-pointer hover:border-primary/40 hover:bg-muted/40 transition-colors">
                         <Upload className="size-8 text-muted-foreground" />
                         <span className="text-sm font-medium">Click to select files</span>
-                        <span className="text-xs text-muted-foreground text-center">PDF, images, Word — up to 10 MB each. Select multiple files at once.</span>
+                        <span className="text-xs text-muted-foreground text-center">PDF, images, Word — up to 5 MB total for all files. Select multiple files at once.</span>
                         <input type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => onFilesPicked(e.target.files)} />
                       </label>
                       {formFiles.length > 0 && (
@@ -312,19 +307,19 @@ export default function DocumentsPage() {
                           ))}
                         </ul>
                       )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label>Or reference URL / path (optional)</Label>
-                      <Input value={formRef} onChange={(e) => setFormRef(e.target.value)} placeholder="https://… or external reference" />
+                      {formFiles.length > 0 && (
+                        <p className={`text-xs ${totalFileBytes > MAX_TOTAL_BYTES ? 'text-destructive' : 'text-muted-foreground'}`}>
+                          Total: {fmtSize(totalFileBytes)} / 5 MB
+                        </p>
+                      )}
                     </div>
 
                     <Button
                       className="w-full"
                       onClick={handleAdd}
-                      disabled={submitting || !formGuardId || !formDocType || (!formFiles.length && !formRef.trim())}
+                      disabled={submitting || !formGuardId || !formDocType || !formFiles.length || totalFileBytes > MAX_TOTAL_BYTES}
                     >
-                      {submitting ? 'Uploading…' : `Add ${formFiles.length + (formRef.trim() ? 1 : 0) || ''} document${formFiles.length + (formRef.trim() ? 1 : 0) !== 1 ? 's' : ''}`}
+                      {submitting ? 'Uploading…' : formFiles.length > 1 ? `Upload ${formFiles.length} files as bundle` : 'Add document'}
                     </Button>
                   </div>
                 </DialogContent>
@@ -379,7 +374,6 @@ export default function DocumentsPage() {
                         <SortableHead label="Document type" colKey="type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Expiry date" colKey="expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="File" colKey="file" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Added" colKey="added" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead className="whitespace-nowrap">Actions</TableHead>
                       </TableRow>
@@ -388,6 +382,7 @@ export default function DocumentsPage() {
                       {pageRows.map((doc) => {
                         const status = getExpiryStatus(doc.expiry_date);
                         const isStored = doc.file_path && !doc.file_path.startsWith('http');
+                        const isBundle = (doc.file_name || '').endsWith('.zip');
                         return (
                           <TableRow key={doc.id}>
                             <TableCell className="font-medium whitespace-nowrap">
@@ -426,27 +421,31 @@ export default function DocumentsPage() {
                                 </span>
                               )}
                             </TableCell>
-                            <TableCell className="max-w-[200px] truncate text-sm" title={displayName(doc)}>
-                              {displayName(doc)}
-                            </TableCell>
                             <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                               {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '—'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-0.5">
-                                {(isStored || doc.file_path?.startsWith('http')) && (
+                                {isStored && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     className="size-8 p-0"
-                                    title="Download"
+                                    title={isBundle ? 'Download bundle' : 'Download'}
                                     onClick={() => {
-                                      if (doc.file_path?.startsWith('http')) {
-                                        window.open(doc.file_path, '_blank');
-                                        return;
-                                      }
                                       downloadDoc(doc).catch(() => toast.error('Download failed'));
                                     }}
+                                  >
+                                    <Download className="size-4" />
+                                  </Button>
+                                )}
+                                {doc.file_path?.startsWith('http') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="size-8 p-0"
+                                    title="Open link"
+                                    onClick={() => window.open(doc.file_path!, '_blank')}
                                   >
                                     <Download className="size-4" />
                                   </Button>

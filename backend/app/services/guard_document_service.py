@@ -1,5 +1,7 @@
+import io
 import os
 import secrets
+import zipfile
 from datetime import date
 from typing import List, Optional
 
@@ -12,7 +14,7 @@ from app.services.company_service import get_company_by_user_id
 from app.storage_paths import DOCUMENTS_DIR, ensure_upload_dirs, resolve_storage_path
 
 ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".doc", ".docx"}
-MAX_BYTES = 10 * 1024 * 1024
+MAX_TOTAL_BYTES = 5 * 1024 * 1024
 
 
 def _guard_in_company(db: Session, guard_id: int, company_id: int) -> Guard:
@@ -22,20 +24,60 @@ def _guard_in_company(db: Session, guard_id: int, company_id: int) -> Guard:
     return guard
 
 
-def _save_file(guard_id: int, file: UploadFile) -> tuple[str, str]:
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file")
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXT:
-        raise HTTPException(status_code=400, detail="File type not allowed")
-    raw = file.file.read()
-    if len(raw) > MAX_BYTES:
-        raise HTTPException(status_code=400, detail="File must be 10 MB or smaller")
+def _read_files(files: List[UploadFile]) -> list[tuple[str, bytes]]:
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+    items: list[tuple[str, bytes]] = []
+    total = 0
+    for file in files:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file")
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in ALLOWED_EXT:
+            raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
+        raw = file.file.read()
+        total += len(raw)
+        if total > MAX_TOTAL_BYTES:
+            raise HTTPException(status_code=400, detail="Total upload size must be 5 MB or less")
+        items.append((file.filename, raw))
+    return items
+
+
+def _unique_zip_name(name: str, used: set[str]) -> str:
+    if name not in used:
+        used.add(name)
+        return name
+    base, ext = os.path.splitext(name)
+    n = 1
+    while True:
+        candidate = f"{base}_{n}{ext}"
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+        n += 1
+
+
+def _store_upload(guard_id: int, document_type: str, items: list[tuple[str, bytes]]) -> tuple[str, str]:
     ensure_upload_dirs()
-    dest = os.path.join(DOCUMENTS_DIR, f"guard_{guard_id}_{secrets.token_hex(8)}{ext}")
+    if len(items) == 1:
+        name, raw = items[0]
+        ext = os.path.splitext(name)[1].lower()
+        dest = os.path.join(DOCUMENTS_DIR, f"guard_{guard_id}_{secrets.token_hex(8)}{ext}")
+        with open(dest, "wb") as out:
+            out.write(raw)
+        return dest, name
+
+    buf = io.BytesIO()
+    used: set[str] = set()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, raw in items:
+            zf.writestr(_unique_zip_name(name, used), raw)
+    slug = document_type.replace(" ", "_").replace("/", "-")[:40] or "documents"
+    zip_name = f"{slug}_{len(items)}_files.zip"
+    dest = os.path.join(DOCUMENTS_DIR, f"guard_{guard_id}_{secrets.token_hex(8)}.zip")
     with open(dest, "wb") as out:
-        out.write(raw)
-    return dest, file.filename
+        out.write(buf.getvalue())
+    return dest, zip_name
 
 
 def get_all_documents(db: Session, user_id: int, guard_id: Optional[int] = None) -> List[GuardDocument]:
@@ -67,26 +109,21 @@ def upload_documents(
     files: List[UploadFile],
     expiry_date: Optional[date] = None,
 ) -> List[GuardDocument]:
-    if not files:
-        raise HTTPException(status_code=400, detail="No files provided")
     company = get_company_by_user_id(db, user_id)
     _guard_in_company(db, guard_id, company.id)
-    created: list[GuardDocument] = []
-    for file in files:
-        path, name = _save_file(guard_id, file)
-        db_doc = GuardDocument(
-            guard_id=guard_id,
-            document_type=document_type,
-            file_path=path,
-            file_name=name,
-            expiry_date=expiry_date,
-        )
-        db.add(db_doc)
-        created.append(db_doc)
+    items = _read_files(files)
+    path, name = _store_upload(guard_id, document_type, items)
+    db_doc = GuardDocument(
+        guard_id=guard_id,
+        document_type=document_type,
+        file_path=path,
+        file_name=name,
+        expiry_date=expiry_date,
+    )
+    db.add(db_doc)
     db.commit()
-    for doc in created:
-        db.refresh(doc)
-    return created
+    db.refresh(db_doc)
+    return [db_doc]
 
 
 def get_documents(db: Session, guard_id: int, user_id: int) -> List[GuardDocument]:
@@ -112,7 +149,7 @@ def get_expiring(db: Session, user_id: int, days: int = 30) -> List[GuardDocumen
     )
 
 
-def get_document_file_path(db: Session, doc_id: int, user_id: int) -> tuple[str, str]:
+def get_document_file_path(db: Session, doc_id: int, user_id: int) -> tuple[str, str, str]:
     company = get_company_by_user_id(db, user_id)
     doc = (
         db.query(GuardDocument)
@@ -135,8 +172,10 @@ def get_document_file_path(db: Session, doc_id: int, user_id: int) -> tuple[str,
         ".gif": "image/gif",
         ".doc": "application/msword",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".zip": "application/zip",
     }.get(ext, "application/octet-stream")
-    return path, mime
+    download_name = doc.file_name or os.path.basename(path)
+    return path, mime, download_name
 
 
 def delete_document(db: Session, doc_id: int, user_id: int) -> None:

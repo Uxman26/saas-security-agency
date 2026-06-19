@@ -755,6 +755,9 @@ export interface SmsLog {
 
 export interface EmailConfig {
   smtp_configured: boolean;
+  mail_server?: string | null;
+  mail_username?: string | null;
+  password_set?: boolean;
   mail_from?: string | null;
   mail_from_name?: string | null;
   templates: Record<string, string>;

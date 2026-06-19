@@ -337,8 +337,12 @@ export const api = {
   },
   email: {
     config: (): Promise<import('./types').EmailConfig> => request<import('./types').EmailConfig>('/email/config'),
-    updateConfig: (data: { templates?: Record<string, string> }) =>
-      request<import('./types').EmailConfig>('/email/config', { method: 'PATCH', body: JSON.stringify(data) }),
+    updateConfig: (data: {
+      templates?: Record<string, string>;
+      mail_server?: string;
+      mail_username?: string;
+      mail_password?: string;
+    }) => request<import('./types').EmailConfig>('/email/config', { method: 'PATCH', body: JSON.stringify(data) }),
     send: (data: { to_email: string; subject: string; body: string }): Promise<import('./types').EmailLog> => {
       const sanitized = {
         to_email: sanitizeInput(data.to_email),

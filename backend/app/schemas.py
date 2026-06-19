@@ -712,6 +712,9 @@ class EmailTestRequest(BaseModel):
 
 class EmailConfigResponse(BaseModel):
     smtp_configured: bool
+    mail_server: Optional[str] = None
+    mail_username: Optional[str] = None
+    password_set: bool = False
     mail_from: Optional[str] = None
     mail_from_name: Optional[str] = None
     templates: dict[str, str] = Field(default_factory=dict)
@@ -720,6 +723,9 @@ class EmailConfigResponse(BaseModel):
 
 class EmailConfigUpdate(BaseModel):
     templates: Optional[dict[str, str]] = None
+    mail_server: Optional[str] = None
+    mail_username: Optional[str] = None
+    mail_password: Optional[str] = None
 
 
 class EmailLogResponse(BaseModel):

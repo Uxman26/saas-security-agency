@@ -22,11 +22,11 @@ def _client_email(client: Client) -> Optional[str]:
 
 
 def _safe_send(db: Session, user_id: int, recipient: Optional[str], subject: str, template_key: str, **ctx) -> None:
-    if not recipient or not email_service.is_configured():
+    if not recipient:
         return
     try:
         company = get_company_by_user_id(db, user_id)
-        if not is_module_enabled(company, "email"):
+        if not is_module_enabled(company, "email") or not email_service.is_company_configured(company):
             return
         templates = email_config_service.parse_templates(company.email_templates_json)
         tpl = templates.get(template_key) or email_config_service.DEFAULT_TEMPLATES.get(template_key, "")

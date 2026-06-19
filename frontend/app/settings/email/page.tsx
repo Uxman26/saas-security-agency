@@ -39,18 +39,53 @@ export default function EmailSettingsPage() {
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [testTo, setTestTo] = useState('');
   const [testSubject, setTestSubject] = useState('Test email');
-  const [testBody, setTestBody] = useState('<p>This is a test email from SecureForce Manager.</p>');
+  const [testBody, setTestBody] = useState('<p>This is a test email from ControlOps.</p>');
   const [saving, setSaving] = useState(false);
+  const [smtpServer, setSmtpServer] = useState('');
+  const [smtpUsername, setSmtpUsername] = useState('');
+  const [smtpPassword, setSmtpPassword] = useState('');
+  const [savingSmtp, setSavingSmtp] = useState(false);
 
   const load = () => {
     api.email.config().then((c) => {
       setConfig(c);
       setTemplates(c.templates || {});
+      setSmtpServer(c.mail_server || '');
+      setSmtpUsername(c.mail_username || '');
+      setSmtpPassword('');
     }).catch(() => {});
     api.email.logs().then(setLogs).catch(() => {});
   };
 
   useEffect(() => { load(); }, []);
+
+  const saveSmtp = async () => {
+    if (!smtpServer.trim() || !smtpUsername.trim()) {
+      toast.warning('SMTP host and username are required');
+      return;
+    }
+    if (!config?.password_set && !smtpPassword.trim()) {
+      toast.warning('SMTP password is required');
+      return;
+    }
+    setSavingSmtp(true);
+    try {
+      const updated = await api.email.updateConfig({
+        mail_server: smtpServer.trim(),
+        mail_username: smtpUsername.trim(),
+        ...(smtpPassword.trim() ? { mail_password: smtpPassword } : {}),
+      });
+      setConfig(updated);
+      setSmtpServer(updated.mail_server || '');
+      setSmtpUsername(updated.mail_username || '');
+      setSmtpPassword('');
+      toast.success('SMTP settings saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSavingSmtp(false);
+    }
+  };
 
   const saveTemplates = async () => {
     setSaving(true);
@@ -86,7 +121,7 @@ export default function EmailSettingsPage() {
               !config?.enabled
                 ? 'Email module is disabled for your account. Contact your administrator.'
                 : !config?.smtp_configured
-                  ? 'SMTP is not configured yet. Ask your platform administrator to set up mail settings.'
+                  ? 'Configure SMTP below to start sending emails from ControlOps.'
                   : undefined
             }
           />
@@ -104,28 +139,75 @@ export default function EmailSettingsPage() {
           />
 
           {tab === 'config' && (
-            <Card>
-              <CardHeader><CardTitle>SMTP status</CardTitle></CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">Status</p>
-                  <p className={cn('font-medium mt-1', config?.smtp_configured ? 'text-green-600' : 'text-amber-600')}>
-                    {config?.smtp_configured ? 'Configured' : 'Not configured'}
+            <div className="grid gap-4">
+              <Card>
+                <CardHeader><CardTitle>SMTP status</CardTitle></CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-lg border p-4">
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <p className={cn('font-medium mt-1', config?.smtp_configured ? 'text-green-600' : 'text-amber-600')}>
+                      {config?.smtp_configured ? 'Configured' : 'Not configured'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <p className="text-xs text-muted-foreground">From address</p>
+                    <p className="font-medium mt-1 text-sm">{config?.mail_from || '—'}</p>
+                  </div>
+                  <div className="rounded-lg border p-4">
+                    <p className="text-xs text-muted-foreground">From name</p>
+                    <p className="font-medium mt-1 text-sm">{config?.mail_from_name || '—'}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>SMTP configuration</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Enter your outgoing mail server details. Defaults show environment values until you save your own settings.
                   </p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">From address</p>
-                  <p className="font-medium mt-1 text-sm">{config?.mail_from || '—'}</p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs text-muted-foreground">From name</p>
-                  <p className="font-medium mt-1 text-sm">{config?.mail_from_name || '—'}</p>
-                </div>
-                <p className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">
-                  System emails (shift reminders, invoice notifications, password resets) are sent via platform SMTP configured by the super admin.
-                </p>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="space-y-4 max-w-xl">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp_server">SMTP Host / Server</Label>
+                    <Input
+                      id="smtp_server"
+                      value={smtpServer}
+                      onChange={(e) => setSmtpServer(e.target.value)}
+                      placeholder="mail.example.com"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp_username">SMTP Username</Label>
+                    <Input
+                      id="smtp_username"
+                      value={smtpUsername}
+                      onChange={(e) => setSmtpUsername(e.target.value)}
+                      placeholder="noreply@example.com"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp_password">SMTP Password</Label>
+                    <Input
+                      id="smtp_password"
+                      type="password"
+                      value={smtpPassword}
+                      onChange={(e) => setSmtpPassword(e.target.value)}
+                      placeholder={config?.password_set ? '•••••••• (leave blank to keep current)' : 'Enter password'}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <Button
+                    className="bg-[#FD6203] hover:bg-[#DF3C01] text-white"
+                    onClick={() => void saveSmtp()}
+                    disabled={savingSmtp || !config?.enabled}
+                  >
+                    {savingSmtp ? 'Saving…' : 'Save SMTP settings'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {tab === 'templates' && (

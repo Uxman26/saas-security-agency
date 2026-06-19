@@ -807,11 +807,14 @@ export function RotaCalendarClient() {
       {state.rotaView === 'dnd' && (
         <div className="grid lg:grid-cols-[220px_1fr] gap-4">
           <div className="rounded-lg border bg-card p-3 space-y-2 max-h-[480px] overflow-y-auto">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Drag staff to a day column →</p>
+            <Input placeholder="Name, job title…" value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="h-8 text-xs" />
+            <p className="text-xs font-medium text-muted-foreground">Drag staff to a day column →</p>
             {state.employees.length === 0 ? (
               <p className="text-xs text-muted-foreground py-4 text-center">Add staff first, then drag them onto days.</p>
+            ) : rows.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">No staff match your search.</p>
             ) : null}
-            {state.employees.map((emp) => (
+            {rows.map((emp) => (
               <div
                 key={emp.id}
                 draggable
@@ -825,7 +828,10 @@ export function RotaCalendarClient() {
                 <span className="size-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: emp.avatarColor }}>
                   {initials(emp.name)}
                 </span>
-                <span className="truncate font-medium">{emp.name}</span>
+                <span className="min-w-0">
+                  <span className="truncate font-medium block">{emp.name}</span>
+                  {emp.role ? <span className="truncate text-[10px] text-muted-foreground block">{emp.role}</span> : null}
+                </span>
               </div>
             ))}
           </div>

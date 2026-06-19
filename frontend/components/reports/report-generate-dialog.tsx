@@ -8,6 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ReportResultView } from '@/components/reports/report-result-view';
 import type { Guard } from '@/lib/types';
 import { FileSpreadsheet, FileText } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+const WIDE_REPORTS = new Set(['shift-overtime', 'shift-early-finish', 'login-logs', 'attendance', 'sms-logs']);
+const STAFF_FILTER_REPORTS = new Set(['shifts', 'attendance', 'shift-overtime', 'shift-early-finish']);
 
 type ReportView =
   | { kind: 'individual'; data: import('@/lib/types').StaffIndividualReport }
@@ -57,72 +61,86 @@ export function ReportGenerateDialog({
   onGenerate,
   onExport,
 }: Props) {
-  const showStaff = report?.id === 'shifts' || report?.id === 'attendance';
+  const showStaff = report ? STAFF_FILTER_REPORTS.has(report.id) : false;
+  const wide = report ? WIDE_REPORTS.has(report.id) : false;
   const canExport = report && !report.noExport && report.exportType !== 'expenses' && report.exportType !== 'usage';
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl">{report?.title}</DialogTitle>
-        </DialogHeader>
+      <DialogContent
+        className={cn(
+          'overflow-hidden max-h-[90vh] p-0 gap-0',
+          wide ? 'sm:max-w-4xl' : 'sm:max-w-xl'
+        )}
+      >
         {report && (
-          <div className="space-y-5">
-            <p className="text-sm text-muted-foreground -mt-2">{report.desc}</p>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs">From</Label>
-                <Input type="date" value={startDate} onChange={(e) => onStartDate(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">To</Label>
-                <Input type="date" value={endDate} onChange={(e) => onEndDate(e.target.value)} />
-              </div>
+          <div className="flex flex-col min-h-0 max-h-[90vh]">
+            <div className="shrink-0 px-6 pt-6 pb-4 border-b">
+              <DialogHeader>
+                <DialogTitle className="text-xl pr-8">{report.title}</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground mt-2">{report.desc}</p>
             </div>
 
-            {showStaff && (
-              <div className="space-y-1.5">
-                <Label>Staff (optional)</Label>
-                <Select value={guardId || 'all'} onValueChange={(v) => onGuardId(v === 'all' ? '' : v)}>
-                  <SelectTrigger><SelectValue placeholder="All staff" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All staff</SelectItem>
-                    {guards.map((g) => (
-                      <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="text-xs">From</Label>
+                  <Input type="date" value={startDate} onChange={(e) => onStartDate(e.target.value)} className="w-full" />
+                </div>
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="text-xs">To</Label>
+                  <Input type="date" value={endDate} onChange={(e) => onEndDate(e.target.value)} className="w-full" />
+                </div>
               </div>
-            )}
 
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button onClick={onGenerate} disabled={loading} className="min-w-[100px]">
-                {loading ? 'Generating…' : 'Generate'}
-              </Button>
-              {canExport && (
-                <>
-                  <Button variant="outline" size="sm" onClick={() => onExport('csv')}>
-                    <FileSpreadsheet className="size-4 mr-1.5" />
-                    CSV
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => onExport('xlsx')}>
-                    <FileSpreadsheet className="size-4 mr-1.5" />
-                    Excel
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => onExport('pdf')}>
-                    <FileText className="size-4 mr-1.5" />
-                    PDF
-                  </Button>
-                </>
+              {showStaff && (
+                <div className="space-y-1.5">
+                  <Label>Staff (optional)</Label>
+                  <Select value={guardId || 'all'} onValueChange={(v) => onGuardId(v === 'all' ? '' : v)}>
+                    <SelectTrigger><SelectValue placeholder="All staff" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All staff</SelectItem>
+                      {guards.map((g) => (
+                        <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={onGenerate}
+                  disabled={loading}
+                  className="min-w-[100px] bg-[#FD6203] hover:bg-[#DF3C01] text-white"
+                >
+                  {loading ? 'Generating…' : 'Generate'}
+                </Button>
+                {canExport && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => onExport('csv')}>
+                      <FileSpreadsheet className="size-4 mr-1.5" />
+                      CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => onExport('xlsx')}>
+                      <FileSpreadsheet className="size-4 mr-1.5" />
+                      Excel
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => onExport('pdf')}>
+                      <FileText className="size-4 mr-1.5" />
+                      PDF
+                    </Button>
+                  </>
+                )}
+              </div>
+
+              {result && (
+                <div className="min-w-0 overflow-hidden pt-1">
+                  <ReportResultView view={result} />
+                </div>
               )}
             </div>
-
-            {result && (
-              <div className="rounded-lg border bg-muted/20 p-4 max-h-[50vh] overflow-y-auto">
-                <ReportResultView view={result} />
-              </div>
-            )}
           </div>
         )}
       </DialogContent>

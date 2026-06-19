@@ -1,6 +1,5 @@
 'use client';
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { StaffIndividualReport, StaffMonthlyReport, SubscriptionReportSummary, UsageSummary } from '@/lib/types';
 
 type Col = { key: string; label: string; fmt?: (v: unknown) => string };
@@ -12,30 +11,40 @@ type ReportView =
   | { kind: 'usage'; data: UsageSummary }
   | { kind: 'rows'; title?: string; columns: Col[]; rows: Record<string, unknown>[] };
 
+const WRAP_KEYS = new Set(['reason', 'site', 'guard', 'body', 'recorded_by']);
+
 function DataTable({ columns, rows }: { columns: Col[]; rows: Record<string, unknown>[] }) {
-  if (!rows.length) return <p className="text-sm text-muted-foreground">No records for this period.</p>;
+  if (!rows.length) return <p className="text-sm text-muted-foreground py-2">No records for this period.</p>;
   return (
-    <div className="overflow-x-auto max-h-64 border rounded-md">
-      <Table>
-        <TableHeader>
-          <TableRow>
+    <div className="overflow-auto max-h-[min(50vh,420px)] rounded-md border bg-background">
+      <table className="w-full min-w-[640px] text-xs">
+        <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm border-b">
+          <tr>
             {columns.map((c) => (
-              <TableHead key={c.key} className="text-xs">{c.label}</TableHead>
+              <th key={c.key} className="h-9 px-2.5 text-left font-medium text-foreground whitespace-nowrap">
+                {c.label}
+              </th>
             ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+          </tr>
+        </thead>
+        <tbody>
           {rows.map((row, i) => (
-            <TableRow key={i}>
-              {columns.map((c) => (
-                <TableCell key={c.key} className="text-xs whitespace-nowrap">
-                  {c.fmt ? c.fmt(row[c.key]) : String(row[c.key] ?? '—')}
-                </TableCell>
-              ))}
-            </TableRow>
+            <tr key={i} className="border-b last:border-0 hover:bg-muted/40">
+              {columns.map((c) => {
+                const wrap = WRAP_KEYS.has(c.key);
+                return (
+                  <td
+                    key={c.key}
+                    className={`px-2.5 py-2 align-top ${wrap ? 'whitespace-normal min-w-[120px] max-w-[220px]' : 'whitespace-nowrap'}`}
+                  >
+                    {c.fmt ? c.fmt(row[c.key]) : String(row[c.key] ?? '—')}
+                  </td>
+                );
+              })}
+            </tr>
           ))}
-        </TableBody>
-      </Table>
+        </tbody>
+      </table>
     </div>
   );
 }

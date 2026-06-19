@@ -49,6 +49,7 @@ const REPORTS: ReportDef[] = [
   { id: 'shifts', title: 'Shift hours', desc: 'Individual staff shift and hours breakdown for any date range.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
   { id: 'shift-overtime', title: 'Overtime report', desc: 'Shift extensions with reasons recorded from the rota.', category: 'staff', icon: BarChart3, exportType: 'shift-overtime' },
   { id: 'shift-early-finish', title: 'Finished early report', desc: 'Shifts ended before schedule with recorded reasons.', category: 'staff', icon: Clock, exportType: 'shift-early-finish' },
+  { id: 'shift-lateness', title: 'Lateness report', desc: 'Late arrivals with scheduled vs actual start times per employee.', category: 'staff', icon: Clock, exportType: 'shift-lateness' },
   { id: 'overtime', title: 'Contract overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
   { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly' },
   { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices' },
@@ -215,6 +216,22 @@ export default function ReportsPage() {
             { key: 'actual_end', label: 'Actual end' },
             { key: 'early_minutes', label: 'Early mins' },
             { key: 'reason', label: 'Reason' },
+            { key: 'recorded_by', label: 'Recorded by' },
+          ],
+          rows: data,
+        };
+      } else if (selected.id === 'shift-lateness') {
+        const data = await api.reports.shiftLateness(startDate, endDate, guardId ? parseInt(guardId) : undefined);
+        view = {
+          kind: 'rows',
+          columns: [
+            { key: 'date', label: 'Date' },
+            { key: 'guard', label: 'Employee' },
+            { key: 'site', label: 'Site' },
+            { key: 'scheduled_start', label: 'Scheduled start' },
+            { key: 'actual_start', label: 'Actual start' },
+            { key: 'late_minutes', label: 'Late mins' },
+            { key: 'note', label: 'Note' },
             { key: 'recorded_by', label: 'Recorded by' },
           ],
           rows: data,

@@ -515,6 +515,26 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    if not table_exists(cur, "shift_late_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE shift_late_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                assignment_id INTEGER REFERENCES assignments(id),
+                guard_id INTEGER NOT NULL REFERENCES guards(id),
+                site_id INTEGER REFERENCES sites(id),
+                shift_date TEXT NOT NULL,
+                scheduled_start TEXT NOT NULL,
+                actual_start TEXT NOT NULL,
+                late_minutes INTEGER NOT NULL,
+                note TEXT,
+                recorded_by INTEGER REFERENCES users(id),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     for table, col, spec in [
         ("sites", "postcode", "TEXT"),
         ("sites", "contact_email", "TEXT"),

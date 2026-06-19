@@ -78,6 +78,11 @@ def shift_early_finish_report(start_date: date, end_date: date, guard_id: Option
     return shift_adjustment_service.early_finish_report_rows(db, current_user.id, start_date, end_date, guard_id)
 
 
+@router.get("/shift-lateness")
+def shift_lateness_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    return shift_adjustment_service.lateness_report_rows(db, current_user.id, start_date, end_date, guard_id)
+
+
 @router.get("/financial/invoices")
 def financial_invoices(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
     return reports_hub_service.financial_invoice_rows(db, current_user.id, start_date, end_date)
@@ -171,6 +176,20 @@ def export_report(
             ("recorded_at", "Recorded at"),
         ]
         title = "Finished early report"
+    elif report_type == "shift-lateness":
+        rows = shift_adjustment_service.lateness_report_rows(db, current_user.id, start_date, end_date, guard_id)
+        columns = [
+            ("date", "Date"),
+            ("guard", "Employee"),
+            ("site", "Site"),
+            ("scheduled_start", "Scheduled start"),
+            ("actual_start", "Actual start"),
+            ("late_minutes", "Late mins"),
+            ("note", "Note"),
+            ("recorded_by", "Recorded by"),
+            ("recorded_at", "Recorded at"),
+        ]
+        title = "Lateness report"
     elif report_type == "login-logs":
         rows = reports_extended_service.login_report_rows(db, current_user.id, start_date, end_date)
         columns = [("login_at", "Login at"), ("email", "Email"), ("full_name", "Name"), ("status", "Status"), ("ip_address", "IP")]

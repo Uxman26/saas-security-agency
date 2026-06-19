@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, calcHours, fmtShortDate, formatHoursDecimal, initials, shiftSiteLine } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, calcHours, fmtShortDate, formatHoursDecimal, initials, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import {
@@ -155,6 +155,7 @@ export function RotaCalendarClient() {
   const [efEnd, setEfEnd] = useState('');
   const [efReason, setEfReason] = useState('');
   const [adjSaving, setAdjSaving] = useState(false);
+  const [attSaving, setAttSaving] = useState(false);
   const [shiftMenu, setShiftMenu] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [shiftMenuAnchor, setShiftMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
   const [empMenu, setEmpMenu] = useState<string | null>(null);
@@ -268,25 +269,79 @@ export function RotaCalendarClient() {
     closeShiftMenu();
     const k = attKey(empId, dk, idx);
     const ex = state.attendance[k];
+    const sh = state.shifts[empId]?.[dk]?.[idx];
+    const lateMinutes =
+      ex?.lateMinutes ??
+      (sh?.scheduledStart && sh.start && sh.scheduledStart !== sh.start
+        ? Math.max(0, timeMins(sh.start) - timeMins(sh.scheduledStart))
+        : undefined);
     setAttCtx({ empId, dk, idx });
     setAttRec(
-      ex || {
-        status: 'present',
-        hours: calcHours(state.shifts[empId][dk][idx]).toFixed(2),
-        note: '',
-        empId,
-        dk,
-        si: idx,
-      }
+      ex
+        ? { ...ex, lateMinutes }
+        : {
+            status: 'present',
+            hours: calcHours(sh || { start: '09:00', end: '17:00', site: '', notes: '', breakH: 0, breakM: 0, color: '#3b82f6', label: '' }).toFixed(2),
+            note: '',
+            lateMinutes,
+            empId,
+            dk,
+            si: idx,
+          }
     );
     setAttOpen(true);
   };
 
-  const saveAtt = () => {
+  const saveAtt = async () => {
     if (!attCtx || !attRec) return;
+    const sh = state.shifts[attCtx.empId]?.[attCtx.dk]?.[attCtx.idx];
+    if (!sh) return;
     const k = attKey(attCtx.empId, attCtx.dk, attCtx.idx);
-    setAttendance(k, { ...attRec, empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx });
+    const lateM = Math.max(0, parseInt(String(attRec.lateMinutes ?? ''), 10) || 0);
+    let rec: AttendanceRec = { ...attRec, empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx };
+    let nextShift = sh;
+
+    if (rec.status === 'late' && lateM > 0) {
+      const scheduled = sh.scheduledStart || sh.start;
+      const newStart = addMinutesToTime(scheduled, lateM);
+      rec = { ...rec, status: 'late', lateMinutes: lateM };
+      nextShift = { ...sh, scheduledStart: scheduled, start: newStart };
+      rec.hours = calcHours(nextShift).toFixed(2);
+
+      if (planPublished) {
+        setAttSaving(true);
+        try {
+          await api.assignments.latenessByShift({
+            guard_id: parseInt(attCtx.empId, 10),
+            date: attCtx.dk,
+            shift_start: scheduled,
+            site_name: sh.site,
+            late_minutes: lateM,
+            note: attRec.note || undefined,
+          });
+          rec.synced = true;
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Failed to record lateness');
+          setAttSaving(false);
+          return;
+        }
+        setAttSaving(false);
+      }
+
+      updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift);
+    } else if (rec.status !== 'late' && sh.scheduledStart) {
+      nextShift = { ...sh, start: sh.scheduledStart, scheduledStart: undefined };
+      rec = { ...rec, lateMinutes: undefined, synced: undefined };
+      updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift);
+    } else if (rec.status === 'late' && lateM <= 0) {
+      rec = { ...rec, lateMinutes: undefined };
+    } else {
+      rec = { ...rec, lateMinutes: rec.status === 'late' ? lateM || undefined : undefined };
+    }
+
+    setAttendance(k, rec);
     setAttOpen(false);
+    toast.success('Attendance saved');
   };
 
   const startOvertime = (empId: string, dk: string, idx: number) => {
@@ -1325,6 +1380,34 @@ export function RotaCalendarClient() {
                   <option value="late">Late</option>
                 </select>
               </div>
+              {attRec.status === 'late' ? (
+                <div className="space-y-1">
+                  <LabelMini>Lateness (mins)</LabelMini>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={attRec.lateMinutes ?? ''}
+                    onChange={(e) => {
+                      const lateMinutes = parseInt(e.target.value, 10) || 0;
+                      const sh = attCtx ? state.shifts[attCtx.empId]?.[attCtx.dk]?.[attCtx.idx] : null;
+                      if (!sh) {
+                        setAttRec({ ...attRec, lateMinutes: lateMinutes || undefined });
+                        return;
+                      }
+                      const scheduled = sh.scheduledStart || sh.start;
+                      const next =
+                        lateMinutes > 0
+                          ? { ...sh, scheduledStart: scheduled, start: addMinutesToTime(scheduled, lateMinutes) }
+                          : sh;
+                      setAttRec({
+                        ...attRec,
+                        lateMinutes: lateMinutes || undefined,
+                        hours: calcHours(next).toFixed(2),
+                      });
+                    }}
+                  />
+                </div>
+              ) : null}
               <div className="space-y-1">
                 <LabelMini>Actual hours</LabelMini>
                 <Input value={attRec.hours} onChange={(e) => setAttRec({ ...attRec, hours: e.target.value })} />
@@ -1340,7 +1423,7 @@ export function RotaCalendarClient() {
             </div>
           )}
           <DialogFooter>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={saveAtt}>
+            <Button type="button" className="bg-pink-600 hover:bg-pink-700" disabled={attSaving} onClick={() => void saveAtt()}>
               Save
             </Button>
           </DialogFooter>
@@ -1486,11 +1569,6 @@ export function RotaCalendarClient() {
       )}
     </div>
   );
-}
-
-function timeMins(t: string) {
-  const parts = t.split(':');
-  return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
 }
 
 function LabelMini({ children }: { children: React.ReactNode }) {

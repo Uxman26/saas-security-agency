@@ -21,6 +21,9 @@ from app.schemas import (
     ShiftAdjustmentByShiftRequest,
     ShiftEarlyFinishLogResponse,
     ShiftEarlyFinishRequest,
+    ShiftLateLogResponse,
+    ShiftLatenessByShiftRequest,
+    ShiftLatenessRequest,
     ShiftOvertimeLogResponse,
     ShiftOvertimeRequest,
 )
@@ -142,6 +145,24 @@ def record_shift_early_finish(
     )
 
 
+@router.post("/by-shift/lateness", response_model=ShiftLateLogResponse)
+def record_shift_lateness(
+    body: ShiftLatenessByShiftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    return shift_adjustment_service.record_lateness_by_shift(
+        db,
+        current_user.id,
+        body.guard_id,
+        body.date,
+        body.shift_start,
+        body.site_name,
+        body.late_minutes,
+        body.note,
+    )
+
+
 @router.get("/{assignment_id}", response_model=AssignmentResponse)
 def get_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_READ))):
     return assignment_service.get_assignment_by_id(db, assignment_id, current_user.id)
@@ -176,3 +197,15 @@ def record_assignment_early_finish(
     current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
 ):
     return shift_adjustment_service.record_early_finish(db, current_user.id, assignment_id, body.actual_end, body.reason)
+
+
+@router.post("/{assignment_id}/lateness", response_model=ShiftLateLogResponse)
+def record_assignment_lateness(
+    assignment_id: int,
+    body: ShiftLatenessRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    return shift_adjustment_service.record_lateness_for_assignment(
+        db, current_user.id, assignment_id, body.late_minutes, body.scheduled_start, body.note
+    )

@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Attendance, Client, Guard, Site
+from app.models import Assignment, Attendance, Client, Guard, ShiftLateLog, Site
 from app.schemas import RotaDetailResponse, RotaSummaryRow
 from app.services.company_service import get_company_by_user_id
 
@@ -58,7 +58,9 @@ def _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date):
     return q
 
 
-def _attendance_status(a: Assignment, att: Optional[Attendance], today: date) -> str:
+def _attendance_status(a: Assignment, att: Optional[Attendance], late_log: Optional[ShiftLateLog], today: date) -> str:
+    if late_log:
+        return "late"
     if a.date > today:
         return "scheduled"
     if att and att.booked_at:
@@ -68,7 +70,9 @@ def _attendance_status(a: Assignment, att: Optional[Attendance], today: date) ->
     return "pending"
 
 
-def _late_minutes(a: Assignment, att: Optional[Attendance]) -> Optional[int]:
+def _late_minutes(a: Assignment, att: Optional[Attendance], late_log: Optional[ShiftLateLog]) -> Optional[int]:
+    if late_log:
+        return late_log.late_minutes
     if not att or not att.booked_at or not a.shift_start or att.status != "late":
         return None
     try:
@@ -99,21 +103,26 @@ def list_rota_details(
     rows = q.order_by(Assignment.date, Guard.full_name).all()
     today = date.today()
     att_map = {}
+    late_map = {}
     if rows:
         ids = [r.id for r in rows]
         for att in db.query(Attendance).filter(Attendance.assignment_id.in_(ids)).all():
             if att.assignment_id not in att_map:
                 att_map[att.assignment_id] = att
+        for log in db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id.in_(ids)).all():
+            if log.assignment_id not in late_map:
+                late_map[log.assignment_id] = log
     out: List[RotaDetailResponse] = []
     for a in rows:
         att = att_map.get(a.id)
+        late_log = late_map.get(a.id)
         g = a.guard
         site = a.site
         cli: Optional[Client] = site.client if site else None
         hrs = shift_hours(a)
         st = normalize_shift_type(a.shift_type)
-        status = _attendance_status(a, att, today)
-        late_m = _late_minutes(a, att) if status == "late" else None
+        status = _attendance_status(a, att, late_log, today)
+        late_m = _late_minutes(a, att, late_log) if status == "late" else None
         out.append(
             RotaDetailResponse(
                 id=a.id,

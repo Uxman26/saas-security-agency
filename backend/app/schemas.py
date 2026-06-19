@@ -1348,3 +1348,35 @@ class ShiftOvertimeLogResponse(ShiftAdjustmentLogResponse):
 
 class ShiftEarlyFinishLogResponse(ShiftAdjustmentLogResponse):
     actual_end: str
+
+
+class ShiftLatenessRequest(BaseModel):
+    late_minutes: int
+    scheduled_start: Optional[str] = None
+    note: Optional[str] = None
+
+
+class ShiftLatenessByShiftRequest(BaseModel):
+    guard_id: int
+    date: date
+    shift_start: str
+    site_name: str
+    late_minutes: int
+    note: Optional[str] = None
+
+
+class ShiftLateLogResponse(BaseModel):
+    id: int
+    assignment_id: Optional[int] = None
+    guard_id: int
+    site_id: Optional[int] = None
+    shift_date: date
+    scheduled_start: str
+    actual_start: str
+    late_minutes: int
+    note: Optional[str] = None
+    recorded_by: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

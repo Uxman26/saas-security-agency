@@ -218,6 +218,10 @@ export const api = {
       request<import('./types').ShiftOvertimeLog>('/assignments/by-shift/overtime', { method: 'POST', body: JSON.stringify(data) }),
     earlyFinishByShift: (data: { guard_id: number; date: string; shift_start: string; site_name: string; actual_end: string; reason: string }) =>
       request<import('./types').ShiftEarlyFinishLog>('/assignments/by-shift/early-finish', { method: 'POST', body: JSON.stringify(data) }),
+    lateness: (id: number, data: { late_minutes: number; scheduled_start?: string; note?: string }) =>
+      request<import('./types').ShiftLateLog>(`/assignments/${id}/lateness`, { method: 'POST', body: JSON.stringify(data) }),
+    latenessByShift: (data: { guard_id: number; date: string; shift_start: string; site_name: string; late_minutes: number; note?: string }) =>
+      request<import('./types').ShiftLateLog>('/assignments/by-shift/lateness', { method: 'POST', body: JSON.stringify(data) }),
   },
   rotaPlans: {
     list: (): Promise<RotaPlanListItem[]> => request<RotaPlanListItem[]>('/rotas'),
@@ -380,6 +384,11 @@ export const api = {
       const q = new URLSearchParams({ start_date, end_date });
       if (guard_id) q.append('guard_id', String(guard_id));
       return request<Record<string, unknown>[]>(`/reports/shift-early-finish?${q}`);
+    },
+    shiftLateness: (start_date: string, end_date: string, guard_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (guard_id) q.append('guard_id', String(guard_id));
+      return request<Record<string, unknown>[]>(`/reports/shift-lateness?${q}`);
     },
     financialInvoices: (start_date: string, end_date: string) =>
       request<Record<string, unknown>[]>(`/reports/financial/invoices?start_date=${start_date}&end_date=${end_date}`),

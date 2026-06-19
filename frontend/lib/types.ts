@@ -429,6 +429,20 @@ export interface ShiftEarlyFinishLog {
   created_at: string;
 }
 
+export interface ShiftLateLog {
+  id: number;
+  assignment_id?: number | null;
+  guard_id: number;
+  site_id?: number | null;
+  shift_date: string;
+  scheduled_start: string;
+  actual_start: string;
+  late_minutes: number;
+  note?: string | null;
+  recorded_by?: number | null;
+  created_at: string;
+}
+
 export interface RotaPlanListItem {
   id: number;
   name: string;

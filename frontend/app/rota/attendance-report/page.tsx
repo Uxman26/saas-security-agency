@@ -21,7 +21,7 @@ export default function RotaAttendanceReportPage() {
   const [empId, setEmpId] = useState<string>('__all');
 
   const rows = useMemo(() => {
-    const out: { dk: string; empId: string; idx: number; hours: number; site: string; start: string; end: string }[] = [];
+    const out: { dk: string; empId: string; idx: number; hours: number; site: string; start: string; end: string; scheduledStart?: string }[] = [];
     const f = from || state.days[0];
     const t = to || state.days[state.days.length - 1];
     if (!f || !t) return out;
@@ -39,6 +39,7 @@ export default function RotaAttendanceReportPage() {
             site: sh.site,
             start: sh.start,
             end: sh.end,
+            scheduledStart: sh.scheduledStart,
           });
         });
       }
@@ -55,6 +56,7 @@ export default function RotaAttendanceReportPage() {
         present: number;
         absent: number;
         late: number;
+        lateMinutes: number;
       }
     >();
     for (const e of state.employees) {
@@ -63,6 +65,7 @@ export default function RotaAttendanceReportPage() {
       let present = 0;
       let absent = 0;
       let late = 0;
+      let lateMinutes = 0;
       const f = from || state.days[0];
       const t = to || state.days[state.days.length - 1];
       if (!f || !t) continue;
@@ -74,16 +77,19 @@ export default function RotaAttendanceReportPage() {
           const a = state.attendance[attKey(e.id, dk, idx)];
           if (a?.status === 'present') present++;
           else if (a?.status === 'absent') absent++;
-          else if (a?.status === 'late') late++;
+          else if (a?.status === 'late') {
+            late++;
+            lateMinutes += a.lateMinutes || 0;
+          }
         });
       }
-      m.set(e.id, { emp: e, totalH, present, absent, late });
+      m.set(e.id, { emp: e, totalH, present, absent, late, lateMinutes });
     }
     return m;
   }, [state, from, to, empId]);
 
   const exportCsv = () => {
-    const lines = ['date,employee,role,start,end,site,hours,attendance,note'];
+    const lines = ['date,employee,role,scheduled_start,start,end,site,hours,attendance,late_minutes,note'];
     const f = from || state.days[0];
     const t = to || state.days[state.days.length - 1];
     for (const e of state.employees) {
@@ -94,7 +100,19 @@ export default function RotaAttendanceReportPage() {
         list.forEach((sh, idx) => {
           const a = state.attendance[attKey(e.id, dk, idx)];
           lines.push(
-            [dk, e.name, e.role, sh.start, sh.end, sh.site, calcHours(sh).toFixed(2), a?.status || '', (a?.note || '').replace(/,/g, ';')].join(',')
+            [
+              dk,
+              e.name,
+              e.role,
+              sh.scheduledStart || sh.start,
+              sh.start,
+              sh.end,
+              sh.site,
+              calcHours(sh).toFixed(2),
+              a?.status || '',
+              a?.lateMinutes ?? '',
+              (a?.note || '').replace(/,/g, ';'),
+            ].join(',')
           );
         });
       }
@@ -158,7 +176,7 @@ export default function RotaAttendanceReportPage() {
               </CardContent>
             </Card>
 
-            {[...byEmp.values()].map(({ emp, totalH, present, absent, late }) => (
+            {[...byEmp.values()].map(({ emp, totalH, present, absent, late, lateMinutes }) => (
               <Card key={emp.id}>
                 <CardHeader className="flex flex-row items-start gap-4 pb-2">
                   <span
@@ -175,6 +193,11 @@ export default function RotaAttendanceReportPage() {
                       <span className="text-xs rounded-full bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 px-2 py-0.5">{present} present</span>
                       <span className="text-xs rounded-full bg-red-500/15 text-red-800 dark:text-red-300 px-2 py-0.5">{absent} absent</span>
                       <span className="text-xs rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-200 px-2 py-0.5">{late} late</span>
+                      {lateMinutes > 0 ? (
+                        <span className="text-xs rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-200 px-2 py-0.5 tabular-nums">
+                          {lateMinutes} late mins
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </CardHeader>
@@ -186,7 +209,8 @@ export default function RotaAttendanceReportPage() {
                         <th className="py-2 pr-3">Time</th>
                         <th className="py-2 pr-3">Site</th>
                         <th className="py-2 pr-3">Hours</th>
-                        <th className="py-2">Status</th>
+                        <th className="py-2 pr-3">Status</th>
+                        <th className="py-2">Late mins</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -198,7 +222,7 @@ export default function RotaAttendanceReportPage() {
                             <tr key={`${r.dk}-${r.idx}`} className="border-b border-border/50">
                               <td className="py-2 pr-3 whitespace-nowrap">{fmtShortDate(r.dk)}</td>
                               <td className="py-2 pr-3 tabular-nums">
-                                {r.start}–{r.end}
+                                {r.scheduledStart && r.scheduledStart !== r.start ? `${r.scheduledStart}→${r.start}` : `${r.start}–${r.end}`}
                               </td>
                               <td className="py-2 pr-3">{r.site}</td>
                               <td className="py-2 pr-3 tabular-nums">{r.hours.toFixed(2)}</td>
@@ -215,6 +239,7 @@ export default function RotaAttendanceReportPage() {
                                   {a?.status || '—'}
                                 </span>
                               </td>
+                              <td className="py-2 tabular-nums">{a?.lateMinutes ?? '—'}</td>
                             </tr>
                           );
                         })}

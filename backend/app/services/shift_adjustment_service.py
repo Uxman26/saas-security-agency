@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Guard, ShiftEarlyFinishLog, ShiftOvertimeLog, Site, User
+from app.models import Assignment, Attendance, Guard, ShiftEarlyFinishLog, ShiftLateLog, ShiftOvertimeLog, Site, User
 from app.services.company_service import get_company_by_user_id
 
 
@@ -19,6 +19,11 @@ def _parse_mins(t: Optional[str]) -> int:
         return int(parts[0]) * 60 + (int(parts[1]) if len(parts) > 1 else 0)
     except (ValueError, IndexError):
         return 0
+
+
+def _mins_to_time(m: int) -> str:
+    m = max(0, int(m)) % (24 * 60)
+    return f"{m // 60:02d}:{m % 60:02d}"
 
 
 def _assignment_for_company(db: Session, company_id: int, assignment_id: int) -> Assignment:
@@ -166,6 +171,127 @@ def record_early_finish_by_shift(
     return record_early_finish(db, user_id, a.id, actual_end, reason)
 
 
+def record_lateness(
+    db: Session,
+    user_id: int,
+    assignment_id: int,
+    scheduled_start: str,
+    late_minutes: int,
+    note: Optional[str] = None,
+) -> ShiftLateLog:
+    company = get_company_by_user_id(db, user_id)
+    scheduled_start = (scheduled_start or "").strip()
+    if not scheduled_start:
+        raise HTTPException(status_code=400, detail="Scheduled start is required")
+    late_minutes = int(late_minutes)
+    if late_minutes <= 0:
+        raise HTTPException(status_code=400, detail="Late minutes must be greater than zero")
+    a = _assignment_for_company(db, company.id, assignment_id)
+    actual_start = _mins_to_time(_parse_mins(scheduled_start) + late_minutes)
+    existing = db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id == a.id).first()
+    if existing:
+        existing.scheduled_start = scheduled_start
+        existing.actual_start = actual_start
+        existing.late_minutes = late_minutes
+        existing.note = (note or "").strip() or None
+        existing.recorded_by = user_id
+        log = existing
+    else:
+        log = ShiftLateLog(
+            company_id=company.id,
+            assignment_id=a.id,
+            guard_id=a.guard_id,
+            site_id=a.site_id,
+            shift_date=a.date,
+            scheduled_start=scheduled_start,
+            actual_start=actual_start,
+            late_minutes=late_minutes,
+            note=(note or "").strip() or None,
+            recorded_by=user_id,
+        )
+        db.add(log)
+    a.shift_start = actual_start
+    att = db.query(Attendance).filter(Attendance.assignment_id == a.id).first()
+    if att:
+        att.status = "late"
+    db.commit()
+    db.refresh(log)
+    return log
+
+
+def record_lateness_by_shift(
+    db: Session,
+    user_id: int,
+    guard_id: int,
+    shift_date: date,
+    shift_start: str,
+    site_name: str,
+    late_minutes: int,
+    note: Optional[str] = None,
+) -> ShiftLateLog:
+    company = get_company_by_user_id(db, user_id)
+    a = find_assignment(db, company.id, guard_id, shift_date, shift_start, site_name)
+    if not a:
+        raise HTTPException(status_code=404, detail="Assignment not found for this shift")
+    return record_lateness(db, user_id, a.id, shift_start, late_minutes, note)
+
+
+def record_lateness_for_assignment(
+    db: Session,
+    user_id: int,
+    assignment_id: int,
+    late_minutes: int,
+    scheduled_start: Optional[str] = None,
+    note: Optional[str] = None,
+) -> ShiftLateLog:
+    company = get_company_by_user_id(db, user_id)
+    a = _assignment_for_company(db, company.id, assignment_id)
+    if not scheduled_start:
+        existing = db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id == a.id).first()
+        scheduled_start = existing.scheduled_start if existing else (a.shift_start or "")
+    return record_lateness(db, user_id, assignment_id, scheduled_start, late_minutes, note)
+
+
+def apply_planner_lateness(
+    db: Session,
+    user_id: int,
+    company_id: int,
+    assignment: Assignment,
+    scheduled_start: str,
+    late_minutes: int,
+    note: Optional[str] = None,
+) -> None:
+    if late_minutes <= 0:
+        return
+    scheduled_start = (scheduled_start or "").strip()
+    if not scheduled_start:
+        return
+    actual_start = _mins_to_time(_parse_mins(scheduled_start) + late_minutes)
+    existing = db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id == assignment.id).first()
+    if existing:
+        existing.scheduled_start = scheduled_start
+        existing.actual_start = actual_start
+        existing.late_minutes = late_minutes
+        existing.note = (note or "").strip() or None
+        existing.recorded_by = user_id
+    else:
+        db.add(
+            ShiftLateLog(
+                company_id=company_id,
+                assignment_id=assignment.id,
+                guard_id=assignment.guard_id,
+                site_id=assignment.site_id,
+                shift_date=assignment.date,
+                scheduled_start=scheduled_start,
+                actual_start=actual_start,
+                late_minutes=late_minutes,
+                note=(note or "").strip() or None,
+                recorded_by=user_id,
+            )
+        )
+    assignment.shift_start = actual_start
+
+
 def apply_planner_adjustments(db: Session, user_id: int, company_id: int, assignment: Assignment, adjustments: list) -> None:
     if not adjustments:
         return
@@ -256,6 +382,55 @@ def sync_published_plan_adjustments(db: Session, user_id: int, plan) -> None:
         db.commit()
 
 
+def sync_published_plan_lateness(db: Session, user_id: int, plan) -> None:
+    if plan.status != "published" or not plan.planner_data:
+        return
+    try:
+        data = json.loads(plan.planner_data)
+    except (json.JSONDecodeError, TypeError):
+        return
+    company = get_company_by_user_id(db, user_id)
+    attendance = data.get("attendance") or {}
+    shifts = data.get("shifts") or {}
+    changed = False
+    for key, rec in attendance.items():
+        if not isinstance(rec, dict) or rec.get("synced"):
+            continue
+        late_m = int(rec.get("lateMinutes") or 0)
+        if late_m <= 0 or rec.get("status") != "late":
+            continue
+        parts = str(key).split(":")
+        if len(parts) < 3:
+            continue
+        emp_id, dk, si = parts[0], parts[1], parts[2]
+        try:
+            guard_id = int(emp_id)
+            idx = int(si)
+        except (TypeError, ValueError):
+            continue
+        day_shifts = (shifts.get(emp_id) or {}).get(dk) or []
+        if idx >= len(day_shifts):
+            continue
+        sh = day_shifts[idx]
+        scheduled = sh.get("scheduledStart") or sh.get("start") or ""
+        a = find_assignment(
+            db,
+            company.id,
+            guard_id,
+            date.fromisoformat(dk),
+            scheduled,
+            sh.get("site") or "",
+        )
+        if not a:
+            continue
+        apply_planner_lateness(db, user_id, company.id, a, scheduled, late_m, rec.get("note"))
+        rec["synced"] = True
+        changed = True
+    if changed:
+        plan.planner_data = json.dumps(data)
+        db.commit()
+
+
 def _recorder_name(u: Optional[User]) -> str:
     if not u:
         return ""
@@ -335,6 +510,44 @@ def early_finish_report_rows(
                 "actual_end": log.actual_end,
                 "early_minutes": early,
                 "reason": log.reason,
+                "recorded_by": _recorder_name(log.recorder),
+                "recorded_at": log.created_at.isoformat() if log.created_at else "",
+            }
+        )
+    return rows
+
+
+def lateness_report_rows(
+    db: Session,
+    user_id: int,
+    start_date: date,
+    end_date: date,
+    guard_id: Optional[int] = None,
+) -> List[dict]:
+    company = get_company_by_user_id(db, user_id)
+    q = (
+        db.query(ShiftLateLog)
+        .options(joinedload(ShiftLateLog.guard), joinedload(ShiftLateLog.site), joinedload(ShiftLateLog.recorder))
+        .filter(
+            ShiftLateLog.company_id == company.id,
+            ShiftLateLog.shift_date >= start_date,
+            ShiftLateLog.shift_date <= end_date,
+        )
+        .order_by(ShiftLateLog.shift_date.desc(), ShiftLateLog.id.desc())
+    )
+    if guard_id:
+        q = q.filter(ShiftLateLog.guard_id == guard_id)
+    rows = []
+    for log in q.all():
+        rows.append(
+            {
+                "date": log.shift_date.isoformat(),
+                "guard": log.guard.full_name if log.guard else "",
+                "site": log.site.name if log.site else "",
+                "scheduled_start": log.scheduled_start,
+                "actual_start": log.actual_start,
+                "late_minutes": log.late_minutes,
+                "note": log.note or "",
                 "recorded_by": _recorder_name(log.recorder),
                 "recorded_at": log.created_at.isoformat() if log.created_at else "",
             }

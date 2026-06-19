@@ -54,3 +54,17 @@ export function formatHoursDecimal(h: number) {
 export function shiftSiteLine(sh: ShiftRec) {
   return sh.site || sh.notes || 'One-off';
 }
+
+export function timeMins(t: string) {
+  const parts = t.split(':');
+  return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+}
+
+export function minsToTime(m: number) {
+  const total = Math.max(0, Math.round(m)) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+export function addMinutesToTime(t: string, mins: number) {
+  return minsToTime(timeMins(t) + mins);
+}

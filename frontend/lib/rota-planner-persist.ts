@@ -34,6 +34,7 @@ function normalizeShift(sh: Partial<ShiftRec>, idx: number): ShiftRec {
     label: sh.label ?? '',
     shiftRate,
     scheduledEnd: sh.scheduledEnd || undefined,
+    scheduledStart: sh.scheduledStart || undefined,
     adjustments: adjustments.length ? adjustments : undefined,
   };
 }

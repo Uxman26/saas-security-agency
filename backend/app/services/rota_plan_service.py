@@ -486,6 +486,7 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
     if "planner_data" in payload:
         from app.services import shift_adjustment_service
         shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
+        shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
     db.refresh(plan)
     return get_rota_plan(db, user_id, plan.id)
 
@@ -535,7 +536,7 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
             errors.append(f"Staff {emp_id} not found")
             continue
         for dk, day_shifts in (by_d or {}).items():
-            for sh in day_shifts or []:
+            for idx, sh in enumerate(day_shifts or []):
                 site_key = (sh.get("site") or "").strip().lower()
                 site_id = site_by_name.get(site_key)
                 if not site_id:
@@ -562,6 +563,24 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                 shift_adjustment_service.apply_planner_adjustments(
                     db, user_id, company.id, assignment, sh.get("adjustments") or []
                 )
+                scheduled = (sh.get("scheduledStart") or "").strip()
+                att_key = f"{emp_id}:{dk}:{idx}"
+                att_rec = (data.get("attendance") or {}).get(att_key) or {}
+                late_m = int(att_rec.get("lateMinutes") or 0)
+                if late_m <= 0 and scheduled and sh.get("start") and scheduled != sh.get("start"):
+                    late_m = max(
+                        0,
+                        shift_adjustment_service._parse_mins(sh.get("start"))
+                        - shift_adjustment_service._parse_mins(scheduled),
+                    )
+                if late_m > 0:
+                    start = sh.get("start") or ""
+                    sched = scheduled or shift_adjustment_service._mins_to_time(
+                        shift_adjustment_service._parse_mins(start) - late_m
+                    )
+                    shift_adjustment_service.apply_planner_lateness(
+                        db, user_id, company.id, assignment, sched, late_m, att_rec.get("note")
+                    )
                 created += 1
 
     plan.status = "published"

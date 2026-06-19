@@ -20,6 +20,7 @@ export type ShiftRec = {
   label: string;
   shiftRate?: number | null;
   scheduledEnd?: string;
+  scheduledStart?: string;
   adjustments?: ShiftAdjustment[];
 };
 
@@ -36,6 +37,8 @@ export type AttendanceRec = {
   status: AttStatus;
   hours: string;
   note: string;
+  lateMinutes?: number;
+  synced?: boolean;
   empId: string;
   dk: string;
   si: number;

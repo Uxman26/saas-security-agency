@@ -7,8 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { forgotPasswordSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -41,48 +40,53 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <ThemeToggle />
-      </div>
-      <Card className="relative w-full max-w-md shadow-xl border-primary/10 bg-card/95">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto rounded-full bg-primary/10 p-3 w-fit">
-            <Mail className="size-6 text-primary" />
+    <AuthShell
+      title="Forgot password?"
+      subtitle={
+        sent
+          ? `If an account exists for ${getValues('email')}, we sent a reset link.`
+          : 'Enter your email and we will send you a reset link.'
+      }
+      topLink={{ href: '/login', label: 'Back to sign in' }}
+    >
+      {!sent ? (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-[#161E2C] font-medium">
+              Work email
+            </Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@company.com"
+                className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+                {...register('email')}
+              />
+            </div>
+            {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
           </div>
-          <CardTitle className="text-2xl">Forgot password?</CardTitle>
-          <CardDescription>
-            {sent
-              ? `If an account exists for ${getValues('email')}, we sent a reset link. Check your inbox.`
-              : 'Enter your email and we will send you a link to reset your password.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!sent ? (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="you@company.com" {...register('email')} />
-                {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Sending...' : 'Send reset link'}
-              </Button>
-            </form>
-          ) : (
-            <Button asChild className="w-full">
-              <Link href="/login">Back to sign in</Link>
-            </Button>
-          )}
-          <Link
-            href="/login"
-            className="mt-4 flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          <Button
+            type="submit"
+            className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold"
+            disabled={loading}
           >
-            <ArrowLeft className="size-4" />
-            Back to login
-          </Link>
-        </CardContent>
-      </Card>
-    </div>
+            {loading ? 'Sending...' : 'Send reset link'}
+          </Button>
+        </form>
+      ) : (
+        <Button asChild className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold">
+          <Link href="/login">Back to sign in</Link>
+        </Button>
+      )}
+      <Link
+        href="/login"
+        className="mt-6 flex items-center justify-center gap-1 text-sm text-[#4B5563] hover:text-[#161E2C]"
+      >
+        <ArrowLeft className="size-4" />
+        Back to login
+      </Link>
+    </AuthShell>
   );
 }

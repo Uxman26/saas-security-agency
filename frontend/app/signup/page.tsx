@@ -8,19 +8,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
-
-// const VALID_TIERS = ['basic', 'standard', 'premium'];
+import { Building2, Lock, Mail, User } from 'lucide-react';
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tierParam = searchParams.get('tier');
-  // const subscription_tier = tierParam && VALID_TIERS.includes(tierParam) ? tierParam : undefined;
   const subscription_tier = tierParam || undefined;
   const [loading, setLoading] = useState(false);
 
@@ -46,66 +43,109 @@ function SignupForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5 dark:to-primary/10">
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <Link href="/pricing">
-          <Button variant="ghost" size="sm">Plans</Button>
-        </Link>
-        <ThemeToggle />
-      </div>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,var(--primary)/15%,transparent)]" />
-      <Card className="relative w-full max-w-md shadow-xl border-primary/10 dark:border-primary/20 bg-card/95 dark:bg-card">
-        <CardHeader className="space-y-1 text-center pb-2">
-          <CardTitle className="text-2xl">Create company</CardTitle>
-          <CardDescription>
-            {subscription_tier ? `Sign up with ${subscription_tier} plan` : 'Register your company to get started'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="full_name">Full Name</Label>
-              <Input id="full_name" placeholder="John Smith" {...register('full_name')} />
-              {errors.full_name && <p className="text-sm text-destructive">{errors.full_name.message as string}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="you@company.com" {...register('email')} />
-              {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="company_name">Company Name</Label>
-              <Input id="company_name" placeholder="Acme Security Ltd" {...register('company_name')} />
-              {errors.company_name && <p className="text-sm text-destructive">{errors.company_name.message as string}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" {...register('password')} />
-              {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating account...' : 'Create account'}
-            </Button>
-            <p className="text-sm text-center text-muted-foreground">
-              Already have an account?{' '}
-              <a href="/login" className="text-primary font-medium hover:underline">
-                Sign in
-              </a>
-              {' · '}
-              <Link href="/pricing" className="text-primary font-medium hover:underline">
-                View plans
-              </Link>
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <AuthShell
+      title="Create your account"
+      subtitle={
+        subscription_tier
+          ? `Start with the ${subscription_tier} plan on ControlOps`
+          : 'Register your company on ControlOps'
+      }
+      topLink={{ href: '/login', label: 'Sign in' }}
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link href="/login" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
+            Sign in
+          </Link>
+          {' · '}
+          <Link href="/pricing" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
+            View plans
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="full_name" className="text-[#161E2C] font-medium">
+            Full name
+          </Label>
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Input
+              id="full_name"
+              placeholder="John Smith"
+              className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              {...register('full_name')}
+            />
+          </div>
+          {errors.full_name && <p className="text-sm text-destructive">{errors.full_name.message as string}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-[#161E2C] font-medium">
+            Work email
+          </Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Input
+              id="email"
+              type="email"
+              placeholder="name@company.com"
+              className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              {...register('email')}
+            />
+          </div>
+          {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="company_name" className="text-[#161E2C] font-medium">
+            Company name
+          </Label>
+          <div className="relative">
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Input
+              id="company_name"
+              placeholder="Acme Security Ltd"
+              className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              {...register('company_name')}
+            />
+          </div>
+          {errors.company_name && <p className="text-sm text-destructive">{errors.company_name.message as string}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password" className="text-[#161E2C] font-medium">
+            Password
+          </Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Input
+              id="password"
+              type="password"
+              placeholder="Create a password"
+              className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              {...register('password')}
+            />
+          </div>
+          {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
+        </div>
+        <Button
+          type="submit"
+          className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold shadow-sm mt-2"
+          disabled={loading}
+        >
+          {loading ? 'Creating account...' : 'Create account'}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }
 
 export default function SignupPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[#F3F4F6] text-[#161E2C]">Loading...</div>
+      }
+    >
       <SignupForm />
     </Suspense>
   );

@@ -8,13 +8,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
 import { parsePaymentPending } from '@/lib/sidebar-modules';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -53,71 +52,87 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5 dark:to-primary/10">
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <Link href="/"><Button variant="ghost" size="sm">Home</Button></Link>
-        <ThemeToggle />
-      </div>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,var(--primary)/15%,transparent)]" />
-      <Card className="relative w-full max-w-md shadow-xl border-primary/10 dark:border-primary/20 bg-card/95 dark:bg-card">
-        <CardHeader className="space-y-1 text-center pb-2">
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your Security Agency account</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSubmit(onSubmit)(e);
-            }}
-            className="space-y-4"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="you@company.com" {...register('email')} />
-              {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link href="/forgot-password" className="text-xs text-primary font-medium hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  className="pr-10"
-                  {...register('password')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-              {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
-            </div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" className="size-4 rounded border-input" {...register('remember_me')} />
-              <span>Keep me signed in for 30 days</span>
-            </label>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in'}
-            </Button>
-            <p className="text-sm text-center text-muted-foreground">
-              Don't have an account?{' '}
-              <Link href="/signup" className="text-primary font-medium hover:underline">
-                Sign up
-              </Link>
-            </p>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to continue to ControlOps"
+      topLink={{ href: '/signup', label: 'Create account' }}
+      footer={
+        <>
+          Don&apos;t have an account?{' '}
+          <Link href="/signup" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
+            Sign up
+          </Link>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit(onSubmit)(e);
+        }}
+        className="space-y-5"
+      >
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-[#161E2C] font-medium">
+            Work email
+          </Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Input
+              id="email"
+              type="email"
+              placeholder="name@company.com"
+              className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              {...register('email')}
+            />
+          </div>
+          {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password" className="text-[#161E2C] font-medium">
+            Password
+          </Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Enter your password"
+              className="pl-10 pr-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              {...register('password')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
+          {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
+        </div>
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <label className="flex items-center gap-2 cursor-pointer text-[#4B5563]">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-[#D1D5DB] accent-[#FD6203]"
+              {...register('remember_me')}
+            />
+            <span>Remember me</span>
+          </label>
+          <Link href="/forgot-password" className="font-medium text-[#FD6203] hover:text-[#DF3C01]">
+            Forgot password?
+          </Link>
+        </div>
+        <Button
+          type="submit"
+          className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold shadow-sm"
+          disabled={loading}
+        >
+          {loading ? 'Signing in...' : 'Sign in'}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

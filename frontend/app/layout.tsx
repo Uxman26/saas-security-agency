@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "@/lib/providers";
 
 export const metadata: Metadata = {
-  title: "Security Agency SAAS",
-  description: "Security agency management system",
+  title: "ControlOps",
+  description: "Command with Clarity — smart workforce management for security teams",
 };
 
 export default function RootLayout({

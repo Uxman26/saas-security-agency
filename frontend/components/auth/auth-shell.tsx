@@ -24,9 +24,9 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
           <Image
             src="/ControlOps-Logos/controlOps-horizontal-logo.png"
             alt="ControlOps"
-            width={280}
-            height={72}
-            className="h-14 w-auto"
+            width={400}
+            height={104}
+            className="h-24 xl:h-28 w-auto"
             priority
           />
         </div>
@@ -57,9 +57,9 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
               <Image
                 src="/ControlOps-Logos/controlOps-logo.png"
                 alt="ControlOps"
-                width={120}
-                height={120}
-                className="size-24"
+                width={160}
+                height={160}
+                className="size-32 sm:size-36"
                 priority
               />
             </div>

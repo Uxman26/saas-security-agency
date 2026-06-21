@@ -537,6 +537,44 @@ export interface ClientContractRenewal {
   created_at: string;
 }
 
+export interface Lead {
+  id: number;
+  company_id: number;
+  title: string;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  source?: string | null;
+  status: string;
+  priority?: string | null;
+  estimated_value?: number;
+  assigned_user_id?: number | null;
+  created_by?: number | null;
+  converted: boolean;
+  converted_at?: string | null;
+  converted_to_type?: string | null;
+  converted_to_id?: number | null;
+  next_follow_up_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadDashboard {
+  total_leads: number;
+  period_leads: number;
+  conversion_rate: number;
+  monthly_growth: number;
+  revenue_forecast: number;
+  missed_follow_ups: number;
+  funnel: { status: string; count: number }[];
+  sources: { source: string; count: number }[];
+  trend: { date: string; count: number }[];
+  period_start: string;
+  period_end: string;
+}
+
 export interface SpecialDay {
   id: number;
   company_id: number;

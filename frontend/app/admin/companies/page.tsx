@@ -26,6 +26,7 @@ const MODULE_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp',
   email: 'Email',
   mobile_apps: 'Mobile Apps',
+  leads: 'Lead Management',
 };
 
 export default function AdminCompaniesPage() {

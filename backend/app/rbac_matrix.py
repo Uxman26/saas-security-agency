@@ -54,6 +54,12 @@ from app.rbac import (
     PERM_STAFF_REQ_READ,
     PERM_STAFF_REQ_WRITE,
     PERM_STAFF_REQ_REVIEW,
+    PERM_LEADS_READ,
+    PERM_LEADS_WRITE,
+    PERM_LEADS_DELETE,
+    PERM_LEADS_ASSIGN,
+    PERM_LEADS_EXPORT,
+    PERM_LEADS_REPORTS,
 )
 
 MODULE_KEYS = (
@@ -68,6 +74,7 @@ MODULE_KEYS = (
     "contractor_registry",
     "contractor_links",
     "staff_requests",
+    "leads",
 )
 
 
@@ -182,6 +189,13 @@ def matrix_to_codes(m: Optional[Dict[str, Any]]) -> FrozenSet[str]:
                 out.add(PERM_STAFF_REQ_REVIEW)
             if d:
                 out.add(PERM_STAFF_REQ_REVIEW)
+        elif mod == "leads":
+            if v:
+                out.update([PERM_LEADS_READ, PERM_LEADS_REPORTS, PERM_LEADS_EXPORT])
+            if c or e:
+                out.update([PERM_LEADS_WRITE, PERM_LEADS_ASSIGN])
+            if d:
+                out.add(PERM_LEADS_DELETE)
     return frozenset(out)
 
 
@@ -208,6 +222,7 @@ def default_matrix_supervisor() -> Dict[str, Any]:
         "contractor_registry": {"view": True, "create": False, "edit": False, "delete": False},
         "contractor_links": {"view": True, "create": False, "edit": False, "delete": False},
         "staff_requests": {"view": True, "create": False, "edit": True, "delete": False},
+        "leads": {"view": False, "create": False, "edit": False, "delete": False},
     }
 
 
@@ -224,6 +239,7 @@ def default_matrix_guard() -> Dict[str, Any]:
         "contractor_registry": {"view": False, "create": False, "edit": False, "delete": False},
         "contractor_links": {"view": False, "create": False, "edit": False, "delete": False},
         "staff_requests": {"view": False, "create": False, "edit": False, "delete": False},
+        "leads": {"view": False, "create": False, "edit": False, "delete": False},
     }
 
 
@@ -240,14 +256,8 @@ def default_matrix_client_portal() -> Dict[str, Any]:
         "contractor_registry": {"view": False, "create": False, "edit": False, "delete": False},
         "contractor_links": {"view": False, "create": False, "edit": False, "delete": False},
         "staff_requests": {"view": True, "create": True, "edit": False, "delete": False},
+        "leads": {"view": False, "create": False, "edit": False, "delete": False},
     }
-    if not raw:
-        return {}
-    try:
-        d = json.loads(raw)
-        return d if isinstance(d, dict) else {}
-    except json.JSONDecodeError:
-        return {}
 
 
 def matrix_json_dumps(m: Dict[str, Any]) -> str:

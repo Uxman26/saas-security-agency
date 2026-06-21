@@ -1,11 +1,13 @@
 import json
 
-TENANT_MODULES = ("expenses", "whatsapp", "email", "mobile_apps")
+TENANT_MODULES = ("expenses", "whatsapp", "email", "mobile_apps", "leads")
 
 DEFAULT_MODULES = {m: True for m in TENANT_MODULES}
+DEFAULT_MODULES["leads"] = False
 
 PATH_MODULE_MAP = {
     "/expenses": "expenses",
+    "/leads": "leads",
 }
 
 

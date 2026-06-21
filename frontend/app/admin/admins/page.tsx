@@ -25,6 +25,7 @@ const MODULE_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp',
   email: 'Email',
   mobile_apps: 'Mobile Apps',
+  leads: 'Lead Management',
 };
 
 const STATUS_STYLES: Record<string, string> = {

@@ -24,6 +24,7 @@ import {
   Receipt,
   Wallet,
   Mail,
+  Target,
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
   { href: '/guards', label: 'Staff', perm: 'guards.read', icon: Users },
   { href: '/sites', label: 'Sites', perm: 'sites.read', icon: MapPin },
   { href: '/clients', label: 'Clients', perm: 'clients.read', icon: Building2 },
+  { href: '/leads', label: 'Leads', perm: 'leads.read', icon: Target },
   { href: '/assignments', label: 'Assignments', perm: 'assign.read', icon: ClipboardList },
   { href: '/rota', label: 'Rotas & Shifts', perm: 'assign.read', icon: Calendar },
   { href: '/client-portal', label: 'Client portal', perm: 'staff_req.write', icon: Building2 },
@@ -57,6 +59,7 @@ const items: { href: string; label: string; perm: string; icon: typeof Users }[]
 function active(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
   if (href === '/rota') return pathname.startsWith('/rota');
+  if (href === '/leads') return pathname.startsWith('/leads');
   if (href === '/client-portal') return pathname.startsWith('/client-portal');
   return pathname === href;
 }
@@ -73,6 +76,7 @@ export function AppSidebar() {
       if (!sidebarPathAllowed(user?.sidebar_modules, i.href)) return false;
       if (i.href === '/contractors') return showDirectory;
       if (i.href === '/expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
+      if (i.href === '/leads' && user?.enabled_modules && user.enabled_modules.leads === false) return false;
       if (i.href === '/settings/sms' && user?.enabled_modules && user.enabled_modules.whatsapp === false) return false;
       if (i.href === '/settings/email' && user?.enabled_modules && user.enabled_modules.email === false) return false;
       return can(user, i.perm);

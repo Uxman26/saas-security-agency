@@ -302,6 +302,57 @@ export const api = {
       request<ClientContractRenewal>(`/clients/${id}/renew`, { method: 'POST', body: JSON.stringify(data) }),
     renewals: (id: number): Promise<ClientContractRenewal[]> => request<ClientContractRenewal[]>(`/clients/${id}/renewals`),
   },
+  leads: {
+    list: (params?: Record<string, string | number | boolean | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          if (v !== undefined && v !== '' && v !== '__all') q.append(k, String(v));
+        });
+      }
+      const qs = q.toString();
+      return request<import('./types').Lead[]>(`/leads${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: number) => request<import('./types').Lead>(`/leads/${id}`),
+    create: (data: Record<string, unknown>) => request<import('./types').Lead>('/leads', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').Lead>(`/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number) => request<void>(`/leads/${id}`, { method: 'DELETE' }),
+    statuses: () => request<{ name: string; custom: boolean; id?: number }[]>('/leads/statuses'),
+    changeStatus: (id: number, status: string, note?: string) =>
+      request<import('./types').Lead>(`/leads/${id}/status`, { method: 'POST', body: JSON.stringify({ status, note }) }),
+    assign: (id: number, assigned_user_id: number) =>
+      request<import('./types').Lead>(`/leads/${id}/assign?assigned_user_id=${assigned_user_id}`, { method: 'POST' }),
+    checkDuplicate: (data: { email?: string; phone?: string; exclude_id?: number }) =>
+      request<{ field: string; lead_id: number; title: string }[]>('/leads/check-duplicate', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    dashboard: (start_date?: string, end_date?: string) => {
+      const q = new URLSearchParams();
+      if (start_date) q.append('start_date', start_date);
+      if (end_date) q.append('end_date', end_date);
+      const qs = q.toString();
+      return request<import('./types').LeadDashboard>(`/leads/dashboard${qs ? `?${qs}` : ''}`);
+    },
+    addNote: (id: number, body: string) =>
+      request<Record<string, unknown>>(`/leads/${id}/notes`, { method: 'POST', body: JSON.stringify({ body }) }),
+    addFollowUp: (id: number, data: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/leads/${id}/follow-ups`, { method: 'POST', body: JSON.stringify(data) }),
+    completeFollowUp: (id: number) =>
+      request<Record<string, unknown>>(`/leads/follow-ups/${id}/complete`, { method: 'POST' }),
+    addCommunication: (id: number, data: Record<string, unknown>) =>
+      request<Record<string, unknown>>(`/leads/${id}/communications`, { method: 'POST', body: JSON.stringify(data) }),
+    convert: (id: number, target_type: string, note?: string) =>
+      request<Record<string, unknown>>(`/leads/${id}/convert`, { method: 'POST', body: JSON.stringify({ target_type, note }) }),
+    audit: (id: number) => request<Record<string, unknown>[]>(`/leads/${id}/audit`),
+    notifications: (unread_only?: boolean) =>
+      request<Record<string, unknown>[]>(`/leads/notifications${unread_only ? '?unread_only=true' : ''}`),
+    exportUrl: (params?: Record<string, string>) => {
+      const q = new URLSearchParams(params);
+      return `/api/leads/export?${q}`;
+    },
+  },
   mainContractors: {
     list: (): Promise<MainContractor[]> => request<MainContractor[]>('/main-contractors'),
     get: (id: number): Promise<MainContractor> => request<MainContractor>(`/main-contractors/${id}`),

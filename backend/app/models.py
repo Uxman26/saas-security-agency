@@ -106,6 +106,7 @@ class Company(Base):
     sms_logs = relationship("SmsLog", back_populates="company", cascade="all, delete-orphan")
     email_logs = relationship("EmailLog", back_populates="company", cascade="all, delete-orphan")
     api_usage_logs = relationship("ApiUsageLog", back_populates="company", cascade="all, delete-orphan")
+    leads = relationship("Lead", back_populates="company", cascade="all, delete-orphan")
 
 
 class SmsLog(Base):
@@ -744,6 +745,183 @@ class Expense(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="expenses")
+
+
+DEFAULT_LEAD_STATUSES = (
+    "new",
+    "contacted",
+    "qualified",
+    "proposal_sent",
+    "negotiation",
+    "won",
+    "lost",
+    "on_hold",
+)
+
+
+class Lead(Base):
+    __tablename__ = "leads"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    title = Column(String, nullable=False)
+    contact_name = Column(String)
+    email = Column(String, index=True)
+    phone = Column(String, index=True)
+    address = Column(String)
+    city = Column(String)
+    source = Column(String)
+    status = Column(String, default="new", nullable=False)
+    priority = Column(String, default="medium")
+    estimated_value = Column(Float, default=0)
+    assigned_user_id = Column(Integer, ForeignKey("users.id"))
+    created_by = Column(Integer, ForeignKey("users.id"))
+    converted = Column(Boolean, default=False)
+    converted_at = Column(DateTime(timezone=True))
+    converted_to_type = Column(String)
+    converted_to_id = Column(Integer)
+    next_follow_up_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="leads")
+    assignee = relationship("User", foreign_keys=[assigned_user_id])
+    creator = relationship("User", foreign_keys=[created_by])
+    status_history = relationship("LeadStatusHistory", back_populates="lead", cascade="all, delete-orphan")
+    notes = relationship("LeadNote", back_populates="lead", cascade="all, delete-orphan")
+    follow_ups = relationship("LeadFollowUp", back_populates="lead", cascade="all, delete-orphan")
+    communications = relationship("LeadCommunication", back_populates="lead", cascade="all, delete-orphan")
+    conversions = relationship("LeadConversion", back_populates="lead", cascade="all, delete-orphan")
+    documents = relationship("LeadDocument", back_populates="lead", cascade="all, delete-orphan")
+    quotations = relationship("LeadQuotation", back_populates="lead", cascade="all, delete-orphan")
+
+
+class LeadCustomStatus(Base):
+    __tablename__ = "lead_custom_statuses"
+    __table_args__ = (UniqueConstraint("company_id", "name", name="uq_lead_custom_status"),)
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    name = Column(String, nullable=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class LeadStatusHistory(Base):
+    __tablename__ = "lead_status_history"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    from_status = Column(String)
+    to_status = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    note = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lead = relationship("Lead", back_populates="status_history")
+    user = relationship("User")
+
+
+class LeadNote(Base):
+    __tablename__ = "lead_notes"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lead = relationship("Lead", back_populates="notes")
+    user = relationship("User")
+
+
+class LeadFollowUp(Base):
+    __tablename__ = "lead_follow_ups"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    activity_type = Column(String, nullable=False)
+    title = Column(String)
+    due_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True))
+    assigned_user_id = Column(Integer, ForeignKey("users.id"))
+    notes = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lead = relationship("Lead", back_populates="follow_ups")
+    assignee = relationship("User", foreign_keys=[assigned_user_id])
+
+
+class LeadCommunication(Base):
+    __tablename__ = "lead_communications"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    channel = Column(String, nullable=False)
+    subject = Column(String)
+    body = Column(Text)
+    attachment_path = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lead = relationship("Lead", back_populates="communications")
+    user = relationship("User")
+
+
+class LeadConversion(Base):
+    __tablename__ = "lead_conversions"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    target_type = Column(String, nullable=False)
+    target_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    note = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lead = relationship("Lead", back_populates="conversions")
+    user = relationship("User")
+
+
+class LeadDocument(Base):
+    __tablename__ = "lead_documents"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    file_name = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    uploaded_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lead = relationship("Lead", back_populates="documents")
+
+
+class LeadQuotation(Base):
+    __tablename__ = "lead_quotations"
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    title = Column(String, nullable=False)
+    amount = Column(Float, default=0)
+    status = Column(String, default="draft")
+    notes = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lead = relationship("Lead", back_populates="quotations")
+
+
+class LeadFilterPreset(Base):
+    __tablename__ = "lead_filter_presets"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    filters_json = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AppNotification(Base):
+    __tablename__ = "app_notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False)
+    title = Column(String, nullable=False)
+    body = Column(Text)
+    entity_type = Column(String)
+    entity_id = Column(Integer)
+    read_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class AuditLog(Base):

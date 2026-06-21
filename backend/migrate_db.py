@@ -535,6 +535,140 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    if not table_exists(cur, "leads"):
+        try:
+            cur.execute(
+                """CREATE TABLE leads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                title TEXT NOT NULL,
+                contact_name TEXT,
+                email TEXT,
+                phone TEXT,
+                address TEXT,
+                city TEXT,
+                source TEXT,
+                status TEXT NOT NULL DEFAULT 'new',
+                priority TEXT DEFAULT 'medium',
+                estimated_value REAL DEFAULT 0,
+                assigned_user_id INTEGER REFERENCES users(id),
+                created_by INTEGER REFERENCES users(id),
+                converted INTEGER DEFAULT 0,
+                converted_at TEXT,
+                converted_to_type TEXT,
+                converted_to_id INTEGER,
+                next_follow_up_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    for t in [
+        ("lead_custom_statuses", """CREATE TABLE lead_custom_statuses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            name TEXT NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(company_id, name)
+        )"""),
+        ("lead_status_history", """CREATE TABLE lead_status_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            from_status TEXT,
+            to_status TEXT NOT NULL,
+            user_id INTEGER REFERENCES users(id),
+            note TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("lead_notes", """CREATE TABLE lead_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            user_id INTEGER REFERENCES users(id),
+            body TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("lead_follow_ups", """CREATE TABLE lead_follow_ups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            activity_type TEXT NOT NULL,
+            title TEXT,
+            due_at TEXT NOT NULL,
+            completed_at TEXT,
+            assigned_user_id INTEGER REFERENCES users(id),
+            notes TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("lead_communications", """CREATE TABLE lead_communications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            channel TEXT NOT NULL,
+            subject TEXT,
+            body TEXT,
+            attachment_path TEXT,
+            user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("lead_conversions", """CREATE TABLE lead_conversions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            target_type TEXT NOT NULL,
+            target_id INTEGER NOT NULL,
+            user_id INTEGER REFERENCES users(id),
+            note TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("lead_documents", """CREATE TABLE lead_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            uploaded_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("lead_quotations", """CREATE TABLE lead_quotations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lead_id INTEGER NOT NULL REFERENCES leads(id),
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            title TEXT NOT NULL,
+            amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'draft',
+            notes TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("lead_filter_presets", """CREATE TABLE lead_filter_presets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            name TEXT NOT NULL,
+            filters_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("app_notifications", """CREATE TABLE app_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            kind TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT,
+            entity_type TEXT,
+            entity_id INTEGER,
+            read_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+    ]:
+        if not table_exists(cur, t[0]):
+            try:
+                cur.execute(t[1])
+            except sqlite3.OperationalError:
+                pass
     for table, col, spec in [
         ("sites", "postcode", "TEXT"),
         ("sites", "contact_email", "TEXT"),

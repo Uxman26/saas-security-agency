@@ -56,6 +56,12 @@ PERM_STAFF_REQ_REVIEW = "staff_req.review"
 PERM_EXP_READ = "exp.read"
 PERM_EXP_WRITE = "exp.write"
 PERM_EXP_DELETE = "exp.delete"
+PERM_LEADS_READ = "leads.read"
+PERM_LEADS_WRITE = "leads.write"
+PERM_LEADS_DELETE = "leads.delete"
+PERM_LEADS_ASSIGN = "leads.assign"
+PERM_LEADS_EXPORT = "leads.export"
+PERM_LEADS_REPORTS = "leads.reports"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -109,6 +115,12 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_EXP_READ,
         PERM_EXP_WRITE,
         PERM_EXP_DELETE,
+        PERM_LEADS_READ,
+        PERM_LEADS_WRITE,
+        PERM_LEADS_DELETE,
+        PERM_LEADS_ASSIGN,
+        PERM_LEADS_EXPORT,
+        PERM_LEADS_REPORTS,
     }
 )
 

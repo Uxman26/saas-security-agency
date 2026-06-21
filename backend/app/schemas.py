@@ -1380,3 +1380,176 @@ class ShiftLateLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class LeadCreate(BaseModel):
+    title: str
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    source: Optional[str] = None
+    status: Optional[str] = "new"
+    priority: Optional[str] = "medium"
+    estimated_value: Optional[float] = 0
+    assigned_user_id: Optional[int] = None
+    force_duplicate: Optional[bool] = False
+
+
+class LeadUpdate(BaseModel):
+    title: Optional[str] = None
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    source: Optional[str] = None
+    priority: Optional[str] = None
+    estimated_value: Optional[float] = None
+    assigned_user_id: Optional[int] = None
+    next_follow_up_at: Optional[datetime] = None
+    force_duplicate: Optional[bool] = False
+
+
+class LeadStatusChange(BaseModel):
+    status: str
+    note: Optional[str] = None
+
+
+class LeadNoteCreate(BaseModel):
+    body: str
+
+
+class LeadFollowUpCreate(BaseModel):
+    activity_type: str
+    title: Optional[str] = None
+    due_at: datetime
+    assigned_user_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class LeadCommunicationCreate(BaseModel):
+    channel: str
+    subject: Optional[str] = None
+    body: Optional[str] = None
+
+
+class LeadQuotationCreate(BaseModel):
+    title: str
+    amount: Optional[float] = 0
+    status: Optional[str] = "draft"
+    notes: Optional[str] = None
+
+
+class LeadConvertRequest(BaseModel):
+    target_type: str
+    note: Optional[str] = None
+
+
+class LeadFilterPresetCreate(BaseModel):
+    name: str
+    filters: dict
+
+
+class LeadDuplicateCheck(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    exclude_id: Optional[int] = None
+
+
+class LeadCustomStatusCreate(BaseModel):
+    name: str
+
+
+class LeadResponse(BaseModel):
+    id: int
+    company_id: int
+    title: str
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    source: Optional[str] = None
+    status: str
+    priority: Optional[str] = None
+    estimated_value: Optional[float] = 0
+    assigned_user_id: Optional[int] = None
+    created_by: Optional[int] = None
+    converted: bool = False
+    converted_at: Optional[datetime] = None
+    converted_to_type: Optional[str] = None
+    converted_to_id: Optional[int] = None
+    next_follow_up_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LeadNoteResponse(BaseModel):
+    id: int
+    lead_id: int
+    user_id: Optional[int] = None
+    body: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LeadFollowUpResponse(BaseModel):
+    id: int
+    lead_id: int
+    activity_type: str
+    title: Optional[str] = None
+    due_at: datetime
+    completed_at: Optional[datetime] = None
+    assigned_user_id: Optional[int] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LeadCommunicationResponse(BaseModel):
+    id: int
+    lead_id: int
+    channel: str
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    user_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class LeadConversionResponse(BaseModel):
+    id: int
+    lead_id: int
+    target_type: str
+    target_id: int
+    user_id: Optional[int] = None
+    note: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AppNotificationResponse(BaseModel):
+    id: int
+    kind: str
+    title: str
+    body: Optional[str] = None
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    read_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

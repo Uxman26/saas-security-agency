@@ -55,6 +55,7 @@ const MODULE_KEYS = [
   'contractors',
   'reports',
   'settings',
+  'leads',
 ] as const;
 
 const MODULE_LABELS: Record<string, string> = {
@@ -66,6 +67,7 @@ const MODULE_LABELS: Record<string, string> = {
   contractors: 'Contractors',
   reports: 'Reports',
   settings: 'Settings',
+  leads: 'Leads',
 };
 
 const ACTIONS = ['view', 'create', 'edit', 'delete'] as const;

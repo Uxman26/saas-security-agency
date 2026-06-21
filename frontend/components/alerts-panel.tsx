@@ -24,7 +24,7 @@ export function AlertsPanel() {
   useEffect(() => {
     if (user?.role === 'super_admin' || !open) return;
     const tasks: Promise<void>[] = [
-      api.reports.compliance(30).then(setAlerts).catch((e: Error) => toast.error(e.message || 'Could not load alerts')),
+      api.reports.compliance(30).then(setAlerts).catch((e: Error) => { toast.error(e.message || 'Could not load alerts'); }),
       api.reports.contractsExpiring(30).then(setContracts).catch(() => {}),
     ];
     if (user?.enabled_modules?.leads !== false && can(user, 'leads.read')) {

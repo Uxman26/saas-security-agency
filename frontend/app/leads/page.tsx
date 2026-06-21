@@ -264,13 +264,14 @@ export default function LeadsPage() {
                       if (v === '__none') return;
                       const p = presets.find((x) => String(x.id) === v);
                       if (!p) return;
-                      const f = p.filters as Record<string, string>;
-                      setStatus(f.status || '__all');
-                      setSource(f.source || '__all');
-                      setPriority(f.priority || '__all');
-                      setCity(f.city || '');
-                      setSearch(f.search || '');
-                      setConverted(f.converted === true ? 'true' : f.converted === false ? 'false' : '__all');
+                      const f = p.filters as Record<string, unknown>;
+                      setStatus(String(f.status || '__all'));
+                      setSource(String(f.source || '__all'));
+                      setPriority(String(f.priority || '__all'));
+                      setCity(String(f.city || ''));
+                      setSearch(String(f.search || ''));
+                      const cv = f.converted;
+                      setConverted(cv === true || cv === 'true' ? 'true' : cv === false || cv === 'false' ? 'false' : '__all');
                       toast.success(`Loaded preset "${p.name}"`);
                     }}
                   >

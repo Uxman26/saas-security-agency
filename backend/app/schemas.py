@@ -1553,3 +1553,9 @@ class AppNotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PushSubscribeRequest(BaseModel):
+    endpoint: str
+    p256dh: str
+    auth: str

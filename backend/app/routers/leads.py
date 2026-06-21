@@ -4,11 +4,11 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User
+from app.models import Lead, LeadDocument, User
 from app.rbac import PERM_LEADS_ASSIGN, PERM_LEADS_DELETE, PERM_LEADS_EXPORT, PERM_LEADS_READ, PERM_LEADS_REPORTS, PERM_LEADS_WRITE, require_perm
 from app.schemas import (
     AppNotificationResponse,
@@ -28,6 +28,7 @@ from app.schemas import (
     LeadResponse,
     LeadStatusChange,
     LeadUpdate,
+    PushSubscribeRequest,
 )
 from app.services import lead_report_service, lead_service
 
@@ -70,6 +71,18 @@ def list_presets(db: Session = Depends(get_db), current_user: User = Depends(req
 def save_preset(body: LeadFilterPresetCreate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_LEADS_READ))):
     row = lead_service.save_filter_preset(db, current_user.id, body.name, body.filters)
     return {"id": row.id, "name": row.name}
+
+
+@router.delete("/filter-presets/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_preset(preset_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_LEADS_READ))):
+    lead_service.delete_filter_preset(db, current_user.id, preset_id)
+    return None
+
+
+@router.post("/push/subscribe")
+def push_subscribe(body: PushSubscribeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_LEADS_READ))):
+    lead_service.save_push_subscription(db, current_user.id, body.endpoint, body.p256dh, body.auth)
+    return {"ok": True}
 
 
 @router.get("/follow-ups/calendar", response_model=list[LeadFollowUpResponse])
@@ -161,6 +174,67 @@ def list_leads(
 @router.post("", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
 def create_lead(body: LeadCreate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_LEADS_WRITE))):
     return lead_service.create_lead(db, current_user.id, body.model_dump(), force_duplicate=bool(body.force_duplicate))
+
+
+@router.get("/{lead_id}/detail")
+def lead_detail(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_LEADS_READ))):
+    d = lead_service.get_lead_detail(db, current_user.id, lead_id)
+    lead = d["lead"]
+
+    def _iso(dt):
+        return dt.isoformat() if dt else None
+
+    return {
+        "lead": LeadResponse.model_validate(lead),
+        "notes": [{"id": n.id, "body": n.body, "user_id": n.user_id, "created_at": _iso(n.created_at)} for n in d["notes"]],
+        "communications": [
+            {"id": c.id, "channel": c.channel, "subject": c.subject, "body": c.body, "user_id": c.user_id, "created_at": _iso(c.created_at)}
+            for c in d["communications"]
+        ],
+        "follow_ups": [
+            {
+                "id": f.id,
+                "activity_type": f.activity_type,
+                "title": f.title,
+                "due_at": _iso(f.due_at),
+                "completed_at": _iso(f.completed_at),
+                "notes": f.notes,
+            }
+            for f in d["follow_ups"]
+        ],
+        "documents": [{"id": doc.id, "file_name": doc.file_name, "created_at": _iso(doc.created_at)} for doc in d["documents"]],
+        "quotations": [
+            {"id": q.id, "title": q.title, "amount": q.amount, "status": q.status, "notes": q.notes, "created_at": _iso(q.created_at)}
+            for q in d["quotations"]
+        ],
+        "status_history": [
+            {"id": h.id, "from_status": h.from_status, "to_status": h.to_status, "note": h.note, "created_at": _iso(h.created_at)}
+            for h in d["status_history"]
+        ],
+        "conversions": [
+            {"id": c.id, "target_type": c.target_type, "target_id": c.target_id, "note": c.note, "created_at": _iso(c.created_at)}
+            for c in d["conversions"]
+        ],
+    }
+
+
+@router.get("/{lead_id}/documents/{doc_id}/file")
+def download_document(lead_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_LEADS_READ))):
+    company = lead_service.require_leads_module(db, current_user.id)
+    doc = (
+        db.query(LeadDocument)
+        .join(Lead)
+        .filter(LeadDocument.id == doc_id, LeadDocument.lead_id == lead_id, Lead.company_id == company.id)
+        .first()
+    )
+    if not doc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Document not found")
+    import os
+    if not os.path.isfile(doc.file_path):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="File missing")
+    return FileResponse(doc.file_path, filename=doc.file_name)
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)

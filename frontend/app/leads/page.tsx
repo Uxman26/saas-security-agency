@@ -16,9 +16,10 @@ import { useAuth } from '@/contexts/auth-context';
 import { useCreateLead, useDeleteLead, useLeadStatuses, useLeads } from '@/hooks/use-leads';
 import { api } from '@/lib/api';
 import { can } from '@/lib/permissions';
-import { BarChart3, Download, Plus, Target } from 'lucide-react';
+import { BarChart3, Bookmark, Calendar, Download, Plus, Target } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const PRIORITIES = ['low', 'medium', 'high'];
 const SOURCES = ['website', 'referral', 'cold_call', 'email', 'social', 'event', 'other'];
@@ -58,6 +59,13 @@ export default function LeadsPage() {
     estimated_value: '',
   });
   const [dupes, setDupes] = useState<{ field: string; lead_id: number; title: string }[]>([]);
+  const [presetName, setPresetName] = useState('');
+  const qc = useQueryClient();
+
+  const { data: presets = [] } = useQuery({
+    queryKey: ['lead-presets'],
+    queryFn: () => api.leads.listPresets(),
+  });
 
   const filters = useMemo(
     () => ({
@@ -146,6 +154,12 @@ export default function LeadsPage() {
               <p className="text-sm text-muted-foreground">Track prospects, follow-ups, and conversions</p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button variant="outline" asChild>
+                <Link href="/leads/calendar">
+                  <Calendar className="size-4 mr-1" />
+                  Calendar
+                </Link>
+              </Button>
               <Button variant="outline" asChild>
                 <Link href="/leads/dashboard">
                   <BarChart3 className="size-4 mr-1" />
@@ -240,6 +254,62 @@ export default function LeadsPage() {
                     <SelectItem value="true">Converted</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1 col-span-2 md:col-span-4 flex flex-wrap items-end gap-2">
+                <div className="flex-1 min-w-[140px] space-y-1">
+                  <Label>Saved presets</Label>
+                  <Select
+                    value="__none"
+                    onValueChange={(v) => {
+                      if (v === '__none') return;
+                      const p = presets.find((x) => String(x.id) === v);
+                      if (!p) return;
+                      const f = p.filters as Record<string, string>;
+                      setStatus(f.status || '__all');
+                      setSource(f.source || '__all');
+                      setPriority(f.priority || '__all');
+                      setCity(f.city || '');
+                      setSearch(f.search || '');
+                      setConverted(f.converted === true ? 'true' : f.converted === false ? 'false' : '__all');
+                      toast.success(`Loaded preset "${p.name}"`);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Load preset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none">Load preset…</SelectItem>
+                      {presets.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 min-w-[140px] space-y-1">
+                  <Label>Preset name</Label>
+                  <Input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="My filters" />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mb-0.5"
+                  onClick={async () => {
+                    if (!presetName.trim()) {
+                      toast.warning('Enter a preset name');
+                      return;
+                    }
+                    await api.leads.savePreset(presetName.trim(), filters as Record<string, unknown>);
+                    setPresetName('');
+                    qc.invalidateQueries({ queryKey: ['lead-presets'] });
+                    toast.success('Preset saved');
+                  }}
+                >
+                  <Bookmark className="size-4 mr-1" />
+                  Save
+                </Button>
               </div>
             </CardContent>
           </Card>

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { ReactNode, useState } from 'react';
 import { AuthProvider } from '@/contexts/auth-context';
+import { LeadNotificationsProvider } from '@/components/lead-notifications-provider';
 import { Toaster } from '@/components/ui/sonner';
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -27,7 +28,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange={false}>
         <AuthProvider>
-          {children}
+          <LeadNotificationsProvider>{children}</LeadNotificationsProvider>
           <Toaster />
         </AuthProvider>
       </ThemeProvider>

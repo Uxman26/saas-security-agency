@@ -663,6 +663,53 @@ def run():
             read_at TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )"""),
+        ("push_subscriptions", """CREATE TABLE push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            endpoint TEXT NOT NULL,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("sales_opportunities", """CREATE TABLE sales_opportunities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            lead_id INTEGER REFERENCES leads(id),
+            client_id INTEGER REFERENCES clients(id),
+            title TEXT NOT NULL,
+            value REAL DEFAULT 0,
+            status TEXT DEFAULT 'open',
+            notes TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("sales_projects", """CREATE TABLE sales_projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            lead_id INTEGER REFERENCES leads(id),
+            client_id INTEGER REFERENCES clients(id),
+            title TEXT NOT NULL,
+            value REAL DEFAULT 0,
+            status TEXT DEFAULT 'planned',
+            start_date TEXT,
+            end_date TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
+        ("sales_contracts", """CREATE TABLE sales_contracts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            lead_id INTEGER REFERENCES leads(id),
+            client_id INTEGER REFERENCES clients(id),
+            title TEXT NOT NULL,
+            value REAL DEFAULT 0,
+            status TEXT DEFAULT 'draft',
+            start_date TEXT,
+            end_date TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )"""),
     ]:
         if not table_exists(cur, t[0]):
             try:

@@ -27,9 +27,15 @@ from app.models import (
     LeadNote,
     LeadQuotation,
     LeadStatusHistory,
+    PushSubscription,
+    SalesContract,
+    SalesOpportunity,
+    SalesProject,
     User,
 )
-from app.services import audit_service
+from app.schemas import InvoiceCreate
+from app.services import audit_service, invoice_service
+from app.services.lead_email_service import email_for_lead_event
 from app.services.company_service import get_company_by_user_id
 from app.services.module_service import is_module_enabled
 
@@ -128,6 +134,8 @@ def _notify(
     body: str = "",
     entity_type: str = "lead",
     entity_id: Optional[int] = None,
+    lead: Optional[Lead] = None,
+    actor_id: Optional[int] = None,
 ) -> None:
     db.add(
         AppNotification(
@@ -140,6 +148,8 @@ def _notify(
             entity_id=entity_id,
         )
     )
+    if lead and actor_id:
+        email_for_lead_event(db, actor_id, lead, kind, body or title, user_id)
 
 
 def create_lead(db: Session, user_id: int, data: dict, force_duplicate: bool = False) -> Lead:
@@ -171,11 +181,11 @@ def create_lead(db: Session, user_id: int, data: dict, force_duplicate: bool = F
     db.add(LeadStatusHistory(lead_id=lead.id, from_status=None, to_status=lead.status, user_id=user_id))
     audit_service.log_action(db, company_id=company.id, user_id=user_id, action="create", entity_type="lead", entity_id=lead.id)
     if lead.assigned_user_id:
-        _notify(db, company.id, lead.assigned_user_id, "lead_assigned", f"Lead assigned: {lead.title}", entity_id=lead.id)
+        _notify(db, company.id, lead.assigned_user_id, "lead_assigned", f"Lead assigned: {lead.title}", entity_id=lead.id, lead=lead, actor_id=user_id)
     admins = db.query(User).filter(User.company_id == company.id, User.is_active == True).limit(5).all()
     for u in admins:
         if u.id != user_id:
-            _notify(db, company.id, u.id, "lead_new", f"New lead: {lead.title}", entity_id=lead.id)
+            _notify(db, company.id, u.id, "lead_new", f"New lead: {lead.title}", entity_id=lead.id, lead=lead, actor_id=user_id)
     db.commit()
     db.refresh(lead)
     return lead
@@ -297,6 +307,8 @@ def update_lead(db: Session, user_id: int, lead_id: int, data: dict, force_dupli
             "lead_assigned",
             f"Lead assigned: {lead.title}",
             entity_id=lead.id,
+            lead=lead,
+            actor_id=user_id,
         )
         audit_service.log_action(
             db,
@@ -343,6 +355,8 @@ def change_status(db: Session, user_id: int, lead_id: int, status: str, note: Op
             "lead_status",
             f"Lead status: {prev} → {status}",
             entity_id=lead.id,
+            lead=lead,
+            actor_id=user_id,
         )
     db.commit()
     db.refresh(lead)
@@ -402,7 +416,7 @@ def add_follow_up(db: Session, user_id: int, lead_id: int, data: dict) -> LeadFo
     db.add(fu)
     lead.next_follow_up_at = due
     assignee = fu.assigned_user_id or user_id
-    _notify(db, company.id, assignee, "follow_up_due", f"Follow-up scheduled: {lead.title}", entity_id=lead.id)
+    _notify(db, company.id, assignee, "follow_up_due", f"Follow-up scheduled: {lead.title}", entity_id=lead.id, lead=lead, actor_id=user_id)
     db.commit()
     db.refresh(fu)
     return fu
@@ -461,6 +475,24 @@ def add_communication(db: Session, user_id: int, lead_id: int, data: dict) -> Le
     return comm
 
 
+def _client_from_lead(db: Session, company_id: int, lead: Lead) -> Client:
+    if lead.converted_to_type == "customer" and lead.converted_to_id:
+        existing = db.query(Client).filter(Client.id == lead.converted_to_id, Client.company_id == company_id).first()
+        if existing:
+            return existing
+    client = Client(
+        company_id=company_id,
+        name=lead.title,
+        email=lead.email,
+        phone=lead.phone,
+        address=lead.address,
+        contact_person=lead.contact_name,
+    )
+    db.add(client)
+    db.flush()
+    return client
+
+
 def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note: Optional[str] = None) -> LeadConversion:
     company = require_leads_module(db, user_id)
     lead = db.query(Lead).filter(Lead.id == lead_id, Lead.company_id == company.id).first()
@@ -468,20 +500,87 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
         raise HTTPException(status_code=404, detail="Lead not found")
     target_type = target_type.strip().lower()
     target_id: Optional[int] = None
-    if target_type == "customer":
-        client = Client(
+    today = date.today()
+
+    if target_type in ("customer", "client"):
+        target_type = "customer"
+        if lead.converted_to_type == "customer" and lead.converted_to_id:
+            target_id = lead.converted_to_id
+        else:
+            client = _client_from_lead(db, company.id, lead)
+            target_id = client.id
+            lead.converted = True
+            lead.converted_to_type = "customer"
+            lead.converted_to_id = target_id
+            lead.converted_at = datetime.now(timezone.utc)
+    elif target_type == "opportunity":
+        client_id = lead.converted_to_id if lead.converted_to_type == "customer" else None
+        opp = SalesOpportunity(
             company_id=company.id,
-            name=lead.title,
-            email=lead.email,
-            phone=lead.phone,
-            address=lead.address,
-            contact_person=lead.contact_name,
+            lead_id=lead.id,
+            client_id=client_id,
+            title=lead.title,
+            value=float(lead.estimated_value or 0),
+            status="open",
+            notes=note,
+            created_by=user_id,
         )
-        db.add(client)
+        db.add(opp)
         db.flush()
-        target_id = client.id
+        target_id = opp.id
+    elif target_type == "project":
+        client_id = lead.converted_to_id if lead.converted_to_type == "customer" else None
+        proj = SalesProject(
+            company_id=company.id,
+            lead_id=lead.id,
+            client_id=client_id,
+            title=lead.title,
+            value=float(lead.estimated_value or 0),
+            status="planned",
+            start_date=today,
+            created_by=user_id,
+        )
+        db.add(proj)
+        db.flush()
+        target_id = proj.id
+    elif target_type == "contract":
+        client = _client_from_lead(db, company.id, lead)
+        contract = SalesContract(
+            company_id=company.id,
+            lead_id=lead.id,
+            client_id=client.id,
+            title=f"Contract — {lead.title}",
+            value=float(lead.estimated_value or 0),
+            status="draft",
+            start_date=today,
+            created_by=user_id,
+        )
+        db.add(contract)
+        db.flush()
+        target_id = contract.id
+    elif target_type == "invoice":
+        client = _client_from_lead(db, company.id, lead)
+        inv = invoice_service.create_invoice(
+            db,
+            InvoiceCreate(
+                client_id=client.id,
+                period_start=today,
+                period_end=today,
+                total=float(lead.estimated_value or 0),
+                subtotal=float(lead.estimated_value or 0),
+                status="draft",
+                notes=note or f"Converted from lead #{lead.id}",
+            ),
+            user_id,
+        )
+        target_id = inv.id
+        lead.converted = True
+        lead.converted_to_type = "invoice"
+        lead.converted_to_id = target_id
+        lead.converted_at = datetime.now(timezone.utc)
     else:
-        raise HTTPException(status_code=400, detail=f"Conversion to {target_type} not supported yet")
+        raise HTTPException(status_code=400, detail=f"Unknown conversion type: {target_type}")
+
     conv = LeadConversion(
         lead_id=lead.id,
         company_id=company.id,
@@ -490,14 +589,10 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
         user_id=user_id,
         note=note,
     )
-    lead.converted = True
-    lead.converted_at = datetime.now(timezone.utc)
-    lead.converted_to_type = target_type
-    lead.converted_to_id = target_id
-    if lead.status != "won":
+    if lead.status != "won" and target_type in ("customer", "invoice"):
         prev = lead.status
         lead.status = "won"
-        db.add(LeadStatusHistory(lead_id=lead.id, from_status=prev, to_status="won", user_id=user_id, note="Converted"))
+        db.add(LeadStatusHistory(lead_id=lead.id, from_status=prev, to_status="won", user_id=user_id, note=f"Converted to {target_type}"))
     db.add(conv)
     audit_service.log_action(
         db,
@@ -508,14 +603,17 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
         entity_id=lead.id,
         meta={"target_type": target_type, "target_id": target_id},
     )
-    if lead.assigned_user_id:
+    notify_ids = {lead.assigned_user_id, user_id} - {None}
+    for uid in notify_ids:
         _notify(
             db,
             company.id,
-            lead.assigned_user_id,
+            uid,
             "lead_converted",
             f"Lead converted to {target_type}",
             entity_id=lead.id,
+            lead=lead,
+            actor_id=user_id,
         )
     db.commit()
     db.refresh(conv)
@@ -654,3 +752,64 @@ def export_leads_csv(db: Session, user_id: int, **filters) -> str:
             )
         )
     return "\n".join(lines)
+
+
+def get_lead_detail(db: Session, user_id: int, lead_id: int) -> dict:
+    lead = get_lead(db, user_id, lead_id)
+    notes = db.query(LeadNote).filter(LeadNote.lead_id == lead_id).order_by(LeadNote.created_at.desc()).all()
+    comms = db.query(LeadCommunication).filter(LeadCommunication.lead_id == lead_id).order_by(LeadCommunication.created_at.desc()).all()
+    follow_ups = db.query(LeadFollowUp).filter(LeadFollowUp.lead_id == lead_id).order_by(LeadFollowUp.due_at).all()
+    docs = db.query(LeadDocument).filter(LeadDocument.lead_id == lead_id).order_by(LeadDocument.created_at.desc()).all()
+    quotes = db.query(LeadQuotation).filter(LeadQuotation.lead_id == lead_id).order_by(LeadQuotation.created_at.desc()).all()
+    history = db.query(LeadStatusHistory).filter(LeadStatusHistory.lead_id == lead_id).order_by(LeadStatusHistory.created_at.desc()).all()
+    conversions = db.query(LeadConversion).filter(LeadConversion.lead_id == lead_id).order_by(LeadConversion.created_at.desc()).all()
+    return {
+        "lead": lead,
+        "notes": notes,
+        "communications": comms,
+        "follow_ups": follow_ups,
+        "documents": docs,
+        "quotations": quotes,
+        "status_history": history,
+        "conversions": conversions,
+    }
+
+
+def delete_filter_preset(db: Session, user_id: int, preset_id: int) -> None:
+    company = require_leads_module(db, user_id)
+    row = (
+        db.query(LeadFilterPreset)
+        .filter(LeadFilterPreset.id == preset_id, LeadFilterPreset.company_id == company.id, LeadFilterPreset.user_id == user_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    db.delete(row)
+    db.commit()
+
+
+def save_push_subscription(db: Session, user_id: int, endpoint: str, p256dh: str, auth_key: str) -> None:
+    company = get_company_by_user_id(db, user_id)
+    existing = db.query(PushSubscription).filter(PushSubscription.user_id == user_id, PushSubscription.endpoint == endpoint).first()
+    if existing:
+        existing.p256dh = p256dh
+        existing.auth = auth_key
+    else:
+        db.add(PushSubscription(user_id=user_id, company_id=company.id, endpoint=endpoint, p256dh=p256dh, auth=auth_key))
+    db.commit()
+
+
+def list_lead_documents(db: Session, user_id: int, lead_id: int) -> List[LeadDocument]:
+    company = require_leads_module(db, user_id)
+    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.company_id == company.id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return db.query(LeadDocument).filter(LeadDocument.lead_id == lead_id).order_by(LeadDocument.created_at.desc()).all()
+
+
+def list_lead_quotations(db: Session, user_id: int, lead_id: int) -> List[LeadQuotation]:
+    company = require_leads_module(db, user_id)
+    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.company_id == company.id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return db.query(LeadQuotation).filter(LeadQuotation.lead_id == lead_id).order_by(LeadQuotation.created_at.desc()).all()

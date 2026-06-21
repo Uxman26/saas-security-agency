@@ -924,6 +924,61 @@ class AppNotification(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    endpoint = Column(Text, nullable=False)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SalesOpportunity(Base):
+    __tablename__ = "sales_opportunities"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    title = Column(String, nullable=False)
+    value = Column(Float, default=0)
+    status = Column(String, default="open")
+    notes = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SalesProject(Base):
+    __tablename__ = "sales_projects"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    title = Column(String, nullable=False)
+    value = Column(Float, default=0)
+    status = Column(String, default="planned")
+    start_date = Column(Date)
+    end_date = Column(Date)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SalesContract(Base):
+    __tablename__ = "sales_contracts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    title = Column(String, nullable=False)
+    value = Column(Float, default=0)
+    status = Column(String, default="draft")
+    start_date = Column(Date)
+    end_date = Column(Date)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id = Column(Integer, primary_key=True, index=True)

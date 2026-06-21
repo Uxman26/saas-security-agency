@@ -104,7 +104,7 @@ def request_password_reset(db: Session, email: str) -> None:
         f'<p><a href="{link}">Reset password</a></p>'
         f"<p>If you did not request this, you can ignore this email.</p>"
     )
-    if settings.mail_username and settings.mail_password:
+    if email_service.is_configured():
         email_service.send_email(user.email, "Reset your password", body)
 
 

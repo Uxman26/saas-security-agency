@@ -346,8 +346,41 @@ export const api = {
     convert: (id: number, target_type: string, note?: string) =>
       request<Record<string, unknown>>(`/leads/${id}/convert`, { method: 'POST', body: JSON.stringify({ target_type, note }) }),
     audit: (id: number) => request<Record<string, unknown>[]>(`/leads/${id}/audit`),
+    detail: (id: number) => request<Record<string, unknown>>(`/leads/${id}/detail`),
+    listPresets: () => request<{ id: number; name: string; filters: Record<string, unknown> }[]>('/leads/filter-presets'),
+    savePreset: (name: string, filters: Record<string, unknown>) =>
+      request<{ id: number; name: string }>('/leads/filter-presets', { method: 'POST', body: JSON.stringify({ name, filters }) }),
+    deletePreset: (id: number) => request<void>(`/leads/filter-presets/${id}`, { method: 'DELETE' }),
+    followUpCalendar: (start_date: string, end_date: string, assigned_user_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (assigned_user_id) q.append('assigned_user_id', String(assigned_user_id));
+      return request<Record<string, unknown>[]>(`/leads/follow-ups/calendar?${q}`);
+    },
+    uploadDocument: async (id: number, file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${API_URL}/leads/${id}/documents`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    documentUrl: (leadId: number, docId: number) => {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      return `${API_URL}/leads/${leadId}/documents/${docId}/file`;
+    },
+    addQuotation: (id: number, data: { title: string; amount?: number; status?: string; notes?: string }) =>
+      request<Record<string, unknown>>(`/leads/${id}/quotations`, { method: 'POST', body: JSON.stringify(data) }),
+    pushSubscribe: (data: { endpoint: string; p256dh: string; auth: string }) =>
+      request<{ ok: boolean }>('/leads/push/subscribe', { method: 'POST', body: JSON.stringify(data) }),
     notifications: (unread_only?: boolean) =>
       request<Record<string, unknown>[]>(`/leads/notifications${unread_only ? '?unread_only=true' : ''}`),
+    readNotification: (id: number) =>
+      request<Record<string, unknown>>(`/leads/notifications/${id}/read`, { method: 'POST' }),
     exportUrl: (params?: Record<string, string>) => {
       const q = new URLSearchParams(params);
       return `/api/leads/export?${q}`;

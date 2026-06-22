@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import Company, SubscriptionReceipt, User
-from app.plan_config import normalize_tier, price_for_tier
+from app.plan_config import SUBSCRIPTION_PERIOD_DAYS, normalize_tier, price_for_tier
 from app.services.module_service import apply_plan_module_flags
 
 SIDEBAR_DEFAULT_PATHS = [

@@ -12,9 +12,12 @@ import { AuthShell } from '@/components/auth/auth-shell';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
+import { useTranslations } from 'next-intl';
 import { Building2, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 
 function SignupForm() {
+  const t = useTranslations('auth');
+  const tc = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
   const tierParam = searchParams.get('tier');
@@ -41,14 +44,14 @@ function SignupForm() {
       const ref = encodeURIComponent(res.receipt.ref_id);
       const email = encodeURIComponent(data.email);
       if (res.email_verification_required) {
-        toast.success('Account created — check your email to verify');
+        toast.success(t('accountCreatedVerify'));
         router.push(`/verify-email?email=${email}&ref=${ref}`);
       } else {
-        toast.success('Account created — complete payment to activate');
+        toast.success(t('accountCreatedPayment'));
         router.push(`/payment-pending?ref=${ref}`);
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Signup failed');
+      toast.error(err instanceof Error ? err.message : t('signupFailed'));
     } finally {
       setLoading(false);
     }
@@ -58,22 +61,18 @@ function SignupForm() {
 
   return (
     <AuthShell
-      title="Create your account"
-      subtitle={
-        subscription_tier
-          ? `Start with the ${subscription_tier} plan on ControlOps`
-          : 'Register your company on ControlOps'
-      }
-      topLink={{ href: '/login', label: 'Sign in' }}
+      title={t('signupTitle')}
+      subtitle={subscription_tier ? t('signupSubtitlePlan', { tier: subscription_tier }) : t('signupSubtitle')}
+      topLink={{ href: '/login', label: tc('signIn') }}
       footer={
         <>
-          Already have an account?{' '}
+          {tc('alreadyHaveAccount')}{' '}
           <Link href="/login" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
-            Sign in
+            {tc('signIn')}
           </Link>
           {' · '}
           <Link href="/pricing" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
-            View plans
+            {tc('viewPlans')}
           </Link>
         </>
       }
@@ -81,7 +80,7 @@ function SignupForm() {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="full_name" className="text-[#161E2C] font-medium">
-            Full name
+            {t('fullName')}
           </Label>
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
@@ -96,7 +95,7 @@ function SignupForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="email" className="text-[#161E2C] font-medium">
-            Work email
+            {t('email')}
           </Label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
@@ -112,7 +111,7 @@ function SignupForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="company_name" className="text-[#161E2C] font-medium">
-            Company name
+            {t('companyName')}
           </Label>
           <div className="relative">
             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
@@ -127,7 +126,7 @@ function SignupForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password" className="text-[#161E2C] font-medium">
-            Password
+            {t('password')}
           </Label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
@@ -142,7 +141,7 @@ function SignupForm() {
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? t('hidePassword') : t('showPassword')}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
@@ -154,7 +153,7 @@ function SignupForm() {
           className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold shadow-sm mt-2"
           disabled={loading}
         >
-          {loading ? 'Creating account...' : 'Create account'}
+          {loading ? t('creatingAccount') : t('createAccount')}
         </Button>
       </form>
     </AuthShell>

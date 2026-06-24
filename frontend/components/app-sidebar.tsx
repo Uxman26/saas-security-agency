@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/auth-context';
 import { can, PERMS } from '@/lib/permissions';
 import {
@@ -30,30 +31,30 @@ import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
 import { sidebarPathAllowed } from '@/lib/sidebar-modules';
 
-const items: { href: string; label: string; perm: string; icon: typeof Users }[] = [
-  { href: '/dashboard', label: 'Dashboard', perm: 'guards.read', icon: LayoutDashboard },
-  { href: '/guards', label: 'Staff', perm: 'guards.read', icon: Users },
-  { href: '/sites', label: 'Sites', perm: 'sites.read', icon: MapPin },
-  { href: '/clients', label: 'Clients', perm: 'clients.read', icon: Building2 },
-  { href: '/leads', label: 'Leads', perm: 'leads.read', icon: Target },
-  { href: '/assignments', label: 'Assignments', perm: 'assign.read', icon: ClipboardList },
-  { href: '/rota', label: 'Rotas & Shifts', perm: 'assign.read', icon: Calendar },
-  { href: '/client-portal', label: 'Client portal', perm: 'staff_req.write', icon: Building2 },
-  { href: '/requests', label: 'Staff requests', perm: 'staff_req.review', icon: ClipboardList },
-  { href: '/attendance', label: 'Attendance', perm: 'attend.read', icon: Clock },
-  { href: '/documents', label: 'Documents', perm: 'doc.read', icon: FolderOpen },
-  { href: '/contractors', label: 'Contractors', perm: PERMS.contractorView, icon: UserCog },
-  { href: '/payroll', label: 'Payroll', perm: 'payroll.read', icon: PoundSterling },
-  { href: '/reports', label: 'Reports', perm: 'rep.read', icon: ClipboardList },
-  { href: '/invoices', label: 'Invoices', perm: 'inv.read', icon: FileText },
-  { href: '/expenses', label: 'Expenses', perm: 'exp.read', icon: Receipt },
-  { href: '/payments', label: 'Payments', perm: 'pay.read', icon: CreditCard },
-  { href: '/allowances', label: 'Allowances', perm: 'allow.read', icon: Gift },
-  { href: '/settings/special-days', label: 'Special days', perm: 'allow.read', icon: Calendar },
-  { href: '/settings/company', label: 'Company', perm: 'sub.read', icon: Building2 },
-  { href: '/settings/sms', label: 'SMS', perm: 'email.send', icon: MessageSquare },
-  { href: '/settings/email', label: 'Email', perm: 'email.send', icon: Mail },
-  { href: '/settings/roles', label: 'Roles', perm: 'roles.read', icon: Shield },
+const items: { href: string; labelKey: string; perm: string; icon: typeof Users }[] = [
+  { href: '/dashboard', labelKey: 'dashboard', perm: 'guards.read', icon: LayoutDashboard },
+  { href: '/guards', labelKey: 'staff', perm: 'guards.read', icon: Users },
+  { href: '/sites', labelKey: 'sites', perm: 'sites.read', icon: MapPin },
+  { href: '/clients', labelKey: 'clients', perm: 'clients.read', icon: Building2 },
+  { href: '/leads', labelKey: 'leads', perm: 'leads.read', icon: Target },
+  { href: '/assignments', labelKey: 'assignments', perm: 'assign.read', icon: ClipboardList },
+  { href: '/rota', labelKey: 'rota', perm: 'assign.read', icon: Calendar },
+  { href: '/client-portal', labelKey: 'clientPortal', perm: 'staff_req.write', icon: Building2 },
+  { href: '/requests', labelKey: 'staffRequests', perm: 'staff_req.review', icon: ClipboardList },
+  { href: '/attendance', labelKey: 'attendance', perm: 'attend.read', icon: Clock },
+  { href: '/documents', labelKey: 'documents', perm: 'doc.read', icon: FolderOpen },
+  { href: '/contractors', labelKey: 'contractors', perm: PERMS.contractorView, icon: UserCog },
+  { href: '/payroll', labelKey: 'payroll', perm: 'payroll.read', icon: PoundSterling },
+  { href: '/reports', labelKey: 'reports', perm: 'rep.read', icon: ClipboardList },
+  { href: '/invoices', labelKey: 'invoices', perm: 'inv.read', icon: FileText },
+  { href: '/expenses', labelKey: 'expenses', perm: 'exp.read', icon: Receipt },
+  { href: '/payments', labelKey: 'payments', perm: 'pay.read', icon: CreditCard },
+  { href: '/allowances', labelKey: 'allowances', perm: 'allow.read', icon: Gift },
+  { href: '/settings/special-days', labelKey: 'specialDays', perm: 'allow.read', icon: Calendar },
+  { href: '/settings/company', labelKey: 'company', perm: 'sub.read', icon: Building2 },
+  { href: '/settings/sms', labelKey: 'sms', perm: 'email.send', icon: MessageSquare },
+  { href: '/settings/email', labelKey: 'email', perm: 'email.send', icon: Mail },
+  { href: '/settings/roles', labelKey: 'roles', perm: 'roles.read', icon: Shield },
 ];
 
 function active(pathname: string, href: string) {
@@ -67,6 +68,7 @@ function active(pathname: string, href: string) {
 export function AppSidebar() {
   const { user } = useAuth();
   const pathname = usePathname();
+  const ts = useTranslations('sidebar');
   const isSuperAdmin = user?.role === 'super_admin';
   const links = useMemo(() => {
     const showDirectory =
@@ -91,16 +93,16 @@ export function AppSidebar() {
         </div>
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
           {[
-            { href: '/admin/companies', label: 'Companies', icon: Building2 },
-            { href: '/admin/users', label: 'Users', icon: Users },
-            { href: '/admin/admins', label: 'Admins', icon: UserCog },
-            { href: '/admin/invoices', label: 'Sub invoices', icon: FileText },
-            { href: '/admin/payments', label: 'Payments', icon: CreditCard },
-            { href: '/admin/receipts', label: 'Receipts', icon: Wallet },
-            { href: '/admin/packages', label: 'Packages', icon: Gift },
-            { href: '/admin/email', label: 'SMTP email', icon: Mail },
-            { href: '/admin/logs', label: 'Activity logs', icon: Clock },
-          ].map(({ href, label, icon: Icon }) => (
+            { href: '/admin/companies', labelKey: 'adminCompanies', icon: Building2 },
+            { href: '/admin/users', labelKey: 'adminUsers', icon: Users },
+            { href: '/admin/admins', labelKey: 'adminAdmins', icon: UserCog },
+            { href: '/admin/invoices', labelKey: 'adminInvoices', icon: FileText },
+            { href: '/admin/payments', labelKey: 'adminPayments', icon: CreditCard },
+            { href: '/admin/receipts', labelKey: 'adminReceipts', icon: Wallet },
+            { href: '/admin/packages', labelKey: 'adminPackages', icon: Gift },
+            { href: '/admin/email', labelKey: 'adminSmtp', icon: Mail },
+            { href: '/admin/logs', labelKey: 'adminLogs', icon: Clock },
+          ].map(({ href, labelKey, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -112,7 +114,7 @@ export function AppSidebar() {
               )}
             >
               <Icon className="size-4 shrink-0" />
-              {label}
+              {ts(labelKey)}
             </Link>
           ))}
         </nav>
@@ -126,7 +128,7 @@ export function AppSidebar() {
         <CompanyBrand />
       </div>
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-        {links.map(({ href, label, icon: Icon }) => (
+        {links.map(({ href, labelKey, icon: Icon }) => (
           <Link
             key={href}
             href={href}
@@ -136,7 +138,7 @@ export function AppSidebar() {
             )}
           >
             <Icon className="size-4 shrink-0 opacity-90" />
-            {label}
+            {ts(labelKey)}
           </Link>
         ))}
       </nav>

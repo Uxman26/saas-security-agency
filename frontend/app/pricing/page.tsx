@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
@@ -9,17 +10,19 @@ import { MarketingFooter } from '@/components/marketing/marketing-footer';
 import { Check, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { PlanTier } from '@/lib/types';
-import { formatPriceGBP, planDisplay, planFeatures } from '@/lib/plan-tiers';
+import { formatPriceGBP, planDisplay, planFeatures, DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
 
 export default function PricingPage() {
+  const t = useTranslations('pricing');
+  const tc = useTranslations('common');
   const [tiers, setTiers] = useState<PlanTier[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.packages
       .list()
-      .then(setTiers)
-      .catch(() => setTiers([]))
+      .then((rows) => setTiers(rows.length ? rows : DEFAULT_PLAN_TIERS))
+      .catch(() => setTiers(DEFAULT_PLAN_TIERS))
       .finally(() => setLoading(false));
   }, []);
 
@@ -31,13 +34,13 @@ export default function PricingPage() {
       <div className="container mx-auto px-4 pt-16 pb-16 md:pt-24 md:pb-24">
         <div className="mx-auto max-w-2xl text-center mb-12">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm text-primary">
-            Memberships
+            {t('badge')}
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Choose your plan
+            {t('title')}
           </h1>
           <p className="mt-4 text-muted-foreground">
-            Subscribe to a plan and create your company. You can change or cancel later.
+            {t('subtitle')}
           </p>
         </div>
         {loading ? (
@@ -45,7 +48,7 @@ export default function PricingPage() {
             <Loader2 className="size-8 animate-spin" />
           </div>
         ) : tiers.length === 0 ? (
-          <p className="text-center text-muted-foreground">Plans are unavailable right now.</p>
+          <p className="text-center text-muted-foreground">{t('unavailable')}</p>
         ) : (
           <div className={`mx-auto grid max-w-6xl gap-8 md:grid-cols-2 ${cols} lg:gap-6`}>
             {tiers.map((tier) => {
@@ -62,7 +65,7 @@ export default function PricingPage() {
                 >
                   {highlighted && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-xs font-medium text-primary-foreground">
-                      Popular
+                      {tc('popular')}
                     </div>
                   )}
                   <CardHeader className="pb-4">
@@ -70,7 +73,7 @@ export default function PricingPage() {
                     <CardDescription>{description}</CardDescription>
                     <div className="mt-4 flex items-baseline gap-1">
                       <span className="text-3xl font-bold text-foreground">{formatPriceGBP(tier.price_gbp)}</span>
-                      <span className="text-muted-foreground">/month</span>
+                      <span className="text-muted-foreground">{tc('perMonth')}</span>
                     </div>
                   </CardHeader>
                   <CardContent className="flex-1 space-y-3">
@@ -88,7 +91,7 @@ export default function PricingPage() {
                       variant={highlighted ? 'default' : 'outline'}
                       size="lg"
                     >
-                      <Link href={`/signup?tier=${tier.tier}`}>Get started</Link>
+                      <Link href={`/signup?tier=${tier.tier}`}>{t('getStarted')}</Link>
                     </Button>
                   </CardFooter>
                 </Card>
@@ -97,9 +100,9 @@ export default function PricingPage() {
           </div>
         )}
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          Already have an account?{' '}
+          {tc('alreadyHaveAccount')}{' '}
           <Link href="/login" className="text-primary font-medium hover:underline">
-            Sign in
+            {tc('signIn')}
           </Link>
         </p>
       </div>

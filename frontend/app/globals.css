@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant rtl (&:is([dir="rtl"] *));
+
+[dir="rtl"] body {
+  font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif;
+}
 
 @theme inline {
   --color-background: var(--background);

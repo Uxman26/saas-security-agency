@@ -13,6 +13,8 @@ import { AlertsPanel } from '@/components/alerts-panel';
 import { usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { can } from '@/lib/permissions';
+import { useTranslations } from 'next-intl';
+import { LanguageSwitcher } from '@/components/language-switcher';
 import { cn } from '@/lib/utils';
 import { sidebarPathAllowed } from '@/lib/sidebar-modules';
 
@@ -24,29 +26,31 @@ function mActive(pathname: string, href: string) {
 }
 
 const mobileLinks = [
-  { href: '/dashboard', label: 'Dashboard', perm: 'guards.read' },
-  { href: '/guards', label: 'Staff', perm: 'guards.read' },
-  { href: '/sites', label: 'Sites', perm: 'sites.read' },
-  { href: '/clients', label: 'Clients', perm: 'clients.read' },
-  { href: '/assignments', label: 'Assignments', perm: 'assign.read' },
-  { href: '/rota', label: 'Rotas & Shifts', perm: 'assign.read' },
-  { href: '/client-portal', label: 'Client portal', perm: 'staff_req.write' },
-  { href: '/requests', label: 'Staff requests', perm: 'staff_req.review' },
-  { href: '/attendance', label: 'Attendance', perm: 'attend.read' },
-  { href: '/documents', label: 'Documents', perm: 'doc.read' },
-  { href: '/contractors', label: 'Contractors', perm: 'subs.read' },
-  { href: '/payroll', label: 'Payroll', perm: 'payroll.read' },
-  { href: '/reports', label: 'Reports', perm: 'rep.read' },
-  { href: '/invoices', label: 'Invoices', perm: 'inv.read' },
-  { href: '/expenses', label: 'Expenses', perm: 'exp.read' },
-  { href: '/payments', label: 'Payments', perm: 'pay.read' },
-  { href: '/allowances', label: 'Allowances', perm: 'allow.read' },
-  { href: '/settings/special-days', label: 'Special days', perm: 'allow.read' },
-  { href: '/settings/roles', label: 'Roles', perm: 'roles.read' },
+  { href: '/dashboard', labelKey: 'dashboard', perm: 'guards.read' },
+  { href: '/guards', labelKey: 'staff', perm: 'guards.read' },
+  { href: '/sites', labelKey: 'sites', perm: 'sites.read' },
+  { href: '/clients', labelKey: 'clients', perm: 'clients.read' },
+  { href: '/assignments', labelKey: 'assignments', perm: 'assign.read' },
+  { href: '/rota', labelKey: 'rota', perm: 'assign.read' },
+  { href: '/client-portal', labelKey: 'clientPortal', perm: 'staff_req.write' },
+  { href: '/requests', labelKey: 'staffRequests', perm: 'staff_req.review' },
+  { href: '/attendance', labelKey: 'attendance', perm: 'attend.read' },
+  { href: '/documents', labelKey: 'documents', perm: 'doc.read' },
+  { href: '/contractors', labelKey: 'contractors', perm: 'subs.read' },
+  { href: '/payroll', labelKey: 'payroll', perm: 'payroll.read' },
+  { href: '/reports', labelKey: 'reports', perm: 'rep.read' },
+  { href: '/invoices', labelKey: 'invoices', perm: 'inv.read' },
+  { href: '/expenses', labelKey: 'expenses', perm: 'exp.read' },
+  { href: '/payments', labelKey: 'payments', perm: 'pay.read' },
+  { href: '/allowances', labelKey: 'allowances', perm: 'allow.read' },
+  { href: '/settings/special-days', labelKey: 'specialDays', perm: 'allow.read' },
+  { href: '/settings/roles', labelKey: 'roles', perm: 'roles.read' },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
+  const tc = useTranslations('common');
+  const ts = useTranslations('sidebar');
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const isSuperAdmin = user?.role === 'super_admin';
@@ -73,11 +77,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="hidden md:block flex-1" />
           <div className="flex items-center gap-1.5 shrink-0">
+            <LanguageSwitcher />
             <ThemeToggle />
             <AlertsPanel />
             <EmailDialog />
             <Button variant="outline" size="sm" onClick={logout}>
-              Logout
+              {tc('logout')}
             </Button>
           </div>
         </header>
@@ -96,16 +101,16 @@ export function AppShell({ children }: { children: ReactNode }) {
               <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
                 {isSuperAdmin ? (
                   [
-                    { href: '/admin/companies', label: 'Companies' },
-                    { href: '/admin/users', label: 'Users' },
-                    { href: '/admin/admins', label: 'Admins' },
-                    { href: '/admin/invoices', label: 'Invoices' },
-                    { href: '/admin/payments', label: 'Payments' },
-                    { href: '/admin/receipts', label: 'Receipts' },
-                    { href: '/admin/packages', label: 'Packages' },
-                    { href: '/admin/email', label: 'SMTP email' },
-                    { href: '/admin/logs', label: 'Activity logs' },
-                  ].map(({ href, label }) => (
+                    { href: '/admin/companies', labelKey: 'adminCompanies' },
+                    { href: '/admin/users', labelKey: 'adminUsers' },
+                    { href: '/admin/admins', labelKey: 'adminAdmins' },
+                    { href: '/admin/invoices', labelKey: 'adminInvoices' },
+                    { href: '/admin/payments', labelKey: 'adminPayments' },
+                    { href: '/admin/receipts', labelKey: 'adminReceipts' },
+                    { href: '/admin/packages', labelKey: 'adminPackages' },
+                    { href: '/admin/email', labelKey: 'adminSmtp' },
+                    { href: '/admin/logs', labelKey: 'adminLogs' },
+                  ].map(({ href, labelKey }) => (
                     <Link
                       key={href}
                       href={href}
@@ -115,11 +120,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                       )}
                       onClick={() => setDrawer(false)}
                     >
-                      {label}
+                      {ts(labelKey)}
                     </Link>
                   ))
                 ) : (
-                  links.map(({ href, label }) => (
+                  links.map(({ href, labelKey }) => (
                     <Link
                       key={href}
                       href={href}
@@ -129,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       )}
                       onClick={() => setDrawer(false)}
                     >
-                      {label}
+                      {ts(labelKey)}
                     </Link>
                   ))
                 )}

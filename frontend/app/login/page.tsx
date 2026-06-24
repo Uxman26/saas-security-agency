@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ import { parsePaymentPending } from '@/lib/sidebar-modules';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 
 export default function LoginPage() {
+  const t = useTranslations('auth');
+  const tc = useTranslations('common');
   const router = useRouter();
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -45,7 +48,7 @@ export default function LoginPage() {
         router.push(`/payment-pending?ref=${encodeURIComponent(pending.receipt_ref)}`);
         return;
       }
-      toast.error(err instanceof Error ? err.message : 'Login failed');
+      toast.error(err instanceof Error ? err.message : t('loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -53,14 +56,14 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="Welcome back"
-      subtitle="Sign in to continue to ControlOps"
-      topLink={{ href: '/pricing', label: 'View plans' }}
+      title={t('loginTitle')}
+      subtitle={t('loginSubtitle')}
+      topLink={{ href: '/pricing', label: tc('viewPlans') }}
       footer={
         <>
-          Don&apos;t have an account?{' '}
+          {tc('dontHaveAccount')}{' '}
           <Link href="/pricing" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
-            Sign up
+            {tc('signUp')}
           </Link>
         </>
       }
@@ -74,7 +77,7 @@ export default function LoginPage() {
       >
         <div className="space-y-2">
           <Label htmlFor="email" className="text-[#161E2C] font-medium">
-            Work email
+            {t('email')}
           </Label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
@@ -90,7 +93,7 @@ export default function LoginPage() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password" className="text-[#161E2C] font-medium">
-            Password
+            {t('password')}
           </Label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
@@ -105,7 +108,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? t('hidePassword') : t('showPassword')}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
@@ -119,10 +122,10 @@ export default function LoginPage() {
               className="size-4 rounded border-[#D1D5DB] accent-[#FD6203]"
               {...register('remember_me')}
             />
-            <span>Remember me</span>
+            <span>{t('rememberMe')}</span>
           </label>
           <Link href="/forgot-password" className="font-medium text-[#FD6203] hover:text-[#DF3C01]">
-            Forgot password?
+            {t('forgotPassword')}
           </Link>
         </div>
         <Button
@@ -130,7 +133,7 @@ export default function LoginPage() {
           className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold shadow-sm"
           disabled={loading}
         >
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? t('signingIn') : tc('signIn')}
         </Button>
       </form>
     </AuthShell>

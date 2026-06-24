@@ -31,9 +31,9 @@ function PaymentPendingContent() {
       </div>
       <Card className="w-full max-w-lg shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Payment pending</CardTitle>
+          <CardTitle className="text-2xl">Awaiting Payment</CardTitle>
           <CardDescription>
-            Your subscription receipt was generated. Pay using the reference below, then sign in after the platform admin marks it paid.
+            Your subscription request has been created successfully. Please complete the payment using the reference below. Once your payment has been verified and approved, you will be able to sign in and access your account.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -41,28 +41,30 @@ function PaymentPendingContent() {
           {!loading && ref && receipt && (
             <div className="rounded-lg border bg-muted/40 p-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Reference</span>
+                <span className="text-muted-foreground">Payment Reference</span>
                 <span className="font-mono font-semibold">{receipt.ref_id}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Company</span>
+                <span className="text-muted-foreground">Organisation</span>
                 <span>{receipt.company_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Plan</span>
+                <span className="text-muted-foreground">Subscription Plan</span>
                 <span className="capitalize">{receipt.subscription_tier}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Amount</span>
+                <span className="text-muted-foreground">Subscription Amount</span>
                 <span className="font-semibold">£{receipt.amount.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Period</span>
+                <span className="text-muted-foreground">Billing Cycle</span>
                 <span>{receipt.period_days} days</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Status</span>
-                <span className="text-amber-600 dark:text-amber-400 font-medium capitalize">{receipt.status}</span>
+                <span className="text-muted-foreground">Payment Status</span>
+                <span className="text-amber-600 dark:text-amber-400 font-medium">
+                  {receipt.status === 'pending' ? 'Awaiting Payment' : receipt.status}
+                </span>
               </div>
             </div>
           )}

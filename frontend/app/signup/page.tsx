@@ -12,7 +12,7 @@ import { AuthShell } from '@/components/auth/auth-shell';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { Building2, Lock, Mail, User } from 'lucide-react';
+import { Building2, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 
 function SignupForm() {
   const router = useRouter();
@@ -20,6 +20,7 @@ function SignupForm() {
   const tierParam = searchParams.get('tier');
   const subscription_tier = tierParam || undefined;
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -119,11 +120,19 @@ function SignupForm() {
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
             <Input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder="Create a password"
-              className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              className="pl-10 pr-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
               {...register('password')}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
           </div>
           {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
         </div>

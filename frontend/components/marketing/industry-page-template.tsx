@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { MarketingFooter } from '@/components/marketing/marketing-footer';
 import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
@@ -29,6 +32,9 @@ export function IndustryPageTemplate({
   workflow,
   faqs,
 }: Props) {
+  const ts = useTranslations('marketing.industrySections');
+  const tc = useTranslations('marketing.cta');
+
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav active={activeNav} />
@@ -47,7 +53,7 @@ export function IndustryPageTemplate({
       </section>
       <section className="py-16 bg-muted/20 border-b border-border/50">
         <div className="container mx-auto px-4 max-w-5xl">
-          <h2 className="text-2xl font-bold mb-8">Common operational challenges</h2>
+          <h2 className="text-2xl font-bold mb-8">{ts('problems')}</h2>
           <div className="grid md:grid-cols-3 gap-6">
             {problems.map((p) => (
               <Card key={p.title}>
@@ -62,7 +68,7 @@ export function IndustryPageTemplate({
       </section>
       <section className="py-16 border-b border-border/50">
         <div className="container mx-auto px-4 max-w-5xl">
-          <h2 className="text-2xl font-bold mb-8">Relevant ControlOps capabilities</h2>
+          <h2 className="text-2xl font-bold mb-8">{ts('capabilities')}</h2>
           <div className="grid sm:grid-cols-2 gap-6">
             {capabilities.map((c) => (
               <div key={c.title} className="rounded-xl border p-5">
@@ -75,7 +81,7 @@ export function IndustryPageTemplate({
       </section>
       <section className="py-16 bg-muted/20 border-b border-border/50">
         <div className="container mx-auto px-4 max-w-3xl">
-          <h2 className="text-2xl font-bold mb-6">Typical workflow</h2>
+          <h2 className="text-2xl font-bold mb-6">{ts('workflow')}</h2>
           <ol className="space-y-4">
             {workflow.map((step, i) => (
               <li key={i} className="flex gap-4 text-muted-foreground">
@@ -88,7 +94,7 @@ export function IndustryPageTemplate({
       </section>
       <section className="py-16 border-b border-border/50">
         <div className="container mx-auto px-4 max-w-3xl space-y-4">
-          <h2 className="text-2xl font-bold mb-6">FAQs</h2>
+          <h2 className="text-2xl font-bold mb-6">{ts('faqs')}</h2>
           {faqs.map((f) => (
             <div key={f.q} className="rounded-xl border p-5">
               <h3 className="font-semibold">{f.q}</h3>
@@ -99,11 +105,11 @@ export function IndustryPageTemplate({
       </section>
       <section className="py-16">
         <div className="container mx-auto px-4 text-center max-w-2xl">
-          <h2 className="text-2xl font-bold">See ControlOps for your operation</h2>
-          <p className="mt-4 text-muted-foreground">Book a tailored demonstration using your workforce, locations and billing requirements.</p>
+          <h2 className="text-2xl font-bold">{ts('finalTitle')}</h2>
+          <p className="mt-4 text-muted-foreground">{ts('finalText')}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <MarketingCta href="/book-demo">{cta}</MarketingCta>
-            <MarketingCta href="/pricing" variant="outline">View pricing</MarketingCta>
+            <MarketingCta href="/pricing" variant="outline">{tc('viewPricing')}</MarketingCta>
           </div>
         </div>
       </section>

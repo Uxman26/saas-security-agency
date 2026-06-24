@@ -15,26 +15,25 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useTranslations } from 'next-intl';
 import { Building2, Eye, EyeOff, Lock, Mail, User, Loader2 } from 'lucide-react';
+import { authFieldClass, authIconClass, authLabelClass, authSelectClass } from '@/lib/auth-styles';
+import { INDUSTRY_VALUES, WORKFORCE_VALUES } from '@/lib/industry-options';
 
-const INDUSTRIES = [
-  'Security',
-  'Cleaning & Facilities',
-  'Event Staffing',
-  'Temporary Staffing',
-  'Other Shift-based Service Business',
-];
-
-const WORKFORCE = ['1–19', '20–49', '50–199', '200–999', '1000+'];
+const INDUSTRIES = INDUSTRY_VALUES;
+const WORKFORCE = WORKFORCE_VALUES;
 
 function SignupForm() {
   const t = useTranslations('auth');
   const tc = useTranslations('common');
+  const tb = useTranslations('marketing.bookDemo');
   const router = useRouter();
   const searchParams = useSearchParams();
   const tierParam = searchParams.get('tier');
   const subscription_tier = tierParam || undefined;
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const industryLabels = tb.raw('industries') as string[];
+  const workforceLabels = tb.raw('workforce') as string[];
 
   useEffect(() => {
     if (!tierParam) router.replace('/pricing');
@@ -80,11 +79,11 @@ function SignupForm() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#F3F4F6] text-[#161E2C] px-4">
         <Loader2 className="size-8 animate-spin text-[#FD6203]" />
-        <p>Loading your selected plan…</p>
+        <p>{t('signupLoadingPlan')}</p>
         <p className="text-sm text-[#4B5563]">
-          <Link href="/pricing" className="text-[#FD6203] hover:underline">View plans</Link>
+          <Link href="/pricing" className="text-[#FD6203] hover:underline">{tc('viewPlans')}</Link>
           {' · '}
-          <Link href="/login" className="text-[#FD6203] hover:underline">Sign in</Link>
+          <Link href="/login" className="text-[#FD6203] hover:underline">{tc('signIn')}</Link>
         </p>
       </div>
     );
@@ -93,7 +92,7 @@ function SignupForm() {
   return (
     <AuthShell
       title={t('signupTitle')}
-      subtitle={t('signupSubtitle')}
+      subtitle={subscription_tier ? t('signupSubtitlePlan', { tier: subscription_tier }) : t('signupSubtitle')}
       topLink={{ href: '/login', label: tc('signIn') }}
       footer={
         <>
@@ -110,36 +109,36 @@ function SignupForm() {
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="full_name">{t('fullName')}</Label>
+          <Label htmlFor="full_name" className={authLabelClass}>{t('fullName')}</Label>
           <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
-            <Input id="full_name" placeholder="John Smith" className="pl-10 h-11" {...register('full_name')} />
+            <User className={authIconClass} />
+            <Input id="full_name" placeholder="John Smith" className={`ps-10 ${authFieldClass}`} {...register('full_name')} />
           </div>
           {errors.full_name && <p className="text-sm text-destructive">{errors.full_name.message as string}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="email">{t('email')}</Label>
+          <Label htmlFor="email" className={authLabelClass}>{t('email')}</Label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
-            <Input id="email" type="email" placeholder="name@company.com" className="pl-10 h-11" {...register('email')} />
+            <Mail className={authIconClass} />
+            <Input id="email" type="email" placeholder="name@company.com" className={`ps-10 ${authFieldClass}`} {...register('email')} />
           </div>
           {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password">{t('password')}</Label>
+          <Label htmlFor="password" className={authLabelClass}>{t('password')}</Label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Lock className={authIconClass} />
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
               placeholder="Create a password"
-              className="pl-10 pr-10 h-11"
+              className={`ps-10 pe-10 ${authFieldClass}`}
               {...register('password')}
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
+              className="absolute end-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
               aria-label={showPassword ? t('hidePassword') : t('showPassword')}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -148,38 +147,38 @@ function SignupForm() {
           {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="company_name">{t('companyName')}</Label>
+          <Label htmlFor="company_name" className={authLabelClass}>{t('companyName')}</Label>
           <div className="relative">
-            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
-            <Input id="company_name" placeholder="Acme Services Ltd" className="pl-10 h-11" {...register('company_name')} />
+            <Building2 className={authIconClass} />
+            <Input id="company_name" placeholder="Acme Services Ltd" className={`ps-10 ${authFieldClass}`} {...register('company_name')} />
           </div>
           {errors.company_name && <p className="text-sm text-destructive">{errors.company_name.message as string}</p>}
         </div>
         <div className="space-y-2">
-          <Label>{t('industry')}</Label>
+          <Label className={authLabelClass}>{t('industry')}</Label>
           <Select onValueChange={(v) => setValue('industry', v, { shouldValidate: true })}>
-            <SelectTrigger className="h-11"><SelectValue placeholder="Select industry" /></SelectTrigger>
+            <SelectTrigger className={authSelectClass}><SelectValue placeholder={t('selectIndustry')} /></SelectTrigger>
             <SelectContent>
-              {INDUSTRIES.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+              {INDUSTRIES.map((v, i) => <SelectItem key={v} value={v}>{industryLabels[i] ?? v}</SelectItem>)}
             </SelectContent>
           </Select>
           {errors.industry && <p className="text-sm text-destructive">{errors.industry.message as string}</p>}
         </div>
         <div className="space-y-2">
-          <Label>{t('workforceSize')}</Label>
+          <Label className={authLabelClass}>{t('workforceSize')}</Label>
           <Select onValueChange={(v) => setValue('workforce_size', v, { shouldValidate: true })}>
-            <SelectTrigger className="h-11"><SelectValue placeholder="Select size" /></SelectTrigger>
+            <SelectTrigger className={authSelectClass}><SelectValue placeholder={t('selectSize')} /></SelectTrigger>
             <SelectContent>
-              {WORKFORCE.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}
+              {WORKFORCE.map((v, i) => <SelectItem key={v} value={v}>{workforceLabels[i] ?? v}</SelectItem>)}
             </SelectContent>
           </Select>
           {errors.workforce_size && <p className="text-sm text-destructive">{errors.workforce_size.message as string}</p>}
         </div>
         <p className="text-xs text-[#4B5563] leading-relaxed">
-          By creating an account, you agree to the{' '}
-          <Link href="/terms" className="text-[#FD6203] hover:underline">ControlOps Terms of Service</Link>
-          {' '}and acknowledge the{' '}
-          <Link href="/privacy" className="text-[#FD6203] hover:underline">Privacy Policy</Link>.
+          {t('signupPrivacyPrefix')}{' '}
+          <Link href="/terms" className="text-[#FD6203] hover:underline">{t('signupPrivacyTerms')}</Link>
+          {' '}{t('signupPrivacyAnd')}{' '}
+          <Link href="/privacy" className="text-[#FD6203] hover:underline">{t('signupPrivacyPolicy')}</Link>.
         </p>
         <Button type="submit" className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold" disabled={loading}>
           {loading ? t('creatingAccount') : t('createAccount')}
@@ -190,20 +189,16 @@ function SignupForm() {
 }
 
 function SignupFallback() {
+  const t = useTranslations('auth');
+  const tc = useTranslations('common');
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#F3F4F6] text-[#161E2C] px-4">
       <Loader2 className="size-8 animate-spin text-[#FD6203]" />
-      <p>Preparing your signup form…</p>
-      <noscript>
-        <p className="text-sm max-w-md text-center">
-          JavaScript is required to create an account. Enable JavaScript or{' '}
-          <a href="/book-demo" className="text-[#FD6203] underline">book a demo</a> to get started.
-        </p>
-      </noscript>
+      <p>{t('signupPreparing')}</p>
       <p className="text-sm text-[#4B5563]">
-        <a href="/pricing" className="text-[#FD6203] hover:underline">View plans</a>
+        <Link href="/pricing" className="text-[#FD6203] hover:underline">{tc('viewPlans')}</Link>
         {' · '}
-        <a href="/login" className="text-[#FD6203] hover:underline">Sign in</a>
+        <Link href="/login" className="text-[#FD6203] hover:underline">{tc('signIn')}</Link>
       </p>
     </div>
   );

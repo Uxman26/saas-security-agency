@@ -1,11 +1,7 @@
-import { LegalPage } from '@/components/marketing/legal-page';
+import { LegalPageClient } from '@/components/marketing/legal-page-client';
 
-export const metadata = { title: 'Cookie Policy | ControlOps' };
+export const metadata = { title: { absolute: 'Cookie Policy | ControlOps' } };
 
 export default function CookiesPage() {
-  return (
-    <LegalPage title="Cookie Policy">
-      <p>ControlOps uses cookies and similar technologies for authentication, preferences and service operation. Full cookie policy documentation will be published here.</p>
-    </LegalPage>
-  );
+  return <LegalPageClient page="cookies" />;
 }

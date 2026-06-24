@@ -1,0 +1,226 @@
+{
+  "auth": {
+    "forgotTitle": "Forgot password?",
+    "forgotSubtitle": "Enter your email and we will send you a reset link.",
+    "forgotSentSubtitle": "If an account exists for {email}, we sent a reset link.",
+    "sendResetLink": "Send reset link",
+    "sending": "Sending…",
+    "checkEmailReset": "Check your email for a reset link",
+    "backToLogin": "Back to login",
+    "resetTitle": "Set new password",
+    "resetSubtitle": "Choose a new password for your account.",
+    "invalidResetLink": "Invalid link",
+    "invalidResetDesc": "This password reset link is missing or invalid.",
+    "requestNewLink": "Request a new link",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm password",
+    "updatePassword": "Update password",
+    "updating": "Updating…",
+    "passwordUpdated": "Password updated",
+    "invalidResetToken": "Invalid reset link",
+    "resetFailed": "Reset failed",
+    "signupPrivacyPrefix": "By creating an account, you agree to the",
+    "signupPrivacyTerms": "ControlOps Terms of Service",
+    "signupPrivacyAnd": "and acknowledge the",
+    "signupPrivacyPolicy": "Privacy Policy",
+    "selectIndustry": "Select industry",
+    "selectSize": "Select size",
+    "signupLoadingPlan": "Loading your selected plan…",
+    "signupPreparing": "Preparing your signup form…",
+    "required": "Required",
+    "validEmailRequired": "Valid email required",
+    "requestFailed": "Request failed"
+  },
+  "payment": {
+    "loadingReceipt": "Loading receipt…",
+    "backToSignIn": "Back to sign in"
+  },
+  "verify": {
+    "viewPayment": "View payment details",
+    "emailMissing": "Email address is missing",
+    "verificationFailed": "Verification failed",
+    "couldNotResend": "Could not resend email",
+    "emailVerifiedToast": "Email verified",
+    "loading": "Loading…"
+  },
+  "marketing": {
+    "platform": {
+      "badge": "ControlOps platform",
+      "title": "One platform for the work behind every shift",
+      "intro": "Bring your workforce, rotas, locations, records, rates, payroll information and client billing together so operations, payroll and finance work from the same current information.",
+      "finalTitle": "See ControlOps for your operation",
+      "finalText": "Book a tailored demonstration using your workforce, locations and billing requirements.",
+      "sections": [
+        { "id": "workforce", "title": "Workforce management", "text": "Keep employee, contractor and subcontractor details, contacts, working records and important documents organised in one profile." },
+        { "id": "sites", "title": "Sites and locations", "text": "Manage business locations, client sites, contacts and default commercial rates without duplicating information." },
+        { "id": "rota", "title": "Rotas and shifts", "text": "Build rotas, assign available team members and organise day, night, weekend and holiday work." },
+        { "id": "records", "title": "Workforce documents", "text": "Record licences, right-to-work information and document expiry dates, with reminders before action is required." },
+        { "id": "rates", "title": "Rates and allowances", "text": "Apply employee pay rates, client charge rates and allowances to the work they relate to." },
+        { "id": "payroll", "title": "Payroll preparation", "text": "Prepare pay information from scheduled or completed assignments, including supported rates and allowances." },
+        { "id": "invoicing", "title": "Client invoicing", "text": "Prepare client invoices using assignment information, charge rates and approved adjustments." },
+        { "id": "reporting", "title": "Operational dashboards", "text": "Review upcoming shifts, workforce status, document warnings and financial information from one dashboard." }
+      ]
+    },
+    "contact": {
+      "badge": "Contact",
+      "title": "Get in touch with ControlOps",
+      "intro": "Book a demonstration to discuss your workforce, locations, rotas and billing requirements, or contact us about an existing account.",
+      "signIn": "Sign in",
+      "newPrefix": "New to ControlOps?"
+    },
+    "industriesIndex": {
+      "badge": "Industries",
+      "title": "Shift-based service businesses",
+      "intro": "ControlOps is especially suited to service businesses that deploy employees and contractors across client sites, manage changing rotas, maintain workforce records and connect completed work to payroll and billing.",
+      "learnMore": "Learn more",
+      "otherTitle": "Other multi-site service businesses",
+      "otherDesc": "Organise employees, contractors, locations and shift-based work around the way your service operation runs. Book a demonstration to confirm ControlOps fits your workflow.",
+      "items": [
+        { "title": "Security services", "desc": "Guards, subcontractors, client sites, SIA records, rotas, rates, payroll information and invoices." },
+        { "title": "Cleaning & facilities", "desc": "Mobile teams, client locations, recurring shifts, worker records, pay information and billing." },
+        { "title": "Event staffing", "desc": "Temporary workers, venues, short-notice assignments, variable rates, documents and client charges." },
+        { "title": "Temporary staffing", "desc": "Workers, client assignments, locations, availability, pay and charge rates, payroll preparation and invoices." }
+      ]
+    },
+    "industrySections": {
+      "problems": "Common operational challenges",
+      "capabilities": "Relevant ControlOps capabilities",
+      "workflow": "Typical workflow",
+      "faqs": "FAQs",
+      "finalTitle": "See ControlOps for your operation",
+      "finalText": "Book a tailored demonstration using your workforce, locations and billing requirements."
+    },
+    "bookDemo": {
+      "badge": "Book a ControlOps demonstration",
+      "title": "See how ControlOps fits your operation",
+      "intro": "Tell us how you currently manage your workforce, locations and shifts. We will show the most relevant ControlOps workflows without giving you a generic presentation.",
+      "success": "Thank you. We have received your request and will contact you to arrange your ControlOps demonstration.",
+      "fullName": "Full name",
+      "workEmail": "Work email",
+      "companyName": "Company name",
+      "industry": "Industry",
+      "workforceSize": "Approximate workforce size",
+      "challenge": "Main operational challenge",
+      "phone": "Phone number (optional)",
+      "currentSystem": "Current system or process (optional)",
+      "preferredTime": "Preferred demonstration time (optional)",
+      "submit": "Request my demo",
+      "industries": ["Security", "Cleaning & Facilities", "Event Staffing", "Temporary Staffing", "Other Shift-based Service Business"],
+      "workforce": ["1–19", "20–49", "50–199", "200–999", "1000+"]
+    },
+    "legal": {
+      "footerPrefix": "For questions,",
+      "footerLink": "book a demo",
+      "footerSuffix": "or contact your ControlOps representative.",
+      "privacy": { "title": "Privacy Policy", "body": "ControlOps processes personal data to provide workforce operations software. This page will be updated with the full privacy policy. Contact us for current privacy documentation." },
+      "terms": { "title": "Terms of Service", "body": "ControlOps is provided subject to terms of service agreed at subscription. This page will be updated with the full terms. Contact us for current terms documentation." },
+      "cookies": { "title": "Cookie Policy", "body": "ControlOps uses cookies and similar technologies for authentication, preferences and service operation. Full cookie policy documentation will be published here." },
+      "dpa": { "title": "Data Processing Agreement", "body": "A data processing agreement is available for business customers. Contact us to request the current DPA for your organisation." },
+      "accessibility": { "title": "Accessibility Statement", "body": "ControlOps aims to make its website and platform accessible. Contact us to report accessibility issues or request assistance." },
+      "security": { "title": "Security", "body": "ControlOps uses authenticated access and company-scoped data separation. Detailed security documentation is available on request for business customers evaluating the platform." }
+    },
+    "industries": {
+      "security": {
+        "eyebrow": "Workforce operations software for security companies",
+        "title": "Manage guards, sites, rotas, workforce records, payroll and invoices in one place.",
+        "paragraph": "ControlOps helps security companies organise guards and subcontractors, manage client sites, build rotas, record SIA and right-to-work information, prepare payroll information and create client invoices.",
+        "cta": "Book a security operations demo",
+        "disclaimer": "ControlOps helps security companies maintain operational and workforce records. It does not guarantee regulatory compliance or replace the checks, decisions and responsibilities required from your organisation.",
+        "problems": [
+          { "title": "Spreadsheet rotas", "text": "Shift planning, site coverage and subcontractor assignments spread across files that are hard to keep current." },
+          { "title": "Document tracking", "text": "SIA licences, right-to-work records and expiry dates need organised tracking before work is assigned." },
+          { "title": "Disconnected billing", "text": "Payroll preparation and client invoicing depend on the same assignment data but often live in separate processes." }
+        ],
+        "capabilities": [
+          { "title": "Guard and subcontractor records", "text": "Maintain profiles, contacts and working records in one place." },
+          { "title": "Client sites and rates", "text": "Manage locations, contacts and commercial rates without duplication." },
+          { "title": "Rota and assignments", "text": "Build rotas and assign guards across day, night, weekend and holiday work." },
+          { "title": "SIA and document records", "text": "Record licence and right-to-work information with expiry reminders." },
+          { "title": "Payroll preparation", "text": "Prepare pay information from scheduled or completed assignments." },
+          { "title": "Client invoicing", "text": "Prepare invoices using assignment information and charge rates." }
+        ],
+        "workflow": ["Configure company settings, document types and rates.", "Add guards, subcontractors and client sites.", "Build rotas, maintain records and prepare payroll and billing information."],
+        "faqs": [
+          { "q": "Does ControlOps replace SIA compliance responsibilities?", "a": "No. ControlOps helps you maintain operational records. Your organisation remains responsible for compliance checks and decisions." },
+          { "q": "Can we manage subcontractors?", "a": "Yes. Subcontractor details and assignments can be managed alongside employee guards where your plan includes this." },
+          { "q": "Can we see the platform before subscribing?", "a": "Yes. Book a security operations demonstration tailored to your workflow." }
+        ]
+      },
+      "cleaning": {
+        "eyebrow": "Workforce operations software for cleaning and facilities contractors",
+        "title": "Manage mobile teams, client sites, rotas, pay information and billing in one place.",
+        "paragraph": "ControlOps helps cleaning and facilities businesses schedule employees and contractors across customer locations, maintain workforce records, apply rates, prepare payroll information and organise client billing.",
+        "cta": "Book a cleaning and facilities demo",
+        "problems": [
+          { "title": "Multi-site scheduling", "text": "Teams move across customer locations with changing shift patterns that are hard to coordinate centrally." },
+          { "title": "Rate complexity", "text": "Different pay rates and client charge rates apply across sites and contract types." },
+          { "title": "Admin duplication", "text": "Workforce records, payroll information and client billing often rely on separate spreadsheets." }
+        ],
+        "capabilities": [
+          { "title": "Workforce records", "text": "Keep employee and contractor details and documents organised." },
+          { "title": "Client sites", "text": "Manage locations, contacts and default rates per site." },
+          { "title": "Rota planning", "text": "Schedule recurring and variable shifts across teams." },
+          { "title": "Rates and allowances", "text": "Apply pay and charge rates to the work they relate to." },
+          { "title": "Payroll preparation", "text": "Prepare pay information from completed assignments." },
+          { "title": "Client billing", "text": "Connect delivered work to client invoices." }
+        ],
+        "workflow": ["Set up company, users and operational settings.", "Add workforce records and customer sites.", "Schedule shifts, maintain records and prepare payroll and billing."],
+        "faqs": [
+          { "q": "Is ControlOps only for cleaning companies?", "a": "No. ControlOps supports multiple shift-based service industries including facilities management." },
+          { "q": "Can we manage contractors as well as employees?", "a": "Yes. Workforce records can include employees and contractors where supported by your plan." },
+          { "q": "Can we book a demo for our specific contracts?", "a": "Yes. We will tailor the demonstration to your sites, rotas and billing process." }
+        ]
+      },
+      "event": {
+        "eyebrow": "Workforce operations software for event staffing businesses",
+        "title": "Coordinate temporary workers, venues, assignments, rates and client charges.",
+        "paragraph": "ControlOps helps event staffing companies organise workers, schedule venue assignments, maintain documents, apply variable rates and connect delivered work to payroll preparation and client billing.",
+        "cta": "Book an event staffing demo",
+        "problems": [
+          { "title": "Variable event schedules", "text": "Short-notice assignments and changing venues make rota planning demanding." },
+          { "title": "Temporary workforce", "text": "Workers, documents and availability must be organised quickly for each event." },
+          { "title": "Client charges", "text": "Variable rates and assignments need to connect to payroll and client billing." }
+        ],
+        "capabilities": [
+          { "title": "Worker records", "text": "Maintain profiles, contacts and document records." },
+          { "title": "Venue assignments", "text": "Schedule work across locations and events." },
+          { "title": "Variable rates", "text": "Apply pay and charge rates to assignments." },
+          { "title": "Document tracking", "text": "Record licences and expiry dates with reminders." },
+          { "title": "Payroll preparation", "text": "Prepare pay from completed event work." },
+          { "title": "Client billing", "text": "Prepare client charges from assignment data." }
+        ],
+        "workflow": ["Configure rates, document types and users.", "Add workers and venue locations.", "Schedule event assignments and prepare payroll and billing."],
+        "faqs": [
+          { "q": "Can ControlOps handle short-notice events?", "a": "ControlOps supports rota planning and assignments. Book a demo to confirm it fits your event workflow." },
+          { "q": "Can we manage multiple venues?", "a": "Yes. Sites and locations can be managed across your operation." },
+          { "q": "Is there specialist event software?", "a": "ControlOps is workforce operations software suited to event staffing alongside other shift-based businesses." }
+        ]
+      },
+      "temporary": {
+        "eyebrow": "Workforce operations software for temporary staffing agencies",
+        "title": "Manage workers, client assignments, pay rates, charge rates and invoices in one system.",
+        "paragraph": "ControlOps helps temporary staffing agencies organise workers, locations, availability and assignments while keeping payroll preparation and client billing connected to the work delivered.",
+        "cta": "Book a staffing agency demo",
+        "problems": [
+          { "title": "Worker availability", "text": "Matching workers to client assignments across locations requires organised records." },
+          { "title": "Dual rates", "text": "Pay rates and client charge rates must stay aligned to each assignment." },
+          { "title": "Billing lag", "text": "Payroll preparation and client invoicing often trail behind completed work." }
+        ],
+        "capabilities": [
+          { "title": "Worker management", "text": "Maintain worker profiles, contacts and records." },
+          { "title": "Client assignments", "text": "Organise work across client locations." },
+          { "title": "Rota and scheduling", "text": "Plan shifts and assignments across your workforce." },
+          { "title": "Pay and charge rates", "text": "Apply rates to the assignments they relate to." },
+          { "title": "Payroll preparation", "text": "Prepare pay information from completed work." },
+          { "title": "Client invoicing", "text": "Prepare invoices from assignment and rate data." }
+        ],
+        "workflow": ["Set up agency settings, rates and permissions.", "Add workers and client assignment locations.", "Schedule work and prepare payroll and client billing."],
+        "faqs": [
+          { "q": "Can we manage pay and charge rates separately?", "a": "Yes. Employee pay rates and client charge rates can be applied to relevant work." },
+          { "q": "Does ControlOps replace agency compliance duties?", "a": "No. ControlOps helps manage operational records. Your agency remains responsible for compliance." },
+          { "q": "Can we see a demo for our agency model?", "a": "Yes. Book a demonstration tailored to your assignments and billing process." }
+        ]
+      }
+    }
+  }
+}

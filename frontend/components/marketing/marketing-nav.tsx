@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -9,17 +10,18 @@ import { MarketingBrand } from '@/components/marketing/marketing-brand';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { cn } from '@/lib/utils';
 
-const INDUSTRIES = [
-  { href: '/industries/security', label: 'Security' },
-  { href: '/industries/cleaning-facilities', label: 'Cleaning & Facilities' },
-  { href: '/industries/event-staffing', label: 'Event Staffing' },
-  { href: '/industries/temporary-staffing', label: 'Temporary Staffing' },
-  { href: '/industries', label: 'Other Multi-site Service Businesses' },
-];
+const INDUSTRY_KEYS = [
+  { href: '/industries/security', key: 'security' },
+  { href: '/industries/cleaning-facilities', key: 'cleaning' },
+  { href: '/industries/event-staffing', key: 'eventStaffing' },
+  { href: '/industries/temporary-staffing', key: 'tempStaffing' },
+  { href: '/industries', key: 'otherIndustries' },
+] as const;
 
 type Props = { active?: 'home' | 'about' | 'pricing' | 'platform' | 'industries' };
 
 export function MarketingNav({ active }: Props) {
+  const t = useTranslations('marketing.nav');
   const [open, setOpen] = useState(false);
   const [indOpen, setIndOpen] = useState(false);
 
@@ -41,7 +43,7 @@ export function MarketingNav({ active }: Props) {
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
         <MarketingBrand />
         <div className="hidden lg:flex items-center gap-6 text-sm">
-          {navLink('/platform', 'Product', active === 'platform')}
+          {navLink('/platform', t('product'), active === 'platform')}
           <div className="relative group">
             <button
               type="button"
@@ -50,32 +52,32 @@ export function MarketingNav({ active }: Props) {
                 active === 'industries' ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              Industries <ChevronDown className="size-3.5" />
+              {t('industries')} <ChevronDown className="size-3.5" />
             </button>
             <div className="absolute start-0 top-full pt-2 hidden group-hover:block group-focus-within:block min-w-[280px]">
               <div className="rounded-lg border bg-card shadow-lg p-2">
-                {INDUSTRIES.map((i) => (
+                {INDUSTRY_KEYS.map((i) => (
                   <Link
                     key={i.href}
                     href={i.href}
                     className="block rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
-                    {i.label}
+                    {t(i.key)}
                   </Link>
                 ))}
               </div>
             </div>
           </div>
-          {navLink('/pricing', 'Pricing', active === 'pricing')}
-          {navLink('/about', 'About', active === 'about')}
+          {navLink('/pricing', t('pricing'), active === 'pricing')}
+          {navLink('/about', t('about'), active === 'about')}
         </div>
         <div className="flex items-center gap-2">
           <LanguageSwitcher className="hidden sm:flex" />
           <Link href="/login" className="hidden md:block">
-            <Button variant="ghost" size="sm">Sign in</Button>
+            <Button variant="ghost" size="sm">{t('signIn')}</Button>
           </Link>
           <Link href="/book-demo" className="hidden sm:block">
-            <Button size="sm">Book a demo</Button>
+            <Button size="sm">{t('bookDemo')}</Button>
           </Link>
           <ThemeToggle />
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen((v) => !v)} aria-label="Menu">
@@ -85,24 +87,24 @@ export function MarketingNav({ active }: Props) {
       </div>
       {open && (
         <div className="lg:hidden border-t bg-background px-4 py-4 space-y-3">
-          <Link href="/platform" className="block text-sm font-medium" onClick={() => setOpen(false)}>Product</Link>
+          <Link href="/platform" className="block text-sm font-medium" onClick={() => setOpen(false)}>{t('product')}</Link>
           <button type="button" className="flex w-full items-center justify-between text-sm font-medium" onClick={() => setIndOpen((v) => !v)}>
-            Industries <ChevronDown className={cn('size-4 transition', indOpen && 'rotate-180')} />
+            {t('industries')} <ChevronDown className={cn('size-4 transition', indOpen && 'rotate-180')} />
           </button>
           {indOpen && (
             <div className="ps-3 space-y-2 border-s ms-2">
-              {INDUSTRIES.map((i) => (
+              {INDUSTRY_KEYS.map((i) => (
                 <Link key={i.href} href={i.href} className="block text-sm text-muted-foreground" onClick={() => setOpen(false)}>
-                  {i.label}
+                  {t(i.key)}
                 </Link>
               ))}
             </div>
           )}
-          <Link href="/pricing" className="block text-sm font-medium" onClick={() => setOpen(false)}>Pricing</Link>
-          <Link href="/about" className="block text-sm font-medium" onClick={() => setOpen(false)}>About</Link>
-          <Link href="/login" className="block text-sm" onClick={() => setOpen(false)}>Sign in</Link>
+          <Link href="/pricing" className="block text-sm font-medium" onClick={() => setOpen(false)}>{t('pricing')}</Link>
+          <Link href="/about" className="block text-sm font-medium" onClick={() => setOpen(false)}>{t('about')}</Link>
+          <Link href="/login" className="block text-sm" onClick={() => setOpen(false)}>{t('signIn')}</Link>
           <Link href="/book-demo" onClick={() => setOpen(false)}>
-            <Button className="w-full">Book a demo</Button>
+            <Button className="w-full">{t('bookDemo')}</Button>
           </Link>
         </div>
       )}

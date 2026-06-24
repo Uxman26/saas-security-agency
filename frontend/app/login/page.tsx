@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
 import { parsePaymentPending } from '@/lib/sidebar-modules';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { authFieldClass, authIconClass, authLabelClass } from '@/lib/auth-styles';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -76,38 +77,38 @@ export default function LoginPage() {
         className="space-y-5"
       >
         <div className="space-y-2">
-          <Label htmlFor="email" className="text-[#161E2C] font-medium">
+          <Label htmlFor="email" className={authLabelClass}>
             {t('email')}
           </Label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Mail className={authIconClass} />
             <Input
               id="email"
               type="email"
               placeholder="name@company.com"
-              className="pl-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              className={`ps-10 ${authFieldClass}`}
               {...register('email')}
             />
           </div>
           {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="password" className="text-[#161E2C] font-medium">
+          <Label htmlFor="password" className={authLabelClass}>
             {t('password')}
           </Label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#9CA3AF]" />
+            <Lock className={authIconClass} />
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
               placeholder="Enter your password"
-              className="pl-10 pr-10 h-11 border-[#E5E7EB] focus-visible:ring-[#FD8018] focus-visible:border-[#FD6203]"
+              className={`ps-10 pe-10 ${authFieldClass}`}
               {...register('password')}
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
+              className="absolute end-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
               aria-label={showPassword ? t('hidePassword') : t('showPassword')}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}

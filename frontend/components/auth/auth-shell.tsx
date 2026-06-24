@@ -69,7 +69,7 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
                 priority
               />
             </div>
-            <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(22,30,44,0.08)] border border-[#E5E7EB] p-8 sm:p-10">
+            <div className="auth-form bg-white rounded-2xl shadow-[0_8px_30px_rgba(22,30,44,0.08)] border border-[#E5E7EB] p-8 sm:p-10">
               <div className="mb-8 text-center lg:text-start">
                 <h2 className="text-2xl font-bold text-[#161E2C]">{title}</h2>
                 <p className="mt-2 text-sm text-[#4B5563]">{subtitle}</p>

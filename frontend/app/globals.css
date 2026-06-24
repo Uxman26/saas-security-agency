@@ -179,3 +179,21 @@
 .animate-glow-breathe {
   animation: glow-breathe 4s ease-in-out infinite;
 }
+
+.auth-form input,
+.auth-form [data-slot="select-trigger"] {
+  color: #161e2c;
+}
+
+.auth-form input::placeholder {
+  color: #9ca3af;
+}
+
+.auth-form input:-webkit-autofill,
+.auth-form input:-webkit-autofill:hover,
+.auth-form input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: #161e2c;
+  caret-color: #161e2c;
+  transition: background-color 9999s ease-out 0s;
+}

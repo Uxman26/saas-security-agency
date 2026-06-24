@@ -1,75 +1,42 @@
 import type { PlanTier } from './types';
 
-const TIER_DISPLAY: Record<string, { name: string; description: string; highlighted?: boolean; extras: string[] }> = {
-  basic: {
-    name: 'Basic',
-    description: 'For small teams getting started.',
-    extras: ['Sites & assignments', 'Rota view', 'Payroll & invoices', 'Compliance alerts'],
-  },
-  standard: {
-    name: 'Standard',
-    description: 'For growing security companies.',
-    highlighted: true,
-    extras: ['Everything in Basic', 'Clients & sub-contractors', 'Allowances & rates', 'Dashboard stats'],
-  },
-  premium: {
-    name: 'Premium',
-    description: 'For larger operations.',
-    extras: ['Everything in Standard', 'Priority support', 'Custom reporting', 'API access'],
-  },
-  enterprise: {
-    name: 'Enterprise',
-    description: 'For national-scale operations.',
-    extras: ['Everything in Premium', 'Sub-contractor module', 'Dedicated support', 'Custom SLAs'],
-  },
-};
+type TFn = (key: string, values?: Record<string, string | number>) => string;
+type TRaw = { raw: (key: string) => unknown };
 
-export function guardLabel(max: number | null | undefined) {
-  return max != null ? `Up to ${max} guards` : 'Unlimited guards';
-}
+const HIGHLIGHTED = new Set(['standard']);
 
-export function siteLabel(max: number | null | undefined) {
-  return max != null ? `Up to ${max} sites` : 'Unlimited sites';
-}
-
-export function workerLabel(max: number | null | undefined) {
-  return max != null ? `Up to ${max} active workers` : 'Unlimited active workers';
-}
-
-export function userLabel(max: number | null | undefined) {
-  return max != null ? `Up to ${max} system users` : 'Unlimited system users';
-}
-
-export function planDetails(tier: PlanTier) {
-  const support =
-    tier.tier === 'enterprise' ? 'Dedicated support' : tier.tier === 'premium' ? 'Priority support' : 'Standard support';
-  return {
-    billing: 'Monthly billing',
-    vat: 'Prices exclude VAT',
-    workers: workerLabel(tier.max_guards),
-    users: userLabel(tier.max_users),
-    support,
-    setup: 'Setup and onboarding — contact us for options',
-    contract: 'Monthly subscription',
-    cancellation: 'Change or cancel subject to your billing terms',
-    trial: 'Contact us to discuss demonstration and trial options',
-    changes: 'Upgrade or downgrade as your operation develops',
-  };
-}
-
-export function planFeatures(tier: PlanTier): string[] {
-  const meta = TIER_DISPLAY[tier.tier];
-  const lines = [workerLabel(tier.max_guards), userLabel(tier.max_users)];
-  if (meta) lines.push(...meta.extras);
+export function planFeatures(tier: PlanTier, t: TFn, tr: TRaw): string[] {
+  const tierKey = tier.tier;
+  const lines = [
+    tier.max_guards != null ? t('workersLimited', { max: tier.max_guards }) : t('workersUnlimited'),
+    tier.max_users != null ? t('usersLimited', { max: tier.max_users }) : t('usersUnlimited'),
+  ];
+  const extras = tr.raw(`${tierKey}.extras`) as string[] | undefined;
+  if (extras?.length) lines.push(...extras);
   return lines;
 }
 
-export function planDisplay(tier: PlanTier) {
-  const meta = TIER_DISPLAY[tier.tier];
+export function planDetails(tier: PlanTier, t: TFn) {
+  const support =
+    tier.tier === 'enterprise' ? t('supportDedicated') : tier.tier === 'premium' ? t('supportPriority') : t('supportStandard');
   return {
-    name: meta?.name ?? tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1),
-    description: meta?.description ?? '',
-    highlighted: meta?.highlighted ?? false,
+    billing: t('billing'),
+    vat: t('vat'),
+    support,
+    setup: t('setup'),
+    contract: t('contract'),
+    cancellation: t('cancellation'),
+    trial: t('trial'),
+    changes: t('changes'),
+  };
+}
+
+export function planDisplay(tier: PlanTier, t: TFn) {
+  const tierKey = tier.tier;
+  return {
+    name: t(`${tierKey}.name`),
+    description: t(`${tierKey}.description`),
+    highlighted: HIGHLIGHTED.has(tierKey),
   };
 }
 

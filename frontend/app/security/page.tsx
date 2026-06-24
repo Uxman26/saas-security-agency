@@ -1,11 +1,7 @@
-import { LegalPage } from '@/components/marketing/legal-page';
+import { LegalPageClient } from '@/components/marketing/legal-page-client';
 
-export const metadata = { title: 'Security | ControlOps' };
+export const metadata = { title: { absolute: 'Security | ControlOps' } };
 
 export default function SecurityPage() {
-  return (
-    <LegalPage title="Security">
-      <p>ControlOps uses authenticated access and company-scoped data separation. Detailed security documentation is available on request for business customers evaluating the platform.</p>
-    </LegalPage>
-  );
+  return <LegalPageClient page="security" />;
 }

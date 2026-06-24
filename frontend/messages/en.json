@@ -176,5 +176,198 @@
     "adminPackages": "Packages",
     "adminSmtp": "SMTP email",
     "adminLogs": "Activity logs"
+  },
+  "marketing": {
+    "nav": {
+      "product": "Product",
+      "industries": "Industries",
+      "pricing": "Pricing",
+      "about": "About",
+      "signIn": "Sign in",
+      "bookDemo": "Book a demo",
+      "security": "Security",
+      "cleaning": "Cleaning & Facilities",
+      "eventStaffing": "Event Staffing",
+      "tempStaffing": "Temporary Staffing",
+      "otherIndustries": "Other Multi-site Service Businesses"
+    },
+    "cta": {
+      "bookDemo": "Book a demo",
+      "viewPricing": "View pricing",
+      "discussRequirements": "Discuss your requirements",
+      "getStarted": "Get started",
+      "bookDemoLink": "Book a demonstration"
+    },
+    "footer": {
+      "desc": "ControlOps is workforce operations software for shift-based service businesses that manage employees, contractors, sites and client assignments.",
+      "tagline": "Every shift. One operational system.",
+      "product": "Product",
+      "industries": "Industries",
+      "company": "Company",
+      "legal": "Legal",
+      "about": "About",
+      "platform": "Platform",
+      "workforce": "Workforce management",
+      "rota": "Rota and scheduling",
+      "sites": "Sites and locations",
+      "records": "Workforce records",
+      "payroll": "Payroll",
+      "invoicing": "Invoicing",
+      "reporting": "Reporting",
+      "pricing": "Pricing",
+      "contact": "Contact",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "cookies": "Cookie Policy",
+      "dpa": "Data Processing Agreement",
+      "accessibility": "Accessibility Statement",
+      "security": "Security",
+      "copyright": "ControlOps. Workforce operations software for shift-based service businesses."
+    },
+    "pricing": {
+      "badge": "ControlOps pricing",
+      "title": "Choose a plan that fits your workforce",
+      "subtitle": "Select the ControlOps plan that matches your team size and operational requirements. You can change your plan as your business develops.",
+      "helpPrefix": "Need help choosing?",
+      "helpSuffix": "and we will recommend the most suitable setup.",
+      "unavailable": "Plans are unavailable right now.",
+      "labels": {
+        "support": "Support",
+        "setup": "Setup",
+        "contract": "Contract",
+        "cancellation": "Cancellation",
+        "trial": "Trial",
+        "planChanges": "Plan changes"
+      }
+    },
+    "plans": {
+      "workersLimited": "Up to {max} active workers",
+      "workersUnlimited": "Unlimited active workers",
+      "usersLimited": "Up to {max} system users",
+      "usersUnlimited": "Unlimited system users",
+      "vat": "Prices exclude VAT",
+      "billing": "Monthly billing",
+      "setup": "Setup and onboarding — contact us for options",
+      "contract": "Monthly subscription",
+      "cancellation": "Change or cancel subject to your billing terms",
+      "trial": "Contact us to discuss demonstration and trial options",
+      "changes": "Upgrade or downgrade as your operation develops",
+      "supportStandard": "Standard support",
+      "supportPriority": "Priority support",
+      "supportDedicated": "Dedicated support",
+      "basic": {
+        "name": "Basic",
+        "description": "For small teams getting started.",
+        "extras": ["Sites & assignments", "Rota view", "Payroll & invoices", "Compliance alerts"]
+      },
+      "standard": {
+        "name": "Standard",
+        "description": "For growing service businesses.",
+        "extras": ["Everything in Basic", "Clients & sub-contractors", "Allowances & rates", "Dashboard stats"]
+      },
+      "premium": {
+        "name": "Premium",
+        "description": "For larger operations.",
+        "extras": ["Everything in Standard", "Priority support", "Custom reporting", "API access"]
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "description": "For national-scale operations.",
+        "extras": ["Everything in Premium", "Sub-contractor module", "Dedicated support", "Custom SLAs"]
+      }
+    },
+    "about": {
+      "badge": "About ControlOps",
+      "title": "Built to simplify shift-based service operations",
+      "hero": "ControlOps gives service businesses one place to manage the people, locations, rotas, records, rates and financial processes behind shift-based work.",
+      "hero2": "The platform is adaptable across service industries while providing specialist workflows for security companies.",
+      "whoTitle": "Practical software for operational teams",
+      "whoText": "ControlOps is developed to help operational teams replace disconnected spreadsheets and repetitive administration with one clearer source of operational information.",
+      "missionTitle": "Our mission",
+      "missionText": "Our mission is to make capable workforce operations software accessible to growing service businesses without forcing them to adopt expensive or difficult enterprise systems.",
+      "audienceTitle": "Designed for businesses where every shift matters",
+      "audienceText": "ControlOps is designed for security, cleaning, facilities management, event staffing, temporary staffing and other multi-site service businesses that coordinate people across shifts and client locations.",
+      "securityTitle": "Deep support for security operations",
+      "securityText": "Security remains a core ControlOps specialism. Security companies can manage guards, SIA licence information, right-to-work records, subcontractors, client sites, assignments, rates, payroll information and invoicing from the same platform.",
+      "cta": "See whether ControlOps fits your operation"
+    },
+    "home": {
+      "heroBadge": "Workforce operations software for shift-based service businesses",
+      "heroTitle": "Manage your workforce, shifts, sites, payroll and client billing in one place.",
+      "heroText": "ControlOps helps service businesses organise employees and contractors, schedule work across locations, manage workforce records, prepare payroll information and create client invoices — without disconnected spreadsheets.",
+      "heroSpecialist": "Built for businesses that deliver work through <b>people and shifts</b>, with specialist workflows for <b>security companies</b>.",
+      "heroReassurance": "One operational platform for your workforce, sites, rotas, records, rates and billing.",
+      "dashboardLabel": "ControlOps dashboard",
+      "dashboardPreview": "Shifts · Sites · Payroll · Billing",
+      "dashboardTiles": ["Upcoming shifts", "Workforce", "Document alerts"],
+      "platformTitle": "One platform for the work behind every shift",
+      "platformIntro": "Bring your workforce, rotas, locations, records, rates, payroll information and client billing together so operations, payroll and finance work from the same current information.",
+      "industriesTitle": "Built for businesses that deliver work through people and shifts",
+      "industriesIntro": "ControlOps is especially suited to service businesses that deploy employees and contractors across client sites, manage changing rotas, maintain workforce records and connect completed work to payroll and billing.",
+      "qualifyTitle": "Is ControlOps right for your business?",
+      "qualifyIntro": "ControlOps is designed for growing service businesses that need more than a basic rota calendar.",
+      "howTitle": "Get your shift operations organised",
+      "demoTitle": "See ControlOps using your operational workflow",
+      "demoText": "Book a tailored demonstration using examples that reflect your workforce, locations, rota process, rates and billing requirements.",
+      "demoCta": "Book a tailored demo",
+      "value1Title": "Designed for shift-based complexity",
+      "value1Text": "Manage changing rotas, multiple locations, employee and contractor records, different rates and operational documents without maintaining separate spreadsheets for every process.",
+      "value2Title": "Specialist support for security operations",
+      "value2Text": "Security businesses can manage guard records, SIA licence information, right-to-work records, client sites, subcontractors, payroll information and client invoicing within the same platform.",
+      "value2Link": "Explore ControlOps for security",
+      "pricingTitle": "Plans that grow with your operation",
+      "pricingText": "Choose a plan based on the size and requirements of your workforce. Upgrade or change your plan as your team and operational needs develop.",
+      "comparePlans": "Compare plans",
+      "faqTitle": "Frequently asked questions",
+      "finalTitle": "Bring your shift operations into one place",
+      "finalText": "See how ControlOps can connect your workforce, locations, rotas, records, payroll preparation and client billing.",
+      "howCta": "See how ControlOps works",
+      "highlights": [
+        { "title": "One operational view", "text": "People, locations, shifts and costs in one place." },
+        { "title": "Flexible shift planning", "text": "Organise rotas and assignments across teams and sites." },
+        { "title": "Workforce records", "text": "Keep documents, licences and expiry dates organised." },
+        { "title": "From shift to billing", "text": "Connect work records to payroll preparation and client invoices." }
+      ],
+      "capabilities": [
+        { "title": "Workforce management", "text": "Keep employee, contractor and subcontractor details, contacts, working records and important documents organised in one profile.", "href": "/platform#workforce" },
+        { "title": "Sites and locations", "text": "Manage business locations, client sites, contacts and default commercial rates without duplicating information.", "href": "/platform#sites" },
+        { "title": "Rotas and shifts", "text": "Build rotas, assign available team members and organise day, night, weekend and holiday work.", "href": "/platform#rota" },
+        { "title": "Workforce documents", "text": "Record licences, right-to-work information and document expiry dates, with reminders before action is required.", "href": "/platform#records" },
+        { "title": "Rates and allowances", "text": "Apply employee pay rates, client charge rates and allowances to the work they relate to.", "href": "/platform#rates" },
+        { "title": "Payroll preparation", "text": "Prepare pay information from scheduled or completed assignments, including supported rates and allowances.", "href": "/platform#payroll" },
+        { "title": "Client invoicing", "text": "Prepare client invoices using assignment information, charge rates and approved adjustments.", "href": "/platform#invoicing" },
+        { "title": "Operational dashboards", "text": "Review upcoming shifts, workforce status, document warnings and financial information from one dashboard.", "href": "/platform#reporting" }
+      ],
+      "industries": [
+        { "title": "Security services", "text": "Manage guards, subcontractors, client sites, rotas, SIA records, pay rates and client invoices.", "href": "/industries/security", "cta": "ControlOps for security" },
+        { "title": "Cleaning & facilities", "text": "Schedule mobile teams across customer locations while keeping records, rates, payroll information and client billing connected.", "href": "/industries/cleaning-facilities", "cta": "ControlOps for cleaning & facilities" },
+        { "title": "Event staffing", "text": "Coordinate temporary workers, venues, assignments, documents, rates and client charges for changing event schedules.", "href": "/industries/event-staffing", "cta": "ControlOps for event staffing" },
+        { "title": "Temporary staffing agencies", "text": "Manage workers, client assignments, availability, pay rates, charge rates, payroll preparation and invoices.", "href": "/industries/temporary-staffing", "cta": "ControlOps for staffing agencies" },
+        { "title": "Other multi-site service businesses", "text": "Organise employees, contractors, locations and shift-based work around the way your service operation runs.", "href": "/industries", "cta": "Explore industries" }
+      ],
+      "qualification": [
+        "Manages employees, contractors or subcontractors",
+        "Schedules people across multiple locations or client sites",
+        "Uses different pay rates and client charge rates",
+        "Maintains licences, documents or workforce expiry dates",
+        "Prepares payroll information from shifts or assignments",
+        "Invoices clients for delivered work",
+        "Currently relies on several spreadsheets or disconnected systems",
+        "Needs operations, payroll and finance to work from the same information"
+      ],
+      "steps": [
+        { "title": "Configure your company", "text": "Add company information, users, permissions, document types, rates and operational settings." },
+        { "title": "Add your workforce and locations", "text": "Create employee or contractor records and add business locations or client sites." },
+        { "title": "Schedule and manage work", "text": "Build rotas, assign shifts, maintain workforce records and prepare payroll and billing information." }
+      ],
+      "faqs": [
+        { "q": "Is ControlOps only for security companies?", "a": "No. ControlOps is designed for shift-based service businesses that manage employees, contractors, locations or client assignments. It includes specialist workflows for security operations, but its core workforce, rota, payroll-preparation and billing features can support other service businesses." },
+        { "q": "What types of businesses can use ControlOps?", "a": "ControlOps is especially relevant to security, cleaning, facilities management, event staffing and temporary staffing businesses. Other sectors should book a demonstration so we can confirm the product fits their workflow." },
+        { "q": "Can we use ControlOps mainly for rota management?", "a": "Your available features depend on your plan. You can begin with the operational areas your team needs and introduce additional workflows as requirements develop." },
+        { "q": "Does ControlOps support security-company requirements?", "a": "Yes. Security operations can record guard and subcontractor details, SIA licence information, right-to-work records, document expiry dates, client sites, assignments, rates, payroll information and invoices. ControlOps supports internal processes but does not replace legal or regulatory responsibilities." },
+        { "q": "Can we move information from spreadsheets?", "a": "Import options depend on the format and the import features currently available. Contact us so we can review your workforce, location, rate and document data." },
+        { "q": "Can we see the platform before subscribing?", "a": "Yes. Book a demonstration to see the most relevant ControlOps workflows for your business." }
+      ]
+    }
   }
 }

@@ -40,7 +40,7 @@ export function OverviewCharts({ shifts, attendance, payroll, operations }: Prop
   const axisLine = axisLineProps(c);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 grid-cols-1">
       <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm p-4 shadow-sm">
         <p className="text-sm font-semibold text-foreground mb-1">Shift volume</p>
         <p className="text-xs text-muted-foreground mb-4">Last 14 days and next 7 days</p>

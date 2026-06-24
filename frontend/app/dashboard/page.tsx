@@ -304,16 +304,16 @@ export default function DashboardPage() {
                   </div>
                 </section>
 
-                <div className="grid gap-6 xl:grid-cols-3 mb-8">
-                  <div className="xl:col-span-2">
-                    <OverviewCharts
-                      shifts={overview.shifts_by_day}
-                      attendance={overview.attendance_by_status}
-                      payroll={overview.payroll_by_month}
-                      operations={overview.operations_compare}
-                    />
-                  </div>
-                  <div className="space-y-4">
+                <section className="mb-8">
+                  <OverviewCharts
+                    shifts={overview.shifts_by_day}
+                    attendance={overview.attendance_by_status}
+                    payroll={overview.payroll_by_month}
+                    operations={overview.operations_compare}
+                  />
+                </section>
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-8">
                     <Card className="border-border/60 bg-card/90">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-semibold">Contractors</CardTitle>
@@ -388,7 +388,6 @@ export default function DashboardPage() {
                         </CardContent>
                       </Card>
                     )}
-                  </div>
                 </div>
               </>
             )}

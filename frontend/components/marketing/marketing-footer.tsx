@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Shield, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MarketingBrand } from '@/components/marketing/marketing-brand';
 
 export function MarketingFooter() {
   return (
@@ -8,12 +9,9 @@ export function MarketingFooter() {
       <div className="container mx-auto px-4">
         <div className="flex flex-col items-center justify-between gap-8 md:flex-row">
           <div>
-            <div className="flex items-center gap-2 font-semibold text-foreground">
-              <Shield className="size-5 text-primary" />
-              Security Agency SAAS
-            </div>
+            <MarketingBrand linked={false} />
             <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-              Built by Paramount Tech for UK security companies who need compliance, payroll and billing in one platform.
+              Command with Clarity — workforce management for UK security companies.
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
@@ -30,7 +28,7 @@ export function MarketingFooter() {
           </Button>
         </div>
         <p className="mt-8 text-center text-xs text-muted-foreground md:text-left">
-          © {new Date().getFullYear()} Paramount Tech. Security company management platform.
+          © {new Date().getFullYear()} ControlOps. Security company management platform.
         </p>
       </div>
     </footer>

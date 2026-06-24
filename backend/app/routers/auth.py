@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Company
-from app.schemas import UserCreate, UserResponse, UserLogin, UserMeResponse, SignupResponse, SubscriptionReceiptResponse, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas import UserCreate, UserResponse, UserLogin, UserMeResponse, SignupResponse, SubscriptionReceiptResponse, ForgotPasswordRequest, ResetPasswordRequest, VerifyEmailRequest, ResendVerificationRequest
 from app.auth import get_current_user, SUPER_ADMIN_ROLE
 from app.services import auth_service
 from app.rbac import permissions_for_user_db
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
-    user, receipt = auth_service.signup_with_receipt(db, user_data)
+    user, receipt, needs_verify = auth_service.signup_with_receipt(db, user_data)
     co = db.query(Company).filter(Company.id == user.company_id).first()
     return SignupResponse(
         user=UserResponse.model_validate(user),
@@ -37,6 +37,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
             paid_at=receipt.paid_at,
             created_at=receipt.created_at,
         ),
+        email_verification_required=needs_verify,
     )
 
 
@@ -59,6 +60,18 @@ def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
 def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     auth_service.reset_password_with_token(db, body.token, body.new_password)
     return {"message": "Password updated. You can sign in now."}
+
+
+@router.post("/verify-email")
+def verify_email(body: VerifyEmailRequest, db: Session = Depends(get_db)):
+    auth_service.verify_email_with_token(db, body.token)
+    return {"message": "Email verified. You can sign in now."}
+
+
+@router.post("/resend-verification")
+def resend_verification(body: ResendVerificationRequest, db: Session = Depends(get_db)):
+    auth_service.resend_verification_email(db, body.email)
+    return {"message": "If an account exists and needs verification, a new link has been sent."}
 
 
 @router.get("/me", response_model=UserMeResponse)

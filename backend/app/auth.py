@@ -47,6 +47,32 @@ def verify_password_reset_token(token: str) -> int:
     except (JWTError, ValueError, KeyError):
         raise HTTPException(status_code=400, detail="Invalid or expired reset link")
 
+def create_email_verification_token(user_id: int) -> str:
+    expire = datetime.utcnow() + timedelta(hours=24)
+    payload = {"sub": str(user_id), "type": "email_verify", "exp": expire}
+    token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+    return str(token) if not isinstance(token, str) else token
+
+def verify_email_verification_token(token: str) -> int:
+    try:
+        payload = jwt.decode(token.strip(), settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "email_verify":
+            raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+        return int(payload["sub"])
+    except (JWTError, ValueError, KeyError):
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+
+AUTH_PROVIDER_LOCAL = "local"
+AUTH_PROVIDER_GOOGLE = "google"
+AUTH_PROVIDER_MICROSOFT = "microsoft"
+OAUTH_AUTH_PROVIDERS = frozenset({AUTH_PROVIDER_GOOGLE, AUTH_PROVIDER_MICROSOFT})
+
+def requires_email_verification(user: User) -> bool:
+    provider = getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL
+    if provider in OAUTH_AUTH_PROVIDERS:
+        return False
+    return not bool(getattr(user, "email_verified", False))
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

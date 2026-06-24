@@ -38,8 +38,15 @@ function SignupForm() {
     setLoading(true);
     try {
       const res = await api.auth.signup({ ...data, subscription_tier });
-      toast.success('Account created — complete payment to activate');
-      router.push(`/payment-pending?ref=${encodeURIComponent(res.receipt.ref_id)}`);
+      const ref = encodeURIComponent(res.receipt.ref_id);
+      const email = encodeURIComponent(data.email);
+      if (res.email_verification_required) {
+        toast.success('Account created — check your email to verify');
+        router.push(`/verify-email?email=${email}&ref=${ref}`);
+      } else {
+        toast.success('Account created — complete payment to activate');
+        router.push(`/payment-pending?ref=${ref}`);
+      }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Signup failed');
     } finally {

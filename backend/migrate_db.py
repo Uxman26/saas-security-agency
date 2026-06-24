@@ -345,6 +345,18 @@ def run():
             cur.execute("ALTER TABLE users ADD COLUMN client_id INTEGER REFERENCES clients(id)")
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "users") and not column_exists(cur, "users", "email_verified"):
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+            cur.execute("UPDATE users SET email_verified = 1")
+        except sqlite3.OperationalError:
+            pass
+    if table_exists(cur, "users") and not column_exists(cur, "users", "auth_provider"):
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'local'")
+            cur.execute("UPDATE users SET auth_provider = 'local' WHERE auth_provider IS NULL")
+        except sqlite3.OperationalError:
+            pass
     if not table_exists(cur, "staff_requests"):
         try:
             cur.execute(

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +9,6 @@ import { MarketingFooter } from '@/components/marketing/marketing-footer';
 import { ParticlesBackground } from '@/components/marketing/particles-background';
 import { ScrollReveal } from '@/components/marketing/scroll-reveal';
 import {
-  Shield,
   ShieldCheck,
   Users,
   MapPin,
@@ -74,9 +74,18 @@ export default function HomePage() {
         <div className="container relative z-10 mx-auto px-4 py-24 md:py-32">
           <div className="mx-auto max-w-4xl text-center">
             <ScrollReveal>
-              <div className="mb-8 flex justify-center">
-                <div className="rounded-2xl border border-primary/25 bg-card/70 p-6 shadow-xl backdrop-blur-md transition-transform hover:scale-105">
-                  <Shield className="size-16 text-primary animate-shield-pulse" />
+              <div className="mb-6 flex flex-col items-center gap-4">
+                <Image
+                  src="/ControlOps-Logos/controlOps-logo.png"
+                  alt="ControlOps"
+                  width={120}
+                  height={120}
+                  className="size-24 sm:size-28"
+                  priority
+                />
+                <div>
+                  <p className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">ControlOps</p>
+                  <p className="mt-1 text-lg font-semibold text-primary">Command with Clarity.</p>
                 </div>
               </div>
             </ScrollReveal>

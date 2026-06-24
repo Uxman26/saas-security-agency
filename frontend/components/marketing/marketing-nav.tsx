@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Shield } from 'lucide-react';
+import { MarketingBrand } from '@/components/marketing/marketing-brand';
 
 type Props = { active?: 'home' | 'about' | 'pricing' };
 
@@ -22,10 +22,7 @@ export function MarketingNav({ active }: Props) {
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-foreground">
-          <Shield className="size-5 text-primary" />
-          Security Agency
-        </Link>
+        <MarketingBrand />
         <div className="hidden sm:flex items-center gap-6 text-sm">
           {link('/', 'Home', 'home')}
           {link('/about', 'About', 'about')}

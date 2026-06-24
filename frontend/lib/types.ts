@@ -110,6 +110,7 @@ export interface ReceiptPublic {
 export interface SignupResponse {
   user: User;
   receipt: SubscriptionReceipt;
+  email_verification_required?: boolean;
 }
 
 export interface PaymentPendingDetail {

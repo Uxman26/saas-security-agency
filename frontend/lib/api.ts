@@ -114,6 +114,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ token, new_password }),
       }),
+    verifyEmail: (token: string): Promise<{ message: string }> =>
+      request<{ message: string }>('/auth/verify-email', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      }),
+    resendVerification: (email: string): Promise<{ message: string }> =>
+      request<{ message: string }>('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email: sanitizeInput(email) }),
+      }),
   },
   guards: {
     list: (params?: { area?: string; postcode?: string; nearby?: string }): Promise<Guard[]> => {

@@ -24,6 +24,12 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str = Field(min_length=6)
 
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
 class UserResponse(UserBase):
     id: int
     role: Optional[str] = None
@@ -31,6 +37,8 @@ class UserResponse(UserBase):
     company_id: Optional[int] = None
     client_id: Optional[int] = None
     is_active: bool
+    email_verified: bool = False
+    auth_provider: Optional[str] = "local"
     created_at: datetime
 
     class Config:
@@ -70,6 +78,7 @@ class SubscriptionReceiptResponse(BaseModel):
 class SignupResponse(BaseModel):
     user: UserResponse
     receipt: SubscriptionReceiptResponse
+    email_verification_required: bool = False
 
 
 class ReceiptPublicResponse(BaseModel):

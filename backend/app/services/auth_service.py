@@ -3,7 +3,18 @@ from sqlalchemy import func
 from fastapi import HTTPException
 from app.models import User, Company
 from app.schemas import UserCreate
-from app.auth import get_password_hash, create_access_token, SUPER_ADMIN_ROLE, create_password_reset_token, verify_password_reset_token
+from app.auth import (
+    get_password_hash,
+    create_access_token,
+    SUPER_ADMIN_ROLE,
+    create_password_reset_token,
+    verify_password_reset_token,
+    create_email_verification_token,
+    verify_email_verification_token,
+    requires_email_verification,
+    AUTH_PROVIDER_LOCAL,
+    OAUTH_AUTH_PROVIDERS,
+)
 from datetime import timedelta
 from app.config import settings
 from app.services.role_service import ensure_roles_for_company, get_role_by_slug
@@ -11,6 +22,38 @@ from app.services.receipt_service import company_subscription_blocked, create_re
 from app.plan_config import normalize_tier
 from app.services import email_service
 from app.services.module_service import modules_from_plan, dump_modules
+
+def send_verification_email(user: User) -> None:
+    if not requires_email_verification(user):
+        return
+    token = create_email_verification_token(user.id)
+    link = f"{settings.frontend_url.rstrip('/')}/verify-email?token={token}"
+    body = (
+        f"<p>Hi {user.full_name},</p>"
+        f"<p>Please verify your email address to activate your ControlOps account.</p>"
+        f'<p><a href="{link}">Verify email</a></p>'
+        f"<p>This link expires in 24 hours. If you did not create an account, you can ignore this email.</p>"
+    )
+    if email_service.is_configured():
+        email_service.send_email(user.email, "Verify your email", body)
+
+
+def verify_email_with_token(db: Session, token: str) -> None:
+    user_id = verify_email_verification_token(token)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    if (getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL) in OAUTH_AUTH_PROVIDERS:
+        return
+    user.email_verified = True
+    db.commit()
+
+
+def resend_verification_email(db: Session, email: str) -> None:
+    user = db.query(User).filter(func.lower(User.email) == email.lower().strip()).first()
+    if not user or not user.is_active or not requires_email_verification(user):
+        return
+    send_verification_email(user)
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if db.query(User).filter(User.email == user_data.email).first():
@@ -22,6 +65,8 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         password_hash=hashed_password,
         full_name=user_data.full_name,
         role=SUPER_ADMIN_ROLE if is_super else "admin",
+        auth_provider=AUTH_PROVIDER_LOCAL,
+        email_verified=is_super,
     )
     db.add(user)
     db.flush()
@@ -47,6 +92,11 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         create_receipt_for_signup(db, company, user, tier)
     db.commit()
     db.refresh(user)
+    if requires_email_verification(user):
+        try:
+            send_verification_email(user)
+        except Exception:
+            pass
     return user
 
 
@@ -63,7 +113,7 @@ def signup_with_receipt(db: Session, user_data: UserCreate):
     )
     if not r:
         raise HTTPException(status_code=500, detail="Receipt not created")
-    return user, r
+    return user, r, requires_email_verification(user)
 
 def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None, remember_me: bool = False) -> dict:
     from app.auth import verify_password
@@ -76,6 +126,9 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
     if not user.is_active:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=403, detail="Account is deactivated")
+    if requires_email_verification(user):
+        login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
+        raise HTTPException(status_code=403, detail="Email not verified. Check your inbox for the verification link.")
     block = company_subscription_blocked(db, user)
     if block:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)

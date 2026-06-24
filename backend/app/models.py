@@ -37,6 +37,8 @@ class User(Base):
     role = Column(String, default="company_admin")
     role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     is_active = Column(Boolean, default=True)
+    email_verified = Column(Boolean, default=False)
+    auth_provider = Column(String, default="local")
     company_id = Column(Integer, ForeignKey("companies.id"))
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     sidebar_modules_json = Column(Text, nullable=True)

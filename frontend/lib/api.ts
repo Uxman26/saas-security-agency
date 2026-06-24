@@ -955,6 +955,20 @@ export const api = {
     deleteAssignment: (id: string): Promise<void> =>
       request<void>(`/contractors/assignments/${id}`, { method: 'DELETE' }),
   },
+  marketing: {
+    requestDemo: (data: {
+      full_name: string;
+      email: string;
+      company_name: string;
+      industry: string;
+      workforce_size: string;
+      challenge: string;
+      phone?: string;
+      current_system?: string;
+      preferred_time?: string;
+    }): Promise<{ ok: boolean }> =>
+      request<{ ok: boolean }>('/marketing/demo', { method: 'POST', body: JSON.stringify(data) }),
+  },
 };
 
 export { ApiError };

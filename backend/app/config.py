@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     mail_from: str = "noreply@securityagency.com"
     mail_port: int = 587
     mail_server: str = "smtp.gmail.com"
-    mail_from_name: str = "Security Agency"
+    mail_from_name: str = "ControlOps"
     super_admin_email: str = ""
     cors_origins: str = "http://localhost:3000"
     frontend_url: str = "http://localhost:3001"

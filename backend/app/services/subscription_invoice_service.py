@@ -91,7 +91,7 @@ def _email_body(inv: SubscriptionInvoice, co: Company) -> str:
         f"<div style='font-family:sans-serif;max-width:600px'>"
         f"<h2 style='color:#1e293b'>Subscription Invoice</h2>"
         f"<p>Hi {co.name},</p>"
-        f"<p>Your SecureForce Manager subscription invoice is ready.</p>"
+        f"<p>Your ControlOps subscription invoice is ready.</p>"
         f"<table style='width:100%;border-collapse:collapse;margin:16px 0'>"
         f"<tr><td style='padding:8px;border-bottom:1px solid #e2e8f0'>Invoice</td>"
         f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'><strong>{inv.invoice_number}</strong></td></tr>"

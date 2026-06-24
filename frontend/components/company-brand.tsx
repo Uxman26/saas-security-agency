@@ -10,7 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 export function CompanyBrand({ className = '' }: { className?: string }) {
   const { user } = useAuth();
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
-  const name = user?.company_name || 'SecureForce';
+  const name = user?.company_name || 'ControlOps';
 
   useEffect(() => {
     if (!user?.logo_url) {

@@ -32,9 +32,34 @@ export function siteLabel(max: number | null | undefined) {
   return max != null ? `Up to ${max} sites` : 'Unlimited sites';
 }
 
+export function workerLabel(max: number | null | undefined) {
+  return max != null ? `Up to ${max} active workers` : 'Unlimited active workers';
+}
+
+export function userLabel(max: number | null | undefined) {
+  return max != null ? `Up to ${max} system users` : 'Unlimited system users';
+}
+
+export function planDetails(tier: PlanTier) {
+  const support =
+    tier.tier === 'enterprise' ? 'Dedicated support' : tier.tier === 'premium' ? 'Priority support' : 'Standard support';
+  return {
+    billing: 'Monthly billing',
+    vat: 'Prices exclude VAT',
+    workers: workerLabel(tier.max_guards),
+    users: userLabel(tier.max_users),
+    support,
+    setup: 'Setup and onboarding — contact us for options',
+    contract: 'Monthly subscription',
+    cancellation: 'Change or cancel subject to your billing terms',
+    trial: 'Contact us to discuss demonstration and trial options',
+    changes: 'Upgrade or downgrade as your operation develops',
+  };
+}
+
 export function planFeatures(tier: PlanTier): string[] {
   const meta = TIER_DISPLAY[tier.tier];
-  const lines = [guardLabel(tier.max_guards)];
+  const lines = [workerLabel(tier.max_guards), userLabel(tier.max_users)];
   if (meta) lines.push(...meta.extras);
   return lines;
 }

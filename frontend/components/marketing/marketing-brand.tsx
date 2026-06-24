@@ -13,7 +13,7 @@ export function MarketingBrand({ className, variant = 'horizontal', linked = tru
     variant === 'horizontal' ? (
       <Image
         src="/ControlOps-Logos/controlOps-horizontal-logo.png"
-        alt="ControlOps"
+        alt="ControlOps workforce operations platform"
         width={200}
         height={52}
         className="h-8 w-auto"
@@ -22,7 +22,7 @@ export function MarketingBrand({ className, variant = 'horizontal', linked = tru
     ) : (
       <Image
         src="/ControlOps-Logos/controlOps-logo.png"
-        alt="ControlOps"
+        alt="ControlOps workforce operations platform"
         width={48}
         height={48}
         className="size-10"

@@ -93,7 +93,7 @@ export default function AdminSubscriptionInvoicePage() {
             <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white px-8 py-6">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-xs uppercase tracking-widest text-slate-400">SecureForce Manager</p>
+                  <p className="text-xs uppercase tracking-widest text-slate-400">ControlOps</p>
                   <h1 className="text-2xl font-bold mt-1">Subscription Invoice</h1>
                 </div>
                 <div className="text-right">

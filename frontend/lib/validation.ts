@@ -32,6 +32,8 @@ export const signupSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters').regex(/[A-Z]/, 'Password must contain uppercase letter').regex(/[a-z]/, 'Password must contain lowercase letter').regex(/[0-9]/, 'Password must contain number'),
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   company_name: z.string().min(2, 'Company name must be at least 2 characters').max(100),
+  industry: z.string().min(1, 'Select an industry'),
+  workforce_size: z.string().min(1, 'Select workforce size'),
 });
 
 const optPosInt = z.preprocess(

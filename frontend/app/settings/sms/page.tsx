@@ -41,7 +41,7 @@ export default function SmsSettingsPage() {
   const [phone, setPhone] = useState('');
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [testTo, setTestTo] = useState('');
-  const [testBody, setTestBody] = useState('Test message from SecureForce Manager');
+  const [testBody, setTestBody] = useState('Test message from ControlOps');
   const [saving, setSaving] = useState(false);
 
   const load = () => {

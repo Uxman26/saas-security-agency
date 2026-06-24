@@ -39,7 +39,7 @@ def send_email(email_data: EmailRequest, db: Session = Depends(get_db), current_
 @router.post("/test", response_model=EmailLogResponse)
 def test_email(body: EmailTestRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_EMAIL_SEND))):
     subject = body.subject or "Test email"
-    content = body.body or "<p>This is a test email from SecureForce Manager.</p>"
+    content = body.body or "<p>This is a test email from ControlOps.</p>"
     log = email_config_service.send_tenant_email(db, current_user.id, body.to_email, subject, content, "alert")
     return EmailLogResponse.model_validate(log)
 

@@ -29,7 +29,7 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
         <div className="relative">
           <Image
             src="/ControlOps-Logos/controlOps-horizontal-logo.png"
-            alt="ControlOps"
+            alt="ControlOps workforce operations platform"
             width={400}
             height={104}
             className="h-24 xl:h-28 w-auto"
@@ -40,6 +40,7 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
           <h1 className="text-4xl xl:text-5xl font-bold tracking-tight text-[#161E2C]">{t('brandTitle')}</h1>
           <p className="text-xl font-semibold text-[#FD6203]">{t('tagline')}</p>
           <p className="text-base text-[#4B5563] leading-relaxed">{t('brandSubtitle')}</p>
+          <p className="text-sm text-[#4B5563]">{t('brandSupporting')}</p>
         </div>
         <p className="relative text-sm text-[#4B5563] flex items-center gap-2">
           <Shield className="size-4 text-[#FD6203]" />

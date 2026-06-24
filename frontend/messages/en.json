@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "ControlOps — Command with Clarity",
-    "description": "Command with Clarity — smart workforce management for security teams"
+    "title": "Workforce Operations & Rota Management Software | ControlOps",
+    "description": "Manage employees, contractors, rotas, client sites, workforce records, payroll preparation and billing with ControlOps."
   },
   "common": {
     "signIn": "Sign in",
@@ -87,20 +87,23 @@
     "getStarted": "Get started"
   },
   "auth": {
-    "tagline": "Command with Clarity.",
-    "brandTitle": "ControlOps",
-    "brandSubtitle": "Smart workforce management for security teams. Real-time visibility, smarter decisions, operational excellence.",
-    "secureNote": "Secure. Reliable. Always.",
-    "footerNote": "Secure access for operations teams. Enterprise-grade encryption.",
+    "tagline": "Every shift. One operational system.",
+    "brandTitle": "Run every shift with clarity.",
+    "brandSubtitle": "Workforce operations software for teams managing people, locations, rotas, records, payroll information and billing.",
+    "brandSupporting": "One operational view. Fewer disconnected processes.",
+    "secureNote": "Secure account access for authorised ControlOps users.",
+    "footerNote": "Secure access for authorised ControlOps users.",
     "loginTitle": "Welcome back",
     "loginSubtitle": "Sign in to continue to ControlOps",
-    "signupTitle": "Create your account",
-    "signupSubtitle": "Register your company on ControlOps",
+    "signupTitle": "Create your ControlOps account",
+    "signupSubtitle": "Set up your company and begin organising your workforce, locations and rotas.",
     "signupSubtitlePlan": "Start with the {tier} plan on ControlOps",
     "email": "Work email",
     "password": "Password",
     "fullName": "Full name",
     "companyName": "Company name",
+    "industry": "Industry",
+    "workforceSize": "Approximate workforce size",
     "rememberMe": "Remember me",
     "forgotPassword": "Forgot password?",
     "creatingAccount": "Creating account…",

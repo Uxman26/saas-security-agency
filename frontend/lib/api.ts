@@ -260,17 +260,23 @@ export const api = {
       request<import('./types').StaffRequest[]>(status ? `/staff-requests?status=${status}` : '/staff-requests'),
     get: (id: number): Promise<import('./types').StaffRequest> =>
       request<import('./types').StaffRequest>(`/staff-requests/${id}`),
-    create: (data: {
+    createBulk: (data: {
       client_id?: number;
       site_id: number;
-      shift_date: string;
       shift_start: string;
       shift_end: string;
       break_minutes?: number;
       staff_count?: number;
       client_notes?: string;
-    }): Promise<import('./types').StaffRequest> =>
-      request<import('./types').StaffRequest>('/staff-requests', { method: 'POST', body: JSON.stringify(data) }),
+      shifts: {
+        shift_date: string;
+        shift_start?: string;
+        shift_end?: string;
+        break_minutes?: number;
+        staff_count?: number;
+      }[];
+    }): Promise<import('./types').StaffRequest[]> =>
+      request<import('./types').StaffRequest[]>('/staff-requests/bulk', { method: 'POST', body: JSON.stringify(data) }),
     approve: (id: number, comment?: string): Promise<import('./types').StaffRequest> =>
       request<import('./types').StaffRequest>(`/staff-requests/${id}/approve`, {
         method: 'POST',

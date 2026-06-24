@@ -1085,6 +1085,25 @@ class StaffRequestCreate(BaseModel):
     client_notes: Optional[str] = None
 
 
+class StaffRequestShiftItem(BaseModel):
+    shift_date: date
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    break_minutes: Optional[int] = Field(default=None, ge=0)
+    staff_count: Optional[int] = Field(default=None, ge=1, le=50)
+
+
+class StaffRequestBulkCreate(BaseModel):
+    client_id: Optional[int] = None
+    site_id: int
+    shift_start: str
+    shift_end: str
+    break_minutes: int = 30
+    staff_count: int = Field(default=1, ge=1, le=50)
+    client_notes: Optional[str] = None
+    shifts: list[StaffRequestShiftItem] = Field(min_length=1, max_length=31)
+
+
 class StaffRequestReview(BaseModel):
     comment: Optional[str] = None
 

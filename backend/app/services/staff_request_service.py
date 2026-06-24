@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import Client, RotaPlan, Site, StaffRequest, User
 from app.rbac import user_has_permission_db, PERM_STAFF_REQ_REVIEW
-from app.schemas import StaffRequestCreate, StaffRequestReview, StaffRequestResponse
+from app.schemas import StaffRequestBulkCreate, StaffRequestCreate, StaffRequestReview, StaffRequestResponse
 from app.services.company_service import get_company_by_user_id
 
 OPEN_EMP_ID = "__open__"
@@ -169,6 +169,37 @@ def _resolve_client_id(db: Session, user: User, data: StaffRequestCreate) -> int
     raise HTTPException(status_code=400, detail="Client is required for this request")
 
 
+def _create_staff_request_row(
+    db: Session,
+    company_id: int,
+    client_id: int,
+    site_id: int,
+    user_id: int,
+    shift_date: date,
+    shift_start: str,
+    shift_end: str,
+    break_minutes: int,
+    staff_count: int,
+    client_notes: str | None,
+) -> StaffRequest:
+    req = StaffRequest(
+        company_id=company_id,
+        client_id=client_id,
+        site_id=site_id,
+        requested_by_user_id=user_id,
+        shift_date=shift_date,
+        shift_start=shift_start,
+        shift_end=shift_end,
+        break_minutes=break_minutes,
+        staff_count=staff_count,
+        client_notes=client_notes,
+        status="pending",
+    )
+    db.add(req)
+    db.flush()
+    return req
+
+
 def create_staff_request(db: Session, user: User, data: StaffRequestCreate) -> StaffRequestResponse:
     company = get_company_by_user_id(db, user.id)
     client_id = _resolve_client_id(db, user, data)
@@ -179,23 +210,53 @@ def create_staff_request(db: Session, user: User, data: StaffRequestCreate) -> S
     )
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
-    req = StaffRequest(
-        company_id=company.id,
-        client_id=client_id,
-        site_id=site.id,
-        requested_by_user_id=user.id,
-        shift_date=data.shift_date,
-        shift_start=data.shift_start,
-        shift_end=data.shift_end,
-        break_minutes=data.break_minutes,
-        staff_count=data.staff_count,
-        client_notes=(data.client_notes or "").strip() or None,
-        status="pending",
+    notes = (data.client_notes or "").strip() or None
+    req = _create_staff_request_row(
+        db,
+        company.id,
+        client_id,
+        site.id,
+        user.id,
+        data.shift_date,
+        data.shift_start,
+        data.shift_end,
+        data.break_minutes,
+        data.staff_count,
+        notes,
     )
-    db.add(req)
     db.commit()
-    db.refresh(req)
     return _load_one(db, company.id, req.id)
+
+
+def create_staff_requests_bulk(db: Session, user: User, data: StaffRequestBulkCreate) -> list[StaffRequestResponse]:
+    company = get_company_by_user_id(db, user.id)
+    client_id = _resolve_client_id(db, user, data)
+    site = (
+        db.query(Site)
+        .filter(Site.id == data.site_id, Site.company_id == company.id)
+        .first()
+    )
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    notes = (data.client_notes or "").strip() or None
+    ids: list[int] = []
+    for item in data.shifts:
+        req = _create_staff_request_row(
+            db,
+            company.id,
+            client_id,
+            site.id,
+            user.id,
+            item.shift_date,
+            item.shift_start or data.shift_start,
+            item.shift_end or data.shift_end,
+            item.break_minutes if item.break_minutes is not None else data.break_minutes,
+            item.staff_count if item.staff_count is not None else data.staff_count,
+            notes,
+        )
+        ids.append(req.id)
+    db.commit()
+    return [_load_one(db, company.id, i) for i in ids]
 
 
 def list_staff_requests(

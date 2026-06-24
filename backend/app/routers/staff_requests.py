@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.rbac import PERM_STAFF_REQ_READ, PERM_STAFF_REQ_REVIEW, PERM_STAFF_REQ_WRITE, require_perm
-from app.schemas import StaffRequestCreate, StaffRequestResponse, StaffRequestReview
+from app.schemas import StaffRequestBulkCreate, StaffRequestCreate, StaffRequestResponse, StaffRequestReview
 from app.services import staff_request_service
 
 router = APIRouter(prefix="/staff-requests", tags=["staff-requests"])
@@ -28,6 +28,15 @@ def create_request(
     current_user: User = Depends(require_perm(PERM_STAFF_REQ_WRITE)),
 ):
     return staff_request_service.create_staff_request(db, current_user, body)
+
+
+@router.post("/bulk", response_model=list[StaffRequestResponse], status_code=status.HTTP_201_CREATED)
+def create_requests_bulk(
+    body: StaffRequestBulkCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_STAFF_REQ_WRITE)),
+):
+    return staff_request_service.create_staff_requests_bulk(db, current_user, body)
 
 
 @router.get("/{request_id}", response_model=StaffRequestResponse)

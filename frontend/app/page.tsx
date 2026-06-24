@@ -105,7 +105,7 @@ export default function HomePage() {
                   <Link href="/pricing">View plans <ArrowRight className="size-4" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg" className="backdrop-blur-sm bg-background/50">
-                  <Link href="/signup">Create company</Link>
+                  <Link href="/pricing">Create company</Link>
                 </Button>
               </div>
             </ScrollReveal>
@@ -262,7 +262,7 @@ export default function HomePage() {
                     <Link href="/pricing">See plans</Link>
                   </Button>
                   <Button asChild variant="outline" size="lg">
-                    <Link href="/signup">Sign up</Link>
+                    <Link href="/pricing">Sign up</Link>
                   </Button>
                 </div>
               </CardContent>
@@ -301,7 +301,7 @@ export default function HomePage() {
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Button asChild size="lg" className="gap-2 shadow-lg shadow-primary/20">
-              <Link href="/signup">Create company <ArrowRight className="size-4" /></Link>
+              <Link href="/pricing">Create company <ArrowRight className="size-4" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/about">Learn about us</Link>

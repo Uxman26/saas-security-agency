@@ -92,7 +92,7 @@ export default function AboutPage() {
                   <Link href="/pricing">Explore plans <ArrowRight className="size-4" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg" className="backdrop-blur-sm bg-background/50">
-                  <Link href="/signup">Start free setup</Link>
+                  <Link href="/pricing">Start free setup</Link>
                 </Button>
               </div>
             </ScrollReveal>
@@ -297,7 +297,7 @@ export default function AboutPage() {
           </p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
             <Button asChild size="lg" className="gap-2">
-              <Link href="/signup">Create your company <ArrowRight className="size-4" /></Link>
+              <Link href="/pricing">Create your company <ArrowRight className="size-4" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/pricing">View pricing</Link>

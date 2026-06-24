@@ -55,11 +55,11 @@ export default function LoginPage() {
     <AuthShell
       title="Welcome back"
       subtitle="Sign in to continue to ControlOps"
-      topLink={{ href: '/signup', label: 'Create account' }}
+      topLink={{ href: '/pricing', label: 'View plans' }}
       footer={
         <>
           Don&apos;t have an account?{' '}
-          <Link href="/signup" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
+          <Link href="/pricing" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
             Sign up
           </Link>
         </>

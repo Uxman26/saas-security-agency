@@ -20,7 +20,7 @@ export function MarketingFooter() {
             <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
             <Link href="/about" className="hover:text-foreground transition-colors">About</Link>
             <Link href="/pricing" className="hover:text-foreground transition-colors">Pricing</Link>
-            <Link href="/signup" className="hover:text-foreground transition-colors">Sign up</Link>
+            <Link href="/pricing" className="hover:text-foreground transition-colors">Sign up</Link>
             <Link href="/login" className="hover:text-foreground transition-colors">Sign in</Link>
           </div>
           <Button asChild size="sm" className="gap-1.5 shrink-0">

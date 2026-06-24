@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -22,6 +22,10 @@ function SignupForm() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    if (!tierParam) router.replace('/pricing');
+  }, [tierParam, router]);
+
   const {
     register,
     handleSubmit,
@@ -42,6 +46,8 @@ function SignupForm() {
       setLoading(false);
     }
   };
+
+  if (!subscription_tier) return null;
 
   return (
     <AuthShell

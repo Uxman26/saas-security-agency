@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     frontend_url: str = "http://localhost:3001"
     redis_url: str = "redis://localhost:6379/0"
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_application_fee_percent: float = 0
 
     @field_validator("database_url", mode="before")
     @classmethod

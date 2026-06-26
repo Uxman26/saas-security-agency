@@ -14,8 +14,12 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: t('description'),
     icons: {
-      icon: '/ControlOps-Logos/controlOps-icon.png',
+      icon: [
+        { url: '/ControlOps-Logos/controlOps-icon.png', type: 'image/png', sizes: '512x512' },
+        { url: '/ControlOps-Logos/controlOps-icon-192.png', type: 'image/png', sizes: '192x192' },
+      ],
       apple: '/ControlOps-Logos/controlOps-icon.png',
+      shortcut: '/ControlOps-Logos/controlOps-icon.png',
     },
   };
 }

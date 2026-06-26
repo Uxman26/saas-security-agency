@@ -1411,32 +1411,48 @@ class ShiftLateLogResponse(BaseModel):
 
 
 class LeadCreate(BaseModel):
-    title: str
+    title: Optional[str] = None
+    organization: Optional[str] = None
     contact_name: Optional[str] = None
+    designation: Optional[str] = None
     email: Optional[str] = None
+    email_secondary: Optional[str] = None
     phone: Optional[str] = None
+    phone_secondary: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
+    postcode: Optional[str] = None
+    comments: Optional[str] = None
     source: Optional[str] = None
     status: Optional[str] = "new"
-    priority: Optional[str] = "medium"
+    priority: Optional[str] = "moderate"
     estimated_value: Optional[float] = 0
     assigned_user_id: Optional[int] = None
+    next_follow_up_at: Optional[datetime] = None
+    meeting_at: Optional[datetime] = None
     force_duplicate: Optional[bool] = False
 
 
 class LeadUpdate(BaseModel):
     title: Optional[str] = None
+    organization: Optional[str] = None
     contact_name: Optional[str] = None
+    designation: Optional[str] = None
     email: Optional[str] = None
+    email_secondary: Optional[str] = None
     phone: Optional[str] = None
+    phone_secondary: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
+    postcode: Optional[str] = None
+    comments: Optional[str] = None
     source: Optional[str] = None
+    status: Optional[str] = None
     priority: Optional[str] = None
     estimated_value: Optional[float] = None
     assigned_user_id: Optional[int] = None
     next_follow_up_at: Optional[datetime] = None
+    meeting_at: Optional[datetime] = None
     force_duplicate: Optional[bool] = False
 
 
@@ -1494,11 +1510,17 @@ class LeadResponse(BaseModel):
     id: int
     company_id: int
     title: str
+    organization: Optional[str] = None
     contact_name: Optional[str] = None
+    designation: Optional[str] = None
     email: Optional[str] = None
+    email_secondary: Optional[str] = None
     phone: Optional[str] = None
+    phone_secondary: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
+    postcode: Optional[str] = None
+    comments: Optional[str] = None
     source: Optional[str] = None
     status: str
     priority: Optional[str] = None
@@ -1510,6 +1532,7 @@ class LeadResponse(BaseModel):
     converted_to_type: Optional[str] = None
     converted_to_id: Optional[int] = None
     next_follow_up_at: Optional[datetime] = None
+    meeting_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

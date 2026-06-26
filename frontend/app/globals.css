@@ -197,3 +197,31 @@
   caret-color: #161e2c;
   transition: background-color 9999s ease-out 0s;
 }
+
+.marketing-hero-bg {
+  background:
+    radial-gradient(ellipse 90% 70% at 10% -10%, rgb(253 98 3 / 0.12), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 90% 20%, rgb(253 128 24 / 0.08), transparent 50%),
+    var(--background);
+}
+
+.marketing-accent-bg {
+  background:
+    radial-gradient(ellipse 70% 50% at 100% 0%, rgb(253 98 3 / 0.06), transparent 50%),
+    var(--muted);
+}
+
+.marketing-cta-bg {
+  background:
+    linear-gradient(135deg, rgb(253 98 3 / 0.08) 0%, transparent 50%),
+    linear-gradient(225deg, rgb(22 30 44 / 0.04) 0%, transparent 50%),
+    var(--background);
+}
+
+.marketing-card-hover {
+  @apply transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5;
+}
+
+.marketing-gradient-text {
+  @apply bg-gradient-to-r from-primary via-[#FD8018] to-[#DF3C01] bg-clip-text text-transparent;
+}

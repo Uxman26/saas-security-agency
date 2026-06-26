@@ -6,34 +6,40 @@ type Props = {
   className?: string;
   variant?: 'horizontal' | 'icon';
   linked?: boolean;
+  size?: 'nav' | 'default';
 };
 
-export function MarketingBrand({ className, variant = 'horizontal', linked = true }: Props) {
+const horizontalClass = {
+  nav: 'h-11 w-auto sm:h-12 md:h-14 max-h-14',
+  default: 'h-10 w-auto sm:h-11',
+} as const;
+
+export function MarketingBrand({ className, variant = 'horizontal', linked = true, size = 'default' }: Props) {
   const img =
     variant === 'horizontal' ? (
       <Image
         src="/ControlOps-Logos/controlOps-horizontal-logo.png"
         alt="ControlOps workforce operations platform"
-        width={200}
-        height={52}
-        className="h-8 w-auto"
+        width={360}
+        height={180}
+        className={horizontalClass[size]}
         priority
       />
     ) : (
       <Image
         src="/ControlOps-Logos/controlOps-logo.png"
         alt="ControlOps workforce operations platform"
-        width={48}
-        height={48}
-        className="size-10"
+        width={56}
+        height={56}
+        className={size === 'nav' ? 'size-11 sm:size-12' : 'size-10'}
         priority
       />
     );
 
-  if (!linked) return <div className={cn('flex items-center', className)}>{img}</div>;
+  if (!linked) return <div className={cn('flex shrink-0 items-center', className)}>{img}</div>;
 
   return (
-    <Link href="/" className={cn('flex items-center', className)}>
+    <Link href="/" className={cn('flex shrink-0 items-center', className)}>
       {img}
     </Link>
   );

@@ -4,7 +4,10 @@ import { useTranslations } from 'next-intl';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { MarketingFooter } from '@/components/marketing/marketing-footer';
 import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
+import { MarketingSection, SectionHeading } from '@/components/marketing/marketing-section';
+import { RichInline } from '@/components/marketing/marketing-rich-text';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Target, Users, Shield } from 'lucide-react';
 
 export function AboutContent() {
   const t = useTranslations('marketing.about');
@@ -12,47 +15,68 @@ export function AboutContent() {
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav active="about" />
-      <section className="border-b border-border/50 py-16 md:py-24">
+      <MarketingSection variant="hero" className="py-16 md:py-24">
         <div className="container mx-auto px-4 max-w-4xl">
           <Eyebrow>{t('badge')}</Eyebrow>
           <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="mt-6 text-lg text-muted-foreground leading-relaxed">{t('hero')}</p>
-          <p className="mt-4 text-muted-foreground leading-relaxed">{t('hero2')}</p>
+          <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
+            <RichInline text={t('hero')} />
+          </p>
+          <p className="mt-4 text-muted-foreground leading-relaxed">
+            <RichInline text={t('hero2')} />
+          </p>
         </div>
-      </section>
-      <section className="py-16 border-b border-border/50 bg-muted/20">
-        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-8">
-          <Card>
+      </MarketingSection>
+      <MarketingSection variant="muted">
+        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-6">
+          <Card className="marketing-card-hover border-t-2 border-t-primary/50">
             <CardHeader>
+              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Users className="size-5" />
+              </div>
               <CardTitle>{t('whoTitle')}</CardTitle>
             </CardHeader>
-            <CardContent className="text-muted-foreground leading-relaxed">{t('whoText')}</CardContent>
+            <CardContent className="text-muted-foreground leading-relaxed">
+              <RichInline text={t('whoText')} />
+            </CardContent>
           </Card>
-          <Card>
+          <Card className="marketing-card-hover border-t-2 border-t-primary/50">
             <CardHeader>
+              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Target className="size-5" />
+              </div>
               <CardTitle>{t('missionTitle')}</CardTitle>
             </CardHeader>
-            <CardContent className="text-muted-foreground leading-relaxed">{t('missionText')}</CardContent>
+            <CardContent className="text-muted-foreground leading-relaxed">
+              <RichInline text={t('missionText')} />
+            </CardContent>
           </Card>
         </div>
-      </section>
-      <section className="py-16 border-b border-border/50">
-        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-8">
-          <div>
+      </MarketingSection>
+      <MarketingSection>
+        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-10">
+          <div className="rounded-2xl border bg-card p-6 marketing-card-hover">
             <h2 className="text-2xl font-bold">{t('audienceTitle')}</h2>
-            <p className="mt-4 text-muted-foreground leading-relaxed">{t('audienceText')}</p>
+            <p className="mt-4 text-muted-foreground leading-relaxed">
+              <RichInline text={t('audienceText')} />
+            </p>
           </div>
-          <div>
+          <div className="rounded-2xl border bg-card p-6 marketing-card-hover border-s-4 border-s-primary">
+            <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Shield className="size-5" />
+            </div>
             <h2 className="text-2xl font-bold">{t('securityTitle')}</h2>
-            <p className="mt-4 text-muted-foreground leading-relaxed">{t('securityText')}</p>
+            <p className="mt-4 text-muted-foreground leading-relaxed">
+              <RichInline text={t('securityText')} />
+            </p>
           </div>
         </div>
-      </section>
-      <section className="py-16">
+      </MarketingSection>
+      <MarketingSection border={false} variant="cta" className="py-16">
         <div className="container mx-auto px-4 text-center">
           <MarketingCta href="/book-demo">{t('cta')}</MarketingCta>
         </div>
-      </section>
+      </MarketingSection>
       <MarketingFooter />
     </div>
   );

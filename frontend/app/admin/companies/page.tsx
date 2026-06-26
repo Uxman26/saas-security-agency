@@ -13,7 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import type { Company } from '@/lib/types';
+import type { Company, PlanTier } from '@/lib/types';
+import {
+  MODULE_LABELS,
+  TENANT_MODULE_KEYS,
+  findPlanTier,
+  formatPlanLimit,
+  modulesFromPlan,
+  planDefaultsForCompany,
+} from '@/lib/plan-company-defaults';
+import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { toast } from '@/lib/toast';
@@ -21,18 +30,12 @@ import { toast } from '@/lib/toast';
 const TIERS = ['basic', 'standard', 'premium', 'enterprise'];
 const STATUSES = ['active', 'pending', 'expired', 'cancelled'];
 const CYCLES = ['monthly', 'quarterly', 'yearly'];
-const MODULE_LABELS: Record<string, string> = {
-  expenses: 'Expenses',
-  whatsapp: 'WhatsApp',
-  email: 'Email',
-  mobile_apps: 'Mobile Apps',
-  leads: 'Lead Management',
-};
 
 export default function AdminCompaniesPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [packages, setPackages] = useState<PlanTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Company | null>(null);
@@ -50,7 +53,13 @@ export default function AdminCompaniesPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.admin.companies().then(setCompanies).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([api.admin.companies(), api.admin.packages()])
+      .then(([rows, pkgs]) => {
+        setCompanies(rows);
+        setPackages(pkgs);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -108,6 +117,21 @@ export default function AdminCompaniesPage() {
     setModules({ ...(c.enabled_modules || {}) });
   };
 
+  const applyPackageForTier = (tier: string) => {
+    const pkg = findPlanTier(tier, packages);
+    if (!pkg) return;
+    const defaults = planDefaultsForCompany(pkg);
+    setEditMaxUsers(defaults.max_users);
+    setModules(defaults.modules);
+  };
+
+  const onTierChange = (tier: string) => {
+    setEditTier(tier);
+    applyPackageForTier(tier);
+  };
+
+  const selectedPlan = findPlanTier(editTier, packages);
+
   const saveCompany = async () => {
     if (!selected) return;
     setSaving(true);
@@ -118,11 +142,13 @@ export default function AdminCompaniesPage() {
         subscription_status: editStatus,
         subscription_end: editEnd ? `${editEnd}T23:59:59Z` : undefined,
         billing_cycle: editCycle,
-        max_users: editMaxUsers ? parseInt(editMaxUsers) : null,
+        max_users: editMaxUsers ? parseInt(editMaxUsers, 10) : null,
         enabled_modules: modules,
       });
       setCompanies((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       setSelected(updated);
+      setEditMaxUsers(updated.max_users != null ? String(updated.max_users) : '');
+      setModules({ ...(updated.enabled_modules || modulesFromPlan(selectedPlan ?? DEFAULT_PLAN_TIERS[0])) });
       toast.success('Company updated');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed');
@@ -196,7 +222,7 @@ export default function AdminCompaniesPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Plan</Label>
-                    <Select value={editTier} onValueChange={setEditTier}>
+                    <Select value={editTier} onValueChange={onTierChange}>
                       <SelectTrigger className="mt-1 capitalize"><SelectValue /></SelectTrigger>
                       <SelectContent>{TIERS.map((t) => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent>
                     </Select>
@@ -209,6 +235,14 @@ export default function AdminCompaniesPage() {
                     </Select>
                   </div>
                 </div>
+                {selectedPlan && (
+                  <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
+                    <p className="font-medium text-sm capitalize">{selectedPlan.tier} package defaults</p>
+                    <p>Price: £{selectedPlan.price_gbp.toFixed(2)}/mo</p>
+                    <p>Guards: {formatPlanLimit(selectedPlan.max_guards)} · Sites: {formatPlanLimit(selectedPlan.max_sites)} · Users: {formatPlanLimit(selectedPlan.max_users)}</p>
+                    <p>SMS: {selectedPlan.features?.sms ? 'Yes' : 'No'} · Email: {selectedPlan.features?.email !== false ? 'Yes' : 'No'}</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label>Billing cycle</Label>
@@ -219,7 +253,7 @@ export default function AdminCompaniesPage() {
                   </div>
                   <div>
                     <Label>User limit (override)</Label>
-                    <Input type="number" min="1" value={editMaxUsers} onChange={(e) => setEditMaxUsers(e.target.value)} placeholder="Plan default" className="mt-1" />
+                    <Input type="number" min="1" value={editMaxUsers} onChange={(e) => setEditMaxUsers(e.target.value)} placeholder={selectedPlan ? formatPlanLimit(selectedPlan.max_users) : 'Plan default'} className="mt-1" />
                   </div>
                 </div>
                 <div>
@@ -230,20 +264,34 @@ export default function AdminCompaniesPage() {
                   <div>
                     <Label>Resource usage</Label>
                     <div className="mt-1 grid grid-cols-2 gap-1 text-xs border rounded-md p-2">
-                      <span>Active users</span><span>{selected.usage.active_users}</span>
+                      <span>Active users</span>
+                      <span>
+                        {selected.usage.active_users}
+                        {selectedPlan?.max_users != null ? ` / ${editMaxUsers || selectedPlan.max_users}` : editMaxUsers ? ` / ${editMaxUsers}` : ''}
+                      </span>
+                      <span>Guards</span>
+                      <span>
+                        {selected.usage.guards_count}
+                        {selectedPlan?.max_guards != null ? ` / ${selectedPlan.max_guards}` : ''}
+                      </span>
                       <span>Storage</span><span>{selected.usage.storage_mb} MB</span>
-                      <span>Guards</span><span>{selected.usage.guards_count}</span>
                       <span>API / Email / WhatsApp</span><span>{selected.usage.api_requests} / {selected.usage.email_sent} / {selected.usage.whatsapp_sent}</span>
                     </div>
                   </div>
                 )}
                 <div>
                   <Label>Module access</Label>
+                  <p className="text-xs text-muted-foreground mt-1 mb-2">Updates from the selected plan. You can still override individual modules.</p>
                   <div className="mt-2 grid gap-2 border rounded-md p-3">
-                    {Object.keys(MODULE_LABELS).map((key) => (
+                    {TENANT_MODULE_KEYS.map((key) => (
                       <label key={key} className="flex items-center gap-2 text-sm">
                         <input type="checkbox" checked={!!modules[key]} onChange={() => setModules((m) => ({ ...m, [key]: !m[key] }))} className="rounded border" />
                         {MODULE_LABELS[key]}
+                        {(key === 'whatsapp' || key === 'email') && selectedPlan && (
+                          <span className="text-xs text-muted-foreground">
+                            (plan: {key === 'whatsapp' ? (selectedPlan.features?.sms ? 'on' : 'off') : (selectedPlan.features?.email !== false ? 'on' : 'off')})
+                          </span>
+                        )}
                       </label>
                     ))}
                   </div>

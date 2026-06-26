@@ -21,6 +21,15 @@ NEXT_PUBLIC_API_URL=https://api.yourdomain.com
 - `SECRET_KEY` – strong random secret
 - `CORS_ORIGINS` – comma-separated frontend origins, e.g. `https://yourdomain.com,https://www.yourdomain.com`
 - Mail settings if you use email
+- **Stripe** (subscription checkout):
+  - `STRIPE_SECRET_KEY` – secret key from [Stripe Dashboard](https://dashboard.stripe.com/apikeys)
+  - `STRIPE_PUBLISHABLE_KEY` – publishable key
+  - `STRIPE_WEBHOOK_SECRET` – from `stripe listen --forward-to localhost:8000/stripe/webhook` or Dashboard webhooks
+  - `FRONTEND_URL` – e.g. `https://yourdomain.com` (used for Checkout return URLs)
+
+**Frontend `.env`:**
+
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` – same publishable key (optional; backend `/stripe/config` also serves it)
 
 ## 3. Run with Docker in Plesk
 

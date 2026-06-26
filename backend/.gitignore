@@ -1,3 +1,4 @@
 security.db
 venv/
-.env
+.env*
+!.env.example

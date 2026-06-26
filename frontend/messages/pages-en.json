@@ -47,7 +47,7 @@
     "platform": {
       "badge": "ControlOps platform",
       "title": "One platform for the work behind every shift",
-      "intro": "Bring your workforce, rotas, locations, records, rates, payroll information and client billing together so operations, payroll and finance work from the same current information.",
+      "intro": "Bring your <hl>workforce, rotas, locations, records, rates</hl>, payroll information and client billing together so operations, payroll and finance work from the <hl>same current information</hl>.",
       "finalTitle": "See ControlOps for your operation",
       "finalText": "Book a tailored demonstration using your workforce, locations and billing requirements.",
       "sections": [
@@ -64,14 +64,14 @@
     "contact": {
       "badge": "Contact",
       "title": "Get in touch with ControlOps",
-      "intro": "Book a demonstration to discuss your workforce, locations, rotas and billing requirements, or contact us about an existing account.",
+      "intro": "Book a demonstration to discuss your workforce, locations, rotas and billing requirements, or contact us about an <hl>existing account</hl>.",
       "signIn": "Sign in",
       "newPrefix": "New to ControlOps?"
     },
     "industriesIndex": {
       "badge": "Industries",
       "title": "Shift-based service businesses",
-      "intro": "ControlOps is especially suited to service businesses that deploy employees and contractors across client sites, manage changing rotas, maintain workforce records and connect completed work to payroll and billing.",
+      "intro": "ControlOps is especially suited to service businesses that deploy employees and contractors across <hl>client sites</hl>, manage changing rotas, maintain workforce records and connect completed work to <hl>payroll and billing</hl>.",
       "learnMore": "Learn more",
       "otherTitle": "Other multi-site service businesses",
       "otherDesc": "Organise employees, contractors, locations and shift-based work around the way your service operation runs. Book a demonstration to confirm ControlOps fits your workflow.",

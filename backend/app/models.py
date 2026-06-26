@@ -61,6 +61,8 @@ class Company(Base):
     max_users = Column(Integer)
     enabled_modules_json = Column(Text)
     stripe_customer_id = Column(String)
+    stripe_subscription_id = Column(String)
+    stripe_connect_account_id = Column(String)
     logo_path = Column(String)
     account_name = Column(String)
     bank_name = Column(String)
@@ -160,6 +162,8 @@ class SubscriptionReceipt(Base):
     period_start = Column(DateTime(timezone=True))
     period_end = Column(DateTime(timezone=True))
     paid_at = Column(DateTime(timezone=True))
+    stripe_checkout_session_id = Column(String)
+    stripe_subscription_id = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     company = relationship("Company", back_populates="subscription_receipts")
     user = relationship("User")
@@ -752,6 +756,8 @@ class Expense(Base):
 DEFAULT_LEAD_STATUSES = (
     "new",
     "contacted",
+    "follow_up",
+    "meeting",
     "qualified",
     "proposal_sent",
     "negotiation",
@@ -766,14 +772,20 @@ class Lead(Base):
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
+    organization = Column(String)
     contact_name = Column(String)
+    designation = Column(String)
     email = Column(String, index=True)
+    email_secondary = Column(String)
     phone = Column(String, index=True)
+    phone_secondary = Column(String)
     address = Column(String)
     city = Column(String)
+    postcode = Column(String)
+    comments = Column(Text)
     source = Column(String)
     status = Column(String, default="new", nullable=False)
-    priority = Column(String, default="medium")
+    priority = Column(String, default="moderate")
     estimated_value = Column(Float, default=0)
     assigned_user_id = Column(Integer, ForeignKey("users.id"))
     created_by = Column(Integer, ForeignKey("users.id"))
@@ -782,6 +794,7 @@ class Lead(Base):
     converted_to_type = Column(String)
     converted_to_id = Column(Integer)
     next_follow_up_at = Column(DateTime(timezone=True))
+    meeting_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="leads")

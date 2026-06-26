@@ -103,26 +103,39 @@ def check_duplicate(
     email: Optional[str],
     phone: Optional[str],
     exclude_id: Optional[int] = None,
+    email_secondary: Optional[str] = None,
+    phone_secondary: Optional[str] = None,
 ) -> list[dict]:
     company = require_leads_module(db, user_id)
-    ne = _norm_email(email)
-    np = _norm_phone(phone)
+    emails = {_norm_email(email), _norm_email(email_secondary)} - {None}
+    phones = {_norm_phone(phone), _norm_phone(phone_secondary)} - {None}
+    if not emails and not phones:
+        return []
     dupes: list[dict] = []
-    if ne:
-        q = db.query(Lead).filter(Lead.company_id == company.id, Lead.email.isnot(None))
-        if exclude_id:
-            q = q.filter(Lead.id != exclude_id)
-        for row in q.all():
-            if _norm_email(row.email) == ne:
+    q = db.query(Lead).filter(Lead.company_id == company.id)
+    if exclude_id:
+        q = q.filter(Lead.id != exclude_id)
+    seen: set[tuple[str, int]] = set()
+    for row in q.all():
+        row_emails = {_norm_email(row.email), _norm_email(row.email_secondary)} - {None}
+        row_phones = {_norm_phone(row.phone), _norm_phone(row.phone_secondary)} - {None}
+        if emails & row_emails:
+            key = ("email", row.id)
+            if key not in seen:
+                seen.add(key)
                 dupes.append({"field": "email", "lead_id": row.id, "title": row.title})
-    if np:
-        q = db.query(Lead).filter(Lead.company_id == company.id, Lead.phone.isnot(None))
-        if exclude_id:
-            q = q.filter(Lead.id != exclude_id)
-        for row in q.all():
-            if _norm_phone(row.phone) == np:
+        if phones & row_phones:
+            key = ("phone", row.id)
+            if key not in seen:
+                seen.add(key)
                 dupes.append({"field": "phone", "lead_id": row.id, "title": row.title})
     return dupes
+
+
+def _lead_title(data: dict) -> str:
+    org = (data.get("organization") or "").strip()
+    title = (data.get("title") or "").strip()
+    return org or title
 
 
 def _notify(
@@ -155,30 +168,49 @@ def _notify(
 def create_lead(db: Session, user_id: int, data: dict, force_duplicate: bool = False) -> Lead:
     company = require_leads_module(db, user_id)
     user = db.query(User).filter(User.id == user_id).first()
-    dupes = check_duplicate(db, user_id, data.get("email"), data.get("phone"))
+    dupes = check_duplicate(
+        db,
+        user_id,
+        data.get("email"),
+        data.get("phone"),
+        email_secondary=data.get("email_secondary"),
+        phone_secondary=data.get("phone_secondary"),
+    )
     if dupes and not force_duplicate:
         if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
             raise HTTPException(status_code=409, detail={"message": "Duplicate lead detected", "duplicates": dupes})
+    title = _lead_title(data)
+    status = data.get("status") or "new"
     lead = Lead(
         company_id=company.id,
-        title=(data.get("title") or "").strip(),
+        title=title,
+        organization=data.get("organization") or title,
         contact_name=data.get("contact_name"),
+        designation=data.get("designation"),
         email=data.get("email"),
+        email_secondary=data.get("email_secondary"),
         phone=data.get("phone"),
+        phone_secondary=data.get("phone_secondary"),
         address=data.get("address"),
         city=data.get("city"),
+        postcode=data.get("postcode"),
+        comments=data.get("comments"),
         source=data.get("source"),
-        status=data.get("status") or "new",
-        priority=data.get("priority") or "medium",
+        status=status,
+        priority=data.get("priority") or "moderate",
         estimated_value=float(data.get("estimated_value") or 0),
         assigned_user_id=data.get("assigned_user_id"),
+        next_follow_up_at=data.get("next_follow_up_at"),
+        meeting_at=data.get("meeting_at"),
         created_by=user_id,
     )
     if not lead.title:
-        raise HTTPException(status_code=400, detail="Title is required")
+        raise HTTPException(status_code=400, detail="Organization is required")
     db.add(lead)
     db.flush()
     db.add(LeadStatusHistory(lead_id=lead.id, from_status=None, to_status=lead.status, user_id=user_id))
+    if lead.comments and lead.comments.strip():
+        db.add(LeadNote(lead_id=lead.id, user_id=user_id, body=lead.comments.strip()))
     audit_service.log_action(db, company_id=company.id, user_id=user_id, action="create", entity_type="lead", entity_id=lead.id)
     if lead.assigned_user_id:
         _notify(db, company.id, lead.assigned_user_id, "lead_assigned", f"Lead assigned: {lead.title}", entity_id=lead.id, lead=lead, actor_id=user_id)
@@ -206,6 +238,10 @@ def list_leads(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     search: Optional[str] = None,
+    has_follow_up: Optional[bool] = None,
+    today_follow_ups: Optional[bool] = None,
+    upcoming_follow_ups: Optional[bool] = None,
+    meetings_only: Optional[bool] = None,
 ) -> List[Lead]:
     company = require_leads_module(db, user_id)
     q = (
@@ -235,15 +271,32 @@ def list_leads(
         q = q.filter(Lead.next_follow_up_at >= datetime.combine(follow_up_from, datetime.min.time()))
     if follow_up_to:
         q = q.filter(Lead.next_follow_up_at <= datetime.combine(follow_up_to, datetime.max.time()))
+    if has_follow_up:
+        q = q.filter(Lead.next_follow_up_at.isnot(None))
+    if today_follow_ups:
+        today = date.today()
+        q = q.filter(
+            Lead.next_follow_up_at >= datetime.combine(today, datetime.min.time()),
+            Lead.next_follow_up_at <= datetime.combine(today, datetime.max.time()),
+        )
+    if upcoming_follow_ups:
+        now = datetime.now(timezone.utc)
+        q = q.filter(Lead.next_follow_up_at >= now)
+    if meetings_only:
+        q = q.filter(or_(Lead.status == "meeting", Lead.meeting_at.isnot(None)))
     if search:
         t = f"%{search.strip()}%"
         q = q.filter(
             or_(
                 Lead.title.ilike(t),
+                Lead.organization.ilike(t),
                 Lead.contact_name.ilike(t),
                 Lead.email.ilike(t),
+                Lead.email_secondary.ilike(t),
                 Lead.phone.ilike(t),
+                Lead.phone_secondary.ilike(t),
                 Lead.city.ilike(t),
+                Lead.postcode.ilike(t),
             )
         )
     return q.order_by(Lead.created_at.desc()).all()
@@ -280,25 +333,55 @@ def update_lead(db: Session, user_id: int, lead_id: int, data: dict, force_dupli
     user = db.query(User).filter(User.id == user_id).first()
     email = data.get("email", lead.email)
     phone = data.get("phone", lead.phone)
-    dupes = check_duplicate(db, user_id, email, phone, exclude_id=lead_id)
+    dupes = check_duplicate(
+        db,
+        user_id,
+        email,
+        phone,
+        exclude_id=lead_id,
+        email_secondary=data.get("email_secondary", lead.email_secondary),
+        phone_secondary=data.get("phone_secondary", lead.phone_secondary),
+    )
     if dupes and not force_duplicate and getattr(user, "role", None) != SUPER_ADMIN_ROLE:
         raise HTTPException(status_code=409, detail={"message": "Duplicate lead detected", "duplicates": dupes})
     prev_assignee = lead.assigned_user_id
+    prev_status = lead.status
+    if "organization" in data or "title" in data:
+        title = _lead_title({**data, "organization": data.get("organization", lead.organization), "title": data.get("title", lead.title)})
+        if title:
+            lead.title = title
+            lead.organization = data.get("organization", lead.organization) or title
     for k in (
-        "title",
+        "organization",
         "contact_name",
+        "designation",
         "email",
+        "email_secondary",
         "phone",
+        "phone_secondary",
         "address",
         "city",
+        "postcode",
+        "comments",
         "source",
+        "status",
         "priority",
         "estimated_value",
         "assigned_user_id",
         "next_follow_up_at",
+        "meeting_at",
     ):
         if k in data:
             setattr(lead, k, data[k])
+    if "status" in data and data["status"] != prev_status:
+        db.add(
+            LeadStatusHistory(
+                lead_id=lead.id,
+                from_status=prev_status,
+                to_status=data["status"],
+                user_id=user_id,
+            )
+        )
     if lead.assigned_user_id and lead.assigned_user_id != prev_assignee:
         _notify(
             db,
@@ -730,23 +813,27 @@ def mark_notification_read(db: Session, user_id: int, notification_id: int) -> A
 
 def export_leads_csv(db: Session, user_id: int, **filters) -> str:
     rows = list_leads(db, user_id, **filters)
-    lines = ["id,title,contact,email,phone,city,source,status,priority,value,assigned,converted,created"]
+    lines = ["id,organization,contact,designation,email,phone,city,postcode,source,status,priority,value,assigned,converted,follow_up,meeting,created"]
     for r in rows:
         lines.append(
             ",".join(
                 [
                     str(r.id),
-                    f'"{r.title}"',
+                    f'"{r.organization or r.title}"',
                     f'"{r.contact_name or ""}"',
+                    f'"{r.designation or ""}"',
                     r.email or "",
                     r.phone or "",
                     f'"{r.city or ""}"',
+                    f'"{r.postcode or ""}"',
                     r.source or "",
                     r.status,
                     r.priority or "",
                     str(r.estimated_value or 0),
                     str(r.assigned_user_id or ""),
                     str(r.converted),
+                    r.next_follow_up_at.isoformat() if r.next_follow_up_at else "",
+                    r.meeting_at.isoformat() if r.meeting_at else "",
                     r.created_at.isoformat() if r.created_at else "",
                 ]
             )

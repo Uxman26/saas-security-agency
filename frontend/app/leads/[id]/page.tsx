@@ -26,9 +26,9 @@ const CONVERT_TYPES = [
   { id: 'invoice', label: 'Invoice (draft)' },
 ];
 
-function statusLabel(s: string) {
-  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import { designationLabel, leadLabel, priorityLabel } from '@/lib/leads';
+
+const statusLabel = leadLabel;
 
 type Detail = {
   lead: Record<string, unknown>;
@@ -179,9 +179,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   Back
                 </Link>
               </Button>
-              <h1 className="text-2xl font-bold">{String(lead.title)}</h1>
-              <p className="text-sm text-muted-foreground capitalize">
-                {statusLabel(String(lead.status))} · {String(lead.priority)} priority
+              <h1 className="text-2xl font-bold">{String(lead.organization || lead.title)}</h1>
+              <p className="text-sm text-muted-foreground">
+                {leadLabel(String(lead.status))} · {priorityLabel(String(lead.priority || 'moderate'))} priority
               </p>
             </div>
             <div className="flex flex-wrap gap-2 items-center">
@@ -223,9 +223,12 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             <div className="grid md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Basic information</CardTitle>
+                  <CardTitle className="text-base">Organization</CardTitle>
                 </CardHeader>
                 <CardContent className="text-sm space-y-2">
+                  <p>
+                    <span className="text-muted-foreground">Organization:</span> {String(lead.organization || lead.title || '—')}
+                  </p>
                   <p>
                     <span className="text-muted-foreground">Source:</span> {lead.source ? statusLabel(String(lead.source)) : '—'}
                   </p>
@@ -235,6 +238,19 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   <p>
                     <span className="text-muted-foreground">City:</span> {String(lead.city || '—')}
                   </p>
+                  <p>
+                    <span className="text-muted-foreground">Postcode:</span> {String(lead.postcode || '—')}
+                  </p>
+                  {lead.next_follow_up_at ? (
+                    <p>
+                      <span className="text-muted-foreground">Follow-up:</span> {new Date(String(lead.next_follow_up_at)).toLocaleString()}
+                    </p>
+                  ) : null}
+                  {lead.meeting_at ? (
+                    <p>
+                      <span className="text-muted-foreground">Meeting:</span> {new Date(String(lead.meeting_at)).toLocaleString()}
+                    </p>
+                  ) : null}
                   <p>
                     <span className="text-muted-foreground">Created:</span> {new Date(String(lead.created_at)).toLocaleString()}
                   </p>
@@ -254,16 +270,38 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                     <span className="text-muted-foreground">Contact:</span> {String(lead.contact_name || '—')}
                   </p>
                   <p>
+                    <span className="text-muted-foreground">Designation:</span>{' '}
+                    {lead.designation ? designationLabel(String(lead.designation)) : '—'}
+                  </p>
+                  <p>
                     <span className="text-muted-foreground">Email:</span> {String(lead.email || '—')}
                   </p>
+                  {lead.email_secondary ? (
+                    <p>
+                      <span className="text-muted-foreground">Additional email:</span> {String(lead.email_secondary)}
+                    </p>
+                  ) : null}
                   <p>
                     <span className="text-muted-foreground">Phone:</span> {String(lead.phone || '—')}
                   </p>
+                  {lead.phone_secondary ? (
+                    <p>
+                      <span className="text-muted-foreground">Additional phone:</span> {String(lead.phone_secondary)}
+                    </p>
+                  ) : null}
                   <p>
                     <span className="text-muted-foreground">Address:</span> {String(lead.address || '—')}
                   </p>
                 </CardContent>
               </Card>
+              {lead.comments ? (
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="text-base">Comments / Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm whitespace-pre-wrap">{String(lead.comments)}</CardContent>
+                </Card>
+              ) : null}
             </div>
           ) : null}
 

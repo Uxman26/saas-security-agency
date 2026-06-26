@@ -402,6 +402,24 @@ export const api = {
       return `/api/leads/export?${q}`;
     },
   },
+  stripe: {
+    config: () => request<{ enabled: boolean; publishable_key: string }>('/stripe/config'),
+    checkoutSession: (ref_id: string) =>
+      request<{ url: string; session_id: string }>('/stripe/checkout-session', {
+        method: 'POST',
+        body: JSON.stringify({ ref_id }),
+      }),
+    sessionStatus: (session_id: string) =>
+      request<{ payment_status: string; paid: boolean; receipt_ref?: string }>(
+        `/stripe/session-status?session_id=${encodeURIComponent(session_id)}`
+      ),
+    portal: () => request<{ url: string }>('/stripe/portal', { method: 'POST' }),
+    connectOnboard: (return_url: string, refresh_url: string) =>
+      request<{ url: string }>('/stripe/connect/onboard', {
+        method: 'POST',
+        body: JSON.stringify({ return_url, refresh_url }),
+      }),
+  },
   mainContractors: {
     list: (): Promise<MainContractor[]> => request<MainContractor[]>('/main-contractors'),
     get: (id: number): Promise<MainContractor> => request<MainContractor>(`/main-contractors/${id}`),

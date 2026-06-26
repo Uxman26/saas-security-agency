@@ -150,6 +150,10 @@ def list_leads(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     search: Optional[str] = None,
+    has_follow_up: Optional[bool] = None,
+    today_follow_ups: Optional[bool] = None,
+    upcoming_follow_ups: Optional[bool] = None,
+    meetings_only: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_perm(PERM_LEADS_READ)),
 ):
@@ -168,6 +172,10 @@ def list_leads(
         start_date=start_date,
         end_date=end_date,
         search=search,
+        has_follow_up=has_follow_up,
+        today_follow_ups=today_follow_ups,
+        upcoming_follow_ups=upcoming_follow_ups,
+        meetings_only=meetings_only,
     )
 
 

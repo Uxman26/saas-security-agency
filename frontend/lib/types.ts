@@ -542,11 +542,17 @@ export interface Lead {
   id: number;
   company_id: number;
   title: string;
+  organization?: string | null;
   contact_name?: string | null;
+  designation?: string | null;
   email?: string | null;
+  email_secondary?: string | null;
   phone?: string | null;
+  phone_secondary?: string | null;
   address?: string | null;
   city?: string | null;
+  postcode?: string | null;
+  comments?: string | null;
   source?: string | null;
   status: string;
   priority?: string | null;
@@ -558,6 +564,7 @@ export interface Lead {
   converted_to_type?: string | null;
   converted_to_id?: number | null;
   next_follow_up_at?: string | null;
+  meeting_at?: string | null;
   created_at: string;
   updated_at: string;
 }

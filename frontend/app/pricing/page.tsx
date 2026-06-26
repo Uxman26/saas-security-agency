@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { MarketingFooter } from '@/components/marketing/marketing-footer';
+import { MarketingSection } from '@/components/marketing/marketing-section';
 import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
 import { Check, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -34,17 +35,18 @@ export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav active="pricing" />
-      <div className="container mx-auto px-4 pt-16 pb-16 md:pt-24 md:pb-24">
-        <div className="mx-auto max-w-2xl text-center mb-12">
-          <Eyebrow>{t('badge')}</Eyebrow>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{t('title')}</h1>
-          <p className="mt-4 text-muted-foreground">{t('subtitle')}</p>
-          <p className="mt-4 text-sm text-muted-foreground">
-            {t('helpPrefix')}{' '}
-            <Link href="/book-demo" className="text-primary font-medium hover:underline">{tc('bookDemoLink')}</Link>{' '}
-            {t('helpSuffix')}
-          </p>
-        </div>
+      <MarketingSection variant="hero" border={false} className="pt-16 pb-8 md:pt-24">
+        <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-2xl text-center mb-12">
+            <Eyebrow>{t('badge')}</Eyebrow>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{t('title')}</h1>
+            <p className="mt-4 text-lg text-muted-foreground">{t('subtitle')}</p>
+            <p className="mt-4 text-sm text-muted-foreground">
+              {t('helpPrefix')}{' '}
+              <Link href="/book-demo" className="text-primary font-medium hover:underline">{tc('bookDemoLink')}</Link>{' '}
+              {t('helpSuffix')}
+            </p>
+          </div>
         {loading ? (
           <div className="flex justify-center py-16 text-muted-foreground">
             <Loader2 className="size-8 animate-spin" />
@@ -61,7 +63,7 @@ export default function PricingPage() {
               return (
                 <Card
                   key={tier.tier}
-                  className={`relative flex flex-col ${highlighted ? 'border-primary shadow-lg shadow-primary/10' : 'border-border/80'}`}
+                  className={`relative flex flex-col marketing-card-hover ${highlighted ? 'border-primary shadow-lg shadow-primary/15 ring-1 ring-primary/20' : 'border-border/80'}`}
                 >
                   {highlighted && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-xs font-medium text-primary-foreground">
@@ -110,7 +112,8 @@ export default function PricingPage() {
           {tcommon('alreadyHaveAccount')}{' '}
           <Link href="/login" className="text-primary font-medium hover:underline">{tcommon('signIn')}</Link>
         </p>
-      </div>
+        </div>
+      </MarketingSection>
       <MarketingFooter />
     </div>
   );

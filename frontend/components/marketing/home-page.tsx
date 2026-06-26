@@ -8,6 +8,11 @@ import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { MarketingFooter } from '@/components/marketing/marketing-footer';
 import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
 import { ScrollReveal } from '@/components/marketing/scroll-reveal';
+import { MarketingFaqAccordion } from '@/components/marketing/marketing-faq-accordion';
+import { MarketingSection, SectionHeading } from '@/components/marketing/marketing-section';
+import { MarketingDashboardPreview } from '@/components/marketing/marketing-dashboard-preview';
+import { MarketingStatsStrip } from '@/components/marketing/marketing-stats-strip';
+import { RichInline, richTags } from '@/components/marketing/marketing-rich-text';
 import {
   Users,
   MapPin,
@@ -18,14 +23,21 @@ import {
   BarChart3,
   Check,
   ArrowRight,
+  LayoutDashboard,
+  FileCheck,
+  Receipt,
 } from 'lucide-react';
 
 const CAPABILITY_ICONS = [Users, MapPin, Calendar, FileText, ClipboardList, Wallet, Wallet, BarChart3];
+const HIGHLIGHT_ICONS = [LayoutDashboard, Calendar, FileCheck, Receipt];
 
 type Titled = { title: string; text: string };
 type Cap = Titled & { href: string };
 type Industry = Titled & { href: string; cta: string };
 type Faq = { q: string; a: string };
+type DashStat = { label: string; value: string; change?: string; trend?: 'up' | 'down' | 'warn' };
+type Shift = { site: string; time: string; staff: string; status: string };
+type ImpactStat = { value: string; label: string; desc: string };
 
 export function HomePage() {
   const t = useTranslations('marketing.home');
@@ -36,110 +48,131 @@ export function HomePage() {
   const qualification = t.raw('qualification') as string[];
   const steps = t.raw('steps') as Titled[];
   const faqs = t.raw('faqs') as Faq[];
-  const dashboardTiles = t.raw('dashboardTiles') as string[];
+  const dashboardStats = t.raw('dashboardStats') as DashStat[];
+  const dashboardShifts = t.raw('dashboardShifts') as Shift[];
+  const impactStats = t.raw('impactStats') as ImpactStat[];
 
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav active="home" />
 
-      <section className="border-b border-border/50 overflow-hidden">
-        <div className="container mx-auto px-4 py-16 md:py-24">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
+      <MarketingSection variant="hero" className="py-16 md:py-24">
+        <div className="container mx-auto px-4">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div className="animate-fade-in-up">
               <Eyebrow>{t('heroBadge')}</Eyebrow>
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{t('heroTitle')}</h1>
-              <p className="mt-6 text-lg text-muted-foreground leading-relaxed">{t('heroText')}</p>
-              <p className="mt-4 text-muted-foreground">
-                {t.rich('heroSpecialist', { b: (c) => <strong className="text-foreground font-semibold">{c}</strong> })}
+              <h1 className="text-3xl md:text-5xl lg:text-[3.25rem] font-bold tracking-tight leading-[1.15]">
+                {t.rich('heroTitle', richTags)}
+              </h1>
+              <p className="mt-6 text-lg md:text-xl text-muted-foreground leading-relaxed">
+                <RichInline text={t('heroText')} variant="hero" />
+              </p>
+              <p className="mt-4 text-base text-muted-foreground leading-relaxed">
+                {t.rich('heroSpecialist', richTags)}
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
                 <MarketingCta href="/book-demo">{tc('bookDemo')}</MarketingCta>
-                <Button asChild variant="outline" size="lg">
+                <Button asChild variant="outline" size="lg" className="border-primary/30 hover:bg-primary/5">
                   <Link href="/pricing">{tc('viewPricing')}</Link>
                 </Button>
               </div>
-              <p className="mt-6 text-sm text-muted-foreground">{t('heroReassurance')}</p>
-            </div>
-            <div className="relative rounded-2xl border bg-card shadow-xl overflow-hidden">
-              <div className="bg-muted/50 px-4 py-3 border-b flex items-center gap-2">
-                <div className="size-3 rounded-full bg-red-400/80" />
-                <div className="size-3 rounded-full bg-amber-400/80" />
-                <div className="size-3 rounded-full bg-green-400/80" />
-                <span className="ms-2 text-xs text-muted-foreground">{t('dashboardLabel')}</span>
-              </div>
-              <div className="p-4 space-y-3 bg-gradient-to-br from-background to-muted/30">
-                <div className="grid grid-cols-3 gap-2">
-                  {dashboardTiles.map((l) => (
-                    <div key={l} className="rounded-lg border bg-card p-3 text-xs">
-                      <p className="text-muted-foreground">{l}</p>
-                      <p className="mt-1 text-lg font-bold text-primary">—</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="rounded-lg border bg-card p-4 h-32 flex items-center justify-center text-sm text-muted-foreground">
-                  {t('dashboardPreview')}
-                </div>
+              <div className="mt-6 rounded-xl border border-primary/20 bg-gradient-to-r from-primary/8 to-transparent p-4">
+                <p className="text-sm leading-relaxed">
+                  <RichInline text={t('heroReassurance')} />
+                </p>
               </div>
             </div>
+            <MarketingDashboardPreview
+              label={t('dashboardLabel')}
+              stats={dashboardStats}
+              shifts={dashboardShifts}
+              chartLabel={t('dashboardChart')}
+              revenueLabel={t('dashboardRevenue')}
+              revenueValue={t('dashboardRevenueValue')}
+              shiftsTitle={t('dashboardShiftsTitle')}
+            />
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-14 bg-muted/20">
+      <MarketingSection variant="muted" className="py-12 md:py-14">
         <div className="container mx-auto px-4">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {highlights.map((h) => (
-              <div key={h.title} className="rounded-xl border bg-card p-5">
-                <p className="font-semibold text-foreground">{h.title}</p>
-                <p className="mt-2 text-sm text-muted-foreground">{h.text}</p>
-              </div>
-            ))}
+          <MarketingStatsStrip items={impactStats} />
+        </div>
+      </MarketingSection>
+
+      <MarketingSection className="py-14">
+        <div className="container mx-auto px-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {highlights.map((h, i) => {
+              const Icon = HIGHLIGHT_ICONS[i];
+              return (
+                <div
+                  key={h.title}
+                  className="group relative overflow-hidden rounded-2xl border bg-card p-6 marketing-card-hover border-t-[3px] border-t-primary shadow-sm"
+                >
+                  <div className="absolute -top-8 -end-8 size-24 rounded-full bg-primary/5 blur-2xl group-hover:bg-primary/10 transition-colors" />
+                  <div className="relative mb-4 flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#DF3C01] text-white shadow-md shadow-primary/25 group-hover:scale-105 transition-transform">
+                    <Icon className="size-6" />
+                  </div>
+                  <p className="relative font-bold text-foreground text-lg">{h.title}</p>
+                  <p className="relative mt-2 text-sm text-muted-foreground leading-relaxed">
+                    <RichInline text={h.text} />
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20">
+      <MarketingSection variant="accent">
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mb-12">
-            <h2 className="text-3xl font-bold">{t('platformTitle')}</h2>
-            <p className="mt-4 text-muted-foreground text-lg">{t('platformIntro')}</p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <SectionHeading
+            title={<RichInline text={t('platformTitle')} variant="hero" />}
+            subtitle={<RichInline text={t('platformIntro')} />}
+          />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {capabilities.map(({ title, text, href }, i) => {
               const Icon = CAPABILITY_ICONS[i];
               return (
-                <Card key={title} className="h-full hover:border-primary/30 transition-colors">
+                <Card key={title} className="h-full marketing-card-hover group border-border/60 shadow-sm">
                   <CardHeader className="pb-2">
-                    <div className="rounded-lg bg-primary/10 p-2 w-fit text-primary mb-2">
-                      <Icon className="size-4" />
+                    <div className="rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 p-3 w-fit text-primary mb-3 group-hover:from-primary group-hover:to-[#DF3C01] group-hover:text-primary-foreground transition-all shadow-sm">
+                      <Icon className="size-5" />
                     </div>
-                    <CardTitle className="text-base">
-                      <Link href={href} className="hover:text-primary">{title}</Link>
+                    <CardTitle className="text-base font-bold">
+                      <Link href={href} className="hover:text-primary transition-colors">{title}</Link>
                     </CardTitle>
-                    <CardDescription className="text-sm leading-relaxed">{text}</CardDescription>
+                    <CardDescription className="text-sm leading-relaxed mt-2">
+                      <RichInline text={text} />
+                    </CardDescription>
                   </CardHeader>
                 </Card>
               );
             })}
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20 bg-muted/20">
+      <MarketingSection>
         <div className="container mx-auto px-4">
-          <div className="max-w-3xl mb-12">
-            <h2 className="text-3xl font-bold">{t('industriesTitle')}</h2>
-            <p className="mt-4 text-muted-foreground text-lg">{t('industriesIntro')}</p>
-          </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <SectionHeading
+            title={<RichInline text={t('industriesTitle')} variant="hero" />}
+            subtitle={<RichInline text={t('industriesIntro')} />}
+          />
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {industries.map((ind) => (
-              <Card key={ind.title} className="flex flex-col">
+              <Card key={ind.title} className="flex flex-col marketing-card-hover shadow-sm overflow-hidden">
+                <div className="h-1 bg-gradient-to-r from-primary via-[#FD8018] to-[#DF3C01]" />
                 <CardHeader>
-                  <CardTitle className="text-lg">{ind.title}</CardTitle>
-                  <CardDescription className="text-sm leading-relaxed">{ind.text}</CardDescription>
+                  <CardTitle className="text-lg font-bold">{ind.title}</CardTitle>
+                  <CardDescription className="text-sm leading-relaxed mt-2">
+                    <RichInline text={ind.text} />
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto pt-0">
-                  <Button asChild variant="outline" size="sm">
+                  <Button asChild variant="outline" size="sm" className="border-primary/30 hover:bg-primary/5 hover:text-primary">
                     <Link href={ind.href}>{ind.cta} <ArrowRight className="size-3.5 ms-1 rtl:rotate-180" /></Link>
                   </Button>
                 </CardContent>
@@ -147,39 +180,50 @@ export function HomePage() {
             ))}
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <h2 className="text-3xl font-bold">{t('qualifyTitle')}</h2>
-          <p className="mt-4 text-muted-foreground text-lg">{t('qualifyIntro')}</p>
-          <ul className="mt-8 space-y-3">
+      <MarketingSection variant="muted">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <SectionHeading
+            title={t('qualifyTitle')}
+            subtitle={<RichInline text={t('qualifyIntro')} />}
+            align="center"
+          />
+          <ul className="grid sm:grid-cols-2 gap-3">
             {qualification.map((item) => (
-              <li key={item} className="flex items-start gap-3 text-muted-foreground">
-                <Check className="size-5 text-primary shrink-0 mt-0.5" />
-                <span>{item}</span>
+              <li
+                key={item}
+                className="flex items-start gap-3 rounded-xl border bg-card p-4 text-sm text-muted-foreground marketing-card-hover shadow-sm"
+              >
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 mt-0.5">
+                  <Check className="size-3.5 text-primary" />
+                </div>
+                <RichInline text={item} />
               </li>
             ))}
           </ul>
-          <div className="mt-10">
+          <div className="mt-10 text-center">
             <MarketingCta href="/book-demo">{tc('discussRequirements')}</MarketingCta>
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20 bg-muted/20">
+      <MarketingSection>
         <div className="container mx-auto px-4">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-3xl font-bold">{t('howTitle')}</h2>
-          </div>
+          <SectionHeading title={t('howTitle')} align="center" />
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {steps.map((step, i) => (
-              <div key={step.title} className="text-center">
-                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full border-2 border-primary bg-primary/10 font-bold text-primary">
+              <div key={step.title} className="relative text-center group">
+                {i < steps.length - 1 && (
+                  <div className="hidden md:block absolute top-8 start-[calc(50%+2.5rem)] w-[calc(100%-5rem)] h-0.5 bg-gradient-to-r from-primary/50 to-transparent" />
+                )}
+                <div className="mx-auto mb-5 flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[#DF3C01] font-bold text-2xl text-white shadow-lg shadow-primary/30 group-hover:scale-105 transition-transform">
                   {i + 1}
                 </div>
-                <h3 className="font-semibold">{step.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{step.text}</p>
+                <h3 className="font-bold text-lg">{step.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  <RichInline text={step.text} />
+                </p>
               </div>
             ))}
           </div>
@@ -187,73 +231,78 @@ export function HomePage() {
             <MarketingCta href="/book-demo">{t('howCta')}</MarketingCta>
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20">
+      <MarketingSection variant="cta">
         <div className="container mx-auto px-4 text-center max-w-2xl">
-          <h2 className="text-3xl font-bold">{t('demoTitle')}</h2>
-          <p className="mt-4 text-muted-foreground text-lg">{t('demoText')}</p>
-          <div className="mt-8">
-            <MarketingCta href="/book-demo">{t('demoCta')}</MarketingCta>
-          </div>
+          <SectionHeading
+            title={t('demoTitle')}
+            subtitle={<RichInline text={t('demoText')} />}
+            align="center"
+          />
+          <MarketingCta href="/book-demo">{t('demoCta')}</MarketingCta>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20 bg-muted/20">
-        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-8">
-          <div className="rounded-2xl border bg-card p-6">
-            <h3 className="text-xl font-semibold">{t('value1Title')}</h3>
-            <p className="mt-3 text-muted-foreground leading-relaxed">{t('value1Text')}</p>
+      <MarketingSection variant="muted">
+        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-6">
+          <div className="rounded-2xl border bg-card p-6 marketing-card-hover border-s-4 border-s-primary shadow-sm">
+            <h3 className="text-xl font-bold">{t('value1Title')}</h3>
+            <p className="mt-3 text-muted-foreground leading-relaxed">
+              <RichInline text={t('value1Text')} />
+            </p>
           </div>
-          <div className="rounded-2xl border bg-card p-6">
-            <h3 className="text-xl font-semibold">{t('value2Title')}</h3>
-            <p className="mt-3 text-muted-foreground leading-relaxed">{t('value2Text')}</p>
-            <Link href="/industries/security" className="mt-4 inline-flex items-center text-sm font-medium text-primary hover:underline">
+          <div className="rounded-2xl border bg-card p-6 marketing-card-hover shadow-sm">
+            <h3 className="text-xl font-bold">{t('value2Title')}</h3>
+            <p className="mt-3 text-muted-foreground leading-relaxed">
+              <RichInline text={t('value2Text')} />
+            </p>
+            <Link href="/industries/security" className="mt-4 inline-flex items-center text-sm font-semibold text-primary hover:underline">
               {t('value2Link')} <ArrowRight className="size-3.5 ms-1 rtl:rotate-180" />
             </Link>
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20">
+      <MarketingSection>
         <div className="container mx-auto px-4 text-center max-w-2xl">
-          <h2 className="text-3xl font-bold">{t('pricingTitle')}</h2>
-          <p className="mt-4 text-muted-foreground text-lg">{t('pricingText')}</p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
+          <SectionHeading
+            title={t('pricingTitle')}
+            subtitle={<RichInline text={t('pricingText')} />}
+            align="center"
+          />
+          <div className="flex flex-wrap justify-center gap-4">
             <MarketingCta href="/pricing">{t('comparePlans')}</MarketingCta>
-            <Button asChild variant="outline" size="lg">
+            <Button asChild variant="outline" size="lg" className="border-primary/30 hover:bg-primary/5">
               <Link href="/book-demo">{tc('discussRequirements')}</Link>
             </Button>
           </div>
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="border-b border-border/50 py-20 bg-muted/20">
+      <MarketingSection variant="muted">
         <div className="container mx-auto px-4 max-w-2xl">
-          <h2 className="text-3xl font-bold text-center mb-10">{t('faqTitle')}</h2>
-          <div className="space-y-4">
-            {faqs.map((f) => (
-              <div key={f.q} className="rounded-xl border bg-card p-5">
-                <h3 className="font-semibold">{f.q}</h3>
-                <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{f.a}</p>
-              </div>
-            ))}
-          </div>
+          <SectionHeading title={t('faqTitle')} align="center" />
+          <MarketingFaqAccordion items={faqs} />
         </div>
-      </section>
+      </MarketingSection>
 
-      <section className="py-20">
+      <MarketingSection border={false} className="py-20 marketing-cta-bg">
         <ScrollReveal className="container mx-auto px-4 text-center max-w-2xl">
-          <h2 className="text-3xl font-bold">{t('finalTitle')}</h2>
-          <p className="mt-4 text-muted-foreground text-lg">{t('finalText')}</p>
+          <h2 className="text-3xl md:text-4xl font-bold">
+            <RichInline text={t('finalTitle')} variant="hero" />
+          </h2>
+          <p className="mt-4 text-muted-foreground text-lg leading-relaxed">
+            <RichInline text={t('finalText')} />
+          </p>
           <div className="mt-10 flex flex-wrap justify-center gap-4">
             <MarketingCta href="/book-demo">{tc('bookDemo')}</MarketingCta>
-            <Button asChild variant="outline" size="lg">
+            <Button asChild variant="outline" size="lg" className="border-primary/30 hover:bg-primary/5">
               <Link href="/pricing">{tc('viewPricing')}</Link>
             </Button>
           </div>
         </ScrollReveal>
-      </section>
+      </MarketingSection>
 
       <MarketingFooter />
     </div>

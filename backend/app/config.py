@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     stripe_publishable_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_application_fee_percent: float = 0
+    stripe_yearly_discount_coupon_id: str = ""
+    payment_failed_lock_retries: int = 3
 
     @field_validator("database_url", mode="before")
     @classmethod

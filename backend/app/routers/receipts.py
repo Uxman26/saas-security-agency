@@ -40,6 +40,7 @@ def get_public_receipt(ref_id: str, db: Session = Depends(get_db)):
         subscription_tier=r.subscription_tier,
         amount=r.amount,
         period_days=r.period_days,
+        billing_cycle=r.billing_cycle or "monthly",
         status=r.status,
         created_at=r.created_at,
     )

@@ -87,8 +87,40 @@ class ReceiptPublicResponse(BaseModel):
     subscription_tier: str
     amount: float
     period_days: int
+    billing_cycle: str = "monthly"
     status: str
     created_at: datetime
+
+
+class BillingSettingsResponse(BaseModel):
+    yearly_discount_percent: float
+    yearly_discount_coupon_id: str
+    payment_failed_lock_retries: int
+
+
+class BillingSettingsPatch(BaseModel):
+    yearly_discount_percent: float | None = None
+    payment_failed_lock_retries: int | None = None
+
+
+class BillingReceiptResponse(BaseModel):
+    id: int
+    receipt_number: str
+    amount: float
+    currency: str
+    plan_name: str | None = None
+    billing_cycle: str | None = None
+    payment_method_last4: str | None = None
+    invoice_url: str | None = None
+    next_renewal_date: str | None = None
+    paid_at: str | None = None
+
+
+class AdminCouponCreate(BaseModel):
+    percent_off: float | None = None
+    amount_off: int | None = None
+    duration: str = "once"
+    max_redemptions: int | None = None
 
 
 class AdminResetPassword(BaseModel):

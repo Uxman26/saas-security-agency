@@ -766,12 +766,68 @@ def run():
         ("companies", "stripe_connect_account_id", "TEXT"),
         ("subscription_receipts", "stripe_checkout_session_id", "TEXT"),
         ("subscription_receipts", "stripe_subscription_id", "TEXT"),
+        ("subscription_receipts", "billing_cycle", "TEXT DEFAULT 'monthly'"),
     ]:
         if table_exists(cur, table) and not column_exists(cur, table, col):
             try:
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
             except sqlite3.OperationalError:
                 pass
+    for ddl in [
+        """CREATE TABLE IF NOT EXISTS platform_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS stripe_plan_prices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tier TEXT NOT NULL,
+            billing_cycle TEXT NOT NULL,
+            stripe_product_id TEXT,
+            stripe_price_id TEXT UNIQUE,
+            unit_amount INTEGER,
+            currency TEXT DEFAULT 'gbp',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(tier, billing_cycle)
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT UNIQUE,
+            stripe_price_id TEXT,
+            plan_tier TEXT NOT NULL,
+            billing_cycle TEXT DEFAULT 'monthly',
+            status TEXT DEFAULT 'active',
+            current_period_start TEXT,
+            current_period_end TEXT,
+            cancel_at_period_end INTEGER DEFAULT 0,
+            canceled_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS billing_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            subscription_id INTEGER REFERENCES company_subscriptions(id),
+            stripe_invoice_id TEXT UNIQUE,
+            receipt_number TEXT UNIQUE,
+            amount REAL NOT NULL,
+            currency TEXT DEFAULT 'gbp',
+            plan_name TEXT,
+            billing_cycle TEXT,
+            payment_method_last4 TEXT,
+            invoice_url TEXT,
+            next_renewal_date TEXT,
+            paid_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+    ]:
+        try:
+            cur.execute(ddl)
+        except sqlite3.OperationalError:
+            pass
     if not table_exists(cur, "email_logs"):
         try:
             cur.execute(

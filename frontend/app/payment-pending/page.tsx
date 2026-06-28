@@ -23,11 +23,19 @@ function PaymentPendingContent() {
   const [receipt, setReceipt] = useState<ReceiptPublic | null>(null);
   const [loading, setLoading] = useState(!!ref);
   const [stripeEnabled, setStripeEnabled] = useState(false);
+  const [yearlyDiscount, setYearlyDiscount] = useState(20);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paying, setPaying] = useState(false);
   const [verified, setVerified] = useState(false);
 
   useEffect(() => {
-    api.stripe.config().then((c) => setStripeEnabled(c.enabled)).catch(() => setStripeEnabled(false));
+    api.stripe
+      .config()
+      .then((c) => {
+        setStripeEnabled(c.enabled);
+        if (c.yearly_discount_percent) setYearlyDiscount(c.yearly_discount_percent);
+      })
+      .catch(() => setStripeEnabled(false));
   }, []);
 
   useEffect(() => {
@@ -54,7 +62,7 @@ function PaymentPendingContent() {
     if (!ref) return;
     setPaying(true);
     try {
-      const { url } = await api.stripe.checkoutSession(ref);
+      const { url } = await api.stripe.checkoutSession(ref, billingCycle);
       window.location.href = url;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('stripeUnavailable'));
@@ -120,10 +128,28 @@ function PaymentPendingContent() {
           )}
           {!ref && <p className="text-center text-muted-foreground text-sm">{t('noRef')}</p>}
           {!isPaid && stripeEnabled && ref && receipt ? (
-            <Button className="w-full" onClick={() => void payWithStripe()} disabled={paying}>
+            <>
+              <div className="flex rounded-lg border p-1 gap-1">
+                <button
+                  type="button"
+                  className={`flex-1 rounded-md py-2 text-sm font-medium ${billingCycle === 'monthly' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                  onClick={() => setBillingCycle('monthly')}
+                >
+                  {t('monthly')}
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 rounded-md py-2 text-sm font-medium ${billingCycle === 'yearly' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                  onClick={() => setBillingCycle('yearly')}
+                >
+                  {t('yearly', { discount: yearlyDiscount })}
+                </button>
+              </div>
+              <Button className="w-full" onClick={() => void payWithStripe()} disabled={paying}>
               {paying ? <Loader2 className="size-4 mr-2 animate-spin" /> : <CreditCard className="size-4 mr-2" />}
               {paying ? t('processing') : t('payWithCard')}
-            </Button>
+              </Button>
+            </>
           ) : null}
           <Button asChild className="w-full" variant={isPaid ? 'default' : 'outline'}>
             <Link href="/login">{isPaid ? tc('backToSignIn') : tc('backToSignIn')}</Link>

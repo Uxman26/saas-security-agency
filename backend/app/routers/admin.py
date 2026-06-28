@@ -27,6 +27,9 @@ from app.schemas import (
     AdminDashboardResponse,
     SmtpConfigResponse,
     SmtpConfigUpdate,
+    BillingSettingsResponse,
+    BillingSettingsPatch,
+    AdminCouponCreate,
 )
 from app.auth import get_current_super_admin
 from app.services import admin_platform_service as ap
@@ -239,6 +242,45 @@ def get_smtp(_: User = Depends(get_current_super_admin)):
 def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(get_current_super_admin)):
     from app.services.platform_smtp_service import update_smtp_config
     return SmtpConfigResponse(**update_smtp_config(body.model_dump(exclude_unset=True)))
+
+
+@router.get("/settings/billing", response_model=BillingSettingsResponse)
+def get_billing_settings(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    from app.services import platform_settings_service
+    return BillingSettingsResponse(**platform_settings_service.get_billing_settings(db))
+
+
+@router.patch("/settings/billing", response_model=BillingSettingsResponse)
+def patch_billing_settings(
+    body: BillingSettingsPatch,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_super_admin),
+):
+    from app.services import platform_settings_service, stripe_plan_service
+    data = body.model_dump(exclude_unset=True)
+    out = platform_settings_service.update_billing_settings(db, data)
+    if "yearly_discount_percent" in data:
+        stripe_plan_service.ensure_yearly_coupon(db)
+        stripe_plan_service.sync_all_plans(db)
+    return BillingSettingsResponse(**out)
+
+
+@router.post("/stripe/sync-plans")
+def sync_stripe_plans(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    from app.services import stripe_plan_service
+    return stripe_plan_service.sync_all_plans(db)
+
+
+@router.post("/coupons")
+def create_coupon(body: AdminCouponCreate, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    from app.services import stripe_plan_service
+    return stripe_plan_service.create_admin_coupon(
+        db,
+        percent_off=body.percent_off,
+        amount_off=body.amount_off,
+        duration=body.duration,
+        max_redemptions=body.max_redemptions,
+    )
 
 
 @router.get("/receipts", response_model=List[SubscriptionReceiptResponse])

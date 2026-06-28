@@ -403,22 +403,64 @@ export const api = {
     },
   },
   stripe: {
-    config: () => request<{ enabled: boolean; publishable_key: string }>('/stripe/config'),
-    checkoutSession: (ref_id: string) =>
+    config: () => request<{ enabled: boolean; publishable_key: string; yearly_discount_percent?: number }>('/stripe/config'),
+    checkoutSession: (ref_id: string, billing_cycle?: string, coupon?: string) =>
       request<{ url: string; session_id: string }>('/stripe/checkout-session', {
         method: 'POST',
-        body: JSON.stringify({ ref_id }),
+        body: JSON.stringify({ ref_id, billing_cycle: billing_cycle || 'monthly', coupon }),
       }),
     sessionStatus: (session_id: string) =>
       request<{ payment_status: string; paid: boolean; receipt_ref?: string }>(
         `/stripe/session-status?session_id=${encodeURIComponent(session_id)}`
       ),
     portal: () => request<{ url: string }>('/stripe/portal', { method: 'POST' }),
+    previewChange: (tier: string, billing_cycle: string) =>
+      request<{ amount_due: number; currency: string }>('/stripe/preview-change', {
+        method: 'POST',
+        body: JSON.stringify({ tier, billing_cycle }),
+      }),
+    changePlan: (tier: string, billing_cycle: string, proration_behavior?: string) =>
+      request<Record<string, unknown>>('/stripe/change-plan', {
+        method: 'POST',
+        body: JSON.stringify({ tier, billing_cycle, proration_behavior }),
+      }),
+    cancel: () => request<Record<string, unknown>>('/stripe/cancel', { method: 'POST' }),
+    reactivate: () => request<Record<string, unknown>>('/stripe/reactivate', { method: 'POST' }),
     connectOnboard: (return_url: string, refresh_url: string) =>
       request<{ url: string }>('/stripe/connect/onboard', {
         method: 'POST',
         body: JSON.stringify({ return_url, refresh_url }),
       }),
+  },
+  billing: {
+    receipts: () =>
+      request<
+        {
+          id: number;
+          receipt_number: string;
+          amount: number;
+          currency: string;
+          plan_name?: string;
+          billing_cycle?: string;
+          payment_method_last4?: string;
+          invoice_url?: string;
+          next_renewal_date?: string;
+          paid_at?: string;
+        }[]
+      >('/billing/receipts'),
+    receipt: (id: number) =>
+      request<{
+        id: number;
+        receipt_number: string;
+        amount: number;
+        currency: string;
+        plan_name?: string;
+        billing_cycle?: string;
+        payment_method_last4?: string;
+        invoice_url?: string;
+        next_renewal_date?: string;
+        paid_at?: string;
+      }>(`/billing/receipts/${id}`),
   },
   mainContractors: {
     list: (): Promise<MainContractor[]> => request<MainContractor[]>('/main-contractors'),

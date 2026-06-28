@@ -135,6 +135,8 @@
     "paymentCanceled": "Payment was canceled. You can try again when ready.",
     "stripeUnavailable": "Card payment is unavailable. Contact support or use bank transfer.",
     "verifyFailed": "Could not verify payment. If you were charged, contact support.",
+    "monthly": "Monthly",
+    "yearly": "Yearly ({discount}% off)",
     "viewDetails": "View payment details",
     "notFound": "Receipt not found. Check your reference ID.",
     "noRef": "No receipt reference provided."

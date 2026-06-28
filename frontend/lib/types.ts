@@ -103,6 +103,7 @@ export interface ReceiptPublic {
   subscription_tier: string;
   amount: number;
   period_days: number;
+  billing_cycle?: string;
   status: string;
   created_at: string;
 }

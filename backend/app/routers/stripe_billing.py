@@ -5,14 +5,22 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Company, User
 from app.auth import get_current_user
-from app.rbac import PERM_SUB_READ, require_perm
-from app.services import stripe_service
+from app.rbac import PERM_SUB_READ, PERM_SUB_MANAGE, require_perm
+from app.services import stripe_subscription_service as stripe_svc
 
 router = APIRouter(prefix="/stripe", tags=["stripe"])
 
 
 class CheckoutRequest(BaseModel):
     ref_id: str
+    billing_cycle: str = "monthly"
+    coupon: str | None = None
+
+
+class PlanChangeRequest(BaseModel):
+    tier: str
+    billing_cycle: str = "monthly"
+    proration_behavior: str = "create_prorations"
 
 
 class ConnectOnboardRequest(BaseModel):
@@ -21,23 +29,26 @@ class ConnectOnboardRequest(BaseModel):
 
 
 @router.get("/config")
-def stripe_config():
+def stripe_config(db: Session = Depends(get_db)):
+    from app.services import platform_settings_service
+    billing = platform_settings_service.get_billing_settings(db)
     return {
-        "enabled": stripe_service.is_enabled(),
-        "publishable_key": stripe_service.publishable_key(),
+        "enabled": stripe_svc.is_enabled(),
+        "publishable_key": stripe_svc.publishable_key(),
+        "yearly_discount_percent": billing["yearly_discount_percent"],
     }
 
 
 @router.post("/checkout-session")
 def checkout_session(body: CheckoutRequest, db: Session = Depends(get_db)):
-    return stripe_service.create_checkout_session(db, body.ref_id.strip())
+    return stripe_svc.create_checkout_session(db, body.ref_id.strip(), body.billing_cycle, body.coupon)
 
 
 @router.get("/session-status")
 def session_status(session_id: str, db: Session = Depends(get_db)):
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id required")
-    return stripe_service.verify_checkout_session(db, session_id)
+    return stripe_svc.verify_checkout_session(db, session_id)
 
 
 @router.post("/webhook")
@@ -47,13 +58,33 @@ async def stripe_webhook(
     stripe_signature: str | None = Header(None, alias="stripe-signature"),
 ):
     payload = await request.body()
-    stripe_service.handle_webhook(db, payload, stripe_signature)
+    stripe_svc.handle_webhook(db, payload, stripe_signature)
     return {"received": True}
 
 
 @router.post("/portal")
 def billing_portal(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_READ))):
-    return stripe_service.create_billing_portal(db, current_user)
+    return stripe_svc.create_billing_portal(db, current_user)
+
+
+@router.post("/preview-change")
+def preview_change(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_READ))):
+    return stripe_svc.preview_plan_change(db, current_user, body.tier, body.billing_cycle)
+
+
+@router.post("/change-plan")
+def change_plan(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_MANAGE))):
+    return stripe_svc.change_plan(db, current_user, body.tier, body.billing_cycle, body.proration_behavior)
+
+
+@router.post("/cancel")
+def cancel_sub(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_MANAGE))):
+    return stripe_svc.cancel_subscription(db, current_user)
+
+
+@router.post("/reactivate")
+def reactivate_sub(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_MANAGE))):
+    return stripe_svc.reactivate_subscription(db, current_user)
 
 
 @router.post("/connect/account")
@@ -63,8 +94,7 @@ def connect_account(db: Session = Depends(get_db), current_user: User = Depends(
     company = db.query(Company).filter(Company.id == current_user.company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    account_id = stripe_service.create_connect_account(db, company, current_user.email)
-    return {"account_id": account_id}
+    return {"account_id": stripe_svc.create_connect_account(db, company, current_user.email)}
 
 
 @router.post("/connect/onboard")
@@ -78,8 +108,6 @@ def connect_onboard(
     company = db.query(Company).filter(Company.id == current_user.company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    account_id = company.stripe_connect_account_id or stripe_service.create_connect_account(
-        db, company, current_user.email
-    )
-    url = stripe_service.create_connect_onboarding_link(account_id, body.return_url, body.refresh_url)
+    account_id = company.stripe_connect_account_id or stripe_svc.create_connect_account(db, company, current_user.email)
+    url = stripe_svc.create_connect_onboarding_link(account_id, body.return_url, body.refresh_url)
     return {"url": url}

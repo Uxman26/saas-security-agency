@@ -105,6 +105,8 @@ class Company(Base):
     rota_plans = relationship("RotaPlan", back_populates="company", cascade="all, delete-orphan")
     subscription_receipts = relationship("SubscriptionReceipt", back_populates="company", cascade="all, delete-orphan")
     subscription_invoices = relationship("SubscriptionInvoice", back_populates="company", cascade="all, delete-orphan")
+    company_subscriptions = relationship("CompanySubscription", back_populates="company", cascade="all, delete-orphan")
+    billing_receipts = relationship("BillingReceipt", back_populates="company", cascade="all, delete-orphan")
     staff_requests = relationship("StaffRequest", back_populates="company", cascade="all, delete-orphan")
     expenses = relationship("Expense", back_populates="company", cascade="all, delete-orphan")
     sms_logs = relationship("SmsLog", back_populates="company", cascade="all, delete-orphan")
@@ -164,9 +166,73 @@ class SubscriptionReceipt(Base):
     paid_at = Column(DateTime(timezone=True))
     stripe_checkout_session_id = Column(String)
     stripe_subscription_id = Column(String)
+    billing_cycle = Column(String, default="monthly")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     company = relationship("Company", back_populates="subscription_receipts")
     user = relationship("User")
+
+
+class PlatformSetting(Base):
+    __tablename__ = "platform_settings"
+    key = Column(String, primary_key=True)
+    value = Column(Text)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class StripePlanPrice(Base):
+    __tablename__ = "stripe_plan_prices"
+    __table_args__ = (UniqueConstraint("tier", "billing_cycle", name="uq_stripe_plan_price"),)
+    id = Column(Integer, primary_key=True, index=True)
+    tier = Column(String, nullable=False)
+    billing_cycle = Column(String, nullable=False)
+    stripe_product_id = Column(String)
+    stripe_price_id = Column(String, unique=True, index=True)
+    unit_amount = Column(Integer)
+    currency = Column(String, default="gbp")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CompanySubscription(Base):
+    __tablename__ = "company_subscriptions"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    stripe_customer_id = Column(String)
+    stripe_subscription_id = Column(String, unique=True, index=True)
+    stripe_price_id = Column(String)
+    plan_tier = Column(String, nullable=False)
+    billing_cycle = Column(String, default="monthly")
+    status = Column(String, default="active")
+    current_period_start = Column(DateTime(timezone=True))
+    current_period_end = Column(DateTime(timezone=True))
+    cancel_at_period_end = Column(Boolean, default=False)
+    canceled_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="company_subscriptions")
+    user = relationship("User")
+    billing_receipts = relationship("BillingReceipt", back_populates="subscription")
+
+
+class BillingReceipt(Base):
+    __tablename__ = "billing_receipts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    subscription_id = Column(Integer, ForeignKey("company_subscriptions.id"))
+    stripe_invoice_id = Column(String, unique=True, index=True)
+    receipt_number = Column(String, unique=True, index=True)
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="gbp")
+    plan_name = Column(String)
+    billing_cycle = Column(String)
+    payment_method_last4 = Column(String)
+    invoice_url = Column(String)
+    next_renewal_date = Column(DateTime(timezone=True))
+    paid_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="billing_receipts")
+    user = relationship("User")
+    subscription = relationship("CompanySubscription", back_populates="billing_receipts")
 
 
 class SubscriptionInvoice(Base):

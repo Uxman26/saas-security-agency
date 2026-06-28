@@ -40,7 +40,9 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
       ? d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed'
       : typeof d === 'string'
         ? d
-        : 'Request failed';
+        : typeof d === 'object' && d !== null && 'message' in d
+          ? JSON.stringify(d)
+          : 'Request failed';
     throw new ApiError(response.status, msg);
   }
 
@@ -73,7 +75,9 @@ async function requestBlob(endpoint: string): Promise<Blob> {
       ? d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed'
       : typeof d === 'string'
         ? d
-        : 'Request failed';
+        : typeof d === 'object' && d !== null && 'message' in d
+          ? JSON.stringify(d)
+          : 'Request failed';
     throw new ApiError(response.status, msg);
   }
   return response.blob();

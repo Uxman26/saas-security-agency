@@ -16,6 +16,8 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       FRONTEND_URL: https://controlops.co.uk
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - backend_data:/app/data
     depends_on:
@@ -31,6 +33,8 @@ services:
       - ./backend/.env
     environment:
       REDIS_URL: redis://redis:6379/0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - backend_data:/app/data
     depends_on:

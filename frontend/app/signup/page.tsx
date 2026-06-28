@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useTranslations } from 'next-intl';
 import { Building2, Eye, EyeOff, Lock, Mail, User, Loader2 } from 'lucide-react';
+import { parseEmailVerificationRequired } from '@/lib/sidebar-modules';
 import { authFieldClass, authIconClass, authLabelClass, authSelectClass } from '@/lib/auth-styles';
 import { INDUSTRY_VALUES, WORKFORCE_VALUES } from '@/lib/industry-options';
 
@@ -69,6 +70,14 @@ function SignupForm() {
         router.push(`/payment-pending?ref=${ref}`);
       }
     } catch (err: unknown) {
+      const verify = parseEmailVerificationRequired(err);
+      if (verify?.email) {
+        const q = new URLSearchParams({ email: verify.email });
+        if (verify.receipt_ref) q.set('ref', verify.receipt_ref);
+        toast.info(t('accountCreatedVerify'));
+        router.push(`/verify-email?${q.toString()}`);
+        return;
+      }
       toast.error(err instanceof Error ? err.message : t('signupFailed'));
     } finally {
       setLoading(false);

@@ -68,3 +68,14 @@ export function parsePaymentPending(err: unknown): import('./types').PaymentPend
   }
   return null;
 }
+
+export function parseEmailVerificationRequired(err: unknown): { email?: string; receipt_ref?: string } | null {
+  if (!(err instanceof Error)) return null;
+  try {
+    const d = JSON.parse(err.message);
+    if (d?.code === 'email_verification_required') return d;
+  } catch {
+    return null;
+  }
+  return null;
+}

@@ -32,6 +32,7 @@ def get_smtp_config() -> dict[str, Any]:
     return {
         "mail_server": raw.get("mail_server") or settings.mail_server,
         "mail_port": int(raw.get("mail_port") or settings.mail_port),
+        "mail_use_tls": raw.get("mail_use_tls") if raw.get("mail_use_tls") is not None else settings.mail_use_tls,
         "mail_username": username,
         "mail_password": password,
         "mail_from": raw.get("mail_from") or settings.mail_from,

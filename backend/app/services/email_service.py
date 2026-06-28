@@ -1,4 +1,6 @@
+import logging
 import smtplib
+import threading
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Optional
@@ -9,6 +11,9 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Company, EmailLog
 from app.services.platform_smtp_service import get_smtp_config
+
+logger = logging.getLogger(__name__)
+SMTP_TIMEOUT = 10
 
 
 def is_configured() -> bool:
@@ -41,11 +46,35 @@ def _send_with_config(cfg: dict[str, Any], to_email: str, subject: str, body: st
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "html"))
-    server = smtplib.SMTP(cfg["mail_server"], cfg["mail_port"])
-    server.starttls()
-    server.login(cfg["mail_username"], cfg["mail_password"])
-    server.send_message(msg)
-    server.quit()
+    host = cfg["mail_server"]
+    port = int(cfg["mail_port"])
+    use_tls = bool(cfg.get("mail_use_tls", port not in (25, 465)))
+    logger.info("SMTP connect %s:%s tls=%s", host, port, use_tls)
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port, timeout=SMTP_TIMEOUT)
+    else:
+        server = smtplib.SMTP(host, port, timeout=SMTP_TIMEOUT)
+        if use_tls:
+            server.starttls()
+    try:
+        if cfg.get("mail_username") and cfg.get("mail_password"):
+            server.login(cfg["mail_username"], cfg["mail_password"])
+        server.send_message(msg)
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
+
+
+def send_email_async(to_email: str, subject: str, body: str) -> None:
+    def _run():
+        try:
+            send_email(to_email, subject, body)
+        except Exception as e:
+            logger.warning("Background email to %s failed: %s", to_email, e)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def send_email(to_email: str, subject: str, body: str) -> bool:

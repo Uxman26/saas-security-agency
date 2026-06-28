@@ -66,3 +66,50 @@ Use the same URLs in `NEXT_PUBLIC_API_URL` and `CORS_ORIGINS` so the frontend ca
 - Backend: **8000**
 
 Ensure these ports are not blocked and that the proxy targets match where Docker exposes them (usually `127.0.0.1:3000` and `127.0.0.1:8000`).
+
+## 6. SMTP on Plesk (Docker)
+
+Containers often cannot reach `mail.yourdomain.com:587` (outbound SMTP blocked or hairpin NAT). Use the **host** mail server instead.
+
+In `backend/.env` on the server:
+
+```env
+MAIL_SERVER=host.docker.internal
+MAIL_PORT=587
+MAIL_USE_TLS=true
+MAIL_USERNAME=noreply@yourdomain.com
+MAIL_PASSWORD=your-mailbox-password
+MAIL_FROM=noreply@yourdomain.com
+```
+
+`docker-compose.yml` already maps `host.docker.internal` to the host gateway.
+
+**Test from the server:**
+
+```bash
+# Host (should work)
+python3 -c "import socket; s=socket.create_connection(('127.0.0.1',587),5); print('host OK'); s.close()"
+
+# Container
+docker compose exec backend python -c "
+import socket
+for h,p in [('host.docker.internal',587),('host.docker.internal',25),('172.17.0.1',25)]:
+  try:
+    s=socket.create_connection((h,p),5); print(h,p,'OK'); s.close()
+  except Exception as e:
+    print(h,p,'FAIL',e)
+"
+
+docker compose exec backend python -c "
+import smtplib
+s=smtplib.SMTP('host.docker.internal',587,timeout=10)
+s.starttls()
+s.login('noreply@yourdomain.com','YOUR_PASSWORD')
+print('SMTP OK')
+s.quit()
+"
+```
+
+If port 587 fails from Docker, try `MAIL_PORT=25` and `MAIL_USE_TLS=false` (Plesk Postfix often allows relay from Docker subnet without auth).
+
+After changing `.env`: `docker compose up -d --build backend worker`

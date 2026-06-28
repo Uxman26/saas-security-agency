@@ -13,7 +13,7 @@ import { AuthShell } from '@/components/auth/auth-shell';
 import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
-import { parsePaymentPending } from '@/lib/sidebar-modules';
+import { parsePaymentPending, parseEmailVerificationRequired } from '@/lib/sidebar-modules';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { authFieldClass, authIconClass, authLabelClass } from '@/lib/auth-styles';
 
@@ -47,6 +47,13 @@ export default function LoginPage() {
       const pending = parsePaymentPending(err);
       if (pending?.receipt_ref) {
         router.push(`/payment-pending?ref=${encodeURIComponent(pending.receipt_ref)}`);
+        return;
+      }
+      const verify = parseEmailVerificationRequired(err);
+      if (verify?.email) {
+        const q = new URLSearchParams({ email: verify.email });
+        if (verify.receipt_ref) q.set('ref', verify.receipt_ref);
+        router.push(`/verify-email?${q.toString()}`);
         return;
       }
       toast.error(err instanceof Error ? err.message : t('loginFailed'));

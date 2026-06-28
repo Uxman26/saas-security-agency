@@ -18,7 +18,7 @@ from app.auth import (
 from datetime import timedelta
 from app.config import settings
 from app.services.role_service import ensure_roles_for_company, get_role_by_slug
-from app.services.receipt_service import company_subscription_blocked, create_receipt_for_signup
+from app.services.receipt_service import company_subscription_blocked, create_receipt_for_signup, latest_pending_receipt
 from app.plan_config import normalize_tier
 from app.services import email_service
 from app.services.module_service import modules_from_plan, dump_modules
@@ -35,7 +35,7 @@ def send_verification_email(user: User) -> None:
         f"<p>This link expires in 24 hours. If you did not create an account, you can ignore this email.</p>"
     )
     if email_service.is_configured():
-        email_service.send_email(user.email, "Verify your email", body)
+        email_service.send_email_async(user.email, "Verify your email", body)
 
 
 def verify_email_with_token(db: Session, token: str) -> None:
@@ -56,7 +56,23 @@ def resend_verification_email(db: Session, email: str) -> None:
     send_verification_email(user)
 
 def create_user_and_company(db: Session, user_data: UserCreate) -> User:
-    if db.query(User).filter(User.email == user_data.email).first():
+    existing = db.query(User).filter(User.email == user_data.email).first()
+    if existing:
+        if requires_email_verification(existing):
+            send_verification_email(existing)
+            receipt_ref = None
+            if existing.company_id:
+                pending = latest_pending_receipt(db, existing.company_id)
+                receipt_ref = pending.ref_id if pending else None
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "email_verification_required",
+                    "message": "Account exists but email is not verified. A new verification link has been sent.",
+                    "email": existing.email,
+                    "receipt_ref": receipt_ref,
+                },
+            )
         raise HTTPException(status_code=400, detail="Email already registered")
     is_super = bool(getattr(settings, "super_admin_email", "")) and user_data.email.lower() == getattr(settings, "super_admin_email", "").lower()
     hashed_password = get_password_hash(user_data.password)
@@ -93,10 +109,15 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     db.commit()
     db.refresh(user)
     if requires_email_verification(user):
-        try:
-            send_verification_email(user)
-        except Exception:
-            pass
+        if email_service.is_configured():
+            try:
+                send_verification_email(user)
+            except Exception:
+                pass
+        else:
+            user.email_verified = True
+            db.commit()
+            db.refresh(user)
     return user
 
 
@@ -128,7 +149,19 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
         raise HTTPException(status_code=403, detail="Account is deactivated")
     if requires_email_verification(user):
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
-        raise HTTPException(status_code=403, detail="Email not verified. Check your inbox for the verification link.")
+        receipt_ref = None
+        if user.company_id:
+            pending = latest_pending_receipt(db, user.company_id)
+            receipt_ref = pending.ref_id if pending else None
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "email_verification_required",
+                "message": "Email not verified. Check your inbox for the verification link.",
+                "email": user.email,
+                "receipt_ref": receipt_ref,
+            },
+        )
     block = company_subscription_blocked(db, user)
     if block:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
@@ -158,7 +191,7 @@ def request_password_reset(db: Session, email: str) -> None:
         f"<p>If you did not request this, you can ignore this email.</p>"
     )
     if email_service.is_configured():
-        email_service.send_email(user.email, "Reset your password", body)
+        email_service.send_email_async(user.email, "Reset your password", body)
 
 
 def reset_password_with_token(db: Session, token: str, new_password: str) -> None:

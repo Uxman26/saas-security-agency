@@ -15,7 +15,7 @@ services:
       - ./backend/.env
     environment:
       REDIS_URL: redis://redis:6379/0
-      FRONTEND_URL: https://security.paramountech.pk
+      FRONTEND_URL: https://controlops.co.uk
     volumes:
       - backend_data:/app/data
     depends_on:
@@ -52,7 +52,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://security.paramountech.pk/api
+        NEXT_PUBLIC_API_URL: https://controlops.co.uk/api
     expose:
       - "3000"
     depends_on:

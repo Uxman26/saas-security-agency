@@ -11,7 +11,6 @@ import { ScrollReveal } from '@/components/marketing/scroll-reveal';
 import { MarketingFaqAccordion } from '@/components/marketing/marketing-faq-accordion';
 import { MarketingSection, SectionHeading } from '@/components/marketing/marketing-section';
 import { MarketingDashboardPreview } from '@/components/marketing/marketing-dashboard-preview';
-import { MarketingStatsStrip } from '@/components/marketing/marketing-stats-strip';
 import { RichInline, richTags } from '@/components/marketing/marketing-rich-text';
 import {
   Users,
@@ -26,6 +25,7 @@ import {
   LayoutDashboard,
   FileCheck,
   Receipt,
+  AlertTriangle,
 } from 'lucide-react';
 
 const CAPABILITY_ICONS = [Users, MapPin, Calendar, FileText, ClipboardList, Wallet, Wallet, BarChart3];
@@ -37,7 +37,6 @@ type Industry = Titled & { href: string; cta: string };
 type Faq = { q: string; a: string };
 type DashStat = { label: string; value: string; change?: string; trend?: 'up' | 'down' | 'warn' };
 type Shift = { site: string; time: string; staff: string; status: string };
-type ImpactStat = { value: string; label: string; desc: string };
 
 export function HomePage() {
   const t = useTranslations('marketing.home');
@@ -50,7 +49,7 @@ export function HomePage() {
   const faqs = t.raw('faqs') as Faq[];
   const dashboardStats = t.raw('dashboardStats') as DashStat[];
   const dashboardShifts = t.raw('dashboardShifts') as Shift[];
-  const impactStats = t.raw('impactStats') as ImpactStat[];
+  const problems = t.raw('problems') as Titled[];
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,9 +94,29 @@ export function HomePage() {
         </div>
       </MarketingSection>
 
-      <MarketingSection variant="muted" className="py-12 md:py-14">
-        <div className="container mx-auto px-4">
-          <MarketingStatsStrip items={impactStats} />
+      <MarketingSection variant="muted" className="py-14 md:py-20">
+        <div className="container mx-auto px-4 max-w-5xl">
+          <SectionHeading
+            title={t('problemTitle')}
+            subtitle={<RichInline text={t('problemIntro')} />}
+            align="center"
+            className="max-w-3xl mx-auto"
+          />
+          <div className="grid md:grid-cols-3 gap-5">
+            {problems.map((p) => (
+              <Card key={p.title} className="marketing-card-hover border-t-2 border-t-amber-500/50 shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+                    <AlertTriangle className="size-4" />
+                  </div>
+                  <CardTitle className="text-base">{p.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground leading-relaxed">
+                  <RichInline text={p.text} />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </MarketingSection>
 

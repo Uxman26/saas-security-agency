@@ -327,6 +327,13 @@
       "heroText": "ControlOps helps service businesses organise <hl>employees and contractors</hl>, schedule work across locations, manage workforce records, prepare <hl>payroll information</hl> and create <hl>client invoices</hl> — without disconnected spreadsheets.",
       "heroSpecialist": "Built for businesses that deliver work through <b>people and shifts</b>, with specialist workflows for <b>security companies</b>.",
       "heroReassurance": "One operational platform for your <hl>workforce, sites, rotas, records, rates and billing</hl>.",
+      "problemTitle": "Your operation should not depend on disconnected spreadsheets.",
+      "problemIntro": "When rotas, workforce records, payroll preparation and client billing live in separate files and systems, every shift change creates rework across operations, payroll and finance.",
+      "problems": [
+        { "title": "Spreadsheet rotas", "text": "Shift planning, site coverage and assignments spread across files that are hard to keep current." },
+        { "title": "Fragmented workforce records", "text": "Licences, documents, rates and site information sit in different places when work is assigned." },
+        { "title": "Disconnected billing", "text": "Payroll preparation and client invoicing depend on the same assignment data but often run as separate processes." }
+      ],
       "dashboardLabel": "ControlOps dashboard",
       "dashboardPreview": "Shifts · Sites · Payroll · Billing",
       "dashboardTiles": ["Upcoming shifts", "Workforce", "Document alerts"],

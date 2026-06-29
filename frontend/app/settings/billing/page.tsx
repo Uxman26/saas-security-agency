@@ -43,7 +43,10 @@ export default function BillingSettingsPage() {
       api.packages.list().catch(() => DEFAULT_PLAN_TIERS),
       api.subscriptions.get().catch(() => null),
       api.billing.receipts().catch(() => []),
-      api.stripe.config().catch(() => ({ enabled: false, publishable_key: '' })),
+      api.stripe.config().catch((): { enabled: boolean; publishable_key: string; yearly_discount_percent?: number } => ({
+        enabled: false,
+        publishable_key: '',
+      })),
     ]);
     setTiers(pkg.length ? pkg : DEFAULT_PLAN_TIERS);
     setSub(subscription);

@@ -29,7 +29,9 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tierParam = searchParams.get('tier');
+  const cycleParam = searchParams.get('cycle');
   const subscription_tier = tierParam || undefined;
+  const billing_cycle = cycleParam === 'yearly' ? 'yearly' : 'monthly';
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -62,18 +64,20 @@ function SignupForm() {
       const res = await api.auth.signup({ ...data, subscription_tier });
       const ref = encodeURIComponent(res.receipt.ref_id);
       const email = encodeURIComponent(data.email);
+      const cycleQ = `&cycle=${billing_cycle}`;
       if (res.email_verification_required) {
         toast.success(t('accountCreatedVerify'));
-        router.push(`/verify-email?email=${email}&ref=${ref}`);
+        router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}`);
       } else {
         toast.success(t('accountCreatedPayment'));
-        router.push(`/payment-pending?ref=${ref}`);
+        router.push(`/payment-pending?ref=${ref}&cycle=${billing_cycle}`);
       }
     } catch (err: unknown) {
       const verify = parseEmailVerificationRequired(err);
       if (verify?.email) {
         const q = new URLSearchParams({ email: verify.email });
         if (verify.receipt_ref) q.set('ref', verify.receipt_ref);
+        q.set('cycle', billing_cycle);
         toast.info(t('accountCreatedVerify'));
         router.push(`/verify-email?${q.toString()}`);
         return;

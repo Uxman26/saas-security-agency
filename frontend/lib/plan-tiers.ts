@@ -44,6 +44,39 @@ export function formatPriceGBP(price: number) {
   return `£${Number.isInteger(price) ? price : price.toFixed(2)}`;
 }
 
+export const TIER_ORDER = ['basic', 'standard', 'premium', 'enterprise'] as const;
+
+export function tierRank(tier: string) {
+  const i = TIER_ORDER.indexOf(tier as (typeof TIER_ORDER)[number]);
+  return i >= 0 ? i : 0;
+}
+
+export function yearlyMonthlyPrice(monthlyGbp: number, discountPercent: number) {
+  return (monthlyGbp * 12 * (1 - discountPercent / 100)) / 12;
+}
+
+export function planDisplayPrice(tier: PlanTier, cycle: 'monthly' | 'yearly', discountPercent: number) {
+  return cycle === 'monthly' ? tier.price_gbp : yearlyMonthlyPrice(tier.price_gbp, discountPercent);
+}
+
+export function isTierDowngrade(fromTier: string, toTier: string) {
+  return tierRank(toTier) < tierRank(fromTier);
+}
+
+export function canChangeToPlan(
+  currentTier: string | null | undefined,
+  currentCycle: string | null | undefined,
+  targetTier: string,
+  targetCycle: 'monthly' | 'yearly'
+) {
+  if (!currentTier) return true;
+  if (isTierDowngrade(currentTier, targetTier)) return false;
+  const cycle = currentCycle || 'monthly';
+  if (currentTier === targetTier && cycle === 'yearly' && targetCycle === 'monthly') return false;
+  if (currentTier === targetTier && cycle === targetCycle) return false;
+  return true;
+}
+
 export const DEFAULT_PLAN_TIERS: PlanTier[] = [
   { tier: 'basic', price_gbp: 29, max_guards: 10, max_sites: 5, max_users: 5, features: { subcontractors: false, extended_reports: false, contractors: false, sub_contractors: false, sms: false, email: true } },
   { tier: 'standard', price_gbp: 79, max_guards: 50, max_sites: 25, max_users: 15, features: { subcontractors: true, extended_reports: false, contractors: false, sub_contractors: false, sms: true, email: true } },

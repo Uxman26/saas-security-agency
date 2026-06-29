@@ -52,6 +52,7 @@ const items: { href: string; labelKey: string; perm: string; icon: typeof Users 
   { href: '/allowances', labelKey: 'allowances', perm: 'allow.read', icon: Gift },
   { href: '/settings/special-days', labelKey: 'specialDays', perm: 'allow.read', icon: Calendar },
   { href: '/settings/company', labelKey: 'company', perm: 'sub.read', icon: Building2 },
+  { href: '/settings/billing', labelKey: 'billing', perm: 'sub.read', icon: CreditCard },
   { href: '/settings/sms', labelKey: 'sms', perm: 'email.send', icon: MessageSquare },
   { href: '/settings/email', labelKey: 'email', perm: 'email.send', icon: Mail },
   { href: '/settings/roles', labelKey: 'roles', perm: 'roles.read', icon: Shield },

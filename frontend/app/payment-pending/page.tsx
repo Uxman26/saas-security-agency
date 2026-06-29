@@ -17,6 +17,7 @@ function PaymentPendingContent() {
   const tc = useTranslations('common');
   const searchParams = useSearchParams();
   const ref = searchParams.get('ref') || '';
+  const cycleParam = searchParams.get('cycle');
   const success = searchParams.get('success') === '1';
   const canceled = searchParams.get('canceled') === '1';
   const sessionId = searchParams.get('session_id') || '';
@@ -24,7 +25,9 @@ function PaymentPendingContent() {
   const [loading, setLoading] = useState(!!ref);
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [yearlyDiscount, setYearlyDiscount] = useState(20);
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>(
+    cycleParam === 'yearly' ? 'yearly' : 'monthly'
+  );
   const [paying, setPaying] = useState(false);
   const [verified, setVerified] = useState(false);
 

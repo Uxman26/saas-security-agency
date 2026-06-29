@@ -105,3 +105,22 @@ SUBSCRIPTION_PERIOD_DAYS = 30
 def price_for_tier(tier: Optional[str]) -> float:
     from app.services.platform_plans_service import get_price
     return get_price(tier or "basic")
+
+
+TIER_ORDER = {"basic": 1, "standard": 2, "premium": 3, "enterprise": 4}
+
+
+def tier_rank(tier: Optional[str]) -> int:
+    return TIER_ORDER.get(normalize_tier(tier), 0)
+
+
+def is_plan_downgrade(company, tier: str, billing_cycle: str) -> bool:
+    current_tier = normalize_tier(company.subscription_tier)
+    new_tier = normalize_tier(tier)
+    if tier_rank(new_tier) < tier_rank(current_tier):
+        return True
+    current_cycle = company.billing_cycle or "monthly"
+    cycle = "yearly" if billing_cycle == "yearly" else "monthly"
+    if new_tier == current_tier and current_cycle == "yearly" and cycle == "monthly":
+        return True
+    return False

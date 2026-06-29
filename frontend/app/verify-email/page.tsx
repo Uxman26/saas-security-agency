@@ -19,6 +19,7 @@ function VerifyEmailContent() {
   const token = searchParams.get('token') || '';
   const email = searchParams.get('email') || '';
   const ref = searchParams.get('ref') || '';
+  const cycle = searchParams.get('cycle') || '';
   const [verifying, setVerifying] = useState(!!token);
   const [verified, setVerified] = useState(false);
   const [resending, setResending] = useState(false);
@@ -31,7 +32,9 @@ function VerifyEmailContent() {
         setVerified(true);
         toast.success(t('emailVerifiedToast'));
         if (ref) {
-          router.replace(`/payment-pending?ref=${encodeURIComponent(ref)}`);
+          const q = new URLSearchParams({ ref });
+          if (cycle) q.set('cycle', cycle);
+          router.replace(`/payment-pending?${q.toString()}`);
         }
       })
       .catch((e: Error) => toast.error(e.message || t('verificationFailed')))
@@ -112,7 +115,7 @@ function VerifyEmailContent() {
           )}
           {ref && (
             <Button asChild className="w-full" variant="secondary">
-              <Link href={`/payment-pending?ref=${encodeURIComponent(ref)}`}>{t('viewPayment')}</Link>
+              <Link href={`/payment-pending?ref=${encodeURIComponent(ref)}${cycle ? `&cycle=${encodeURIComponent(cycle)}` : ''}`}>{t('viewPayment')}</Link>
             </Button>
           )}
           <Button asChild className="w-full" variant="ghost">

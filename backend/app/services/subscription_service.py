@@ -4,7 +4,7 @@ from app.models import Company, User
 from app.schemas import SubscriptionUpdate
 from app.services.company_service import get_company_by_user_id
 from app.auth import SUPER_ADMIN_ROLE
-from app.plan_config import normalize_tier
+from app.plan_config import normalize_tier, is_plan_downgrade
 from app.services.module_service import apply_plan_module_flags
 
 TIERS = {"basic", "starter", "standard", "premium", "enterprise"}
@@ -21,8 +21,8 @@ def _company_scoped_user(db: Session, user_id: int) -> None:
 def update_subscription(db: Session, data: SubscriptionUpdate, user_id: int) -> Company:
     _company_scoped_user(db, user_id)
     company = get_company_by_user_id(db, user_id)
-    # if data.subscription_tier not in TIERS:
-    #     raise HTTPException(status_code=400, detail="Invalid subscription tier")
+    if is_plan_downgrade(company, data.subscription_tier, company.billing_cycle or "monthly"):
+        raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
     company.subscription_tier = normalize_tier(data.subscription_tier)
     apply_plan_module_flags(company, company.subscription_tier)
     db.commit()

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import BillingReceipt, Company, CompanySubscription, SubscriptionReceipt, User
-from app.plan_config import normalize_tier, price_for_tier
+from app.plan_config import normalize_tier, is_plan_downgrade
 from app.services import platform_settings_service, stripe_plan_service
 from app.services.receipt_service import mark_receipt_paid, receipt_by_ref
 
@@ -396,7 +396,7 @@ def create_billing_portal(db: Session, user: User) -> dict[str, str]:
         raise HTTPException(status_code=400, detail="No billing account")
     session = stripe.billing_portal.Session.create(
         customer=company.stripe_customer_id,
-        return_url=f"{settings.frontend_url}/settings/company",
+        return_url=f"{settings.frontend_url}/settings/billing",
     )
     return {"url": session.url}
 
@@ -407,6 +407,8 @@ def preview_plan_change(db: Session, user: User, tier: str, billing_cycle: str) 
     company = db.query(Company).filter(Company.id == user.company_id).first()
     if not company or not company.stripe_subscription_id:
         raise HTTPException(status_code=400, detail="No active subscription")
+    if is_plan_downgrade(company, tier, billing_cycle):
+        raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
     sub = stripe.Subscription.retrieve(company.stripe_subscription_id)
     item_id = sub["items"]["data"][0]["id"]
     price_id = stripe_plan_service.resolve_price_id(db, tier, billing_cycle)
@@ -438,15 +440,15 @@ def change_plan(
     company = db.query(Company).filter(Company.id == user.company_id).first()
     if not company or not company.stripe_subscription_id:
         raise HTTPException(status_code=400, detail="No active subscription")
+    if is_plan_downgrade(company, tier, billing_cycle):
+        raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
     sub = stripe.Subscription.retrieve(company.stripe_subscription_id)
     item_id = sub["items"]["data"][0]["id"]
     price_id = stripe_plan_service.resolve_price_id(db, tier, billing_cycle)
-    is_downgrade = price_for_tier(tier) < price_for_tier(company.subscription_tier)
-    behavior = "none" if is_downgrade and proration_behavior != "create_prorations" else proration_behavior
     updated = stripe.Subscription.modify(
         company.stripe_subscription_id,
         items=[{"id": item_id, "price": price_id}],
-        proration_behavior=behavior,
+        proration_behavior=proration_behavior,
         metadata={
             **(sub.metadata or {}),
             "tier": normalize_tier(tier),

@@ -755,6 +755,14 @@ export const api = {
   packages: {
     list: (): Promise<PlanTier[]> => request<PlanTier[]>('/subscriptions/packages'),
   },
+  subscriptions: {
+    get: (): Promise<{
+      subscription_tier?: string;
+      billing_cycle?: string;
+      subscription_status?: string;
+      subscription_end?: string;
+    }> => request('/subscriptions'),
+  },
   admin: {
     dashboard: (): Promise<import('./types').AdminDashboard> => request<import('./types').AdminDashboard>('/admin/dashboard'),
     companies: (): Promise<import('./types').Company[]> => request<import('./types').Company[]>('/admin/companies'),

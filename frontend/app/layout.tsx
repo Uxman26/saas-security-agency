@@ -15,12 +15,14 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t('description'),
     icons: {
       icon: [
-        { url: '/ControlOps-Logos/controlOps-icon.png', type: 'image/png', sizes: '512x512' },
-        { url: '/ControlOps-Logos/controlOps-icon-192.png', type: 'image/png', sizes: '192x192' },
+        { url: '/ControlOps-Logos/favicon_io/favicon.ico', sizes: 'any' },
+        { url: '/ControlOps-Logos/favicon_io/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+        { url: '/ControlOps-Logos/favicon_io/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
       ],
-      apple: '/ControlOps-Logos/controlOps-icon.png',
-      shortcut: '/ControlOps-Logos/controlOps-icon.png',
+      apple: '/ControlOps-Logos/favicon_io/apple-touch-icon.png',
+      shortcut: '/ControlOps-Logos/favicon_io/favicon.ico',
     },
+    manifest: '/ControlOps-Logos/favicon_io/site.webmanifest',
   };
 }
 

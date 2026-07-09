@@ -337,6 +337,16 @@
       "heroReassurance": "One operational platform for your <hl>workforce, sites, rotas, records, rates and billing</hl>.",
       "problemTitle": "Your operation should not depend on disconnected spreadsheets.",
       "problemIntro": "When rotas, workforce records, payroll preparation and client billing live in separate files and systems, every shift change creates rework across operations, payroll and finance.",
+      "problemSectionLabel": "Problem section",
+      "workflowSectionLabel": "Workflow section",
+      "workflowSteps": [
+        "Set up workforce and locations",
+        "Build the rota",
+        "Maintain workforce records",
+        "Prepare payroll information",
+        "Create client invoices",
+        "Review the operation"
+      ],
       "problems": [
         { "title": "Spreadsheet rotas", "text": "Shift planning, site coverage and assignments spread across files that are hard to keep current." },
         { "title": "Fragmented workforce records", "text": "Licences, documents, rates and site information sit in different places when work is assigned." },

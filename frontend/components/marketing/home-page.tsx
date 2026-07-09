@@ -25,7 +25,6 @@ import {
   LayoutDashboard,
   FileCheck,
   Receipt,
-  AlertTriangle,
 } from 'lucide-react';
 
 const CAPABILITY_ICONS = [Users, MapPin, Calendar, FileText, ClipboardList, Wallet, Wallet, BarChart3];
@@ -49,7 +48,7 @@ export function HomePage() {
   const faqs = t.raw('faqs') as Faq[];
   const dashboardStats = t.raw('dashboardStats') as DashStat[];
   const dashboardShifts = t.raw('dashboardShifts') as Shift[];
-  const problems = t.raw('problems') as Titled[];
+  const workflowSteps = t.raw('workflowSteps') as string[];
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,27 +94,37 @@ export function HomePage() {
       </MarketingSection>
 
       <MarketingSection variant="muted" className="py-14 md:py-20">
-        <div className="container mx-auto px-4 max-w-5xl">
-          <SectionHeading
-            title={t('problemTitle')}
-            subtitle={<RichInline text={t('problemIntro')} />}
-            align="center"
-            className="max-w-3xl mx-auto"
-          />
-          <div className="grid md:grid-cols-3 gap-5">
-            {problems.map((p) => (
-              <Card key={p.title} className="marketing-card-hover border-t-2 border-t-amber-500/50 shadow-sm">
-                <CardHeader className="pb-2">
-                  <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
-                    <AlertTriangle className="size-4" />
-                  </div>
-                  <CardTitle className="text-base">{p.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground leading-relaxed">
-                  <RichInline text={p.text} />
-                </CardContent>
-              </Card>
-            ))}
+        <div className="container mx-auto px-4 max-w-3xl">
+          <div className="rounded-2xl border-2 border-primary/20 bg-[#FFF8F3] p-8 md:p-10 shadow-sm space-y-10 md:space-y-12">
+            <div>
+              <p className="text-sm font-semibold tracking-wide text-emerald-700 mb-4">
+                {t('problemSectionLabel')}
+              </p>
+              <blockquote className="rounded-xl border border-primary/15 bg-white/70 px-5 py-4 md:px-6 md:py-5">
+                <p className="text-xl md:text-2xl font-semibold leading-snug text-foreground italic">
+                  &ldquo;{t('problemTitle')}&rdquo;
+                </p>
+              </blockquote>
+              <p className="mt-4 text-sm md:text-base text-muted-foreground leading-relaxed">
+                <RichInline text={t('problemIntro')} />
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold tracking-wide text-emerald-700 mb-5">
+                {t('workflowSectionLabel')}
+              </p>
+              <ol className="space-y-4">
+                {workflowSteps.map((step, i) => (
+                  <li key={step} className="flex items-center gap-4">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white shadow-sm shadow-primary/25">
+                      {i + 1}
+                    </span>
+                    <span className="text-base md:text-lg font-medium text-foreground">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
         </div>
       </MarketingSection>

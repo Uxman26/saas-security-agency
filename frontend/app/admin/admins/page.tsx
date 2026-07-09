@@ -169,7 +169,7 @@ export default function AdminAdminsPage() {
     if (!selected) return;
     const parsed = passwordFieldSchema.safeParse(newPassword);
     if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message ?? PASSWORD_REQUIREMENTS_MSG);
+      toast.error(parsed.error.issues[0]?.message ?? PASSWORD_REQUIREMENTS_MSG);
       return;
     }
     try {

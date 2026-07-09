@@ -11,6 +11,7 @@ import { ScrollReveal } from '@/components/marketing/scroll-reveal';
 import { MarketingFaqAccordion } from '@/components/marketing/marketing-faq-accordion';
 import { MarketingSection, SectionHeading } from '@/components/marketing/marketing-section';
 import { MarketingDashboardPreview } from '@/components/marketing/marketing-dashboard-preview';
+import { MarketingShiftStory } from '@/components/marketing/marketing-shift-story';
 import { RichInline, richTags } from '@/components/marketing/marketing-rich-text';
 import {
   Users,
@@ -48,7 +49,6 @@ export function HomePage() {
   const faqs = t.raw('faqs') as Faq[];
   const dashboardStats = t.raw('dashboardStats') as DashStat[];
   const dashboardShifts = t.raw('dashboardShifts') as Shift[];
-  const workflowSteps = t.raw('workflowSteps') as string[];
 
   return (
     <div className="min-h-screen bg-background">
@@ -94,38 +94,8 @@ export function HomePage() {
       </MarketingSection>
 
       <MarketingSection variant="muted" className="py-14 md:py-20">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <div className="rounded-2xl border-2 border-primary/20 bg-[#FFF8F3] p-8 md:p-10 shadow-sm space-y-10 md:space-y-12">
-            <div>
-              <p className="text-sm font-semibold tracking-wide text-emerald-700 mb-4">
-                {t('problemSectionLabel')}
-              </p>
-              <blockquote className="rounded-xl border border-primary/15 bg-white/70 px-5 py-4 md:px-6 md:py-5">
-                <p className="text-xl md:text-2xl font-semibold leading-snug text-foreground italic">
-                  &ldquo;{t('problemTitle')}&rdquo;
-                </p>
-              </blockquote>
-              <p className="mt-4 text-sm md:text-base text-muted-foreground leading-relaxed">
-                <RichInline text={t('problemIntro')} />
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold tracking-wide text-emerald-700 mb-5">
-                {t('workflowSectionLabel')}
-              </p>
-              <ol className="space-y-4">
-                {workflowSteps.map((step, i) => (
-                  <li key={step} className="flex items-center gap-4">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white shadow-sm shadow-primary/25">
-                      {i + 1}
-                    </span>
-                    <span className="text-base md:text-lg font-medium text-foreground">{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </div>
+        <div className="container mx-auto px-4 max-w-6xl">
+          <MarketingShiftStory />
         </div>
       </MarketingSection>
 

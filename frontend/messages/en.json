@@ -337,8 +337,18 @@
       "heroReassurance": "One operational platform for your <hl>workforce, sites, rotas, records, rates and billing</hl>.",
       "problemTitle": "Your operation should not depend on disconnected spreadsheets.",
       "problemIntro": "When rotas, workforce records, payroll preparation and client billing live in separate files and systems, every shift change creates rework across operations, payroll and finance.",
-      "problemSectionLabel": "Problem section",
-      "workflowSectionLabel": "Workflow section",
+      "storyBeforeFeatures": "Add before features",
+      "storyGapLabel": "Current gap",
+      "storyGapTitle": "The page moves quickly from hero into feature cards.",
+      "storyGapText": "This makes the site informative, but it does not first explain the operational problem or the complete shift-to-invoice story.",
+      "storyGapFeatures": [
+        "Workforce management",
+        "Sites and locations",
+        "Rotas and shifts"
+      ],
+      "storyTargetLabel": "Target order",
+      "problemSectionLabel": "1. Problem section",
+      "workflowSectionLabel": "2. Workflow section",
       "workflowSteps": [
         "Set up workforce and locations",
         "Build the rota",

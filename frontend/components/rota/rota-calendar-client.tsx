@@ -12,6 +12,7 @@ import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, calcHours, fmtShortDate, formatHoursDecimal, initials, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
+import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -19,6 +20,7 @@ import {
   GripVertical,
   MoreHorizontal,
   Loader2,
+  Pencil,
   Plus,
   Users,
 } from 'lucide-react';
@@ -50,6 +52,7 @@ export function RotaCalendarClient() {
     poolLoading,
     loadRotaPlan,
     setRotaView,
+    setRotaName,
     totalRotaHours,
     empTotalHours,
     dayTotalHours,
@@ -59,6 +62,7 @@ export function RotaCalendarClient() {
     copyShiftToDates,
     copyShiftToEmployee,
     addEmployeesById,
+    removeEmployee,
     reorderEmployees,
     copyAllShiftsBetweenEmployees,
     moveShiftToEmployee,
@@ -71,6 +75,15 @@ export function RotaCalendarClient() {
 
   const [publishing, setPublishing] = useState(false);
   const [planPublished, setPlanPublished] = useState(false);
+  const bootstrappedRef = useRef(false);
+  const [previewEmpId, setPreviewEmpId] = useState<string | null>(null);
+  const previewEmployee = useMemo(() => {
+    if (!previewEmpId) return null;
+    const emp = state.employees.find((e) => e.id === previewEmpId);
+    if (!emp) return null;
+    const fromPool = pool.find((p) => p.id === previewEmpId);
+    return fromPool ? { ...emp, phone: emp.phone || fromPool.phone } : emp;
+  }, [previewEmpId, state.employees, pool]);
 
   useEffect(() => {
     if (!planIdParam) {
@@ -90,7 +103,10 @@ export function RotaCalendarClient() {
         if (cancelled) return;
         setPlanPublished(plan.status === 'published');
         const bootstrap = searchParams.get('bootstrap') === '1';
-        if (bootstrap) {
+        if (bootstrap && !bootstrappedRef.current) {
+          bootstrappedRef.current = true;
+          const staffParam = searchParams.get('staffIds');
+          const staffIds = staffParam ? staffParam.split(',').filter(Boolean) : undefined;
           loadRotaPlan(plan, {
             name: plan.name,
             view: (plan.view_mode as RotaViewMode) || 'table',
@@ -99,8 +115,10 @@ export function RotaCalendarClient() {
             budget: plan.budget,
             copySeed: searchParams.get('copy') === '1',
             includeAllStaff: searchParams.get('allStaff') === '1',
+            staffIds,
           });
-        } else {
+          router.replace(`/rota/calendar?id=${id}`, { scroll: false });
+        } else if (!bootstrap) {
           loadRotaPlan(plan);
         }
       })
@@ -111,7 +129,7 @@ export function RotaCalendarClient() {
     return () => {
       cancelled = true;
     };
-  }, [planIdParam, searchParams, loadRotaPlan]);
+  }, [planIdParam, searchParams, loadRotaPlan, router]);
 
   const shiftCount = useMemo(() => {
     let n = 0;
@@ -551,6 +569,18 @@ export function RotaCalendarClient() {
     }, { label: 'Delete' });
   };
 
+  const removeEmpFromRota = (empId: string) => {
+    const emp = state.employees.find((e) => e.id === empId);
+    if (!emp) return;
+    toast.confirm(`Remove ${emp.name} from this rota?`, () => {
+      removeEmployee(empId);
+      closeEmpMenu();
+      if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
+      if (previewEmpId === empId) setPreviewEmpId(null);
+      toast.success('Employee removed from rota');
+    }, { label: 'Remove' });
+  };
+
   const [dragEmpId, setDragEmpId] = useState<string | null>(null);
 
   const onDragStart = (e: React.DragEvent, empId: string) => {
@@ -639,7 +669,16 @@ export function RotaCalendarClient() {
             <ArrowLeft className="size-4 mr-1" />
             Back
           </Button>
-          <h1 className="text-xl font-bold truncate">{state.rotaName || 'Untitled rota'}</h1>
+          <div className="flex items-center gap-2 min-w-0 max-w-xl group">
+            <Input
+              value={state.rotaName}
+              onChange={(e) => setRotaName(e.target.value)}
+              placeholder="Untitled rota"
+              aria-label="Rota name"
+              className="text-xl font-bold h-10 border-transparent bg-transparent shadow-none px-0 rounded-none focus-visible:ring-0 focus-visible:border-b focus-visible:border-primary placeholder:text-muted-foreground/60"
+            />
+            <Pencil className="size-4 text-muted-foreground shrink-0 opacity-60 group-hover:opacity-100" aria-hidden />
+          </div>
           <p className="text-sm text-muted-foreground">{meta}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
@@ -1561,12 +1600,32 @@ export function RotaCalendarClient() {
           <button type="button" className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium" onClick={() => openViewShifts(empMenu)}>
             Edit/view employee shifts
           </button>
+          <button
+            type="button"
+            className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+            onClick={() => {
+              setPreviewEmpId(empMenu);
+              closeEmpMenu();
+            }}
+          >
+            Shift preview
+          </button>
           <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => deleteAllEmpShifts(empMenu)}>
             Delete employee shifts
+          </button>
+          <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => removeEmpFromRota(empMenu)}>
+            Remove from rota
           </button>
         </div>,
         document.body
       )}
+
+      <ShiftPreviewDialog
+        open={!!previewEmpId}
+        onOpenChange={(o) => !o && setPreviewEmpId(null)}
+        employee={previewEmployee}
+        state={state}
+      />
     </div>
   );
 }

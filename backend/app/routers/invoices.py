@@ -20,6 +20,7 @@ from app.schemas import (
 from app.rbac import require_perm, PERM_INV_READ, PERM_INV_WRITE, PERM_INV_DELETE
 from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
+from app.services.invoice_payment_service import invoice_amount_paid
 from app.services.company_profile_service import company_logo_url
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -146,13 +147,16 @@ def create_invoice(
 
 @router.post("/generate", response_model=InvoiceResponse)
 def generate_invoice(
-    client_id: int,
     period_start: date,
     period_end: date,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_perm(PERM_INV_WRITE)),
 ):
-    inv = invoice_service.generate_from_assignments(db, client_id, period_start, period_end, current_user.id)
+    inv = invoice_service.generate_from_assignments(
+        db, period_start, period_end, current_user.id, client_id=client_id, site_id=site_id
+    )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)
 

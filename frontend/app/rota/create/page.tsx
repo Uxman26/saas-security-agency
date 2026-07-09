@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { RotaPlanListItem } from '@/lib/types';
+import type { RotaPlanListItem, Guard } from '@/lib/types';
 import type { RotaViewMode } from '@/lib/rota-shifts-types';
 import { Calendar, Check, Copy, LayoutGrid, Layers, Loader2, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,6 +39,20 @@ function CreateRotaPage() {
   const [budget, setBudget] = useState('');
   const [view, setView] = useState<RotaViewMode>('table');
   const [saving, setSaving] = useState(false);
+  const [guards, setGuards] = useState<Guard[]>([]);
+  const [guardsLoading, setGuardsLoading] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState<Set<number>>(new Set());
+  const [staffSearch, setStaffSearch] = useState('');
+
+  useEffect(() => {
+    if (mode !== 'new') return;
+    setGuardsLoading(true);
+    api.guards
+      .list()
+      .then(setGuards)
+      .catch(() => setGuards([]))
+      .finally(() => setGuardsLoading(false));
+  }, [mode]);
 
   useEffect(() => {
     if (mode !== 'copy') return;
@@ -105,7 +119,10 @@ function CreateRotaPage() {
         view_mode: view,
         budget: parseFloat(budget.replace(/,/g, '')) || 0,
       });
-      const q = new URLSearchParams({ bootstrap: '1', copy: '0', allStaff: '1' });
+      const q = new URLSearchParams({ bootstrap: '1', copy: '0' });
+      if (selectedStaff.size > 0) {
+        q.set('staffIds', [...selectedStaff].join(','));
+      }
       router.push(`/rota/calendar?id=${plan.id}&${q.toString()}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to create rota');
@@ -150,7 +167,7 @@ function CreateRotaPage() {
                   <div className="pr-6">
                     <div className="font-semibold">Create a new rota</div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Blank rota with all staff on the planner. Set shift times, assign employees, then publish.
+                      Start with a blank planner. Choose which staff to include, then add shifts and publish.
                     </p>
                   </div>
                 </button>
@@ -220,6 +237,58 @@ function CreateRotaPage() {
                       from <strong>{fmtPeriod(source)}</strong>. Shifts are moved to your new start date.
                     </p>
                   ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {mode === 'new' ? (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Select staff to include</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    Choose which employees to add to this rota. You can add or remove staff later in the planner.
+                  </p>
+                  <Input
+                    placeholder="Search staff…"
+                    value={staffSearch}
+                    onChange={(e) => setStaffSearch(e.target.value)}
+                  />
+                  {guardsLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                      <Loader2 className="size-4 animate-spin" />
+                      Loading staff…
+                    </div>
+                  ) : guards.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No staff in directory yet.</p>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
+                      {guards
+                        .filter((g) => g.full_name.toLowerCase().includes(staffSearch.toLowerCase()))
+                        .map((g) => (
+                          <label key={g.id} className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-muted/40 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedStaff.has(g.id)}
+                              onChange={(e) => {
+                                setSelectedStaff((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(g.id);
+                                  else next.delete(g.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                            <span className="font-medium">{g.full_name}</span>
+                          </label>
+                        ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {selectedStaff.size} staff selected
+                    {selectedStaff.size === 0 ? ' — rota will start empty' : ''}
+                  </p>
                 </CardContent>
               </Card>
             ) : null}

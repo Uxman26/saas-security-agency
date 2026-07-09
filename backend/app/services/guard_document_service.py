@@ -12,8 +12,16 @@ from app.models import GuardDocument, Guard
 from app.schemas import GuardDocumentCreate
 from app.services.company_service import get_company_by_user_id
 from app.storage_paths import DOCUMENTS_DIR, ensure_upload_dirs, resolve_storage_path
+from app.services.image_avif_service import (
+    AVIF_EXT,
+    AVIF_MIME,
+    IMAGE_INPUT_EXT,
+    avif_filename,
+    encode_avif_bytes,
+    is_image_filename,
+)
 
-ALLOWED_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".doc", ".docx"}
+ALLOWED_EXT = {".pdf", ".doc", ".docx", AVIF_EXT} | IMAGE_INPUT_EXT
 MAX_TOTAL_BYTES = 5 * 1024 * 1024
 
 
@@ -33,7 +41,7 @@ def _read_files(files: List[UploadFile]) -> list[tuple[str, bytes]]:
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file")
         ext = os.path.splitext(file.filename)[1].lower()
-        if ext not in ALLOWED_EXT:
+        if ext not in ALLOWED_EXT and not (is_image_filename(file.filename) or ext in {".pdf", ".doc", ".docx"}):
             raise HTTPException(status_code=400, detail=f"File type not allowed: {file.filename}")
         raw = file.file.read()
         total += len(raw)
@@ -57,21 +65,30 @@ def _unique_zip_name(name: str, used: set[str]) -> str:
         n += 1
 
 
+def _as_stored_file(name: str, raw: bytes) -> tuple[str, bytes]:
+    ext = os.path.splitext(name)[1].lower()
+    if is_image_filename(name) and ext != AVIF_EXT:
+        return avif_filename(name), encode_avif_bytes(raw)
+    return name, raw
+
+
 def _store_upload(guard_id: int, document_type: str, items: list[tuple[str, bytes]]) -> tuple[str, str]:
     ensure_upload_dirs()
     if len(items) == 1:
         name, raw = items[0]
-        ext = os.path.splitext(name)[1].lower()
+        stored_name, stored_raw = _as_stored_file(name, raw)
+        ext = os.path.splitext(stored_name)[1].lower()
         dest = os.path.join(DOCUMENTS_DIR, f"guard_{guard_id}_{secrets.token_hex(8)}{ext}")
         with open(dest, "wb") as out:
-            out.write(raw)
-        return dest, name
+            out.write(stored_raw)
+        return dest, stored_name
 
     buf = io.BytesIO()
     used: set[str] = set()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for name, raw in items:
-            zf.writestr(_unique_zip_name(name, used), raw)
+            stored_name, stored_raw = _as_stored_file(name, raw)
+            zf.writestr(_unique_zip_name(stored_name, used), stored_raw)
     slug = document_type.replace(" ", "_").replace("/", "-")[:40] or "documents"
     zip_name = f"{slug}_{len(items)}_files.zip"
     dest = os.path.join(DOCUMENTS_DIR, f"guard_{guard_id}_{secrets.token_hex(8)}.zip")
@@ -165,11 +182,7 @@ def get_document_file_path(db: Session, doc_id: int, user_id: int) -> tuple[str,
     ext = os.path.splitext(path)[1].lower()
     mime = {
         ".pdf": "application/pdf",
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-        ".gif": "image/gif",
+        AVIF_EXT: AVIF_MIME,
         ".doc": "application/msword",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ".zip": "application/zip",

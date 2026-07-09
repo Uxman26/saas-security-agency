@@ -3,7 +3,7 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'ControlOps';
   const options = {
     body: data.body || '',
-    icon: '/ControlOps-Logos/controlOps-icon.png',
+    icon: '/ControlOps-Logos/controlOps-icon.avif',
     data: { url: data.url || '/leads' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -27,7 +27,7 @@ self.addEventListener('message', (event) => {
     const { title, body, url } = event.data;
     self.registration.showNotification(title, {
       body,
-      icon: '/ControlOps-Logos/controlOps-icon.png',
+      icon: '/ControlOps-Logos/controlOps-icon.avif',
       data: { url: url || '/leads' },
     });
   }

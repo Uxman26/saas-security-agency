@@ -43,7 +43,7 @@ export function CompanyBrand({ className = '' }: { className?: string }) {
   return (
     <Link href="/dashboard" className={`flex items-center gap-2 font-semibold text-white min-w-0 ${className}`}>
       {logoSrc ? (
-        <img src={logoSrc} alt="" className="size-8 rounded object-contain bg-white/10 shrink-0" />
+        <img src={logoSrc} alt="" className="h-11 w-auto max-w-[180px] object-contain shrink-0" />
       ) : (
         <Shield className="size-5 text-sky-400 shrink-0" />
       )}

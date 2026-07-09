@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
+import { passwordFieldSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
 import type { AdminUserDetail } from '@/lib/types';
 import { ALL_SIDEBAR_PATHS, SIDEBAR_LABELS } from '@/lib/sidebar-modules';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -165,8 +166,10 @@ export default function AdminAdminsPage() {
   };
 
   const savePassword = async () => {
-    if (!selected || newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (!selected) return;
+    const parsed = passwordFieldSchema.safeParse(newPassword);
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message ?? PASSWORD_REQUIREMENTS_MSG);
       return;
     }
     try {

@@ -1,5 +1,4 @@
 import os
-import shutil
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
@@ -9,8 +8,9 @@ from app.models import Company, User
 from app.schemas import CompanyProfileUpdate
 from app.services.company_service import get_company_by_user_id
 from app.storage_paths import LOGOS_DIR, ensure_upload_dirs, resolve_storage_path
+from app.services.image_avif_service import AVIF_EXT, is_image_filename, save_upload_as_avif
 
-ALLOWED_LOGO_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+ALLOWED_LOGO_EXT = {AVIF_EXT, ".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 def company_logo_url(company: Company) -> Optional[str]:
@@ -78,18 +78,17 @@ def save_company_logo(db: Session, user_id: int, file: UploadFile) -> dict:
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file")
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_LOGO_EXT:
-        raise HTTPException(status_code=400, detail="Use PNG, JPG, WEBP or GIF")
+    if ext not in ALLOWED_LOGO_EXT and not is_image_filename(file.filename):
+        raise HTTPException(status_code=400, detail="Upload a valid image file (stored as AVIF)")
     ensure_upload_dirs()
-    dest = os.path.join(LOGOS_DIR, f"company_{company.id}{ext}")
+    base = os.path.join(LOGOS_DIR, f"company_{company.id}")
     old = resolve_storage_path(company.logo_path)
-    if old and old != dest and os.path.isfile(old):
+    if old and os.path.isfile(old):
         try:
             os.remove(old)
         except OSError:
             pass
-    with open(dest, "wb") as out:
-        shutil.copyfileobj(file.file, out)
+    dest, _mime = save_upload_as_avif(file.file, base)
     company.logo_path = dest
     db.commit()
     db.refresh(company)

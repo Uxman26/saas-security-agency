@@ -171,6 +171,14 @@
     "invalid": "This link may be invalid or expired."
   },
   "sidebar": {
+    "sectionOverview": "Overview",
+    "sectionHr": "HR & People",
+    "sectionOperations": "Operations",
+    "sectionSales": "Sales",
+    "sectionFinance": "Finance",
+    "sectionReports": "Reports",
+    "sectionSettings": "Settings",
+    "sectionAdmin": "Platform",
     "dashboard": "Dashboard",
     "staff": "Staff",
     "sites": "Sites",

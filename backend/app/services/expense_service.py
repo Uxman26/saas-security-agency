@@ -12,11 +12,12 @@ from app.models import Expense, Invoice
 from app.schemas import ExpenseCreate, ExpenseUpdate
 from app.services.company_service import get_company_by_user_id
 from app.storage_paths import EXPENSES_DIR, ensure_upload_dirs, resolve_storage_path
+from app.services.image_avif_service import AVIF_EXT, AVIF_MIME, IMAGE_INPUT_EXT, is_image_filename, save_bytes_as_avif
 
 VAT_RATE = 0.20
 MAX_DOC_BYTES = 300 * 1024
-ALLOWED_MIME = {"image/png", "image/jpeg", "image/jpg"}
-ALLOWED_EXT = {".png", ".jpg", ".jpeg"}
+ALLOWED_MIME = {AVIF_MIME, "image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
+ALLOWED_EXT = IMAGE_INPUT_EXT
 
 EXPENSE_CATEGORIES = [
     "fuel",
@@ -156,26 +157,28 @@ def save_expense_document(db: Session, expense_id: int, file: UploadFile, user_i
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file")
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXT:
-        raise HTTPException(status_code=400, detail="Only PNG and JPEG files are allowed")
+    if ext not in ALLOWED_EXT and not is_image_filename(file.filename):
+        raise HTTPException(status_code=400, detail="Upload a valid image file (stored as AVIF)")
     content_type = (file.content_type or "").lower()
-    if content_type and content_type not in ALLOWED_MIME:
-        raise HTTPException(status_code=400, detail="Only PNG and JPEG files are allowed")
+    if content_type and content_type not in ALLOWED_MIME and not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Upload a valid image file (stored as AVIF)")
     raw = file.file.read()
     if len(raw) > MAX_DOC_BYTES:
         raise HTTPException(status_code=400, detail="File must be 300 KB or smaller")
     ensure_upload_dirs()
-    dest = os.path.join(EXPENSES_DIR, f"expense_{exp.id}{ext}")
+    base = os.path.join(EXPENSES_DIR, f"expense_{exp.id}")
     old = resolve_storage_path(exp.document_path)
-    if old and old != dest and os.path.isfile(old):
+    if old and os.path.isfile(old):
         try:
             os.remove(old)
         except OSError:
             pass
+    avif_bytes = save_bytes_as_avif(raw) if ext != AVIF_EXT else raw
+    dest = base + AVIF_EXT
     with open(dest, "wb") as out:
-        out.write(raw)
+        out.write(avif_bytes)
     exp.document_path = dest
-    exp.document_mime = "image/png" if ext == ".png" else "image/jpeg"
+    exp.document_mime = AVIF_MIME
     db.commit()
     db.refresh(exp)
     return _to_response(exp)
@@ -201,7 +204,7 @@ def get_expense_document_path(db: Session, expense_id: int, user_id: int) -> tup
     path = resolve_storage_path(exp.document_path)
     if not path:
         raise HTTPException(status_code=404, detail="No document attached")
-    return path, exp.document_mime or "image/jpeg"
+    return path, exp.document_mime or AVIF_MIME
 
 
 def _expense_totals(db: Session, company_id: int, start: date, end: date) -> dict:

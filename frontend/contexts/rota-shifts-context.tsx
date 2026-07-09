@@ -26,6 +26,7 @@ type InitPayload = {
   budget: number;
   copySeed?: boolean;
   includeAllStaff?: boolean;
+  staffIds?: string[];
 };
 
 export type PublishRotaResult = {
@@ -106,6 +107,7 @@ type Ctx = {
   saveRotaPlan: () => Promise<void>;
   resetRota: () => void;
   setRotaView: (v: RotaViewMode) => void;
+  setRotaName: (name: string) => void;
   setBudget: (n: number) => void;
   addDaysDelta: (delta: number) => void;
   setDayCount: (n: number) => void;
@@ -176,6 +178,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       if (p.copySeed && pool.length > 0) {
         employees = pool.slice(0, Math.min(5, pool.length));
         shifts = seedSampleShifts(days, pool, siteNames);
+      } else if (p.staffIds?.length && pool.length > 0) {
+        const idSet = new Set(p.staffIds);
+        employees = pool.filter((e) => idSet.has(e.id));
       } else if (p.includeAllStaff && pool.length > 0) {
         employees = [...pool];
       }
@@ -240,6 +245,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         if (bootstrap.copySeed && pool.length > 0) {
           employees = pool.slice(0, Math.min(5, pool.length));
           shifts = seedSampleShifts(days, pool, siteNames);
+        } else if (bootstrap.staffIds?.length && pool.length > 0) {
+          const idSet = new Set(bootstrap.staffIds);
+          employees = pool.filter((e) => idSet.has(e.id));
         } else if (bootstrap.includeAllStaff && pool.length > 0) {
           employees = [...pool];
         }
@@ -267,6 +275,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
   const setRotaView = useCallback((rotaView: RotaViewMode) => {
     setState((s) => ({ ...s, rotaView }));
+  }, []);
+
+  const setRotaName = useCallback((rotaName: string) => {
+    setState((s) => ({ ...s, rotaName }));
   }, []);
 
   const setBudget = useCallback((budget: number) => {
@@ -589,6 +601,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       saveRotaPlan,
       resetRota,
       setRotaView,
+      setRotaName,
       setBudget,
       addDaysDelta,
       setDayCount,
@@ -626,6 +639,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       saveRotaPlan,
       resetRota,
       setRotaView,
+      setRotaName,
       setBudget,
       addDaysDelta,
       setDayCount,

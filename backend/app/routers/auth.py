@@ -1,4 +1,5 @@
 import os
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.services.plan_enforcement import plan_summary
 from app.services.receipt_service import parse_sidebar_modules
 from app.services.module_service import parse_modules, path_allowed_by_modules
 from app.storage_paths import resolve_storage_path
+from app.services.image_avif_service import AVIF_EXT, AVIF_MIME
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -122,4 +124,6 @@ def company_logo(db: Session = Depends(get_db), current_user: User = Depends(get
     path = resolve_storage_path(co.logo_path) if co else None
     if not path:
         raise HTTPException(status_code=404, detail="Logo not found")
-    return FileResponse(path)
+    ext = os.path.splitext(path)[1].lower()
+    media_type = AVIF_MIME if ext == AVIF_EXT else None
+    return FileResponse(path, media_type=media_type)

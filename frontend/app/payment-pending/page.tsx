@@ -18,6 +18,7 @@ function PaymentPendingContent() {
   const searchParams = useSearchParams();
   const ref = searchParams.get('ref') || '';
   const cycleParam = searchParams.get('cycle');
+  const couponParam = searchParams.get('coupon') || '';
   const success = searchParams.get('success') === '1';
   const canceled = searchParams.get('canceled') === '1';
   const sessionId = searchParams.get('session_id') || '';
@@ -65,7 +66,7 @@ function PaymentPendingContent() {
     if (!ref) return;
     setPaying(true);
     try {
-      const { url } = await api.stripe.checkoutSession(ref, billingCycle);
+      const { url } = await api.stripe.checkoutSession(ref, billingCycle, couponParam || undefined);
       window.location.href = url;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : t('stripeUnavailable'));

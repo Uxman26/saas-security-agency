@@ -217,15 +217,33 @@ def delete_invoice_line(db: Session, invoice_id: int, line_id: int, user_id: int
     db.commit()
 
 
-def generate_from_assignments(db: Session, client_id: int, period_start: date, period_end: date, user_id: int) -> Invoice:
+def generate_from_assignments(
+    db: Session,
+    period_start: date,
+    period_end: date,
+    user_id: int,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+) -> Invoice:
     company = get_company_by_user_id(db, user_id)
+    if site_id:
+        site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
+        if not site:
+            raise HTTPException(status_code=404, detail="Site not found")
+        if not site.client_id:
+            raise HTTPException(status_code=400, detail="Site is not linked to a client")
+        client_id = site.client_id
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id or site_id required")
     client = db.query(Client).filter(Client.id == client_id, Client.company_id == company.id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     sites = db.query(Site).filter(Site.company_id == company.id, Site.client_id == client_id).all()
     if not sites:
         raise HTTPException(status_code=400, detail="No sites linked to this client")
-    details = list_rota_details(db, user_id, period_start, period_end, client_id=client_id)
+    details = list_rota_details(
+        db, user_id, period_start, period_end, client_id=client_id, site_id=site_id
+    )
     allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
     if not details and not allowance_inv:
         raise HTTPException(

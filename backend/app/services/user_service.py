@@ -29,6 +29,7 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
         company_id=company_id,
         client_id=data.client_id,
         is_active=True,
+        email_verified=True,
     )
     db.add(user)
     db.commit()

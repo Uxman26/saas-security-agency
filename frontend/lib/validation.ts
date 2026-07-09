@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+export const PASSWORD_REQUIREMENTS_MSG =
+  'Password must be at least 9 characters and include uppercase, lowercase, number, and special character';
+
+const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{9,}$/;
+
+export const passwordFieldSchema = z
+  .string()
+  .min(9, PASSWORD_REQUIREMENTS_MSG)
+  .regex(passwordPattern, PASSWORD_REQUIREMENTS_MSG);
+
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -12,8 +22,8 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z
   .object({
-    password: z.string().min(6, 'Password must be at least 6 characters'),
-    confirm: z.string().min(6, 'Confirm your password'),
+    password: passwordFieldSchema,
+    confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {
     message: 'Passwords do not match',
@@ -22,18 +32,19 @@ export const resetPasswordSchema = z
 
 export const companyUserSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: passwordFieldSchema,
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   role_id: z.number().int().positive('Select a role'),
 });
 
 export const signupSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters').regex(/[A-Z]/, 'Password must contain uppercase letter').regex(/[a-z]/, 'Password must contain lowercase letter').regex(/[0-9]/, 'Password must contain number'),
+  password: passwordFieldSchema,
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   company_name: z.string().min(2, 'Company name must be at least 2 characters').max(100),
   industry: z.string().min(1, 'Select an industry'),
   workforce_size: z.string().min(1, 'Select workforce size'),
+  verification_code: z.string().max(50).optional().or(z.literal('')),
 });
 
 const optPosInt = z.preprocess(

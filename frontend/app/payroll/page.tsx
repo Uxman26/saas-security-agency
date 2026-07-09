@@ -28,10 +28,15 @@ export default function PayrollPage() {
   const [guards, setGuards] = useState<Guard[]>([]);
   const [loading, setLoading] = useState(true);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [calcMode, setCalcMode] = useState<'employee' | 'site' | 'rota'>('employee');
   const [calcGuardId, setCalcGuardId] = useState('');
+  const [calcSiteId, setCalcSiteId] = useState('');
+  const [calcRotaId, setCalcRotaId] = useState('');
   const [calcStart, setCalcStart] = useState('');
   const [calcEnd, setCalcEnd] = useState('');
   const [calcLoading, setCalcLoading] = useState(false);
+  const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
+  const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
   const [search, setSearch] = useState('');
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
@@ -47,20 +52,43 @@ export default function PayrollPage() {
   useEffect(() => {
     loadPayrolls();
     api.guards.list().then(setGuards).catch(() => {});
+    api.sites.list().then(setSites).catch(() => {});
+    api.rotaPlans.list().then(setRotas).catch(() => {});
   }, []);
 
   const handleCalculate = async () => {
-    if (!calcGuardId || !calcStart || !calcEnd) return;
+    if (!calcStart || !calcEnd) return;
+    if (calcMode === 'employee' && !calcGuardId) return;
+    if (calcMode === 'site' && !calcSiteId) return;
+    if (calcMode === 'rota' && !calcRotaId) return;
     setCalcLoading(true);
     try {
-      await api.payroll.calculate(parseInt(calcGuardId), calcStart, calcEnd);
+      if (calcMode === 'employee') {
+        await api.payroll.calculate(parseInt(calcGuardId, 10), calcStart, calcEnd);
+      } else {
+        const batch = await api.payroll.calculateBatch({
+          mode: calcMode,
+          period_start: calcStart,
+          period_end: calcEnd,
+          ...(calcMode === 'site' ? { site_id: parseInt(calcSiteId, 10) } : {}),
+          ...(calcMode === 'rota' ? { rota_plan_id: parseInt(calcRotaId, 10) } : {}),
+        });
+        if (!batch.length) {
+          toast.error('No payroll records created — check assignments exist for this period');
+        } else {
+          toast.success(`Created ${batch.length} payroll record(s)`);
+        }
+      }
       setCalcOpen(false);
       setCalcGuardId('');
+      setCalcSiteId('');
+      setCalcRotaId('');
       setCalcStart('');
       setCalcEnd('');
       loadPayrolls();
+      if (calcMode === 'employee') toast.success('Payroll calculated');
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Payroll calculation failed');
     } finally {
       setCalcLoading(false);
     }
@@ -160,21 +188,64 @@ export default function PayrollPage() {
                   </DialogHeader>
                   <div className="space-y-4 py-2">
                     <p className="text-sm text-muted-foreground">
-                      Auto-calculate payroll for a guard based on their assignments and rates for a given period.
+                      Calculate payroll from published assignments and shift hours for a given period.
                     </p>
                     <div className="space-y-1">
-                      <Label>Guard <span className="text-destructive">*</span></Label>
-                      <Select value={calcGuardId} onValueChange={setCalcGuardId}>
+                      <Label>Generate by</Label>
+                      <Select value={calcMode} onValueChange={(v) => setCalcMode(v as 'employee' | 'site' | 'rota')}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select guard" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {guards.map((g) => (
-                            <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-                          ))}
+                          <SelectItem value="employee">Individual employee</SelectItem>
+                          <SelectItem value="site">By site (all staff on site)</SelectItem>
+                          <SelectItem value="rota">By rota (all staff on rota)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    {calcMode === 'employee' ? (
+                      <div className="space-y-1">
+                        <Label>Employee <span className="text-destructive">*</span></Label>
+                        <Select value={calcGuardId} onValueChange={setCalcGuardId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select employee" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {guards.map((g) => (
+                              <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : calcMode === 'site' ? (
+                      <div className="space-y-1">
+                        <Label>Site <span className="text-destructive">*</span></Label>
+                        <Select value={calcSiteId} onValueChange={setCalcSiteId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select site" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sites.map((s) => (
+                              <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <Label>Rota <span className="text-destructive">*</span></Label>
+                        <Select value={calcRotaId} onValueChange={setCalcRotaId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select rota" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {rotas.map((r) => (
+                              <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <Label>Period Start <span className="text-destructive">*</span></Label>
@@ -188,7 +259,14 @@ export default function PayrollPage() {
                     <Button
                       className="w-full"
                       onClick={handleCalculate}
-                      disabled={calcLoading || !calcGuardId || !calcStart || !calcEnd}
+                      disabled={
+                        calcLoading ||
+                        !calcStart ||
+                        !calcEnd ||
+                        (calcMode === 'employee' && !calcGuardId) ||
+                        (calcMode === 'site' && !calcSiteId) ||
+                        (calcMode === 'rota' && !calcRotaId)
+                      }
                     >
                       {calcLoading ? 'Calculating...' : 'Calculate & Save Payroll'}
                     </Button>
@@ -273,7 +351,7 @@ export default function PayrollPage() {
                           <TableCell className="whitespace-nowrap text-sm">
                             {p.period_start} – {p.period_end}
                           </TableCell>
-                          <TableCell>{p.total_hours.toFixed(2)}h</TableCell>
+                          <TableCell>{(p.total_hours ?? 0).toFixed(2)}h</TableCell>
                           <TableCell>£{p.hourly_rate.toFixed(2)}/hr</TableCell>
                           <TableCell className="font-medium">£{p.bank_amount.toFixed(2)}</TableCell>
                           <TableCell className="font-medium">£{p.cash_amount.toFixed(2)}</TableCell>

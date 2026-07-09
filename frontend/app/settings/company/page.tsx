@@ -171,16 +171,16 @@ export default function CompanySettingsPage() {
               </CardHeader>
               <CardContent className="flex flex-wrap items-center gap-6">
                 {logoSrc ? (
-                  <img src={logoSrc} alt="" className="h-24 max-w-[240px] object-contain rounded border bg-white p-3" />
+                  <img src={logoSrc} alt="" className="h-28 max-w-[320px] object-contain rounded border bg-white p-3" />
                 ) : (
-                  <div className="h-24 w-48 rounded border border-dashed flex items-center justify-center text-sm text-muted-foreground">No logo</div>
+                  <div className="h-28 w-56 rounded border border-dashed flex items-center justify-center text-sm text-muted-foreground">No logo</div>
                 )}
                 <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">PNG, JPEG, WebP or GIF. Shown at the top of invoices.</p>
+                  <p className="text-sm text-muted-foreground">Upload any image — stored as AVIF. Shown at the top of invoices.</p>
                   <label className="inline-flex">
                     <input
                       type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      accept="image/avif,image/*,.avif"
                       className="hidden"
                       onChange={(e) => void onLogo(e.target.files?.[0] ?? null)}
                     />

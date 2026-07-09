@@ -412,7 +412,7 @@ export default function ExpensesPage() {
           <Label>Supporting document (PNG/JPEG, max 300 KB)</Label>
           <Input
             type="file"
-            accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+            accept="image/avif,image/*,.avif"
             onChange={(ev) => {
               const f = ev.target.files?.[0];
               if (f && validateDoc(f)) setDocFile(f);

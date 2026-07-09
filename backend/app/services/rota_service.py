@@ -30,7 +30,13 @@ def shift_hours(a: Assignment) -> float:
         except (ValueError, IndexError):
             return 0
 
-    mins = _parse(a.shift_end) - _parse(a.shift_start) - (a.break_minutes or 0)
+    start_mins = _parse(a.shift_start)
+    end_mins = _parse(a.shift_end)
+    if start_mins == 0 and end_mins == 0:
+        return 0.0
+    if end_mins <= start_mins:
+        end_mins += 24 * 60
+    mins = end_mins - start_mins - (a.break_minutes or 0)
     return max(0.0, mins / 60.0)
 
 

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import type { Invoice, Client } from '@/lib/types';
+import type { Invoice, Client, Site } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { FileText, Zap, Trash2, Eye, Pencil, Download } from 'lucide-react';
@@ -42,10 +42,13 @@ export default function InvoicesPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [genOpen, setGenOpen] = useState(false);
+  const [genMode, setGenMode] = useState<'client' | 'site'>('client');
   const [genClientId, setGenClientId] = useState('');
+  const [genSiteId, setGenSiteId] = useState('');
   const [genStart, setGenStart] = useState('');
   const [genEnd, setGenEnd] = useState('');
   const [genLoading, setGenLoading] = useState(false);
+  const [sites, setSites] = useState<Site[]>([]);
   const [pageTab, setPageTab] = useState<'overview' | 'invoices'>('overview');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -63,15 +66,24 @@ export default function InvoicesPage() {
   useEffect(() => {
     loadInvoices();
     api.clients.list().then(setClients).catch(() => {});
+    api.sites.list().then(setSites).catch(() => {});
   }, []);
 
   const handleGenerate = async () => {
-    if (!genClientId || !genStart || !genEnd) return;
+    if (!genStart || !genEnd) return;
+    if (genMode === 'client' && !genClientId) return;
+    if (genMode === 'site' && !genSiteId) return;
     setGenLoading(true);
     try {
-      await api.invoices.generate(parseInt(genClientId), genStart, genEnd);
+      await api.invoices.generate({
+        period_start: genStart,
+        period_end: genEnd,
+        ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
+        ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
+      });
       setGenOpen(false);
       setGenClientId('');
+      setGenSiteId('');
       setGenStart('');
       setGenEnd('');
       loadInvoices();
@@ -213,21 +225,49 @@ export default function InvoicesPage() {
                   </DialogHeader>
                   <div className="space-y-4 py-2">
                     <p className="text-sm text-muted-foreground">
-                      Auto-generate an invoice for a client based on completed assignments in the given period.
+                      Generate an invoice from published assignments and shift hours in the selected period.
                     </p>
                     <div className="space-y-1">
-                      <Label>Client <span className="text-destructive">*</span></Label>
-                      <Select value={genClientId} onValueChange={setGenClientId}>
+                      <Label>Generate by</Label>
+                      <Select value={genMode} onValueChange={(v) => setGenMode(v as 'client' | 'site')}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select client" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {clients.map((c) => (
-                            <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                          ))}
+                          <SelectItem value="client">By client</SelectItem>
+                          <SelectItem value="site">By site</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                    {genMode === 'client' ? (
+                      <div className="space-y-1">
+                        <Label>Client <span className="text-destructive">*</span></Label>
+                        <Select value={genClientId} onValueChange={setGenClientId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select client" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {clients.map((c) => (
+                              <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <Label>Site <span className="text-destructive">*</span></Label>
+                        <Select value={genSiteId} onValueChange={setGenSiteId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select site" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sites.map((s) => (
+                              <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <Label>Period Start <span className="text-destructive">*</span></Label>
@@ -241,7 +281,13 @@ export default function InvoicesPage() {
                     <Button
                       className="w-full"
                       onClick={handleGenerate}
-                      disabled={genLoading || !genClientId || !genStart || !genEnd}
+                      disabled={
+                        genLoading ||
+                        !genStart ||
+                        !genEnd ||
+                        (genMode === 'client' && !genClientId) ||
+                        (genMode === 'site' && !genSiteId)
+                      }
                     >
                       {genLoading ? 'Generating...' : 'Generate Invoice'}
                     </Button>

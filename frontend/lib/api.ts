@@ -593,6 +593,15 @@ export const api = {
     create: (data: Partial<Payroll>): Promise<Payroll> => request<Payroll>('/payroll', { method: 'POST', body: JSON.stringify(data) }),
     calculate: (guard_id: number, period_start: string, period_end: string): Promise<Payroll> =>
       request<Payroll>(`/payroll/calculate?guard_id=${guard_id}&period_start=${period_start}&period_end=${period_end}`, { method: 'POST' }),
+    calculateBatch: (data: {
+      mode: 'employee' | 'site' | 'rota';
+      period_start: string;
+      period_end: string;
+      guard_id?: number;
+      site_id?: number;
+      rota_plan_id?: number;
+    }): Promise<Payroll[]> =>
+      request<Payroll[]>('/payroll/calculate-batch', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/payroll/${id}`, { method: 'DELETE' }),
   },
   invoices: {
@@ -625,8 +634,20 @@ export const api = {
     deleteLine: (invoiceId: number, lineId: number): Promise<void> =>
       request<void>(`/invoices/${invoiceId}/lines/${lineId}`, { method: 'DELETE' }),
     create: (data: Partial<Invoice>): Promise<Invoice> => request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
-    generate: (client_id: number, period_start: string, period_end: string): Promise<Invoice> =>
-      request<Invoice>(`/invoices/generate?client_id=${client_id}&period_start=${period_start}&period_end=${period_end}`, { method: 'POST' }),
+    generate: (params: {
+      period_start: string;
+      period_end: string;
+      client_id?: number;
+      site_id?: number;
+    }): Promise<Invoice> => {
+      const q = new URLSearchParams({
+        period_start: params.period_start,
+        period_end: params.period_end,
+      });
+      if (params.client_id) q.append('client_id', params.client_id.toString());
+      if (params.site_id) q.append('site_id', params.site_id.toString());
+      return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
+    },
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
     addLine: (
       invoiceId: number,

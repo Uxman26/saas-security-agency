@@ -34,6 +34,7 @@ function SignupForm() {
   const billing_cycle = cycleParam === 'yearly' ? 'yearly' : 'monthly';
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
 
   const industryLabels = tb.raw('industries') as string[];
   const workforceLabels = tb.raw('workforce') as string[];
@@ -58,6 +59,7 @@ function SignupForm() {
     company_name: string;
     industry: string;
     workforce_size: string;
+    verification_code?: string;
   }) => {
     setLoading(true);
     try {
@@ -65,12 +67,14 @@ function SignupForm() {
       const ref = encodeURIComponent(res.receipt.ref_id);
       const email = encodeURIComponent(data.email);
       const cycleQ = `&cycle=${billing_cycle}`;
+      const code = (data.verification_code || verificationCode).trim();
+      const couponQ = code ? `&coupon=${encodeURIComponent(code)}` : '';
       if (res.email_verification_required) {
         toast.success(t('accountCreatedVerify'));
-        router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}`);
+        router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}${couponQ}`);
       } else {
         toast.success(t('accountCreatedPayment'));
-        router.push(`/payment-pending?ref=${ref}&cycle=${billing_cycle}`);
+        router.push(`/payment-pending?ref=${ref}&cycle=${billing_cycle}${couponQ}`);
       }
     } catch (err: unknown) {
       const verify = parseEmailVerificationRequired(err);
@@ -78,6 +82,8 @@ function SignupForm() {
         const q = new URLSearchParams({ email: verify.email });
         if (verify.receipt_ref) q.set('ref', verify.receipt_ref);
         q.set('cycle', billing_cycle);
+        const code = verificationCode.trim();
+        if (code) q.set('coupon', code);
         toast.info(t('accountCreatedVerify'));
         router.push(`/verify-email?${q.toString()}`);
         return;
@@ -186,6 +192,19 @@ function SignupForm() {
             </SelectContent>
           </Select>
           {errors.workforce_size && <p className="text-sm text-destructive">{errors.workforce_size.message as string}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="verification_code" className={authLabelClass}>Verification / promo code (optional)</Label>
+          <Input
+            id="verification_code"
+            placeholder="Enter code if you have one"
+            className={authFieldClass}
+            value={verificationCode}
+            onChange={(e) => {
+              setVerificationCode(e.target.value);
+              setValue('verification_code', e.target.value);
+            }}
+          />
         </div>
         <p className="text-xs text-[#4B5563] leading-relaxed">
           {t('signupPrivacyPrefix')}{' '}

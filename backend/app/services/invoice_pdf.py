@@ -1,11 +1,14 @@
 from io import BytesIO
+import os
 from typing import List, Optional
 
+from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard, User, Payment
 from app.services.company_profile_service import account_bank_lines, has_account_bank_details
 from app.services.invoice_payment_service import invoice_amount_paid
+from app.services.image_avif_service import AVIF_EXT
 from app.storage_paths import resolve_storage_path
 
 
@@ -55,7 +58,14 @@ def render_invoice_pdf(
     logo_resolved = resolve_storage_path(company.logo_path)
     if logo_resolved:
         try:
-            img = RLImage(logo_resolved, width=4 * cm, height=2 * cm, kind="proportional")
+            ext = os.path.splitext(logo_resolved)[1].lower()
+            if ext == AVIF_EXT:
+                avif_buf = BytesIO()
+                Image.open(logo_resolved).save(avif_buf, format="PNG")
+                avif_buf.seek(0)
+                img = RLImage(avif_buf, width=4 * cm, height=2 * cm, kind="proportional")
+            else:
+                img = RLImage(logo_resolved, width=4 * cm, height=2 * cm, kind="proportional")
             story.append(img)
             story.append(Spacer(1, 8))
         except Exception:

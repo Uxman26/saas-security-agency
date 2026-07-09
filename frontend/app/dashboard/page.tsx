@@ -76,6 +76,7 @@ function Kpi({
   icon: Icon,
   warn,
   accent,
+  href,
 }: {
   label: string;
   value: React.ReactNode;
@@ -83,12 +84,13 @@ function Kpi({
   icon: LucideIcon;
   warn?: boolean;
   accent?: string;
+  href?: string;
 }) {
-  return (
+  const card = (
     <div
-      className={`rounded-xl border bg-card/90 p-4 shadow-sm transition-shadow hover:shadow-md ${
-        warn ? 'border-amber-500/40' : 'border-border/60'
-      }`}
+      className={`rounded-xl border bg-card/90 p-4 shadow-sm transition-all ${
+        href ? 'hover:border-primary/30 hover:shadow-md cursor-pointer' : 'hover:shadow-md'
+      } ${warn ? 'border-amber-500/40' : 'border-border/60'}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
@@ -100,6 +102,16 @@ function Kpi({
       {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block">
+        {card}
+      </Link>
+    );
+  }
+
+  return card;
 }
 
 export default function DashboardPage() {
@@ -167,25 +179,34 @@ export default function DashboardPage() {
                 {!isSuperAdmin && stats && (
                   <div className="flex flex-wrap gap-3 text-sm">
                     <Link
-                      href="/rota"
+                      href="/rota?tab=active"
                       className="rounded-full bg-cyan-500/20 px-3 py-1 ring-1 ring-cyan-400/30 hover:bg-cyan-500/30 transition-colors"
                     >
                       <span className="text-cyan-200">Active rotas</span>{' '}
                       <strong className="text-white">{stats.rotas_active ?? 0}</strong>
                       <span className="text-cyan-200/80"> / {stats.rotas_total ?? 0}</span>
                     </Link>
-                    <span className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/10">
+                    <Link
+                      href="/rota"
+                      className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 transition-colors"
+                    >
                       <span className="text-slate-400">Today&apos;s shifts</span>{' '}
                       <strong className="text-white">{stats.shifts_today}</strong>
-                    </span>
-                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 ring-1 ring-emerald-400/30">
+                    </Link>
+                    <Link
+                      href="/attendance"
+                      className="rounded-full bg-emerald-500/20 px-3 py-1 ring-1 ring-emerald-400/30 hover:bg-emerald-500/30 transition-colors"
+                    >
                       <span className="text-emerald-200">Present</span>{' '}
                       <strong>{stats.present_count}</strong>
-                    </span>
-                    <span className="rounded-full bg-red-500/20 px-3 py-1 ring-1 ring-red-400/30">
+                    </Link>
+                    <Link
+                      href="/attendance"
+                      className="rounded-full bg-red-500/20 px-3 py-1 ring-1 ring-red-400/30 hover:bg-red-500/30 transition-colors"
+                    >
                       <span className="text-red-200">Absent</span>{' '}
                       <strong>{stats.absent_count}</strong>
-                    </span>
+                    </Link>
                   </div>
                 )}
               </div>
@@ -205,15 +226,16 @@ export default function DashboardPage() {
                     Workforce & compliance
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                    <Kpi label="Staff" value={stats.active_guards} sub="Directory total" icon={Users} />
-                    <Kpi label="Sites" value={stats.sites_count} icon={MapPin} accent="text-green-600" />
-                    <Kpi label="Clients" value={stats.clients_count} icon={Building2} accent="text-purple-600" />
+                    <Kpi label="Staff" value={stats.active_guards} sub="Directory total" icon={Users} href="/guards" />
+                    <Kpi label="Sites" value={stats.sites_count} icon={MapPin} accent="text-green-600" href="/sites" />
+                    <Kpi label="Clients" value={stats.clients_count} icon={Building2} accent="text-purple-600" href="/clients" />
                     <Kpi
                       label="Docs expiring"
                       value={stats.expiring_documents}
                       sub="Within 30 days"
                       icon={FolderOpen}
                       warn={stats.expiring_documents > 0}
+                      href="/documents"
                     />
                     <Kpi
                       label="SIA expiring"
@@ -221,6 +243,7 @@ export default function DashboardPage() {
                       sub="Within 30 days"
                       icon={BadgeCheck}
                       warn={stats.sia_expiring_30d > 0}
+                      href="/guards"
                     />
                     <Kpi
                       label="Contracts"
@@ -228,6 +251,7 @@ export default function DashboardPage() {
                       sub="Client contracts (30d)"
                       icon={CalendarCheck}
                       warn={stats.contracts_expiring_soon > 0}
+                      href="/clients"
                     />
                   </div>
                 </section>
@@ -237,24 +261,22 @@ export default function DashboardPage() {
                     Rotas
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Link href="/rota" className="block">
-                      <Kpi
-                        label="Total rotas"
-                        value={stats.rotas_total ?? 0}
-                        sub="All saved rotas"
-                        icon={CalendarRange}
-                        accent="text-cyan-600"
-                      />
-                    </Link>
-                    <Link href="/rota?tab=active" className="block">
-                      <Kpi
-                        label="Active rotas"
-                        value={stats.rotas_active ?? 0}
-                        sub="End date today or later"
-                        icon={Calendar}
-                        accent="text-cyan-600"
-                      />
-                    </Link>
+                    <Kpi
+                      label="Total rotas"
+                      value={stats.rotas_total ?? 0}
+                      sub="All saved rotas"
+                      icon={CalendarRange}
+                      accent="text-cyan-600"
+                      href="/rota"
+                    />
+                    <Kpi
+                      label="Active rotas"
+                      value={stats.rotas_active ?? 0}
+                      sub="End date today or later"
+                      icon={Calendar}
+                      accent="text-cyan-600"
+                      href="/rota?tab=active"
+                    />
                   </div>
                 </section>
 
@@ -263,20 +285,22 @@ export default function DashboardPage() {
                     Shifts & attendance
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Kpi label="Shifts today" value={stats.shifts_today} icon={Calendar} accent="text-cyan-600" />
-                    <Kpi label="Shifts (7 days)" value={stats.upcoming_shifts} sub="From today" icon={Activity} />
+                    <Kpi label="Shifts today" value={stats.shifts_today} icon={Calendar} accent="text-cyan-600" href="/rota" />
+                    <Kpi label="Shifts (7 days)" value={stats.upcoming_shifts} sub="From today" icon={Activity} href="/rota" />
                     <Kpi
                       label="Late (30d)"
                       value={stats.late_count}
                       icon={Clock}
                       warn={stats.late_count > 0}
                       accent="text-red-600"
+                      href="/attendance"
                     />
                     <Kpi
                       label="Present today"
                       value={stats.present_count}
                       icon={BadgeCheck}
                       accent="text-emerald-600"
+                      href="/attendance"
                     />
                   </div>
                 </section>
@@ -291,15 +315,17 @@ export default function DashboardPage() {
                       value={gbp(stats.revenue_total)}
                       icon={PoundSterling}
                       accent="text-emerald-600"
+                      href="/payroll"
                     />
-                    <Kpi label="Payroll MTD" value={gbp(stats.payroll_mtd)} icon={TrendingUp} />
-                    <Kpi label="Invoiced total" value={gbp(stats.invoice_total)} icon={FileText} accent="text-rose-600" />
+                    <Kpi label="Payroll MTD" value={gbp(stats.payroll_mtd)} icon={TrendingUp} href="/payroll" />
+                    <Kpi label="Invoiced total" value={gbp(stats.invoice_total)} icon={FileText} accent="text-rose-600" href="/invoices" />
                     <Kpi
                       label="Outstanding"
                       value={gbp(stats.invoice_outstanding)}
                       sub="Draft + sent"
                       icon={FileText}
                       warn={stats.invoice_outstanding > 0}
+                      href="/invoices"
                     />
                   </div>
                 </section>

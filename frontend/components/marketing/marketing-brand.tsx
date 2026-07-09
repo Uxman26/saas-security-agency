@@ -10,15 +10,15 @@ type Props = {
 };
 
 const horizontalClass = {
-  nav: 'h-11 w-auto sm:h-12 md:h-14 max-h-14',
-  default: 'h-10 w-auto sm:h-11',
+  nav: 'h-12 w-auto sm:h-14 md:h-16 max-h-16 object-contain',
+  default: 'h-11 w-auto sm:h-12 object-contain',
 } as const;
 
 export function MarketingBrand({ className, variant = 'horizontal', linked = true, size = 'default' }: Props) {
   const img =
     variant === 'horizontal' ? (
       <Image
-        src="/ControlOps-Logos/controlOps-horizontal-logo.png"
+        src="/ControlOps-Logos/controlOps-horizontal-logo.avif"
         alt="ControlOps workforce operations platform"
         width={360}
         height={180}
@@ -27,11 +27,11 @@ export function MarketingBrand({ className, variant = 'horizontal', linked = tru
       />
     ) : (
       <Image
-        src="/ControlOps-Logos/controlOps-logo.png"
+        src="/ControlOps-Logos/controlOps-logo.avif"
         alt="ControlOps workforce operations platform"
-        width={56}
-        height={56}
-        className={size === 'nav' ? 'size-11 sm:size-12' : 'size-10'}
+        width={72}
+        height={72}
+        className={size === 'nav' ? 'h-12 w-auto sm:h-14 object-contain' : 'h-11 w-auto object-contain'}
         priority
       />
     );

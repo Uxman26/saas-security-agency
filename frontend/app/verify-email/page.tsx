@@ -20,6 +20,7 @@ function VerifyEmailContent() {
   const email = searchParams.get('email') || '';
   const ref = searchParams.get('ref') || '';
   const cycle = searchParams.get('cycle') || '';
+  const coupon = searchParams.get('coupon') || '';
   const [verifying, setVerifying] = useState(!!token);
   const [verified, setVerified] = useState(false);
   const [resending, setResending] = useState(false);
@@ -34,6 +35,7 @@ function VerifyEmailContent() {
         if (ref) {
           const q = new URLSearchParams({ ref });
           if (cycle) q.set('cycle', cycle);
+          if (coupon) q.set('coupon', coupon);
           router.replace(`/payment-pending?${q.toString()}`);
         }
       })
@@ -115,7 +117,7 @@ function VerifyEmailContent() {
           )}
           {ref && (
             <Button asChild className="w-full" variant="secondary">
-              <Link href={`/payment-pending?ref=${encodeURIComponent(ref)}${cycle ? `&cycle=${encodeURIComponent(cycle)}` : ''}`}>{t('viewPayment')}</Link>
+              <Link href={`/payment-pending?ref=${encodeURIComponent(ref)}${cycle ? `&cycle=${encodeURIComponent(cycle)}` : ''}${coupon ? `&coupon=${encodeURIComponent(coupon)}` : ''}`}>{t('viewPayment')}</Link>
             </Button>
           )}
           <Button asChild className="w-full" variant="ghost">

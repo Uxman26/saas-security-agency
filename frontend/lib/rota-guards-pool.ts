@@ -8,6 +8,7 @@ export function guardToEmployee(g: Guard, i: number): EmployeeRec {
     name: g.full_name,
     role: 'Staff',
     avatarColor: AVATAR_PALETTE[i % AVATAR_PALETTE.length],
+    phone: g.phone || g.work_phone || undefined,
   };
 }
 

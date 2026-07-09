@@ -32,7 +32,7 @@ const DOCUMENT_TYPES = [
   'Other',
 ];
 
-const ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx';
+const ACCEPT = '.pdf,.avif,image/avif,image/*,.doc,.docx';
 const MAX_TOTAL_BYTES = 5 * 1024 * 1024;
 
 function getExpiryStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {

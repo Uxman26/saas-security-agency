@@ -67,7 +67,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
       <div className="flex flex-col sm:flex-row sm:justify-between gap-6 border-b border-slate-200 pb-6 mb-6">
         <div className="space-y-2 min-w-0">
           {logoSrc ? (
-            <img src={logoSrc} alt="" className="h-14 max-w-[200px] object-contain object-left mb-2" />
+            <img src={logoSrc} alt="" className="h-16 max-w-[280px] object-contain object-left mb-2" />
           ) : null}
           <h2 className="text-xl font-bold text-slate-900">{invoice.company_name ?? 'Company'}</h2>
           {invoice.company_email ? <p className="text-sm text-slate-600">{invoice.company_email}</p> : null}

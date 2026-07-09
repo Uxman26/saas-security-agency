@@ -29,6 +29,7 @@ export type EmployeeRec = {
   name: string;
   role: string;
   avatarColor: string;
+  phone?: string;
 };
 
 export type AttStatus = 'present' | 'absent' | 'late';

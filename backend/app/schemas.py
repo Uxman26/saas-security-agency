@@ -1,7 +1,9 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from datetime import date, datetime
 from typing import Any, List, Optional
 from uuid import UUID
+
+from app.validators import validate_password_strength
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -11,6 +13,11 @@ class UserCreate(UserBase):
     password: str
     company_name: str
     subscription_tier: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -22,7 +29,12 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str = Field(min_length=6)
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 class ResendVerificationRequest(BaseModel):
     email: EmailStr
@@ -124,7 +136,12 @@ class AdminCouponCreate(BaseModel):
 
 
 class AdminResetPassword(BaseModel):
-    new_password: str = Field(min_length=6)
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class AdminSidebarPatch(BaseModel):
@@ -1109,10 +1126,15 @@ class UserRolePatch(BaseModel):
 
 class CompanyUserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: str
     full_name: str = Field(min_length=2, max_length=100)
     role_id: int
     client_id: Optional[int] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class StaffRequestCreate(BaseModel):

@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { Mail } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 
 const emailSchema = z.object({
   to_email: z.string().email('Invalid email address'),
@@ -65,7 +66,7 @@ export function EmailDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant={compact ? 'ghost' : 'outline'} size="sm" title="Send email" className={compact ? 'size-8 p-0' : undefined}>
+        <Button variant={compact ? 'ghost' : 'outline'} size="sm" title="Send email" className={cn(compact ? 'size-8 p-0' : undefined, 'transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary')}>
           <Mail className={compact ? 'size-4' : 'h-4 w-4 mr-2'} />
           {!compact && 'Send Email'}
         </Button>

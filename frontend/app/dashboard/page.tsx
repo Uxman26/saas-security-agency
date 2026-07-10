@@ -33,6 +33,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can, PERMS } from '@/lib/permissions';
+import { cn } from '@/lib/utils';
 import type { DashboardOverview, ComplianceAlert, ContractExpiryAlert, AdminDashboard } from '@/lib/types';
 
 const gbp = (n: number) =>
@@ -77,6 +78,7 @@ function Kpi({
   warn,
   accent,
   href,
+  emphasized,
 }: {
   label: string;
   value: React.ReactNode;
@@ -85,27 +87,54 @@ function Kpi({
   warn?: boolean;
   accent?: string;
   href?: string;
+  emphasized?: boolean;
 }) {
+  const clickable = Boolean(href);
+
   const card = (
     <div
-      className={`rounded-xl border bg-card/90 p-4 shadow-sm transition-all ${
-        href ? 'hover:border-primary/30 hover:shadow-md cursor-pointer' : 'hover:shadow-md'
-      } ${warn ? 'border-amber-500/40' : 'border-border/60'}`}
+      className={cn(
+        'relative rounded-xl border bg-card p-4 shadow-sm transition-all duration-200',
+        clickable && [
+          'group cursor-pointer',
+          'hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md',
+          emphasized && 'border-primary/30 ring-1 ring-primary/15 hover:bg-primary/[0.04] hover:ring-primary/30',
+        ],
+        !clickable && 'border-border/60',
+        clickable && !emphasized && 'border-border/80',
+        warn && 'border-amber-500/50 dark:border-amber-500/40'
+      )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <div className="rounded-lg bg-primary/10 p-1.5">
-          <Icon className={`size-4 ${accent ?? 'text-primary'}`} />
+      <div className="flex items-start justify-between gap-2 pe-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/85 dark:text-foreground/90">
+          {label}
+        </p>
+        <div
+          className={cn(
+            'rounded-lg p-1.5',
+            warn ? 'bg-amber-500/20 dark:bg-amber-500/25' : 'bg-primary/15 dark:bg-primary/25'
+          )}
+        >
+          <Icon className={cn('size-4', accent ?? 'text-primary dark:text-orange-400')} />
         </div>
       </div>
-      <p className={`mt-2 text-2xl font-bold tabular-nums ${warn ? 'text-amber-600' : ''}`}>{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+      <p className={cn('mt-2 text-2xl font-bold tabular-nums', warn && 'text-amber-700 dark:text-amber-400')}>
+        {value}
+      </p>
+      {sub && (
+        <p className="mt-1.5 text-sm font-medium leading-snug text-foreground/75 dark:text-foreground/80 line-clamp-2 break-words">
+          {sub}
+        </p>
+      )}
+      {clickable && (
+        <ArrowRight className="absolute top-4 end-3 size-3.5 text-muted-foreground transition-all group-hover:text-primary group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
+      )}
     </div>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block">
+      <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
         {card}
       </Link>
     );
@@ -161,51 +190,58 @@ export default function DashboardPage() {
       <AppShell>
         <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.08),transparent_55%),linear-gradient(to_bottom,hsl(var(--background)),hsl(var(--muted)/0.25))]">
           <div className="container mx-auto px-4 py-8 space-y-6">
-            <div className="mb-8 rounded-2xl border border-primary/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-lg shadow-primary/10">
+            <div className="mb-8 rounded-2xl border border-primary/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-6 md:p-8 text-white shadow-lg shadow-primary/10">
               <div className="flex flex-wrap items-center gap-4">
-                <div className="flex size-12 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-white/10">
-                  <Shield className="size-7 text-primary" />
+                <div className="flex size-12 items-center justify-center rounded-xl bg-primary/25 ring-1 ring-white/15">
+                  <Shield className="size-7 text-orange-300" />
                 </div>
                 <div className="flex-1 min-w-[200px]">
-                  <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                    {isSuperAdmin ? 'Platform Admin' : 'Operations Command Centre'}
+                  <h1 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-sm sm:text-4xl">
+                    {isSuperAdmin
+                      ? 'Platform Admin'
+                      : `Welcome back${user?.full_name ? `, ${user.full_name}` : ''}`}
                   </h1>
-                  <p className="text-sm text-slate-300 mt-1">
+                  <p className="mt-2 text-base font-semibold text-slate-100 sm:text-lg">
                     {isSuperAdmin
                       ? 'Full platform control — companies, users, invoices, payments, and packages'
-                      : `Welcome back${user?.full_name ? `, ${user.full_name}` : ''} — live metrics for staffing, compliance, and finance.`}
+                      : 'Operations Command Centre'}
                   </p>
+                  {!isSuperAdmin && (
+                    <p className="mt-1 text-sm font-medium text-slate-200">
+                      Live metrics for staffing, compliance, and finance.
+                    </p>
+                  )}
                 </div>
                 {!isSuperAdmin && stats && (
                   <div className="flex flex-wrap gap-3 text-sm">
                     <Link
                       href="/rota?tab=active"
-                      className="rounded-full bg-cyan-500/20 px-3 py-1 ring-1 ring-cyan-400/30 hover:bg-cyan-500/30 transition-colors"
+                      className="rounded-full bg-cyan-500/30 px-3 py-1.5 ring-1 ring-cyan-400/40 transition-colors hover:bg-cyan-500/40"
                     >
-                      <span className="text-cyan-200">Active rotas</span>{' '}
+                      <span className="font-medium text-cyan-50">Active rotas</span>{' '}
                       <strong className="text-white">{stats.rotas_active ?? 0}</strong>
-                      <span className="text-cyan-200/80"> / {stats.rotas_total ?? 0}</span>
+                      <span className="text-cyan-100/90"> / {stats.rotas_total ?? 0}</span>
                     </Link>
                     <Link
                       href="/rota"
-                      className="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/10 hover:bg-white/15 transition-colors"
+                      className="rounded-full bg-sky-500/30 px-3 py-1.5 ring-1 ring-sky-400/40 transition-colors hover:bg-sky-500/40"
                     >
-                      <span className="text-slate-400">Today&apos;s shifts</span>{' '}
+                      <span className="font-medium text-sky-50">Today&apos;s shifts</span>{' '}
                       <strong className="text-white">{stats.shifts_today}</strong>
                     </Link>
                     <Link
                       href="/attendance"
-                      className="rounded-full bg-emerald-500/20 px-3 py-1 ring-1 ring-emerald-400/30 hover:bg-emerald-500/30 transition-colors"
+                      className="rounded-full bg-emerald-500/30 px-3 py-1.5 ring-1 ring-emerald-400/40 transition-colors hover:bg-emerald-500/40"
                     >
-                      <span className="text-emerald-200">Present</span>{' '}
-                      <strong>{stats.present_count}</strong>
+                      <span className="font-medium text-emerald-50">Present</span>{' '}
+                      <strong className="text-white">{stats.present_count}</strong>
                     </Link>
                     <Link
                       href="/attendance"
-                      className="rounded-full bg-red-500/20 px-3 py-1 ring-1 ring-red-400/30 hover:bg-red-500/30 transition-colors"
+                      className="rounded-full bg-red-500/30 px-3 py-1.5 ring-1 ring-red-400/40 transition-colors hover:bg-red-500/40"
                     >
-                      <span className="text-red-200">Absent</span>{' '}
-                      <strong>{stats.absent_count}</strong>
+                      <span className="font-medium text-red-50">Absent</span>{' '}
+                      <strong className="text-white">{stats.absent_count}</strong>
                     </Link>
                   </div>
                 )}
@@ -226,14 +262,15 @@ export default function DashboardPage() {
                     Workforce & compliance
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                    <Kpi label="Staff" value={stats.active_guards} sub="Directory total" icon={Users} href="/guards" />
-                    <Kpi label="Sites" value={stats.sites_count} icon={MapPin} accent="text-green-600" href="/sites" />
-                    <Kpi label="Clients" value={stats.clients_count} icon={Building2} accent="text-purple-600" href="/clients" />
+                    <Kpi label="Staff" value={stats.active_guards} sub="Directory total" icon={Users} accent="text-blue-700 dark:text-blue-400" href="/guards" />
+                    <Kpi label="Sites" value={stats.sites_count} icon={MapPin} accent="text-green-700 dark:text-green-400" href="/sites" />
+                    <Kpi label="Clients" value={stats.clients_count} icon={Building2} accent="text-purple-700 dark:text-purple-400" href="/clients" />
                     <Kpi
                       label="Docs expiring"
                       value={stats.expiring_documents}
                       sub="Within 30 days"
                       icon={FolderOpen}
+                      accent="text-amber-700 dark:text-amber-400"
                       warn={stats.expiring_documents > 0}
                       href="/documents"
                     />
@@ -242,6 +279,7 @@ export default function DashboardPage() {
                       value={stats.sia_expiring_30d}
                       sub="Within 30 days"
                       icon={BadgeCheck}
+                      accent="text-amber-700 dark:text-amber-400"
                       warn={stats.sia_expiring_30d > 0}
                       href="/guards"
                     />
@@ -250,6 +288,7 @@ export default function DashboardPage() {
                       value={stats.contracts_expiring_soon}
                       sub="Client contracts (30d)"
                       icon={CalendarCheck}
+                      accent="text-orange-700 dark:text-orange-400"
                       warn={stats.contracts_expiring_soon > 0}
                       href="/clients"
                     />
@@ -266,16 +305,18 @@ export default function DashboardPage() {
                       value={stats.rotas_total ?? 0}
                       sub="All saved rotas"
                       icon={CalendarRange}
-                      accent="text-cyan-600"
+                      accent="text-cyan-700 dark:text-cyan-400"
                       href="/rota"
+                      emphasized
                     />
                     <Kpi
                       label="Active rotas"
                       value={stats.rotas_active ?? 0}
                       sub="End date today or later"
                       icon={Calendar}
-                      accent="text-cyan-600"
+                      accent="text-cyan-700 dark:text-cyan-400"
                       href="/rota?tab=active"
+                      emphasized
                     />
                   </div>
                 </section>
@@ -285,21 +326,21 @@ export default function DashboardPage() {
                     Shifts & attendance
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Kpi label="Shifts today" value={stats.shifts_today} icon={Calendar} accent="text-cyan-600" href="/rota" />
-                    <Kpi label="Shifts (7 days)" value={stats.upcoming_shifts} sub="From today" icon={Activity} href="/rota" />
+                    <Kpi label="Shifts today" value={stats.shifts_today} icon={Calendar} accent="text-cyan-700 dark:text-cyan-400" href="/rota" />
+                    <Kpi label="Shifts (7 days)" value={stats.upcoming_shifts} sub="From today" icon={Activity} accent="text-indigo-700 dark:text-indigo-400" href="/rota" />
                     <Kpi
                       label="Late (30d)"
                       value={stats.late_count}
                       icon={Clock}
                       warn={stats.late_count > 0}
-                      accent="text-red-600"
+                      accent="text-red-700 dark:text-red-400"
                       href="/attendance"
                     />
                     <Kpi
                       label="Present today"
                       value={stats.present_count}
                       icon={BadgeCheck}
-                      accent="text-emerald-600"
+                      accent="text-emerald-700 dark:text-emerald-400"
                       href="/attendance"
                     />
                   </div>
@@ -314,16 +355,17 @@ export default function DashboardPage() {
                       label="Payroll (all time)"
                       value={gbp(stats.revenue_total)}
                       icon={PoundSterling}
-                      accent="text-emerald-600"
+                      accent="text-emerald-700 dark:text-emerald-400"
                       href="/payroll"
                     />
-                    <Kpi label="Payroll MTD" value={gbp(stats.payroll_mtd)} icon={TrendingUp} href="/payroll" />
-                    <Kpi label="Invoiced total" value={gbp(stats.invoice_total)} icon={FileText} accent="text-rose-600" href="/invoices" />
+                    <Kpi label="Payroll MTD" value={gbp(stats.payroll_mtd)} icon={TrendingUp} accent="text-emerald-700 dark:text-emerald-400" href="/payroll" />
+                    <Kpi label="Invoiced total" value={gbp(stats.invoice_total)} icon={FileText} accent="text-rose-700 dark:text-rose-400" href="/invoices" />
                     <Kpi
                       label="Outstanding"
                       value={gbp(stats.invoice_outstanding)}
                       sub="Draft + sent"
                       icon={FileText}
+                      accent="text-rose-700 dark:text-rose-400"
                       warn={stats.invoice_outstanding > 0}
                       href="/invoices"
                     />
@@ -446,17 +488,17 @@ export default function DashboardPage() {
               </h2>
               <div className={`grid gap-3 ${isSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
                 {tiles.map(({ href, title, desc, icon: Icon, color }) => (
-                  <Link key={href} href={href}>
-                    <Card className="h-full transition-all border-border/60 hover:border-primary/30 hover:shadow-md group">
+                  <Link key={href} href={href} className="group block cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                    <Card className="h-full border-border/80 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md group-hover:bg-card">
                       <CardHeader className="flex flex-row items-start gap-3 py-4">
-                        <div className="rounded-lg bg-primary/10 p-2 group-hover:bg-primary/15">
-                          <Icon className={`size-4 ${color}`} />
+                        <div className="rounded-lg bg-primary/15 p-2 transition-colors group-hover:bg-primary/20 dark:bg-primary/25">
+                          <Icon className={cn('size-4', color)} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <CardTitle className="text-sm leading-tight">{title}</CardTitle>
-                          <CardDescription className="text-xs mt-0.5 line-clamp-1">{desc}</CardDescription>
+                          <CardDescription className="mt-0.5 text-xs leading-snug line-clamp-2 break-words">{desc}</CardDescription>
                         </div>
-                        <ArrowRight className="size-3.5 text-muted-foreground shrink-0 group-hover:text-primary" />
+                        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-all group-hover:text-primary group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
                       </CardHeader>
                     </Card>
                   </Link>

@@ -42,7 +42,7 @@ export function AlertsPanel() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" title="Alerts & messages">
+        <Button variant="ghost" size="icon" className="relative transition-colors hover:bg-primary/10 hover:text-primary" title="Alerts & messages">
           <Bell className="size-4" />
           {count > 0 && (
             <span className="absolute -top-0.5 -right-0.5 size-4 rounded-full bg-destructive text-[10px] text-white flex items-center justify-center">

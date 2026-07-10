@@ -68,15 +68,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex bg-background">
       <AppSidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-40 h-12 shrink-0 border-b bg-card/95 backdrop-blur flex items-center justify-between px-3 gap-2">
-          <div className="flex items-center gap-2 min-w-0 md:hidden">
-            <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={() => setDrawer(true)}>
+        <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
+          <div className="flex min-w-0 items-center gap-2 md:hidden">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="shrink-0 transition-colors hover:bg-primary/10 hover:text-primary"
+              onClick={() => setDrawer(true)}
+            >
               <Menu className="size-5" />
             </Button>
             <CompanyBrand className="text-primary text-sm [&_span]:text-primary" />
           </div>
-          <div className="hidden md:block flex-1" />
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="hidden flex-1 md:block" />
+          <div className="flex shrink-0 items-center gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
             <LanguageSwitcher />
             <ThemeToggle />
             <AlertsPanel />

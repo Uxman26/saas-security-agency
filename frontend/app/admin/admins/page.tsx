@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -366,7 +367,7 @@ export default function AdminAdminsPage() {
                 <div>
                   <p className="font-medium mb-2">Reset password</p>
                   <Label htmlFor="new_pw">New password</Label>
-                  <Input id="new_pw" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-1" />
+                  <PasswordInput id="new_pw" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-1" />
                   <Button className="mt-2" size="sm" variant="destructive" onClick={savePassword}>Reset password</Button>
                 </div>
               </div>

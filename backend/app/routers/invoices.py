@@ -165,10 +165,23 @@ def generate_invoice(
 def list_invoices(
     client_id: Optional[int] = None,
     status: Optional[str] = None,
+    status_group: Optional[str] = None,
+    due_from: Optional[date] = None,
+    due_to: Optional[date] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_perm(PERM_INV_READ)),
 ):
-    rows = invoice_service.get_invoices(db, current_user.id, client_id, status)
+    rows = invoice_service.get_invoices(
+        db,
+        current_user.id,
+        client_id=client_id,
+        status=status,
+        status_group=status_group,
+        due_from=due_from,
+        due_to=due_to,
+        search=search,
+    )
     return [_serialize_invoice(inv, False, db) for inv in rows]
 
 
@@ -246,6 +259,16 @@ def delete_line(
     current_user: User = Depends(require_perm(PERM_INV_WRITE)),
 ):
     invoice_service.delete_invoice_line(db, invoice_id, line_id, current_user.id)
+
+
+@router.post("/{invoice_id}/duplicate", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
+def duplicate_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+):
+    inv = invoice_service.duplicate_invoice(db, invoice_id, current_user.id)
+    return _serialize_invoice(inv, True, db)
 
 
 @router.get("/{invoice_id}", response_model=InvoiceResponse)

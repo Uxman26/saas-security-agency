@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Role
-from app.rbac import require_perm, PERM_ROLES_READ, PERM_ROLES_WRITE
-from app.schemas import CompanyUserOut, UserRolePatch, CompanyUserCreate
+from app.rbac import require_perm, PERM_ROLES_READ, PERM_ROLES_WRITE, PERM_ROLES_DELETE
+from app.schemas import CompanyUserOut, UserRolePatch, CompanyUserCreate, CompanyUserUpdate, CompanyUserResetPassword
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -39,6 +39,16 @@ def list_company_users(
     return [_out(u) for u in rows]
 
 
+@router.get("/{user_id}", response_model=CompanyUserOut)
+def get_company_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ROLES_READ)),
+):
+    cid = _require_company(current_user)
+    return _out(user_service._get_user(db, cid, user_id))
+
+
 @router.post("", response_model=CompanyUserOut, status_code=status.HTTP_201_CREATED)
 def create_company_user(
     body: CompanyUserCreate,
@@ -48,6 +58,40 @@ def create_company_user(
     cid = _require_company(current_user)
     u = user_service.create_company_user(db, cid, body)
     return _out(u)
+
+
+@router.put("/{user_id}", response_model=CompanyUserOut)
+def update_company_user(
+    user_id: int,
+    body: CompanyUserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ROLES_WRITE)),
+):
+    cid = _require_company(current_user)
+    u = user_service.update_company_user(db, cid, user_id, body)
+    return _out(u)
+
+
+@router.post("/{user_id}/reset-password", response_model=CompanyUserOut)
+def reset_company_user_password(
+    user_id: int,
+    body: CompanyUserResetPassword,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ROLES_WRITE)),
+):
+    cid = _require_company(current_user)
+    u = user_service.reset_company_user_password(db, cid, user_id, body.new_password)
+    return _out(u)
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_company_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ROLES_DELETE)),
+):
+    cid = _require_company(current_user)
+    user_service.delete_company_user(db, cid, user_id, current_user.id)
 
 
 @router.patch("/{user_id}/role", response_model=CompanyUserOut)

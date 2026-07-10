@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, calcHours, fmtShortDate, formatHoursDecimal, initials, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
@@ -17,7 +17,6 @@ import {
   ArrowLeft,
   ArrowUpDown,
   CalendarPlus,
-  GripVertical,
   MoreHorizontal,
   Loader2,
   Pencil,
@@ -1070,38 +1069,34 @@ export function RotaCalendarClient() {
       </Dialog>
 
       <Dialog open={reorderOpen} onOpenChange={setReorderOpen}>
-        <DialogContent showCloseButton>
-          <DialogHeader>
+        <DialogContent showCloseButton className="sm:max-w-md max-h-[min(90vh,720px)] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>Employee custom order</DialogTitle>
+            <DialogDescription>
+              Use the arrows to move employees up or down. Order is saved for this rota session.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">Drag using the handle. Order is stored for this session.</p>
-          <ul className="space-y-1">
+          <ul className="flex-1 min-h-0 overflow-y-auto px-6 py-2 space-y-1">
             {orderDraft.map((id, i) => {
               const emp = state.employees.find((e) => e.id === id);
               if (!emp) return null;
               return (
                 <li
                   key={id}
-                  draggable
-                  onDragStart={() => {}}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => {
-                    /* swap simplified: click only */
-                  }}
-                  className="flex items-center gap-2 rounded-md border px-2 py-2 text-sm"
+                  className="flex items-center gap-2 rounded-md border px-2 py-2 text-sm bg-card"
                 >
-                  <GripVertical className="size-4 text-muted-foreground cursor-grab" />
                   <span className="size-8 rounded-full flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: emp.avatarColor }}>
                     {initials(emp.name)}
                   </span>
                   <span className="flex-1 truncate">{emp.name}</span>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 shrink-0">
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-7 px-2"
+                      className="h-7 w-7 p-0"
                       disabled={i === 0}
+                      aria-label={`Move ${emp.name} up`}
                       onClick={() =>
                         setOrderDraft((d) => {
                           const n = [...d];
@@ -1114,10 +1109,11 @@ export function RotaCalendarClient() {
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-7 px-2"
+                      className="h-7 w-7 p-0"
                       disabled={i === orderDraft.length - 1}
+                      aria-label={`Move ${emp.name} down`}
                       onClick={() =>
                         setOrderDraft((d) => {
                           const n = [...d];
@@ -1133,7 +1129,7 @@ export function RotaCalendarClient() {
               );
             })}
           </ul>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t bg-muted/30">
             <Button type="button" variant="outline" onClick={() => setReorderOpen(false)}>
               Cancel
             </Button>

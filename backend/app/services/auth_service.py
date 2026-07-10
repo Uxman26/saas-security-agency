@@ -143,7 +143,7 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.password_hash):
         login_log_service.log_login(db, email=email, status="failed", ip_address=ip_address, user_agent=user_agent)
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
+        raise HTTPException(status_code=401, detail="The email or password is incorrect.")
     if not user.is_active:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=403, detail="Account is deactivated")

@@ -37,6 +37,13 @@ export const companyUserSchema = z.object({
   role_id: z.number().int().positive('Select a role'),
 });
 
+export const companyUserUpdateSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  password: z.union([z.literal(''), passwordFieldSchema]).optional(),
+  role_id: z.number().int().positive('Select a role'),
+});
+
 export const signupSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: passwordFieldSchema,

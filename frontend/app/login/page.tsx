@@ -56,7 +56,7 @@ export default function LoginPage() {
         router.push(`/verify-email?${q.toString()}`);
         return;
       }
-      toast.error(err instanceof Error ? err.message : t('loginFailed'));
+      toast.error(err instanceof Error ? err.message : 'The email or password is incorrect.');
     } finally {
       setLoading(false);
     }

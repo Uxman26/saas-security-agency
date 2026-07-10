@@ -1137,6 +1137,29 @@ class CompanyUserCreate(BaseModel):
         return validate_password_strength(v)
 
 
+class CompanyUserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    password: Optional[str] = None
+    role_id: Optional[int] = None
+
+    @field_validator("password")
+    @classmethod
+    def password_rules(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        return validate_password_strength(v)
+
+
+class CompanyUserResetPassword(BaseModel):
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+
 class StaffRequestCreate(BaseModel):
     client_id: Optional[int] = None
     site_id: int

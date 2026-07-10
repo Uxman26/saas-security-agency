@@ -23,11 +23,14 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   });
 
   if (response.status === 401) {
-    if (typeof window !== 'undefined') {
+    const error = await response.json().catch(() => ({ detail: 'Unauthorized' }));
+    const d = error.detail;
+    const msg = typeof d === 'string' ? d : 'Unauthorized';
+    if (token && typeof window !== 'undefined') {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
-    throw new ApiError(401, 'Unauthorized');
+    throw new ApiError(401, msg);
   }
 
   if (!response.ok) {
@@ -62,11 +65,14 @@ async function requestBlob(endpoint: string): Promise<Blob> {
     },
   });
   if (response.status === 401) {
-    if (typeof window !== 'undefined') {
+    const error = await response.json().catch(() => ({ detail: 'Unauthorized' }));
+    const d = error.detail;
+    const msg = typeof d === 'string' ? d : 'Unauthorized';
+    if (token && typeof window !== 'undefined') {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
-    throw new ApiError(401, 'Unauthorized');
+    throw new ApiError(401, msg);
   }
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
@@ -605,11 +611,23 @@ export const api = {
     delete: (id: number): Promise<void> => request<void>(`/payroll/${id}`, { method: 'DELETE' }),
   },
   invoices: {
-    list: (params?: { client_id?: number; status?: string }): Promise<Invoice[]> => {
+    list: (params?: {
+      client_id?: number;
+      status?: string;
+      status_group?: 'unpaid' | 'draft' | 'all';
+      due_from?: string;
+      due_to?: string;
+      search?: string;
+    }): Promise<Invoice[]> => {
       const q = new URLSearchParams();
       if (params?.client_id) q.append('client_id', params.client_id.toString());
       if (params?.status) q.append('status', params.status);
-      return request<Invoice[]>(`/invoices?${q.toString()}`);
+      if (params?.status_group && params.status_group !== 'all') q.append('status_group', params.status_group);
+      if (params?.due_from) q.append('due_from', params.due_from);
+      if (params?.due_to) q.append('due_to', params.due_to);
+      if (params?.search) q.append('search', params.search);
+      const qs = q.toString();
+      return request<Invoice[]>(`/invoices${qs ? `?${qs}` : ''}`);
     },
     get: (id: number): Promise<Invoice> => request<Invoice>(`/invoices/${id}`),
     pdf: (id: number): Promise<Blob> => requestBlob(`/invoices/${id}/pdf`),
@@ -655,6 +673,8 @@ export const api = {
     ): Promise<import('./types').InvoiceLine> =>
       request<import('./types').InvoiceLine>(`/invoices/${invoiceId}/lines`, { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/invoices/${id}`, { method: 'DELETE' }),
+    duplicate: (id: number): Promise<Invoice> =>
+      request<Invoice>(`/invoices/${id}/duplicate`, { method: 'POST' }),
   },
   expenses: {
     meta: (): Promise<ExpenseMeta> => request<ExpenseMeta>('/expenses/meta'),
@@ -880,6 +900,7 @@ export const api = {
   },
   users: {
     list: (): Promise<CompanyUser[]> => request<CompanyUser[]>('/users'),
+    get: (id: number): Promise<CompanyUser> => request<CompanyUser>(`/users/${id}`),
     create: (data: { email: string; password: string; full_name: string; role_id: number }): Promise<CompanyUser> =>
       request<CompanyUser>('/users', {
         method: 'POST',
@@ -890,6 +911,25 @@ export const api = {
           role_id: data.role_id,
         }),
       }),
+    update: (
+      id: number,
+      data: { email?: string; full_name?: string; password?: string; role_id?: number }
+    ): Promise<CompanyUser> =>
+      request<CompanyUser>(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...(data.email !== undefined ? { email: sanitizeInput(data.email) } : {}),
+          ...(data.full_name !== undefined ? { full_name: sanitizeInput(data.full_name) } : {}),
+          ...(data.password ? { password: data.password } : {}),
+          ...(data.role_id !== undefined ? { role_id: data.role_id } : {}),
+        }),
+      }),
+    resetPassword: (id: number, new_password: string): Promise<CompanyUser> =>
+      request<CompanyUser>(`/users/${id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password }),
+      }),
+    delete: (id: number): Promise<void> => request<void>(`/users/${id}`, { method: 'DELETE' }),
     patchRole: (userId: number, role_id: number): Promise<CompanyUser> =>
       request<CompanyUser>(`/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ role_id }) }),
   },

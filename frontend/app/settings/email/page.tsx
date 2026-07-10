@@ -7,6 +7,7 @@ import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
@@ -189,9 +190,8 @@ export default function EmailSettingsPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="smtp_password">SMTP Password</Label>
-                    <Input
+                    <PasswordInput
                       id="smtp_password"
-                      type="password"
                       value={smtpPassword}
                       onChange={(e) => setSmtpPassword(e.target.value)}
                       placeholder={config?.password_set ? '•••••••• (leave blank to keep current)' : 'Enter password'}

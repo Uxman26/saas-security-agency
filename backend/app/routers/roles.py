@@ -11,7 +11,7 @@ from app.services.role_service import matrix_from_permissions_json, permissions_
 
 router = APIRouter(prefix="/roles", tags=["roles"])
 
-RESERVED_SLUGS = frozenset({"admin", "manager", "supervisor", "guard", "client"})
+RESERVED_SLUGS = frozenset({"admin"})
 
 
 def slugify(name: str) -> str:
@@ -92,11 +92,11 @@ def update_role(
     r = db.query(Role).filter(Role.id == role_id, Role.company_id == cid).first()
     if not r:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    if r.is_system:
+    if r.is_system or r.slug == "admin":
         if body.matrix is not None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change system role permissions")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change Admin role permissions")
         if body.name is not None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot rename system role")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot rename Admin role")
     else:
         if body.name is not None:
             r.name = body.name.strip()
@@ -117,8 +117,8 @@ def delete_role(
     r = db.query(Role).filter(Role.id == role_id, Role.company_id == cid).first()
     if not r:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-    if r.is_system:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete system role")
+    if r.is_system or r.slug == "admin":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete Admin role")
     n = db.query(User).filter(User.role_id == role_id).count()
     if n:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role is assigned to users")

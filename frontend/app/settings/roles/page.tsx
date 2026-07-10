@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { companyUserSchema } from '@/lib/validation';
+import { companyUserSchema, companyUserUpdateSchema, passwordFieldSchema } from '@/lib/validation';
 import type { z } from 'zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -12,6 +12,7 @@ import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import {
   Table,
@@ -41,9 +42,10 @@ import { can } from '@/lib/permissions';
 import type { Role, CompanyUser, PermissionMatrix } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Shield, Trash2, UserPlus } from 'lucide-react';
+import { Shield, Trash2, UserPlus, Eye, Pencil, KeyRound } from 'lucide-react';
 
 type CompanyUserFormData = z.infer<typeof companyUserSchema>;
+type CompanyUserUpdateFormData = z.infer<typeof companyUserUpdateSchema>;
 import { toast } from '@/lib/toast';
 
 const MODULE_KEYS = [
@@ -149,6 +151,10 @@ export default function RolesSettingsPage() {
   const [userPage, setUserPage] = useState(1);
   const [userPageSize, setUserPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
   const [addUserOpen, setAddUserOpen] = useState(false);
+  const [viewUser, setViewUser] = useState<CompanyUser | null>(null);
+  const [editUser, setEditUser] = useState<CompanyUser | null>(null);
+  const [resetUser, setResetUser] = useState<CompanyUser | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
   const [tab, setTab] = useState<'roles' | 'users'>('roles');
 
   const userForm = useForm<CompanyUserFormData>({
@@ -156,8 +162,13 @@ export default function RolesSettingsPage() {
     defaultValues: { email: '', password: '', full_name: '', role_id: 1 },
   });
 
+  const editUserForm = useForm<CompanyUserUpdateFormData>({
+    resolver: zodResolver(companyUserUpdateSchema),
+    defaultValues: { email: '', password: '', full_name: '', role_id: 1 },
+  });
+
   const openAddUser = () => {
-    const def = roles.find((r) => r.slug === 'manager') ?? roles.find((r) => r.slug === 'admin') ?? roles[0];
+    const def = roles.find((r) => r.slug === 'admin') ?? roles[0];
     userForm.reset({
       email: '',
       password: '',
@@ -269,6 +280,74 @@ export default function RolesSettingsPage() {
     try {
       const updated = await api.users.patchRole(userId, rid);
       setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
+      toast.success('Role updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update role');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEditUser = (u: CompanyUser) => {
+    setEditUser(u);
+    editUserForm.reset({
+      email: u.email,
+      full_name: u.full_name,
+      password: '',
+      role_id: u.role_id ?? roles[0]?.id ?? 1,
+    });
+  };
+
+  const saveEditUser = async (data: CompanyUserUpdateFormData) => {
+    if (!editUser) return;
+    setSaving(true);
+    try {
+      await api.users.update(editUser.id, {
+        email: data.email,
+        full_name: data.full_name,
+        role_id: data.role_id,
+        ...(data.password ? { password: data.password } : {}),
+      });
+      setEditUser(null);
+      await load();
+      toast.success('User updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteUser = (userId: number) => {
+    toast.confirm('Delete this user?', async () => {
+      setSaving(true);
+      try {
+        await api.users.delete(userId);
+        await load();
+        toast.success('User deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      } finally {
+        setSaving(false);
+      }
+    }, { label: 'Delete', description: 'This cannot be undone.' });
+  };
+
+  const saveResetPassword = async () => {
+    if (!resetUser) return;
+    const parsed = passwordFieldSchema.safeParse(resetPassword);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? 'Invalid password');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.users.resetPassword(resetUser.id, resetPassword);
+      setResetUser(null);
+      setResetPassword('');
+      toast.success('Password reset');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to reset password');
     } finally {
       setSaving(false);
     }
@@ -367,7 +446,7 @@ export default function RolesSettingsPage() {
       <ModulePage>
           <ModuleHeader
             title={<span className="flex items-center gap-2"><Shield className="size-7 text-primary" /> Roles & permissions</span>}
-            description="System roles are fixed; create custom roles with a permission matrix and assign them to users."
+            description="The Admin role is fixed. Create custom roles with a permission matrix and assign them to users."
           />
 
           {loading ? (
@@ -388,7 +467,7 @@ export default function RolesSettingsPage() {
                 <CardHeader className="flex flex-row items-center justify-between gap-4">
                   <div>
                     <CardTitle>Roles</CardTitle>
-                    <CardDescription>Predefined and custom roles for your organisation.</CardDescription>
+                    <CardDescription>Admin is fixed. Create custom roles and assign permissions.</CardDescription>
                   </div>
                   {canWrite && (
                     <Button onClick={() => setCreateOpen(true)} size="sm">
@@ -434,13 +513,13 @@ export default function RolesSettingsPage() {
                           <TableCell className="font-medium">{r.name}</TableCell>
                           <TableCell className="text-muted-foreground text-sm">{r.slug}</TableCell>
                           <TableCell>{r.is_system ? 'System' : 'Custom'}</TableCell>
-                          <TableCell className="text-right space-x-2">
-                            {!r.is_system && r.uses_matrix && canWrite && (
+                          <TableCell className="text-right space-x-1 whitespace-nowrap">
+                            {!r.is_system && r.slug !== 'admin' && r.uses_matrix && canWrite && (
                               <Button variant="outline" size="sm" onClick={() => startEdit(r)}>
                                 Edit matrix
                               </Button>
                             )}
-                            {!r.is_system && canDelete && (
+                            {!r.is_system && r.slug !== 'admin' && canDelete && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -493,9 +572,9 @@ export default function RolesSettingsPage() {
                     </div>
                   )}
 
-                  {roles.some((r) => r.is_system && !r.uses_matrix) && (
+                  {roles.some((r) => r.slug === 'admin') && (
                     <p className="text-sm text-muted-foreground">
-                      Guard and some system roles use a fixed permission bundle (not the matrix above).
+                      The Admin role is fixed and cannot be renamed, edited, or deleted.
                     </p>
                   )}
                 </CardContent>
@@ -547,7 +626,8 @@ export default function RolesSettingsPage() {
                       <TableRow>
                         <SortableHead label="Email" colKey="email" sortKey={userSort.sortKey} sortDir={userSort.sortDir} onSort={userSort.toggleSort} />
                         <SortableHead label="Name" colKey="name" sortKey={userSort.sortKey} sortDir={userSort.sortDir} onSort={userSort.toggleSort} />
-                        <SortableHead label="Role" colKey="role" sortKey={userSort.sortKey} sortDir={userSort.sortDir} onSort={userSort.toggleSort} className="w-[240px]" />
+                        <SortableHead label="Role" colKey="role" sortKey={userSort.sortKey} sortDir={userSort.sortDir} onSort={userSort.toggleSort} className="w-[200px]" />
+                        <TableHead className="text-right w-[280px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -576,6 +656,32 @@ export default function RolesSettingsPage() {
                             ) : (
                               <span className="text-sm text-muted-foreground">{u.role_name ?? '—'}</span>
                             )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1 flex-wrap">
+                              <Button variant="ghost" size="sm" onClick={() => setViewUser(u)}>
+                                <Eye className="size-3.5 mr-1" />
+                                View
+                              </Button>
+                              {canWrite && (
+                                <>
+                                  <Button variant="ghost" size="sm" onClick={() => openEditUser(u)}>
+                                    <Pencil className="size-3.5 mr-1" />
+                                    Edit
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => { setResetUser(u); setResetPassword(''); }}>
+                                    <KeyRound className="size-3.5 mr-1" />
+                                    Reset password
+                                  </Button>
+                                </>
+                              )}
+                              {canDelete && (
+                                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteUser(u.id)} disabled={saving}>
+                                  <Trash2 className="size-3.5 mr-1" />
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -622,7 +728,7 @@ export default function RolesSettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Password</Label>
-                      <Input type="password" {...userForm.register('password')} />
+                      <PasswordInput {...userForm.register('password')} />
                       {userForm.formState.errors.password && (
                         <p className="text-xs text-destructive">{userForm.formState.errors.password.message}</p>
                       )}
@@ -657,6 +763,93 @@ export default function RolesSettingsPage() {
                       </Button>
                     </DialogFooter>
                   </form>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={!!viewUser} onOpenChange={(open) => !open && setViewUser(null)}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>User details</DialogTitle>
+                  </DialogHeader>
+                  {viewUser && (
+                    <dl className="space-y-3 text-sm">
+                      <div><dt className="text-muted-foreground">Name</dt><dd className="font-medium">{viewUser.full_name}</dd></div>
+                      <div><dt className="text-muted-foreground">Email</dt><dd className="font-medium">{viewUser.email}</dd></div>
+                      <div><dt className="text-muted-foreground">Role</dt><dd className="font-medium">{viewUser.role_name ?? '—'}</dd></div>
+                    </dl>
+                  )}
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={!!editUser} onOpenChange={(open) => !open && setEditUser(null)}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Edit user</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={editUserForm.handleSubmit(saveEditUser)} className="space-y-4">
+                    <div className="space-y-1">
+                      <Label>Full name</Label>
+                      <Input {...editUserForm.register('full_name')} />
+                      {editUserForm.formState.errors.full_name && (
+                        <p className="text-xs text-destructive">{editUserForm.formState.errors.full_name.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Email</Label>
+                      <Input type="email" {...editUserForm.register('email')} />
+                      {editUserForm.formState.errors.email && (
+                        <p className="text-xs text-destructive">{editUserForm.formState.errors.email.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>New password (optional)</Label>
+                      <PasswordInput {...editUserForm.register('password')} placeholder="Leave blank to keep current" />
+                      {editUserForm.formState.errors.password && (
+                        <p className="text-xs text-destructive">{editUserForm.formState.errors.password.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Role</Label>
+                      <Select
+                        value={editUserForm.watch('role_id') ? String(editUserForm.watch('role_id')) : undefined}
+                        onValueChange={(v) => editUserForm.setValue('role_id', parseInt(v, 10), { shouldValidate: true })}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                        <SelectContent>
+                          {roles.map((r) => (
+                            <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
+                      <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={!!resetUser} onOpenChange={(open) => !open && setResetUser(null)}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Reset password</DialogTitle>
+                  </DialogHeader>
+                  {resetUser && (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">Set a new password for {resetUser.full_name}.</p>
+                      <div className="space-y-1">
+                        <Label>New password</Label>
+                        <PasswordInput value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} />
+                      </div>
+                      <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setResetUser(null)}>Cancel</Button>
+                        <Button onClick={() => void saveResetPassword()} disabled={saving}>
+                          {saving ? 'Saving…' : 'Reset password'}
+                        </Button>
+                      </DialogFooter>
+                    </div>
+                  )}
                 </DialogContent>
               </Dialog>
             </>

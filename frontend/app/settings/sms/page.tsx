@@ -7,6 +7,7 @@ import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
@@ -114,7 +115,7 @@ export default function SmsSettingsPage() {
                 </div>
                 <div>
                   <Label>Auth Token</Label>
-                  <Input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={config?.auth_token_set ? '•••••••• (configured)' : ''} className="mt-1" />
+                  <PasswordInput value={token} onChange={(e) => setToken(e.target.value)} placeholder={config?.auth_token_set ? '•••••••• (configured)' : ''} className="mt-1" />
                 </div>
                 <div>
                   <Label>Twilio phone number</Label>

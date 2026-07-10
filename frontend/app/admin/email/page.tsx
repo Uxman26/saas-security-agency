@@ -7,6 +7,7 @@ import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
@@ -103,7 +104,7 @@ export default function AdminEmailPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Password</Label>
-                  <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={config?.password_set ? '•••••••• (configured)' : ''} />
+                  <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} placeholder={config?.password_set ? '•••••••• (configured)' : ''} />
                 </div>
                 <div className="space-y-1">
                   <Label>From email</Label>

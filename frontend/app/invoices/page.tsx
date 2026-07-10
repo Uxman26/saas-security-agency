@@ -15,7 +15,7 @@ import { api } from '@/lib/api';
 import type { Invoice, Client, Site } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Trash2, Eye, Pencil, Download } from 'lucide-react';
+import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, ChevronDown } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
@@ -49,25 +49,43 @@ export default function InvoicesPage() {
   const [genEnd, setGenEnd] = useState('');
   const [genLoading, setGenLoading] = useState(false);
   const [sites, setSites] = useState<Site[]>([]);
-  const [pageTab, setPageTab] = useState<'overview' | 'invoices'>('overview');
+  const [pageTab, setPageTab] = useState<'overview' | 'invoices'>('invoices');
+  const [listTab, setListTab] = useState<'unpaid' | 'draft' | 'all'>('unpaid');
+  const [clientFilter, setClientFilter] = useState('');
+  const [dueFrom, setDueFrom] = useState('');
+  const [dueTo, setDueTo] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payLoading, setPayLoading] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
 
-  const loadInvoices = (status?: string) => {
+  const loadInvoices = useCallback(() => {
     setLoading(true);
-    api.invoices.list(status ? { status } : {}).then(setInvoices).catch(() => {}).finally(() => setLoading(false));
-  };
+    api.invoices
+      .list({
+        client_id: clientFilter ? parseInt(clientFilter, 10) : undefined,
+        status_group: listTab,
+        status: statusFilter || undefined,
+        due_from: dueFrom || undefined,
+        due_to: dueTo || undefined,
+      })
+      .then(setInvoices)
+      .catch(() => toast.error('Could not load invoices'))
+      .finally(() => setLoading(false));
+  }, [clientFilter, listTab, statusFilter, dueFrom, dueTo]);
 
   useEffect(() => {
     loadInvoices();
     api.clients.list().then(setClients).catch(() => {});
     api.sites.list().then(setSites).catch(() => {});
-  }, []);
+  }, [loadInvoices]);
 
   const handleGenerate = async () => {
     if (!genStart || !genEnd) return;
@@ -95,18 +113,11 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleStatusChange = async (id: number, newStatus: string) => {
-    try {
-      await api.invoices.updateStatus(id, newStatus);
-      loadInvoices(statusFilter || undefined);
-    } catch (err) { console.error(err); }
-  };
-
   const handleDelete = (id: number) => {
     toast.confirm('Delete this invoice?', async () => {
       try {
         await api.invoices.delete(id);
-        loadInvoices(statusFilter || undefined);
+        loadInvoices();
         toast.success('Invoice deleted');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Delete failed');
@@ -195,6 +206,60 @@ export default function InvoicesPage() {
   const draftTotal = draftInvoices.reduce((sum, i) => sum + i.total, 0);
   const sentTotal = sentInvoices.reduce((sum, i) => sum + i.total, 0);
 
+  const handleDuplicate = async (id: number) => {
+    try {
+      const dup = await api.invoices.duplicate(id);
+      loadInvoices();
+      toast.success(`Invoice #${dup.id} created`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Duplicate failed');
+    } finally {
+      setOpenMenuId(null);
+    }
+  };
+
+  const handleRecordPayment = async () => {
+    if (!payInvoice || !payAmount) return;
+    setPayLoading(true);
+    try {
+      await api.payments.create({
+        invoice_id: payInvoice.id,
+        amount: parseFloat(payAmount),
+        method: 'bank_transfer',
+        paid_at: new Date().toISOString().slice(0, 10),
+      });
+      setPayInvoice(null);
+      setPayAmount('');
+      loadInvoices();
+      toast.success('Payment recorded');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Payment failed');
+    } finally {
+      setPayLoading(false);
+    }
+  };
+
+  const unpaidCount = invoices.filter((i) => ['sent', 'unpaid', 'overdue', 'partial'].includes(i.status)).length;
+  const draftCount = invoices.filter((i) => i.status === 'draft').length;
+
+  const formatInvoiceDate = (inv: Invoice) => {
+    const raw = inv.created_at ?? inv.period_end;
+    if (!raw) return '—';
+    return String(raw).slice(0, 10);
+  };
+
+  const formatDueLabel = (inv: Invoice) => {
+    if (!inv.due_date) return '—';
+    const due = new Date(`${inv.due_date}T12:00:00`);
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
+    if (diff < 0) return `${Math.abs(diff)} days ago`;
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff <= 7) return `In ${diff} days`;
+    return formatDueDate(inv.due_date);
+  };
   const statusChart = STATUS_OPTIONS.map((s) => ({
     name: s.charAt(0).toUpperCase() + s.slice(1),
     value: invoices.filter((i) => i.status === s).length,
@@ -209,7 +274,7 @@ export default function InvoicesPage() {
             description={`${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}`}
             actions={
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => loadInvoices(statusFilter || undefined)} disabled={loading}>
+                <Button variant="outline" onClick={loadInvoices} disabled={loading}>
                   {loading ? 'Loading...' : 'Refresh'}
                 </Button>
                 <Dialog open={genOpen} onOpenChange={setGenOpen}>
@@ -359,39 +424,59 @@ export default function InvoicesPage() {
 
           {pageTab === 'invoices' && (
           <>
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Input
-              placeholder="Search by client, status or period..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-            <Select
-              value={statusFilter || 'all'}
-              onValueChange={(v) => {
-                const val = v === 'all' ? '' : v;
-                setStatusFilter(val);
-                loadInvoices(val || undefined);
-              }}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
+          <div className="flex flex-wrap gap-2 border-b pb-3">
+            {([
+              ['unpaid', `Unpaid (${unpaidCount})`],
+              ['draft', `Draft (${draftCount})`],
+              ['all', 'All invoices'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setListTab(id)}
+                className={cn(
+                  'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                  listTab === id
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-3 flex-wrap">
+            <Select value={clientFilter || '__all'} onValueChange={(v) => setClientFilter(v === '__all' ? '' : v)}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="All customers" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="__all">All customers</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter || '__all'} onValueChange={(v) => setStatusFilter(v === '__all' ? '' : v)}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">All statuses</SelectItem>
                 {STATUS_OPTIONS.map((s) => (
                   <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <Input type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} className="w-[160px]" placeholder="From" />
+            <Input type="date" value={dueTo} onChange={(e) => setDueTo(e.target.value)} className="w-[160px]" placeholder="To" />
+            <Input
+              placeholder="Enter invoice #"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-xs"
+            />
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle>All Invoices</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               {loading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
               ) : total === 0 ? (
@@ -403,85 +488,79 @@ export default function InvoicesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <SortableHead label="Inv #" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Due Date" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead>Change Status</TableHead>
-                        <TableHead>Actions</TableHead>
+                        <SortableHead label="Due" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Date" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Number" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Customer" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Amount due" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead className="text-right w-[120px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((inv) => {
                         const pastDue = isInvoicePastDue(inv);
+                        const balance = inv.balance_due ?? (inv.status === 'paid' ? 0 : inv.total);
                         return (
                         <TableRow
                           key={inv.id}
-                          className={cn(
-                            pastDue && 'bg-red-50 dark:bg-red-950/25 border-l-2 border-l-red-500'
-                          )}
+                          className={cn(pastDue && 'bg-red-50/60 dark:bg-red-950/20')}
                         >
-                          <TableCell className="font-medium text-muted-foreground">#{inv.id}</TableCell>
-                          <TableCell className="font-medium whitespace-nowrap">
-                            {inv.client_name ?? clientMap.get(inv.client_id) ?? `Client #${inv.client_id}`}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {inv.period_start} – {inv.period_end}
-                          </TableCell>
-                          <TableCell className={cn('whitespace-nowrap text-sm', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
-                            {formatDueDate(inv.due_date)}
-                            {pastDue ? <span className="ml-1.5 text-xs uppercase tracking-wide">Overdue</span> : null}
-                          </TableCell>
-                          <TableCell className="font-bold whitespace-nowrap">£{inv.total.toFixed(2)}</TableCell>
                           <TableCell>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[inv.status] ?? 'bg-secondary text-secondary-foreground'}`}>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[inv.status] ?? 'bg-secondary text-secondary-foreground'}`}>
                               {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
                             </span>
                           </TableCell>
-                          <TableCell>
-                            <Select
-                              value={inv.status}
-                              onValueChange={(v) => handleStatusChange(inv.id, v)}
-                            >
-                              <SelectTrigger className="h-7 text-xs w-[120px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {STATUS_OPTIONS.map((s) => (
-                                  <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                          <TableCell className={cn('text-sm whitespace-nowrap', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
+                            {formatDueLabel(inv)}
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-0.5">
-                              <Button variant="ghost" size="sm" asChild title="View">
-                                <Link href={`/invoices/${inv.id}/view`}>
-                                  <Eye className="size-4" />
-                                </Link>
-                              </Button>
-                              <Button variant="ghost" size="sm" title="Download PDF" onClick={() => void downloadPdf(inv.id)}>
-                                <Download className="size-4" />
-                              </Button>
-                              {can(user, 'inv.write') && (
-                                <Button variant="ghost" size="sm" asChild title="Edit">
-                                  <Link href={`/invoices/${inv.id}/edit`}>
-                                    <Pencil className="size-4" />
+                          <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>
+                          <TableCell className="font-medium">#{inv.id}</TableCell>
+                          <TableCell className="font-medium max-w-[200px] truncate">
+                            {inv.client_name ?? clientMap.get(inv.client_id) ?? `Client #${inv.client_id}`}
+                          </TableCell>
+                          <TableCell className="font-semibold whitespace-nowrap">£{balance.toFixed(2)}</TableCell>
+                          <TableCell className="text-right relative">
+                            <Button variant="outline" size="sm" onClick={() => setOpenMenuId(openMenuId === inv.id ? null : inv.id)}>
+                              Actions <ChevronDown className="size-3.5 ml-1" />
+                            </Button>
+                            {openMenuId === inv.id && (
+                              <>
+                                <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpenMenuId(null)} />
+                                <div className="absolute right-0 z-50 mt-1 w-48 rounded-md border bg-popover shadow-lg py-1 text-sm">
+                                  <Link href={`/invoices/${inv.id}/view`} className="flex items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => setOpenMenuId(null)}>
+                                    <Eye className="size-4" /> View
                                   </Link>
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDelete(inv.id)}
-                                title="Delete invoice"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </div>
+                                  {can(user, 'inv.write') && (
+                                    <Link href={`/invoices/${inv.id}/edit`} className="flex items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => setOpenMenuId(null)}>
+                                      <Pencil className="size-4" /> Edit
+                                    </Link>
+                                  )}
+                                  {can(user, 'inv.write') && (
+                                    <button type="button" className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => void handleDuplicate(inv.id)}>
+                                      <Copy className="size-4" /> Duplicate
+                                    </button>
+                                  )}
+                                  {can(user, 'pay.write') && balance > 0 && (
+                                    <button
+                                      type="button"
+                                      className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted"
+                                      onClick={() => { setPayInvoice(inv); setPayAmount(balance.toFixed(2)); setOpenMenuId(null); }}
+                                    >
+                                      <CreditCard className="size-4" /> Record payment
+                                    </button>
+                                  )}
+                                  <button type="button" className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => { void downloadPdf(inv.id); setOpenMenuId(null); }}>
+                                    <Download className="size-4" /> Export PDF
+                                  </button>
+                                  {can(user, 'inv.delete') && (
+                                    <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-destructive hover:bg-destructive/10" onClick={() => { handleDelete(inv.id); setOpenMenuId(null); }}>
+                                      <Trash2 className="size-4" /> Delete
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
                           </TableCell>
                         </TableRow>
                         );
@@ -505,6 +584,24 @@ export default function InvoicesPage() {
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={!!payInvoice} onOpenChange={(open) => !open && setPayInvoice(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader>
+              {payInvoice && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Invoice #{payInvoice.id} — balance £{(payInvoice.balance_due ?? payInvoice.total).toFixed(2)}</p>
+                  <div className="space-y-1">
+                    <Label>Amount</Label>
+                    <Input type="number" step="0.01" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+                  </div>
+                  <Button className="w-full" onClick={() => void handleRecordPayment()} disabled={payLoading || !payAmount}>
+                    {payLoading ? 'Saving…' : 'Record payment'}
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
           </>
           )}
         </ModulePage>

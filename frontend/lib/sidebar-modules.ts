@@ -43,7 +43,7 @@ export const SIDEBAR_LABELS: Record<string, string> = {
   '/payments': 'Payments',
   '/allowances': 'Allowances',
   '/settings/special-days': 'Special days',
-  '/settings/roles': 'Roles',
+  '/settings/roles': 'Roles & Permissions',
   '/settings/company': 'Company',
   '/settings/sms': 'SMS',
   '/settings/email': 'Email',

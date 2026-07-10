@@ -3,40 +3,34 @@ from __future__ import annotations
 import json
 from sqlalchemy.orm import Session
 from app.models import Role, User, Company
-from app.rbac import (
-    PERM_ASSIGN_READ,
-    PERM_ATTEND_READ,
-    PERM_ATTEND_WRITE,
-    PERM_DOC_READ,
-    PERM_GUARDS_READ,
-)
 from app.rbac_matrix import (
     default_matrix_admin,
-    default_matrix_client_portal,
-    default_matrix_manager,
-    default_matrix_supervisor,
     MODULE_KEYS,
-    wrap_codes,
     wrap_matrix,
 )
-
-GUARD_CODES = [
-    PERM_GUARDS_READ,
-    PERM_ASSIGN_READ,
-    PERM_ATTEND_READ,
-    PERM_ATTEND_WRITE,
-    PERM_DOC_READ,
-]
 
 
 def _seed_rows():
     return [
         ("Admin", "admin", True, wrap_matrix(default_matrix_admin())),
-        ("Manager", "manager", True, wrap_matrix(default_matrix_manager())),
-        ("Supervisor", "supervisor", True, wrap_matrix(default_matrix_supervisor())),
-        ("Guard", "guard", True, wrap_codes(GUARD_CODES)),
-        ("Client", "client", True, wrap_matrix(default_matrix_client_portal())),
     ]
+
+
+def prune_legacy_roles(db: Session, company_id: int) -> None:
+    admin = get_role_by_slug(db, company_id, "admin")
+    if not admin:
+        ensure_roles_for_company(db, company_id)
+        admin = get_role_by_slug(db, company_id, "admin")
+    if not admin:
+        return
+    legacy = db.query(Role).filter(Role.company_id == company_id, Role.slug != "admin").all()
+    for role in legacy:
+        db.query(User).filter(User.role_id == role.id).update(
+            {User.role_id: admin.id, User.role: "admin"},
+            synchronize_session=False,
+        )
+        db.delete(role)
+    db.flush()
 
 
 def ensure_roles_for_company(db: Session, company_id: int) -> None:
@@ -67,15 +61,15 @@ def get_role_by_slug(db: Session, company_id: int, slug: str) -> Role | None:
 
 def backfill_user_roles(db: Session) -> None:
     ensure_roles_for_all_companies(db)
+    for co in db.query(Company.id).all():
+        prune_legacy_roles(db, co[0])
     for u in db.query(User).filter(User.company_id.isnot(None), User.role_id.is_(None)).all():
         slug = (u.role or "company_admin").lower().strip()
         if slug == "company_admin":
             slug = "admin"
         elif slug == "super_admin":
             continue
-        r = get_role_by_slug(db, u.company_id, slug)
-        if not r:
-            r = get_role_by_slug(db, u.company_id, "admin")
+        r = get_role_by_slug(db, u.company_id, "admin")
         if r:
             u.role_id = r.id
             u.role = r.slug

@@ -77,7 +77,18 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     return inv
 
 
-def get_invoices(db: Session, user_id: int, client_id: Optional[int] = None, status: Optional[str] = None) -> List[Invoice]:
+def get_invoices(
+    db: Session,
+    user_id: int,
+    client_id: Optional[int] = None,
+    status: Optional[str] = None,
+    status_group: Optional[str] = None,
+    due_from: Optional[date] = None,
+    due_to: Optional[date] = None,
+    search: Optional[str] = None,
+) -> List[Invoice]:
+    from sqlalchemy import or_, cast, String
+
     company = get_company_by_user_id(db, user_id)
     q = (
         db.query(Invoice)
@@ -86,9 +97,28 @@ def get_invoices(db: Session, user_id: int, client_id: Optional[int] = None, sta
     )
     if client_id:
         q = q.filter(Invoice.client_id == client_id)
-    if status:
+    if status_group == "unpaid":
+        q = q.filter(Invoice.status.in_(("sent", "unpaid", "overdue", "partial")))
+    elif status_group == "draft":
+        q = q.filter(Invoice.status == "draft")
+    elif status:
         q = q.filter(Invoice.status == status)
-    rows = q.order_by(Invoice.period_end.desc()).all()
+    if due_from:
+        q = q.filter(Invoice.due_date >= due_from)
+    if due_to:
+        q = q.filter(Invoice.due_date <= due_to)
+    if search:
+        term = search.strip()
+        if term:
+            like = f"%{term}%"
+            q = q.join(Client).filter(
+                or_(
+                    cast(Invoice.id, String).ilike(like),
+                    Client.name.ilike(like),
+                    Invoice.status.ilike(like),
+                )
+            )
+    rows = q.order_by(Invoice.due_date.desc().nullslast(), Invoice.period_end.desc()).all()
     changed = False
     for inv in rows:
         if maybe_mark_overdue(db, inv):
@@ -317,6 +347,44 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
         from app.services import sms_trigger_service, email_trigger_service
         sms_trigger_service.notify_invoice_sent(db, user_id, inv)
         email_trigger_service.notify_invoice_sent(db, user_id, inv)
+    return inv
+
+
+def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
+    src = get_invoice(db, invoice_id, user_id)
+    company = get_company_by_user_id(db, user_id)
+    inv = Invoice(
+        company_id=company.id,
+        client_id=src.client_id,
+        period_start=src.period_start,
+        period_end=src.period_end,
+        due_date=src.due_date,
+        notes=src.notes,
+        subtotal=src.subtotal,
+        tax_rate=src.tax_rate,
+        tax_amount=src.tax_amount,
+        total=src.total,
+        status="draft",
+    )
+    db.add(inv)
+    db.flush()
+    for ln in sorted(src.lines, key=lambda x: x.id):
+        db.add(
+            InvoiceLine(
+                invoice_id=inv.id,
+                site_id=ln.site_id,
+                guard_id=ln.guard_id,
+                hours=ln.hours,
+                rate=ln.rate,
+                amount=ln.amount,
+                allowance_amount=ln.allowance_amount or 0,
+            )
+        )
+    recalc_invoice_totals(db, inv)
+    db.commit()
+    db.refresh(inv)
+    log_invoice_audit(db, company.id, user_id, inv.id, "invoice_duplicated", {"source_id": invoice_id})
+    db.commit()
     return inv
 
 

@@ -26,6 +26,7 @@ const industryLinks = [
 
 const companyLinks = [
   { href: '/about', key: 'about' },
+  { href: '/help', key: 'help' },
   { href: '/contact', key: 'contact' },
   { href: '/book-demo', key: 'bookDemo' },
   { href: '/login', key: 'signIn' },
@@ -75,7 +76,13 @@ export function MarketingFooter() {
               {companyLinks.map((l) => (
                 <li key={l.href}>
                   <Link href={l.href} className="hover:text-foreground">
-                    {l.key === 'contact' ? t('contact') : l.key === 'about' ? t('about') : tn(l.key)}
+                    {l.key === 'contact'
+                      ? t('contact')
+                      : l.key === 'about'
+                        ? t('about')
+                        : l.key === 'help'
+                          ? t('help')
+                          : tn(l.key)}
                   </Link>
                 </li>
               ))}

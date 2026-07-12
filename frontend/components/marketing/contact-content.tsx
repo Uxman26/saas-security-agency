@@ -33,6 +33,8 @@ export function ContactContent() {
           <p className="mt-8 text-sm text-muted-foreground">
             {t('newPrefix')}{' '}
             <Link href="/pricing" className="text-primary font-medium hover:underline">{tc('viewPricing')}</Link>
+            {' · '}
+            <Link href="/help" className="text-primary font-medium hover:underline">Help Centre</Link>
           </p>
         </div>
       </MarketingSection>

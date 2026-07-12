@@ -18,7 +18,7 @@ const INDUSTRY_KEYS = [
   { href: '/industries', key: 'otherIndustries' },
 ] as const;
 
-type Props = { active?: 'home' | 'about' | 'pricing' | 'platform' | 'industries' };
+type Props = { active?: 'home' | 'about' | 'pricing' | 'platform' | 'industries' | 'help' };
 
 export function MarketingNav({ active }: Props) {
   const t = useTranslations('marketing.nav');
@@ -70,6 +70,7 @@ export function MarketingNav({ active }: Props) {
           </div>
           {navLink('/pricing', t('pricing'), active === 'pricing')}
           {navLink('/about', t('about'), active === 'about')}
+          {navLink('/help', t('help'), active === 'help')}
         </div>
         <div className="flex items-center gap-2">
           <LanguageSwitcher className="hidden sm:flex" />
@@ -102,6 +103,7 @@ export function MarketingNav({ active }: Props) {
           )}
           <Link href="/pricing" className="block text-sm font-medium" onClick={() => setOpen(false)}>{t('pricing')}</Link>
           <Link href="/about" className="block text-sm font-medium" onClick={() => setOpen(false)}>{t('about')}</Link>
+          <Link href="/help" className="block text-sm font-medium" onClick={() => setOpen(false)}>{t('help')}</Link>
           <Link href="/login" className="block text-sm" onClick={() => setOpen(false)}>{t('signIn')}</Link>
           <Link href="/book-demo" onClick={() => setOpen(false)}>
             <Button className="w-full">{t('bookDemo')}</Button>

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
+import re
 from datetime import date, datetime, time
 from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Attendance, Client, Guard, ShiftLateLog, Site
+from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site
 from app.schemas import RotaDetailResponse, RotaSummaryRow
 from app.services.company_service import get_company_by_user_id
 
@@ -20,24 +22,55 @@ def normalize_shift_type(st: Optional[str]) -> str:
     return "day"
 
 
-def shift_hours(a: Assignment) -> float:
-    def _parse(t: Optional[str]) -> int:
-        if not t:
-            return 0
-        try:
-            parts = str(t).strip().split(":")
-            return int(parts[0]) * 60 + (int(parts[1]) if len(parts) > 1 else 0)
-        except (ValueError, IndexError):
-            return 0
+def parse_shift_minutes(t: Optional[str]) -> Optional[int]:
+    """Parse a clock time into minutes from midnight. Returns None if blank/unparseable."""
+    if t is None:
+        return None
+    raw = str(t).strip()
+    if not raw:
+        return None
+    # ISO datetime / datetime-local → take time portion
+    if "T" in raw:
+        raw = raw.split("T", 1)[1]
+    raw = raw.split("Z")[0].split("+")[0].split(".")[0].strip()
+    # 09:00 / 9:00 / 09:00:00
+    m = re.match(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?$", raw)
+    if m:
+        h, mi = int(m.group(1)), int(m.group(2))
+        ampm = m.group(4)
+        if ampm:
+            ampm = ampm.upper()
+            if ampm == "PM" and h < 12:
+                h += 12
+            elif ampm == "AM" and h == 12:
+                h = 0
+        if 0 <= h <= 23 and 0 <= mi <= 59:
+            return h * 60 + mi
+        return None
+    # Compact HHMM
+    m2 = re.match(r"^(\d{2})(\d{2})$", raw)
+    if m2:
+        h, mi = int(m2.group(1)), int(m2.group(2))
+        if 0 <= h <= 23 and 0 <= mi <= 59:
+            return h * 60 + mi
+    return None
 
-    start_mins = _parse(a.shift_start)
-    end_mins = _parse(a.shift_end)
-    if start_mins == 0 and end_mins == 0:
+
+def calc_shift_hours(start: Optional[str], end: Optional[str], break_minutes: Optional[int] = 0) -> float:
+    """Net hours from start/end clock times, deducting unpaid break. Overnight shifts supported."""
+    start_mins = parse_shift_minutes(start)
+    end_mins = parse_shift_minutes(end)
+    if start_mins is None or end_mins is None:
         return 0.0
     if end_mins <= start_mins:
         end_mins += 24 * 60
-    mins = end_mins - start_mins - (a.break_minutes or 0)
+    brk = max(0, int(break_minutes or 0))
+    mins = end_mins - start_mins - brk
     return max(0.0, mins / 60.0)
+
+
+def shift_hours(a: Assignment) -> float:
+    return calc_shift_hours(a.shift_start, a.shift_end, a.break_minutes)
 
 
 def _assignment_base_query(db: Session, company_id: int):
@@ -119,6 +152,8 @@ def list_rota_details(
             if log.assignment_id not in late_map:
                 late_map[log.assignment_id] = log
     out: List[RotaDetailResponse] = []
+    # Fingerprints to avoid double-counting draft planner rows already published as assignments
+    seen = set()
     for a in rows:
         att = att_map.get(a.id)
         late_log = late_map.get(a.id)
@@ -148,6 +183,143 @@ def list_rota_details(
                 late_minutes=late_m,
             )
         )
+        seen.add(_shift_fingerprint(a.guard_id, a.date, a.shift_start, a.shift_end, a.site_id))
+
+    # Include draft / unpublished rota planner shifts so reports match the on-screen rota
+    if start_date and end_date:
+        out.extend(
+            _planner_shift_details(
+                db,
+                company.id,
+                start_date,
+                end_date,
+                seen,
+                today,
+                guard_id=guard_id,
+                site_id=site_id,
+                client_id=client_id,
+            )
+        )
+    out.sort(key=lambda d: (d.date, (d.guard_name or "").lower(), d.shift_start or ""))
+    return out
+
+
+def _shift_fingerprint(guard_id, dk, start, end, site_id) -> tuple:
+    return (
+        int(guard_id),
+        str(dk),
+        str(start or "").strip(),
+        str(end or "").strip(),
+        int(site_id) if site_id is not None else 0,
+    )
+
+
+def _parse_planner_json(raw) -> dict:
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _planner_shift_details(
+    db: Session,
+    company_id: int,
+    start_date: date,
+    end_date: date,
+    seen: set,
+    today: date,
+    guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+) -> List[RotaDetailResponse]:
+    """Load shifts from unpublished rota plans overlapping the report period."""
+    plans = (
+        db.query(RotaPlan)
+        .filter(
+            RotaPlan.company_id == company_id,
+            RotaPlan.start_date <= end_date,
+            RotaPlan.end_date >= start_date,
+            RotaPlan.status != "published",
+        )
+        .all()
+    )
+    if not plans:
+        return []
+
+    sites = {s.id: s for s in db.query(Site).filter(Site.company_id == company_id).all()}
+    site_by_name = {(s.name or "").strip().lower(): s for s in sites.values() if s.name}
+    guards = {g.id: g for g in db.query(Guard).filter(Guard.company_id == company_id).all()}
+    out: List[RotaDetailResponse] = []
+    synthetic_id = -1
+
+    for plan in plans:
+        data = _parse_planner_json(plan.planner_data)
+        shifts = data.get("shifts") or {}
+        for emp_id, by_d in shifts.items():
+            try:
+                gid = int(emp_id)
+            except (TypeError, ValueError):
+                continue
+            if guard_id and gid != guard_id:
+                continue
+            guard = guards.get(gid)
+            if not guard:
+                continue
+            for dk, day_shifts in (by_d or {}).items():
+                try:
+                    d = date.fromisoformat(str(dk)[:10])
+                except ValueError:
+                    continue
+                if d < start_date or d > end_date:
+                    continue
+                for sh in day_shifts or []:
+                    start_t = (sh.get("start") or "").strip()
+                    end_t = (sh.get("end") or "").strip()
+                    site_name = (sh.get("site") or "").strip()
+                    site = site_by_name.get(site_name.lower()) if site_name else None
+                    sid = site.id if site else None
+                    if site_id and sid != site_id:
+                        continue
+                    if client_id and (not site or site.client_id != client_id):
+                        continue
+                    fp = _shift_fingerprint(gid, d, start_t, end_t, sid)
+                    if fp in seen:
+                        continue
+                    seen.add(fp)
+                    break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
+                    hrs = calc_shift_hours(start_t, end_t, break_m)
+                    if d > today:
+                        status = "scheduled"
+                    elif d < today:
+                        status = "pending"
+                    else:
+                        status = "pending"
+                    cli = site.client if site else None
+                    out.append(
+                        RotaDetailResponse(
+                            id=synthetic_id,
+                            guard_id=gid,
+                            guard_name=guard.full_name or "",
+                            site_id=sid or 0,
+                            site_name=site.name if site else site_name,
+                            client_id=site.client_id if site else None,
+                            client_name=cli.name if cli else None,
+                            date=d,
+                            shift_start=start_t or None,
+                            shift_end=end_t or None,
+                            break_minutes=break_m,
+                            shift_type="day",
+                            hours=round(hrs, 2),
+                            attendance_status=status,
+                            late_minutes=None,
+                        )
+                    )
+                    synthetic_id -= 1
     return out
 
 

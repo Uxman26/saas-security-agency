@@ -118,15 +118,25 @@ def shift_hours_report(db: Session, user_id: int, start_date: date, end_date: da
     company = get_company_by_user_id(db, user_id)
     details = list_rota_details(db, user_id, start_date, end_date)
     summary_rows = rota_summary(db, user_id, start_date, end_date)
-    by_employee = _all_employee_rows(db, company.id, start_date, end_date, summary_rows)
+    # Summary only for staff who actually have shifts in the period (accurate hours)
+    by_employee = [r.model_dump() for r in summary_rows]
+    # Also attach contracted committed hours for staff with no shifts? Skip — zeros mislead exports.
+    guard_ids_with_shifts = {r["guard_id"] for r in by_employee}
+    # Ensure committed calc is present (already on summary rows)
+    _ = company  # company scoped via list_rota_details
     shift_rows = [
         {
             "guard": d.guard_name,
-            "site": d.site_name,
+            "guard_id": d.guard_id,
+            "site": d.site_name or "",
             "date": d.date.isoformat(),
-            "shift": f"{d.shift_start}-{d.shift_end}",
-            "hours": d.hours,
+            "shift": f"{d.shift_start or ''}–{d.shift_end or ''}",
+            "shift_start": d.shift_start or "",
+            "shift_end": d.shift_end or "",
+            "break_minutes": d.break_minutes or 0,
+            "hours": round(float(d.hours or 0), 2),
             "status": d.attendance_status,
+            "late_minutes": d.late_minutes if d.late_minutes is not None else "",
         }
         for d in details
     ]
@@ -138,6 +148,7 @@ def shift_hours_report(db: Session, user_id: int, start_date: date, end_date: da
         "total_shifts": len(shift_rows),
         "workforce_total_hours": round(sum(r["total_hours"] for r in by_employee), 2),
         "total_employees": len(by_employee),
+        "guards_with_shifts": len(guard_ids_with_shifts),
     }
 
 

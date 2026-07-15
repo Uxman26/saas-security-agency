@@ -143,9 +143,19 @@ def export_report(
         title = "Monthly staff summary"
     elif report_type == "shift-hours":
         data = staff_report_service.shift_hours_report(db, current_user.id, start_date, end_date)
-        rows = data["by_employee"]
-        columns = [("guard_name", "Employee"), ("total_hours", "Hours"), ("late_arrivals", "Late"), ("overtime_hours", "Overtime"), ("committed_hours", "Committed")]
-        title = "Shift hours summary"
+        # Per-shift detail so exported hours match each shift (not a padded staff list of zeros)
+        rows = data["shifts"]
+        columns = [
+            ("guard", "Employee"),
+            ("site", "Site"),
+            ("date", "Date"),
+            ("shift_start", "Start"),
+            ("shift_end", "End"),
+            ("break_minutes", "Break mins"),
+            ("hours", "Hours"),
+            ("status", "Status"),
+        ]
+        title = "Shift hours detail"
     elif report_type == "shift-overtime":
         rows = shift_adjustment_service.overtime_report_rows(db, current_user.id, start_date, end_date, guard_id)
         columns = [

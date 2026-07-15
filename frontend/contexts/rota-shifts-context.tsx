@@ -121,6 +121,7 @@ type Ctx = {
   copyShiftToEmployee: (fromId: string, dk: string, idx: number, toId: string) => void;
   copyAllShiftsBetweenEmployees: (fromId: string, toId: string) => void;
   moveShiftToEmployee: (fromId: string, dk: string, idx: number, toId: string) => void;
+  moveShiftToDay: (empId: string, fromDk: string, idx: number, toDk: string, toEmpId?: string) => void;
   clearEmployeeShifts: (empId: string) => void;
   setAttendance: (key: string, a: AttendanceRec) => void;
   setCtxShift: (v: RotaJsState['ctxShift']) => void;
@@ -468,6 +469,57 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /** Move a shift to another day (same employee by default), optionally to another employee. */
+  const moveShiftToDay = useCallback((empId: string, fromDk: string, idx: number, toDk: string, toEmpId?: string) => {
+    const destEmp = toEmpId || empId;
+    if (empId === destEmp && fromDk === toDk) return;
+    setState((s) => {
+      const fromEmp = s.shifts[empId];
+      const srcList = fromEmp?.[fromDk];
+      if (!srcList?.[idx]) return s;
+      const shift = { ...srcList[idx] };
+
+      const fromCopy = { ...(fromEmp || {}) } as Record<string, ShiftRec[]>;
+      const fromList = [...(fromCopy[fromDk] || [])];
+      const oldLen = fromList.length;
+      fromList.splice(idx, 1);
+      fromCopy[fromDk] = fromList;
+
+      const toEmp = empId === destEmp ? fromCopy : ({ ...(s.shifts[destEmp] || {}) } as Record<string, ShiftRec[]>);
+      const toList = [...(toEmp[toDk] || []), shift];
+      toEmp[toDk] = toList;
+      const newIdx = toList.length - 1;
+
+      const attendance = { ...s.attendance };
+      const srcAttKey = attKey(empId, fromDk, idx);
+      if (attendance[srcAttKey]) {
+        attendance[attKey(destEmp, toDk, newIdx)] = {
+          ...attendance[srcAttKey],
+          empId: destEmp,
+          dk: toDk,
+          si: newIdx,
+        };
+        delete attendance[srcAttKey];
+      }
+      for (let i = idx; i < oldLen - 1; i++) {
+        const fromKey = attKey(empId, fromDk, i + 1);
+        const toKey = attKey(empId, fromDk, i);
+        if (attendance[fromKey]) {
+          attendance[toKey] = { ...attendance[fromKey], si: i };
+          delete attendance[fromKey];
+        } else {
+          delete attendance[toKey];
+        }
+      }
+      delete attendance[attKey(empId, fromDk, oldLen - 1)];
+
+      const shifts = { ...s.shifts, [empId]: fromCopy };
+      if (empId !== destEmp) shifts[destEmp] = toEmp;
+
+      return { ...s, shifts, attendance };
+    });
+  }, []);
+
   const clearEmployeeShifts = useCallback((empId: string) => {
     setState((s) => {
       const shifts = { ...s.shifts };
@@ -615,6 +667,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       copyShiftToEmployee,
       copyAllShiftsBetweenEmployees,
       moveShiftToEmployee,
+      moveShiftToDay,
       clearEmployeeShifts,
       setAttendance,
       setCtxShift,
@@ -653,6 +706,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       copyShiftToEmployee,
       copyAllShiftsBetweenEmployees,
       moveShiftToEmployee,
+      moveShiftToDay,
       clearEmployeeShifts,
       setAttendance,
       setCtxShift,

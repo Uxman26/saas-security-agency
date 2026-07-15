@@ -65,11 +65,23 @@ const optUuid = z.preprocess(
 );
 
 const optStr = z.string().max(200).optional().or(z.literal(''));
-const optPhone = z
-  .string()
-  .regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number')
-  .optional()
-  .or(z.literal(''));
+
+/** Optional international phone stored as +{dial}{nationalDigits}. */
+export const optPhone = z.string().superRefine((val, ctx) => {
+  if (!val) return;
+  if (!val.startsWith('+')) {
+    ctx.addIssue({ code: 'custom', message: 'Select a country code and enter a valid number' });
+    return;
+  }
+  const digits = val.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 15) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Enter a valid phone number for the selected country',
+    });
+  }
+});
+
 const optDate = z.string().optional().or(z.literal(''));
 const toOptInt = (v: unknown) => {
   if (v === '' || v === null || v === undefined) return 0;
@@ -101,7 +113,7 @@ export const guardSchema = z.object({
   date_of_birth: optDate,
   email: optStr,
   phone: optPhone,
-  work_phone: optStr,
+  work_phone: optPhone,
   job_title: optStr,
   employment_start_date: optDate,
   probation_end_date: optDate,
@@ -123,9 +135,9 @@ export const guardSchema = z.object({
   ),
   emergency_first_name: optStr,
   emergency_last_name: optStr,
-  emergency_mobile: optStr,
-  emergency_home_phone: optStr,
-  emergency_work_phone: optStr,
+  emergency_mobile: optPhone,
+  emergency_home_phone: optPhone,
+  emergency_work_phone: optPhone,
   emergency_relationship: optStr,
   emergency_address_line_1: optStr,
   emergency_address_line_2: optStr,

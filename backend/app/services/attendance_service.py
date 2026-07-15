@@ -3,8 +3,21 @@ from fastapi import HTTPException
 from typing import List, Optional
 from datetime import datetime, date
 from app.models import Attendance, Assignment, Guard
-from app.schemas import AttendanceCreate, BookingOnOff
+from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate
 from app.services.company_service import get_company_by_user_id
+
+def _get_owned_attendance(db: Session, attendance_id: int, user_id: int) -> Attendance:
+    company = get_company_by_user_id(db, user_id)
+    att = (
+        db.query(Attendance)
+        .join(Assignment)
+        .join(Guard)
+        .filter(Attendance.id == attendance_id, Guard.company_id == company.id)
+        .first()
+    )
+    if not att:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    return att
 
 def get_all_attendance(db: Session, user_id: int, guard_id: Optional[int] = None) -> List[Attendance]:
     company = get_company_by_user_id(db, user_id)
@@ -89,3 +102,23 @@ def get_late_summary(db: Session, user_id: int, start: Optional[date] = None, en
     if end:
         q = q.filter(Assignment.date <= end)
     return q.all()
+
+def update_attendance(db: Session, attendance_id: int, data: AttendanceUpdate, user_id: int) -> Attendance:
+    att = _get_owned_attendance(db, attendance_id, user_id)
+    payload = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+    allowed_status = {"on_time", "late", "absent", "early_leave", "no_show", "present"}
+    if "status" in payload and payload["status"] is not None:
+        status = str(payload["status"]).strip().lower().replace(" ", "_")
+        if status not in allowed_status:
+            raise HTTPException(status_code=400, detail="Invalid attendance status")
+        payload["status"] = status
+    for k, v in payload.items():
+        setattr(att, k, v)
+    db.commit()
+    db.refresh(att)
+    return att
+
+def delete_attendance(db: Session, attendance_id: int, user_id: int) -> None:
+    att = _get_owned_attendance(db, attendance_id, user_id)
+    db.delete(att)
+    db.commit()

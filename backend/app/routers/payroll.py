@@ -5,7 +5,7 @@ from datetime import date
 from pydantic import BaseModel
 from app.database import get_db
 from app.models import User
-from app.schemas import PayrollCreate, PayrollResponse
+from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
 from app.rbac import require_perm, PERM_PAYROLL_READ, PERM_PAYROLL_WRITE
 from app.services import payroll_service
 
@@ -48,6 +48,10 @@ def list_payrolls(guard_id: Optional[int] = None, period_start: Optional[date] =
 @router.get("/{payroll_id}", response_model=PayrollResponse)
 def get_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_PAYROLL_READ))):
     return payroll_service.get_payroll(db, payroll_id, current_user.id)
+
+@router.put("/{payroll_id}", response_model=PayrollResponse)
+def update_payroll(payroll_id: int, data: PayrollUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_PAYROLL_WRITE))):
+    return payroll_service.update_payroll(db, payroll_id, data, current_user.id)
 
 @router.delete("/{payroll_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_PAYROLL_WRITE))):

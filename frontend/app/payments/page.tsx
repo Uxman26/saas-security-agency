@@ -8,13 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Payment, Invoice } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { CreditCard, Plus, Trash2 } from 'lucide-react';
+import { CreditCard, Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'card', 'direct_debit', 'other'];
@@ -44,6 +44,7 @@ export default function PaymentsPage() {
   const [formMethod, setFormMethod] = useState('bank_transfer');
   const [formPaidAt, setFormPaidAt] = useState(new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
+  const [editRec, setEditRec] = useState<Payment | null>(null);
 
   const invoiceMap = useMemo(() => new Map(invoices.map((i) => [i.id, i])), [invoices]);
 
@@ -90,6 +91,48 @@ export default function PaymentsPage() {
         toast.error(e instanceof Error ? e.message : 'Delete failed');
       }
     }, { label: 'Delete', description: 'This cannot be undone.' });
+  };
+
+  const openEdit = (p: Payment) => {
+    setAddOpen(false);
+    setEditRec(p);
+    setFormInvoiceId(p.invoice_id ? String(p.invoice_id) : '');
+    setFormAmount(String(p.amount));
+    setFormMethod(p.method || 'bank_transfer');
+    setFormPaidAt(p.paid_at ? p.paid_at.slice(0, 10) : new Date().toISOString().split('T')[0]);
+  };
+
+  const handleEditSave = async () => {
+    if (!editRec) return;
+    const amount = parseFloat(formAmount);
+    if (!formAmount || Number.isNaN(amount) || amount <= 0) {
+      toast.error('Enter a valid amount greater than zero');
+      return;
+    }
+    if (!formMethod || !formPaidAt) {
+      toast.error('Method and date are required');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.payments.update(editRec.id, {
+        invoice_id: formInvoiceId ? parseInt(formInvoiceId, 10) : null,
+        amount,
+        method: formMethod,
+        paid_at: `${formPaidAt}T00:00:00`,
+      });
+      setEditRec(null);
+      setFormInvoiceId('');
+      setFormAmount('');
+      setFormMethod('bank_transfer');
+      setFormPaidAt(new Date().toISOString().split('T')[0]);
+      loadPayments();
+      toast.success('Payment updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const forTable = useMemo(
@@ -332,15 +375,20 @@ export default function PaymentsPage() {
                               {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '—'}
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDelete(p.id)}
-                                title="Delete payment"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payment">
+                                  <Pencil className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDelete(p.id)}
+                                  title="Delete payment"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
@@ -366,6 +414,78 @@ export default function PaymentsPage() {
           </Card>
         </div>
       </div>
+
+      <Dialog
+        open={!!editRec}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditRec(null);
+            setFormInvoiceId('');
+            setFormAmount('');
+            setFormMethod('bank_transfer');
+            setFormPaidAt(new Date().toISOString().split('T')[0]);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit payment</DialogTitle>
+          </DialogHeader>
+          {editRec && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-1">
+                <Label>Invoice (optional)</Label>
+                <Select value={formInvoiceId || 'none'} onValueChange={(v) => setFormInvoiceId(v === 'none' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Link to invoice (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No invoice</SelectItem>
+                    {invoices.map((inv) => (
+                      <SelectItem key={inv.id} value={inv.id.toString()}>
+                        Invoice #{inv.id} — £{inv.total.toFixed(2)} ({inv.status})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label>Amount (£)</Label>
+                  <Input type="number" step="0.01" min="0" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Payment Date</Label>
+                  <Input type="date" value={formPaidAt} onChange={(e) => setFormPaidAt(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>Method</Label>
+                <Select value={formMethod} onValueChange={setFormMethod}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {METHOD_LABELS[m] ?? m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditRec(null)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={() => void handleEditSave()} disabled={submitting}>
+                  {submitting ? 'Saving…' : 'Save changes'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppShell>
     </ProtectedRoute>
   );

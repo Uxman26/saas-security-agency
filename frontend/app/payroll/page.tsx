@@ -8,13 +8,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Payroll, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { PoundSterling, Calculator, Trash2 } from 'lucide-react';
+import { PoundSterling, Calculator, Trash2, Pencil } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
@@ -41,6 +41,16 @@ export default function PayrollPage() {
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [editRec, setEditRec] = useState<Payroll | null>(null);
+  const [editHours, setEditHours] = useState('');
+  const [editRate, setEditRate] = useState('');
+  const [editBank, setEditBank] = useState('');
+  const [editCash, setEditCash] = useState('');
+  const [editAllowances, setEditAllowances] = useState('');
+  const [editMode, setEditMode] = useState('100_bank');
+  const [editStart, setEditStart] = useState('');
+  const [editEnd, setEditEnd] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
 
@@ -104,6 +114,74 @@ export default function PayrollPage() {
         toast.error(e instanceof Error ? e.message : 'Delete failed');
       }
     }, { label: 'Delete', description: 'This cannot be undone.' });
+  };
+
+  const openEdit = (p: Payroll) => {
+    setEditRec(p);
+    setEditHours(String(p.total_hours ?? 0));
+    setEditRate(String(p.hourly_rate ?? 0));
+    setEditBank(String(p.bank_amount ?? 0));
+    setEditCash(String(p.cash_amount ?? 0));
+    setEditAllowances(String(p.allowance_total ?? 0));
+    setEditMode(p.payment_mode || '100_bank');
+    setEditStart(p.period_start);
+    setEditEnd(p.period_end);
+  };
+
+  const applyModeSplit = (mode: string, hours: number, rate: number, allowances: number) => {
+    const base = hours * rate + allowances;
+    if (mode === '100_cash') {
+      setEditCash(base.toFixed(2));
+      setEditBank('0');
+    } else if (mode === 'split') {
+      // keep current bank/cash unless both zero — then 50/50
+      const bank = parseFloat(editBank) || 0;
+      const cash = parseFloat(editCash) || 0;
+      if (bank === 0 && cash === 0) {
+        setEditBank((base / 2).toFixed(2));
+        setEditCash((base / 2).toFixed(2));
+      }
+    } else {
+      setEditBank(base.toFixed(2));
+      setEditCash('0');
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editRec) return;
+    const hours = parseFloat(editHours);
+    const rate = parseFloat(editRate);
+    const bank = parseFloat(editBank);
+    const cash = parseFloat(editCash);
+    const allowances = parseFloat(editAllowances);
+    if ([hours, rate, bank, cash, allowances].some((n) => Number.isNaN(n) || n < 0)) {
+      toast.error('Enter valid non-negative numbers');
+      return;
+    }
+    if (!editStart || !editEnd) {
+      toast.error('Period dates are required');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      await api.payroll.update(editRec.id, {
+        period_start: editStart,
+        period_end: editEnd,
+        total_hours: hours,
+        hourly_rate: rate,
+        bank_amount: bank,
+        cash_amount: cash,
+        allowance_total: allowances,
+        payment_mode: editMode,
+      });
+      setEditRec(null);
+      loadPayrolls();
+      toast.success('Payroll updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed');
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const getSearchText = useCallback(
@@ -362,15 +440,20 @@ export default function PayrollPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDelete(p.id)}
-                              title="Delete record"
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit record">
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(p.id)}
+                                title="Delete record"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -395,6 +478,122 @@ export default function PayrollPage() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={!!editRec} onOpenChange={(open) => !open && setEditRec(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit payroll</DialogTitle>
+          </DialogHeader>
+          {editRec && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {guardMap.get(editRec.guard_id) ?? `Guard #${editRec.guard_id}`}
+              </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Period start</Label>
+                  <Input type="date" value={editStart} onChange={(e) => setEditStart(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Period end</Label>
+                  <Input type="date" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Hours</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editHours}
+                    onChange={(e) => {
+                      setEditHours(e.target.value);
+                      const h = parseFloat(e.target.value) || 0;
+                      const r = parseFloat(editRate) || 0;
+                      const a = parseFloat(editAllowances) || 0;
+                      applyModeSplit(editMode, h, r, a);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Hourly rate (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editRate}
+                    onChange={(e) => {
+                      setEditRate(e.target.value);
+                      const h = parseFloat(editHours) || 0;
+                      const r = parseFloat(e.target.value) || 0;
+                      const a = parseFloat(editAllowances) || 0;
+                      applyModeSplit(editMode, h, r, a);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Allowances (£)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editAllowances}
+                    onChange={(e) => {
+                      setEditAllowances(e.target.value);
+                      const h = parseFloat(editHours) || 0;
+                      const r = parseFloat(editRate) || 0;
+                      const a = parseFloat(e.target.value) || 0;
+                      applyModeSplit(editMode, h, r, a);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Payment mode</Label>
+                  <Select
+                    value={editMode}
+                    onValueChange={(v) => {
+                      setEditMode(v);
+                      const h = parseFloat(editHours) || 0;
+                      const r = parseFloat(editRate) || 0;
+                      const a = parseFloat(editAllowances) || 0;
+                      applyModeSplit(v, h, r, a);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PAYMENT_MODE_LABELS).map(([k, label]) => (
+                        <SelectItem key={k} value={k}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Bank (£)</Label>
+                  <Input type="number" min={0} step="0.01" value={editBank} onChange={(e) => setEditBank(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Cash (£)</Label>
+                  <Input type="number" min={0} step="0.01" value={editCash} onChange={(e) => setEditCash(e.target.value)} />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Base pay = hours × rate + allowances. Changing mode recalculates bank/cash (you can still override amounts).
+              </p>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditRec(null)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={() => void handleEditSave()} disabled={editSaving}>
+                  {editSaving ? 'Saving…' : 'Save changes'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AppShell>
     </ProtectedRoute>
   );

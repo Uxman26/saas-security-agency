@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import date
 from app.database import get_db
 from app.models import User
-from app.schemas import AttendanceCreate, AttendanceResponse, BookingOnOff
+from app.schemas import AttendanceCreate, AttendanceUpdate, AttendanceResponse, BookingOnOff
 from app.rbac import require_perm, PERM_ATTEND_READ, PERM_ATTEND_WRITE
 from app.services import attendance_service
 
@@ -33,3 +33,12 @@ def list_attendance(assignment_id: int, db: Session = Depends(get_db), current_u
 @router.get("/late", response_model=List[AttendanceResponse])
 def late_summary(start_date: Optional[date] = None, end_date: Optional[date] = None, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ATTEND_READ))):
     return attendance_service.get_late_summary(db, current_user.id, start_date, end_date)
+
+@router.put("/{attendance_id}", response_model=AttendanceResponse)
+def update_attendance(attendance_id: int, data: AttendanceUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ATTEND_WRITE))):
+    return attendance_service.update_attendance(db, attendance_id, data, current_user.id)
+
+@router.delete("/{attendance_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_attendance(attendance_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ATTEND_WRITE))):
+    attendance_service.delete_attendance(db, attendance_id, current_user.id)
+    return None

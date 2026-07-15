@@ -894,6 +894,11 @@ class AttendanceBase(BaseModel):
 class AttendanceCreate(AttendanceBase):
     pass
 
+class AttendanceUpdate(BaseModel):
+    booked_at: Optional[datetime] = None
+    booked_off_at: Optional[datetime] = None
+    status: Optional[str] = None
+
 class AttendanceResponse(AttendanceBase):
     id: int
     created_at: datetime
@@ -918,6 +923,16 @@ class PayrollBase(BaseModel):
 
 class PayrollCreate(PayrollBase):
     pass
+
+class PayrollUpdate(BaseModel):
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    total_hours: Optional[float] = None
+    hourly_rate: Optional[float] = None
+    bank_amount: Optional[float] = None
+    cash_amount: Optional[float] = None
+    allowance_total: Optional[float] = None
+    payment_mode: Optional[str] = None
 
 class PayrollResponse(PayrollBase):
     id: int
@@ -1022,6 +1037,12 @@ class PaymentBase(BaseModel):
 
 class PaymentCreate(PaymentBase):
     pass
+
+class PaymentUpdate(BaseModel):
+    invoice_id: Optional[int] = None
+    amount: Optional[float] = None
+    method: Optional[str] = None
+    paid_at: Optional[datetime] = None
 
 class PaymentResponse(PaymentBase):
     id: int

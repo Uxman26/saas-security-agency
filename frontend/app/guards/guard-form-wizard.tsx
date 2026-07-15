@@ -21,6 +21,7 @@ import {
   WEEKDAYS,
   PAY_FREQUENCIES,
 } from '@/lib/guard-options';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { cn } from '@/lib/utils';
 
 const STEPS = ['Employee details', 'Employment details', 'Summary'] as const;
@@ -305,7 +306,11 @@ export function GuardFormWizard({
               </div>
               <div className="space-y-1">
                 <Label>Mobile number</Label>
-                <Input {...register('phone')} placeholder="e.g. 07700900123" />
+                <PhoneInput
+                  value={watch('phone') || ''}
+                  onChange={(v) => setValue('phone', v, { shouldValidate: true })}
+                />
+                <p className="text-[11px] text-muted-foreground">Digits only after country code (e.g. UK +44).</p>
                 {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
               <div className="space-y-1 sm:col-span-2">
@@ -342,7 +347,11 @@ export function GuardFormWizard({
               </div>
               <div className="space-y-1">
                 <Label>Work phone</Label>
-                <Input {...register('work_phone')} />
+                <PhoneInput
+                  value={watch('work_phone') || ''}
+                  onChange={(v) => setValue('work_phone', v, { shouldValidate: true })}
+                />
+                {errors.work_phone && <p className="text-xs text-destructive">{errors.work_phone.message}</p>}
               </div>
               <div className="space-y-1">
                 <Label>Job title</Label>
@@ -435,9 +444,30 @@ export function GuardFormWizard({
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1"><Label>First name</Label><Input {...register('emergency_first_name')} /></div>
               <div className="space-y-1"><Label>Last name</Label><Input {...register('emergency_last_name')} /></div>
-              <div className="space-y-1"><Label>Mobile</Label><Input {...register('emergency_mobile')} /></div>
-              <div className="space-y-1"><Label>Home phone</Label><Input {...register('emergency_home_phone')} /></div>
-              <div className="space-y-1"><Label>Work phone</Label><Input {...register('emergency_work_phone')} /></div>
+              <div className="space-y-1">
+                <Label>Mobile</Label>
+                <PhoneInput
+                  value={watch('emergency_mobile') || ''}
+                  onChange={(v) => setValue('emergency_mobile', v, { shouldValidate: true })}
+                />
+                {errors.emergency_mobile && <p className="text-xs text-destructive">{errors.emergency_mobile.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label>Home phone</Label>
+                <PhoneInput
+                  value={watch('emergency_home_phone') || ''}
+                  onChange={(v) => setValue('emergency_home_phone', v, { shouldValidate: true })}
+                />
+                {errors.emergency_home_phone && <p className="text-xs text-destructive">{errors.emergency_home_phone.message}</p>}
+              </div>
+              <div className="space-y-1">
+                <Label>Work phone</Label>
+                <PhoneInput
+                  value={watch('emergency_work_phone') || ''}
+                  onChange={(v) => setValue('emergency_work_phone', v, { shouldValidate: true })}
+                />
+                {errors.emergency_work_phone && <p className="text-xs text-destructive">{errors.emergency_work_phone.message}</p>}
+              </div>
               <div className="space-y-1">
                 <Label>Relationship</Label>
                 <Select value={watch('emergency_relationship') || '__none__'} onValueChange={(v) => setValue('emergency_relationship', v === '__none__' ? '' : v)}>

@@ -65,6 +65,7 @@ export function RotaCalendarClient() {
     reorderEmployees,
     copyAllShiftsBetweenEmployees,
     moveShiftToEmployee,
+    moveShiftToDay,
     clearEmployeeShifts,
     addDaysDelta,
     setAttendance,
@@ -584,8 +585,18 @@ export function RotaCalendarClient() {
 
   const onDragStart = (e: React.DragEvent, empId: string) => {
     e.dataTransfer.setData('text/plain', empId);
+    e.dataTransfer.setData('application/x-rota-drag', JSON.stringify({ type: 'employee', empId }));
     e.dataTransfer.effectAllowed = 'copy';
     setDragEmpId(empId);
+  };
+
+  const onShiftDragStart = (e: React.DragEvent, empId: string, dk: string, idx: number) => {
+    e.stopPropagation();
+    const payload = JSON.stringify({ type: 'shift', empId, dk, idx });
+    e.dataTransfer.setData('application/x-rota-drag', payload);
+    e.dataTransfer.setData('text/plain', payload);
+    e.dataTransfer.effectAllowed = 'move';
+    setDragEmpId(null);
   };
 
   const onDragEnd = () => {
@@ -594,15 +605,43 @@ export function RotaCalendarClient() {
 
   const onDayDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    const raw = e.dataTransfer.types.includes('application/x-rota-drag') || e.dataTransfer.types.includes('text/plain');
+    e.dataTransfer.dropEffect = raw ? 'move' : 'copy';
   };
 
-  const onDropDay = (e: React.DragEvent, dk: string) => {
+  const parseDragPayload = (e: React.DragEvent): { type: 'employee'; empId: string } | { type: 'shift'; empId: string; dk: string; idx: number } | null => {
+    const typed = e.dataTransfer.getData('application/x-rota-drag') || e.dataTransfer.getData('text/plain');
+    if (!typed) return null;
+    try {
+      const parsed = JSON.parse(typed);
+      if (parsed?.type === 'shift' && parsed.empId && parsed.dk != null && typeof parsed.idx === 'number') {
+        return { type: 'shift', empId: String(parsed.empId), dk: String(parsed.dk), idx: parsed.idx };
+      }
+      if (parsed?.type === 'employee' && parsed.empId) {
+        return { type: 'employee', empId: String(parsed.empId) };
+      }
+    } catch {
+      // legacy plain employee id
+      if (typed && !typed.startsWith('{')) return { type: 'employee', empId: typed };
+    }
+    return null;
+  };
+
+  const onDropDay = (e: React.DragEvent, dk: string, rowEmpId?: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const empId = e.dataTransfer.getData('text/plain');
+    const payload = parseDragPayload(e);
     setDragEmpId(null);
-    if (empId) openAddShift(dk, empId);
+    if (!payload) return;
+    if (payload.type === 'employee') {
+      openAddShift(dk, payload.empId);
+      return;
+    }
+    // Move timeslot to this day (same employee, or the row employee in table view)
+    const destEmp = rowEmpId || payload.empId;
+    if (payload.dk === dk && payload.empId === destEmp) return;
+    moveShiftToDay(payload.empId, payload.dk, payload.idx, dk, destEmp);
+    toast.success('Shift moved');
   };
 
   const toggleShiftMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string, dk: string, idx: number, shiftsBelow: number) => {
@@ -793,7 +832,12 @@ export function RotaCalendarClient() {
                   {state.days.map((dk) => {
                     const list = state.shifts[emp.id]?.[dk] || [];
                     return (
-                      <td key={dk} className="relative align-top p-1 border-l border-border/40 min-h-[56px] bg-muted/5">
+                      <td
+                        key={dk}
+                        className="relative align-top p-1 border-l border-border/40 min-h-[56px] bg-muted/5"
+                        onDragOver={onDayDragOver}
+                        onDrop={(e) => onDropDay(e, dk, emp.id)}
+                      >
                         <div className="flex flex-col gap-1 min-h-[48px]">
                           {list.map((sh, idx) => {
                             const menuOpen = shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx;
@@ -801,11 +845,15 @@ export function RotaCalendarClient() {
                             <div key={idx}>
                               <button
                                 type="button"
+                                draggable
+                                onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
+                                onDragEnd={onDragEnd}
                                 className={cn(
-                                  'w-full rounded border bg-background px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:bg-muted/50',
+                                  'w-full rounded border bg-background px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:bg-muted/50 cursor-grab active:cursor-grabbing',
                                   menuOpen && 'ring-2 ring-pink-500/60'
                                 )}
                                 onClick={(e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
+                                title="Drag to another day to move this shift"
                               >
                                 <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
                                 <div className="font-medium tabular-nums">
@@ -856,7 +904,10 @@ export function RotaCalendarClient() {
       {state.rotaView === 'timeline' && (
         <div className="space-y-4 overflow-x-auto">
           {state.days.map((dk) => (
-            <div key={dk} className="rounded-lg border bg-card">
+            <div key={dk} className="rounded-lg border bg-card"
+              onDragOver={onDayDragOver}
+              onDrop={(e) => onDropDay(e, dk)}
+            >
               <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
                 <span className="font-medium text-sm">{fmtShortDate(dk)}</span>
                 <Button type="button" variant="link" size="sm" className="h-8 text-pink-600" onClick={() => rows[0] && openAddShift(dk, rows[0].id)}>
@@ -869,8 +920,12 @@ export function RotaCalendarClient() {
                     <button
                       key={`${emp.id}-${idx}`}
                       type="button"
-                      className="rounded-lg border text-left px-3 py-2 text-xs hover:bg-muted/50 flex gap-2 items-start"
+                      draggable
+                      onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
+                      onDragEnd={onDragEnd}
+                      className="rounded-lg border text-left px-3 py-2 text-xs hover:bg-muted/50 flex gap-2 items-start cursor-grab active:cursor-grabbing"
                       onClick={() => openEditShift(emp.id, dk, idx)}
+                      title="Drag to another day to move"
                     >
                       <span className="size-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: emp.avatarColor }}>
                         {initials(emp.name)}
@@ -948,8 +1003,12 @@ export function RotaCalendarClient() {
                     <button
                       key={`${emp.id}-${idx}`}
                       type="button"
-                      className="text-[10px] rounded bg-muted/60 px-1 py-0.5 truncate pointer-events-auto"
+                      draggable
+                      onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
+                      onDragEnd={onDragEnd}
+                      className="text-[10px] rounded bg-muted/60 px-1 py-0.5 truncate pointer-events-auto cursor-grab active:cursor-grabbing"
                       onClick={() => openEditShift(emp.id, dk, idx)}
+                      title="Drag to another day to move"
                     >
                       {initials(emp.name)} {sh.start}
                     </button>

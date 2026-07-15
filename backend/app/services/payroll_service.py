@@ -3,11 +3,13 @@ from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
 from app.models import Payroll, Guard, Site, RotaPlan
-from app.schemas import PayrollCreate, PayrollResponse
+from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_assignment_pay_rate
 from app.models import Assignment, Allowance
 from app.services.rota_service import shift_hours
+
+VALID_PAYMENT_MODES = {"100_bank", "100_cash", "split"}
 
 def _calculate_for_assignments(
     db: Session,
@@ -156,3 +158,39 @@ def delete_payroll(db: Session, payroll_id: int, user_id: int) -> None:
         raise HTTPException(status_code=404, detail="Payroll not found")
     db.delete(pr)
     db.commit()
+
+def update_payroll(db: Session, payroll_id: int, data: PayrollUpdate, user_id: int) -> Payroll:
+    company = get_company_by_user_id(db, user_id)
+    pr = db.query(Payroll).filter(Payroll.id == payroll_id, Payroll.company_id == company.id).first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Payroll not found")
+    payload = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+    if "payment_mode" in payload and payload["payment_mode"] is not None:
+        mode = str(payload["payment_mode"]).strip().lower()
+        if mode not in VALID_PAYMENT_MODES:
+            raise HTTPException(status_code=400, detail="payment_mode must be 100_bank, 100_cash, or split")
+        payload["payment_mode"] = mode
+    if "period_start" in payload and "period_end" in payload:
+        if payload["period_start"] and payload["period_end"] and payload["period_start"] > payload["period_end"]:
+            raise HTTPException(status_code=400, detail="period_start cannot be after period_end")
+    elif "period_start" in payload and payload["period_start"] and pr.period_end and payload["period_start"] > pr.period_end:
+        raise HTTPException(status_code=400, detail="period_start cannot be after period_end")
+    elif "period_end" in payload and payload["period_end"] and pr.period_start and payload["period_end"] < pr.period_start:
+        raise HTTPException(status_code=400, detail="period_end cannot be before period_start")
+    for field in ("total_hours", "hourly_rate", "bank_amount", "cash_amount", "allowance_total"):
+        if field in payload and payload[field] is not None and payload[field] < 0:
+            raise HTTPException(status_code=400, detail=f"{field} cannot be negative")
+    for k, v in payload.items():
+        setattr(pr, k, v)
+    # Keep bank/cash consistent with payment mode when mode changes and amounts not both provided
+    mode = pr.payment_mode or "100_bank"
+    base = float(pr.total_hours or 0) * float(pr.hourly_rate or 0) + float(pr.allowance_total or 0)
+    if mode == "100_bank" and "bank_amount" not in payload and "cash_amount" not in payload:
+        pr.bank_amount = base
+        pr.cash_amount = 0.0
+    elif mode == "100_cash" and "bank_amount" not in payload and "cash_amount" not in payload:
+        pr.cash_amount = base
+        pr.bank_amount = 0.0
+    db.commit()
+    db.refresh(pr)
+    return pr

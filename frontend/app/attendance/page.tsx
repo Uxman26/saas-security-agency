@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Attendance, Guard, Assignment } from '@/lib/types';
@@ -16,14 +16,39 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { StatusPieChart } from '@/components/charts/status-chart';
-import { Clock, Plus } from 'lucide-react';
+import { Clock, Plus, Pencil, Trash2 } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const STATUS_STYLES: Record<string, string> = {
   on_time: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  late: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  absent: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  late: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  absent: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+  no_show: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   early_leave: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
 };
+
+const STATUS_OPTIONS = [
+  { value: 'on_time', label: 'On time' },
+  { value: 'late', label: 'Late' },
+  { value: 'absent', label: 'Absent' },
+  { value: 'no_show', label: 'No show' },
+  { value: 'early_leave', label: 'Early leave' },
+];
+
+function toLocalInput(iso?: string | null) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalInput(v: string) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
 
 export default function AttendancePage() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -31,6 +56,10 @@ export default function AttendancePage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookOpen, setBookOpen] = useState(false);
+  const [editRec, setEditRec] = useState<Attendance | null>(null);
+  const [editStatus, setEditStatus] = useState('on_time');
+  const [editBookedAt, setEditBookedAt] = useState('');
+  const [editBookedOffAt, setEditBookedOffAt] = useState('');
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'overview' | 'all' | 'late'>('all');
   const { sortKey, sortDir, toggleSort } = useTableSort();
@@ -70,11 +99,50 @@ export default function AttendancePage() {
       setBookGuardId('');
       setBookOff(false);
       loadAttendance();
+      toast.success(bookOff ? 'Booked off' : 'Booked on');
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Booking failed');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openEdit = (a: Attendance) => {
+    setEditRec(a);
+    setEditStatus(a.status || 'on_time');
+    setEditBookedAt(toLocalInput(a.booked_at));
+    setEditBookedOffAt(toLocalInput(a.booked_off_at));
+  };
+
+  const handleEditSave = async () => {
+    if (!editRec) return;
+    setSubmitting(true);
+    try {
+      await api.attendance.update(editRec.id, {
+        status: editStatus,
+        booked_at: fromLocalInput(editBookedAt),
+        booked_off_at: fromLocalInput(editBookedOffAt),
+      });
+      setEditRec(null);
+      loadAttendance();
+      toast.success('Attendance updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Update failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    toast.confirm('Delete this attendance record?', async () => {
+      try {
+        await api.attendance.delete(id);
+        loadAttendance();
+        toast.success('Attendance deleted');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Delete failed');
+      }
+    }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
   const baseRows = useMemo(
@@ -312,6 +380,7 @@ export default function AttendancePage() {
                         <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Recorded" colKey="recorded" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -341,6 +410,22 @@ export default function AttendancePage() {
                           <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                             {a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}
                           </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit">
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDelete(a.id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -364,6 +449,52 @@ export default function AttendancePage() {
           </Card>
           </>
           )}
+
+          <Dialog open={!!editRec} onOpenChange={(open) => !open && setEditRec(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit attendance</DialogTitle>
+              </DialogHeader>
+              {editRec && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {guardMap.get(editRec.guard_id) ?? `Guard #${editRec.guard_id}`} · Assignment #{editRec.assignment_id}
+                  </p>
+                  <div className="space-y-1">
+                    <Label>Status</Label>
+                    <Select value={editStatus} onValueChange={setEditStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Booked on</Label>
+                    <Input type="datetime-local" value={editBookedAt} onChange={(e) => setEditBookedAt(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Booked off</Label>
+                    <Input type="datetime-local" value={editBookedOffAt} onChange={(e) => setEditBookedOffAt(e.target.value)} />
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setEditRec(null)}>
+                      Cancel
+                    </Button>
+                    <Button type="button" onClick={() => void handleEditSave()} disabled={submitting}>
+                      {submitting ? 'Saving…' : 'Save changes'}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </ModulePage>
     </AppShell>
     </ProtectedRoute>

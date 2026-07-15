@@ -608,6 +608,10 @@ export const api = {
       rota_plan_id?: number;
     }): Promise<Payroll[]> =>
       request<Payroll[]>('/payroll/calculate-batch', { method: 'POST', body: JSON.stringify(data) }),
+    update: (
+      id: number,
+      data: Partial<Pick<Payroll, 'period_start' | 'period_end' | 'total_hours' | 'hourly_rate' | 'bank_amount' | 'cash_amount' | 'allowance_total' | 'payment_mode'>>
+    ): Promise<Payroll> => request<Payroll>(`/payroll/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/payroll/${id}`, { method: 'DELETE' }),
   },
   invoices: {
@@ -987,6 +991,12 @@ export const api = {
       request<Attendance>('/attendance/book', { method: 'POST', body: JSON.stringify({ assignment_id, book_off: false }) }),
     bookOff: (assignment_id: number): Promise<Attendance> =>
       request<Attendance>('/attendance/book', { method: 'POST', body: JSON.stringify({ assignment_id, book_off: true }) }),
+    update: (
+      id: number,
+      data: { booked_at?: string | null; booked_off_at?: string | null; status?: string }
+    ): Promise<Attendance> =>
+      request<Attendance>(`/attendance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/attendance/${id}`, { method: 'DELETE' }),
     late: (params?: { start_date?: string; end_date?: string }): Promise<Attendance[]> => {
       const q = new URLSearchParams();
       if (params?.start_date) q.append('start_date', params.start_date);
@@ -1002,6 +1012,11 @@ export const api = {
     },
     create: (data: { invoice_id?: number; amount: number; method: string; paid_at: string }): Promise<Payment> =>
       request<Payment>('/payments', { method: 'POST', body: JSON.stringify(data) }),
+    update: (
+      id: number,
+      data: { invoice_id?: number | null; amount?: number; method?: string; paid_at?: string }
+    ): Promise<Payment> =>
+      request<Payment>(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/payments/${id}`, { method: 'DELETE' }),
   },
   rates: {

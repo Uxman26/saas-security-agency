@@ -16,8 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { INDUSTRY_VALUES, WORKFORCE_VALUES } from '@/lib/industry-options';
-import { authFieldClass, authLabelClass, authSelectClass } from '@/lib/auth-styles';
+import { authFieldClass, authSelectClass } from '@/lib/auth-styles';
 import { Loader2 } from 'lucide-react';
+
+/** Theme-aware labels for marketing pages (auth labels stay navy for white AuthShell). */
+const fieldLabelClass = 'text-foreground font-medium';
 
 const schema = z.object({
   full_name: z.string().min(2),
@@ -68,21 +71,21 @@ export default function BookDemoPage() {
           ) : (
             <form onSubmit={handleSubmit(onSubmit)} className="mt-10 space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="full_name" className={authLabelClass}>{t('fullName')}</Label>
+                <Label htmlFor="full_name" className={fieldLabelClass}>{t('fullName')}</Label>
                 <Input id="full_name" className={authFieldClass} {...register('full_name')} />
                 {errors.full_name && <p className="text-sm text-destructive">{ta('required')}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email" className={authLabelClass}>{t('workEmail')}</Label>
+                <Label htmlFor="email" className={fieldLabelClass}>{t('workEmail')}</Label>
                 <Input id="email" type="email" className={authFieldClass} {...register('email')} />
                 {errors.email && <p className="text-sm text-destructive">{ta('validEmailRequired')}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company_name" className={authLabelClass}>{t('companyName')}</Label>
+                <Label htmlFor="company_name" className={fieldLabelClass}>{t('companyName')}</Label>
                 <Input id="company_name" className={authFieldClass} {...register('company_name')} />
               </div>
               <div className="space-y-2">
-                <Label className={authLabelClass}>{t('industry')}</Label>
+                <Label className={fieldLabelClass}>{t('industry')}</Label>
                 <Select onValueChange={(v) => setValue('industry', v)}>
                   <SelectTrigger className={authSelectClass}><SelectValue placeholder={ta('selectIndustry')} /></SelectTrigger>
                   <SelectContent>
@@ -94,7 +97,7 @@ export default function BookDemoPage() {
                 {errors.industry && <p className="text-sm text-destructive">{ta('required')}</p>}
               </div>
               <div className="space-y-2">
-                <Label className={authLabelClass}>{t('workforceSize')}</Label>
+                <Label className={fieldLabelClass}>{t('workforceSize')}</Label>
                 <Select onValueChange={(v) => setValue('workforce_size', v)}>
                   <SelectTrigger className={authSelectClass}><SelectValue placeholder={ta('selectSize')} /></SelectTrigger>
                   <SelectContent>
@@ -103,19 +106,19 @@ export default function BookDemoPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="challenge" className={authLabelClass}>{t('challenge')}</Label>
+                <Label htmlFor="challenge" className={fieldLabelClass}>{t('challenge')}</Label>
                 <Textarea id="challenge" rows={4} className={authFieldClass} {...register('challenge')} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone" className={authLabelClass}>{t('phone')}</Label>
+                <Label htmlFor="phone" className={fieldLabelClass}>{t('phone')}</Label>
                 <Input id="phone" className={authFieldClass} {...register('phone')} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="current_system" className={authLabelClass}>{t('currentSystem')}</Label>
+                <Label htmlFor="current_system" className={fieldLabelClass}>{t('currentSystem')}</Label>
                 <Input id="current_system" className={authFieldClass} {...register('current_system')} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="preferred_time" className={authLabelClass}>{t('preferredTime')}</Label>
+                <Label htmlFor="preferred_time" className={fieldLabelClass}>{t('preferredTime')}</Label>
                 <Input id="preferred_time" className={authFieldClass} {...register('preferred_time')} />
               </div>
               <Button type="submit" className="w-full" disabled={loading}>

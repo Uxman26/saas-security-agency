@@ -602,6 +602,10 @@ export default function RolesSettingsPage() {
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
                       className="max-w-md"
+                      name="user-list-filter"
+                      autoComplete="off"
+                      type="search"
+                      inputMode="search"
                     />
                     <Select value={userRoleId || '__all'} onValueChange={(v) => setUserRoleId(v === '__all' ? '' : v)}>
                       <SelectTrigger className="w-[200px]">
@@ -721,14 +725,14 @@ export default function RolesSettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Email</Label>
-                      <Input type="email" {...userForm.register('email')} placeholder="user@company.com" />
+                      <Input type="email" autoComplete="off" {...userForm.register('email')} placeholder="user@company.com" />
                       {userForm.formState.errors.email && (
                         <p className="text-xs text-destructive">{userForm.formState.errors.email.message}</p>
                       )}
                     </div>
                     <div className="space-y-1">
                       <Label>Password</Label>
-                      <PasswordInput {...userForm.register('password')} />
+                      <PasswordInput autoComplete="new-password" {...userForm.register('password')} />
                       {userForm.formState.errors.password && (
                         <p className="text-xs text-destructive">{userForm.formState.errors.password.message}</p>
                       )}
@@ -796,14 +800,14 @@ export default function RolesSettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Email</Label>
-                      <Input type="email" {...editUserForm.register('email')} />
+                      <Input type="email" autoComplete="off" {...editUserForm.register('email')} />
                       {editUserForm.formState.errors.email && (
                         <p className="text-xs text-destructive">{editUserForm.formState.errors.email.message}</p>
                       )}
                     </div>
                     <div className="space-y-1">
                       <Label>New password (optional)</Label>
-                      <PasswordInput {...editUserForm.register('password')} placeholder="Leave blank to keep current" />
+                      <PasswordInput autoComplete="new-password" {...editUserForm.register('password')} placeholder="Leave blank to keep current" />
                       {editUserForm.formState.errors.password && (
                         <p className="text-xs text-destructive">{editUserForm.formState.errors.password.message}</p>
                       )}
@@ -830,25 +834,61 @@ export default function RolesSettingsPage() {
                 </DialogContent>
               </Dialog>
 
-              <Dialog open={!!resetUser} onOpenChange={(open) => !open && setResetUser(null)}>
+              <Dialog
+                open={!!resetUser}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setResetUser(null);
+                    setResetPassword('');
+                  }
+                }}
+              >
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
                     <DialogTitle>Reset password</DialogTitle>
                   </DialogHeader>
                   {resetUser && (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">Set a new password for {resetUser.full_name}.</p>
+                    <form
+                      className="space-y-4"
+                      autoComplete="off"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        void saveResetPassword();
+                      }}
+                    >
+                      <p className="text-sm text-muted-foreground">
+                        Set a new password for {resetUser.full_name || resetUser.email}.
+                      </p>
+                      {/* Keep browser autofill inside the dialog instead of the Users search field */}
+                      <input
+                        type="email"
+                        name="username"
+                        autoComplete="username"
+                        value={resetUser.email}
+                        readOnly
+                        tabIndex={-1}
+                        aria-hidden
+                        className="sr-only"
+                      />
                       <div className="space-y-1">
-                        <Label>New password</Label>
-                        <PasswordInput value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} />
+                        <Label htmlFor="reset-user-password">New password</Label>
+                        <PasswordInput
+                          id="reset-user-password"
+                          name="new-password"
+                          autoComplete="new-password"
+                          value={resetPassword}
+                          onChange={(e) => setResetPassword(e.target.value)}
+                        />
                       </div>
                       <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setResetUser(null)}>Cancel</Button>
-                        <Button onClick={() => void saveResetPassword()} disabled={saving}>
+                        <Button type="button" variant="outline" onClick={() => setResetUser(null)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={saving}>
                           {saving ? 'Saving…' : 'Reset password'}
                         </Button>
                       </DialogFooter>
-                    </div>
+                    </form>
                   )}
                 </DialogContent>
               </Dialog>

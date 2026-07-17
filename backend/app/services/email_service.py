@@ -35,8 +35,8 @@ def company_smtp_config(company: Company) -> dict[str, Any]:
         "mail_port": int(company.smtp_port or 587),
         "mail_username": company.smtp_username,
         "mail_password": company.smtp_password,
-        "mail_from": (company.email or settings.mail_from).strip(),
-        "mail_from_name": (company.name or settings.mail_from_name).strip(),
+        "mail_from": (company.smtp_from or company.smtp_username or company.email or settings.mail_from or "").strip(),
+        "mail_from_name": (company.smtp_from_name or company.name or settings.mail_from_name or "").strip(),
     }
 
 

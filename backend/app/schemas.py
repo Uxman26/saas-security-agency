@@ -314,6 +314,7 @@ class CompanyProfileUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     postcode: Optional[str] = None
+    website: Optional[str] = None
     registration_number: Optional[str] = None
     vat_number: Optional[str] = None
     account_name: Optional[str] = None
@@ -331,6 +332,7 @@ class CompanyProfileResponse(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     postcode: Optional[str] = None
+    website: Optional[str] = None
     registration_number: Optional[str] = None
     vat_number: Optional[str] = None
     logo_url: Optional[str] = None
@@ -467,6 +469,7 @@ class GuardResponse(GuardBase):
     company_id: int
     full_name: str
     created_at: datetime
+    photo_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -771,6 +774,7 @@ class EmailTestRequest(BaseModel):
 class EmailConfigResponse(BaseModel):
     smtp_configured: bool
     mail_server: Optional[str] = None
+    mail_port: Optional[int] = None
     mail_username: Optional[str] = None
     password_set: bool = False
     mail_from: Optional[str] = None
@@ -782,8 +786,11 @@ class EmailConfigResponse(BaseModel):
 class EmailConfigUpdate(BaseModel):
     templates: Optional[dict[str, str]] = None
     mail_server: Optional[str] = None
+    mail_port: Optional[int] = None
     mail_username: Optional[str] = None
     mail_password: Optional[str] = None
+    mail_from: Optional[str] = None
+    mail_from_name: Optional[str] = None
 
 
 class EmailLogResponse(BaseModel):
@@ -890,6 +897,7 @@ class AttendanceBase(BaseModel):
     booked_at: Optional[datetime] = None
     booked_off_at: Optional[datetime] = None
     status: Optional[str] = "on_time"
+    note: Optional[str] = None
 
 class AttendanceCreate(AttendanceBase):
     pass
@@ -898,13 +906,46 @@ class AttendanceUpdate(BaseModel):
     booked_at: Optional[datetime] = None
     booked_off_at: Optional[datetime] = None
     status: Optional[str] = None
+    note: Optional[str] = None
 
 class AttendanceResponse(AttendanceBase):
     id: int
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    updated_by_user_id: Optional[int] = None
+    updated_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class AttendanceByShiftRequest(BaseModel):
+    guard_id: int
+    date: date
+    shift_start: str
+    site_name: str = ""
+    status: str
+    note: str
+    hours: Optional[float] = None
+
+    @field_validator("hours", mode="before")
+    @classmethod
+    def coerce_hours(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    @field_validator("note")
+    @classmethod
+    def note_required(cls, v: str) -> str:
+        s = (v or "").strip()
+        if not s:
+            raise ValueError("Note is required")
+        return s
+
 
 class BookingOnOff(BaseModel):
     assignment_id: int

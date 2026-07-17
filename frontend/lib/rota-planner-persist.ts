@@ -1,5 +1,5 @@
-import { buildDayRange } from './rota-shifts-utils';
-import type { RotaJsState, ShiftRec } from './rota-shifts-types';
+import { buildDayRange, normalizeAttStatus } from './rota-shifts-utils';
+import type { AttendanceRec, RotaJsState, ShiftRec } from './rota-shifts-types';
 import { SHIFT_COLOR_OPTS, AVATAR_PALETTE } from './rota-shifts-types';
 
 export type PlannerPayload = {
@@ -99,6 +99,15 @@ export function remapPlannerPayload(
   return normalizePayload({ ...payload, days: newDays, shifts, attendance });
 }
 
+function normalizeAttendance(attendance: PlannerPayload['attendance']): PlannerPayload['attendance'] {
+  const out: PlannerPayload['attendance'] = {};
+  for (const [key, rec] of Object.entries(attendance || {})) {
+    const status = normalizeAttStatus(rec.status) ?? 'on_time';
+    out[key] = { ...rec, status };
+  }
+  return out;
+}
+
 function normalizePayload(p: PlannerPayload): PlannerPayload {
   return {
     rotaView: p.rotaView ?? 'table',
@@ -108,9 +117,10 @@ function normalizePayload(p: PlannerPayload): PlannerPayload {
       name: e.name ?? '',
       role: e.role ?? 'Staff',
       avatarColor: e.avatarColor?.trim() || AVATAR_PALETTE[i % AVATAR_PALETTE.length],
+      ...(e.photoUrl != null ? { photoUrl: e.photoUrl } : {}),
     })),
     shifts: normalizeShifts(p.shifts),
-    attendance: p.attendance ?? {},
+    attendance: normalizeAttendance(p.attendance),
     budget: p.budget ?? 0,
     inclBreaks: p.inclBreaks ?? false,
   };

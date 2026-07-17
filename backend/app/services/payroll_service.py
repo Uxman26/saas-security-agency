@@ -25,7 +25,10 @@ def _calculate_for_assignments(
         r = resolve_assignment_pay_rate(db, a, company_id)
         rate_sum += r * hrs
     allowances = db.query(Allowance).filter(Allowance.company_id == company_id, Allowance.in_payroll == True).all()
-    allowance_total = sum(al.amount for al in allowances)
+    # Do not dump every company allowance onto each employee — base pay is hours × rates only.
+    # Allowances can be added manually when editing a payroll record.
+    allowance_total = 0.0
+    _ = allowances  # kept for future per-guard allowance rules
     mode = "100_bank"
     bank = rate_sum + allowance_total
     cash = 0.0

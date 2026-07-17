@@ -74,6 +74,7 @@ class Company(Base):
     phone = Column(String)
     address = Column(String)
     postcode = Column(String)
+    website = Column(String)
     registration_number = Column(String)
     vat_number = Column(String)
     email_templates_json = Column(Text)
@@ -81,6 +82,8 @@ class Company(Base):
     smtp_port = Column(Integer, default=587)
     smtp_username = Column(String)
     smtp_password = Column(String)
+    smtp_from = Column(String)
+    smtp_from_name = Column(String)
     twilio_account_sid = Column(String)
     twilio_auth_token = Column(String)
     twilio_phone_number = Column(String)
@@ -345,6 +348,7 @@ class Guard(Base):
     phone = Column(String)
     work_phone = Column(String)
     job_title = Column(String)
+    photo_path = Column(String)
     employment_start_date = Column(Date)
     probation_end_date = Column(Date)
     address_line_1 = Column(String)
@@ -426,6 +430,12 @@ class Guard(Base):
     rates = relationship("GuardRate", back_populates="guard", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="guard", cascade="all, delete-orphan")
     payrolls = relationship("Payroll", back_populates="guard", cascade="all, delete-orphan")
+
+    @property
+    def photo_url(self):
+        if self.photo_path:
+            return f"/guards/{self.id}/photo"
+        return None
 
 class GuardDocument(Base):
     __tablename__ = "guard_documents"
@@ -679,10 +689,13 @@ class Attendance(Base):
     booked_at = Column(DateTime(timezone=True))
     booked_off_at = Column(DateTime(timezone=True))
     status = Column(String, default="on_time")
+    note = Column(Text)
+    updated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     assignment = relationship("Assignment", back_populates="attendances")
     guard = relationship("Guard", back_populates="attendances")
+    updated_by = relationship("User", foreign_keys=[updated_by_user_id])
 
 class Payroll(Base):
     __tablename__ = "payroll"

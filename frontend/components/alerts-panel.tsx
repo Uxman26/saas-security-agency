@@ -22,7 +22,7 @@ export function AlertsPanel() {
   const [leadAlerts, setLeadAlerts] = useState<LeadNotif[]>([]);
 
   useEffect(() => {
-    if (user?.role === 'super_admin' || !open) return;
+    if (user?.role === 'super_admin') return;
     const tasks: Promise<void>[] = [
       api.reports.compliance(30).then(setAlerts).catch((e: Error) => { toast.error(e.message || 'Could not load alerts'); }),
       api.reports.contractsExpiring(30).then(setContracts).catch(() => {}),
@@ -33,7 +33,7 @@ export function AlertsPanel() {
       );
     }
     void Promise.all(tasks);
-  }, [open, user?.role, user?.enabled_modules, user]);
+  }, [user?.role, user?.enabled_modules, user]);
 
   if (user?.role === 'super_admin') return null;
 

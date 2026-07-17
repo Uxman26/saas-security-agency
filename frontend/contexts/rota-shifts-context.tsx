@@ -13,7 +13,7 @@ import {
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
-import { buildDayRange, attKey, calcHours } from '@/lib/rota-shifts-utils';
+import { buildDayRange, attKey, calcHours, shiftPayable } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
@@ -135,6 +135,8 @@ type Ctx = {
   totalRotaHours: number;
   empTotalHours: (empId: string) => number;
   dayTotalHours: (dk: string) => number;
+  totalRotaPayable: number;
+  empTotalPayable: (empId: string) => number;
 };
 
 const RotaCtx = createContext<Ctx | null>(null);
@@ -641,6 +643,30 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     [state.shifts, state.inclBreaks]
   );
 
+  const totalRotaPayable = useMemo(() => {
+    let t = 0;
+    for (const empId of Object.keys(state.shifts)) {
+      const byD = state.shifts[empId];
+      for (const dk of Object.keys(byD)) {
+        for (const sh of byD[dk] || []) t += shiftPayable(sh, state.inclBreaks);
+      }
+    }
+    return t;
+  }, [state.shifts, state.inclBreaks]);
+
+  const empTotalPayable = useCallback(
+    (empId: string) => {
+      const byD = state.shifts[empId];
+      if (!byD) return 0;
+      let t = 0;
+      for (const dk of Object.keys(byD)) {
+        for (const sh of byD[dk] || []) t += shiftPayable(sh, state.inclBreaks);
+      }
+      return t;
+    },
+    [state.shifts, state.inclBreaks]
+  );
+
   const value = useMemo(
     () => ({
       state,
@@ -681,6 +707,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       totalRotaHours,
       empTotalHours,
       dayTotalHours,
+      totalRotaPayable,
+      empTotalPayable,
     }),
     [
       state,
@@ -720,6 +748,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       totalRotaHours,
       empTotalHours,
       dayTotalHours,
+      totalRotaPayable,
+      empTotalPayable,
     ]
   );
 

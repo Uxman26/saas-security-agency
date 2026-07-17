@@ -30,9 +30,10 @@ export type EmployeeRec = {
   role: string;
   avatarColor: string;
   phone?: string;
+  photoUrl?: string | null;
 };
 
-export type AttStatus = 'present' | 'absent' | 'late';
+export type AttStatus = 'on_time' | 'late' | 'absent' | 'no_show';
 
 export type AttendanceRec = {
   status: AttStatus;

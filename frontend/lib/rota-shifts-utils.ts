@@ -1,5 +1,5 @@
 import { addDays, format, parseISO } from 'date-fns';
-import type { ShiftRec } from './rota-shifts-types';
+import type { AttStatus, ShiftRec } from './rota-shifts-types';
 
 export function dateKey(d: Date) {
   return format(d, 'yyyy-MM-dd');
@@ -67,4 +67,51 @@ export function minsToTime(m: number) {
 
 export function addMinutesToTime(t: string, mins: number) {
   return minsToTime(timeMins(t) + mins);
+}
+
+export function normalizeAttStatus(s: string | undefined | null): AttStatus | null {
+  if (!s) return null;
+  if (s === 'present') return 'on_time';
+  if (s === 'on_time' || s === 'late' || s === 'absent' || s === 'no_show') return s;
+  return null;
+}
+
+export function attStatusLabel(s: AttStatus | string | null | undefined): string {
+  const n = normalizeAttStatus(s ?? null);
+  switch (n) {
+    case 'on_time':
+      return 'On time';
+    case 'late':
+      return 'Late';
+    case 'absent':
+      return 'Absent';
+    case 'no_show':
+      return 'No show';
+    default:
+      return '—';
+  }
+}
+
+export function attStatusBarColor(s: AttStatus | string | null | undefined): string {
+  const n = normalizeAttStatus(s ?? null);
+  switch (n) {
+    case 'on_time':
+      return '#22c55e';
+    case 'late':
+      return '#eab308';
+    case 'absent':
+      return '#f97316';
+    case 'no_show':
+      return '#ef4444';
+    default:
+      return '#64748b';
+  }
+}
+
+export function shiftPayable(sh: ShiftRec, inclBreaks = false): number {
+  return calcHours(sh, inclBreaks) * (Number(sh.shiftRate) || 0);
+}
+
+export function formatMoney(n: number): string {
+  return `£${n.toFixed(2)}`;
 }

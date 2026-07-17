@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, calcHours, fmtShortDate, formatHoursDecimal, initials, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
-import type { AttendanceRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
+import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, calcHours, fmtShortDate, formatHoursDecimal, formatMoney, initials, normalizeAttStatus, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
+import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
 import {
@@ -28,6 +28,65 @@ import { toast } from '@/lib/toast';
 
 const SHIFT_MENU_H = 268;
 const EMP_MENU_H = 132;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+const ATT_STATUS_OPTIONS: { value: AttStatus; label: string }[] = [
+  { value: 'on_time', label: 'On time' },
+  { value: 'late', label: 'Late' },
+  { value: 'absent', label: 'Absent' },
+  { value: 'no_show', label: 'No show' },
+];
+
+const STATUS_LEGEND: { status: AttStatus; description: string }[] = [
+  { status: 'on_time', description: 'Arrived on time' },
+  { status: 'late', description: 'Arrived late' },
+  { status: 'absent', description: 'Did not attend' },
+  { status: 'no_show', description: 'Scheduled but no show' },
+];
+
+function useAuthImageUrl(url?: string | null) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!url) {
+      setSrc(null);
+      return;
+    }
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    const token = localStorage.getItem('token')?.trim();
+    void fetch(`${API_URL}${url}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        blobUrl = URL.createObjectURL(blob);
+        setSrc(blobUrl);
+      })
+      .catch(() => setSrc(null));
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [url]);
+  return src;
+}
+
+function EmployeeAvatar({ emp, className }: { emp: EmployeeRec; className?: string }) {
+  const poolPhoto = emp.photoUrl;
+  const src = useAuthImageUrl(poolPhoto);
+  if (src) {
+    return <img src={src} alt="" className={cn('rounded-full object-cover shrink-0', className)} />;
+  }
+  return (
+    <span
+      className={cn('rounded-full shrink-0 flex items-center justify-center text-white font-semibold', className)}
+      style={{ backgroundColor: emp.avatarColor }}
+    >
+      {initials(emp.name)}
+    </span>
+  );
+}
 
 function placeMenu(rect: DOMRect, w: number, menuH: number, preferUp: boolean) {
   const width = Math.max(rect.width, w);
@@ -55,6 +114,8 @@ export function RotaCalendarClient() {
     totalRotaHours,
     empTotalHours,
     dayTotalHours,
+    totalRotaPayable,
+    empTotalPayable,
     addShift,
     deleteShift,
     updateShift,
@@ -142,6 +203,7 @@ export function RotaCalendarClient() {
   }, [state.shifts]);
 
   const [empFilter, setEmpFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | AttStatus>('all');
   const [shiftOpen, setShiftOpen] = useState(false);
   const [shiftPref, setShiftPref] = useState<{ dk: string; empId: string }>({ dk: '', empId: '' });
   const [shiftEdit, setShiftEdit] = useState<{ empId: string; dk: string; idx: number; shift: ShiftRec } | null>(null);
@@ -217,12 +279,31 @@ export function RotaCalendarClient() {
     };
   }, []);
 
+  const empMatchesStatusFilter = useCallback(
+    (empId: string) => {
+      if (statusFilter === 'all') return true;
+      let hasMatch = false;
+      for (const dk of state.days) {
+        const list = state.shifts[empId]?.[dk] || [];
+        for (let idx = 0; idx < list.length; idx++) {
+          const a = state.attendance[attKey(empId, dk, idx)];
+          if (a && normalizeAttStatus(a.status) === statusFilter) hasMatch = true;
+        }
+      }
+      return hasMatch;
+    },
+    [state.days, state.shifts, state.attendance, statusFilter]
+  );
+
   const rows = useMemo(() => {
     const q = empFilter.trim().toLowerCase();
-    let list = state.employees;
+    let list = state.employees.filter((e) => empMatchesStatusFilter(e.id));
     if (q) list = list.filter((e) => e.name.toLowerCase().includes(q) || e.role.toLowerCase().includes(q));
-    return list;
-  }, [state.employees, empFilter]);
+    return list.map((e) => {
+      const fromPool = pool.find((p) => p.id === e.id);
+      return fromPool?.photoUrl ? { ...e, photoUrl: fromPool.photoUrl } : e;
+    });
+  }, [state.employees, empFilter, empMatchesStatusFilter, pool]);
 
   const meta = useMemo(() => {
     if (!state.days.length) return '';
@@ -294,11 +375,12 @@ export function RotaCalendarClient() {
         ? Math.max(0, timeMins(sh.start) - timeMins(sh.scheduledStart))
         : undefined);
     setAttCtx({ empId, dk, idx });
+    const normalized = ex ? { ...ex, status: normalizeAttStatus(ex.status) ?? 'on_time', lateMinutes } : null;
     setAttRec(
-      ex
-        ? { ...ex, lateMinutes }
+      normalized
+        ? normalized
         : {
-            status: 'present',
+            status: 'on_time',
             hours: calcHours(sh || { start: '09:00', end: '17:00', site: '', notes: '', breakH: 0, breakM: 0, color: '#3b82f6', label: '' }).toFixed(2),
             note: '',
             lateMinutes,
@@ -312,11 +394,15 @@ export function RotaCalendarClient() {
 
   const saveAtt = async () => {
     if (!attCtx || !attRec) return;
+    if (!attRec.note?.trim()) {
+      toast.error('Note is required');
+      return;
+    }
     const sh = state.shifts[attCtx.empId]?.[attCtx.dk]?.[attCtx.idx];
     if (!sh) return;
     const k = attKey(attCtx.empId, attCtx.dk, attCtx.idx);
     const lateM = Math.max(0, parseInt(String(attRec.lateMinutes ?? ''), 10) || 0);
-    let rec: AttendanceRec = { ...attRec, empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx };
+    let rec: AttendanceRec = { ...attRec, empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx, note: attRec.note.trim() };
     let nextShift = sh;
 
     if (rec.status === 'late' && lateM > 0) {
@@ -335,7 +421,7 @@ export function RotaCalendarClient() {
             shift_start: scheduled,
             site_name: sh.site,
             late_minutes: lateM,
-            note: attRec.note || undefined,
+            note: attRec.note.trim(),
           });
           rec.synced = true;
         } catch (e) {
@@ -355,6 +441,28 @@ export function RotaCalendarClient() {
       rec = { ...rec, lateMinutes: undefined };
     } else {
       rec = { ...rec, lateMinutes: rec.status === 'late' ? lateM || undefined : undefined };
+    }
+
+    if (planPublished) {
+      setAttSaving(true);
+      try {
+        const scheduled = sh.scheduledStart || sh.start;
+        await api.attendance.upsertByShift({
+          guard_id: parseInt(attCtx.empId, 10),
+          date: attCtx.dk,
+          shift_start: scheduled,
+          site_name: sh.site,
+          status: rec.status,
+          note: rec.note,
+          hours: rec.hours,
+        });
+        rec.synced = true;
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to sync attendance');
+        setAttSaving(false);
+        return;
+      }
+      setAttSaving(false);
     }
 
     setAttendance(k, rec);
@@ -766,6 +874,22 @@ export function RotaCalendarClient() {
               ({state.inclBreaks ? 'incl. breaks' : 'excl. breaks'})
             </span>
           </span>
+          <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 px-2 py-1 tabular-nums">
+            Payable {formatMoney(totalRotaPayable)}
+          </span>
+          <select
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as 'all' | AttStatus)}
+            aria-label="Filter by attendance status"
+          >
+            <option value="all">All statuses</option>
+            {ATT_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
           <Button variant="outline" size="sm" type="button" onClick={openReorder}>
             <ArrowUpDown className="size-3.5 mr-1" />
             Reorder employees
@@ -805,6 +929,9 @@ export function RotaCalendarClient() {
                     Incl. breaks?
                   </label>
                 </th>
+                <th className="p-2 text-center text-xs bg-emerald-100/80 dark:bg-emerald-950/40 border-l min-w-[90px] align-top">
+                  <div className="font-semibold">Payable</div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -816,12 +943,7 @@ export function RotaCalendarClient() {
                       className="flex gap-2 text-left w-full rounded-md hover:bg-muted/60 p-1 -m-1"
                       onClick={(e) => toggleEmpMenu(e, emp.id)}
                     >
-                      <span
-                        className="size-9 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold text-white"
-                        style={{ backgroundColor: emp.avatarColor }}
-                      >
-                        {initials(emp.name)}
-                      </span>
+                      <EmployeeAvatar emp={emp} className="size-9 text-[11px]" />
                       <span className="min-w-0">
                         <span className="font-medium block truncate">{emp.name}</span>
                         <span className="text-[11px] text-muted-foreground truncate block">{emp.role}</span>
@@ -831,6 +953,15 @@ export function RotaCalendarClient() {
                   </td>
                   {state.days.map((dk) => {
                     const list = state.shifts[emp.id]?.[dk] || [];
+                    const showCell = statusFilter === 'all' || list.some((_, idx) => {
+                      const a = state.attendance[attKey(emp.id, dk, idx)];
+                      return a && normalizeAttStatus(a.status) === statusFilter;
+                    });
+                    if (statusFilter !== 'all' && list.length > 0 && !showCell) {
+                      return (
+                        <td key={dk} className="relative align-top p-1 border-l border-border/40 min-h-[56px] bg-muted/5 opacity-40" />
+                      );
+                    }
                     return (
                       <td
                         key={dk}
@@ -840,6 +971,10 @@ export function RotaCalendarClient() {
                       >
                         <div className="flex flex-col gap-1 min-h-[48px]">
                           {list.map((sh, idx) => {
+                            const att = state.attendance[attKey(emp.id, dk, idx)];
+                            const attStatus = att ? normalizeAttStatus(att.status) : null;
+                            if (statusFilter !== 'all' && attStatus !== statusFilter) return null;
+                            const barColor = attStatus ? attStatusBarColor(attStatus) : sh.color;
                             const menuOpen = shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx;
                             return (
                             <div key={idx}>
@@ -855,11 +990,16 @@ export function RotaCalendarClient() {
                                 onClick={(e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
                                 title="Drag to another day to move this shift"
                               >
-                                <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
+                                <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: barColor }} />
                                 <div className="font-medium tabular-nums">
                                   {sh.start} – {sh.end}
                                 </div>
                                 <div className="text-muted-foreground truncate text-[10px]">{sh.site || sh.notes || 'One-off'}</div>
+                                {attStatus ? (
+                                  <div className="text-[10px] font-medium truncate" style={{ color: barColor }}>
+                                    {attStatusLabel(attStatus)}
+                                  </div>
+                                ) : null}
                                 {sh.site && sh.notes ? <div className="text-muted-foreground truncate text-[10px] italic">{sh.notes}</div> : null}
                               </button>
                             </div>
@@ -875,6 +1015,9 @@ export function RotaCalendarClient() {
                   <td className="text-center align-top p-2 bg-sky-100/50 dark:bg-sky-950/30 border-l text-xs tabular-nums font-medium">
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
+                  <td className="text-center align-top p-2 bg-emerald-100/50 dark:bg-emerald-950/30 border-l text-xs tabular-nums font-medium">
+                    {formatMoney(empTotalPayable(emp.id))}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -887,9 +1030,24 @@ export function RotaCalendarClient() {
                   </td>
                 ))}
                 <td className="text-center p-2 border-l tabular-nums">{formatHoursDecimal(totalRotaHours)}</td>
+                <td className="text-center p-2 border-l tabular-nums">{formatMoney(totalRotaPayable)}</td>
               </tr>
             </tfoot>
           </table>
+          <div className="mx-3 mb-3 rounded-lg border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Status legend</p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {STATUS_LEGEND.map(({ status, description }) => (
+                <div key={status} className="flex items-start gap-2 text-xs">
+                  <span className="mt-1 h-1 w-8 rounded-full shrink-0" style={{ backgroundColor: attStatusBarColor(status) }} />
+                  <span>
+                    <span className="font-medium">{attStatusLabel(status)}</span>
+                    <span className="text-muted-foreground"> — {description}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
           <button
             type="button"
             className="m-3 w-[calc(100%-1.5rem)] py-3 rounded-lg border border-dashed border-muted-foreground/40 text-sm text-muted-foreground hover:bg-muted/40 flex items-center justify-center gap-2"
@@ -1469,9 +1627,11 @@ export function RotaCalendarClient() {
                   value={attRec.status}
                   onChange={(e) => setAttRec({ ...attRec, status: e.target.value as AttendanceRec['status'] })}
                 >
-                  <option value="present">Present</option>
-                  <option value="absent">Absent</option>
-                  <option value="late">Late</option>
+                  {ATT_STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               {attRec.status === 'late' ? (
@@ -1507,11 +1667,12 @@ export function RotaCalendarClient() {
                 <Input value={attRec.hours} onChange={(e) => setAttRec({ ...attRec, hours: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <LabelMini>Note</LabelMini>
+                <LabelMini>Note (required)</LabelMini>
                 <textarea
                   className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={attRec.note}
                   onChange={(e) => setAttRec({ ...attRec, note: e.target.value })}
+                  required
                 />
               </div>
             </div>

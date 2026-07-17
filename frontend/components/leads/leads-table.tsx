@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { can } from '@/lib/permissions';
-import { leadLabel, priorityClass, priorityLabel, statusClass } from '@/lib/leads';
+import { designationLabel, leadLabel, priorityClass, priorityLabel, statusClass } from '@/lib/leads';
 import type { Lead } from '@/lib/types';
 import type { User } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -20,13 +20,14 @@ type Props = {
 };
 
 export function LeadsTable({ leads, isLoading, user, onEdit, onDelete, showDates }: Props) {
-  const cols = showDates ? 8 : 7;
+  const cols = showDates ? 9 : 8;
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Organization</TableHead>
           <TableHead>Contact</TableHead>
+          <TableHead>Designation</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Priority</TableHead>
           <TableHead>Source</TableHead>
@@ -58,6 +59,9 @@ export function LeadsTable({ leads, isLoading, user, onEdit, onDelete, showDates
               <TableCell>
                 <div className="text-sm">{l.contact_name || '—'}</div>
                 <div className="text-xs text-muted-foreground">{l.email || l.phone || '—'}</div>
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {l.designation ? designationLabel(l.designation) : '—'}
               </TableCell>
               <TableCell>
                 <span className={cn('text-xs rounded-full px-2 py-0.5', statusClass(l.status))}>{leadLabel(l.status)}</span>

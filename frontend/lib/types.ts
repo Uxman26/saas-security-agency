@@ -255,6 +255,7 @@ export interface CompanyProfile {
   registration_number?: string | null;
   vat_number?: string | null;
   logo_url?: string | null;
+  website?: string | null;
   account_name?: string | null;
   bank_name?: string | null;
   sort_code?: string | null;
@@ -367,6 +368,7 @@ export interface Guard {
   available_days?: string;
   availability_timing?: string;
   pay_frequency?: string;
+  photo_url?: string | null;
   created_at: string;
 }
 
@@ -817,6 +819,7 @@ export interface SmsLog {
 export interface EmailConfig {
   smtp_configured: boolean;
   mail_server?: string | null;
+  mail_port?: number | null;
   mail_username?: string | null;
   password_set?: boolean;
   mail_from?: string | null;
@@ -895,6 +898,10 @@ export interface Attendance {
   booked_at?: string;
   booked_off_at?: string;
   status?: string;
+  note?: string | null;
+  updated_at?: string | null;
+  updated_by_user_id?: number | null;
+  updated_by_name?: string | null;
   created_at: string;
 }
 

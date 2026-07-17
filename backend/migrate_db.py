@@ -766,6 +766,12 @@ def run():
         ("companies", "stripe_connect_account_id", "TEXT"),
         ("subscription_receipts", "stripe_checkout_session_id", "TEXT"),
         ("subscription_receipts", "stripe_subscription_id", "TEXT"),
+        ("companies", "website", "TEXT"),
+        ("companies", "smtp_from", "TEXT"),
+        ("companies", "smtp_from_name", "TEXT"),
+        ("attendance", "note", "TEXT"),
+        ("attendance", "updated_by_user_id", "INTEGER"),
+        ("guards", "photo_path", "TEXT"),
         ("subscription_receipts", "billing_cycle", "TEXT DEFAULT 'monthly'"),
     ]:
         if table_exists(cur, table) and not column_exists(cur, table, col):

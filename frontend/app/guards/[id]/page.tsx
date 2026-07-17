@@ -12,7 +12,38 @@ import { api } from '@/lib/api';
 import { can } from '@/lib/permissions';
 import { formatDateUK } from '@/lib/date-format';
 import type { Guard } from '@/lib/types';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, Upload } from 'lucide-react';
+import { toast } from '@/lib/toast';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+function useAuthImageUrl(url?: string | null) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!url) {
+      setSrc(null);
+      return;
+    }
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    const token = localStorage.getItem('token')?.trim();
+    void fetch(`${API_URL}${url}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        blobUrl = URL.createObjectURL(blob);
+        setSrc(blobUrl);
+      })
+      .catch(() => setSrc(null));
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [url]);
+  return src;
+}
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -40,6 +71,8 @@ export default function GuardViewPage() {
   const { user } = useAuth();
   const [guard, setGuard] = useState<Guard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const photoSrc = useAuthImageUrl(guard?.photo_url);
 
   const load = useCallback(async () => {
     if (!id || Number.isNaN(id)) return;
@@ -56,6 +89,20 @@ export default function GuardViewPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const onPhoto = async (file: File | null) => {
+    if (!file || !guard) return;
+    setUploading(true);
+    try {
+      const updated = await api.guards.uploadPhoto(guard.id, file);
+      setGuard(updated);
+      toast.success('Photo uploaded');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (!id || Number.isNaN(id)) return null;
 
@@ -86,9 +133,34 @@ export default function GuardViewPage() {
             <div className="text-center py-12 text-muted-foreground">Staff member not found.</div>
           ) : (
             <>
-              <div>
-                <h1 className="text-3xl font-bold">{guard.full_name}</h1>
-                <p className="text-muted-foreground mt-1">{guard.job_title || 'Staff member'}</p>
+              <div className="flex flex-wrap gap-6 items-start">
+                <div className="shrink-0">
+                  {photoSrc ? (
+                    <img src={photoSrc} alt="" className="size-24 rounded-full object-cover border bg-muted" />
+                  ) : (
+                    <div className="size-24 rounded-full border border-dashed flex items-center justify-center text-xs text-muted-foreground bg-muted/30">
+                      No photo
+                    </div>
+                  )}
+                  {can(user, 'guards.write') && (
+                    <label className="mt-2 inline-flex">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => void onPhoto(e.target.files?.[0] ?? null)}
+                      />
+                      <span className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-xs font-medium hover:bg-muted cursor-pointer">
+                        <Upload className="size-3.5 mr-1.5" />
+                        {uploading ? 'Uploading…' : 'Upload photo'}
+                      </span>
+                    </label>
+                  )}
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold">{guard.full_name}</h1>
+                  <p className="text-muted-foreground mt-1">{guard.job_title || 'Staff member'}</p>
+                </div>
               </div>
 
               <Section title="Personal details">

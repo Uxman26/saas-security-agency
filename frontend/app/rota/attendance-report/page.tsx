@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, calcHours, fmtShortDate, initials } from '@/lib/rota-shifts-utils';
+import { attKey, attStatusLabel, calcHours, fmtShortDate, initials, normalizeAttStatus } from '@/lib/rota-shifts-utils';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -53,18 +53,20 @@ export default function RotaAttendanceReportPage() {
       {
         emp: (typeof state.employees)[0];
         totalH: number;
-        present: number;
+        onTime: number;
         absent: number;
         late: number;
+        noShow: number;
         lateMinutes: number;
       }
     >();
     for (const e of state.employees) {
       if (empId !== '__all' && e.id !== empId) continue;
       let totalH = 0;
-      let present = 0;
+      let onTime = 0;
       let absent = 0;
       let late = 0;
+      let noShow = 0;
       let lateMinutes = 0;
       const f = from || state.days[0];
       const t = to || state.days[state.days.length - 1];
@@ -75,15 +77,16 @@ export default function RotaAttendanceReportPage() {
         list.forEach((sh, idx) => {
           totalH += calcHours(sh);
           const a = state.attendance[attKey(e.id, dk, idx)];
-          if (a?.status === 'present') present++;
-          else if (a?.status === 'absent') absent++;
-          else if (a?.status === 'late') {
+          const status = normalizeAttStatus(a?.status);
+          if (status === 'on_time') onTime++;
+          else if (status === 'absent') absent++;
+          else if (status === 'late') {
             late++;
-            lateMinutes += a.lateMinutes || 0;
-          }
+            lateMinutes += a?.lateMinutes || 0;
+          } else if (status === 'no_show') noShow++;
         });
       }
-      m.set(e.id, { emp: e, totalH, present, absent, late, lateMinutes });
+      m.set(e.id, { emp: e, totalH, onTime, absent, late, noShow, lateMinutes });
     }
     return m;
   }, [state, from, to, empId]);
@@ -99,6 +102,7 @@ export default function RotaAttendanceReportPage() {
         const list = state.shifts[e.id]?.[dk] || [];
         list.forEach((sh, idx) => {
           const a = state.attendance[attKey(e.id, dk, idx)];
+          const status = normalizeAttStatus(a?.status) ?? '';
           lines.push(
             [
               dk,
@@ -109,7 +113,7 @@ export default function RotaAttendanceReportPage() {
               sh.end,
               sh.site,
               calcHours(sh).toFixed(2),
-              a?.status || '',
+              status,
               a?.lateMinutes ?? '',
               (a?.note || '').replace(/,/g, ';'),
             ].join(',')
@@ -167,16 +171,13 @@ export default function RotaAttendanceReportPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="button" variant="secondary">
-                  Apply
-                </Button>
                 <Button type="button" variant="outline" onClick={exportCsv}>
                   Export CSV
                 </Button>
               </CardContent>
             </Card>
 
-            {[...byEmp.values()].map(({ emp, totalH, present, absent, late, lateMinutes }) => (
+            {[...byEmp.values()].map(({ emp, totalH, onTime, absent, late, noShow, lateMinutes }) => (
               <Card key={emp.id}>
                 <CardHeader className="flex flex-row items-start gap-4 pb-2">
                   <span
@@ -190,9 +191,10 @@ export default function RotaAttendanceReportPage() {
                     <p className="text-sm text-muted-foreground">{emp.role}</p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       <span className="text-xs rounded-full bg-muted px-2 py-0.5 tabular-nums">{totalH.toFixed(1)}h total</span>
-                      <span className="text-xs rounded-full bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 px-2 py-0.5">{present} present</span>
+                      <span className="text-xs rounded-full bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 px-2 py-0.5">{onTime} on time</span>
                       <span className="text-xs rounded-full bg-red-500/15 text-red-800 dark:text-red-300 px-2 py-0.5">{absent} absent</span>
                       <span className="text-xs rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-200 px-2 py-0.5">{late} late</span>
+                      <span className="text-xs rounded-full bg-red-600/15 text-red-900 dark:text-red-200 px-2 py-0.5">{noShow} no show</span>
                       {lateMinutes > 0 ? (
                         <span className="text-xs rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-200 px-2 py-0.5 tabular-nums">
                           {lateMinutes} late mins
@@ -218,6 +220,7 @@ export default function RotaAttendanceReportPage() {
                         .filter((r) => r.empId === emp.id)
                         .map((r) => {
                           const a = state.attendance[attKey(r.empId, r.dk, r.idx)];
+                          const status = normalizeAttStatus(a?.status);
                           return (
                             <tr key={`${r.dk}-${r.idx}`} className="border-b border-border/50">
                               <td className="py-2 pr-3 whitespace-nowrap">{fmtShortDate(r.dk)}</td>
@@ -230,13 +233,14 @@ export default function RotaAttendanceReportPage() {
                                 <span
                                   className={cn(
                                     'text-xs rounded-full px-2 py-0.5',
-                                    a?.status === 'present' && 'bg-emerald-500/15',
-                                    a?.status === 'absent' && 'bg-red-500/15',
-                                    a?.status === 'late' && 'bg-amber-500/15',
-                                    !a && 'bg-muted'
+                                    status === 'on_time' && 'bg-emerald-500/15',
+                                    status === 'absent' && 'bg-orange-500/15',
+                                    status === 'late' && 'bg-amber-500/15',
+                                    status === 'no_show' && 'bg-red-500/15',
+                                    !status && 'bg-muted'
                                   )}
                                 >
-                                  {a?.status || '—'}
+                                  {status ? attStatusLabel(status) : '—'}
                                 </span>
                               </td>
                               <td className="py-2 tabular-nums">{a?.lateMinutes ?? '—'}</td>

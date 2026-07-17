@@ -8,10 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Attendance, Guard, Assignment } from '@/lib/types';
+import { attStatusLabel, normalizeAttStatus } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -24,7 +26,6 @@ const STATUS_STYLES: Record<string, string> = {
   late: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
   absent: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
   no_show: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  early_leave: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
 };
 
 const STATUS_OPTIONS = [
@@ -32,8 +33,11 @@ const STATUS_OPTIONS = [
   { value: 'late', label: 'Late' },
   { value: 'absent', label: 'Absent' },
   { value: 'no_show', label: 'No show' },
-  { value: 'early_leave', label: 'Early leave' },
 ];
+
+function displayStatus(status?: string | null) {
+  return attStatusLabel(normalizeAttStatus(status));
+}
 
 function toLocalInput(iso?: string | null) {
   if (!iso) return '';
@@ -58,6 +62,7 @@ export default function AttendancePage() {
   const [bookOpen, setBookOpen] = useState(false);
   const [editRec, setEditRec] = useState<Attendance | null>(null);
   const [editStatus, setEditStatus] = useState('on_time');
+  const [editNote, setEditNote] = useState('');
   const [editBookedAt, setEditBookedAt] = useState('');
   const [editBookedOffAt, setEditBookedOffAt] = useState('');
   const [search, setSearch] = useState('');
@@ -66,7 +71,6 @@ export default function AttendancePage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
-  // Book On/Off form
   const [bookAssignmentId, setBookAssignmentId] = useState('');
   const [bookGuardId, setBookGuardId] = useState('');
   const [bookOff, setBookOff] = useState(false);
@@ -109,17 +113,23 @@ export default function AttendancePage() {
 
   const openEdit = (a: Attendance) => {
     setEditRec(a);
-    setEditStatus(a.status || 'on_time');
+    setEditStatus(normalizeAttStatus(a.status) ?? 'on_time');
+    setEditNote(a.note ?? '');
     setEditBookedAt(toLocalInput(a.booked_at));
     setEditBookedOffAt(toLocalInput(a.booked_off_at));
   };
 
   const handleEditSave = async () => {
     if (!editRec) return;
+    if (!editNote.trim()) {
+      toast.error('Note is required');
+      return;
+    }
     setSubmitting(true);
     try {
       await api.attendance.update(editRec.id, {
         status: editStatus,
+        note: editNote.trim(),
         booked_at: fromLocalInput(editBookedAt),
         booked_off_at: fromLocalInput(editBookedOffAt),
       });
@@ -146,7 +156,7 @@ export default function AttendancePage() {
   };
 
   const baseRows = useMemo(
-    () => (tab === 'late' ? attendance.filter((a) => a.status === 'late') : attendance),
+    () => (tab === 'late' ? attendance.filter((a) => normalizeAttStatus(a.status) === 'late') : attendance),
     [attendance, tab]
   );
 
@@ -156,8 +166,11 @@ export default function AttendancePage() {
         guardMap.get(a.guard_id),
         String(a.assignment_id),
         a.status,
+        a.note,
+        a.updated_by_name,
         a.booked_at,
         a.booked_off_at,
+        a.updated_at,
         a.created_at,
       ]
         .filter(Boolean)
@@ -177,6 +190,12 @@ export default function AttendancePage() {
           return a.booked_off_at || '';
         case 'status':
           return a.status || '';
+        case 'note':
+          return a.note || '';
+        case 'updated_by':
+          return a.updated_by_name || '';
+        case 'updated_at':
+          return a.updated_at || '';
         case 'recorded':
           return a.created_at || '';
         default:
@@ -204,8 +223,8 @@ export default function AttendancePage() {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
 
-  const lateCount = useMemo(() => attendance.filter(a => a.status === 'late').length, [attendance]);
-  const onTimeCount = useMemo(() => attendance.filter(a => a.status === 'on_time').length, [attendance]);
+  const lateCount = useMemo(() => attendance.filter((a) => normalizeAttStatus(a.status) === 'late').length, [attendance]);
+  const onTimeCount = useMemo(() => attendance.filter((a) => normalizeAttStatus(a.status) === 'on_time').length, [attendance]);
 
   return (
     <ProtectedRoute>
@@ -375,11 +394,13 @@ export default function AttendancePage() {
                     <TableHeader>
                       <TableRow>
                         <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Assignment ID" colKey="assignment" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Note" colKey="note" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Updated by" colKey="updated_by" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Updated at" colKey="updated_at" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Recorded" colKey="recorded" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Assignment" colKey="assignment" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -389,17 +410,10 @@ export default function AttendancePage() {
                           <TableCell className="font-medium whitespace-nowrap">
                             {guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`}
                           </TableCell>
-                          <TableCell className="text-muted-foreground">#{a.assignment_id}</TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
-                          </TableCell>
                           <TableCell>
                             {a.status ? (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[a.status] ?? 'bg-secondary text-secondary-foreground'}`}>
-                                {a.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[normalizeAttStatus(a.status) ?? ''] ?? 'bg-secondary text-secondary-foreground'}`}>
+                                {displayStatus(a.status)}
                               </span>
                             ) : (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
@@ -407,9 +421,22 @@ export default function AttendancePage() {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}
+                          <TableCell className="text-sm max-w-[200px] truncate" title={a.note ?? undefined}>
+                            {a.note?.trim() ? a.note : '—'}
                           </TableCell>
+                          <TableCell className="text-sm whitespace-nowrap">
+                            {a.updated_by_name?.trim() ? a.updated_by_name : '—'}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {a.updated_at ? new Date(a.updated_at).toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">
+                            {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">#{a.assignment_id}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit">
@@ -474,6 +501,10 @@ export default function AttendancePage() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Note <span className="text-destructive">*</span></Label>
+                    <Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Reason or details for this status" rows={3} />
                   </div>
                   <div className="space-y-1">
                     <Label>Booked on</Label>

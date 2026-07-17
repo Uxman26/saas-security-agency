@@ -56,6 +56,7 @@ export default function CompanySettingsPage() {
   const [postcode, setPostcode] = useState('');
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [vatNumber, setVatNumber] = useState('');
+  const [website, setWebsite] = useState('');
   const [accountName, setAccountName] = useState('');
   const [bankName, setBankName] = useState('');
   const [sortCode, setSortCode] = useState('');
@@ -78,6 +79,7 @@ export default function CompanySettingsPage() {
         setPostcode(p.postcode ?? '');
         setRegistrationNumber(p.registration_number ?? '');
         setVatNumber(p.vat_number ?? '');
+        setWebsite(p.website ?? '');
         setAccountName(p.account_name ?? '');
         setBankName(p.bank_name ?? '');
         setSortCode(p.sort_code ?? '');
@@ -103,6 +105,7 @@ export default function CompanySettingsPage() {
         postcode: postcode.trim() || undefined,
         registration_number: registrationNumber.trim() || undefined,
         vat_number: vatNumber.trim() || undefined,
+        website: website.trim() || undefined,
         account_name: accountName.trim() || undefined,
         bank_name: bankName.trim() || undefined,
         sort_code: sortCode.trim() || undefined,
@@ -211,6 +214,10 @@ export default function CompanySettingsPage() {
                 <div className="space-y-1">
                   <Label>Phone</Label>
                   <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 20 0000 0000" />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label>Website</Label>
+                  <Input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://www.company.com" />
                 </div>
                 <div className="space-y-1">
                   <Label>Postcode</Label>

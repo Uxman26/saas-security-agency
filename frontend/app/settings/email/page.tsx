@@ -43,8 +43,11 @@ export default function EmailSettingsPage() {
   const [testBody, setTestBody] = useState('<p>This is a test email from ControlOps.</p>');
   const [saving, setSaving] = useState(false);
   const [smtpServer, setSmtpServer] = useState('');
+  const [smtpPort, setSmtpPort] = useState('');
   const [smtpUsername, setSmtpUsername] = useState('');
   const [smtpPassword, setSmtpPassword] = useState('');
+  const [smtpFrom, setSmtpFrom] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('');
   const [savingSmtp, setSavingSmtp] = useState(false);
 
   const load = () => {
@@ -52,7 +55,10 @@ export default function EmailSettingsPage() {
       setConfig(c);
       setTemplates(c.templates || {});
       setSmtpServer(c.mail_server || '');
+      setSmtpPort(c.mail_port != null ? String(c.mail_port) : '');
       setSmtpUsername(c.mail_username || '');
+      setSmtpFrom(c.mail_from || '');
+      setSmtpFromName(c.mail_from_name || '');
       setSmtpPassword('');
     }).catch(() => {});
     api.email.logs().then(setLogs).catch(() => {});
@@ -69,16 +75,27 @@ export default function EmailSettingsPage() {
       toast.warning('SMTP password is required');
       return;
     }
+    const portNum = smtpPort.trim() ? parseInt(smtpPort.trim(), 10) : null;
+    if (smtpPort.trim() && (portNum == null || Number.isNaN(portNum) || portNum <= 0)) {
+      toast.warning('Enter a valid port number');
+      return;
+    }
     setSavingSmtp(true);
     try {
       const updated = await api.email.updateConfig({
         mail_server: smtpServer.trim(),
+        mail_port: portNum,
         mail_username: smtpUsername.trim(),
+        mail_from: smtpFrom.trim() || undefined,
+        mail_from_name: smtpFromName.trim() || undefined,
         ...(smtpPassword.trim() ? { mail_password: smtpPassword } : {}),
       });
       setConfig(updated);
       setSmtpServer(updated.mail_server || '');
+      setSmtpPort(updated.mail_port != null ? String(updated.mail_port) : '');
       setSmtpUsername(updated.mail_username || '');
+      setSmtpFrom(updated.mail_from || '');
+      setSmtpFromName(updated.mail_from_name || '');
       setSmtpPassword('');
       toast.success('SMTP settings saved');
     } catch (e) {
@@ -165,21 +182,32 @@ export default function EmailSettingsPage() {
                 <CardHeader>
                   <CardTitle>SMTP configuration</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    Enter your outgoing mail server details. Defaults show environment values until you save your own settings.
+                    Enter your own outgoing mail server (SMTP) for sending invoices and other emails from ControlOps. All fields are editable — use your provider&apos;s host, port, and credentials.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4 max-w-xl">
                   <div className="space-y-1.5">
-                    <Label htmlFor="smtp_server">SMTP Host / Server</Label>
+                    <Label htmlFor="smtp_server">Host</Label>
                     <Input
                       id="smtp_server"
                       value={smtpServer}
                       onChange={(e) => setSmtpServer(e.target.value)}
-                      placeholder="mail.example.com"
+                      placeholder="smtp.example.com"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="smtp_username">SMTP Username</Label>
+                    <Label htmlFor="smtp_port">Port</Label>
+                    <Input
+                      id="smtp_port"
+                      type="number"
+                      min={1}
+                      value={smtpPort}
+                      onChange={(e) => setSmtpPort(e.target.value)}
+                      placeholder="587"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp_username">Username</Label>
                     <Input
                       id="smtp_username"
                       value={smtpUsername}
@@ -189,13 +217,32 @@ export default function EmailSettingsPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="smtp_password">SMTP Password</Label>
+                    <Label htmlFor="smtp_password">Password</Label>
                     <PasswordInput
                       id="smtp_password"
                       value={smtpPassword}
                       onChange={(e) => setSmtpPassword(e.target.value)}
                       placeholder={config?.password_set ? '•••••••• (leave blank to keep current)' : 'Enter password'}
                       autoComplete="new-password"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp_from">From email</Label>
+                    <Input
+                      id="smtp_from"
+                      type="email"
+                      value={smtpFrom}
+                      onChange={(e) => setSmtpFrom(e.target.value)}
+                      placeholder="invoices@yourcompany.com"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp_from_name">From name</Label>
+                    <Input
+                      id="smtp_from_name"
+                      value={smtpFromName}
+                      onChange={(e) => setSmtpFromName(e.target.value)}
+                      placeholder="Your Company Ltd"
                     />
                   </div>
                   <Button

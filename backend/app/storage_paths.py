@@ -5,12 +5,14 @@ UPLOADS_DIR = os.path.join(_BACKEND_ROOT, "uploads")
 LOGOS_DIR = os.path.join(UPLOADS_DIR, "logos")
 EXPENSES_DIR = os.path.join(UPLOADS_DIR, "expenses")
 DOCUMENTS_DIR = os.path.join(UPLOADS_DIR, "documents")
+GUARD_PHOTOS_DIR = os.path.join(UPLOADS_DIR, "guard_photos")
 
 
 def ensure_upload_dirs() -> None:
     os.makedirs(LOGOS_DIR, exist_ok=True)
     os.makedirs(EXPENSES_DIR, exist_ok=True)
     os.makedirs(DOCUMENTS_DIR, exist_ok=True)
+    os.makedirs(GUARD_PHOTOS_DIR, exist_ok=True)
 
 
 def resolve_storage_path(path: str | None) -> str | None:

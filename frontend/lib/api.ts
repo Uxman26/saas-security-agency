@@ -158,6 +158,23 @@ export const api = {
       return request<Guard>(`/guards/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
     },
     delete: (id: number): Promise<void> => request<void>(`/guards/${id}`, { method: 'DELETE' }),
+    uploadPhoto: async (id: number, file: File): Promise<Guard> => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch(`${API_URL}/guards/${id}/photo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        const d = error.detail;
+        const msg = typeof d === 'string' ? d : 'Upload failed';
+        throw new ApiError(response.status, msg);
+      }
+      return response.json();
+    },
   },
   sites: {
     list: (): Promise<Site[]> => request<Site[]>('/sites'),
@@ -514,8 +531,11 @@ export const api = {
     updateConfig: (data: {
       templates?: Record<string, string>;
       mail_server?: string;
+      mail_port?: number | null;
       mail_username?: string;
       mail_password?: string;
+      mail_from?: string;
+      mail_from_name?: string;
     }) => request<import('./types').EmailConfig>('/email/config', { method: 'PATCH', body: JSON.stringify(data) }),
     send: (data: { to_email: string; subject: string; body: string }): Promise<import('./types').EmailLog> => {
       const sanitized = {
@@ -993,9 +1013,19 @@ export const api = {
       request<Attendance>('/attendance/book', { method: 'POST', body: JSON.stringify({ assignment_id, book_off: true }) }),
     update: (
       id: number,
-      data: { booked_at?: string | null; booked_off_at?: string | null; status?: string }
+      data: { booked_at?: string | null; booked_off_at?: string | null; status?: string; note?: string | null }
     ): Promise<Attendance> =>
       request<Attendance>(`/attendance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    upsertByShift: (data: {
+      guard_id: number;
+      date: string;
+      shift_start: string;
+      site_name: string;
+      status: string;
+      note?: string;
+      hours?: string | number;
+    }): Promise<Attendance> =>
+      request<Attendance>('/attendance/by-shift', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/attendance/${id}`, { method: 'DELETE' }),
     late: (params?: { start_date?: string; end_date?: string }): Promise<Attendance[]> => {
       const q = new URLSearchParams();

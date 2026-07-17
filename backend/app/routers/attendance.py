@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import date
 from app.database import get_db
 from app.models import User
-from app.schemas import AttendanceCreate, AttendanceUpdate, AttendanceResponse, BookingOnOff
+from app.schemas import AttendanceCreate, AttendanceUpdate, AttendanceResponse, BookingOnOff, AttendanceByShiftRequest
 from app.rbac import require_perm, PERM_ATTEND_READ, PERM_ATTEND_WRITE
 from app.services import attendance_service
 
@@ -25,6 +25,14 @@ def create_attendance(data: AttendanceCreate, db: Session = Depends(get_db), cur
 @router.post("/book", response_model=AttendanceResponse)
 def book_on_off(data: BookingOnOff, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ATTEND_WRITE))):
     return attendance_service.book_on_off(db, data, current_user.id)
+
+@router.post("/by-shift", response_model=AttendanceResponse)
+def upsert_by_shift(
+    data: AttendanceByShiftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ATTEND_WRITE)),
+):
+    return attendance_service.upsert_attendance_by_shift(db, current_user.id, data)
 
 @router.get("/assignment/{assignment_id}", response_model=List[AttendanceResponse])
 def list_attendance(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ATTEND_READ))):

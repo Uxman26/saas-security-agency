@@ -116,6 +116,7 @@ export function RotaCalendarClient() {
     dayTotalHours,
     totalRotaPayable,
     empTotalPayable,
+    resolveShiftRate,
     addShift,
     deleteShift,
     updateShift,
@@ -394,15 +395,17 @@ export function RotaCalendarClient() {
 
   const saveAtt = async () => {
     if (!attCtx || !attRec) return;
-    if (!attRec.note?.trim()) {
-      toast.error('Note is required');
+    const status = normalizeAttStatus(attRec.status) || attRec.status;
+    const noteTrimmed = (attRec.note || '').trim();
+    if (status !== 'on_time' && !noteTrimmed) {
+      toast.error('Note is required for Late, Absent, and No show');
       return;
     }
     const sh = state.shifts[attCtx.empId]?.[attCtx.dk]?.[attCtx.idx];
     if (!sh) return;
     const k = attKey(attCtx.empId, attCtx.dk, attCtx.idx);
     const lateM = Math.max(0, parseInt(String(attRec.lateMinutes ?? ''), 10) || 0);
-    let rec: AttendanceRec = { ...attRec, empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx, note: attRec.note.trim() };
+    let rec: AttendanceRec = { ...attRec, status: status as AttendanceRec['status'], empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx, note: noteTrimmed };
     let nextShift = sh;
 
     if (rec.status === 'late' && lateM > 0) {
@@ -421,7 +424,7 @@ export function RotaCalendarClient() {
             shift_start: scheduled,
             site_name: sh.site,
             late_minutes: lateM,
-            note: attRec.note.trim(),
+            note: attRec.note.trim() || undefined,
           });
           rec.synced = true;
         } catch (e) {
@@ -453,7 +456,7 @@ export function RotaCalendarClient() {
           shift_start: scheduled,
           site_name: sh.site,
           status: rec.status,
-          note: rec.note,
+          note: rec.note || undefined,
           hours: rec.hours,
         });
         rec.synced = true;
@@ -463,6 +466,15 @@ export function RotaCalendarClient() {
         return;
       }
       setAttSaving(false);
+    }
+
+    // Persist resolved rate onto shift so Payable stays correct after save
+    if ((rec.status === 'on_time' || rec.status === 'late') && !(Number(nextShift.shiftRate) > 0)) {
+      const rate = resolveShiftRate(nextShift, attCtx.empId);
+      if (rate > 0) {
+        nextShift = { ...nextShift, shiftRate: rate };
+        updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift);
+      }
     }
 
     setAttendance(k, rec);
@@ -903,21 +915,32 @@ export function RotaCalendarClient() {
 
       {state.rotaView === 'table' && (
         <div className="overflow-x-auto rounded-lg border bg-card" ref={menuRef}>
-          <table className="w-full text-sm border-collapse min-w-[720px]">
+          <table
+            className="table-fixed w-full text-sm border-collapse"
+            style={{ minWidth: `${208 + state.days.length * 128 + 200}px` }}
+          >
+            <colgroup>
+              <col style={{ width: 208 }} />
+              {state.days.map((dk) => (
+                <col key={dk} style={{ width: 128 }} />
+              ))}
+              <col style={{ width: 104 }} />
+              <col style={{ width: 96 }} />
+            </colgroup>
             <thead>
-              <tr className="bg-muted/50 border-b">
-                <th className="sticky left-0 z-20 bg-muted/50 p-2 text-left align-top w-52 min-w-[13rem] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+              <tr className="bg-muted border-b">
+                <th className="sticky left-0 z-20 bg-muted p-2 text-left align-top shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]">
                   <Input placeholder="Name, job title…" value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="h-8 text-xs mb-2" />
                   <button type="button" className="text-xs text-pink-600 font-medium hover:underline" onClick={openReorder}>
                     ⇅ Employee custom order
                   </button>
                 </th>
                 {state.days.map((dk) => (
-                  <th key={dk} className="p-1.5 text-center text-xs font-medium border-l min-w-[100px] whitespace-nowrap">
+                  <th key={dk} className="p-1.5 text-center text-xs font-medium border-l whitespace-nowrap overflow-hidden text-ellipsis">
                     {fmtShortDate(dk)}
                   </th>
                 ))}
-                <th className="p-2 text-center text-xs bg-sky-100/80 dark:bg-sky-950/40 border-l min-w-[100px] align-top">
+                <th className="p-2 text-center text-xs bg-sky-100 dark:bg-sky-950 border-l align-top">
                   <div className="font-semibold">Total hours</div>
                   <label className="mt-1.5 flex items-center justify-center gap-1.5 font-normal text-[10px] text-muted-foreground cursor-pointer">
                     <input
@@ -929,7 +952,7 @@ export function RotaCalendarClient() {
                     Incl. breaks?
                   </label>
                 </th>
-                <th className="p-2 text-center text-xs bg-emerald-100/80 dark:bg-emerald-950/40 border-l min-w-[90px] align-top">
+                <th className="p-2 text-center text-xs bg-emerald-100 dark:bg-emerald-950 border-l align-top">
                   <div className="font-semibold">Payable</div>
                 </th>
               </tr>
@@ -937,18 +960,18 @@ export function RotaCalendarClient() {
             <tbody>
               {rows.map((emp) => (
                 <tr key={emp.id} className="border-b border-border/60">
-                  <td className="sticky left-0 z-10 bg-card p-2 align-top border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] relative">
+                  <td className="sticky left-0 z-10 bg-card p-2 align-top border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] relative overflow-hidden">
                     <button
                       type="button"
-                      className="flex gap-2 text-left w-full rounded-md hover:bg-muted/60 p-1 -m-1"
+                      className="flex gap-2 text-left w-full min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
                       onClick={(e) => toggleEmpMenu(e, emp.id)}
                     >
-                      <EmployeeAvatar emp={emp} className="size-9 text-[11px]" />
-                      <span className="min-w-0">
+                      <EmployeeAvatar emp={emp} className="size-9 text-[11px] shrink-0" />
+                      <span className="min-w-0 flex-1 overflow-hidden">
                         <span className="font-medium block truncate">{emp.name}</span>
                         <span className="text-[11px] text-muted-foreground truncate block">{emp.role}</span>
                       </span>
-                      <MoreHorizontal className="size-4 shrink-0 ml-auto text-muted-foreground" />
+                      <MoreHorizontal className="size-4 shrink-0 text-muted-foreground" />
                     </button>
                   </td>
                   {state.days.map((dk) => {
@@ -959,71 +982,86 @@ export function RotaCalendarClient() {
                     });
                     if (statusFilter !== 'all' && list.length > 0 && !showCell) {
                       return (
-                        <td key={dk} className="relative align-top p-1 border-l border-border/40 min-h-[56px] bg-muted/5 opacity-40" />
+                        <td key={dk} className="relative align-top p-1 border-l border-border/40 bg-muted/5 opacity-40 overflow-hidden" />
                       );
                     }
                     return (
                       <td
                         key={dk}
-                        className="relative align-top p-1 border-l border-border/40 min-h-[56px] bg-muted/5"
+                        className="relative align-top p-1 border-l border-border/40 bg-muted/5 overflow-hidden"
                         onDragOver={onDayDragOver}
                         onDrop={(e) => onDropDay(e, dk, emp.id)}
                       >
-                        <div className="flex flex-col gap-1 min-h-[48px]">
+                        <div className="flex flex-col gap-1.5 min-h-[52px] min-w-0">
                           {list.map((sh, idx) => {
                             const att = state.attendance[attKey(emp.id, dk, idx)];
                             const attStatus = att ? normalizeAttStatus(att.status) : null;
                             if (statusFilter !== 'all' && attStatus !== statusFilter) return null;
-                            const barColor = attStatus ? attStatusBarColor(attStatus) : sh.color;
+                            const statusColor = attStatus ? attStatusBarColor(attStatus) : null;
                             const menuOpen = shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx;
+                            const siteLine = sh.site || (!sh.notes ? 'One-off' : '');
+                            const noteLine = sh.notes?.trim() || '';
+                            const tip = [sh.start && sh.end ? `${sh.start} – ${sh.end}` : '', sh.site, noteLine, attStatus ? attStatusLabel(attStatus) : '']
+                              .filter(Boolean)
+                              .join('\n');
                             return (
-                            <div key={idx}>
+                            <div key={idx} className="min-w-0">
                               <button
                                 type="button"
                                 draggable
                                 onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
                                 onDragEnd={onDragEnd}
                                 className={cn(
-                                  'w-full rounded border bg-background px-1.5 py-1 text-left text-[11px] leading-tight shadow-sm hover:bg-muted/50 cursor-grab active:cursor-grabbing',
+                                  'w-full max-w-full min-w-0 overflow-hidden rounded border bg-background px-1.5 py-1.5 text-left text-[11px] leading-snug shadow-sm hover:bg-muted/50 cursor-grab active:cursor-grabbing',
                                   menuOpen && 'ring-2 ring-pink-500/60'
                                 )}
                                 onClick={(e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
-                                title="Drag to another day to move this shift"
+                                title={tip || 'Drag to another day to move this shift'}
                               >
-                                <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: barColor }} />
-                                <div className="font-medium tabular-nums">
+                                <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
+                                <div className="font-medium tabular-nums truncate">
                                   {sh.start} – {sh.end}
                                 </div>
-                                <div className="text-muted-foreground truncate text-[10px]">{sh.site || sh.notes || 'One-off'}</div>
-                                {attStatus ? (
-                                  <div className="text-[10px] font-medium truncate" style={{ color: barColor }}>
-                                    {attStatusLabel(attStatus)}
-                                  </div>
+                                {siteLine ? (
+                                  <div className="text-muted-foreground truncate text-[10px]">{siteLine}</div>
                                 ) : null}
-                                {sh.site && sh.notes ? <div className="text-muted-foreground truncate text-[10px] italic">{sh.notes}</div> : null}
+                                {noteLine ? (
+                                  <div className="text-muted-foreground text-[10px] italic line-clamp-2 break-all">{noteLine}</div>
+                                ) : null}
+                                {attStatus ? (
+                                  <span
+                                    className="mt-1 inline-flex max-w-full truncate rounded px-1 py-px text-[9px] font-semibold"
+                                    style={{
+                                      color: statusColor || undefined,
+                                      backgroundColor: statusColor ? `${statusColor}22` : undefined,
+                                    }}
+                                  >
+                                    {attStatusLabel(attStatus)}
+                                  </span>
+                                ) : null}
                               </button>
                             </div>
                             );
                           })}
-                          <Button type="button" variant="ghost" size="sm" className="h-7 text-muted-foreground" onClick={() => openAddShift(dk, emp.id)}>
+                          <Button type="button" variant="ghost" size="sm" className="h-7 w-full shrink-0 text-muted-foreground" onClick={() => openAddShift(dk, emp.id)}>
                             <Plus className="size-3.5" />
                           </Button>
                         </div>
                       </td>
                     );
                   })}
-                  <td className="text-center align-top p-2 bg-sky-100/50 dark:bg-sky-950/30 border-l text-xs tabular-nums font-medium">
+                  <td className="text-center align-top p-2 bg-sky-100 dark:bg-sky-950 border-l text-xs tabular-nums font-medium">
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
-                  <td className="text-center align-top p-2 bg-emerald-100/50 dark:bg-emerald-950/30 border-l text-xs tabular-nums font-medium">
+                  <td className="text-center align-top p-2 bg-emerald-100 dark:bg-emerald-950 border-l text-xs tabular-nums font-medium">
                     {formatMoney(empTotalPayable(emp.id))}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="bg-sky-100/70 dark:bg-sky-950/40 border-t font-medium text-xs">
-                <td className="sticky left-0 z-10 bg-sky-100/70 dark:bg-sky-950/40 p-2">Daily total</td>
+              <tr className="bg-sky-100 dark:bg-sky-950 border-t font-medium text-xs">
+                <td className="sticky left-0 z-10 bg-sky-100 dark:bg-sky-950 p-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Daily total</td>
                 {state.days.map((dk) => (
                   <td key={dk} className="text-center p-2 border-l tabular-nums">
                     {formatHoursDecimal(dayTotalHours(dk))}
@@ -1081,17 +1119,17 @@ export function RotaCalendarClient() {
                       draggable
                       onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
                       onDragEnd={onDragEnd}
-                      className="rounded-lg border text-left px-3 py-2 text-xs hover:bg-muted/50 flex gap-2 items-start cursor-grab active:cursor-grabbing"
+                      className="rounded-lg border text-left px-3 py-2 text-xs hover:bg-muted/50 flex gap-2 items-start cursor-grab active:cursor-grabbing min-w-0 overflow-hidden w-full max-w-full"
                       onClick={() => openEditShift(emp.id, dk, idx)}
                       title="Drag to another day to move"
                     >
                       <span className="size-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: emp.avatarColor }}>
                         {initials(emp.name)}
                       </span>
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1 overflow-hidden">
                         <span className="font-medium block truncate">{emp.name}</span>
-                        <span className="text-muted-foreground tabular-nums">{sh.start} · {sh.site || sh.notes || 'One-off'}</span>
-                        {sh.site && sh.notes ? <span className="text-muted-foreground block truncate italic">{sh.notes}</span> : null}
+                        <span className="text-muted-foreground tabular-nums block truncate">{sh.start} · {sh.site || (!sh.notes ? 'One-off' : '')}</span>
+                        {sh.notes ? <span className="text-muted-foreground block line-clamp-2 break-all italic">{sh.notes}</span> : null}
                       </span>
                       <span className="ml-auto h-3 w-1 rounded-full shrink-0 mt-1" style={{ backgroundColor: sh.color }} />
                     </button>
@@ -1451,13 +1489,14 @@ export function RotaCalendarClient() {
               {viewShiftsList.map(({ dk, idx, sh }) => (
                 <li key={`${dk}-${idx}`} className="flex items-center gap-2 rounded-lg border p-3 text-sm">
                   <span className="h-8 w-1 rounded-full shrink-0" style={{ backgroundColor: sh.color }} />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="font-medium">{fmtShortDate(dk)}</div>
-                    <div className="text-xs text-muted-foreground tabular-nums">
-                      {sh.start} – {sh.end} · {sh.site || sh.notes || 'One-off'}
+                    <div className="text-xs text-muted-foreground tabular-nums truncate">
+                      {sh.start} – {sh.end}
+                      {sh.site ? ` · ${sh.site}` : !sh.notes ? ' · One-off' : ''}
                       {sh.label ? ` · ${sh.label}` : ''}
                     </div>
-                    {sh.site && sh.notes ? <div className="text-[11px] text-muted-foreground italic truncate">{sh.notes}</div> : null}
+                    {sh.notes ? <div className="text-[11px] text-muted-foreground italic line-clamp-2 break-all">{sh.notes}</div> : null}
                     <div className="text-[11px] text-muted-foreground">
                       Break {(sh.breakH || 0) > 0 || (sh.breakM || 0) > 0 ? `${sh.breakH}h ${sh.breakM}m` : 'none'} ·{' '}
                       {formatHoursDecimal(calcHours(sh, state.inclBreaks))}
@@ -1667,12 +1706,14 @@ export function RotaCalendarClient() {
                 <Input value={attRec.hours} onChange={(e) => setAttRec({ ...attRec, hours: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <LabelMini>Note (required)</LabelMini>
+                <LabelMini>
+                  Note{attRec.status !== 'on_time' ? ' (required)' : ' (optional)'}
+                </LabelMini>
                 <textarea
                   className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={attRec.note}
                   onChange={(e) => setAttRec({ ...attRec, note: e.target.value })}
-                  required
+                  placeholder={attRec.status === 'on_time' ? 'Optional note' : 'Required for Late / Absent / No show'}
                 />
               </div>
             </div>

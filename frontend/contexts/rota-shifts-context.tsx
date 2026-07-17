@@ -13,7 +13,7 @@ import {
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
-import { buildDayRange, attKey, calcHours, shiftPayable } from '@/lib/rota-shifts-utils';
+import { buildDayRange, attKey, countedHoursForAttendance, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
@@ -137,6 +137,7 @@ type Ctx = {
   dayTotalHours: (dk: string) => number;
   totalRotaPayable: number;
   empTotalPayable: (empId: string) => number;
+  resolveShiftRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => number;
 };
 
 const RotaCtx = createContext<Ctx | null>(null);
@@ -147,6 +148,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const [pool, setPool] = useState<EmployeeRec[]>([]);
   const [poolLoading, setPoolLoading] = useState(true);
   const [siteNames, setSiteNames] = useState<string[]>([]);
+  const [siteRateByName, setSiteRateByName] = useState<Record<string, number>>({});
+  const [guardRateById, setGuardRateById] = useState<Record<string, number>>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -155,14 +158,49 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setPoolLoading(true);
       try {
         const [guards, sites] = await Promise.all([api.guards.list(), api.sites.list()]);
-        if (!cancelled) {
-          setPool(guardsToEmployees(guards));
-          setSiteNames(sites.map((s) => s.name));
+        if (cancelled) return;
+        setPool(guardsToEmployees(guards));
+        setSiteNames(sites.map((s) => s.name));
+        const rates: Record<string, number> = {};
+        for (const s of sites) {
+          if (s.default_hourly_rate != null && !Number.isNaN(Number(s.default_hourly_rate))) {
+            rates[s.name.trim().toLowerCase()] = Number(s.default_hourly_rate);
+          }
         }
+        setSiteRateByName(rates);
+
+        // Enrich staff with latest guard hourly rates (used for Payable fallback)
+        const rateRows = await Promise.all(
+          guards.map(async (g) => {
+            try {
+              const gr = await api.rates.guardRates(g.id);
+              if (!gr?.length) return null;
+              const sorted = [...gr].sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)));
+              const rate = Number(sorted[0]?.hourly_rate);
+              if (!rate || Number.isNaN(rate) || rate <= 0) return null;
+              return [String(g.id), rate] as const;
+            } catch {
+              return null;
+            }
+          })
+        );
+        if (cancelled) return;
+        const gRates: Record<string, number> = {};
+        for (const row of rateRows) {
+          if (row) gRates[row[0]] = row[1];
+        }
+        setGuardRateById(gRates);
+        setPool((prev) => prev.map((e) => (gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e)));
+        setState((prev) => ({
+          ...prev,
+          employees: prev.employees.map((e) => (gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e)),
+        }));
       } catch {
         if (!cancelled) {
           setPool([]);
           setSiteNames([]);
+          setSiteRateByName({});
+          setGuardRateById({});
         }
       } finally {
         if (!cancelled) setPoolLoading(false);
@@ -172,6 +210,23 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  const resolveShiftRate = useCallback(
+    (sh: { site?: string; shiftRate?: number | null }, empId?: string) => {
+      if (sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate)) && Number(sh.shiftRate) > 0) {
+        return Number(sh.shiftRate);
+      }
+      const key = (sh.site || '').trim().toLowerCase();
+      if (key && siteRateByName[key] != null && siteRateByName[key] > 0) {
+        return siteRateByName[key];
+      }
+      if (empId && guardRateById[empId] != null && guardRateById[empId] > 0) {
+        return guardRateById[empId];
+      }
+      return 0;
+    },
+    [siteRateByName, guardRateById]
+  );
 
   const initRota = useCallback(
     (p: InitPayload) => {
@@ -613,11 +668,14 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     for (const empId of Object.keys(state.shifts)) {
       const byD = state.shifts[empId];
       for (const dk of Object.keys(byD)) {
-        for (const sh of byD[dk] || []) t += calcHours(sh, state.inclBreaks);
+        (byD[dk] || []).forEach((sh, idx) => {
+          const att = state.attendance[attKey(empId, dk, idx)];
+          t += countedHoursForAttendance(sh, att, state.inclBreaks);
+        });
       }
     }
     return t;
-  }, [state.shifts, state.inclBreaks]);
+  }, [state.shifts, state.attendance, state.inclBreaks]);
 
   const empTotalHours = useCallback(
     (empId: string) => {
@@ -625,22 +683,28 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       if (!byD) return 0;
       let t = 0;
       for (const dk of Object.keys(byD)) {
-        for (const sh of byD[dk] || []) t += calcHours(sh, state.inclBreaks);
+        (byD[dk] || []).forEach((sh, idx) => {
+          const att = state.attendance[attKey(empId, dk, idx)];
+          t += countedHoursForAttendance(sh, att, state.inclBreaks);
+        });
       }
       return t;
     },
-    [state.shifts, state.inclBreaks]
+    [state.shifts, state.attendance, state.inclBreaks]
   );
 
   const dayTotalHours = useCallback(
     (dk: string) => {
       let t = 0;
       for (const empId of Object.keys(state.shifts)) {
-        for (const sh of state.shifts[empId]?.[dk] || []) t += calcHours(sh, state.inclBreaks);
+        (state.shifts[empId]?.[dk] || []).forEach((sh, idx) => {
+          const att = state.attendance[attKey(empId, dk, idx)];
+          t += countedHoursForAttendance(sh, att, state.inclBreaks);
+        });
       }
       return t;
     },
-    [state.shifts, state.inclBreaks]
+    [state.shifts, state.attendance, state.inclBreaks]
   );
 
   const totalRotaPayable = useMemo(() => {
@@ -648,11 +712,16 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     for (const empId of Object.keys(state.shifts)) {
       const byD = state.shifts[empId];
       for (const dk of Object.keys(byD)) {
-        for (const sh of byD[dk] || []) t += shiftPayable(sh, state.inclBreaks);
+        (byD[dk] || []).forEach((sh, idx) => {
+          const att = state.attendance[attKey(empId, dk, idx)];
+          const hrs = payableHoursForAttendance(sh, att, state.inclBreaks);
+          if (hrs <= 0) return;
+          t += hrs * resolveShiftRate(sh, empId);
+        });
       }
     }
     return t;
-  }, [state.shifts, state.inclBreaks]);
+  }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate]);
 
   const empTotalPayable = useCallback(
     (empId: string) => {
@@ -660,11 +729,16 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       if (!byD) return 0;
       let t = 0;
       for (const dk of Object.keys(byD)) {
-        for (const sh of byD[dk] || []) t += shiftPayable(sh, state.inclBreaks);
+        (byD[dk] || []).forEach((sh, idx) => {
+          const att = state.attendance[attKey(empId, dk, idx)];
+          const hrs = payableHoursForAttendance(sh, att, state.inclBreaks);
+          if (hrs <= 0) return;
+          t += hrs * resolveShiftRate(sh, empId);
+        });
       }
       return t;
     },
-    [state.shifts, state.inclBreaks]
+    [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate]
   );
 
   const value = useMemo(
@@ -709,6 +783,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       dayTotalHours,
       totalRotaPayable,
       empTotalPayable,
+      resolveShiftRate,
     }),
     [
       state,
@@ -750,6 +825,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       dayTotalHours,
       totalRotaPayable,
       empTotalPayable,
+      resolveShiftRate,
     ]
   );
 

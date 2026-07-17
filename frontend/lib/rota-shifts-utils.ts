@@ -108,8 +108,40 @@ export function attStatusBarColor(s: AttStatus | string | null | undefined): str
   }
 }
 
-export function shiftPayable(sh: ShiftRec, inclBreaks = false): number {
-  return calcHours(sh, inclBreaks) * (Number(sh.shiftRate) || 0);
+export function shiftPayable(sh: ShiftRec, inclBreaks = false, rateOverride?: number | null): number {
+  const rate = rateOverride != null && !Number.isNaN(Number(rateOverride))
+    ? Number(rateOverride)
+    : Number(sh.shiftRate) || 0;
+  if (rate <= 0) return 0;
+  return calcHours(sh, inclBreaks) * rate;
+}
+
+/** Hours that count toward totals: unmarked = scheduled; On time/Late = worked; Absent/No show = 0. */
+export function countedHoursForAttendance(
+  sh: ShiftRec,
+  att: { status?: string; hours?: string } | null | undefined,
+  inclBreaks = false
+): number {
+  const status = normalizeAttStatus(att?.status ?? null);
+  if (status === 'absent' || status === 'no_show') return 0;
+  if (status === 'on_time' || status === 'late') {
+    const fromAtt = att?.hours != null && String(att.hours).trim() !== '' ? parseFloat(String(att.hours)) : NaN;
+    if (!Number.isNaN(fromAtt) && fromAtt >= 0) return fromAtt;
+  }
+  return calcHours(sh, inclBreaks);
+}
+
+/** Payable hours for a shift: only On time / Late count; Absent / No show / unmarked = 0. */
+export function payableHoursForAttendance(
+  sh: ShiftRec,
+  att: { status?: string; hours?: string } | null | undefined,
+  inclBreaks = false
+): number {
+  const status = normalizeAttStatus(att?.status ?? null);
+  if (status !== 'on_time' && status !== 'late') return 0;
+  const fromAtt = att?.hours != null && String(att.hours).trim() !== '' ? parseFloat(String(att.hours)) : NaN;
+  if (!Number.isNaN(fromAtt) && fromAtt >= 0) return fromAtt;
+  return calcHours(sh, inclBreaks);
 }
 
 export function formatMoney(n: number): string {

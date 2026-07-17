@@ -121,15 +121,15 @@ export default function AttendancePage() {
 
   const handleEditSave = async () => {
     if (!editRec) return;
-    if (!editNote.trim()) {
-      toast.error('Note is required');
+    if (editStatus !== 'on_time' && !editNote.trim()) {
+      toast.error('Note is required for Late, Absent, and No show');
       return;
     }
     setSubmitting(true);
     try {
       await api.attendance.update(editRec.id, {
         status: editStatus,
-        note: editNote.trim(),
+        note: editNote.trim() || null,
         booked_at: fromLocalInput(editBookedAt),
         booked_off_at: fromLocalInput(editBookedOffAt),
       });
@@ -503,8 +503,15 @@ export default function AttendancePage() {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Note <span className="text-destructive">*</span></Label>
-                    <Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} placeholder="Reason or details for this status" rows={3} />
+                    <Label>
+                      Note{editStatus !== 'on_time' ? <span className="text-destructive"> *</span> : ' (optional)'}
+                    </Label>
+                    <Textarea
+                      value={editNote}
+                      onChange={(e) => setEditNote(e.target.value)}
+                      placeholder={editStatus === 'on_time' ? 'Optional note' : 'Required for Late / Absent / No show'}
+                      rows={3}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label>Booked on</Label>

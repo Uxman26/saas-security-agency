@@ -60,6 +60,13 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
       ...s,
       site: siteName,
       color: rec?.color || DEFAULT_SITE_COLOR,
+      // Prefill rate from site default when empty so Payable can calculate
+      shiftRate:
+        s.shiftRate != null && !Number.isNaN(Number(s.shiftRate))
+          ? s.shiftRate
+          : rec?.default_hourly_rate != null
+            ? Number(rec.default_hourly_rate)
+            : s.shiftRate,
     }));
   };
 

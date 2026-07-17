@@ -925,7 +925,7 @@ class AttendanceByShiftRequest(BaseModel):
     shift_start: str
     site_name: str = ""
     status: str
-    note: str
+    note: Optional[str] = ""
     hours: Optional[float] = None
 
     @field_validator("hours", mode="before")
@@ -940,11 +940,8 @@ class AttendanceByShiftRequest(BaseModel):
 
     @field_validator("note")
     @classmethod
-    def note_required(cls, v: str) -> str:
-        s = (v or "").strip()
-        if not s:
-            raise ValueError("Note is required")
-        return s
+    def note_strip(cls, v: Optional[str]) -> str:
+        return (v or "").strip()
 
 
 class BookingOnOff(BaseModel):

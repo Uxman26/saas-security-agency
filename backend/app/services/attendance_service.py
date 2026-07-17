@@ -179,8 +179,9 @@ def update_attendance(db: Session, attendance_id: int, data: AttendanceUpdate, u
         payload["note"] = str(payload["note"]).strip() or None
     if "status" in payload:
         note = payload.get("note", att.note)
-        if not (note or "").strip():
-            raise HTTPException(status_code=400, detail="Note is required when updating attendance status")
+        status = payload.get("status", att.status)
+        if status != "on_time" and not (note or "").strip():
+            raise HTTPException(status_code=400, detail="Note is required for Late, Absent, and No show")
     for k, v in payload.items():
         setattr(att, k, v)
     att.updated_by_user_id = user_id
@@ -197,10 +198,10 @@ def update_attendance(db: Session, attendance_id: int, data: AttendanceUpdate, u
 
 def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShiftRequest) -> Attendance:
     company = get_company_by_user_id(db, user_id)
-    note = (data.note or "").strip()
-    if not note:
-        raise HTTPException(status_code=400, detail="Note is required")
     status = _normalize_status(data.status)
+    note = (data.note or "").strip()
+    if status != "on_time" and not note:
+        raise HTTPException(status_code=400, detail="Note is required for Late, Absent, and No show")
     a = find_assignment(db, company.id, data.guard_id, data.date, data.shift_start, data.site_name or "")
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found for this shift (publish the rota first)")
@@ -214,10 +215,9 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
         db.add(att)
         db.flush()
     att.status = status
-    att.note = note
+    att.note = note or None
     att.updated_by_user_id = user_id
     if status in ("absent", "no_show"):
-        # keep booked times empty for no-shows/absent
         pass
     elif status == "late" and not att.booked_at:
         att.booked_at = datetime.utcnow()

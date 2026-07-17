@@ -31,6 +31,8 @@ export type EmployeeRec = {
   avatarColor: string;
   phone?: string;
   photoUrl?: string | null;
+  /** Latest guard hourly rate (fallback for Payable when shift has no rate) */
+  hourlyRate?: number | null;
 };
 
 export type AttStatus = 'on_time' | 'late' | 'absent' | 'no_show';

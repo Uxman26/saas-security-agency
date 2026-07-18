@@ -170,20 +170,26 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         setSiteRateByName(rates);
 
         // Enrich staff with latest guard hourly rates (used for Payable fallback)
-        const rateRows = await Promise.all(
-          guards.map(async (g) => {
-            try {
-              const gr = await api.rates.guardRates(g.id);
-              if (!gr?.length) return null;
-              const sorted = [...gr].sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)));
-              const rate = Number(sorted[0]?.hourly_rate);
-              if (!rate || Number.isNaN(rate) || rate <= 0) return null;
-              return [String(g.id), rate] as const;
-            } catch {
-              return null;
-            }
-          })
-        );
+        const rateRows: Array<readonly [string, number] | null> = [];
+        // Keep request concurrency below the API's database capacity.
+        for (let i = 0; i < guards.length && !cancelled; i += 3) {
+          const batch = guards.slice(i, i + 3);
+          const rows = await Promise.all(
+            batch.map(async (g) => {
+              try {
+                const gr = await api.rates.guardRates(g.id);
+                if (!gr?.length) return null;
+                const sorted = [...gr].sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)));
+                const rate = Number(sorted[0]?.hourly_rate);
+                if (!rate || Number.isNaN(rate) || rate <= 0) return null;
+                return [String(g.id), rate] as const;
+              } catch {
+                return null;
+              }
+            })
+          );
+          rateRows.push(...rows);
+        }
         if (cancelled) return;
         const gRates: Record<string, number> = {};
         for (const row of rateRows) {

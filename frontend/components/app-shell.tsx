@@ -65,10 +65,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [user]);
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <AppSidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="z-40 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
           <div className="flex min-w-0 items-center gap-2 md:hidden">
             <Button
               type="button"
@@ -148,7 +148,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         )}
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">{children}</main>
       </div>
     </div>
   );

@@ -129,11 +129,11 @@ export function AppSidebar() {
 
   if (isSuperAdmin) {
     return (
-      <aside className="hidden md:flex w-56 shrink-0 flex-col border-r bg-slate-900 text-slate-100">
-        <div className="p-4 border-b border-slate-700/80">
+      <aside className="hidden h-dvh min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
+        <div className="shrink-0 p-4 border-b border-slate-700/80">
           <CompanyBrand />
         </div>
-        <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+        <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-2">
           <div>
             <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{ts('sectionAdmin')}</p>
             <div className="space-y-0.5 mt-1">
@@ -170,11 +170,11 @@ export function AppSidebar() {
   }
 
   return (
-    <aside className="hidden md:flex w-56 shrink-0 flex-col border-r bg-slate-900 text-slate-100">
-      <div className="p-4 border-b border-slate-700/80">
+    <aside className="hidden h-dvh min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
+      <div className="shrink-0 p-4 border-b border-slate-700/80">
         <CompanyBrand />
       </div>
-      <nav className="flex-1 p-2 space-y-4 overflow-y-auto">
+      <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-2">
         {grouped.map((section) => (
           <div key={section.titleKey}>
             <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">

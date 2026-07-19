@@ -85,8 +85,8 @@ export default function PayrollPage() {
     api.rotaPlans.list().then(setRotas).catch(() => {});
   }, []);
 
-  const applyModeSplit = useCallback((mode: string, hours: number, rate: number, allowances: number, currentBank?: string, currentCash?: string) => {
-    const base = hours * rate + allowances;
+  const applyModeSplit = useCallback((mode: string, hours: number, rate: number, allowances: number, currentBank?: string, currentCash?: string, rotaAmount?: number) => {
+    const base = rotaAmount ?? (hours * rate + allowances);
     if (mode === '100_cash') {
       return { bank: '0', cash: base.toFixed(2) };
     }
@@ -122,10 +122,18 @@ export default function PayrollPage() {
         });
       }
       if (!created.length) {
-        toast.error('No payroll records created — check assignments exist for this period');
+        toast.error('No payroll records created — check the published rota has On time or Late shifts in this period');
       } else {
         for (const rec of created) {
-          const split = applyModeSplit(calcPaymentMode, rec.total_hours, rec.hourly_rate, rec.allowance_total);
+          const split = applyModeSplit(
+            calcPaymentMode,
+            rec.total_hours,
+            rec.hourly_rate,
+            rec.allowance_total,
+            undefined,
+            undefined,
+            (rec.bank_amount ?? 0) + (rec.cash_amount ?? 0)
+          );
           await api.payroll.update(rec.id, {
             payment_mode: calcPaymentMode,
             bank_amount: parseFloat(split.bank),
@@ -381,7 +389,7 @@ export default function PayrollPage() {
                     </DialogHeader>
                     <div className="space-y-4 py-2">
                       <p className="text-sm text-muted-foreground">
-                        Calculate payroll from published assignments and shift hours for a given period.
+                        Import payable hours and amounts directly from published rota attendance for a given period.
                       </p>
                       <div className="space-y-1">
                         <Label>Generate by</Label>

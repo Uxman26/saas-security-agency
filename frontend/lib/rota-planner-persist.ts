@@ -8,6 +8,15 @@ export type PlannerPayload = {
   employees: RotaJsState['employees'];
   shifts: RotaJsState['shifts'];
   attendance: RotaJsState['attendance'];
+  payrollLines?: Array<{
+    guardId: string;
+    date: string;
+    site: string;
+    hours: number;
+    rate: number;
+    amount: number;
+    status: string;
+  }>;
   budget: number;
   inclBreaks: boolean;
 };
@@ -53,12 +62,46 @@ function normalizeShifts(shifts: PlannerPayload['shifts']): PlannerPayload['shif
 }
 
 export function serializePlannerState(state: RotaJsState): string {
+  const payrollLines: NonNullable<PlannerPayload['payrollLines']> = [];
+  for (const [guardId, byDate] of Object.entries(state.shifts)) {
+    for (const [date, shifts] of Object.entries(byDate || {})) {
+      (shifts || []).forEach((shift, index) => {
+        const attendance = state.attendance[`${guardId}:${date}:${index}`];
+        const status = normalizeAttStatus(attendance?.status ?? null);
+        if (status !== 'on_time' && status !== 'late') return;
+        const attendanceHours =
+          attendance?.hours != null && String(attendance.hours).trim() !== ''
+            ? Number(attendance.hours)
+            : Number.NaN;
+        let hours = attendanceHours;
+        if (!Number.isFinite(hours) || hours < 0) {
+          const [startH, startM] = shift.start.split(':').map(Number);
+          const [endH, endM] = shift.end.split(':').map(Number);
+          let minutes = endH * 60 + endM - (startH * 60 + startM);
+          if (minutes < 0) minutes += 24 * 60;
+          if (!state.inclBreaks) minutes -= (shift.breakH || 0) * 60 + (shift.breakM || 0);
+          hours = Math.max(0, minutes / 60);
+        }
+        const rate = Number(shift.shiftRate) || 0;
+        payrollLines.push({
+          guardId,
+          date,
+          site: shift.site || '',
+          hours,
+          rate,
+          amount: hours * rate,
+          status,
+        });
+      });
+    }
+  }
   const payload: PlannerPayload = {
     rotaView: state.rotaView,
     days: state.days,
     employees: state.employees,
     shifts: state.shifts,
     attendance: state.attendance,
+    payrollLines,
     budget: state.budget,
     inclBreaks: state.inclBreaks,
   };

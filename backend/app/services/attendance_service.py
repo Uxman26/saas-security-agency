@@ -1,3 +1,4 @@
+import json
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
@@ -232,6 +233,74 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
         .first()
     )
     return _att_out(att)
+
+
+def sync_published_plan_attendance(db: Session, user_id: int, plan) -> None:
+    if plan.status != "published" or not plan.planner_data:
+        return
+    try:
+        payload = json.loads(plan.planner_data)
+    except (json.JSONDecodeError, TypeError):
+        return
+    company = get_company_by_user_id(db, user_id)
+    shifts = payload.get("shifts") or {}
+    changed = False
+    for key, record in (payload.get("attendance") or {}).items():
+        if not isinstance(record, dict):
+            continue
+        parts = str(key).split(":", 2)
+        if len(parts) != 3:
+            continue
+        guard_raw, day_raw, index_raw = parts
+        try:
+            guard_id = int(guard_raw)
+            shift_date = date.fromisoformat(day_raw)
+            shift_index = int(index_raw)
+            shift = shifts[guard_raw][day_raw][shift_index]
+        except (TypeError, ValueError, KeyError, IndexError):
+            continue
+        if not isinstance(shift, dict):
+            continue
+        status_raw = str(record.get("status") or "").strip()
+        if not status_raw:
+            continue
+        try:
+            status = _normalize_status(status_raw)
+        except HTTPException:
+            continue
+        note = (record.get("note") or "").strip()
+        if status != "on_time" and not note:
+            continue
+        scheduled_start = shift.get("scheduledStart") or shift.get("start") or ""
+        assignment = find_assignment(
+            db,
+            company.id,
+            guard_id,
+            shift_date,
+            scheduled_start,
+            shift.get("site") or "",
+        )
+        if not assignment:
+            continue
+        attendance = (
+            db.query(Attendance)
+            .filter(
+                Attendance.assignment_id == assignment.id,
+                Attendance.guard_id == guard_id,
+            )
+            .first()
+        )
+        if not attendance:
+            attendance = Attendance(assignment_id=assignment.id, guard_id=guard_id)
+            db.add(attendance)
+        attendance.status = status
+        attendance.note = note or None
+        attendance.updated_by_user_id = user_id
+        if status in {"on_time", "late"} and not attendance.booked_at:
+            attendance.booked_at = datetime.utcnow()
+        changed = True
+    if changed:
+        db.commit()
 
 
 def delete_attendance(db: Session, attendance_id: int, user_id: int) -> None:

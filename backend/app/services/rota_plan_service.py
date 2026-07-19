@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Guard, RotaPlan, Site
+from app.models import Assignment, Attendance, Guard, RotaPlan, Site
 from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.rota_service import normalize_shift_type
@@ -138,6 +138,20 @@ def _parse_shift_rate(raw) -> Optional[float]:
         return v if v >= 0 else None
     except (TypeError, ValueError):
         return None
+
+
+def _delete_plan_assignments(db: Session, plan_id: int) -> None:
+    assignment_ids = [
+        row[0]
+        for row in db.query(Assignment.id).filter(Assignment.rota_plan_id == plan_id).all()
+    ]
+    if assignment_ids:
+        db.query(Attendance).filter(Attendance.assignment_id.in_(assignment_ids)).delete(
+            synchronize_session=False
+        )
+    db.query(Assignment).filter(Assignment.rota_plan_id == plan_id).delete(
+        synchronize_session=False
+    )
 
 
 def _normalize_shift(block: dict, idx: int = 0) -> dict:
@@ -484,9 +498,10 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
         plan.status = payload["status"]
     db.commit()
     if "planner_data" in payload:
-        from app.services import shift_adjustment_service
+        from app.services import attendance_service, shift_adjustment_service
         shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
         shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
+        attendance_service.sync_published_plan_attendance(db, user_id, plan)
     db.refresh(plan)
     return get_rota_plan(db, user_id, plan.id)
 
@@ -496,7 +511,7 @@ def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Rota not found")
-    db.query(Assignment).filter(Assignment.rota_plan_id == plan.id).delete()
+    _delete_plan_assignments(db, plan.id)
     db.delete(plan)
     db.commit()
 
@@ -517,7 +532,7 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
     sites = db.query(Site).filter(Site.company_id == company.id).all()
     site_by_name = {s.name.strip().lower(): s.id for s in sites}
 
-    db.query(Assignment).filter(Assignment.rota_plan_id == plan.id).delete()
+    _delete_plan_assignments(db, plan.id)
 
     created = 0
     skipped = 0
@@ -581,6 +596,19 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                     shift_adjustment_service.apply_planner_lateness(
                         db, user_id, company.id, assignment, sched, late_m, att_rec.get("note")
                     )
+                raw_status = str(att_rec.get("status") or "").strip().lower().replace(" ", "_")
+                status = "on_time" if raw_status == "present" else raw_status
+                if status in {"on_time", "late", "absent", "no_show", "early_leave"}:
+                    marked = Attendance(
+                        assignment_id=assignment.id,
+                        guard_id=guard_id,
+                        status=status,
+                        note=(att_rec.get("note") or "").strip() or None,
+                        updated_by_user_id=user_id,
+                    )
+                    if status in {"on_time", "late"}:
+                        marked.booked_at = datetime.now(timezone.utc)
+                    db.add(marked)
                 created += 1
 
     plan.status = "published"

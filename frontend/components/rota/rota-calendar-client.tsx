@@ -1826,8 +1826,19 @@ export function RotaCalendarClient() {
             type="button"
             className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
             onClick={() => {
-              deleteShift(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx);
+              const { empId, dk, idx } = shiftMenu;
               closeShiftMenu();
+              toast.confirm(
+                'Delete this shift?',
+                () => {
+                  deleteShift(empId, dk, idx);
+                  toast.success('Shift deleted');
+                },
+                {
+                  label: 'Delete',
+                  description: 'This action cannot be undone.',
+                }
+              );
             }}
           >
             Delete

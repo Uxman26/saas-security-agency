@@ -47,7 +47,7 @@ def find_assignment(
     shift_start: str,
     site_name: Optional[str] = None,
 ) -> Optional[Assignment]:
-    q = (
+    base = (
         db.query(Assignment)
         .join(Guard)
         .join(Site)
@@ -55,12 +55,23 @@ def find_assignment(
             Guard.company_id == company_id,
             Assignment.guard_id == guard_id,
             Assignment.date == shift_date,
-            Assignment.shift_start == shift_start,
         )
     )
     if site_name:
-        q = q.filter(Site.name == site_name)
-    return q.order_by(Assignment.id.desc()).first()
+        base = base.filter(Site.name == site_name)
+
+    exact = base.filter(Assignment.shift_start == shift_start).order_by(Assignment.id.desc()).first()
+    if exact:
+        return exact
+
+    # Late shifts store the actual start on Assignment and retain the original
+    # scheduled start in ShiftLateLog. Accept either value for later updates.
+    return (
+        base.join(ShiftLateLog, ShiftLateLog.assignment_id == Assignment.id)
+        .filter(ShiftLateLog.scheduled_start == shift_start)
+        .order_by(Assignment.id.desc())
+        .first()
+    )
 
 
 def record_overtime(

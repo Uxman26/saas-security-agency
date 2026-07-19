@@ -1,46 +1,37 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Bell, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import type { ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
 import { formatDateUK } from '@/lib/date-format';
-import { toast } from '@/lib/toast';
-import { can } from '@/lib/permissions';
-
-type LeadNotif = { id: number; kind: string; title: string; body?: string; entity_id?: number; read_at?: string | null };
+import { useCentralAlerts } from '@/components/lead-notifications-provider';
 
 export function AlertsPanel() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
-  const [contracts, setContracts] = useState<ContractExpiryAlert[]>([]);
-  const [leadAlerts, setLeadAlerts] = useState<LeadNotif[]>([]);
-
-  useEffect(() => {
-    if (user?.role === 'super_admin') return;
-    const tasks: Promise<void>[] = [
-      api.reports.compliance(30).then(setAlerts).catch((e: Error) => { toast.error(e.message || 'Could not load alerts'); }),
-      api.reports.contractsExpiring(30).then(setContracts).catch(() => {}),
-    ];
-    if (user?.enabled_modules?.leads !== false && can(user, 'leads.read')) {
-      tasks.push(
-        api.leads.notifications(true).then((rows) => setLeadAlerts(rows as LeadNotif[])).catch(() => {})
-      );
-    }
-    void Promise.all(tasks);
-  }, [user?.role, user?.enabled_modules, user]);
+  const {
+    complianceAlerts: alerts,
+    contractAlerts: contracts,
+    leadAlerts,
+    refreshAlerts,
+    markLeadRead,
+  } = useCentralAlerts();
 
   if (user?.role === 'super_admin') return null;
 
   const count = alerts.length + contracts.length + leadAlerts.length;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) void refreshAlerts();
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon" className="relative transition-colors hover:bg-primary/10 hover:text-primary" title="Alerts & messages">
           <Bell className="size-4" />
@@ -69,8 +60,7 @@ export function AlertsPanel() {
                         type="button"
                         className="font-medium hover:underline text-left"
                         onClick={() => {
-                          void api.leads.readNotification(a.id);
-                          setLeadAlerts((prev) => prev.filter((x) => x.id !== a.id));
+                          void markLeadRead(a.id);
                           setOpen(false);
                           window.location.href = a.entity_id ? `/leads/${a.entity_id}` : '/leads';
                         }}

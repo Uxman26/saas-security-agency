@@ -58,6 +58,11 @@ def update_company_user(db: Session, company_id: int, user_id: int, data: Compan
     if data.password:
         user.password_hash = get_password_hash(data.password)
     if data.role_id is not None:
+        if user.role_row and user.role_row.slug == "admin" and data.role_id != user.role_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin role cannot be changed",
+            )
         role = db.query(Role).filter(Role.id == data.role_id, Role.company_id == company_id).first()
         if not role:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")

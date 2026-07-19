@@ -23,18 +23,27 @@ def prune_legacy_roles(db: Session, company_id: int) -> None:
         admin = get_role_by_slug(db, company_id, "admin")
     if not admin:
         return
-    legacy = db.query(Role).filter(Role.company_id == company_id, Role.slug != "admin").all()
-    for role in legacy:
-        db.query(User).filter(User.role_id == role.id).update(
-            {User.role_id: admin.id, User.role: "admin"},
-            synchronize_session=False,
+    legacy = (
+        db.query(Role)
+        .filter(
+            Role.company_id == company_id,
+            Role.is_system.is_(True),
+            Role.slug != "admin",
         )
-        db.delete(role)
+        .all()
+    )
+    for role in legacy:
+        assigned = db.query(User.id).filter(User.role_id == role.id).first()
+        if assigned:
+            # Preserve existing users' access without keeping another fixed role.
+            role.is_system = False
+        else:
+            db.delete(role)
     db.flush()
 
 
 def ensure_roles_for_company(db: Session, company_id: int) -> None:
-    if db.query(Role).filter(Role.company_id == company_id).first():
+    if get_role_by_slug(db, company_id, "admin"):
         return
     for name, slug, is_sys, pj in _seed_rows():
         db.add(
@@ -61,18 +70,21 @@ def get_role_by_slug(db: Session, company_id: int, slug: str) -> Role | None:
 
 def backfill_user_roles(db: Session) -> None:
     ensure_roles_for_all_companies(db)
-    for co in db.query(Company.id).all():
-        prune_legacy_roles(db, co[0])
     for u in db.query(User).filter(User.company_id.isnot(None), User.role_id.is_(None)).all():
         slug = (u.role or "company_admin").lower().strip()
         if slug == "company_admin":
             slug = "admin"
         elif slug == "super_admin":
             continue
-        r = get_role_by_slug(db, u.company_id, "admin")
+        r = get_role_by_slug(db, u.company_id, slug)
+        if not r:
+            r = get_role_by_slug(db, u.company_id, "admin")
         if r:
             u.role_id = r.id
             u.role = r.slug
+    db.flush()
+    for co in db.query(Company.id).all():
+        prune_legacy_roles(db, co[0])
     db.commit()
 
 

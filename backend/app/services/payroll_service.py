@@ -1,3 +1,4 @@
+import json
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
@@ -5,45 +6,99 @@ from datetime import date
 from app.models import Payroll, Guard, Site, RotaPlan
 from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
 from app.services.company_service import get_company_by_user_id
-from app.services.rate_service import resolve_assignment_pay_rate
-from app.models import Assignment, Allowance
-from app.services.rota_service import shift_hours
 
 VALID_PAYMENT_MODES = {"100_bank", "100_cash", "split"}
 
-def _calculate_for_assignments(
+def _number(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _hours_from_shift(shift: dict, include_breaks: bool) -> float:
+    def mins(raw: str) -> int:
+        try:
+            hour, minute = str(raw or "00:00").split(":")[:2]
+            return int(hour) * 60 + int(minute)
+        except (TypeError, ValueError):
+            return 0
+
+    duration = mins(shift.get("end")) - mins(shift.get("start"))
+    if duration < 0:
+        duration += 24 * 60
+    if not include_breaks:
+        duration -= int(shift.get("breakH") or 0) * 60 + int(shift.get("breakM") or 0)
+    return max(0.0, duration / 60)
+
+
+def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
+    try:
+        payload = json.loads(plan.planner_data or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+    stored = payload.get("payrollLines")
+    if isinstance(stored, list):
+        return [line for line in stored if isinstance(line, dict)]
+
+    # Compatibility for rotas saved before payroll snapshots were introduced.
+    lines: list[dict] = []
+    attendance = payload.get("attendance") or {}
+    include_breaks = bool(payload.get("inclBreaks", False))
+    for guard_id, by_date in (payload.get("shifts") or {}).items():
+        for day, shifts in (by_date or {}).items():
+            for index, shift in enumerate(shifts or []):
+                if not isinstance(shift, dict):
+                    continue
+                record = attendance.get(f"{guard_id}:{day}:{index}") or {}
+                status = str(record.get("status") or "").strip().lower().replace(" ", "_")
+                if status == "present":
+                    status = "on_time"
+                if status not in {"on_time", "late"}:
+                    continue
+                raw_hours = record.get("hours")
+                hours = _number(raw_hours, -1)
+                if hours < 0:
+                    hours = _hours_from_shift(shift, include_breaks)
+                rate = _number(shift.get("shiftRate"))
+                lines.append(
+                    {
+                        "guardId": str(guard_id),
+                        "date": str(day),
+                        "site": shift.get("site") or "",
+                        "hours": hours,
+                        "rate": rate,
+                        "amount": hours * rate,
+                        "status": status,
+                    }
+                )
+    return lines
+
+
+def _create_from_rota_lines(
     db: Session,
     company_id: int,
     guard_id: int,
-    assignments: list[Assignment],
+    lines: list[dict],
+    period_start: date,
+    period_end: date,
 ) -> Payroll:
-    total_hours = 0.0
-    rate_sum = 0.0
-    for a in assignments:
-        hrs = shift_hours(a)
-        total_hours += hrs
-        r = resolve_assignment_pay_rate(db, a, company_id)
-        rate_sum += r * hrs
-    allowances = db.query(Allowance).filter(Allowance.company_id == company_id, Allowance.in_payroll == True).all()
-    # Do not dump every company allowance onto each employee — base pay is hours × rates only.
-    # Allowances can be added manually when editing a payroll record.
-    allowance_total = 0.0
-    _ = allowances  # kept for future per-guard allowance rules
+    total_hours = sum(max(0.0, _number(line.get("hours"))) for line in lines)
+    total_amount = sum(max(0.0, _number(line.get("amount"))) for line in lines)
+    if total_hours <= 0:
+        raise HTTPException(status_code=400, detail="No payable rota hours found for this employee")
     mode = "100_bank"
-    bank = rate_sum + allowance_total
-    cash = 0.0
-    period_start = min(a.date for a in assignments)
-    period_end = max(a.date for a in assignments)
     pr = Payroll(
         company_id=company_id,
         guard_id=guard_id,
         period_start=period_start,
         period_end=period_end,
         total_hours=total_hours,
-        hourly_rate=rate_sum / total_hours if total_hours else 0,
-        bank_amount=bank,
-        cash_amount=cash,
-        allowance_total=allowance_total,
+        hourly_rate=total_amount / total_hours,
+        bank_amount=total_amount,
+        cash_amount=0.0,
+        allowance_total=0.0,
         payment_mode=mode,
     )
     db.add(pr)
@@ -80,21 +135,15 @@ def get_payroll(db: Session, payroll_id: int, user_id: int) -> Payroll:
     return pr
 
 def calculate_payroll(db: Session, guard_id: int, period_start: date, period_end: date, user_id: int) -> Payroll:
-    company = get_company_by_user_id(db, user_id)
-    guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
-    if not guard:
-        raise HTTPException(status_code=404, detail="Guard not found")
-    assignments = db.query(Assignment).filter(
-        Assignment.guard_id == guard_id,
-        Assignment.date >= period_start,
-        Assignment.date <= period_end
-    ).all()
-    if not assignments:
-        raise HTTPException(status_code=400, detail="No assignments found for this guard in the selected period")
-    pr = _calculate_for_assignments(db, company.id, guard_id, assignments)
-    db.commit()
-    db.refresh(pr)
-    return pr
+    rows = calculate_payroll_batch(
+        db,
+        user_id,
+        period_start,
+        period_end,
+        "employee",
+        guard_id=guard_id,
+    )
+    return rows[0]
 
 
 def calculate_payroll_batch(
@@ -109,46 +158,80 @@ def calculate_payroll_batch(
 ) -> List[Payroll]:
     company = get_company_by_user_id(db, user_id)
     mode = (mode or "employee").lower().strip()
-    q = db.query(Assignment).join(Guard).filter(
-        Guard.company_id == company.id,
-        Assignment.date >= period_start,
-        Assignment.date <= period_end,
+    if period_start > period_end:
+        raise HTTPException(status_code=400, detail="period_start cannot be after period_end")
+
+    plans_query = db.query(RotaPlan).filter(
+        RotaPlan.company_id == company.id,
+        RotaPlan.status == "published",
+        RotaPlan.end_date >= period_start,
+        RotaPlan.start_date <= period_end,
     )
+    selected_site_name: Optional[str] = None
     if mode == "employee":
         if not guard_id:
             raise HTTPException(status_code=400, detail="guard_id required for employee payroll")
         guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
         if not guard:
             raise HTTPException(status_code=404, detail="Guard not found")
-        q = q.filter(Assignment.guard_id == guard_id)
     elif mode == "site":
         if not site_id:
             raise HTTPException(status_code=400, detail="site_id required for site payroll")
         site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
-        q = q.filter(Assignment.site_id == site_id)
+        selected_site_name = (site.name or "").strip().lower()
     elif mode == "rota":
         if not rota_plan_id:
             raise HTTPException(status_code=400, detail="rota_plan_id required for rota payroll")
         plan = db.query(RotaPlan).filter(RotaPlan.id == rota_plan_id, RotaPlan.company_id == company.id).first()
         if not plan:
             raise HTTPException(status_code=404, detail="Rota not found")
-        q = q.filter(Assignment.rota_plan_id == rota_plan_id)
+        if plan.status != "published":
+            raise HTTPException(status_code=400, detail="Publish the rota before creating payroll")
+        plans_query = plans_query.filter(RotaPlan.id == rota_plan_id)
     else:
         raise HTTPException(status_code=400, detail="mode must be employee, site, or rota")
 
-    assignments = q.all()
-    if not assignments:
-        raise HTTPException(status_code=400, detail="No assignments found for the selected criteria and period")
+    by_guard: dict[int, list[dict]] = {}
+    for plan in plans_query.all():
+        for line in _planner_payroll_lines(plan):
+            try:
+                line_date = date.fromisoformat(str(line.get("date")))
+                line_guard_id = int(line.get("guardId"))
+            except (TypeError, ValueError):
+                continue
+            if line_date < period_start or line_date > period_end:
+                continue
+            if mode == "employee" and line_guard_id != guard_id:
+                continue
+            if mode == "site" and (str(line.get("site") or "").strip().lower() != selected_site_name):
+                continue
+            by_guard.setdefault(line_guard_id, []).append(line)
 
-    by_guard: dict[int, list[Assignment]] = {}
-    for a in assignments:
-        by_guard.setdefault(a.guard_id, []).append(a)
+    if not by_guard:
+        raise HTTPException(
+            status_code=400,
+            detail="No payable On time or Late shifts found in published rota data for the selected period",
+        )
 
     created: list[Payroll] = []
-    for gid, rows in by_guard.items():
-        created.append(_calculate_for_assignments(db, company.id, gid, rows))
+    for gid, lines in by_guard.items():
+        guard = db.query(Guard).filter(Guard.id == gid, Guard.company_id == company.id).first()
+        if not guard:
+            continue
+        created.append(
+            _create_from_rota_lines(
+                db,
+                company.id,
+                gid,
+                lines,
+                period_start,
+                period_end,
+            )
+        )
+    if not created:
+        raise HTTPException(status_code=400, detail="No valid employee payroll records could be created")
     db.commit()
     for pr in created:
         db.refresh(pr)

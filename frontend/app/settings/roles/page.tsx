@@ -644,9 +644,9 @@ export default function RolesSettingsPage() {
                               <Select
                                 value={u.role_id != null ? String(u.role_id) : undefined}
                                 onValueChange={(v) => patchUserRole(u.id, v)}
-                                disabled={saving}
+                                disabled={saving || u.role_slug === 'admin'}
                               >
-                                <SelectTrigger className="w-full">
+                                <SelectTrigger className="w-full" title={u.role_slug === 'admin' ? 'Admin role cannot be changed' : undefined}>
                                   <SelectValue placeholder="Role" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -817,6 +817,7 @@ export default function RolesSettingsPage() {
                       <Select
                         value={editUserForm.watch('role_id') ? String(editUserForm.watch('role_id')) : undefined}
                         onValueChange={(v) => editUserForm.setValue('role_id', parseInt(v, 10), { shouldValidate: true })}
+                        disabled={editUser?.role_slug === 'admin'}
                       >
                         <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                         <SelectContent>

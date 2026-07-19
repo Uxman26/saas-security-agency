@@ -9,7 +9,12 @@ from app.models import User
 from app.config import settings
 
 SUPER_ADMIN_ROLE = "super_admin"
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="auth/swagger-login",
+    scheme_name="EmailPassword",
+    description="Enter the account email in the Username field and the account password.",
+    auto_error=False,
+)
 
 def _password_bytes(password: str) -> bytes:
     return password.encode("utf-8")[:72]
@@ -73,7 +78,10 @@ def requires_email_verification(user: User) -> bool:
         return False
     return not bool(getattr(user, "email_verified", False))
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

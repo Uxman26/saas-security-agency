@@ -24,6 +24,16 @@ class UserLogin(BaseModel):
     password: str
     remember_me: Optional[bool] = False
 
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

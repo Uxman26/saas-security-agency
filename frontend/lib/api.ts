@@ -1053,13 +1053,13 @@ export const api = {
     guardRates: (guard_id: number): Promise<GuardRate[]> => request<GuardRate[]>(`/rates/guards/${guard_id}`),
     createGuardRate: (guard_id: number, data: { hourly_rate: number; effective_from: string }): Promise<GuardRate> =>
       request<GuardRate>(`/rates/guards/${guard_id}`, { method: 'POST', body: JSON.stringify(data) }),
-    deleteGuardRate: (guard_id: number, rate_id: number): Promise<void> =>
-      request<void>(`/rates/guards/${guard_id}/${rate_id}`, { method: 'DELETE' }),
+    deleteGuardRate: (rate_id: number): Promise<void> =>
+      request<void>(`/rates/guards/${rate_id}`, { method: 'DELETE' }),
     siteRates: (site_id: number): Promise<SiteRate[]> => request<SiteRate[]>(`/rates/sites/${site_id}`),
     createSiteRate: (site_id: number, data: { shift_type: string; hourly_rate: number }): Promise<SiteRate> =>
       request<SiteRate>(`/rates/sites/${site_id}`, { method: 'POST', body: JSON.stringify(data) }),
-    deleteSiteRate: (site_id: number, rate_id: number): Promise<void> =>
-      request<void>(`/rates/sites/${site_id}/${rate_id}`, { method: 'DELETE' }),
+    deleteSiteRate: (rate_id: number): Promise<void> =>
+      request<void>(`/rates/sites/${rate_id}`, { method: 'DELETE' }),
   },
   directoryContractors: {
     getContractors: (params?: { type?: 'main' | 'sub'; is_active?: boolean }): Promise<DirectoryContractorList[]> => {

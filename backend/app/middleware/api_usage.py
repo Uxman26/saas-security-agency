@@ -10,7 +10,7 @@ from app.models import ApiUsageLog, User
 class ApiUsageMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        if request.method == "OPTIONS" or request.url.path in ("/", "/docs", "/openapi.json"):
+        if request.method == "OPTIONS" or request.url.path == "/" or request.url.path.startswith("/swagger"):
             return response
         auth = request.headers.get("authorization") or ""
         if not auth.lower().startswith("bearer "):

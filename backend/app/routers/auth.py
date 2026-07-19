@@ -2,10 +2,24 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import FileResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Company
-from app.schemas import UserCreate, UserResponse, UserLogin, UserMeResponse, SignupResponse, SubscriptionReceiptResponse, ForgotPasswordRequest, ResetPasswordRequest, VerifyEmailRequest, ResendVerificationRequest
+from app.schemas import (
+    ForgotPasswordRequest,
+    MessageResponse,
+    ResendVerificationRequest,
+    ResetPasswordRequest,
+    SignupResponse,
+    SubscriptionReceiptResponse,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserMeResponse,
+    UserResponse,
+    VerifyEmailRequest,
+)
 from app.auth import get_current_user, SUPER_ADMIN_ROLE
 from app.services import auth_service
 from app.rbac import permissions_for_user_db
@@ -43,7 +57,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/login")
+@router.post("/login", response_model=TokenResponse)
 def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
@@ -52,25 +66,44 @@ def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db
     )
 
 
-@router.post("/forgot-password")
+@router.post("/swagger-login", response_model=TokenResponse, include_in_schema=False)
+def swagger_login(
+    request: Request,
+    credentials: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    """OAuth2 form adapter used only by Swagger UI's Authorize dialog."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    return auth_service.authenticate_user(
+        db,
+        credentials.username,
+        credentials.password,
+        ip_address=ip,
+        user_agent=ua,
+        remember_me=False,
+    )
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
 def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
     auth_service.request_password_reset(db, body.email)
     return {"message": "If an account exists for that email, a reset link has been sent."}
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", response_model=MessageResponse)
 def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     auth_service.reset_password_with_token(db, body.token, body.new_password)
     return {"message": "Password updated. You can sign in now."}
 
 
-@router.post("/verify-email")
+@router.post("/verify-email", response_model=MessageResponse)
 def verify_email(body: VerifyEmailRequest, db: Session = Depends(get_db)):
     auth_service.verify_email_with_token(db, body.token)
     return {"message": "Email verified. You can sign in now."}
 
 
-@router.post("/resend-verification")
+@router.post("/resend-verification", response_model=MessageResponse)
 def resend_verification(body: ResendVerificationRequest, db: Session = Depends(get_db)):
     auth_service.resend_verification_email(db, body.email)
     return {"message": "If an account exists and needs verification, a new link has been sent."}

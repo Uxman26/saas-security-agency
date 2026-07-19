@@ -43,14 +43,6 @@ def reports_hub(start_date: date, end_date: date, db: Session = Depends(get_db),
     return ReportsHubResponse(**reports_hub_service.reports_hub(db, current_user.id, start_date, end_date))
 
 
-@router.get("/staff/{guard_id}", response_model=StaffIndividualReportResponse)
-def staff_individual(guard_id: int, start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
-    data = staff_report_service.staff_individual_report(db, current_user.id, guard_id, start_date, end_date)
-    if not data:
-        raise HTTPException(status_code=404, detail="Staff not found")
-    return StaffIndividualReportResponse(**data)
-
-
 @router.get("/staff/shift-hours")
 def staff_shift_hours(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
     return staff_report_service.shift_hours_report(db, current_user.id, start_date, end_date)
@@ -61,6 +53,14 @@ def staff_monthly(start_date: date, end_date: date, group_by: str = "guard", db:
     if group_by not in ("guard", "site", "client"):
         group_by = "guard"
     return StaffMonthlyReportResponse(**staff_report_service.staff_monthly_report(db, current_user.id, start_date, end_date, group_by))
+
+
+@router.get("/staff/{guard_id}", response_model=StaffIndividualReportResponse)
+def staff_individual(guard_id: int, start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_REP_READ))):
+    data = staff_report_service.staff_individual_report(db, current_user.id, guard_id, start_date, end_date)
+    if not data:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    return StaffIndividualReportResponse(**data)
 
 
 @router.get("/attendance")

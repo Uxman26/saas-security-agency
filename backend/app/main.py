@@ -7,6 +7,7 @@ from app.routers import subscriptions, documents, rates, allowances, attendance,
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.database import engine, Base
 from app.config import settings
+from app.openapi import configure_openapi
 
 def _ensure_db():
     if settings.database_url.startswith("sqlite"):
@@ -21,9 +22,33 @@ def _ensure_db():
     from migrate_db import run as run_migrate
     run_migrate()
 
-_ensure_db()
+if os.getenv("CONTROL_OPS_SKIP_DB_INIT") != "1":
+    _ensure_db()
 
-app = FastAPI(title="ControlOps", version="1.0.0")
+app = FastAPI(
+    title="ControlOps API",
+    version="1.0.0",
+    description=(
+        "API for ControlOps web and mobile clients. In Swagger, select **Authorize** "
+        "and enter the user's email in the Username field plus their password. "
+        "Other clients sign in with `POST /auth/login` and send the returned Bearer JWT."
+    ),
+    docs_url="/swagger/",
+    redoc_url=None,
+    openapi_url="/swagger/openapi.json",
+    swagger_ui_parameters={
+        "docExpansion": "none",
+        "defaultModelsExpandDepth": -1,
+        "displayRequestDuration": True,
+        "filter": True,
+        "persistAuthorization": True,
+    },
+    servers=[
+        {"url": "/api", "description": "Production same-origin API proxy"},
+        {"url": "http://localhost:8000", "description": "Local development"},
+    ],
+)
+configure_openapi(app)
 app.add_middleware(ApiUsageMiddleware)
 
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]

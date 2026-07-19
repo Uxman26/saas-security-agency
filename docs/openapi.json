@@ -30181,7 +30181,7 @@
         "flows": {
           "password": {
             "scopes": {},
-            "tokenUrl": "auth/swagger-login"
+            "tokenUrl": "/api/auth/swagger-login"
           }
         }
       }

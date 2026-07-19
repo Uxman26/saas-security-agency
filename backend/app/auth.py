@@ -10,7 +10,7 @@ from app.config import settings
 
 SUPER_ADMIN_ROLE = "super_admin"
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="auth/swagger-login",
+    tokenUrl="/api/auth/swagger-login",
     scheme_name="EmailPassword",
     description="Enter the account email in the Username field and the account password.",
     auto_error=False,

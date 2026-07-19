@@ -12,7 +12,7 @@ def test_swagger_and_openapi_are_available_at_public_documentation_path(client):
     assert schema["servers"][0]["url"] == "/api"
     email_password = schema["components"]["securitySchemes"]["EmailPassword"]
     assert email_password["type"] == "oauth2"
-    assert email_password["flows"]["password"]["tokenUrl"] == "auth/swagger-login"
+    assert email_password["flows"]["password"]["tokenUrl"] == "/api/auth/swagger-login"
     assert "/auth/swagger-login" not in schema["paths"]
     assert (
         schema["paths"]["/auth/login"]["post"]["responses"]["200"]["content"][

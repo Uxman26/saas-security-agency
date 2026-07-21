@@ -78,7 +78,6 @@ function Kpi({
   warn,
   accent,
   href,
-  emphasized,
 }: {
   label: string;
   value: React.ReactNode;
@@ -87,54 +86,54 @@ function Kpi({
   warn?: boolean;
   accent?: string;
   href?: string;
-  emphasized?: boolean;
 }) {
   const clickable = Boolean(href);
 
   const card = (
     <div
       className={cn(
-        'relative rounded-xl border bg-card p-4 shadow-sm transition-all duration-200',
+        'relative flex h-full min-h-[7.5rem] flex-col rounded-xl border bg-card/95 p-4 shadow-sm transition-all duration-200',
         clickable && [
           'group cursor-pointer',
-          'hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md',
-          emphasized && 'border-primary/30 ring-1 ring-primary/15 hover:bg-primary/[0.04] hover:ring-primary/30',
+          'hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md hover:bg-card',
         ],
         !clickable && 'border-border/60',
-        clickable && !emphasized && 'border-border/80',
-        warn && 'border-amber-500/50 dark:border-amber-500/40'
+        clickable && !warn && 'border-border/70',
+        warn && 'border-amber-500/45 dark:border-amber-500/35'
       )}
     >
       <div className="flex items-start justify-between gap-2 pe-5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-foreground/85 dark:text-foreground/90">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           {label}
         </p>
         <div
           className={cn(
             'rounded-lg p-1.5',
-            warn ? 'bg-amber-500/20 dark:bg-amber-500/25' : 'bg-primary/15 dark:bg-primary/25'
+            warn ? 'bg-amber-500/15 dark:bg-amber-500/20' : 'bg-muted/80 dark:bg-primary/15'
           )}
         >
           <Icon className={cn('size-4', accent ?? 'text-primary dark:text-orange-400')} />
         </div>
       </div>
-      <p className={cn('mt-2 text-2xl font-bold tabular-nums', warn && 'text-amber-700 dark:text-amber-400')}>
+      <p className={cn('mt-3 text-2xl font-bold tracking-tight tabular-nums', warn && 'text-amber-700 dark:text-amber-400')}>
         {value}
       </p>
-      {sub && (
-        <p className="mt-1.5 text-sm font-medium leading-snug text-foreground/75 dark:text-foreground/80 line-clamp-2 break-words">
+      {sub ? (
+        <p className="mt-auto pt-2 text-xs font-medium leading-snug text-muted-foreground line-clamp-2 break-words">
           {sub}
         </p>
+      ) : (
+        <div className="mt-auto" />
       )}
       {clickable && (
-        <ArrowRight className="absolute top-4 end-3 size-3.5 text-muted-foreground transition-all group-hover:text-primary group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
+        <ArrowRight className="absolute top-4 end-3 size-3.5 text-muted-foreground/70 transition-all group-hover:text-primary group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
       )}
     </div>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+      <Link href={href} className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
         {card}
       </Link>
     );
@@ -142,6 +141,21 @@ function Kpi({
 
   return card;
 }
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      {children}
+    </h2>
+  );
+}
+
+/** Shared 12-col grid so every KPI row lines up on the same vertical rhythm. */
+const KPI_GRID = 'grid grid-cols-12 gap-3';
+const KPI_SPAN_SIXTH = 'col-span-6 sm:col-span-4 lg:col-span-2'; // 6-up
+const KPI_SPAN_QUARTER = 'col-span-6 sm:col-span-6 lg:col-span-3'; // 4-up
+const KPI_SPAN_HALF = 'col-span-12 sm:col-span-6'; // 2-up
+
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -257,122 +271,149 @@ export default function DashboardPage() {
 
             {!isSuperAdmin && !loading && stats && overview && (
               <>
-                <section className="mb-6">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                    Workforce & compliance
-                  </h2>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                    <Kpi label="Staff" value={stats.active_guards} sub="Directory total" icon={Users} accent="text-blue-700 dark:text-blue-400" href="/guards" />
-                    <Kpi label="Sites" value={stats.sites_count} icon={MapPin} accent="text-green-700 dark:text-green-400" href="/sites" />
-                    <Kpi label="Clients" value={stats.clients_count} icon={Building2} accent="text-purple-700 dark:text-purple-400" href="/clients" />
-                    <Kpi
-                      label="Docs expiring"
-                      value={stats.expiring_documents}
-                      sub="Within 30 days"
-                      icon={FolderOpen}
-                      accent="text-amber-700 dark:text-amber-400"
-                      warn={stats.expiring_documents > 0}
-                      href="/documents"
-                    />
-                    <Kpi
-                      label="SIA expiring"
-                      value={stats.sia_expiring_30d}
-                      sub="Within 30 days"
-                      icon={BadgeCheck}
-                      accent="text-amber-700 dark:text-amber-400"
-                      warn={stats.sia_expiring_30d > 0}
-                      href="/guards"
-                    />
-                    <Kpi
-                      label="Contracts"
-                      value={stats.contracts_expiring_soon}
-                      sub="Client contracts (30d)"
-                      icon={CalendarCheck}
-                      accent="text-orange-700 dark:text-orange-400"
-                      warn={stats.contracts_expiring_soon > 0}
-                      href="/clients"
-                    />
-                  </div>
-                </section>
+                <div className="space-y-8">
+                  <section>
+                    <SectionTitle>Workforce & compliance</SectionTitle>
+                    <div className={KPI_GRID}>
+                      <div className={KPI_SPAN_SIXTH}>
+                        <Kpi label="Staff" value={stats.active_guards} sub="Directory total" icon={Users} accent="text-blue-700 dark:text-blue-400" href="/guards" />
+                      </div>
+                      <div className={KPI_SPAN_SIXTH}>
+                        <Kpi label="Sites" value={stats.sites_count} sub="Active locations" icon={MapPin} accent="text-green-700 dark:text-green-400" href="/sites" />
+                      </div>
+                      <div className={KPI_SPAN_SIXTH}>
+                        <Kpi label="Clients" value={stats.clients_count} sub="Client accounts" icon={Building2} accent="text-purple-700 dark:text-purple-400" href="/clients" />
+                      </div>
+                      <div className={KPI_SPAN_SIXTH}>
+                        <Kpi
+                          label="Docs expiring"
+                          value={stats.expiring_documents}
+                          sub="Within 30 days"
+                          icon={FolderOpen}
+                          accent="text-amber-700 dark:text-amber-400"
+                          warn={stats.expiring_documents > 0}
+                          href="/documents"
+                        />
+                      </div>
+                      <div className={KPI_SPAN_SIXTH}>
+                        <Kpi
+                          label="SIA expiring"
+                          value={stats.sia_expiring_30d}
+                          sub="Within 30 days"
+                          icon={BadgeCheck}
+                          accent="text-amber-700 dark:text-amber-400"
+                          warn={stats.sia_expiring_30d > 0}
+                          href="/guards"
+                        />
+                      </div>
+                      <div className={KPI_SPAN_SIXTH}>
+                        <Kpi
+                          label="Contracts"
+                          value={stats.contracts_expiring_soon}
+                          sub="Client contracts (30d)"
+                          icon={CalendarCheck}
+                          accent="text-orange-700 dark:text-orange-400"
+                          warn={stats.contracts_expiring_soon > 0}
+                          href="/clients"
+                        />
+                      </div>
+                    </div>
+                  </section>
 
-                <section className="mb-6">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                    Rotas
-                  </h2>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Kpi
-                      label="Total rotas"
-                      value={stats.rotas_total ?? 0}
-                      sub="All saved rotas"
-                      icon={CalendarRange}
-                      accent="text-cyan-700 dark:text-cyan-400"
-                      href="/rota"
-                      emphasized
-                    />
-                    <Kpi
-                      label="Active rotas"
-                      value={stats.rotas_active ?? 0}
-                      sub="End date today or later"
-                      icon={Calendar}
-                      accent="text-cyan-700 dark:text-cyan-400"
-                      href="/rota?tab=active"
-                      emphasized
-                    />
-                  </div>
-                </section>
+                  <section>
+                    <SectionTitle>Rotas</SectionTitle>
+                    <div className={KPI_GRID}>
+                      <div className={KPI_SPAN_HALF}>
+                        <Kpi
+                          label="Total rotas"
+                          value={stats.rotas_total ?? 0}
+                          sub="All saved rotas"
+                          icon={CalendarRange}
+                          accent="text-cyan-700 dark:text-cyan-400"
+                          href="/rota"
+                        />
+                      </div>
+                      <div className={KPI_SPAN_HALF}>
+                        <Kpi
+                          label="Active rotas"
+                          value={stats.rotas_active ?? 0}
+                          sub="End date today or later"
+                          icon={Calendar}
+                          accent="text-cyan-700 dark:text-cyan-400"
+                          href="/rota?tab=active"
+                        />
+                      </div>
+                    </div>
+                  </section>
 
-                <section className="mb-6">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                    Shifts & attendance
-                  </h2>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Kpi label="Shifts today" value={stats.shifts_today} icon={Calendar} accent="text-cyan-700 dark:text-cyan-400" href="/rota" />
-                    <Kpi label="Shifts (7 days)" value={stats.upcoming_shifts} sub="From today" icon={Activity} accent="text-indigo-700 dark:text-indigo-400" href="/rota" />
-                    <Kpi
-                      label="Late (30d)"
-                      value={stats.late_count}
-                      icon={Clock}
-                      warn={stats.late_count > 0}
-                      accent="text-red-700 dark:text-red-400"
-                      href="/attendance"
-                    />
-                    <Kpi
-                      label="Present today"
-                      value={stats.present_count}
-                      icon={BadgeCheck}
-                      accent="text-emerald-700 dark:text-emerald-400"
-                      href="/attendance"
-                    />
-                  </div>
-                </section>
+                  <section>
+                    <SectionTitle>Shifts & attendance</SectionTitle>
+                    <div className={KPI_GRID}>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi label="Shifts today" value={stats.shifts_today} sub="Scheduled today" icon={Calendar} accent="text-cyan-700 dark:text-cyan-400" href="/rota" />
+                      </div>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi label="Shifts (7 days)" value={stats.upcoming_shifts} sub="From today" icon={Activity} accent="text-indigo-700 dark:text-indigo-400" href="/rota" />
+                      </div>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi
+                          label="Late (30d)"
+                          value={stats.late_count}
+                          sub="Last 30 days"
+                          icon={Clock}
+                          warn={stats.late_count > 0}
+                          accent="text-red-700 dark:text-red-400"
+                          href="/attendance"
+                        />
+                      </div>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi
+                          label="Present today"
+                          value={stats.present_count}
+                          sub="On duty today"
+                          icon={BadgeCheck}
+                          accent="text-emerald-700 dark:text-emerald-400"
+                          href="/attendance"
+                        />
+                      </div>
+                    </div>
+                  </section>
 
-                <section className="mb-8">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                    Finance
-                  </h2>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Kpi
-                      label="Payroll (all time)"
-                      value={gbp(stats.revenue_total)}
-                      icon={PoundSterling}
-                      accent="text-emerald-700 dark:text-emerald-400"
-                      href="/payroll"
-                    />
-                    <Kpi label="Payroll MTD" value={gbp(stats.payroll_mtd)} icon={TrendingUp} accent="text-emerald-700 dark:text-emerald-400" href="/payroll" />
-                    <Kpi label="Invoiced total" value={gbp(stats.invoice_total)} icon={FileText} accent="text-rose-700 dark:text-rose-400" href="/invoices" />
-                    <Kpi
-                      label="Outstanding"
-                      value={gbp(stats.invoice_outstanding)}
-                      sub="Draft + sent"
-                      icon={FileText}
-                      accent="text-rose-700 dark:text-rose-400"
-                      warn={stats.invoice_outstanding > 0}
-                      href="/invoices"
-                    />
-                  </div>
-                </section>
+                  <section>
+                    <SectionTitle>Finance</SectionTitle>
+                    <div className={KPI_GRID}>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi
+                          label="Payroll (all time)"
+                          value={gbp(stats.revenue_total)}
+                          sub="Cumulative payroll"
+                          icon={PoundSterling}
+                          accent="text-emerald-700 dark:text-emerald-400"
+                          href="/payroll"
+                        />
+                      </div>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi label="Payroll MTD" value={gbp(stats.payroll_mtd)} sub="Month to date" icon={TrendingUp} accent="text-emerald-700 dark:text-emerald-400" href="/payroll" />
+                      </div>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi label="Invoiced total" value={gbp(stats.invoice_total)} sub="All invoices" icon={FileText} accent="text-rose-700 dark:text-rose-400" href="/invoices" />
+                      </div>
+                      <div className={KPI_SPAN_QUARTER}>
+                        <Kpi
+                          label="Outstanding"
+                          value={gbp(stats.invoice_outstanding)}
+                          sub="Draft + sent"
+                          icon={FileText}
+                          accent="text-rose-700 dark:text-rose-400"
+                          warn={stats.invoice_outstanding > 0}
+                          href="/invoices"
+                        />
+                      </div>
+                    </div>
+                  </section>
+                </div>
 
-                <section className="mb-8">
+                <section className="mt-8 mb-8">
                   <OverviewCharts
                     shifts={overview.shifts_by_day}
                     attendance={overview.attendance_by_status}
@@ -470,22 +511,32 @@ export default function DashboardPage() {
 
             {isSuperAdmin && adminStats && (
               <section className="mb-6">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Platform overview</h2>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                  <Kpi label="Companies" value={adminStats.total_companies} sub={`${adminStats.active_subscriptions} active`} icon={Building2} />
-                  <Kpi label="Invoices" value={adminStats.total_invoices} sub={`${adminStats.unpaid_invoices} unpaid`} icon={FileText} />
-                  <Kpi label="Overdue" value={adminStats.overdue_invoices} icon={AlertTriangle} warn={adminStats.overdue_invoices > 0} />
-                  <Kpi label="Outstanding" value={gbp(adminStats.outstanding_balance)} icon={TrendingUp} accent="text-red-600" />
-                  <Kpi label="Collected" value={gbp(adminStats.total_collected)} icon={Wallet} accent="text-green-600" />
-                  <Kpi label="Active users" value={adminStats.platform_usage.total_active_users} sub={`${adminStats.platform_usage.storage_mb} MB storage`} icon={Users} />
+                <SectionTitle>Platform overview</SectionTitle>
+                <div className={KPI_GRID}>
+                  <div className={KPI_SPAN_SIXTH}>
+                    <Kpi label="Companies" value={adminStats.total_companies} sub={`${adminStats.active_subscriptions} active`} icon={Building2} />
+                  </div>
+                  <div className={KPI_SPAN_SIXTH}>
+                    <Kpi label="Invoices" value={adminStats.total_invoices} sub={`${adminStats.unpaid_invoices} unpaid`} icon={FileText} />
+                  </div>
+                  <div className={KPI_SPAN_SIXTH}>
+                    <Kpi label="Overdue" value={adminStats.overdue_invoices} icon={AlertTriangle} warn={adminStats.overdue_invoices > 0} />
+                  </div>
+                  <div className={KPI_SPAN_SIXTH}>
+                    <Kpi label="Outstanding" value={gbp(adminStats.outstanding_balance)} icon={TrendingUp} accent="text-red-600" />
+                  </div>
+                  <div className={KPI_SPAN_SIXTH}>
+                    <Kpi label="Collected" value={gbp(adminStats.total_collected)} icon={Wallet} accent="text-green-600" />
+                  </div>
+                  <div className={KPI_SPAN_SIXTH}>
+                    <Kpi label="Active users" value={adminStats.platform_usage.total_active_users} sub={`${adminStats.platform_usage.storage_mb} MB storage`} icon={Users} />
+                  </div>
                 </div>
               </section>
             )}
 
             <section>
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                {isSuperAdmin ? 'Admin' : 'Quick access'}
-              </h2>
+              <SectionTitle>{isSuperAdmin ? 'Admin' : 'Quick access'}</SectionTitle>
               <div className={`grid gap-3 ${isSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
                 {tiles.map(({ href, title, desc, icon: Icon, color }) => (
                   <Link key={href} href={href} className="group block cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">

@@ -167,13 +167,19 @@ export default function RolesSettingsPage() {
     defaultValues: { email: '', password: '', full_name: '', role_id: 1 },
   });
 
+  const assignableRoles = useMemo(() => roles.filter((r) => r.slug !== 'admin'), [roles]);
+
   const openAddUser = () => {
-    const def = roles.find((r) => r.slug === 'admin') ?? roles[0];
+    const def = assignableRoles[0];
+    if (!def) {
+      toast.error('Create a custom role first. Admin cannot be assigned to new users.');
+      return;
+    }
     userForm.reset({
       email: '',
       password: '',
       full_name: '',
-      role_id: def?.id ?? 1,
+      role_id: def.id,
     });
     setAddUserOpen(true);
   };
@@ -290,11 +296,12 @@ export default function RolesSettingsPage() {
 
   const openEditUser = (u: CompanyUser) => {
     setEditUser(u);
+    const fallback = assignableRoles[0]?.id ?? roles[0]?.id ?? 1;
     editUserForm.reset({
       email: u.email,
       full_name: u.full_name,
       password: '',
-      role_id: u.role_id ?? roles[0]?.id ?? 1,
+      role_id: u.role_slug === 'admin' ? (u.role_id ?? fallback) : (u.role_id ?? fallback),
     });
   };
 
@@ -640,17 +647,21 @@ export default function RolesSettingsPage() {
                           <TableCell className="text-sm">{u.email}</TableCell>
                           <TableCell>{u.full_name}</TableCell>
                           <TableCell>
-                            {canWrite ? (
+                            {u.role_slug === 'admin' ? (
+                              <span className="text-sm font-medium" title="Only one Admin is allowed">
+                                {u.role_name ?? 'Admin'}
+                              </span>
+                            ) : canWrite ? (
                               <Select
                                 value={u.role_id != null ? String(u.role_id) : undefined}
                                 onValueChange={(v) => patchUserRole(u.id, v)}
-                                disabled={saving || u.role_slug === 'admin'}
+                                disabled={saving}
                               >
-                                <SelectTrigger className="w-full" title={u.role_slug === 'admin' ? 'Admin role cannot be changed' : undefined}>
+                                <SelectTrigger className="w-full">
                                   <SelectValue placeholder="Role" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {roles.map((r) => (
+                                  {assignableRoles.map((r) => (
                                     <SelectItem key={r.id} value={String(r.id)}>
                                       {r.name}
                                     </SelectItem>
@@ -747,13 +758,14 @@ export default function RolesSettingsPage() {
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
                         <SelectContent>
-                          {roles.map((r) => (
+                          {assignableRoles.map((r) => (
                             <SelectItem key={r.id} value={String(r.id)}>
                               {r.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      <p className="text-[11px] text-muted-foreground">Admin is unique and cannot be assigned to new users.</p>
                       {userForm.formState.errors.role_id && (
                         <p className="text-xs text-destructive">{userForm.formState.errors.role_id.message}</p>
                       )}
@@ -814,18 +826,21 @@ export default function RolesSettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Role</Label>
-                      <Select
-                        value={editUserForm.watch('role_id') ? String(editUserForm.watch('role_id')) : undefined}
-                        onValueChange={(v) => editUserForm.setValue('role_id', parseInt(v, 10), { shouldValidate: true })}
-                        disabled={editUser?.role_slug === 'admin'}
-                      >
-                        <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
-                        <SelectContent>
-                          {roles.map((r) => (
-                            <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {editUser?.role_slug === 'admin' ? (
+                        <Input value={editUser.role_name ?? 'Admin'} disabled />
+                      ) : (
+                        <Select
+                          value={editUserForm.watch('role_id') ? String(editUserForm.watch('role_id')) : undefined}
+                          onValueChange={(v) => editUserForm.setValue('role_id', parseInt(v, 10), { shouldValidate: true })}
+                        >
+                          <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                          <SelectContent>
+                            {assignableRoles.map((r) => (
+                              <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                     <DialogFooter>
                       <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>

@@ -111,7 +111,7 @@ function SiteForm({
           <Input {...register('name')} placeholder="City Centre Office" />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 sm:col-span-2">
           <Label>Client <span className="text-muted-foreground font-normal">(optional)</span></Label>
           <Select
             value={watch('client_id') ? String(watch('client_id')) : '__none__'}
@@ -127,8 +127,12 @@ function SiteForm({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label>Default Hourly Rate (£)</Label>
-          <Input type="number" step="0.01" min="0" {...register('default_hourly_rate', { valueAsNumber: true })} placeholder="12.50" />
+          <Label>Staff Rate <span className="text-muted-foreground font-normal">(per hour)</span></Label>
+          <Input type="number" step="0.01" min="0" {...register('staff_hourly_rate', { valueAsNumber: true })} placeholder="e.g. 12.50" />
+        </div>
+        <div className="space-y-1">
+          <Label>Site Rate <span className="text-muted-foreground font-normal">(per hour)</span></Label>
+          <Input type="number" step="0.01" min="0" {...register('default_hourly_rate', { valueAsNumber: true })} placeholder="e.g. 15.00" />
         </div>
         <div className="space-y-1">
           <Label>Contract start</Label>
@@ -217,7 +221,7 @@ export default function SitesPage() {
 
   const addForm = useForm<SiteFormData>({
     resolver: zodResolver(siteSchema) as Resolver<SiteFormData>,
-    defaultValues: { client_id: null, default_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
+    defaultValues: { client_id: null, default_hourly_rate: undefined, staff_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
   });
 
   const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) as Resolver<SiteFormData> });
@@ -237,6 +241,8 @@ export default function SitesPage() {
     };
     const rate = data.default_hourly_rate;
     if (rate != null && !Number.isNaN(Number(rate))) o.default_hourly_rate = rate;
+    const staffRate = data.staff_hourly_rate;
+    if (staffRate != null && !Number.isNaN(Number(staffRate))) o.staff_hourly_rate = staffRate;
     if (data.contractor_id) {
       o.contractor_id = data.contractor_id;
       o.main_contractor_id = null;
@@ -268,6 +274,7 @@ export default function SitesPage() {
       color: site.color || DEFAULT_SITE_COLOR,
       client_id: site.client_id ?? null,
       default_hourly_rate: site.default_hourly_rate ?? undefined,
+      staff_hourly_rate: site.staff_hourly_rate ?? undefined,
       address: site.address ?? '',
       postcode: site.postcode ?? '',
       contact_person: site.contact_person ?? '',
@@ -300,7 +307,7 @@ export default function SitesPage() {
 
   const getSearchText = useCallback(
     (s: Site) =>
-      [s.name, s.address, s.postcode, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_email, s.contact_phone, String(s.default_hourly_rate ?? '')]
+      [s.name, s.address, s.postcode, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_email, s.contact_phone, String(s.default_hourly_rate ?? ''), String(s.staff_hourly_rate ?? '')]
         .filter(Boolean)
         .join(' '),
     [clientMap, contractorLabel]
@@ -315,6 +322,8 @@ export default function SitesPage() {
           return contractorLabel(s);
         case 'client':
           return clientMap.get(s.client_id ?? 0) ?? '';
+        case 'staff_rate':
+          return s.staff_hourly_rate ?? 0;
         case 'rate':
           return s.default_hourly_rate ?? 0;
         case 'address':
@@ -417,7 +426,8 @@ export default function SitesPage() {
                         <TableHead>Colour</TableHead>
                         <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Default Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Staff Rate" colKey="staff_rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Site Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Address" colKey="address" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Postcode" colKey="postcode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Contact Person" colKey="contact_person" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -444,6 +454,9 @@ export default function SitesPage() {
                                 {clientMap.get(site.client_id) ?? `Client #${site.client_id}`}
                               </span>
                             ) : '-'}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap font-medium">
+                            {site.staff_hourly_rate != null ? `£${Number(site.staff_hourly_rate).toFixed(2)}/hr` : '-'}
                           </TableCell>
                           <TableCell className="whitespace-nowrap font-medium">
                             {site.default_hourly_rate != null ? `£${Number(site.default_hourly_rate).toFixed(2)}/hr` : '-'}

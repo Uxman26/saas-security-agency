@@ -25,16 +25,35 @@ type Props = {
 };
 
 const empty = (): ShiftRec => ({
-  start: '09:00',
-  end: '17:00',
+  start: '00:00',
+  end: '00:00',
   site: '',
   notes: '',
   breakH: 0,
-  breakM: 30,
+  breakM: 0,
   color: SHIFT_COLOR_OPTS[0],
   label: '',
   shiftRate: null,
 });
+
+/** Keep HH:MM so <input type="time"> does not clear the value on open. */
+function normalizeTimeValue(t: string | undefined | null): string {
+  if (!t || !String(t).trim()) return '00:00';
+  const parts = String(t).trim().split(':');
+  const h = Math.min(23, Math.max(0, parseInt(parts[0] || '0', 10) || 0));
+  const m = Math.min(59, Math.max(0, parseInt(parts[1] || '0', 10) || 0));
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function normalizeShiftForm(sh: ShiftRec): ShiftRec {
+  return {
+    ...sh,
+    start: normalizeTimeValue(sh.start),
+    end: normalizeTimeValue(sh.end),
+    breakH: Number.isFinite(Number(sh.breakH)) ? Number(sh.breakH) : 0,
+    breakM: Number.isFinite(Number(sh.breakM)) ? Number(sh.breakM) : 0,
+  };
+}
 
 export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultEmpId, edit, onApply }: Props) {
   const { data: sites = [] } = useSites();
@@ -56,16 +75,25 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
 
   const applySite = (siteName: string) => {
     const rec = siteName ? siteByName.get(siteName) : undefined;
+    const staff =
+      rec?.staff_hourly_rate != null && !Number.isNaN(Number(rec.staff_hourly_rate))
+        ? Number(rec.staff_hourly_rate)
+        : null;
+    const siteRate =
+      rec?.default_hourly_rate != null && !Number.isNaN(Number(rec.default_hourly_rate))
+        ? Number(rec.default_hourly_rate)
+        : null;
+    const prefer = staff != null && staff > 0 ? staff : siteRate;
     setShift((s) => ({
       ...s,
       site: siteName,
       color: rec?.color || DEFAULT_SITE_COLOR,
-      // Prefill rate from site default when empty so Payable can calculate
+      // Prefill from site staff rate (then site rate) when empty so Payable can calculate
       shiftRate:
         s.shiftRate != null && !Number.isNaN(Number(s.shiftRate))
           ? s.shiftRate
-          : rec?.default_hourly_rate != null
-            ? Number(rec.default_hourly_rate)
+          : prefer != null && prefer > 0
+            ? prefer
             : s.shiftRate,
     }));
   };
@@ -74,23 +102,32 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
     if (!open) return;
     setDk(defaultDk);
     if (edit) {
-      setShift({ ...edit.shift });
+      setShift(normalizeShiftForm({ ...edit.shift }));
       setAssignees([edit.empId]);
     } else {
       setShift(empty());
       setAssignees(defaultEmpId ? [defaultEmpId] : employees[0] ? [employees[0].id] : []);
     }
-  }, [open, defaultDk, defaultEmpId, edit, employees]);
+    // Intentionally omit `employees` — parent remaps that array every render and would reset the form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultDk, defaultEmpId, edit?.empId, edit?.dk, edit?.idx]);
 
   const toggleAsg = (id: string) => {
     setAssignees((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const reset = () => setShift(edit ? { ...edit.shift } : empty());
+  const reset = () =>
+    setShift((s) => ({
+      ...s,
+      start: '00:00',
+      end: '00:00',
+      breakH: 0,
+      breakM: 0,
+    }));
 
   const submit = () => {
     if (assignees.length === 0 || !dk) return;
-    onApply(assignees, dk, shift);
+    onApply(assignees, dk, normalizeShiftForm(shift));
     onOpenChange(false);
   };
 
@@ -110,6 +147,20 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
   };
 
   const siteValue = shift.site || '__none__';
+
+  const assigneeStaffRates = useMemo(() => {
+    return assignees
+      .map((id) => {
+        const emp = employees.find((e) => e.id === id);
+        if (!emp) return null;
+        const rate = emp.hourlyRate;
+        if (rate == null || Number.isNaN(Number(rate))) return null;
+        return { id: emp.id, name: emp.name, rate: Number(rate) };
+      })
+      .filter((r): r is { id: string; name: string; rate: number } => !!r);
+  }, [assignees, employees]);
+
+  const primaryStaffRate = assigneeStaffRates.length === 1 ? assigneeStaffRates[0] : null;
 
   return (
     <>
@@ -187,7 +238,25 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Shift rate (£/hr, optional)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Shift rate (per hour, optional)</Label>
+                {primaryStaffRate ? (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-sky-600 hover:underline tabular-nums"
+                    title="Use this staff hourly rate"
+                    onClick={() => setShift((s) => ({ ...s, shiftRate: primaryStaffRate.rate }))}
+                  >
+                    Staff rate: {primaryStaffRate.rate.toFixed(2)}
+                  </button>
+                ) : assigneeStaffRates.length > 1 ? (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    Staff rates: {assigneeStaffRates.map((r) => r.rate.toFixed(2)).join(' / ')}
+                  </span>
+                ) : assignees.length > 0 ? (
+                  <span className="text-xs text-muted-foreground">No staff rate set</span>
+                ) : null}
+              </div>
               <Input
                 type="number"
                 step="0.01"
@@ -201,15 +270,6 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
                     shiftRate: v === '' ? null : parseFloat(v) || null,
                   }));
                 }}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <textarea
-                className="w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                placeholder="Location details, instructions, or one-off info"
-                value={shift.notes}
-                onChange={(e) => setShift((s) => ({ ...s, notes: e.target.value }))}
               />
             </div>
             <div className="space-y-2">

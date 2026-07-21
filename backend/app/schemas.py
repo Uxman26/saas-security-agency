@@ -496,6 +496,7 @@ class SiteBase(BaseModel):
     contract_start_date: Optional[date] = None
     contract_end_date: Optional[date] = None
     default_hourly_rate: Optional[float] = None
+    staff_hourly_rate: Optional[float] = None
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
     contractor_id: Optional[UUID] = None

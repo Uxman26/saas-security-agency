@@ -113,6 +113,11 @@ def patch_user_role(
     role = db.query(Role).filter(Role.id == body.role_id, Role.company_id == cid).first()
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    if role.slug == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only one Admin is allowed. Assign a custom role instead.",
+        )
     tu.role_id = role.id
     tu.role = role.slug
     db.commit()

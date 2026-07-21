@@ -216,6 +216,7 @@ export const siteSchema = z
     contract_start_date: z.string().optional().or(z.literal('')),
     contract_end_date: z.string().optional().or(z.literal('')),
     default_hourly_rate: z.number().min(0).optional().nullable(),
+    staff_hourly_rate: z.number().min(0).optional().nullable(),
     contractor_id: optUuid,
     main_contractor_id: optPosInt,
     sub_contractor_id: optPosInt,

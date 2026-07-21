@@ -386,6 +386,8 @@ export interface Site {
   contract_start_date?: string;
   contract_end_date?: string;
   default_hourly_rate?: number;
+  /** Staff pay rate for this site (£/hr) */
+  staff_hourly_rate?: number;
   main_contractor_id?: number | null;
   sub_contractor_id?: number | null;
   contractor_id?: string | null;

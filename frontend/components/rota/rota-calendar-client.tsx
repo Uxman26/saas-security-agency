@@ -9,24 +9,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, calcHours, fmtShortDate, formatHoursDecimal, formatMoney, initials, normalizeAttStatus, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, calcHours, countedHoursForAttendance, fmtShortDate, formatHoursDecimal, formatMoney, initials, normalizeAttStatus, payableHoursForAttendance, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
+import { ShiftRotaSections } from '@/components/rota/shift-rota-sections';
 import {
   ArrowLeft,
   ArrowUpDown,
   CalendarPlus,
+  Download,
+  GripVertical,
   MoreHorizontal,
   Loader2,
   Pencil,
   Plus,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 
-const SHIFT_MENU_H = 268;
+const SHIFT_MENU_H = 300;
 const EMP_MENU_H = 132;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -117,13 +121,14 @@ export function RotaCalendarClient() {
     totalRotaPayable,
     empTotalPayable,
     resolveShiftRate,
-    addShift,
     deleteShift,
     updateShift,
+    applyShiftChange,
     copyShiftToDates,
     copyShiftToEmployee,
     addEmployeesById,
     removeEmployee,
+    removeEmployees,
     reorderEmployees,
     copyAllShiftsBetweenEmployees,
     moveShiftToEmployee,
@@ -208,6 +213,7 @@ export function RotaCalendarClient() {
   const [shiftOpen, setShiftOpen] = useState(false);
   const [shiftPref, setShiftPref] = useState<{ dk: string; empId: string }>({ dk: '', empId: '' });
   const [shiftEdit, setShiftEdit] = useState<{ empId: string; dk: string; idx: number; shift: ShiftRec } | null>(null);
+  const [descCtx, setDescCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [copyCtx, setCopyCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
@@ -241,6 +247,7 @@ export function RotaCalendarClient() {
   const [shiftMenuAnchor, setShiftMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
   const [empMenu, setEmpMenu] = useState<string | null>(null);
   const [empMenuAnchor, setEmpMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
+  const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(() => new Set());
   const menuRef = useRef<HTMLDivElement>(null);
   const shiftMenuPortalRef = useRef<HTMLDivElement>(null);
   const empMenuPortalRef = useRef<HTMLDivElement>(null);
@@ -306,12 +313,98 @@ export function RotaCalendarClient() {
     });
   }, [state.employees, empFilter, empMatchesStatusFilter, pool]);
 
+  useEffect(() => {
+    const alive = new Set(state.employees.map((e) => e.id));
+    setSelectedEmpIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (alive.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [state.employees]);
+
   const meta = useMemo(() => {
     if (!state.days.length) return '';
     const a = fmtShortDate(state.days[0]);
     const b = fmtShortDate(state.days[state.days.length - 1]);
     return `${a} – ${b} | ${state.days.length} days | ${state.employees.length} employees`;
   }, [state.days, state.employees.length]);
+
+  const csvCell = (value: string | number | null | undefined) => {
+    const s = value == null ? '' : String(value);
+    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const exportSingleRota = useCallback(() => {
+    if (!state.days.length) {
+      toast.warning('No days to export');
+      return;
+    }
+    const header = [
+      'Employee',
+      'Role',
+      'Date',
+      'Start',
+      'End',
+      'Site',
+      'Hours',
+      'Status',
+      'Rate',
+      'Payable',
+      'Note',
+    ];
+    const lines = [header.map(csvCell).join(',')];
+    for (const emp of state.employees) {
+      let wrote = false;
+      for (const dk of state.days) {
+        const list = state.shifts[emp.id]?.[dk] || [];
+        list.forEach((sh, idx) => {
+          wrote = true;
+          const a = state.attendance[attKey(emp.id, dk, idx)];
+          const status = normalizeAttStatus(a?.status);
+          const hours = countedHoursForAttendance(sh, a, state.inclBreaks);
+          const payableHrs = payableHoursForAttendance(sh, a, state.inclBreaks);
+          const rate = resolveShiftRate(sh, emp.id);
+          const payable = payableHrs * rate;
+          lines.push(
+            [
+              emp.name,
+              emp.role,
+              dk,
+              sh.start,
+              sh.end,
+              shiftSiteLine(sh) || sh.site || '',
+              hours.toFixed(2),
+              status ? attStatusLabel(status) : '',
+              rate.toFixed(2),
+              payable.toFixed(2),
+              a?.note || '',
+            ]
+              .map(csvCell)
+              .join(',')
+          );
+        });
+      }
+      if (!wrote) {
+        lines.push([emp.name, emp.role, '', '', '', '', '0.00', '', '', '0.00', ''].map(csvCell).join(','));
+      }
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const from = state.days[0];
+    const to = state.days[state.days.length - 1];
+    const safeName = (state.rotaName || 'rota').replace(/[^\w.-]+/g, '_').slice(0, 40);
+    a.download = `${safeName}_${from}_${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Rota exported');
+  }, [state.days, state.employees, state.shifts, state.attendance, state.rotaName, state.inclBreaks, resolveShiftRate]);
 
   const openAddShift = (dk: string, empId: string) => {
     setShiftEdit(null);
@@ -327,13 +420,15 @@ export function RotaCalendarClient() {
     setShiftOpen(true);
   };
 
+  const openShiftDescription = (empId: string, dk: string, idx: number) => {
+    const sh = state.shifts[empId]?.[dk]?.[idx];
+    if (!sh) return;
+    setDescCtx({ empId, dk, idx });
+  };
+
   const onApplyShift = (assignees: string[], dk: string, sh: ShiftRec) => {
-    if (shiftEdit) {
-      deleteShift(shiftEdit.empId, shiftEdit.dk, shiftEdit.idx);
-    }
-    for (const id of assignees) {
-      addShift(id, dk, { ...sh });
-    }
+    applyShiftChange(shiftEdit, assignees, dk, sh);
+    setShiftEdit(null);
   };
 
   const startCopy = (empId: string, dk: string, idx: number) => {
@@ -694,6 +789,12 @@ export function RotaCalendarClient() {
     if (!emp) return;
     toast.confirm(`Remove ${emp.name} from this rota?`, () => {
       removeEmployee(empId);
+      setSelectedEmpIds((prev) => {
+        if (!prev.has(empId)) return prev;
+        const next = new Set(prev);
+        next.delete(empId);
+        return next;
+      });
       closeEmpMenu();
       if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
       if (previewEmpId === empId) setPreviewEmpId(null);
@@ -701,13 +802,97 @@ export function RotaCalendarClient() {
     }, { label: 'Remove' });
   };
 
+  const toggleEmpSelected = (empId: string, checked: boolean) => {
+    setSelectedEmpIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(empId);
+      else next.delete(empId);
+      return next;
+    });
+  };
+
+  const allVisibleSelected = rows.length > 0 && rows.every((e) => selectedEmpIds.has(e.id));
+  const someVisibleSelected = rows.some((e) => selectedEmpIds.has(e.id));
+
+  const toggleSelectAllVisible = (checked: boolean) => {
+    setSelectedEmpIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        for (const e of rows) next.add(e.id);
+      } else {
+        for (const e of rows) next.delete(e.id);
+      }
+      return next;
+    });
+  };
+
+  const removeSelectedEmployees = () => {
+    const ids = [...selectedEmpIds].filter((id) => state.employees.some((e) => e.id === id));
+    if (!ids.length) {
+      toast.warning('Select employees to remove');
+      return;
+    }
+    const label =
+      ids.length === 1
+        ? state.employees.find((e) => e.id === ids[0])?.name || '1 employee'
+        : `${ids.length} employees`;
+    toast.confirm(`Remove ${label} from this rota?`, () => {
+      removeEmployees(ids);
+      setSelectedEmpIds(new Set());
+      closeEmpMenu();
+      if (viewShiftsEmpId && ids.includes(viewShiftsEmpId)) setViewShiftsOpen(false);
+      if (previewEmpId && ids.includes(previewEmpId)) setPreviewEmpId(null);
+      toast.success(ids.length === 1 ? 'Employee removed from rota' : `${ids.length} employees removed from rota`);
+    }, { label: 'Remove' });
+  };
+
   const [dragEmpId, setDragEmpId] = useState<string | null>(null);
+  const [rowDragId, setRowDragId] = useState<string | null>(null);
+  const [rowDropId, setRowDropId] = useState<string | null>(null);
 
   const onDragStart = (e: React.DragEvent, empId: string) => {
     e.dataTransfer.setData('text/plain', empId);
     e.dataTransfer.setData('application/x-rota-drag', JSON.stringify({ type: 'employee', empId }));
     e.dataTransfer.effectAllowed = 'copy';
     setDragEmpId(empId);
+  };
+
+  const onRowReorderDragStart = (e: React.DragEvent, empId: string) => {
+    e.stopPropagation();
+    e.dataTransfer.setData('application/x-rota-row-reorder', empId);
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'row-reorder', empId }));
+    e.dataTransfer.effectAllowed = 'move';
+    setRowDragId(empId);
+    setRowDropId(null);
+    closeEmpMenu();
+    closeShiftMenu();
+  };
+
+  const onRowReorderDragOver = (e: React.DragEvent, empId: string) => {
+    if (!e.dataTransfer.types.includes('application/x-rota-row-reorder') && rowDragId == null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (rowDropId !== empId) setRowDropId(empId);
+  };
+
+  const onRowReorderDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const fromId =
+      e.dataTransfer.getData('application/x-rota-row-reorder') ||
+      rowDragId ||
+      '';
+    setRowDragId(null);
+    setRowDropId(null);
+    if (!fromId || fromId === targetId) return;
+    const ids = state.employees.map((emp) => emp.id);
+    const from = ids.indexOf(fromId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    const next = [...ids];
+    next.splice(from, 1);
+    next.splice(to, 0, fromId);
+    reorderEmployees(next);
   };
 
   const onShiftDragStart = (e: React.DragEvent, empId: string, dk: string, idx: number) => {
@@ -717,13 +902,17 @@ export function RotaCalendarClient() {
     e.dataTransfer.setData('text/plain', payload);
     e.dataTransfer.effectAllowed = 'move';
     setDragEmpId(null);
+    setRowDragId(null);
   };
 
   const onDragEnd = () => {
     setDragEmpId(null);
+    setRowDragId(null);
+    setRowDropId(null);
   };
 
   const onDayDragOver = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('application/x-rota-row-reorder')) return;
     e.preventDefault();
     const raw = e.dataTransfer.types.includes('application/x-rota-drag') || e.dataTransfer.types.includes('text/plain');
     e.dataTransfer.dropEffect = raw ? 'move' : 'copy';
@@ -910,6 +1099,28 @@ export function RotaCalendarClient() {
             <CalendarPlus className="size-3.5 mr-1" />
             Add days
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={exportSingleRota}
+            disabled={!state.days.length}
+          >
+            <Download className="size-3.5 mr-1" />
+            Export rota
+          </Button>
+          {selectedEmpIds.size > 0 ? (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              onClick={removeSelectedEmployees}
+            >
+              <Trash2 className="size-3.5 mr-1" />
+              Remove selected ({selectedEmpIds.size})
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -917,10 +1128,10 @@ export function RotaCalendarClient() {
         <div className="overflow-x-auto rounded-lg border bg-card" ref={menuRef}>
           <table
             className="table-fixed w-full text-sm border-collapse"
-            style={{ minWidth: `${208 + state.days.length * 128 + 200}px` }}
+            style={{ minWidth: `${252 + state.days.length * 128 + 200}px` }}
           >
             <colgroup>
-              <col style={{ width: 208 }} />
+              <col style={{ width: 252 }} />
               {state.days.map((dk) => (
                 <col key={dk} style={{ width: 128 }} />
               ))}
@@ -930,10 +1141,24 @@ export function RotaCalendarClient() {
             <thead>
               <tr className="bg-muted border-b">
                 <th className="sticky left-0 z-20 bg-muted p-2 text-left align-top shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]">
-                  <Input placeholder="Name, job title…" value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="h-8 text-xs mb-2" />
+                  <div className="flex items-start gap-2 mb-2">
+                    <input
+                      type="checkbox"
+                      className="mt-2 size-4 shrink-0 rounded border-input"
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
+                      }}
+                      onChange={(e) => toggleSelectAllVisible(e.target.checked)}
+                      aria-label="Select all visible employees"
+                      disabled={rows.length === 0}
+                    />
+                    <Input placeholder="Name, job title…" value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="h-8 text-xs flex-1" />
+                  </div>
                   <button type="button" className="text-xs text-pink-600 font-medium hover:underline" onClick={openReorder}>
                     ⇅ Employee custom order
                   </button>
+                  <p className="text-[10px] text-muted-foreground mt-1">Or drag the ⋮⋮ handle on a row</p>
                 </th>
                 {state.days.map((dk) => (
                   <th key={dk} className="p-1.5 text-center text-xs font-medium border-l whitespace-nowrap overflow-hidden text-ellipsis">
@@ -959,20 +1184,53 @@ export function RotaCalendarClient() {
             </thead>
             <tbody>
               {rows.map((emp) => (
-                <tr key={emp.id} className="border-b border-border/60">
-                  <td className="sticky left-0 z-10 bg-card p-2 align-top border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] relative overflow-hidden">
-                    <button
-                      type="button"
-                      className="flex gap-2 text-left w-full min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
-                      onClick={(e) => toggleEmpMenu(e, emp.id)}
-                    >
-                      <EmployeeAvatar emp={emp} className="size-9 text-[11px] shrink-0" />
-                      <span className="min-w-0 flex-1 overflow-hidden">
-                        <span className="font-medium block truncate">{emp.name}</span>
-                        <span className="text-[11px] text-muted-foreground truncate block">{emp.role}</span>
-                      </span>
-                      <MoreHorizontal className="size-4 shrink-0 text-muted-foreground" />
-                    </button>
+                <tr
+                  key={emp.id}
+                  className={cn(
+                    'border-b border-border/60',
+                    selectedEmpIds.has(emp.id) && 'bg-muted/30',
+                    rowDragId === emp.id && 'opacity-50',
+                    rowDropId === emp.id && rowDragId && rowDragId !== emp.id && 'ring-2 ring-inset ring-pink-500/70'
+                  )}
+                  onDragOver={(e) => onRowReorderDragOver(e, emp.id)}
+                  onDrop={(e) => onRowReorderDrop(e, emp.id)}
+                >
+                  <td className={cn(
+                    'sticky left-0 z-10 p-2 align-top border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] relative overflow-hidden',
+                    selectedEmpIds.has(emp.id) ? 'bg-muted/40' : 'bg-card'
+                  )}>
+                    <div className="flex gap-1.5 items-start min-w-0">
+                      <button
+                        type="button"
+                        draggable
+                        onDragStart={(e) => onRowReorderDragStart(e, emp.id)}
+                        onDragEnd={onDragEnd}
+                        className="mt-2 shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-muted cursor-grab active:cursor-grabbing"
+                        aria-label={`Drag to reorder ${emp.name}`}
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="size-4" />
+                      </button>
+                      <input
+                        type="checkbox"
+                        className="mt-2.5 size-4 shrink-0 rounded border-input"
+                        checked={selectedEmpIds.has(emp.id)}
+                        onChange={(e) => toggleEmpSelected(emp.id, e.target.checked)}
+                        aria-label={`Select ${emp.name}`}
+                      />
+                      <button
+                        type="button"
+                        className="flex gap-2 text-left flex-1 min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
+                        onClick={(e) => toggleEmpMenu(e, emp.id)}
+                      >
+                        <EmployeeAvatar emp={emp} className="size-9 text-[11px] shrink-0" />
+                        <span className="min-w-0 flex-1 overflow-hidden">
+                          <span className="font-medium block truncate">{emp.name}</span>
+                          <span className="text-[11px] text-muted-foreground truncate block">{emp.role}</span>
+                        </span>
+                        <MoreHorizontal className="size-4 shrink-0 text-muted-foreground" />
+                      </button>
+                    </div>
                   </td>
                   {state.days.map((dk) => {
                     const list = state.shifts[emp.id]?.[dk] || [];
@@ -997,11 +1255,8 @@ export function RotaCalendarClient() {
                             const att = state.attendance[attKey(emp.id, dk, idx)];
                             const attStatus = att ? normalizeAttStatus(att.status) : null;
                             if (statusFilter !== 'all' && attStatus !== statusFilter) return null;
-                            const statusColor = attStatus ? attStatusBarColor(attStatus) : null;
                             const menuOpen = shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx;
-                            const siteLine = sh.site || (!sh.notes ? 'One-off' : '');
-                            const noteLine = sh.notes?.trim() || '';
-                            const tip = [sh.start && sh.end ? `${sh.start} – ${sh.end}` : '', sh.site, noteLine, attStatus ? attStatusLabel(attStatus) : '']
+                            const tip = [sh.start && sh.end ? `${sh.start} – ${sh.end}` : '', sh.site, attStatus ? attStatusLabel(attStatus) : '']
                               .filter(Boolean)
                               .join('\n');
                             return (
@@ -1019,32 +1274,20 @@ export function RotaCalendarClient() {
                                 title={tip || 'Drag to another day to move this shift'}
                               >
                                 <div className="h-0.5 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
-                                <div className="font-medium tabular-nums truncate">
-                                  {sh.start} – {sh.end}
-                                </div>
-                                {siteLine ? (
-                                  <div className="text-muted-foreground truncate text-[10px]">{siteLine}</div>
-                                ) : null}
-                                {noteLine ? (
-                                  <div className="text-muted-foreground text-[10px] italic line-clamp-2 break-all">{noteLine}</div>
-                                ) : null}
-                                {attStatus ? (
-                                  <span
-                                    className="mt-1 inline-flex max-w-full truncate rounded px-1 py-px text-[9px] font-semibold"
-                                    style={{
-                                      color: statusColor || undefined,
-                                      backgroundColor: statusColor ? `${statusColor}22` : undefined,
-                                    }}
-                                  >
-                                    {attStatusLabel(attStatus)}
-                                  </span>
-                                ) : null}
+                                <ShiftRotaSections shift={sh} attendance={att} compact />
                               </button>
                             </div>
                             );
                           })}
-                          <Button type="button" variant="ghost" size="sm" className="h-7 w-full shrink-0 text-muted-foreground" onClick={() => openAddShift(dk, emp.id)}>
-                            <Plus className="size-3.5" />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-full shrink-0 font-bold text-foreground/70 hover:text-foreground"
+                            onClick={() => openAddShift(dk, emp.id)}
+                            aria-label="Add shift"
+                          >
+                            <Plus className="size-5 stroke-[3]" />
                           </Button>
                         </div>
                       </td>
@@ -1218,13 +1461,63 @@ export function RotaCalendarClient() {
 
       <ShiftDialog
         open={shiftOpen}
-        onOpenChange={setShiftOpen}
-        employees={state.employees}
+        onOpenChange={(v) => {
+          setShiftOpen(v);
+          if (!v) setShiftEdit(null);
+        }}
+        employees={state.employees.map((e) => {
+          const fromPool = pool.find((p) => p.id === e.id);
+          return fromPool?.hourlyRate != null ? { ...e, hourlyRate: fromPool.hourlyRate } : e;
+        })}
         defaultDk={shiftEdit?.dk ?? shiftPref.dk}
         defaultEmpId={shiftPref.empId}
         edit={shiftEdit}
         onApply={onApplyShift}
       />
+
+      <Dialog
+        open={!!descCtx}
+        onOpenChange={(v) => {
+          if (!v) setDescCtx(null);
+        }}
+      >
+        <DialogContent showCloseButton className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Description</DialogTitle>
+            <DialogDescription>
+              {descCtx
+                ? `${state.employees.find((e) => e.id === descCtx.empId)?.name ?? 'Shift'} · ${fmtShortDate(descCtx.dk)}`
+                : 'Shift details'}
+            </DialogDescription>
+          </DialogHeader>
+          {descCtx && state.shifts[descCtx.empId]?.[descCtx.dk]?.[descCtx.idx] ? (
+            <ShiftRotaSections
+              shift={state.shifts[descCtx.empId][descCtx.dk][descCtx.idx]}
+              attendance={state.attendance[attKey(descCtx.empId, descCtx.dk, descCtx.idx)]}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">Shift not found.</p>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setDescCtx(null)}>
+              Close
+            </Button>
+            {descCtx ? (
+              <Button
+                type="button"
+                className="bg-pink-600 hover:bg-pink-700"
+                onClick={() => {
+                  const { empId, dk, idx } = descCtx;
+                  setDescCtx(null);
+                  openEditShift(empId, dk, idx);
+                }}
+              >
+                Edit shift
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={copyOpen}
@@ -1328,7 +1621,7 @@ export function RotaCalendarClient() {
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>Employee custom order</DialogTitle>
             <DialogDescription>
-              Use the arrows to move employees up or down. Order is saved for this rota session.
+              Drag rows to reorder, or use the arrows. Order is saved for this rota.
             </DialogDescription>
           </DialogHeader>
           <ul className="flex-1 min-h-0 overflow-y-auto px-6 py-2 space-y-1">
@@ -1338,8 +1631,42 @@ export function RotaCalendarClient() {
               return (
                 <li
                   key={id}
-                  className="flex items-center gap-2 rounded-md border px-2 py-2 text-sm bg-card"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/x-rota-order-draft', String(i));
+                    e.dataTransfer.effectAllowed = 'move';
+                    setRowDragId(id);
+                  }}
+                  onDragEnd={() => {
+                    setRowDragId(null);
+                    setRowDropId(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (rowDropId !== id) setRowDropId(id);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const fromRaw = e.dataTransfer.getData('application/x-rota-order-draft');
+                    const from = fromRaw !== '' ? parseInt(fromRaw, 10) : -1;
+                    setRowDropId(null);
+                    setRowDragId(null);
+                    if (Number.isNaN(from) || from < 0 || from === i) return;
+                    setOrderDraft((d) => {
+                      const n = [...d];
+                      const [item] = n.splice(from, 1);
+                      n.splice(i, 0, item);
+                      return n;
+                    });
+                  }}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md border px-2 py-2 text-sm bg-card cursor-grab active:cursor-grabbing',
+                    rowDragId === id && 'opacity-50',
+                    rowDropId === id && rowDragId && rowDragId !== id && 'ring-2 ring-pink-500/60'
+                  )}
                 >
+                  <GripVertical className="size-4 shrink-0 text-muted-foreground" />
                   <span className="size-8 rounded-full flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: emp.avatarColor }}>
                     {initials(emp.name)}
                   </span>
@@ -1792,10 +2119,20 @@ export function RotaCalendarClient() {
             className="w-full text-left px-3 py-1.5 hover:bg-muted"
             onClick={() => {
               closeShiftMenu();
+              openShiftDescription(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx);
+            }}
+          >
+            Description
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-3 py-1.5 hover:bg-muted"
+            onClick={() => {
+              closeShiftMenu();
               openEditShift(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx);
             }}
           >
-            Info / Edit
+            Edit
           </button>
           <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startCopy(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
             Copy shift…

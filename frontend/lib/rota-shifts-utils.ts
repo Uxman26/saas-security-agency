@@ -60,6 +60,31 @@ export function timeMins(t: string) {
   return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
 }
 
+export function minutesBetweenTimes(from: string, to: string): number {
+  let d = timeMins(to) - timeMins(from);
+  if (d < 0) d += 24 * 60;
+  return Math.max(0, d);
+}
+
+/** e.g. 60 → "1 hour", 30 → "30 min" */
+export function formatDurationMins(mins: number): string {
+  const m = Math.max(0, Math.round(mins));
+  if (m < 60) return m === 1 ? '1 min' : `${m} min`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (rem === 0) return h === 1 ? '1 hour' : `${h} hours`;
+  return `${h}h ${rem}m`;
+}
+
+export function latestShiftAdjustment(
+  sh: { adjustments?: { type: string; scheduledEnd: string; actualEnd: string; reason: string; at: string }[] },
+  type: 'overtime' | 'early_finish'
+) {
+  const list = (sh.adjustments || []).filter((a) => a.type === type);
+  if (!list.length) return null;
+  return list[list.length - 1];
+}
+
 export function minsToTime(m: number) {
   const total = Math.max(0, Math.round(m)) % (24 * 60);
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;

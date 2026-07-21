@@ -26,11 +26,11 @@ function buildShiftMessage(employee: EmployeeRec, state: RotaJsState, rotaName: 
       const hrs = calcHours(sh, state.inclBreaks);
       total += hrs;
       const site = shiftSiteLine(sh);
-      lines.push(`• ${fmtShortDate(dk)}: ${sh.start}–${sh.end}${site ? ` @ ${site}` : ''} (${formatHoursDecimal(hrs)}h)`);
+      lines.push(`• ${fmtShortDate(dk)}: ${sh.start}–${sh.end}${site ? ` @ ${site}` : ''} (${formatHoursDecimal(hrs)})`);
     }
   }
   if (total > 0) {
-    lines.push('', `Total: ${formatHoursDecimal(total)} hours`);
+    lines.push('', `Total: ${formatHoursDecimal(total)}`);
   } else {
     lines.push('', 'No shifts scheduled yet.');
   }
@@ -66,7 +66,7 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Shift preview — {employee.name}</DialogTitle>
+          <DialogTitle>{employee.name}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
@@ -91,7 +91,7 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
                           {shiftSiteLine(sh) ? ` · ${shiftSiteLine(sh)}` : ''}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatHoursDecimal(calcHours(sh, state.inclBreaks))}h
+                          {formatHoursDecimal(calcHours(sh, state.inclBreaks))}
                           {sh.notes ? ` · ${sh.notes}` : ''}
                         </p>
                       </div>
@@ -100,7 +100,7 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
                 </div>
               ))}
               <p className="text-sm font-semibold text-right tabular-nums">
-                Total: {formatHoursDecimal(totalHours)} hours
+                Total: {formatHoursDecimal(totalHours)}
               </p>
             </div>
           )}

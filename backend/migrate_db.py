@@ -740,6 +740,7 @@ def run():
         ("sites", "contact_email", "TEXT"),
         ("sites", "contract_start_date", "TEXT"),
         ("sites", "contract_end_date", "TEXT"),
+        ("sites", "staff_hourly_rate", "REAL"),
         ("clients", "postcode", "TEXT"),
         ("contractors", "postcode", "TEXT"),
         ("main_contractors", "postcode", "TEXT"),

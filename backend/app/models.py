@@ -512,6 +512,7 @@ class Site(Base):
     contract_start_date = Column(Date, nullable=True)
     contract_end_date = Column(Date, nullable=True)
     default_hourly_rate = Column(Float)
+    staff_hourly_rate = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="sites")

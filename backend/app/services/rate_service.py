@@ -6,6 +6,15 @@ from app.models import GuardRate, SiteRate, Guard, Site, Assignment
 from app.schemas import GuardRateCreate, SiteRateCreate
 from app.services.company_service import get_company_by_user_id
 
+def _site_staff_rate(site: Optional[Site]) -> Optional[float]:
+    if not site:
+        return None
+    if site.staff_hourly_rate is not None:
+        return site.staff_hourly_rate
+    if site.default_hourly_rate is not None:
+        return site.default_hourly_rate
+    return None
+
 def _guard_rate_for_date(db: Session, guard_id: int, site_id: Optional[int], shift_type: str, d: date) -> Optional[float]:
     gr = db.query(GuardRate).filter(
         GuardRate.guard_id == guard_id,
@@ -21,8 +30,7 @@ def _guard_rate_for_date(db: Session, guard_id: int, site_id: Optional[int], shi
         if sr:
             return sr.hourly_rate
         site = db.query(Site).filter(Site.id == site_id).first()
-        if site and site.default_hourly_rate is not None:
-            return site.default_hourly_rate
+        return _site_staff_rate(site)
     return None
 
 def _billing_rate_for_site(db: Session, company_id: int, site_id: int, shift_type: str) -> Optional[float]:
@@ -40,8 +48,9 @@ def resolve_pay_rate(db: Session, company_id: int, guard_id: int, site_id: int, 
     if r is not None:
         return r
     site = db.query(Site).filter(Site.id == site_id, Site.company_id == company_id).first()
-    if site and site.default_hourly_rate is not None:
-        return site.default_hourly_rate
+    staff = _site_staff_rate(site)
+    if staff is not None:
+        return staff
     gr = db.query(GuardRate).filter(GuardRate.guard_id == guard_id).order_by(GuardRate.effective_from.desc()).first()
     return gr.hourly_rate if gr else 0.0
 

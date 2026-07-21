@@ -113,9 +113,16 @@ type Ctx = {
   setDayCount: (n: number) => void;
   addEmployeesById: (ids: string[]) => void;
   removeEmployee: (id: string) => void;
+  removeEmployees: (ids: string[]) => void;
   reorderEmployees: (ids: string[]) => void;
   addShift: (empId: string, dk: string, s: ShiftRec) => void;
   updateShift: (empId: string, dk: string, idx: number, s: ShiftRec) => void;
+  applyShiftChange: (
+    edit: { empId: string; dk: string; idx: number } | null,
+    assignees: string[],
+    dk: string,
+    s: ShiftRec
+  ) => void;
   deleteShift: (empId: string, dk: string, idx: number) => void;
   copyShiftToDates: (empId: string, dk: string, idx: number, targets: string[]) => void;
   copyShiftToEmployee: (fromId: string, dk: string, idx: number, toId: string) => void;
@@ -163,8 +170,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         setSiteNames(sites.map((s) => s.name));
         const rates: Record<string, number> = {};
         for (const s of sites) {
-          if (s.default_hourly_rate != null && !Number.isNaN(Number(s.default_hourly_rate))) {
-            rates[s.name.trim().toLowerCase()] = Number(s.default_hourly_rate);
+          const staff = s.staff_hourly_rate != null && !Number.isNaN(Number(s.staff_hourly_rate)) ? Number(s.staff_hourly_rate) : null;
+          const siteRate = s.default_hourly_rate != null && !Number.isNaN(Number(s.default_hourly_rate)) ? Number(s.default_hourly_rate) : null;
+          // Payable prefers staff rate; fall back to site rate for older data
+          const pay = staff != null && staff > 0 ? staff : siteRate;
+          if (pay != null && pay > 0) {
+            rates[s.name.trim().toLowerCase()] = pay;
           }
         }
         setSiteRateByName(rates);
@@ -396,6 +407,27 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const removeEmployees = useCallback((ids: string[]) => {
+    const idSet = new Set(ids.filter(Boolean));
+    if (!idSet.size) return;
+    setState((s) => {
+      const shifts = { ...s.shifts };
+      const attendance = { ...s.attendance };
+      for (const id of idSet) {
+        delete shifts[id];
+        for (const k of Object.keys(attendance)) {
+          if (k.startsWith(`${id}:`)) delete attendance[k];
+        }
+      }
+      return {
+        ...s,
+        employees: s.employees.filter((e) => !idSet.has(e.id)),
+        shifts,
+        attendance,
+      };
+    });
+  }, []);
+
   const reorderEmployees = useCallback((ids: string[]) => {
     setState((s) => {
       const map = new Map(s.employees.map((e) => [e.id, e]));
@@ -423,6 +455,85 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       return { ...s, shifts: { ...s.shifts, [empId]: emp } };
     });
   }, []);
+
+  /** Edit/create shifts in one state update so attendance indexes are not lost mid-save. */
+  const applyShiftChange = useCallback(
+    (
+      edit: { empId: string; dk: string; idx: number } | null,
+      assignees: string[],
+      dk: string,
+      sh: ShiftRec
+    ) => {
+      const ids = assignees.filter(Boolean);
+      if (!ids.length || !dk) return;
+      setState((s) => {
+        let shifts = { ...s.shifts };
+        let attendance = { ...s.attendance };
+        let preserved: AttendanceRec | undefined;
+
+        const deleteAt = (empId: string, day: string, idx: number) => {
+          const empShifts = { ...(shifts[empId] || {}) } as Record<string, ShiftRec[]>;
+          const list = [...(empShifts[day] || [])];
+          const oldLen = list.length;
+          if (idx < 0 || idx >= oldLen) return;
+          const key = attKey(empId, day, idx);
+          if (!preserved && attendance[key]) preserved = { ...attendance[key] };
+          list.splice(idx, 1);
+          empShifts[day] = list;
+          shifts = { ...shifts, [empId]: empShifts };
+          for (let i = idx; i < oldLen - 1; i++) {
+            const fromKey = attKey(empId, day, i + 1);
+            const toKey = attKey(empId, day, i);
+            if (attendance[fromKey]) {
+              attendance[toKey] = { ...attendance[fromKey], si: i };
+              delete attendance[fromKey];
+            } else {
+              delete attendance[toKey];
+            }
+          }
+          delete attendance[attKey(empId, day, oldLen - 1)];
+        };
+
+        const addAt = (empId: string, day: string, shift: ShiftRec, withAtt?: AttendanceRec) => {
+          const empShifts = { ...(shifts[empId] || {}) } as Record<string, ShiftRec[]>;
+          const list = [...(empShifts[day] || []), shift];
+          const newIdx = list.length - 1;
+          empShifts[day] = list;
+          shifts = { ...shifts, [empId]: empShifts };
+          if (withAtt) {
+            attendance[attKey(empId, day, newIdx)] = {
+              ...withAtt,
+              empId,
+              dk: day,
+              si: newIdx,
+            };
+          }
+        };
+
+        // In-place edit (same employee + day): keep attendance index stable
+        if (edit && ids.length === 1 && ids[0] === edit.empId && dk === edit.dk) {
+          const empShifts = { ...(shifts[edit.empId] || {}) } as Record<string, ShiftRec[]>;
+          const list = [...(empShifts[edit.dk] || [])];
+          if (!list[edit.idx]) return s;
+          list[edit.idx] = { ...sh };
+          empShifts[edit.dk] = list;
+          return { ...s, shifts: { ...shifts, [edit.empId]: empShifts }, attendance };
+        }
+
+        if (edit) {
+          deleteAt(edit.empId, edit.dk, edit.idx);
+        }
+
+        // Restore attendance onto the first assignee only when reassigning/moving a single shift
+        ids.forEach((id, i) => {
+          addAt(id, dk, { ...sh }, i === 0 ? preserved : undefined);
+        });
+
+        return { ...s, shifts, attendance };
+      });
+    },
+    []
+  );
 
   const deleteShift = useCallback((empId: string, dk: string, idx: number) => {
     setState((s) => {
@@ -765,9 +876,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setDayCount,
       addEmployeesById,
       removeEmployee,
+      removeEmployees,
       reorderEmployees,
       addShift,
       updateShift,
+      applyShiftChange,
       deleteShift,
       copyShiftToDates,
       copyShiftToEmployee,
@@ -807,9 +920,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setDayCount,
       addEmployeesById,
       removeEmployee,
+      removeEmployees,
       reorderEmployees,
       addShift,
       updateShift,
+      applyShiftChange,
       deleteShift,
       copyShiftToDates,
       copyShiftToEmployee,

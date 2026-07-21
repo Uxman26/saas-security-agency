@@ -28,6 +28,11 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
     if role.slug == "super_admin":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+    if role.slug == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only one Admin is allowed. Assign a custom role instead.",
+        )
     user = User(
         email=email,
         password_hash=get_password_hash(data.password),
@@ -66,6 +71,11 @@ def update_company_user(db: Session, company_id: int, user_id: int, data: Compan
         role = db.query(Role).filter(Role.id == data.role_id, Role.company_id == company_id).first()
         if not role:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        if role.slug == "admin" and (not user.role_row or user.role_row.slug != "admin"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only one Admin is allowed. Assign a custom role instead.",
+            )
         user.role_id = role.id
         user.role = role.slug
     db.commit()

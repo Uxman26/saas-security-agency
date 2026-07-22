@@ -11,6 +11,10 @@ from app.services.invoice_service import log_invoice_audit
 
 def create_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
     company = get_company_by_user_id(db, user_id)
+    if data.amount is None or data.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    if data.amount > 99_999_999.99:
+        raise HTTPException(status_code=400, detail="Amount is too large")
     inv = None
     if data.invoice_id is not None:
         inv = db.query(Invoice).filter(Invoice.id == data.invoice_id, Invoice.company_id == company.id).first()
@@ -66,6 +70,8 @@ def update_payment(db: Session, payment_id: int, data: PaymentUpdate, user_id: i
     old_inv_id = pay.invoice_id
     if "amount" in payload and payload["amount"] is not None and payload["amount"] <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
+    if "amount" in payload and payload["amount"] is not None and payload["amount"] > 99_999_999.99:
+        raise HTTPException(status_code=400, detail="Amount is too large")
     if "invoice_id" in payload and payload["invoice_id"] is not None:
         inv = db.query(Invoice).filter(Invoice.id == payload["invoice_id"], Invoice.company_id == company.id).first()
         if not inv:

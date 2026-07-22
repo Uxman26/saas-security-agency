@@ -345,18 +345,18 @@ export default function ClientsPage() {
             </div>
           </div>
 
-          <div className="mb-4 flex flex-col sm:flex-row gap-3 flex-wrap">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <Input
               placeholder="Search name, email, phone, address, contract dates..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
+              className="w-full sm:max-w-md sm:flex-1 min-w-0"
             />
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[200px] shrink-0">
                 <SelectValue placeholder="Contract status" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="valid">Valid (&gt;30d)</SelectItem>
                 <SelectItem value="soon">Expiring (≤30d)</SelectItem>
@@ -370,7 +370,7 @@ export default function ClientsPage() {
             <CardHeader>
               <CardTitle>All Clients</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-h-[280px]">
               {isLoading ? (
                 <div className="text-center py-8 text-muted-foreground">Loading clients...</div>
               ) : total === 0 ? (

@@ -91,6 +91,10 @@ export default function InvoicesPage() {
     if (!genStart || !genEnd) return;
     if (genMode === 'client' && !genClientId) return;
     if (genMode === 'site' && !genSiteId) return;
+    if (genStart > genEnd) {
+      toast.error('Period start cannot be after period end');
+      return;
+    }
     setGenLoading(true);
     try {
       await api.invoices.generate({
@@ -336,13 +340,26 @@ export default function InvoicesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <Label>Period Start <span className="text-destructive">*</span></Label>
-                        <Input type="date" value={genStart} onChange={(e) => setGenStart(e.target.value)} />
+                        <Input
+                          type="date"
+                          value={genStart}
+                          max={genEnd || undefined}
+                          onChange={(e) => setGenStart(e.target.value)}
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label>Period End <span className="text-destructive">*</span></Label>
-                        <Input type="date" value={genEnd} onChange={(e) => setGenEnd(e.target.value)} />
+                        <Input
+                          type="date"
+                          value={genEnd}
+                          min={genStart || undefined}
+                          onChange={(e) => setGenEnd(e.target.value)}
+                        />
                       </div>
                     </div>
+                    {genStart && genEnd && genStart > genEnd ? (
+                      <p className="text-sm text-destructive">Period start cannot be after period end</p>
+                    ) : null}
                     <Button
                       className="w-full"
                       onClick={handleGenerate}
@@ -350,6 +367,7 @@ export default function InvoicesPage() {
                         genLoading ||
                         !genStart ||
                         !genEnd ||
+                        genStart > genEnd ||
                         (genMode === 'client' && !genClientId) ||
                         (genMode === 'site' && !genSiteId)
                       }

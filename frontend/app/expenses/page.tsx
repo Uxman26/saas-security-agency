@@ -123,6 +123,7 @@ export default function ExpensesPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const [formErrors, setFormErrors] = useState<{ expense_date?: string; category?: string; amount_ex_vat?: string }>({});
   const [docFile, setDocFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -168,6 +169,7 @@ export default function ExpensesPage() {
 
   const resetForm = () => {
     setForm(emptyForm());
+    setFormErrors({});
     setDocFile(null);
     setEditId(null);
   };
@@ -203,11 +205,32 @@ export default function ExpensesPage() {
   };
 
   const handleSubmit = async () => {
-    const amount = parseFloat(form.amount_ex_vat);
-    if (!form.expense_date || !form.category || !Number.isFinite(amount) || amount < 0) {
-      toast.error('Fill in date, category, and amount');
+    const errors: { expense_date?: string; category?: string; amount_ex_vat?: string } = {};
+    if (!form.expense_date) {
+      errors.expense_date = 'Expense date is required';
+    }
+    if (!form.category) {
+      errors.category = 'Category is required';
+    }
+    const amountRaw = form.amount_ex_vat.trim();
+    const amount = parseFloat(amountRaw);
+    if (!amountRaw) {
+      errors.amount_ex_vat = 'Amount is required';
+    } else if (!Number.isFinite(amount)) {
+      errors.amount_ex_vat = 'Enter a valid number for amount';
+    } else if (amount < 0) {
+      errors.amount_ex_vat = 'Amount cannot be negative';
+    } else if (amount > 99_999_999.99) {
+      errors.amount_ex_vat = 'Amount is too large (max £99,999,999.99)';
+    }
+
+    if (Object.keys(errors).length) {
+      setFormErrors(errors);
+      const first = errors.expense_date || errors.category || errors.amount_ex_vat;
+      if (first) toast.error(first);
       return;
     }
+    setFormErrors({});
     setSubmitting(true);
     try {
       const payload = {
@@ -333,11 +356,25 @@ export default function ExpensesPage() {
     <div className="grid gap-4 sm:grid-cols-2">
       <div>
         <Label>Expense date</Label>
-        <Input type="date" value={form.expense_date} onChange={(ev) => setForm((f) => ({ ...f, expense_date: ev.target.value }))} />
+        <Input
+          type="date"
+          value={form.expense_date}
+          onChange={(ev) => {
+            setForm((f) => ({ ...f, expense_date: ev.target.value }));
+            if (formErrors.expense_date) setFormErrors((e) => ({ ...e, expense_date: undefined }));
+          }}
+        />
+        {formErrors.expense_date ? <p className="text-xs text-destructive mt-1">{formErrors.expense_date}</p> : null}
       </div>
       <div>
         <Label>Category</Label>
-        <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+        <Select
+          value={form.category}
+          onValueChange={(v) => {
+            setForm((f) => ({ ...f, category: v }));
+            if (formErrors.category) setFormErrors((e) => ({ ...e, category: undefined }));
+          }}
+        >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {categories.map((c) => (
@@ -345,6 +382,7 @@ export default function ExpensesPage() {
             ))}
           </SelectContent>
         </Select>
+        {formErrors.category ? <p className="text-xs text-destructive mt-1">{formErrors.category}</p> : null}
       </div>
       <div>
         <Label>Vendor / supplier</Label>
@@ -365,7 +403,17 @@ export default function ExpensesPage() {
       </div>
       <div>
         <Label>Amount (ex VAT)</Label>
-        <Input type="number" min="0" step="0.01" value={form.amount_ex_vat} onChange={(ev) => setForm((f) => ({ ...f, amount_ex_vat: ev.target.value }))} />
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.amount_ex_vat}
+          onChange={(ev) => {
+            setForm((f) => ({ ...f, amount_ex_vat: ev.target.value }));
+            if (formErrors.amount_ex_vat) setFormErrors((e) => ({ ...e, amount_ex_vat: undefined }));
+          }}
+        />
+        {formErrors.amount_ex_vat ? <p className="text-xs text-destructive mt-1">{formErrors.amount_ex_vat}</p> : null}
       </div>
       <div className="sm:col-span-2 flex items-center gap-2 pt-6">
         <input

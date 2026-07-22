@@ -963,6 +963,9 @@ export function RotaCalendarClient() {
   const [dragEmpId, setDragEmpId] = useState<string | null>(null);
   const [rowDragId, setRowDragId] = useState<string | null>(null);
   const [rowDropId, setRowDropId] = useState<string | null>(null);
+  const [dropDayKey, setDropDayKey] = useState<string | null>(null);
+  const [dropEmpId, setDropEmpId] = useState<string | null>(null);
+  const [draggingShift, setDraggingShift] = useState(false);
 
   const onDragStart = (e: React.DragEvent, empId: string) => {
     e.dataTransfer.setData('text/plain', empId);
@@ -1017,19 +1020,33 @@ export function RotaCalendarClient() {
     e.dataTransfer.effectAllowed = 'move';
     setDragEmpId(null);
     setRowDragId(null);
+    setDraggingShift(true);
+    setDropDayKey(null);
+    setDropEmpId(null);
   };
 
   const onDragEnd = () => {
     setDragEmpId(null);
     setRowDragId(null);
     setRowDropId(null);
+    setDraggingShift(false);
+    setDropDayKey(null);
+    setDropEmpId(null);
   };
 
-  const onDayDragOver = (e: React.DragEvent) => {
+  const onDayDragOver = (e: React.DragEvent, dk: string, rowEmpId?: string) => {
     if (e.dataTransfer.types.includes('application/x-rota-row-reorder')) return;
     e.preventDefault();
     const raw = e.dataTransfer.types.includes('application/x-rota-drag') || e.dataTransfer.types.includes('text/plain');
     e.dataTransfer.dropEffect = raw ? 'move' : 'copy';
+    if (dropDayKey !== dk) setDropDayKey(dk);
+    const nextEmp = rowEmpId ?? null;
+    if (dropEmpId !== nextEmp) setDropEmpId(nextEmp);
+  };
+
+  const clearDropHighlight = () => {
+    setDropDayKey(null);
+    setDropEmpId(null);
   };
 
   const parseDragPayload = (e: React.DragEvent): { type: 'employee'; empId: string } | { type: 'shift'; empId: string; dk: string; idx: number } | null => {
@@ -1055,6 +1072,8 @@ export function RotaCalendarClient() {
     e.stopPropagation();
     const payload = parseDragPayload(e);
     setDragEmpId(null);
+    setDraggingShift(false);
+    clearDropHighlight();
     if (!payload) return;
     if (payload.type === 'employee') {
       openAddShift(dk, payload.empId);
@@ -1419,8 +1438,14 @@ export function RotaCalendarClient() {
                     return (
                       <td
                         key={dk}
-                        className="relative align-top p-1 border-l border-b border-border/40 bg-muted/5 overflow-hidden"
-                        onDragOver={onDayDragOver}
+                        className={cn(
+                          'relative align-top p-1 border-l border-b border-border/40 bg-muted/5 overflow-hidden transition-colors',
+                          draggingShift && dropDayKey === dk && dropEmpId === emp.id && 'bg-pink-100/80 dark:bg-pink-950/40 ring-2 ring-inset ring-pink-500/70'
+                        )}
+                        onDragOver={(e) => onDayDragOver(e, dk, emp.id)}
+                        onDragLeave={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
+                        }}
                         onDrop={(e) => onDropDay(e, dk, emp.id)}
                       >
                         <div className="flex flex-col gap-1.5 min-h-[52px] min-w-0">
@@ -1529,8 +1554,16 @@ export function RotaCalendarClient() {
       {state.rotaView === 'timeline' && (
         <div className="space-y-4 overflow-x-auto">
           {state.days.map((dk) => (
-            <div key={dk} className="rounded-lg border bg-card"
-              onDragOver={onDayDragOver}
+            <div
+              key={dk}
+              className={cn(
+                'rounded-lg border bg-card transition-colors',
+                (draggingShift || dragEmpId) && dropDayKey === dk && 'ring-2 ring-pink-500/70 bg-pink-50/40 dark:bg-pink-950/20'
+              )}
+              onDragOver={(e) => onDayDragOver(e, dk)}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
+              }}
               onDrop={(e) => onDropDay(e, dk)}
             >
               <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
@@ -1617,9 +1650,16 @@ export function RotaCalendarClient() {
                 key={dk}
                 className={cn(
                   'rounded-lg border-2 border-dashed min-h-[160px] p-2 flex flex-col gap-1 transition-colors',
-                  dragEmpId ? 'border-pink-400/70 bg-pink-50/20 dark:bg-pink-950/15' : 'border-muted'
+                  dropDayKey === dk && (draggingShift || !!dragEmpId)
+                    ? 'border-pink-500 bg-pink-100/70 dark:bg-pink-950/40 ring-2 ring-pink-500/50'
+                    : dragEmpId || draggingShift
+                      ? 'border-pink-300/50 bg-pink-50/10 dark:bg-pink-950/10'
+                      : 'border-muted'
                 )}
-                onDragOverCapture={onDayDragOver}
+                onDragOverCapture={(e) => onDayDragOver(e, dk)}
+                onDragLeaveCapture={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
+                }}
                 onDropCapture={(e) => onDropDay(e, dk)}
               >
                 <span className="text-[10px] font-semibold text-center border-b pb-1 pointer-events-none">{fmtShortDate(dk)}</span>

@@ -58,13 +58,37 @@ export default function PaymentsPage() {
     api.invoices.list().then(setInvoices).catch(() => {});
   }, []);
 
+  const MAX_PAYMENT_AMOUNT = 99_999_999.99;
+
+  const validatePaymentAmount = (raw: string): number | null => {
+    const amount = parseFloat(raw);
+    if (!raw.trim() || Number.isNaN(amount)) {
+      toast.error('Enter a valid payment amount');
+      return null;
+    }
+    if (amount <= 0) {
+      toast.error('Amount must be greater than zero');
+      return null;
+    }
+    if (amount > MAX_PAYMENT_AMOUNT) {
+      toast.error('Amount is too large (max £99,999,999.99)');
+      return null;
+    }
+    return Math.round(amount * 100) / 100;
+  };
+
   const handleAdd = async () => {
-    if (!formAmount || !formMethod || !formPaidAt) return;
+    if (!formMethod || !formPaidAt) {
+      toast.error('Method and date are required');
+      return;
+    }
+    const amount = validatePaymentAmount(formAmount);
+    if (amount == null) return;
     setSubmitting(true);
     try {
       await api.payments.create({
         invoice_id: formInvoiceId ? parseInt(formInvoiceId) : undefined,
-        amount: parseFloat(formAmount),
+        amount,
         method: formMethod,
         paid_at: formPaidAt ? `${formPaidAt}T00:00:00` : new Date().toISOString(),
       });
@@ -74,8 +98,9 @@ export default function PaymentsPage() {
       setFormMethod('bank_transfer');
       setFormPaidAt(new Date().toISOString().split('T')[0]);
       loadPayments();
+      toast.success('Payment recorded');
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Payment failed');
     } finally {
       setSubmitting(false);
     }
@@ -104,11 +129,8 @@ export default function PaymentsPage() {
 
   const handleEditSave = async () => {
     if (!editRec) return;
-    const amount = parseFloat(formAmount);
-    if (!formAmount || Number.isNaN(amount) || amount <= 0) {
-      toast.error('Enter a valid amount greater than zero');
-      return;
-    }
+    const amount = validatePaymentAmount(formAmount);
+    if (amount == null) return;
     if (!formMethod || !formPaidAt) {
       toast.error('Method and date are required');
       return;
@@ -237,9 +259,13 @@ export default function PaymentsPage() {
                         <Input
                           type="number"
                           step="0.01"
-                          min="0"
+                          min="0.01"
+                          max="99999999.99"
                           value={formAmount}
-                          onChange={(e) => setFormAmount(e.target.value)}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) setFormAmount(v);
+                          }}
                           placeholder="0.00"
                         />
                       </div>
@@ -452,7 +478,17 @@ export default function PaymentsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label>Amount (£)</Label>
-                  <Input type="number" step="0.01" min="0" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max="99999999.99"
+                    value={formAmount}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '' || /^\d*\.?\d{0,2}$/.test(v)) setFormAmount(v);
+                    }}
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Payment Date</Label>

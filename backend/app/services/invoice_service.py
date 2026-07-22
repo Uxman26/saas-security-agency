@@ -255,6 +255,8 @@ def generate_from_assignments(
     client_id: Optional[int] = None,
     site_id: Optional[int] = None,
 ) -> Invoice:
+    if period_start > period_end:
+        raise HTTPException(status_code=400, detail="Period start cannot be after period end")
     company = get_company_by_user_id(db, user_id)
     if site_id:
         site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()

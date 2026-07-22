@@ -1092,7 +1092,7 @@ class InvoiceAuditEntry(BaseModel):
 
 class PaymentBase(BaseModel):
     invoice_id: Optional[int] = None
-    amount: float
+    amount: float = Field(..., gt=0, le=99_999_999.99)
     method: Optional[str] = None
     paid_at: Optional[datetime] = None
 
@@ -1101,7 +1101,7 @@ class PaymentCreate(PaymentBase):
 
 class PaymentUpdate(BaseModel):
     invoice_id: Optional[int] = None
-    amount: Optional[float] = None
+    amount: Optional[float] = Field(None, gt=0, le=99_999_999.99)
     method: Optional[str] = None
     paid_at: Optional[datetime] = None
 

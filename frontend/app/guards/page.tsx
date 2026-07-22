@@ -223,11 +223,13 @@ export default function GuardsPage() {
                 <DialogTrigger asChild>
                   <Button disabled={!can(user, 'guards.write')}>Add staff</Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
-                  <DialogHeader>
+                <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+                  <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
                     <DialogTitle>Add staff member</DialogTitle>
                   </DialogHeader>
-                  <GuardFormWizard form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create staff" />
+                  <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
+                    <GuardFormWizard form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create staff" />
+                  </div>
                 </DialogContent>
               </Dialog>
             </div>
@@ -380,11 +382,13 @@ export default function GuardsPage() {
 
         {/* Edit Dialog */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit staff — {editingGuard?.full_name}</DialogTitle>
+          <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+            <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+              <DialogTitle className="break-words">Edit staff — {editingGuard?.full_name}</DialogTitle>
             </DialogHeader>
-            <GuardFormWizard form={editForm} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save changes" />
+            <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
+              <GuardFormWizard form={editForm} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save changes" />
+            </div>
           </DialogContent>
         </Dialog>
       </div>

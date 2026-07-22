@@ -2,7 +2,7 @@ import json
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from app.models import Attendance, Assignment, Guard, User
 from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest
 from app.services.company_service import get_company_by_user_id
@@ -10,6 +10,16 @@ from app.services.shift_adjustment_service import find_assignment
 
 ALLOWED_STATUS = {"on_time", "late", "absent", "early_leave", "no_show", "present"}
 STATUS_ALIASES = {"present": "on_time"}
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _as_utc_naive(dt: datetime) -> datetime:
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 def _normalize_status(status: str) -> str:
@@ -183,6 +193,13 @@ def update_attendance(db: Session, attendance_id: int, data: AttendanceUpdate, u
         status = payload.get("status", att.status)
         if status != "on_time" and not (note or "").strip():
             raise HTTPException(status_code=400, detail="Note is required for Late, Absent, and No show")
+    now = _utc_now()
+    if "booked_at" in payload and payload["booked_at"] is not None:
+        if _as_utc_naive(payload["booked_at"]) > now:
+            raise HTTPException(status_code=400, detail="Booked on cannot be in the future")
+    if "booked_off_at" in payload and payload["booked_off_at"] is not None:
+        if _as_utc_naive(payload["booked_off_at"]) > now:
+            raise HTTPException(status_code=400, detail="Booked off cannot be in the future")
     for k, v in payload.items():
         setattr(att, k, v)
     att.updated_by_user_id = user_id

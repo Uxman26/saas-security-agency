@@ -42,19 +42,20 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
       <div className={cn(bodyCls, 'font-medium tabular-nums')}>
         Time: {shift.start} – {shift.end}
       </div>
-      <div className={cn(bodyCls, 'text-muted-foreground truncate')}>Site: {site}</div>
+      <div className={cn(bodyCls, 'font-bold text-foreground truncate')}>Site: {site}</div>
 
       {hasExtras ? (
         <div className={cn('space-y-1.5', compact ? 'pt-0.5' : 'pt-2 border-t mt-2')}>
           {showAtt ? (
             <div className="min-w-0 space-y-0.5">
               <div
-                className={labelCls}
+                className={cn(labelCls, 'whitespace-nowrap truncate leading-tight')}
                 style={{ color: attStatusBarColor(attStatus) || undefined }}
+                title={`Attendance: ${attStatusLabel(attStatus)}`}
               >
                 Attendance: {attStatusLabel(attStatus)}
               </div>
-              <div className={noteCls}>Note: {attNote || '—'}</div>
+              {attNote ? <div className={noteCls}>Note: {attNote}</div> : null}
             </div>
           ) : null}
 
@@ -63,7 +64,9 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
               <div className={cn(labelCls, 'text-sky-700 dark:text-sky-300 normal-case')}>
                 Overtime: {formatDurationMins(otMins)}
               </div>
-              <div className={noteCls}>Note: {(overtime?.reason || '').trim() || '—'}</div>
+              {(overtime?.reason || '').trim() ? (
+                <div className={noteCls}>Note: {(overtime?.reason || '').trim()}</div>
+              ) : null}
             </div>
           ) : null}
 
@@ -76,7 +79,9 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
               <div className={cn(labelCls, 'text-amber-700 dark:text-amber-300 normal-case')}>
                 Finish early: {formatDurationMins(earlyMins)}
               </div>
-              <div className={noteCls}>Note: {(early?.reason || '').trim() || '—'}</div>
+              {(early?.reason || '').trim() ? (
+                <div className={noteCls}>Note: {(early?.reason || '').trim()}</div>
+              ) : null}
             </div>
           ) : null}
         </div>

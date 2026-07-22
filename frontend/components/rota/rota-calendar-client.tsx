@@ -9,16 +9,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, calcHours, countedHoursForAttendance, fmtShortDate, formatHoursDecimal, formatMoney, initials, normalizeAttStatus, payableHoursForAttendance, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, calcHours, countedHoursForAttendance, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, payableHoursForAttendance, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
+import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
+import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
 import { ShiftRotaSections } from '@/components/rota/shift-rota-sections';
 import {
   ArrowLeft,
   ArrowUpDown,
   CalendarPlus,
+  ChevronDown,
   Download,
+  FileSpreadsheet,
   GripVertical,
   MoreHorizontal,
   Loader2,
@@ -33,6 +37,9 @@ import { toast } from '@/lib/toast';
 const SHIFT_MENU_H = 300;
 const EMP_MENU_H = 132;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const ROTA_PAY_COL_W = 96;
+const ROTA_HOURS_COL_W = 104;
+const ROTA_EMP_COL_W = 252;
 
 const ATT_STATUS_OPTIONS: { value: AttStatus; label: string }[] = [
   { value: 'on_time', label: 'On time' },
@@ -142,6 +149,9 @@ export function RotaCalendarClient() {
 
   const [publishing, setPublishing] = useState(false);
   const [planPublished, setPlanPublished] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
   const [previewEmpId, setPreviewEmpId] = useState<string | null>(null);
   const previewEmployee = useMemo(() => {
@@ -224,6 +234,9 @@ export function RotaCalendarClient() {
   const [moveCtx, setMoveCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [viewShiftsOpen, setViewShiftsOpen] = useState(false);
   const [viewShiftsEmpId, setViewShiftsEmpId] = useState<string | null>(null);
+  const [deleteShiftsOpen, setDeleteShiftsOpen] = useState(false);
+  const [deleteShiftsEmpId, setDeleteShiftsEmpId] = useState<string | null>(null);
+  const [deleteShiftsDayKey, setDeleteShiftsDayKey] = useState<string | null>(null);
   const [reorderOpen, setReorderOpen] = useState(false);
   const [orderDraft, setOrderDraft] = useState<string[]>([]);
   const [daysOpen, setDaysOpen] = useState(false);
@@ -248,6 +261,7 @@ export function RotaCalendarClient() {
   const [empMenu, setEmpMenu] = useState<string | null>(null);
   const [empMenuAnchor, setEmpMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
   const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(() => new Set());
+  const [employeeSelectMode, setEmployeeSelectMode] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const shiftMenuPortalRef = useRef<HTMLDivElement>(null);
   const empMenuPortalRef = useRef<HTMLDivElement>(null);
@@ -286,6 +300,18 @@ export function RotaCalendarClient() {
       window.removeEventListener('resize', fn);
     };
   }, []);
+
+  useEffect(() => {
+    if (!shiftMenu && !empMenu) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeShiftMenu();
+        closeEmpMenu();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [shiftMenu, empMenu]);
 
   const empMatchesStatusFilter = useCallback(
     (empId: string) => {
@@ -333,78 +359,40 @@ export function RotaCalendarClient() {
     return `${a} – ${b} | ${state.days.length} days | ${state.employees.length} employees`;
   }, [state.days, state.employees.length]);
 
-  const csvCell = (value: string | number | null | undefined) => {
-    const s = value == null ? '' : String(value);
-    if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!exportMenuRef.current?.contains(e.target as Node)) setExportMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [exportMenuOpen]);
 
-  const exportSingleRota = useCallback(() => {
+  const exportRotaCsv = useCallback(() => {
+    if (!downloadPlannerRotaCsv(state, resolveShiftRate)) {
+      toast.warning('No days to export');
+      return;
+    }
+    setExportMenuOpen(false);
+    toast.success('Rota exported as CSV');
+  }, [state, resolveShiftRate]);
+
+  const exportRotaPdf = useCallback(async () => {
     if (!state.days.length) {
       toast.warning('No days to export');
       return;
     }
-    const header = [
-      'Employee',
-      'Role',
-      'Date',
-      'Start',
-      'End',
-      'Site',
-      'Hours',
-      'Status',
-      'Rate',
-      'Payable',
-      'Note',
-    ];
-    const lines = [header.map(csvCell).join(',')];
-    for (const emp of state.employees) {
-      let wrote = false;
-      for (const dk of state.days) {
-        const list = state.shifts[emp.id]?.[dk] || [];
-        list.forEach((sh, idx) => {
-          wrote = true;
-          const a = state.attendance[attKey(emp.id, dk, idx)];
-          const status = normalizeAttStatus(a?.status);
-          const hours = countedHoursForAttendance(sh, a, state.inclBreaks);
-          const payableHrs = payableHoursForAttendance(sh, a, state.inclBreaks);
-          const rate = resolveShiftRate(sh, emp.id);
-          const payable = payableHrs * rate;
-          lines.push(
-            [
-              emp.name,
-              emp.role,
-              dk,
-              sh.start,
-              sh.end,
-              shiftSiteLine(sh) || sh.site || '',
-              hours.toFixed(2),
-              status ? attStatusLabel(status) : '',
-              rate.toFixed(2),
-              payable.toFixed(2),
-              a?.note || '',
-            ]
-              .map(csvCell)
-              .join(',')
-          );
-        });
-      }
-      if (!wrote) {
-        lines.push([emp.name, emp.role, '', '', '', '', '0.00', '', '', '0.00', ''].map(csvCell).join(','));
-      }
+    setExporting(true);
+    try {
+      await downloadPlannerRotaPdf(state);
+      setExportMenuOpen(false);
+      toast.success('Rota exported as PDF');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'PDF export failed');
+    } finally {
+      setExporting(false);
     }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const from = state.days[0];
-    const to = state.days[state.days.length - 1];
-    const safeName = (state.rotaName || 'rota').replace(/[^\w.-]+/g, '_').slice(0, 40);
-    a.download = `${safeName}_${from}_${to}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Rota exported');
-  }, [state.days, state.employees, state.shifts, state.attendance, state.rotaName, state.inclBreaks, resolveShiftRate]);
+  }, [state]);
 
   const openAddShift = (dk: string, empId: string) => {
     setShiftEdit(null);
@@ -577,24 +565,92 @@ export function RotaCalendarClient() {
     toast.success('Attendance saved');
   };
 
+  const removeShiftAdjustment = (empId: string, dk: string, idx: number, type: 'overtime' | 'early_finish') => {
+    const sh = state.shifts[empId]?.[dk]?.[idx];
+    if (!sh) return null;
+    const existing = latestShiftAdjustment(sh, type);
+    if (!existing) return null;
+    const adjustments = (sh.adjustments || []).filter((a) => a.type !== type);
+    const restoreEnd = existing.scheduledEnd || sh.scheduledEnd || sh.end;
+    updateShift(empId, dk, idx, {
+      ...sh,
+      end: restoreEnd,
+      scheduledEnd: adjustments.length > 0 ? sh.scheduledEnd || restoreEnd : undefined,
+      adjustments,
+    });
+    return restoreEnd;
+  };
+
+  const openEarlyFinishDialog = (empId: string, dk: string, idx: number, defaultEnd?: string) => {
+    const sh = state.shifts[empId]?.[dk]?.[idx];
+    if (!sh) return;
+    const scheduled = defaultEnd || sh.scheduledEnd || sh.end;
+    setEfCtx({ empId, dk, idx });
+    setEfEnd(scheduled);
+    setEfReason('');
+    setEfOpen(true);
+  };
+
+  const openOvertimeDialog = (empId: string, dk: string, idx: number, defaultEnd?: string) => {
+    const sh = state.shifts[empId]?.[dk]?.[idx];
+    if (!sh) return;
+    const scheduled = sh.scheduledEnd || sh.end;
+    setOtCtx({ empId, dk, idx });
+    setOtEnd(defaultEnd || scheduled);
+    setOtReason('');
+    setOtOpen(true);
+  };
+
   const startOvertime = (empId: string, dk: string, idx: number) => {
     closeShiftMenu();
     const sh = state.shifts[empId]?.[dk]?.[idx];
     if (!sh) return;
-    setOtCtx({ empId, dk, idx });
-    setOtEnd(sh.end);
-    setOtReason('');
-    setOtOpen(true);
+    const early = latestShiftAdjustment(sh, 'early_finish');
+    const earlyMins = early ? minutesBetweenTimes(early.actualEnd, early.scheduledEnd) : 0;
+    if (early && earlyMins > 0) {
+      toast.confirm(
+        'This shift has an early finish recorded. Remove it before adding overtime.',
+        () => {
+          const restoreEnd = removeShiftAdjustment(empId, dk, idx, 'early_finish');
+          if (restoreEnd) {
+            openOvertimeDialog(empId, dk, idx, restoreEnd);
+            toast.success('Early finish removed — enter an overtime end time');
+          }
+        },
+        {
+          label: 'Remove early finish',
+          description: 'Overtime and early finish cannot apply to the same shift.',
+        }
+      );
+      return;
+    }
+    openOvertimeDialog(empId, dk, idx);
   };
 
   const startEarlyFinish = (empId: string, dk: string, idx: number) => {
     closeShiftMenu();
     const sh = state.shifts[empId]?.[dk]?.[idx];
     if (!sh) return;
-    setEfCtx({ empId, dk, idx });
-    setEfEnd(sh.end);
-    setEfReason('');
-    setEfOpen(true);
+    const overtime = latestShiftAdjustment(sh, 'overtime');
+    const otMins = overtime ? minutesBetweenTimes(overtime.scheduledEnd, overtime.actualEnd) : 0;
+    if (overtime && otMins > 0) {
+      toast.confirm(
+        'This shift has overtime recorded. Remove it before adding an early finish.',
+        () => {
+          const restoreEnd = removeShiftAdjustment(empId, dk, idx, 'overtime');
+          if (restoreEnd) {
+            openEarlyFinishDialog(empId, dk, idx, restoreEnd);
+            toast.success('Overtime removed — enter a finish time earlier than scheduled end');
+          }
+        },
+        {
+          label: 'Remove overtime',
+          description: 'Overtime and early finish cannot apply to the same shift.',
+        }
+      );
+      return;
+    }
+    openEarlyFinishDialog(empId, dk, idx);
   };
 
   const applyShiftAdjustment = async (
@@ -652,6 +708,11 @@ export function RotaCalendarClient() {
       toast.warning('Reason is required');
       return;
     }
+    const early = latestShiftAdjustment(sh, 'early_finish');
+    if (early && minutesBetweenTimes(early.actualEnd, early.scheduledEnd) > 0) {
+      toast.warning('Remove early finish before adding overtime');
+      return;
+    }
     if (timeMins(otEnd) <= timeMins(scheduled)) {
       toast.warning('New end time must be after scheduled end');
       return;
@@ -675,8 +736,13 @@ export function RotaCalendarClient() {
       toast.warning('Reason is required');
       return;
     }
+    const overtime = latestShiftAdjustment(sh, 'overtime');
+    if (overtime && minutesBetweenTimes(overtime.scheduledEnd, overtime.actualEnd) > 0) {
+      toast.warning('Remove overtime before adding an early finish');
+      return;
+    }
     if (timeMins(efEnd) >= timeMins(scheduled)) {
-      toast.warning('Actual end time must be before scheduled end');
+      toast.warning(`Actual end time must be before scheduled end (${scheduled})`);
       return;
     }
     setAdjSaving(true);
@@ -767,6 +833,56 @@ export function RotaCalendarClient() {
     return items;
   }, [viewShiftsEmpId, state.shifts, state.days]);
 
+  const deleteShiftsEmp = deleteShiftsEmpId ? state.employees.find((e) => e.id === deleteShiftsEmpId) : null;
+
+  const deleteShiftsRows = useMemo(() => {
+    if (!deleteShiftsEmpId) return [];
+    const byD = state.shifts[deleteShiftsEmpId] || {};
+    const days = deleteShiftsDayKey ? [deleteShiftsDayKey] : state.days;
+    const items: { dayKey: string; idx: number; shift: ShiftRec }[] = [];
+    for (const dk of days) {
+      (byD[dk] || []).forEach((shift, idx) => items.push({ dayKey: dk, idx, shift }));
+    }
+    return items;
+  }, [deleteShiftsEmpId, deleteShiftsDayKey, state.shifts, state.days]);
+
+  const openDeleteShifts = (empId: string, dayKey?: string | null) => {
+    setDeleteShiftsEmpId(empId);
+    setDeleteShiftsDayKey(dayKey ?? null);
+    setDeleteShiftsOpen(true);
+    closeEmpMenu();
+    closeShiftMenu();
+  };
+
+  const handleDeleteShiftRow = (dayKey: string, idx: number) => {
+    if (!deleteShiftsEmpId) return;
+    deleteShift(deleteShiftsEmpId, dayKey, idx);
+    toast.success('Shift deleted');
+    if (deleteShiftsRows.length <= 1) {
+      setDeleteShiftsOpen(false);
+      setDeleteShiftsEmpId(null);
+      setDeleteShiftsDayKey(null);
+      if (viewShiftsEmpId === deleteShiftsEmpId) setViewShiftsOpen(false);
+    }
+  };
+
+  const handleDeleteAllShifts = () => {
+    if (!deleteShiftsEmpId) return;
+    if (deleteShiftsDayKey) {
+      const list = [...(state.shifts[deleteShiftsEmpId]?.[deleteShiftsDayKey] || [])];
+      for (let i = list.length - 1; i >= 0; i--) {
+        deleteShift(deleteShiftsEmpId, deleteShiftsDayKey, i);
+      }
+    } else {
+      clearEmployeeShifts(deleteShiftsEmpId);
+    }
+    setDeleteShiftsOpen(false);
+    setDeleteShiftsEmpId(null);
+    setDeleteShiftsDayKey(null);
+    if (viewShiftsEmpId === deleteShiftsEmpId) setViewShiftsOpen(false);
+    toast.success('Shifts deleted');
+  };
+
   const openViewShifts = (empId: string) => {
     setViewShiftsEmpId(empId);
     setViewShiftsOpen(true);
@@ -774,14 +890,7 @@ export function RotaCalendarClient() {
   };
 
   const deleteAllEmpShifts = (empId: string) => {
-    const emp = state.employees.find((e) => e.id === empId);
-    if (!emp) return;
-    toast.confirm(`Delete all shifts for ${emp.name}?`, () => {
-      clearEmployeeShifts(empId);
-      closeEmpMenu();
-      if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
-      toast.success('Shifts removed');
-    }, { label: 'Delete' });
+    openDeleteShifts(empId);
   };
 
   const removeEmpFromRota = (empId: string) => {
@@ -826,6 +935,11 @@ export function RotaCalendarClient() {
     });
   };
 
+  const exitEmployeeSelectMode = () => {
+    setEmployeeSelectMode(false);
+    setSelectedEmpIds(new Set());
+  };
+
   const removeSelectedEmployees = () => {
     const ids = [...selectedEmpIds].filter((id) => state.employees.some((e) => e.id === id));
     if (!ids.length) {
@@ -838,7 +952,7 @@ export function RotaCalendarClient() {
         : `${ids.length} employees`;
     toast.confirm(`Remove ${label} from this rota?`, () => {
       removeEmployees(ids);
-      setSelectedEmpIds(new Set());
+      exitEmployeeSelectMode();
       closeEmpMenu();
       if (viewShiftsEmpId && ids.includes(viewShiftsEmpId)) setViewShiftsOpen(false);
       if (previewEmpId && ids.includes(previewEmpId)) setPreviewEmpId(null);
@@ -1099,61 +1213,110 @@ export function RotaCalendarClient() {
             <CalendarPlus className="size-3.5 mr-1" />
             Add days
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={exportSingleRota}
-            disabled={!state.days.length}
-          >
-            <Download className="size-3.5 mr-1" />
-            Export rota
-          </Button>
-          {selectedEmpIds.size > 0 ? (
+          <div className="relative" ref={exportMenuRef}>
             <Button
               variant="outline"
               size="sm"
               type="button"
-              className="text-destructive border-destructive/40 hover:bg-destructive/10"
-              onClick={removeSelectedEmployees}
+              onClick={() => setExportMenuOpen((open) => !open)}
+              disabled={!state.days.length || exporting}
             >
-              <Trash2 className="size-3.5 mr-1" />
-              Remove selected ({selectedEmpIds.size})
+              <Download className="size-3.5 mr-1" />
+              Export rota
+              <ChevronDown className="size-3.5 ml-1 opacity-70" />
             </Button>
-          ) : null}
+            {exportMenuOpen ? (
+              <div className="absolute right-0 z-50 mt-1 w-52 rounded-md border bg-popover text-popover-foreground shadow-md py-1">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                  onClick={exportRotaCsv}
+                >
+                  <FileSpreadsheet className="size-3.5 shrink-0" />
+                  CSV spreadsheet
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left disabled:opacity-50"
+                  onClick={() => void exportRotaPdf()}
+                  disabled={exporting}
+                >
+                  {exporting ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <Download className="size-3.5 shrink-0" />}
+                  PDF (shareable)
+                </button>
+              </div>
+            ) : null}
+          </div>
+          {employeeSelectMode ? (
+            <>
+              <Button variant="outline" size="sm" type="button" onClick={exitEmployeeSelectMode}>
+                Cancel selection
+              </Button>
+              {selectedEmpIds.size > 0 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                  onClick={removeSelectedEmployees}
+                >
+                  <Trash2 className="size-3.5 mr-1" />
+                  Remove selected ({selectedEmpIds.size})
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => setEmployeeSelectMode(true)}
+              disabled={rows.length === 0}
+            >
+              Select employees
+            </Button>
+          )}
         </div>
       </div>
 
       {state.rotaView === 'table' && (
-        <div className="overflow-x-auto rounded-lg border bg-card" ref={menuRef}>
+        <div className="rounded-lg border bg-card">
+          <div
+            className="overflow-auto max-h-[min(72vh,calc(100dvh-14rem))] min-h-[280px]"
+            ref={menuRef}
+          >
           <table
-            className="table-fixed w-full text-sm border-collapse"
-            style={{ minWidth: `${252 + state.days.length * 128 + 200}px` }}
+            className="table-fixed w-full text-sm border-separate border-spacing-0"
+            style={{ minWidth: `${ROTA_EMP_COL_W + state.days.length * 128 + ROTA_HOURS_COL_W + ROTA_PAY_COL_W}px` }}
           >
             <colgroup>
-              <col style={{ width: 252 }} />
+              <col style={{ width: ROTA_EMP_COL_W }} />
               {state.days.map((dk) => (
                 <col key={dk} style={{ width: 128 }} />
               ))}
-              <col style={{ width: 104 }} />
-              <col style={{ width: 96 }} />
+              <col style={{ width: ROTA_HOURS_COL_W }} />
+              <col style={{ width: ROTA_PAY_COL_W }} />
             </colgroup>
             <thead>
               <tr className="bg-muted border-b">
-                <th className="sticky left-0 z-20 bg-muted p-2 text-left align-top shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)]">
-                  <div className="flex items-start gap-2 mb-2">
-                    <input
-                      type="checkbox"
-                      className="mt-2 size-4 shrink-0 rounded border-input"
-                      checked={allVisibleSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
-                      }}
-                      onChange={(e) => toggleSelectAllVisible(e.target.checked)}
-                      aria-label="Select all visible employees"
-                      disabled={rows.length === 0}
-                    />
-                    <Input placeholder="Name, job title…" value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="h-8 text-xs flex-1" />
+                <th className="sticky top-0 left-0 z-40 bg-muted p-2 text-left align-top shadow-[2px_2px_4px_-2px_rgba(0,0,0,0.12)] border-b border-r">
+                  <div className="flex items-start gap-1.5 mb-2 min-w-0">
+                    <span className="mt-2 shrink-0 w-5" aria-hidden />
+                    {employeeSelectMode ? (
+                      <input
+                        type="checkbox"
+                        className="mt-2.5 size-4 shrink-0 rounded border-input"
+                        checked={allVisibleSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
+                        }}
+                        onChange={(e) => toggleSelectAllVisible(e.target.checked)}
+                        aria-label="Select all visible employees"
+                        title="Select all"
+                        disabled={rows.length === 0}
+                      />
+                    ) : null}
+                    <Input placeholder="Name, job title…" value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="h-8 text-xs flex-1 min-w-0" />
                   </div>
                   <button type="button" className="text-xs text-pink-600 font-medium hover:underline" onClick={openReorder}>
                     ⇅ Employee custom order
@@ -1161,11 +1324,17 @@ export function RotaCalendarClient() {
                   <p className="text-[10px] text-muted-foreground mt-1">Or drag the ⋮⋮ handle on a row</p>
                 </th>
                 {state.days.map((dk) => (
-                  <th key={dk} className="p-1.5 text-center text-xs font-medium border-l whitespace-nowrap overflow-hidden text-ellipsis">
+                  <th
+                    key={dk}
+                    className="sticky top-0 z-20 bg-muted p-1.5 text-center text-xs font-medium border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.08)]"
+                  >
                     {fmtShortDate(dk)}
                   </th>
                 ))}
-                <th className="p-2 text-center text-xs bg-sky-100 dark:bg-sky-950 border-l align-top">
+                <th
+                  className="sticky top-0 z-40 p-2 text-center text-xs bg-sky-100 dark:bg-sky-950 border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.08),-2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                  style={{ right: ROTA_PAY_COL_W }}
+                >
                   <div className="font-semibold">Total hours</div>
                   <label className="mt-1.5 flex items-center justify-center gap-1.5 font-normal text-[10px] text-muted-foreground cursor-pointer">
                     <input
@@ -1177,7 +1346,9 @@ export function RotaCalendarClient() {
                     Incl. breaks?
                   </label>
                 </th>
-                <th className="p-2 text-center text-xs bg-emerald-100 dark:bg-emerald-950 border-l align-top">
+                <th
+                  className="sticky top-0 right-0 z-40 p-2 text-center text-xs bg-emerald-100 dark:bg-emerald-950 border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.08),-2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                >
                   <div className="font-semibold">Payable</div>
                 </th>
               </tr>
@@ -1188,7 +1359,7 @@ export function RotaCalendarClient() {
                   key={emp.id}
                   className={cn(
                     'border-b border-border/60',
-                    selectedEmpIds.has(emp.id) && 'bg-muted/30',
+                    employeeSelectMode && selectedEmpIds.has(emp.id) && 'bg-muted/30',
                     rowDragId === emp.id && 'opacity-50',
                     rowDropId === emp.id && rowDragId && rowDragId !== emp.id && 'ring-2 ring-inset ring-pink-500/70'
                   )}
@@ -1196,8 +1367,8 @@ export function RotaCalendarClient() {
                   onDrop={(e) => onRowReorderDrop(e, emp.id)}
                 >
                   <td className={cn(
-                    'sticky left-0 z-10 p-2 align-top border-r shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] relative overflow-hidden',
-                    selectedEmpIds.has(emp.id) ? 'bg-muted/40' : 'bg-card'
+                    'sticky left-0 z-10 p-2 align-top border-r border-b shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] relative overflow-hidden',
+                    employeeSelectMode && selectedEmpIds.has(emp.id) ? 'bg-muted/40' : 'bg-card'
                   )}>
                     <div className="flex gap-1.5 items-start min-w-0">
                       <button
@@ -1211,13 +1382,15 @@ export function RotaCalendarClient() {
                       >
                         <GripVertical className="size-4" />
                       </button>
-                      <input
-                        type="checkbox"
-                        className="mt-2.5 size-4 shrink-0 rounded border-input"
-                        checked={selectedEmpIds.has(emp.id)}
-                        onChange={(e) => toggleEmpSelected(emp.id, e.target.checked)}
-                        aria-label={`Select ${emp.name}`}
-                      />
+                      {employeeSelectMode ? (
+                        <input
+                          type="checkbox"
+                          className="mt-2.5 size-4 shrink-0 rounded border-input"
+                          checked={selectedEmpIds.has(emp.id)}
+                          onChange={(e) => toggleEmpSelected(emp.id, e.target.checked)}
+                          aria-label={`Select ${emp.name}`}
+                        />
+                      ) : null}
                       <button
                         type="button"
                         className="flex gap-2 text-left flex-1 min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
@@ -1240,13 +1413,13 @@ export function RotaCalendarClient() {
                     });
                     if (statusFilter !== 'all' && list.length > 0 && !showCell) {
                       return (
-                        <td key={dk} className="relative align-top p-1 border-l border-border/40 bg-muted/5 opacity-40 overflow-hidden" />
+                        <td key={dk} className="relative align-top p-1 border-l border-b border-border/40 bg-muted/5 opacity-40 overflow-hidden" />
                       );
                     }
                     return (
                       <td
                         key={dk}
-                        className="relative align-top p-1 border-l border-border/40 bg-muted/5 overflow-hidden"
+                        className="relative align-top p-1 border-l border-b border-border/40 bg-muted/5 overflow-hidden"
                         onDragOver={onDayDragOver}
                         onDrop={(e) => onDropDay(e, dk, emp.id)}
                       >
@@ -1293,10 +1466,13 @@ export function RotaCalendarClient() {
                       </td>
                     );
                   })}
-                  <td className="text-center align-top p-2 bg-sky-100 dark:bg-sky-950 border-l text-xs tabular-nums font-medium">
+                  <td
+                    className="sticky z-10 text-center align-top p-2 bg-sky-100 dark:bg-sky-950 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]"
+                    style={{ right: ROTA_PAY_COL_W }}
+                  >
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
-                  <td className="text-center align-top p-2 bg-emerald-100 dark:bg-emerald-950 border-l text-xs tabular-nums font-medium">
+                  <td className="sticky right-0 z-10 text-center align-top p-2 bg-emerald-100 dark:bg-emerald-950 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">
                     {formatMoney(empTotalPayable(emp.id))}
                   </td>
                 </tr>
@@ -1304,17 +1480,27 @@ export function RotaCalendarClient() {
             </tbody>
             <tfoot>
               <tr className="bg-sky-100 dark:bg-sky-950 border-t font-medium text-xs">
-                <td className="sticky left-0 z-10 bg-sky-100 dark:bg-sky-950 p-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Daily total</td>
+                <td className="sticky left-0 bottom-0 z-30 bg-sky-100 dark:bg-sky-950 p-2 border-r border-t shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1),0_-2px_4px_-2px_rgba(0,0,0,0.08)]">
+                  Daily total
+                </td>
                 {state.days.map((dk) => (
-                  <td key={dk} className="text-center p-2 border-l tabular-nums">
+                  <td key={dk} className="text-center p-2 border-l border-t tabular-nums">
                     {formatHoursDecimal(dayTotalHours(dk))}
                   </td>
                 ))}
-                <td className="text-center p-2 border-l tabular-nums">{formatHoursDecimal(totalRotaHours)}</td>
-                <td className="text-center p-2 border-l tabular-nums">{formatMoney(totalRotaPayable)}</td>
+                <td
+                  className="sticky bottom-0 z-30 text-center p-2 border-l border-t tabular-nums bg-sky-100 dark:bg-sky-950 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1),0_-2px_4px_-2px_rgba(0,0,0,0.08)]"
+                  style={{ right: ROTA_PAY_COL_W }}
+                >
+                  {formatHoursDecimal(totalRotaHours)}
+                </td>
+                <td className="sticky right-0 bottom-0 z-30 text-center p-2 border-l border-t tabular-nums bg-emerald-100 dark:bg-emerald-950 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1),0_-2px_4px_-2px_rgba(0,0,0,0.08)]">
+                  {formatMoney(totalRotaPayable)}
+                </td>
               </tr>
             </tfoot>
           </table>
+          </div>
           <div className="mx-3 mb-3 rounded-lg border bg-muted/30 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Status legend</p>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -1860,12 +2046,7 @@ export function RotaCalendarClient() {
                       variant="outline"
                       size="sm"
                       className="h-8 text-destructive border-destructive/30"
-                      onClick={() => {
-                        toast.confirm('Delete this shift?', () => {
-                          deleteShift(viewShiftsEmpId!, dk, idx);
-                          toast.success('Shift deleted');
-                        }, { label: 'Delete' });
-                      }}
+                      onClick={() => openDeleteShifts(viewShiftsEmpId!, dk)}
                     >
                       Delete
                     </Button>
@@ -1902,6 +2083,22 @@ export function RotaCalendarClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeleteShiftsDialog
+        open={deleteShiftsOpen}
+        onOpenChange={(open) => {
+          setDeleteShiftsOpen(open);
+          if (!open) {
+            setDeleteShiftsEmpId(null);
+            setDeleteShiftsDayKey(null);
+          }
+        }}
+        employeeName={deleteShiftsEmp?.name || 'Employee'}
+        dayKey={deleteShiftsDayKey}
+        rows={deleteShiftsRows}
+        onDeleteRow={handleDeleteShiftRow}
+        onDeleteAll={handleDeleteAllShifts}
+      />
 
       <Dialog open={xferOpen} onOpenChange={setXferOpen}>
         <DialogContent showCloseButton className="sm:max-w-sm">
@@ -2163,19 +2360,8 @@ export function RotaCalendarClient() {
             type="button"
             className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
             onClick={() => {
-              const { empId, dk, idx } = shiftMenu;
-              closeShiftMenu();
-              toast.confirm(
-                'Delete this shift?',
-                () => {
-                  deleteShift(empId, dk, idx);
-                  toast.success('Shift deleted');
-                },
-                {
-                  label: 'Delete',
-                  description: 'This action cannot be undone.',
-                }
-              );
+              const { empId, dk } = shiftMenu;
+              openDeleteShifts(empId, dk);
             }}
           >
             Delete

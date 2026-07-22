@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { EmployeeRec, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
@@ -236,6 +237,17 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
                   })}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="Location details, instructions, or one-off info"
+                value={shift.notes}
+                onChange={(e) => setShift((s) => ({ ...s, notes: e.target.value.slice(0, 200) }))}
+                rows={3}
+                maxLength={200}
+                className="min-h-[72px] resize-y"
+              />
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">

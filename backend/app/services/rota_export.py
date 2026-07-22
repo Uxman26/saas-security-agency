@@ -1,7 +1,136 @@
+from datetime import datetime
+from html import escape
 from io import BytesIO
-from typing import List
+from typing import Any, List
 
 from app.schemas import RotaDetailResponse, RotaSummaryRow
+
+_STATUS_LABELS = {
+    "on_time": "On time",
+    "late": "Late",
+    "absent": "Absent",
+    "no_show": "No show",
+}
+
+
+def _fmt_day(dk: str) -> str:
+    try:
+        return datetime.strptime(dk, "%Y-%m-%d").strftime("%a %d %b")
+    except ValueError:
+        return dk
+
+
+def _time_mins(t: str) -> int:
+    parts = (t or "0:0").split(":")
+    h = int(parts[0]) if parts and parts[0].isdigit() else 0
+    m = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
+    return h * 60 + m
+
+
+def _calc_hours(shift: dict[str, Any], incl_breaks: bool) -> float:
+    sm = _time_mins(str(shift.get("start") or "0:00"))
+    em = _time_mins(str(shift.get("end") or "0:00"))
+    mins = em - sm
+    if mins < 0:
+        mins += 24 * 60
+    if not incl_breaks:
+        mins -= int(shift.get("breakH") or 0) * 60 + int(shift.get("breakM") or 0)
+    return max(0.0, mins / 60.0)
+
+
+def _shift_cell_html(shift: dict[str, Any], att: dict[str, Any] | None) -> str:
+    site = (shift.get("site") or shift.get("notes") or "One-off").strip()
+    lines = [f"{shift.get('start', '')}–{shift.get('end', '')}", escape(site[:36])]
+    status = (att or {}).get("status")
+    if status:
+        lines.append(escape(_STATUS_LABELS.get(str(status), str(status).replace("_", " ").title())))
+    note = ((att or {}).get("note") or "").strip()
+    if note:
+        lines.append(escape(note[:48]))
+    return "<br/>".join(lines)
+
+
+def export_planner_rota_pdf(data: dict[str, Any]) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    name = escape(str(data.get("rotaName") or "Rota"))
+    days = list(data.get("days") or [])
+    employees = list(data.get("employees") or [])
+    shifts = data.get("shifts") or {}
+    attendance = data.get("attendance") or {}
+    incl_breaks = bool(data.get("inclBreaks", False))
+
+    page = landscape(A4)
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=page,
+        leftMargin=0.45 * cm,
+        rightMargin=0.45 * cm,
+        topMargin=0.7 * cm,
+        bottomMargin=0.7 * cm,
+    )
+    styles = getSampleStyleSheet()
+    cell_style = ParagraphStyle("cell", parent=styles["Normal"], fontSize=6, leading=7)
+    header_style = ParagraphStyle("hdr", parent=styles["Normal"], fontSize=7, leading=8, fontName="Helvetica-Bold")
+
+    story = [Paragraph(name, styles["Title"])]
+    if days:
+        story.append(Paragraph(f"{_fmt_day(days[0])} – {_fmt_day(days[-1])} · {len(days)} days · {len(employees)} employees", styles["Normal"]))
+    story.append(Spacer(1, 8))
+
+    hdr = [Paragraph("Employee", header_style)]
+    for dk in days:
+        hdr.append(Paragraph(escape(_fmt_day(dk)), header_style))
+    hdr.append(Paragraph("Hours", header_style))
+    table_data = [hdr]
+
+    for emp in employees:
+        emp_id = str(emp.get("id") or "")
+        emp_name = escape(str(emp.get("name") or "")[:40])
+        row = [Paragraph(emp_name, cell_style)]
+        total_h = 0.0
+        for dk in days:
+            day_shifts = list((shifts.get(emp_id) or {}).get(dk) or [])
+            if not day_shifts:
+                row.append(Paragraph("—", cell_style))
+                continue
+            parts: list[str] = []
+            for idx, sh in enumerate(day_shifts):
+                key = f"{emp_id}:{dk}:{idx}"
+                att = attendance.get(key)
+                parts.append(_shift_cell_html(sh, att))
+                total_h += _calc_hours(sh, incl_breaks)
+            row.append(Paragraph("<br/><br/>".join(parts), cell_style))
+        row.append(Paragraph(f"{total_h:.1f}", cell_style))
+        table_data.append(row)
+
+    usable = page[0] - 0.9 * cm
+    emp_col = 2.8 * cm
+    total_col = 1.1 * cm
+    day_col = max(1.35 * cm, (usable - emp_col - total_col) / max(len(days), 1))
+    col_widths = [emp_col] + [day_col] * len(days) + [total_col]
+    grid = Table(table_data, colWidths=col_widths, repeatRows=1)
+    grid.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e5e7eb")),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
+    story.append(grid)
+    doc.build(story)
+    return buf.getvalue()
 
 
 def export_rota_xlsx(details: List[RotaDetailResponse], summary: List[RotaSummaryRow]) -> bytes:

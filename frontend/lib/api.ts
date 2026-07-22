@@ -56,13 +56,19 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   return response.json();
 }
 
-async function requestBlob(endpoint: string): Promise<Blob> {
+async function requestBlob(
+  endpoint: string,
+  options?: { method?: string; body?: string }
+): Promise<Blob> {
   const raw = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const token = raw ? raw.trim() : null;
   const response = await fetch(`${API_URL}${endpoint}`, {
+    method: options?.method || 'GET',
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
     },
+    body: options?.body,
   });
   if (response.status === 401) {
     const error = await response.json().catch(() => ({ detail: 'Unauthorized' }));
@@ -291,6 +297,11 @@ export const api = {
       }
     ): Promise<RotaPlanDetail> =>
       request<RotaPlanDetail>(`/rotas/${id}/copy`, { method: 'POST', body: JSON.stringify(data) }),
+    exportPlanner: (planner_data: string, format: 'pdf' = 'pdf'): Promise<Blob> =>
+      requestBlob('/rotas/export', {
+        method: 'POST',
+        body: JSON.stringify({ planner_data, format }),
+      }),
   },
   staffRequests: {
     list: (status?: string): Promise<import('./types').StaffRequest[]> =>

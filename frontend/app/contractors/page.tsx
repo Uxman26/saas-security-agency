@@ -83,11 +83,12 @@ export default function ContractorsDirectoryPage() {
                       Add contractor
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
+                  <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+                    <DialogHeader className="shrink-0">
                       <DialogTitle>New contractor</DialogTitle>
                     </DialogHeader>
-                    <ContractorForm
+                    <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
+                      <ContractorForm
                       allowSubContractors={allowSub}
                       loading={saving}
                       submitLabel="Create"
@@ -109,6 +110,7 @@ export default function ContractorsDirectoryPage() {
                         }
                       }}
                     />
+                    </div>
                   </DialogContent>
                 </Dialog>
               )}
@@ -150,11 +152,11 @@ export default function ContractorsDirectoryPage() {
             </Select>
           </div>
 
-          <Card>
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader>
               <CardTitle>Directory ({filtered.length})</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {loading ? (
                 <p className="text-muted-foreground py-8 text-center">Loading…</p>
               ) : filtered.length === 0 ? (
@@ -174,14 +176,16 @@ export default function ContractorsDirectoryPage() {
                     <TableBody>
                       {filtered.map((r) => (
                         <TableRow key={r.id}>
-                          <TableCell className="font-medium">
-                            <Link href={`/contractors/${r.id}`} className="hover:underline">
+                          <TableCell className="font-medium max-w-[220px]">
+                            <Link href={`/contractors/${r.id}`} className="hover:underline block truncate" title={r.name}>
                               {r.name}
                             </Link>
                           </TableCell>
-                          <TableCell>{r.type}</TableCell>
-                          <TableCell>{r.is_active ? 'active' : 'inactive'}</TableCell>
-                          <TableCell>{r.contact_email || '—'}</TableCell>
+                          <TableCell className="whitespace-nowrap">{r.type}</TableCell>
+                          <TableCell className="whitespace-nowrap">{r.is_active ? 'active' : 'inactive'}</TableCell>
+                          <TableCell className="max-w-[200px] truncate" title={r.contact_email || undefined}>
+                            {r.contact_email || '—'}
+                          </TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm" asChild>
                               <Link href={`/contractors/${r.id}`}>View</Link>

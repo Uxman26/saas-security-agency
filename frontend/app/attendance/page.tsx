@@ -54,6 +54,16 @@ function fromLocalInput(v: string) {
   return d.toISOString();
 }
 
+function maxLocalDateTime() {
+  return toLocalInput(new Date().toISOString());
+}
+
+function isFutureLocalInput(v: string) {
+  if (!v) return false;
+  const d = new Date(v);
+  return !Number.isNaN(d.getTime()) && d.getTime() > Date.now();
+}
+
 export default function AttendancePage() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
@@ -65,6 +75,7 @@ export default function AttendancePage() {
   const [editNote, setEditNote] = useState('');
   const [editBookedAt, setEditBookedAt] = useState('');
   const [editBookedOffAt, setEditBookedOffAt] = useState('');
+  const [editDateError, setEditDateError] = useState('');
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'overview' | 'all' | 'late'>('all');
   const { sortKey, sortDir, toggleSort } = useTableSort();
@@ -117,6 +128,7 @@ export default function AttendancePage() {
     setEditNote(a.note ?? '');
     setEditBookedAt(toLocalInput(a.booked_at));
     setEditBookedOffAt(toLocalInput(a.booked_off_at));
+    setEditDateError('');
   };
 
   const handleEditSave = async () => {
@@ -125,6 +137,15 @@ export default function AttendancePage() {
       toast.error('Note is required for Late, Absent, and No show');
       return;
     }
+    if (isFutureLocalInput(editBookedAt)) {
+      setEditDateError('Booked on cannot be in the future');
+      return;
+    }
+    if (isFutureLocalInput(editBookedOffAt)) {
+      setEditDateError('Booked off cannot be in the future');
+      return;
+    }
+    setEditDateError('');
     setSubmitting(true);
     try {
       await api.attendance.update(editRec.id, {
@@ -515,12 +536,29 @@ export default function AttendancePage() {
                   </div>
                   <div className="space-y-1">
                     <Label>Booked on</Label>
-                    <Input type="datetime-local" value={editBookedAt} onChange={(e) => setEditBookedAt(e.target.value)} />
+                    <Input
+                      type="datetime-local"
+                      value={editBookedAt}
+                      max={maxLocalDateTime()}
+                      onChange={(e) => {
+                        setEditBookedAt(e.target.value);
+                        if (editDateError) setEditDateError('');
+                      }}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label>Booked off</Label>
-                    <Input type="datetime-local" value={editBookedOffAt} onChange={(e) => setEditBookedOffAt(e.target.value)} />
+                    <Input
+                      type="datetime-local"
+                      value={editBookedOffAt}
+                      max={maxLocalDateTime()}
+                      onChange={(e) => {
+                        setEditBookedOffAt(e.target.value);
+                        if (editDateError) setEditDateError('');
+                      }}
+                    />
                   </div>
+                  {editDateError ? <p className="text-sm text-destructive">{editDateError}</p> : null}
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setEditRec(null)}>
                       Cancel

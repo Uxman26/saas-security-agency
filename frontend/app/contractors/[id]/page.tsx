@@ -65,8 +65,8 @@ export default function ContractorDetailPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6">
-          <div className="flex flex-wrap gap-4 items-center">
+        <div className="container mx-auto px-4 py-8 space-y-6 min-w-0 max-w-full overflow-x-hidden">
+          <div className="flex flex-wrap gap-4 items-center min-w-0">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/contractors">
                 <ArrowLeft className="size-4 mr-2" />
@@ -79,10 +79,11 @@ export default function ContractorDetailPage() {
                   <DialogTrigger asChild>
                     <Button variant="outline">Edit</Button>
                   </DialogTrigger>
-                  <DialogContent className="max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
+                  <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+                    <DialogHeader className="shrink-0">
                       <DialogTitle>Edit contractor</DialogTitle>
                     </DialogHeader>
+                    <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
                     <ContractorForm
                       allowSubContractors={allowSub}
                       loading={saving}
@@ -113,6 +114,7 @@ export default function ContractorDetailPage() {
                         }
                       }}
                     />
+                    </div>
                   </DialogContent>
                 </Dialog>
                 <Button
@@ -136,18 +138,18 @@ export default function ContractorDetailPage() {
             <p className="text-muted-foreground">{loading ? 'Loading…' : 'Not found.'}</p>
           ) : (
             <>
-              <div>
-                <h1 className="text-3xl font-bold">{row.name}</h1>
+              <div className="min-w-0">
+                <h1 className="text-3xl font-bold break-words">{row.name}</h1>
                 <p className="text-muted-foreground mt-1">
                   {row.type} · {row.is_active ? 'active' : 'inactive'}
                 </p>
               </div>
 
-              <Card>
+              <Card className="min-w-0 overflow-hidden">
                 <CardHeader>
                   <CardTitle>Contact</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1 text-sm">
+                <CardContent className="space-y-1 text-sm break-words">
                   <p>Email: {row.contact_email || '—'}</p>
                   <p>Phone: {row.contact_phone || '—'}</p>
                   <p>Address: {row.address || '—'}</p>
@@ -155,7 +157,7 @@ export default function ContractorDetailPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="min-w-0 overflow-hidden">
                 <CardHeader>
                   <CardTitle>Assignments</CardTitle>
                 </CardHeader>
@@ -177,8 +179,12 @@ export default function ContractorDetailPage() {
                         <TableBody>
                           {assignments.map((a) => (
                             <TableRow key={a.id}>
-                              <TableCell>{a.main_contractor.name}</TableCell>
-                              <TableCell>{a.sub_contractor.name}</TableCell>
+                              <TableCell className="max-w-[160px] truncate" title={a.main_contractor.name}>
+                                {a.main_contractor.name}
+                              </TableCell>
+                              <TableCell className="max-w-[160px] truncate" title={a.sub_contractor.name}>
+                                {a.sub_contractor.name}
+                              </TableCell>
                               <TableCell>{a.site_id ?? '—'}</TableCell>
                               <TableCell className="text-xs whitespace-nowrap">
                                 {a.start_date || '—'} → {a.end_date || '—'}

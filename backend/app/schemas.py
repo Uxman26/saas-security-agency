@@ -501,6 +501,14 @@ class SiteBase(BaseModel):
     sub_contractor_id: Optional[int] = None
     contractor_id: Optional[UUID] = None
 
+    @model_validator(mode="after")
+    def staff_rate_not_above_site_rate(self):
+        staff = self.staff_hourly_rate
+        site = self.default_hourly_rate
+        if staff is not None and site is not None and staff > site:
+            raise ValueError("Staff rate cannot be greater than site rate")
+        return self
+
 class SiteCreate(SiteBase):
     pass
 
@@ -579,6 +587,10 @@ class RotaPlanPublishResult(BaseModel):
     created: int
     skipped: int
     errors: List[str] = Field(default_factory=list)
+
+class PlannerExportRequest(BaseModel):
+    planner_data: str
+    format: str = "pdf"
 
 class RotaResponse(BaseModel):
     guard_id: int

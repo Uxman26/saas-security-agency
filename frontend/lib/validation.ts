@@ -231,6 +231,18 @@ export const siteSchema = z
       message: 'Select a main contractor or a sub contractor (exactly one).',
       path: ['main_contractor_id'],
     }
+  )
+  .refine(
+    (d) => {
+      const staff = d.staff_hourly_rate;
+      const site = d.default_hourly_rate;
+      if (staff == null || site == null || Number.isNaN(staff) || Number.isNaN(site)) return true;
+      return staff <= site;
+    },
+    {
+      message: 'Staff rate cannot be greater than site rate',
+      path: ['staff_hourly_rate'],
+    }
   );
 export type SiteFormData = z.infer<typeof siteSchema>;
 

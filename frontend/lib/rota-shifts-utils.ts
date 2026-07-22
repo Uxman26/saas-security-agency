@@ -34,6 +34,14 @@ export function fmtShortDate(dk: string) {
   }
 }
 
+export function fmtRotaDeleteDate(dk: string) {
+  try {
+    return format(parseDateKey(dk), 'do MMM yy');
+  } catch {
+    return dk;
+  }
+}
+
 export function attKey(empId: string, dk: string, si: number) {
   return `${empId}:${dk}:${si}`;
 }

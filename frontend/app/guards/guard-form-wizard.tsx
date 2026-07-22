@@ -55,9 +55,9 @@ function stepForField(key: string) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border p-4 space-y-4">
+    <div className="min-w-0 overflow-hidden rounded-lg border p-4 space-y-4">
       <h3 className="font-semibold text-sm">{title}</h3>
-      {children}
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -199,7 +199,7 @@ export function GuardFormWizard({
         if (step === 2) saveSummary();
         else handleSubmit(onSubmit, onInvalid)(e);
       }}
-      className="space-y-4"
+      className="min-w-0 max-w-full space-y-4"
     >
       {step !== 2 && errorMessages.length > 0 && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive space-y-1">
@@ -225,11 +225,11 @@ export function GuardFormWizard({
         ))}
       </div>
 
-      <p className="text-lg font-semibold">{displayName}</p>
+      <p className="text-lg font-semibold break-words line-clamp-2">{displayName}</p>
 
       {step === 0 && (
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-          <div className="rounded-md border p-3 bg-muted/30 space-y-3">
+        <div className="min-w-0 space-y-4 max-h-[60vh] overflow-y-auto overflow-x-hidden pr-1">
+          <div className="min-w-0 overflow-hidden rounded-md border p-3 bg-muted/30 space-y-3">
             <p className="text-sm font-medium">Contractor (optional)</p>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -279,32 +279,32 @@ export function GuardFormWizard({
           </div>
 
           <Section title="Basic details">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
+            <div className="grid min-w-0 sm:grid-cols-2 gap-3">
+              <div className="space-y-1 min-w-0">
                 <Label>Title</Label>
                 <Select value={watch('title') || '__none__'} onValueChange={(v) => setValue('title', v === '__none__' ? '' : v)}>
-                  <SelectTrigger><SelectValue placeholder="Title" /></SelectTrigger>
+                  <SelectTrigger className="min-w-0"><SelectValue placeholder="Title" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">—</SelectItem>
                     {TITLES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>First name <span className="text-destructive">*</span></Label>
-                <Input {...register('first_name')} />
+                <Input className="min-w-0" maxLength={80} {...register('first_name')} />
                 {errors.first_name && <p className="text-xs text-destructive">{errors.first_name.message}</p>}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>Middle name</Label>
-                <Input {...register('middle_name')} />
+                <Input className="min-w-0" maxLength={80} {...register('middle_name')} />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>Last name <span className="text-destructive">*</span></Label>
-                <Input {...register('last_name')} />
+                <Input className="min-w-0" maxLength={80} {...register('last_name')} />
                 {errors.last_name && <p className="text-xs text-destructive">{errors.last_name.message}</p>}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>Mobile number</Label>
                 <PhoneInput
                   value={watch('phone') || ''}
@@ -313,9 +313,9 @@ export function GuardFormWizard({
                 <p className="text-[11px] text-muted-foreground">Digits only after country code (e.g. UK +44).</p>
                 {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
-              <div className="space-y-1 sm:col-span-2">
+              <div className="space-y-1 min-w-0 sm:col-span-2">
                 <Label>Visa type</Label>
-                <Input {...register('visa_status')} placeholder="e.g. British citizen, Skilled Worker" />
+                <Input className="min-w-0" maxLength={100} {...register('visa_status')} placeholder="e.g. British citizen, Skilled Worker" />
                 {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
               </div>
               <div className="space-y-1">
@@ -353,9 +353,9 @@ export function GuardFormWizard({
                 />
                 {errors.work_phone && <p className="text-xs text-destructive">{errors.work_phone.message}</p>}
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>Job title</Label>
-                <Input {...register('job_title')} />
+                <Input className="min-w-0" maxLength={200} {...register('job_title')} />
               </div>
               <div className="space-y-1">
                 <Label>Employment start date</Label>
@@ -369,25 +369,25 @@ export function GuardFormWizard({
           </Section>
 
           <Section title="Address details">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1 sm:col-span-2"><Label>Address 1</Label><Input {...register('address_line_1')} /></div>
-              <div className="space-y-1 sm:col-span-2"><Label>Address 2</Label><Input {...register('address_line_2')} /></div>
-              <div className="space-y-1 sm:col-span-2"><Label>Address 3</Label><Input {...register('address_line_3')} /></div>
-              <div className="space-y-1"><Label>Town/City</Label><Input {...register('town_city')} /></div>
-              <div className="space-y-1"><Label>County</Label><Input {...register('county')} /></div>
-              <div className="space-y-1"><Label>Postcode</Label><Input {...register('postcode')} placeholder="e.g. E15 2AB" /></div>
+            <div className="grid min-w-0 sm:grid-cols-2 gap-3">
+              <div className="space-y-1 min-w-0 sm:col-span-2"><Label>Address 1</Label><Input className="min-w-0" maxLength={200} {...register('address_line_1')} /></div>
+              <div className="space-y-1 min-w-0 sm:col-span-2"><Label>Address 2</Label><Input className="min-w-0" maxLength={200} {...register('address_line_2')} /></div>
+              <div className="space-y-1 min-w-0 sm:col-span-2"><Label>Address 3</Label><Input className="min-w-0" maxLength={200} {...register('address_line_3')} /></div>
+              <div className="space-y-1 min-w-0"><Label>Town/City</Label><Input className="min-w-0" maxLength={200} {...register('town_city')} /></div>
+              <div className="space-y-1 min-w-0"><Label>County</Label><Input className="min-w-0" maxLength={200} {...register('county')} /></div>
+              <div className="space-y-1 min-w-0"><Label>Postcode</Label><Input className="min-w-0" maxLength={20} {...register('postcode')} placeholder="e.g. E15 2AB" /></div>
             </div>
           </Section>
 
           <Section title="Area & availability">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
+            <div className="grid min-w-0 sm:grid-cols-2 gap-3">
+              <div className="space-y-1 min-w-0">
                 <Label>Service area</Label>
-                <Input {...register('service_area')} placeholder="e.g. East London" />
+                <Input className="min-w-0" maxLength={200} {...register('service_area')} placeholder="e.g. East London" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0">
                 <Label>Nearby areas willing to work</Label>
-                <Input {...register('nearby_areas')} placeholder="e.g. Stratford, Hackney" />
+                <Input className="min-w-0" maxLength={200} {...register('nearby_areas')} placeholder="e.g. Stratford, Hackney" />
               </div>
               <div className="sm:col-span-2 rounded-md border bg-muted/30 px-3 py-3">
                 <div className="flex items-start gap-3">
@@ -415,9 +415,9 @@ export function GuardFormWizard({
                   ))}
                 </div>
               </div>
-              <div className="space-y-1 sm:col-span-2">
+              <div className="space-y-1 min-w-0 sm:col-span-2">
                 <Label>Preferred timing</Label>
-                <Input {...register('availability_timing')} placeholder="e.g. 06:00–14:00, nights only" />
+                <Input className="min-w-0" maxLength={200} {...register('availability_timing')} placeholder="e.g. 06:00–14:00, nights only" />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Pay / contract period</Label>
@@ -524,7 +524,7 @@ export function GuardFormWizard({
       )}
 
       {step === 1 && (
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="min-w-0 space-y-4 max-h-[60vh] overflow-y-auto overflow-x-hidden pr-1">
           <Section title="Location">
             <div className="space-y-1 max-w-md">
               <Label>Public holidays observed for</Label>

@@ -30,6 +30,16 @@ class ContractorCreate(BaseModel):
             raise ValueError("name required")
         return s[:120]
 
+    @field_validator("contact_phone")
+    @classmethod
+    def phone_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return None
+        s = str(v).strip()
+        if not re.fullmatch(r"\+[0-9]{7,15}", s):
+            raise ValueError("Invalid phone number")
+        return s
+
 
 class ContractorUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=120)
@@ -49,6 +59,16 @@ class ContractorUpdate(BaseModel):
         if not s:
             raise ValueError("name cannot be empty")
         return s[:120]
+
+    @field_validator("contact_phone")
+    @classmethod
+    def phone_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not str(v).strip():
+            return None
+        s = str(v).strip()
+        if not re.fullmatch(r"\+[0-9]{7,15}", s):
+            raise ValueError("Invalid phone number")
+        return s
 
 
 class ContractorListRead(BaseModel):

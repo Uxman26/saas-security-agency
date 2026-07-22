@@ -1,13 +1,39 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
+import json
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
 from app.rbac import PERM_ASSIGN_DELETE, PERM_ASSIGN_READ, PERM_ASSIGN_WRITE, require_perm
-from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
-from app.services import rota_plan_service
+from app.schemas import PlannerExportRequest, RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
+from app.services import rota_export, rota_plan_service
 
 router = APIRouter(prefix="/rotas", tags=["rotas"])
+
+
+@router.post("/export")
+def export_planner_rota(
+    body: PlannerExportRequest,
+    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+):
+    fmt = (body.format or "pdf").lower()
+    if fmt != "pdf":
+        raise HTTPException(status_code=400, detail="Only pdf format is supported")
+    try:
+        data = json.loads(body.planner_data)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid planner data") from exc
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Invalid planner data")
+    pdf = rota_export.export_planner_rota_pdf(data)
+    safe = str(data.get("rotaName") or "rota").strip().replace(" ", "_")
+    safe = "".join(c for c in safe if c.isalnum() or c in "._-")[:40] or "rota"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe}.pdf"'},
+    )
 
 
 @router.get("", response_model=list[RotaPlanListItem])

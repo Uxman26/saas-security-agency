@@ -129,10 +129,12 @@ function SiteForm({
         <div className="space-y-1">
           <Label>Staff Rate <span className="text-muted-foreground font-normal">(per hour)</span></Label>
           <Input type="number" step="0.01" min="0" {...register('staff_hourly_rate', { valueAsNumber: true })} placeholder="e.g. 12.50" />
+          {errors.staff_hourly_rate && <p className="text-xs text-destructive">{errors.staff_hourly_rate.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Site Rate <span className="text-muted-foreground font-normal">(per hour)</span></Label>
           <Input type="number" step="0.01" min="0" {...register('default_hourly_rate', { valueAsNumber: true })} placeholder="e.g. 15.00" />
+          {errors.default_hourly_rate && <p className="text-xs text-destructive">{errors.default_hourly_rate.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Contract start</Label>

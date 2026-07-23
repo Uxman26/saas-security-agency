@@ -1487,7 +1487,7 @@ export function RotaCalendarClient() {
                   </th>
                 ))}
                 <th
-                  className="sticky top-0 z-50 p-2 text-center text-xs bg-sky-100 dark:bg-sky-950 border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_4px_-2px_rgba(0,0,0,0.1)]"
+                  className="sticky top-0 z-50 p-2 text-center text-xs bg-muted border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_4px_-2px_rgba(0,0,0,0.1)]"
                   style={{ right: ROTA_PAY_COL_W + ROTA_PUBLISH_COL_W, backgroundClip: 'padding-box' }}
                 >
                   <div className="font-semibold">Total hours</div>
@@ -1502,13 +1502,13 @@ export function RotaCalendarClient() {
                   </label>
                 </th>
                 <th
-                  className="sticky top-0 z-50 p-2 text-center text-xs bg-emerald-100 dark:bg-emerald-950 border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_4px_-2px_rgba(0,0,0,0.1)]"
+                  className="sticky top-0 z-50 p-2 text-center text-xs bg-muted border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_4px_-2px_rgba(0,0,0,0.1)]"
                   style={{ right: ROTA_PUBLISH_COL_W, backgroundClip: 'padding-box' }}
                 >
                   <div className="font-semibold">Payable</div>
                 </th>
                 <th
-                  className="sticky top-0 right-0 z-50 p-2 text-center text-xs bg-pink-50 dark:bg-pink-950/40 border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_4px_-2px_rgba(0,0,0,0.1)]"
+                  className="sticky top-0 right-0 z-50 p-2 text-center text-xs bg-muted border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_4px_-2px_rgba(0,0,0,0.1)]"
                   style={{ backgroundClip: 'padding-box' }}
                 >
                   <div className="font-semibold leading-tight">Publish individual</div>
@@ -1665,19 +1665,19 @@ export function RotaCalendarClient() {
                     );
                   })}
                   <td
-                    className="sticky z-20 text-center align-top p-2 bg-sky-100 dark:bg-sky-950 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
+                    className="sticky z-30 text-center align-top p-2 bg-card border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
                     style={{ right: ROTA_PAY_COL_W + ROTA_PUBLISH_COL_W, backgroundClip: 'padding-box' }}
                   >
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
                   <td
-                    className="sticky z-20 text-center align-top p-2 bg-emerald-100 dark:bg-emerald-950 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
+                    className="sticky z-30 text-center align-top p-2 bg-card border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
                     style={{ right: ROTA_PUBLISH_COL_W, backgroundClip: 'padding-box' }}
                   >
                     {formatMoney(empTotalPayable(emp.id))}
                   </td>
                   <td
-                    className="sticky right-0 z-20 text-center align-top p-2 bg-pink-50/80 dark:bg-pink-950/30 border-l border-b shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
+                    className="sticky right-0 z-30 text-center align-top p-2 bg-card border-l border-b shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12)]"
                     style={{ backgroundClip: 'padding-box' }}
                   >
                     {isEmployeePublished(emp.id) ? (
@@ -1707,9 +1707,9 @@ export function RotaCalendarClient() {
               ))}
             </tbody>
             <tfoot>
-              <tr className="bg-sky-100 dark:bg-sky-950 font-medium text-xs">
+              <tr className="bg-muted font-medium text-xs">
                 <td
-                  className="sticky left-0 bottom-0 z-40 bg-sky-100 dark:bg-sky-950 p-2 border-r border-t shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
+                  className="sticky left-0 bottom-0 z-40 bg-muted p-2 border-r border-t shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
                   style={{ backgroundClip: 'padding-box' }}
                 >
                   Daily total
@@ -1717,26 +1717,26 @@ export function RotaCalendarClient() {
                 {state.days.map((dk) => (
                   <td
                     key={dk}
-                    className="sticky bottom-0 z-30 text-center p-2 border-l border-t tabular-nums bg-sky-100 dark:bg-sky-950 shadow-[0_-2px_4px_-2px_rgba(0,0,0,0.1)]"
+                    className="sticky bottom-0 z-30 text-center p-2 border-l border-t tabular-nums bg-muted shadow-[0_-2px_4px_-2px_rgba(0,0,0,0.1)]"
                     style={{ backgroundClip: 'padding-box' }}
                   >
                     {formatHoursDecimal(dayTotalHours(dk))}
                   </td>
                 ))}
                 <td
-                  className="sticky bottom-0 z-40 text-center p-2 border-l border-t tabular-nums bg-sky-100 dark:bg-sky-950 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
+                  className="sticky bottom-0 z-40 text-center p-2 border-l border-t tabular-nums bg-muted shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
                   style={{ right: ROTA_PAY_COL_W + ROTA_PUBLISH_COL_W, backgroundClip: 'padding-box' }}
                 >
                   {formatHoursDecimal(totalRotaHours)}
                 </td>
                 <td
-                  className="sticky bottom-0 z-40 text-center p-2 border-l border-t tabular-nums bg-emerald-100 dark:bg-emerald-950 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
+                  className="sticky bottom-0 z-40 text-center p-2 border-l border-t tabular-nums bg-muted shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
                   style={{ right: ROTA_PUBLISH_COL_W, backgroundClip: 'padding-box' }}
                 >
                   {formatMoney(totalRotaPayable)}
                 </td>
                 <td
-                  className="sticky right-0 bottom-0 z-40 p-2 border-l border-t bg-pink-50 dark:bg-pink-950/40 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
+                  className="sticky right-0 bottom-0 z-40 p-2 border-l border-t bg-muted shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
                   style={{ backgroundClip: 'padding-box' }}
                 />
               </tr>

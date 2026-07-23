@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -40,10 +40,14 @@ const EMP_MENU_H = 132;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ROTA_PAY_COL_W = 96;
 const ROTA_HOURS_COL_W = 104;
-const ROTA_PUBLISH_COL_W = 100;
-const ROTA_EMP_COL_W = 252;
+const ROTA_EMP_COL_W = 268;
 
-/** Solid fills so scrolled shift tiles cannot bleed through sticky right columns. */
+/** Solid fills so scrolled shift tiles cannot bleed through sticky columns. */
+const ROTA_STICKY_EMP_BG = {
+  backgroundColor: 'var(--rota-emp-bg)',
+  backgroundClip: 'padding-box',
+  isolation: 'isolate',
+} as const;
 const ROTA_STICKY_HOURS_BG = {
   backgroundColor: 'var(--rota-hours-bg)',
   backgroundClip: 'padding-box',
@@ -51,11 +55,6 @@ const ROTA_STICKY_HOURS_BG = {
 } as const;
 const ROTA_STICKY_PAY_BG = {
   backgroundColor: 'var(--rota-pay-bg)',
-  backgroundClip: 'padding-box',
-  isolation: 'isolate',
-} as const;
-const ROTA_STICKY_PUBLISH_BG = {
-  backgroundColor: 'var(--rota-publish-bg)',
   backgroundClip: 'padding-box',
   isolation: 'isolate',
 } as const;
@@ -876,39 +875,36 @@ export function RotaCalendarClient() {
       `Publish ${shiftCount} shift(s)?`,
       () => runPublish(),
       {
-        description: 'They will appear in Assignments and the legacy rota grid.',
+        description:
+          'All staff shifts are published. Uncheck a staff member afterwards to unpublish only their shifts.',
         label: 'Publish',
       }
     );
   };
 
-  const publishEmployee = (emp: { id: string; name: string }) => {
-    const count = Object.values(state.shifts[emp.id] || {}).reduce(
-      (n, list) => n + (list?.length || 0),
-      0
-    );
-    if (count === 0) {
-      toast.warning(`Add shifts for ${emp.name} before publishing.`);
+  const toggleEmployeePublished = (emp: { id: string; name: string }, nextPublished: boolean) => {
+    const guardId = parseInt(emp.id, 10);
+    if (!guardId) return;
+    if (publishingEmpId === emp.id || publishing) return;
+
+    if (nextPublished) {
+      const count = Object.values(state.shifts[emp.id] || {}).reduce(
+        (n, list) => n + (list?.length || 0),
+        0
+      );
+      if (count === 0) {
+        toast.warning(`Add shifts for ${emp.name} before publishing.`);
+        return;
+      }
+      void runPublish(guardId);
       return;
     }
-    const guardId = parseInt(emp.id, 10);
-    toast.confirm(
-      `Publish ${count} shift(s) for ${emp.name}?`,
-      () => runPublish(guardId),
-      {
-        description: 'Only this employee’s shifts will be published.',
-        label: 'Publish',
-      }
-    );
-  };
 
-  const unpublishEmployee = (emp: { id: string; name: string }) => {
-    const guardId = parseInt(emp.id, 10);
     toast.confirm(
       `Unpublish ${emp.name}?`,
       () => runUnpublish(guardId),
       {
-        description: 'Their published assignments for this rota will be removed.',
+        description: 'Only this employee’s published shifts will be removed from assignments.',
         label: 'Unpublish',
       }
     );
@@ -1448,7 +1444,7 @@ export function RotaCalendarClient() {
           <table
             className="table-fixed w-full text-sm border-separate border-spacing-0"
             style={{
-              minWidth: `${ROTA_EMP_COL_W + state.days.length * 128 + ROTA_HOURS_COL_W + ROTA_PAY_COL_W + ROTA_PUBLISH_COL_W}px`,
+              minWidth: `${ROTA_EMP_COL_W + state.days.length * 128 + ROTA_HOURS_COL_W + ROTA_PAY_COL_W}px`,
             }}
           >
             <colgroup>
@@ -1458,13 +1454,12 @@ export function RotaCalendarClient() {
               ))}
               <col style={{ width: ROTA_HOURS_COL_W }} />
               <col style={{ width: ROTA_PAY_COL_W }} />
-              <col style={{ width: ROTA_PUBLISH_COL_W }} />
             </colgroup>
             <thead>
               <tr className="bg-muted">
                 <th
-                  className="sticky top-0 left-0 z-50 bg-muted p-2 text-left align-top border-b border-r shadow-[2px_2px_4px_-2px_rgba(0,0,0,0.14)]"
-                  style={{ backgroundClip: 'padding-box' }}
+                  className="rota-sticky-emp sticky top-0 left-0 z-[70] p-2 text-left align-top border-b border-r shadow-[2px_2px_8px_-2px_rgba(0,0,0,0.2)] overflow-hidden isolate"
+                  style={{ ...ROTA_STICKY_EMP_BG }}
                 >
                   <div className="flex items-start gap-1.5 mb-2 min-w-0">
                     <span className="mt-2 shrink-0 w-5" aria-hidden />
@@ -1487,7 +1482,8 @@ export function RotaCalendarClient() {
                   <button type="button" className="text-xs text-pink-600 font-medium hover:underline" onClick={openReorder}>
                     ⇅ Employee custom order
                   </button>
-                  <p className="text-[10px] text-muted-foreground mt-1">Or drag the ⋮⋮ handle on a row</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">☑ Checked = published for that staff</p>
+                  <p className="text-[10px] text-muted-foreground">Or drag the ⋮⋮ handle on a row</p>
                 </th>
                 {state.days.map((dk) => (
                   <th
@@ -1505,7 +1501,7 @@ export function RotaCalendarClient() {
                 ))}
                 <th
                   className="rota-sticky-hours sticky top-0 z-[60] p-2 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                  style={{ right: ROTA_PAY_COL_W + ROTA_PUBLISH_COL_W, ...ROTA_STICKY_HOURS_BG }}
+                  style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
                 >
                   <div className="font-semibold">Total hours</div>
                   <label className="mt-1.5 flex items-center justify-center gap-1.5 font-normal text-[10px] text-muted-foreground cursor-pointer">
@@ -1519,16 +1515,10 @@ export function RotaCalendarClient() {
                   </label>
                 </th>
                 <th
-                  className="rota-sticky-pay sticky top-0 z-[60] p-2 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                  style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                  className="rota-sticky-pay sticky top-0 right-0 z-[60] p-2 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                  style={{ ...ROTA_STICKY_PAY_BG }}
                 >
                   <div className="font-semibold">Payable</div>
-                </th>
-                <th
-                  className="rota-sticky-publish sticky top-0 right-0 z-[60] p-2 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                  style={{ ...ROTA_STICKY_PUBLISH_BG }}
-                >
-                  <div className="font-semibold leading-tight">Publish individual</div>
                 </th>
               </tr>
             </thead>
@@ -1547,15 +1537,19 @@ export function RotaCalendarClient() {
                   onDrop={(e) => onRowReorderDrop(e, emp.id)}
                 >
                   <td
-                    className={cn(
-                      'sticky left-0 z-30 p-2 align-top border-r border-b shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)] relative isolate',
-                      employeeSelectMode && selectedEmpIds.has(emp.id)
-                        ? 'bg-muted'
-                        : empHasConflict(emp.id)
-                          ? 'bg-amber-50 dark:bg-amber-950'
-                          : 'bg-card'
-                    )}
-                    style={{ backgroundClip: 'padding-box' }}
+                    className="rota-sticky-emp sticky left-0 z-50 p-2 align-top border-r border-b shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    style={
+                      {
+                        ['--rota-emp-cell-bg' as string]:
+                          employeeSelectMode && selectedEmpIds.has(emp.id)
+                            ? 'var(--muted)'
+                            : empHasConflict(emp.id)
+                              ? 'var(--rota-emp-conflict-bg)'
+                              : 'var(--rota-emp-bg)',
+                        backgroundClip: 'padding-box',
+                        isolation: 'isolate',
+                      } as CSSProperties
+                    }
                   >
                     <div className="flex gap-1.5 items-start min-w-0 overflow-hidden">
                       <button
@@ -1569,6 +1563,27 @@ export function RotaCalendarClient() {
                       >
                         <GripVertical className="size-4" />
                       </button>
+                      <label
+                        className="mt-2.5 shrink-0 flex items-center"
+                        title={
+                          isEmployeePublished(emp.id)
+                            ? 'Published — uncheck to unpublish this staff'
+                            : 'Not published — check to publish this staff'
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          className="size-4 rounded border-input accent-pink-600"
+                          checked={isEmployeePublished(emp.id)}
+                          disabled={publishingEmpId === emp.id || publishing}
+                          onChange={(e) => toggleEmployeePublished(emp, e.target.checked)}
+                          aria-label={
+                            isEmployeePublished(emp.id)
+                              ? `Unpublish ${emp.name}`
+                              : `Publish ${emp.name}`
+                          }
+                        />
+                      </label>
                       {employeeSelectMode ? (
                         <input
                           type="checkbox"
@@ -1687,42 +1702,15 @@ export function RotaCalendarClient() {
                   })}
                   <td
                     className="rota-sticky-hours sticky z-50 text-center align-top p-2 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ right: ROTA_PAY_COL_W + ROTA_PUBLISH_COL_W, ...ROTA_STICKY_HOURS_BG }}
+                    style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
                   >
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
                   <td
-                    className="rota-sticky-pay sticky z-50 text-center align-top p-2 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                    className="rota-sticky-pay sticky right-0 z-50 text-center align-top p-2 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    style={{ ...ROTA_STICKY_PAY_BG }}
                   >
                     {formatMoney(empTotalPayable(emp.id))}
-                  </td>
-                  <td
-                    className="rota-sticky-publish sticky right-0 z-50 text-center align-top p-2 border-l border-b shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ ...ROTA_STICKY_PUBLISH_BG }}
-                  >
-                    {isEmployeePublished(emp.id) ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2 text-[11px] relative z-[1]"
-                        disabled={publishingEmpId === emp.id || publishing}
-                        onClick={() => unpublishEmployee(emp)}
-                      >
-                        {publishingEmpId === emp.id ? '…' : 'Unpublish'}
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 px-2 text-[11px] bg-pink-600 hover:bg-pink-700 text-white relative z-[1]"
-                        disabled={publishingEmpId === emp.id || publishing}
-                        onClick={() => publishEmployee(emp)}
-                      >
-                        {publishingEmpId === emp.id ? '…' : 'Publish'}
-                      </Button>
-                    )}
                   </td>
                 </tr>
               ))}
@@ -1730,8 +1718,8 @@ export function RotaCalendarClient() {
             <tfoot>
               <tr className="bg-muted font-medium text-xs">
                 <td
-                  className="sticky left-0 bottom-0 z-40 bg-muted p-2 border-r border-t shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12),0_-2px_4px_-2px_rgba(0,0,0,0.12)]"
-                  style={{ backgroundClip: 'padding-box' }}
+                  className="rota-sticky-emp sticky left-0 bottom-0 z-[55] p-2 border-r border-t shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                  style={{ ...ROTA_STICKY_EMP_BG }}
                 >
                   Daily total
                 </td>
@@ -1746,20 +1734,16 @@ export function RotaCalendarClient() {
                 ))}
                 <td
                   className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-2 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                  style={{ right: ROTA_PAY_COL_W + ROTA_PUBLISH_COL_W, ...ROTA_STICKY_HOURS_BG }}
+                  style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
                 >
                   {formatHoursDecimal(totalRotaHours)}
                 </td>
                 <td
-                  className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-2 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                  style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                  className="rota-sticky-pay sticky right-0 bottom-0 z-[55] text-center p-2 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                  style={{ ...ROTA_STICKY_PAY_BG }}
                 >
                   {formatMoney(totalRotaPayable)}
                 </td>
-                <td
-                  className="rota-sticky-publish sticky right-0 bottom-0 z-[55] p-2 border-l border-t shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                  style={{ ...ROTA_STICKY_PUBLISH_BG }}
-                />
               </tr>
             </tfoot>
           </table>

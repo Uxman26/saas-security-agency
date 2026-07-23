@@ -87,6 +87,8 @@
   --rota-hours-bg: #e0f2fe;
   --rota-pay-bg: #d1fae5;
   --rota-publish-bg: #fce7f3;
+  --rota-emp-bg: #ffffff;
+  --rota-emp-conflict-bg: #fffbeb;
 }
 
 .dark {
@@ -124,6 +126,8 @@
   --rota-hours-bg: #0c4a6e;
   --rota-pay-bg: #064e3b;
   --rota-publish-bg: #831843;
+  --rota-emp-bg: #161E2C;
+  --rota-emp-conflict-bg: #451a03;
 }
 
 @layer base {
@@ -242,7 +246,10 @@
   transform: translate(-50%, -50%) !important;
 }
 
-/* Opaque sticky rota summary columns — no alpha, no shift bleed-through */
+/* Opaque sticky rota columns — solid fills, no shift bleed-through */
+.rota-sticky-emp {
+  background-color: var(--rota-emp-cell-bg, var(--rota-emp-bg)) !important;
+}
 .rota-sticky-hours {
   background-color: var(--rota-hours-bg) !important;
 }

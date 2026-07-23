@@ -582,11 +582,13 @@ class RotaPlanListItem(BaseModel):
 
 class RotaPlanDetail(RotaPlanListItem):
     planner_data: Optional[str] = None
+    published_guard_ids: List[int] = Field(default_factory=list)
 
 class RotaPlanPublishResult(BaseModel):
     created: int
     skipped: int
     errors: List[str] = Field(default_factory=list)
+    published_guard_ids: List[int] = Field(default_factory=list)
 
 class PlannerExportRequest(BaseModel):
     planner_data: str

@@ -33,27 +33,33 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
   const showEarly = !!early && earlyMins > 0;
   const hasExtras = showAtt || showOt || showEarly;
 
-  const labelCls = compact ? 'text-[9px] font-semibold uppercase tracking-wide' : 'text-xs font-semibold uppercase tracking-wide';
-  const bodyCls = compact ? 'text-[10px] leading-snug' : 'text-sm leading-snug';
-  const noteCls = compact ? 'text-[9px] text-muted-foreground italic line-clamp-2 break-all' : 'text-xs text-muted-foreground italic break-words';
+  const labelCls = compact
+    ? 'text-[8px] font-semibold uppercase tracking-tight leading-tight'
+    : 'text-xs font-semibold uppercase tracking-wide';
+  const bodyCls = compact ? 'text-[9px] leading-tight' : 'text-sm leading-snug';
+  const noteCls = compact
+    ? 'text-[8px] text-muted-foreground italic line-clamp-1 break-all'
+    : 'text-xs text-muted-foreground italic break-words';
 
   return (
-    <div className={cn('min-w-0 space-y-1', className)}>
-      <div className={cn(bodyCls, 'font-medium tabular-nums')}>
-        Time: {shift.start} – {shift.end}
+    <div className={cn('min-w-0', compact ? 'space-y-0.5' : 'space-y-1', className)}>
+      <div className={cn(bodyCls, 'font-medium tabular-nums truncate')}>
+        {compact ? `${shift.start}–${shift.end}` : `Time: ${shift.start} – ${shift.end}`}
       </div>
-      <div className={cn(bodyCls, 'font-bold text-foreground truncate')}>Site: {site}</div>
+      <div className={cn(bodyCls, 'font-bold text-foreground truncate')} title={site}>
+        {compact ? site : `Site: ${site}`}
+      </div>
 
       {hasExtras ? (
-        <div className={cn('space-y-1.5', compact ? 'pt-0.5' : 'pt-2 border-t mt-2')}>
+        <div className={cn(compact ? 'space-y-0.5 pt-0.5' : 'space-y-1.5 pt-2 border-t mt-2')}>
           {showAtt ? (
             <div className="min-w-0 space-y-0.5">
               <div
-                className={cn(labelCls, 'whitespace-nowrap truncate leading-tight')}
+                className={cn(labelCls, 'whitespace-nowrap truncate')}
                 style={{ color: attStatusBarColor(attStatus) || undefined }}
                 title={`Attendance: ${attStatusLabel(attStatus)}`}
               >
-                Attendance: {attStatusLabel(attStatus)}
+                {compact ? attStatusLabel(attStatus) : `Attendance: ${attStatusLabel(attStatus)}`}
               </div>
               {attNote ? <div className={noteCls}>Note: {attNote}</div> : null}
             </div>
@@ -61,8 +67,8 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
 
           {showOt ? (
             <div className="min-w-0 space-y-0.5">
-              <div className={cn(labelCls, 'text-sky-700 dark:text-sky-300 normal-case')}>
-                Overtime: {formatDurationMins(otMins)}
+              <div className={cn(labelCls, 'text-sky-700 dark:text-sky-300 normal-case truncate')}>
+                {compact ? `OT: ${formatDurationMins(otMins)}` : `Overtime: ${formatDurationMins(otMins)}`}
               </div>
               {(overtime?.reason || '').trim() ? (
                 <div className={noteCls}>Note: {(overtime?.reason || '').trim()}</div>
@@ -76,8 +82,8 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
 
           {showEarly ? (
             <div className="min-w-0 space-y-0.5">
-              <div className={cn(labelCls, 'text-amber-700 dark:text-amber-300 normal-case')}>
-                Finish early: {formatDurationMins(earlyMins)}
+              <div className={cn(labelCls, 'text-amber-700 dark:text-amber-300 normal-case truncate')}>
+                {compact ? `Early: ${formatDurationMins(earlyMins)}` : `Finish early: ${formatDurationMins(earlyMins)}`}
               </div>
               {(early?.reason || '').trim() ? (
                 <div className={noteCls}>Note: {(early?.reason || '').trim()}</div>

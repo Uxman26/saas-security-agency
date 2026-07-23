@@ -466,12 +466,14 @@ export interface RotaPlanListItem {
 
 export interface RotaPlanDetail extends RotaPlanListItem {
   planner_data?: string | null;
+  published_guard_ids?: number[];
 }
 
 export interface RotaPlanPublishResult {
   created: number;
   skipped: number;
   errors: string[];
+  published_guard_ids?: number[];
 }
 
 export interface Rota {

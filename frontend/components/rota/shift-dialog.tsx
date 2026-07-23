@@ -9,11 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { EmployeeRec, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
+import { findConflictsForDraft } from '@/lib/rota-shifts-utils';
 import { useCreateSite, useSites } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { cn } from '@/lib/utils';
-import { Plus } from 'lucide-react';
+import { AlertTriangle, Plus } from 'lucide-react';
 
 type Props = {
   open: boolean;
@@ -22,6 +23,8 @@ type Props = {
   defaultDk: string;
   defaultEmpId: string;
   edit?: { empId: string; dk: string; idx: number; shift: ShiftRec } | null;
+  /** Current planner shifts — used to detect conflicts while editing. */
+  allShifts?: Record<string, Record<string, ShiftRec[] | undefined> | undefined>;
   onApply: (assignees: string[], dk: string, shift: ShiftRec) => void;
 };
 
@@ -56,7 +59,16 @@ function normalizeShiftForm(sh: ShiftRec): ShiftRec {
   };
 }
 
-export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultEmpId, edit, onApply }: Props) {
+export function ShiftDialog({
+  open,
+  onOpenChange,
+  employees,
+  defaultDk,
+  defaultEmpId,
+  edit,
+  allShifts,
+  onApply,
+}: Props) {
   const { data: sites = [] } = useSites();
   const createSite = useCreateSite();
   const { data: contractors = [] } = useDirectoryContractorsList({ is_active: true });
@@ -163,6 +175,26 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
 
   const primaryStaffRate = assigneeStaffRates.length === 1 ? assigneeStaffRates[0] : null;
 
+  const draftConflicts = useMemo(() => {
+    if (!open || !allShifts) return [] as ReturnType<typeof findConflictsForDraft>;
+    const seen = new Set<string>();
+    const hits: ReturnType<typeof findConflictsForDraft> = [];
+    for (const empId of assignees) {
+      for (const hit of findConflictsForDraft(
+        allShifts,
+        empId,
+        dk,
+        shift,
+        edit && edit.empId === empId && edit.dk === dk ? edit.idx : null
+      )) {
+        if (seen.has(hit.label)) continue;
+        seen.add(hit.label);
+        hits.push(hit);
+      }
+    }
+    return hits;
+  }, [open, allShifts, assignees, dk, shift, edit]);
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,6 +217,21 @@ export function ShiftDialog({ open, onOpenChange, employees, defaultDk, defaultE
                 <Input type="time" value={shift.end} onChange={(e) => setShift((s) => ({ ...s, end: e.target.value }))} />
               </div>
             </div>
+            {draftConflicts.length > 0 ? (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                <div className="flex items-start gap-2 font-semibold">
+                  <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <span>
+                    Shift conflict{draftConflicts.length === 1 ? '' : 's'} ({draftConflicts.length})
+                  </span>
+                </div>
+                <ul className="mt-1.5 space-y-0.5 pl-6">
+                  {draftConflicts.map((c) => (
+                    <li key={`${c.dk}-${c.idx}-${c.label}`}>{c.label}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label>Break (hrs)</Label>

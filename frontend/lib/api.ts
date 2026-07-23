@@ -284,8 +284,13 @@ export const api = {
     ): Promise<RotaPlanDetail> =>
       request<RotaPlanDetail>(`/rotas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/rotas/${id}`, { method: 'DELETE' }),
-    publish: (id: number): Promise<RotaPlanPublishResult> =>
-      request<RotaPlanPublishResult>(`/rotas/${id}/publish`, { method: 'POST' }),
+    publish: (id: number, guardId?: number): Promise<RotaPlanPublishResult> =>
+      request<RotaPlanPublishResult>(
+        guardId != null ? `/rotas/${id}/publish?guard_id=${guardId}` : `/rotas/${id}/publish`,
+        { method: 'POST' }
+      ),
+    unpublishGuard: (id: number, guardId: number): Promise<RotaPlanPublishResult> =>
+      request<RotaPlanPublishResult>(`/rotas/${id}/unpublish/${guardId}`, { method: 'POST' }),
     copy: (
       id: number,
       data: {

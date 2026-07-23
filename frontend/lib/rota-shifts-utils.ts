@@ -180,3 +180,138 @@ export function payableHoursForAttendance(
 export function formatMoney(n: number): string {
   return `£${n.toFixed(2)}`;
 }
+
+export type ShiftConflictHit = {
+  empId: string;
+  dk: string;
+  idx: number;
+  label: string;
+};
+
+function padTime(t: string): string {
+  const parts = String(t || '').trim().split(':');
+  const h = Math.min(23, Math.max(0, parseInt(parts[0] || '0', 10) || 0));
+  const m = Math.min(59, Math.max(0, parseInt(parts[1] || '0', 10) || 0));
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** True when end is at/before start (overnight into the next calendar day). */
+export function isOvernightShift(sh: { start: string; end: string }): boolean {
+  return timeMins(padTime(sh.end)) <= timeMins(padTime(sh.start));
+}
+
+/** Absolute [start, end] ms for a shift on `dk` (overnight spans into the next day). */
+export function shiftAbsoluteRange(
+  dk: string,
+  sh: { start: string; end: string }
+): { start: number; end: number } | null {
+  const start = Date.parse(`${dk}T${padTime(sh.start)}:00`);
+  let end = Date.parse(`${dk}T${padTime(sh.end)}:00`);
+  if (Number.isNaN(start) || Number.isNaN(end)) return null;
+  if (end <= start) end += 24 * 60 * 60 * 1000;
+  return { start, end };
+}
+
+/** Abutting times count as a conflict (e.g. ends 09:00 / starts 09:00). */
+export function intervalsTouchOrOverlap(
+  a: { start: number; end: number },
+  b: { start: number; end: number }
+): boolean {
+  return a.start <= b.end && b.start <= a.end;
+}
+
+export function formatShiftConflictLabel(dk: string, sh: { start: string; end: string }): string {
+  const startT = padTime(sh.start);
+  const endT = padTime(sh.end);
+  const overnight = isOvernightShift({ start: startT, end: endT });
+  const endDk = overnight ? dateKey(addDays(parseDateKey(dk), 1)) : dk;
+  return `${fmtShortDate(dk)} ${startT} - ${fmtShortDate(endDk)} ${endT}`;
+}
+
+export function shiftConflictKey(empId: string, dk: string, idx: number): string {
+  return `${empId}:${dk}:${idx}`;
+}
+
+/** Per-shift conflict targets for every employee in the planner. */
+export function buildShiftConflictMap(
+  shifts: Record<string, Record<string, ShiftRec[] | undefined> | undefined>
+): Map<string, ShiftConflictHit[]> {
+  const map = new Map<string, ShiftConflictHit[]>();
+  for (const empId of Object.keys(shifts || {})) {
+    const entries: {
+      key: string;
+      empId: string;
+      dk: string;
+      idx: number;
+      range: { start: number; end: number };
+      sh: ShiftRec;
+    }[] = [];
+    const byD = shifts[empId] || {};
+    for (const dk of Object.keys(byD)) {
+      (byD[dk] || []).forEach((sh, idx) => {
+        const range = shiftAbsoluteRange(dk, sh);
+        if (!range) return;
+        entries.push({
+          key: shiftConflictKey(empId, dk, idx),
+          empId,
+          dk,
+          idx,
+          range,
+          sh,
+        });
+      });
+    }
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        if (!intervalsTouchOrOverlap(entries[i].range, entries[j].range)) continue;
+        const a = entries[i];
+        const b = entries[j];
+        const add = (
+          from: (typeof entries)[number],
+          to: (typeof entries)[number]
+        ) => {
+          const list = map.get(from.key) || [];
+          list.push({
+            empId: to.empId,
+            dk: to.dk,
+            idx: to.idx,
+            label: formatShiftConflictLabel(to.dk, to.sh),
+          });
+          map.set(from.key, list);
+        };
+        add(a, b);
+        add(b, a);
+      }
+    }
+  }
+  return map;
+}
+
+/** Live conflicts for a draft shift (e.g. while editing in the dialog). */
+export function findConflictsForDraft(
+  shifts: Record<string, Record<string, ShiftRec[] | undefined> | undefined>,
+  empId: string,
+  dk: string,
+  draft: { start: string; end: string },
+  excludeIdx?: number | null
+): ShiftConflictHit[] {
+  const range = shiftAbsoluteRange(dk, draft);
+  if (!range || !empId) return [];
+  const hits: ShiftConflictHit[] = [];
+  const byD = shifts[empId] || {};
+  for (const otherDk of Object.keys(byD)) {
+    (byD[otherDk] || []).forEach((sh, idx) => {
+      if (otherDk === dk && excludeIdx != null && idx === excludeIdx) return;
+      const other = shiftAbsoluteRange(otherDk, sh);
+      if (!other) return;
+      if (!intervalsTouchOrOverlap(range, other)) return;
+      hits.push({
+        empId,
+        dk: otherDk,
+        idx,
+        label: formatShiftConflictLabel(otherDk, sh),
+      });
+    });
+  }
+  return hits;
+}

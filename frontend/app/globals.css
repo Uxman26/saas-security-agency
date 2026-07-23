@@ -225,3 +225,14 @@
 .marketing-gradient-text {
   @apply bg-gradient-to-r from-primary via-[#FD8018] to-[#DF3C01] bg-clip-text text-transparent;
 }
+
+/* Centre-centre toast alerts (override Sonner top-centre) */
+[data-sonner-toaster][data-x-position='center'] {
+  top: 50% !important;
+  bottom: auto !important;
+  left: 50% !important;
+  right: auto !important;
+  --offset-top: 0px !important;
+  transform: translate(-50%, -50%) !important;
+}
+

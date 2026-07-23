@@ -79,15 +79,6 @@ def list_rota_plans(db: Session, user_id: int) -> List[RotaPlanListItem]:
     return [_to_list_item(db, p) for p in rows]
 
 
-def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
-    company = get_company_by_user_id(db, user_id)
-    plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
-    if not plan:
-        raise HTTPException(status_code=404, detail="Rota not found")
-    base = _to_list_item(db, plan)
-    return RotaPlanDetail(**base.model_dump(), planner_data=plan.planner_data)
-
-
 _AVATAR_PALETTE = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#f97316"]
 _SHIFT_COLOR_OPTS = [
     "#3b82f6",
@@ -140,17 +131,41 @@ def _parse_shift_rate(raw) -> Optional[float]:
         return None
 
 
-def _delete_plan_assignments(db: Session, plan_id: int) -> None:
-    assignment_ids = [
-        row[0]
-        for row in db.query(Assignment.id).filter(Assignment.rota_plan_id == plan_id).all()
-    ]
+def _delete_plan_assignments(db: Session, plan_id: int, guard_id: Optional[int] = None) -> None:
+    q = db.query(Assignment.id).filter(Assignment.rota_plan_id == plan_id)
+    if guard_id is not None:
+        q = q.filter(Assignment.guard_id == guard_id)
+    assignment_ids = [row[0] for row in q.all()]
     if assignment_ids:
         db.query(Attendance).filter(Attendance.assignment_id.in_(assignment_ids)).delete(
             synchronize_session=False
         )
-    db.query(Assignment).filter(Assignment.rota_plan_id == plan_id).delete(
-        synchronize_session=False
+    del_q = db.query(Assignment).filter(Assignment.rota_plan_id == plan_id)
+    if guard_id is not None:
+        del_q = del_q.filter(Assignment.guard_id == guard_id)
+    del_q.delete(synchronize_session=False)
+
+
+def _published_guard_ids(db: Session, plan_id: int) -> List[int]:
+    rows = (
+        db.query(Assignment.guard_id)
+        .filter(Assignment.rota_plan_id == plan_id)
+        .distinct()
+        .all()
+    )
+    return sorted({int(r[0]) for r in rows if r[0] is not None})
+
+
+def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
+    company = get_company_by_user_id(db, user_id)
+    plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Rota not found")
+    base = _to_list_item(db, plan)
+    return RotaPlanDetail(
+        **base.model_dump(),
+        planner_data=plan.planner_data,
+        published_guard_ids=_published_guard_ids(db, plan.id),
     )
 
 
@@ -516,7 +531,9 @@ def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
     db.commit()
 
 
-def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublishResult:
+def publish_rota_plan(
+    db: Session, user_id: int, plan_id: int, guard_id: Optional[int] = None
+) -> RotaPlanPublishResult:
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
@@ -529,10 +546,15 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid planner data")
 
+    if guard_id is not None:
+        guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
+        if not guard:
+            raise HTTPException(status_code=404, detail="Staff not found")
+
     sites = db.query(Site).filter(Site.company_id == company.id).all()
     site_by_name = {s.name.strip().lower(): s.id for s in sites}
 
-    _delete_plan_assignments(db, plan.id)
+    _delete_plan_assignments(db, plan.id, guard_id)
 
     created = 0
     skipped = 0
@@ -541,11 +563,13 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
 
     for emp_id, by_d in shifts.items():
         try:
-            guard_id = int(emp_id)
+            emp_guard_id = int(emp_id)
         except (TypeError, ValueError):
             skipped += 1
             continue
-        guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
+        if guard_id is not None and emp_guard_id != guard_id:
+            continue
+        guard = db.query(Guard).filter(Guard.id == emp_guard_id, Guard.company_id == company.id).first()
         if not guard:
             skipped += 1
             errors.append(f"Staff {emp_id} not found")
@@ -562,7 +586,7 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                     continue
                 break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
                 assignment = Assignment(
-                        guard_id=guard_id,
+                        guard_id=emp_guard_id,
                         site_id=site_id,
                         rota_plan_id=plan.id,
                         date=date.fromisoformat(dk),
@@ -601,7 +625,7 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                 if status in {"on_time", "late", "absent", "no_show", "early_leave"}:
                     marked = Attendance(
                         assignment_id=assignment.id,
-                        guard_id=guard_id,
+                        guard_id=emp_guard_id,
                         status=status,
                         note=(att_rec.get("note") or "").strip() or None,
                         updated_by_user_id=user_id,
@@ -611,7 +635,38 @@ def publish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublis
                     db.add(marked)
                 created += 1
 
-    plan.status = "published"
-    plan.published_at = datetime.now(timezone.utc)
+    published_ids = _published_guard_ids(db, plan.id)
+    if published_ids:
+        plan.status = "published"
+        plan.published_at = datetime.now(timezone.utc)
+    else:
+        plan.status = "draft"
+        plan.published_at = None
     db.commit()
-    return RotaPlanPublishResult(created=created, skipped=skipped, errors=errors)
+    return RotaPlanPublishResult(
+        created=created, skipped=skipped, errors=errors, published_guard_ids=published_ids
+    )
+
+
+def unpublish_rota_plan_guard(
+    db: Session, user_id: int, plan_id: int, guard_id: int
+) -> RotaPlanPublishResult:
+    company = get_company_by_user_id(db, user_id)
+    plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Rota not found")
+    guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
+    if not guard:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    _delete_plan_assignments(db, plan.id, guard_id)
+    published_ids = _published_guard_ids(db, plan.id)
+    if published_ids:
+        plan.status = "published"
+    else:
+        plan.status = "draft"
+        plan.published_at = None
+    db.commit()
+    return RotaPlanPublishResult(
+        created=0, skipped=0, errors=[], published_guard_ids=published_ids
+    )

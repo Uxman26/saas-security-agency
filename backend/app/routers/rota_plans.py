@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 import json
@@ -91,7 +93,18 @@ def delete_rota(
 @router.post("/{plan_id}/publish", response_model=RotaPlanPublishResult)
 def publish_rota(
     plan_id: int,
+    guard_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
 ):
-    return rota_plan_service.publish_rota_plan(db, current_user.id, plan_id)
+    return rota_plan_service.publish_rota_plan(db, current_user.id, plan_id, guard_id)
+
+
+@router.post("/{plan_id}/unpublish/{guard_id}", response_model=RotaPlanPublishResult)
+def unpublish_rota_guard(
+    plan_id: int,
+    guard_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    return rota_plan_service.unpublish_rota_plan_guard(db, current_user.id, plan_id, guard_id)

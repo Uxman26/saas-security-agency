@@ -33,6 +33,7 @@ export type PublishRotaResult = {
   created: number;
   skipped: number;
   errors: string[];
+  published_guard_ids?: number[];
 };
 
 function emptyShifts() {
@@ -131,6 +132,7 @@ type Ctx = {
   moveShiftToDay: (empId: string, fromDk: string, idx: number, toDk: string, toEmpId?: string) => void;
   clearEmployeeShifts: (empId: string) => void;
   setAttendance: (key: string, a: AttendanceRec) => void;
+  clearAttendance: (key: string) => void;
   setCtxShift: (v: RotaJsState['ctxShift']) => void;
   setCtxEmp: (id: string | null) => void;
   setCopyShift: (v: RotaJsState['copyShift']) => void;
@@ -138,7 +140,11 @@ type Ctx = {
   setOrderDragIdx: (n: number | null) => void;
   setSelectedColor: (c: string) => void;
   setInclBreaks: (v: boolean) => void;
-  publishRota: () => Promise<PublishRotaResult>;
+  publishRota: (guardId?: number) => Promise<PublishRotaResult>;
+  unpublishGuard: (guardId: number) => Promise<PublishRotaResult>;
+  publishedGuardIds: Set<string>;
+  setPublishedGuardIds: (ids: number[] | string[]) => void;
+  isEmployeePublished: (empId: string) => boolean;
   totalRotaHours: number;
   empTotalHours: (empId: string) => number;
   dayTotalHours: (dk: string) => number;
@@ -152,12 +158,22 @@ const RotaCtx = createContext<Ctx | null>(null);
 export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<RotaJsState>(defaultState);
   const [rotaPlanId, setRotaPlanId] = useState<number | null>(null);
+  const [publishedGuardIds, setPublishedGuardIdsState] = useState<Set<string>>(() => new Set());
   const [pool, setPool] = useState<EmployeeRec[]>([]);
   const [poolLoading, setPoolLoading] = useState(true);
   const [siteNames, setSiteNames] = useState<string[]>([]);
   const [siteRateByName, setSiteRateByName] = useState<Record<string, number>>({});
   const [guardRateById, setGuardRateById] = useState<Record<string, number>>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setPublishedGuardIds = useCallback((ids: number[] | string[]) => {
+    setPublishedGuardIdsState(new Set(ids.map(String)));
+  }, []);
+
+  const isEmployeePublished = useCallback(
+    (empId: string) => publishedGuardIds.has(String(empId)),
+    [publishedGuardIds]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +291,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
   const resetRota = useCallback(() => {
     setRotaPlanId(null);
+    setPublishedGuardIdsState(new Set());
     setState(defaultState());
   }, []);
 
@@ -309,6 +326,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const loadRotaPlan = useCallback(
     (plan: RotaPlanDetail, bootstrap?: InitPayload) => {
       setRotaPlanId(plan.id);
+      setPublishedGuardIds(plan.published_guard_ids || []);
       if (plan.planner_data) {
         setState((s) => applyPlannerPayload(s, plan.planner_data, plan.name));
         return;
@@ -345,7 +363,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         }));
       }
     },
-    [pool, siteNames]
+    [pool, siteNames, setPublishedGuardIds]
   );
 
   const setRotaView = useCallback((rotaView: RotaViewMode) => {
@@ -365,7 +383,26 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       if (s.days.length === 0) return s;
       const start = s.days[0];
       const n = Math.max(1, s.days.length + delta);
-      return { ...s, days: buildDayRange(start, n) };
+      const days = buildDayRange(start, n);
+      const keep = new Set(days);
+      if (days.length >= s.days.length) {
+        return { ...s, days };
+      }
+      // Prune shifts and attendance for removed days
+      const shifts: RotaJsState['shifts'] = {};
+      for (const [empId, byDay] of Object.entries(s.shifts)) {
+        const nextByDay: Record<string, ShiftRec[]> = {};
+        for (const [dk, list] of Object.entries(byDay || {})) {
+          if (keep.has(dk) && list?.length) nextByDay[dk] = list;
+        }
+        shifts[empId] = nextByDay;
+      }
+      const attendance: RotaJsState['attendance'] = {};
+      for (const [key, rec] of Object.entries(s.attendance)) {
+        const dk = key.split(':')[1];
+        if (dk && keep.has(dk)) attendance[key] = rec;
+      }
+      return { ...s, days, shifts, attendance };
     });
   }, []);
 
@@ -710,6 +747,15 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, attendance: { ...s.attendance, [key]: a } }));
   }, []);
 
+  const clearAttendance = useCallback((key: string) => {
+    setState((s) => {
+      if (!s.attendance[key]) return s;
+      const attendance = { ...s.attendance };
+      delete attendance[key];
+      return { ...s, attendance };
+    });
+  }, []);
+
   const setCtxShift = useCallback((ctxShift: RotaJsState['ctxShift']) => {
     setState((s) => ({ ...s, ctxShift }));
   }, []);
@@ -738,47 +784,98 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, inclBreaks }));
   }, []);
 
-  const publishRota = useCallback(async (): Promise<PublishRotaResult> => {
-    if (rotaPlanId) {
-      await saveRotaPlan();
-      return api.rotaPlans.publish(rotaPlanId);
-    }
-    const sites = await api.sites.list();
-    const siteByName = new Map(sites.map((s) => [s.name.trim().toLowerCase(), s.id]));
-    let created = 0;
-    let skipped = 0;
-    const errors: string[] = [];
-    for (const empId of Object.keys(state.shifts)) {
-      const guardId = parseInt(empId, 10);
-      if (!guardId) continue;
-      const byD = state.shifts[empId] || {};
-      for (const dk of Object.keys(byD)) {
-        for (const sh of byD[dk] || []) {
-          const siteKey = (sh.site || '').trim().toLowerCase();
-          const siteId = siteByName.get(siteKey);
-          if (!siteId) {
-            skipped++;
-            errors.push(
-              siteKey ? `No site named "${sh.site}" (${dk})` : `One-off shift on ${dk} (no site — skipped on publish)`
-            );
-            continue;
-          }
-          await api.assignments.create({
-            guard_id: guardId,
-            site_id: siteId,
-            date: dk,
-            shift_start: sh.start,
-            shift_end: sh.end,
-            break_minutes: (sh.breakH || 0) * 60 + (sh.breakM || 0),
-            shift_type: 'day',
-            ...(sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate)) ? { shift_rate: Number(sh.shiftRate) } : {}),
+  const publishRota = useCallback(
+    async (guardId?: number): Promise<PublishRotaResult> => {
+      if (rotaPlanId) {
+        await saveRotaPlan();
+        const result = await api.rotaPlans.publish(rotaPlanId, guardId);
+        if (result.published_guard_ids) {
+          setPublishedGuardIds(result.published_guard_ids);
+        } else if (guardId != null) {
+          setPublishedGuardIdsState((prev) => {
+            const next = new Set(prev);
+            next.add(String(guardId));
+            return next;
           });
-          created++;
+        }
+        return result;
+      }
+      const sites = await api.sites.list();
+      const siteByName = new Map(sites.map((s) => [s.name.trim().toLowerCase(), s.id]));
+      let created = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      const empKeys =
+        guardId != null ? [String(guardId)] : Object.keys(state.shifts);
+      for (const empId of empKeys) {
+        const gid = parseInt(empId, 10);
+        if (!gid) continue;
+        const byD = state.shifts[empId] || {};
+        for (const dk of Object.keys(byD)) {
+          for (const sh of byD[dk] || []) {
+            const siteKey = (sh.site || '').trim().toLowerCase();
+            const siteId = siteByName.get(siteKey);
+            if (!siteId) {
+              skipped++;
+              errors.push(
+                siteKey
+                  ? `No site named "${sh.site}" (${dk})`
+                  : `One-off shift on ${dk} (no site — skipped on publish)`
+              );
+              continue;
+            }
+            await api.assignments.create({
+              guard_id: gid,
+              site_id: siteId,
+              date: dk,
+              shift_start: sh.start,
+              shift_end: sh.end,
+              break_minutes: (sh.breakH || 0) * 60 + (sh.breakM || 0),
+              shift_type: 'day',
+              ...(sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate))
+                ? { shift_rate: Number(sh.shiftRate) }
+                : {}),
+            });
+            created++;
+          }
         }
       }
-    }
-    return { created, skipped, errors };
-  }, [rotaPlanId, saveRotaPlan, state.shifts]);
+      if (guardId != null) {
+        setPublishedGuardIdsState((prev) => {
+          const next = new Set(prev);
+          next.add(String(guardId));
+          return next;
+        });
+      }
+      return { created, skipped, errors };
+    },
+    [rotaPlanId, saveRotaPlan, state.shifts, setPublishedGuardIds]
+  );
+
+  const unpublishGuard = useCallback(
+    async (guardId: number): Promise<PublishRotaResult> => {
+      if (!rotaPlanId) {
+        setPublishedGuardIdsState((prev) => {
+          const next = new Set(prev);
+          next.delete(String(guardId));
+          return next;
+        });
+        return { created: 0, skipped: 0, errors: [] };
+      }
+      const result = await api.rotaPlans.unpublishGuard(rotaPlanId, guardId);
+      if (result.published_guard_ids) {
+        setPublishedGuardIds(result.published_guard_ids);
+      } else {
+        setPublishedGuardIdsState((prev) => {
+          const next = new Set(prev);
+          next.delete(String(guardId));
+          return next;
+        });
+      }
+      return result;
+    },
+    [rotaPlanId, setPublishedGuardIds]
+  );
 
   const totalRotaHours = useMemo(() => {
     let t = 0;
@@ -889,6 +986,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       moveShiftToDay,
       clearEmployeeShifts,
       setAttendance,
+      clearAttendance,
       setCtxShift,
       setCtxEmp,
       setCopyShift,
@@ -897,6 +995,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setSelectedColor,
       setInclBreaks,
       publishRota,
+      unpublishGuard,
+      publishedGuardIds,
+      setPublishedGuardIds,
+      isEmployeePublished,
       totalRotaHours,
       empTotalHours,
       dayTotalHours,
@@ -933,6 +1035,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       moveShiftToDay,
       clearEmployeeShifts,
       setAttendance,
+      clearAttendance,
       setCtxShift,
       setCtxEmp,
       setCopyShift,
@@ -941,6 +1044,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setSelectedColor,
       setInclBreaks,
       publishRota,
+      unpublishGuard,
+      publishedGuardIds,
+      setPublishedGuardIds,
+      isEmployeePublished,
       totalRotaHours,
       empTotalHours,
       dayTotalHours,

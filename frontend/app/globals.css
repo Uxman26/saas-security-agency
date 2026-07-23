@@ -84,6 +84,9 @@
   --sidebar-accent-foreground: #F9FAFB;
   --sidebar-border: #374151;
   --sidebar-ring: #FD8018;
+  --rota-hours-bg: #e0f2fe;
+  --rota-pay-bg: #d1fae5;
+  --rota-publish-bg: #fdf2f8;
 }
 
 .dark {
@@ -118,6 +121,9 @@
   --sidebar-accent-foreground: #F9FAFB;
   --sidebar-border: #374151;
   --sidebar-ring: #FD8018;
+  --rota-hours-bg: #0c4a6e;
+  --rota-pay-bg: #064e3b;
+  --rota-publish-bg: #500724;
 }
 
 @layer base {

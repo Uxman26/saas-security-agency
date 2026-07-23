@@ -86,7 +86,7 @@
   --sidebar-ring: #FD8018;
   --rota-hours-bg: #e0f2fe;
   --rota-pay-bg: #d1fae5;
-  --rota-publish-bg: #fdf2f8;
+  --rota-publish-bg: #fce7f3;
 }
 
 .dark {
@@ -123,7 +123,7 @@
   --sidebar-ring: #FD8018;
   --rota-hours-bg: #0c4a6e;
   --rota-pay-bg: #064e3b;
-  --rota-publish-bg: #500724;
+  --rota-publish-bg: #831843;
 }
 
 @layer base {
@@ -240,5 +240,16 @@
   right: auto !important;
   --offset-top: 0px !important;
   transform: translate(-50%, -50%) !important;
+}
+
+/* Opaque sticky rota summary columns — no alpha, no shift bleed-through */
+.rota-sticky-hours {
+  background-color: var(--rota-hours-bg) !important;
+}
+.rota-sticky-pay {
+  background-color: var(--rota-pay-bg) !important;
+}
+.rota-sticky-publish {
+  background-color: var(--rota-publish-bg) !important;
 }
 

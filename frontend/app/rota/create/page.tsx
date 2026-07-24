@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/lib/api';
 import type { RotaPlanListItem, Guard } from '@/lib/types';
 import type { RotaViewMode } from '@/lib/rota-shifts-types';
-import { Calendar, Check, Copy, LayoutGrid, Layers, Loader2, Timer } from 'lucide-react';
+import { Calendar, Check, Copy, LayoutGrid, Loader2, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 
@@ -84,7 +84,7 @@ function CreateRotaPage() {
       setCustomDays(s.day_count);
       setDuration('custom');
     }
-    setView((s.view_mode as RotaViewMode) || 'table');
+    setView((s.view_mode === 'dnd' ? 'table' : (s.view_mode as RotaViewMode)) || 'table');
     setBudget(s.budget ? String(s.budget) : '');
   }, [sourceId, mode, rotas]);
 
@@ -342,12 +342,11 @@ function CreateRotaPage() {
 
             <div>
               <p className="text-sm font-medium mb-3">Select your rota view</p>
-              <div className="grid sm:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 {(
                   [
                     { id: 'table' as const, title: 'Table view', desc: 'Employees × dates grid.', icon: LayoutGrid },
-                    { id: 'timeline' as const, title: 'Timeline view', desc: 'Days as rows, time across.', icon: Timer },
-                    { id: 'dnd' as const, title: 'Drag & drop', desc: 'Drag staff onto days.', icon: Layers },
+                    { id: 'timeline' as const, title: 'Timeline view', desc: 'Shifts along a 24-hour time flow.', icon: Timer },
                   ] as const
                 ).map(({ id, title, desc, icon: Icon }) => (
                   <button

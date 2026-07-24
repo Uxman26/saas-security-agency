@@ -1,4 +1,4 @@
-export type RotaViewMode = 'table' | 'timeline' | 'dnd';
+export type RotaViewMode = 'table' | 'timeline';
 
 export type ShiftAdjustment = {
   type: 'overtime' | 'early_finish';

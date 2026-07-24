@@ -142,6 +142,7 @@ type Ctx = {
   setInclBreaks: (v: boolean) => void;
   publishRota: (guardId?: number) => Promise<PublishRotaResult>;
   unpublishGuard: (guardId: number) => Promise<PublishRotaResult>;
+  unpublishRota: () => Promise<PublishRotaResult>;
   publishedGuardIds: Set<string>;
   setPublishedGuardIds: (ids: number[] | string[]) => void;
   isEmployeePublished: (empId: string) => boolean;
@@ -347,7 +348,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         setState({
           ...defaultState(),
           rotaName: plan.name,
-          rotaView: (plan.view_mode as RotaViewMode) || bootstrap.view,
+          rotaView: (plan.view_mode === 'dnd' ? 'table' : plan.view_mode as RotaViewMode) || bootstrap.view,
           days,
           budget: plan.budget ?? bootstrap.budget,
           employees,
@@ -357,7 +358,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       } else {
         setState((s) => ({
           ...applyPlannerPayload(s, null, plan.name),
-          rotaView: (plan.view_mode as RotaViewMode) || 'table',
+          rotaView: (plan.view_mode === 'dnd' ? 'table' : plan.view_mode as RotaViewMode) || 'table',
           days: buildDayRange(plan.start_date, plan.day_count),
           budget: plan.budget ?? 0,
         }));
@@ -877,6 +878,16 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     [rotaPlanId, setPublishedGuardIds]
   );
 
+  const unpublishRota = useCallback(async (): Promise<PublishRotaResult> => {
+    if (!rotaPlanId) {
+      setPublishedGuardIdsState(new Set());
+      return { created: 0, skipped: 0, errors: [] };
+    }
+    const result = await api.rotaPlans.unpublish(rotaPlanId);
+    setPublishedGuardIds(result.published_guard_ids || []);
+    return result;
+  }, [rotaPlanId, setPublishedGuardIds]);
+
   const totalRotaHours = useMemo(() => {
     let t = 0;
     for (const empId of Object.keys(state.shifts)) {
@@ -996,6 +1007,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setInclBreaks,
       publishRota,
       unpublishGuard,
+      unpublishRota,
       publishedGuardIds,
       setPublishedGuardIds,
       isEmployeePublished,
@@ -1045,6 +1057,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setInclBreaks,
       publishRota,
       unpublishGuard,
+      unpublishRota,
       publishedGuardIds,
       setPublishedGuardIds,
       isEmployeePublished,

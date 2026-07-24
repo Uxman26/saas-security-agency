@@ -55,7 +55,7 @@ def export_planner_rota_pdf(data: dict[str, Any]) -> bytes:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     name = escape(str(data.get("rotaName") or "Rota"))
     days = list(data.get("days") or [])
@@ -69,66 +69,113 @@ def export_planner_rota_pdf(data: dict[str, Any]) -> bytes:
     doc = SimpleDocTemplate(
         buf,
         pagesize=page,
-        leftMargin=0.45 * cm,
-        rightMargin=0.45 * cm,
+        leftMargin=0.5 * cm,
+        rightMargin=0.5 * cm,
         topMargin=0.7 * cm,
         bottomMargin=0.7 * cm,
     )
     styles = getSampleStyleSheet()
-    cell_style = ParagraphStyle("cell", parent=styles["Normal"], fontSize=6, leading=7)
+    cell_style = ParagraphStyle(
+        "cell",
+        parent=styles["Normal"],
+        fontSize=6.5,
+        leading=8,
+        wordWrap="CJK",
+    )
+    name_style = ParagraphStyle(
+        "empName",
+        parent=styles["Normal"],
+        fontSize=7.5,
+        leading=9,
+        fontName="Helvetica-Bold",
+        wordWrap="CJK",
+    )
     header_style = ParagraphStyle("hdr", parent=styles["Normal"], fontSize=7, leading=8, fontName="Helvetica-Bold")
 
-    story = [Paragraph(name, styles["Title"])]
+    story: list[Any] = [Paragraph(name, styles["Title"])]
     if days:
-        story.append(Paragraph(f"{_fmt_day(days[0])} – {_fmt_day(days[-1])} · {len(days)} days · {len(employees)} employees", styles["Normal"]))
+        story.append(
+            Paragraph(
+                f"{_fmt_day(days[0])} – {_fmt_day(days[-1])} · {len(days)} days · {len(employees)} employees",
+                styles["Normal"],
+            )
+        )
     story.append(Spacer(1, 8))
 
-    hdr = [Paragraph("Employee", header_style)]
-    for dk in days:
-        hdr.append(Paragraph(escape(_fmt_day(dk)), header_style))
-    hdr.append(Paragraph("Hours", header_style))
-    table_data = [hdr]
+    usable = page[0] - 1.0 * cm
+    emp_col = 4.2 * cm  # wide enough for full names
+    total_col = 1.2 * cm
+    # Keep day columns readable; split across pages when too many days
+    min_day = 1.6 * cm
+    max_days_per_page = max(1, int((usable - emp_col - total_col) // min_day))
 
-    for emp in employees:
-        emp_id = str(emp.get("id") or "")
-        emp_name = escape(str(emp.get("name") or "")[:40])
-        row = [Paragraph(emp_name, cell_style)]
-        total_h = 0.0
-        for dk in days:
-            day_shifts = list((shifts.get(emp_id) or {}).get(dk) or [])
-            if not day_shifts:
-                row.append(Paragraph("—", cell_style))
-                continue
-            parts: list[str] = []
-            for idx, sh in enumerate(day_shifts):
-                key = f"{emp_id}:{dk}:{idx}"
-                att = attendance.get(key)
-                parts.append(_shift_cell_html(sh, att))
-                total_h += _calc_hours(sh, incl_breaks)
-            row.append(Paragraph("<br/><br/>".join(parts), cell_style))
-        row.append(Paragraph(f"{total_h:.1f}", cell_style))
-        table_data.append(row)
+    def build_chunk(day_chunk: list[str], show_hours: bool) -> Table:
+        hdr = [Paragraph("Employee", header_style)]
+        for dk in day_chunk:
+            hdr.append(Paragraph(escape(_fmt_day(dk)), header_style))
+        if show_hours:
+            hdr.append(Paragraph("Hours", header_style))
+        table_data = [hdr]
 
-    usable = page[0] - 0.9 * cm
-    emp_col = 2.8 * cm
-    total_col = 1.1 * cm
-    day_col = max(1.35 * cm, (usable - emp_col - total_col) / max(len(days), 1))
-    col_widths = [emp_col] + [day_col] * len(days) + [total_col]
-    grid = Table(table_data, colWidths=col_widths, repeatRows=1)
-    grid.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e5e7eb")),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 3),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ]
+        for emp in employees:
+            emp_id = str(emp.get("id") or "")
+            emp_name = escape(str(emp.get("name") or "").strip() or "—")
+            row = [Paragraph(emp_name, name_style)]
+            total_h = 0.0
+            for dk in day_chunk:
+                day_shifts = list((shifts.get(emp_id) or {}).get(dk) or [])
+                if not day_shifts:
+                    row.append(Paragraph("—", cell_style))
+                    continue
+                parts: list[str] = []
+                for idx, sh in enumerate(day_shifts):
+                    key = f"{emp_id}:{dk}:{idx}"
+                    att = attendance.get(key)
+                    parts.append(_shift_cell_html(sh, att))
+                    total_h += _calc_hours(sh, incl_breaks)
+                row.append(Paragraph("<br/><br/>".join(parts), cell_style))
+            if show_hours:
+                # Hours for whole rota (all days), not just this chunk
+                full_h = 0.0
+                for dk in days:
+                    for sh in list((shifts.get(emp_id) or {}).get(dk) or []):
+                        full_h += _calc_hours(sh, incl_breaks)
+                row.append(Paragraph(f"{full_h:.1f}", cell_style))
+            table_data.append(row)
+
+        day_w = (usable - emp_col - (total_col if show_hours else 0)) / max(len(day_chunk), 1)
+        col_widths = [emp_col] + [day_w] * len(day_chunk)
+        if show_hours:
+            col_widths.append(total_col)
+        grid = Table(table_data, colWidths=col_widths, repeatRows=1)
+        grid.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e5e7eb")),
+                    ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f8fafc")),
+                    ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
         )
-    )
-    story.append(grid)
+        return grid
+
+    if not days:
+        story.append(Paragraph("No days in this rota.", styles["Normal"]))
+    else:
+        chunks = [days[i : i + max_days_per_page] for i in range(0, len(days), max_days_per_page)]
+        for i, chunk in enumerate(chunks):
+            if i > 0:
+                story.append(PageBreak())
+                story.append(Paragraph(f"{name} (continued)", styles["Heading2"]))
+                story.append(Spacer(1, 6))
+            # Show hours column on the last chunk only
+            story.append(build_chunk(chunk, show_hours=(i == len(chunks) - 1)))
+
     doc.build(story)
     return buf.getvalue()
 

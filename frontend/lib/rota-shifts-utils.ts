@@ -205,8 +205,12 @@ export function shiftAbsoluteRange(
   dk: string,
   sh: { start: string; end: string }
 ): { start: number; end: number } | null {
-  const start = Date.parse(`${dk}T${padTime(sh.start)}:00`);
-  let end = Date.parse(`${dk}T${padTime(sh.end)}:00`);
+  const startT = padTime(sh.start);
+  const endT = padTime(sh.end);
+  // Placeholder / unset times (identical start & end) are not conflicts yet
+  if (startT === endT) return null;
+  const start = Date.parse(`${dk}T${startT}:00`);
+  let end = Date.parse(`${dk}T${endT}:00`);
   if (Number.isNaN(start) || Number.isNaN(end)) return null;
   if (end <= start) end += 24 * 60 * 60 * 1000;
   return { start, end };

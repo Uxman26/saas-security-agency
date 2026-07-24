@@ -7,10 +7,14 @@ type ConfirmOpts = {
 };
 
 export const toast = {
-  success: (message: string, opts?: ExternalToast) => sonner.success(message, opts),
-  error: (message: string, opts?: ExternalToast) => sonner.error(message, opts),
-  warning: (message: string, opts?: ExternalToast) => sonner.warning(message, opts),
-  info: (message: string, opts?: ExternalToast) => sonner.info(message, opts),
+  success: (message: string, opts?: ExternalToast) =>
+    sonner.success(message, { duration: 1000, ...opts }),
+  error: (message: string, opts?: ExternalToast) =>
+    sonner.error(message, { duration: 2500, ...opts }),
+  warning: (message: string, opts?: ExternalToast) =>
+    sonner.warning(message, { duration: 2000, ...opts }),
+  info: (message: string, opts?: ExternalToast) =>
+    sonner.info(message, { duration: 1000, ...opts }),
   loading: (message: string, opts?: ExternalToast) => sonner.loading(message, opts),
   dismiss: (id?: string | number) => sonner.dismiss(id),
   promise: sonner.promise,

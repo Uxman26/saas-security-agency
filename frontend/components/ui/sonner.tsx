@@ -69,6 +69,7 @@ export function Toaster({ ...props }: ToasterProps) {
           } as CSSProperties
         }
         toastOptions={{
+          duration: 1000,
           classNames: {
             toast:
               'group toast !bg-card !text-card-foreground !border-border !shadow-lg !rounded-lg',

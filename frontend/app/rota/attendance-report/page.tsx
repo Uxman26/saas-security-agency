@@ -13,6 +13,7 @@ import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, attStatusLabel, calcHours, fmtShortDate, initials, normalizeAttStatus } from '@/lib/rota-shifts-utils';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
 
 export default function RotaAttendanceReportPage() {
   const { state } = useRotaShifts();
@@ -21,7 +22,16 @@ export default function RotaAttendanceReportPage() {
   const [empId, setEmpId] = useState<string>('__all');
 
   const rows = useMemo(() => {
-    const out: { dk: string; empId: string; idx: number; hours: number; site: string; start: string; end: string; scheduledStart?: string }[] = [];
+    const out: {
+      dk: string;
+      empId: string;
+      idx: number;
+      hours: number;
+      site: string;
+      start: string;
+      end: string;
+      scheduledStart?: string;
+    }[] = [];
     const f = from || state.days[0];
     const t = to || state.days[state.days.length - 1];
     if (!f || !t) return out;
@@ -130,6 +140,83 @@ export default function RotaAttendanceReportPage() {
     URL.revokeObjectURL(url);
   };
 
+  const exportPdf = () => {
+    const f = from || state.days[0] || '';
+    const t = to || state.days[state.days.length - 1] || '';
+    if (!f || !t) {
+      toast.warning('Select a date range first');
+      return;
+    }
+    const sections = [...byEmp.values()]
+      .map(({ emp, totalH, onTime, absent, late, noShow, lateMinutes }) => {
+        const empRows = rows
+          .filter((r) => r.empId === emp.id)
+          .map((r) => {
+            const a = state.attendance[attKey(r.empId, r.dk, r.idx)];
+            const status = normalizeAttStatus(a?.status);
+            const time =
+              r.scheduledStart && r.scheduledStart !== r.start
+                ? `${r.scheduledStart}→${r.start}`
+                : `${r.start}–${r.end}`;
+            return `<tr>
+              <td>${fmtShortDate(r.dk)}</td>
+              <td>${time}</td>
+              <td>${r.site || '—'}</td>
+              <td>${r.hours.toFixed(2)}</td>
+              <td>${status ? attStatusLabel(status) : '—'}</td>
+              <td>${a?.lateMinutes ?? '—'}</td>
+            </tr>`;
+          })
+          .join('');
+        return `
+          <section style="margin-bottom:24px;page-break-inside:avoid">
+            <h2 style="margin:0 0 6px;font-size:16px">${emp.name}</h2>
+            <p style="margin:0 0 10px;color:#555;font-size:12px">
+              ${emp.role || 'Staff'} · ${totalH.toFixed(1)}h total ·
+              ${onTime} on time · ${absent} absent · ${late} late · ${noShow} no show
+              ${lateMinutes > 0 ? ` · ${lateMinutes} late mins` : ''}
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th><th>Time</th><th>Site</th><th>Hours</th><th>Status</th><th>Late mins</th>
+                </tr>
+              </thead>
+              <tbody>${empRows || '<tr><td colspan="6">No shifts in range</td></tr>'}</tbody>
+            </table>
+          </section>`;
+      })
+      .join('');
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8" />
+<title>Attendance report — ${state.rotaName || 'Rota'}</title>
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: #555; font-size: 12px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f3f4f6; }
+  @media print { body { margin: 12px; } }
+</style></head><body>
+  <h1>Attendance report</h1>
+  <p class="meta">${state.rotaName || 'Rota'} · ${fmtShortDate(f)} – ${fmtShortDate(t)}</p>
+  ${sections || '<p>No employees in this report.</p>'}
+  <script>window.onload = function () { window.print(); };</script>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      toast.error('Pop-up blocked — allow pop-ups to export PDF');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    toast.success('Use Print → Save as PDF in the print dialog');
+  };
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -173,6 +260,9 @@ export default function RotaAttendanceReportPage() {
                 </div>
                 <Button type="button" variant="outline" onClick={exportCsv}>
                   Export CSV
+                </Button>
+                <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={exportPdf}>
+                  Export in PDF
                 </Button>
               </CardContent>
             </Card>

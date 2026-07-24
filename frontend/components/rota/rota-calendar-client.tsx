@@ -41,7 +41,7 @@ const EMP_MENU_H = 132;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ROTA_PAY_COL_W = 96;
 const ROTA_HOURS_COL_W = 104;
-const ROTA_EMP_COL_W = 268;
+const ROTA_EMP_COL_W = 320;
 
 /** Solid fills so scrolled shift tiles cannot bleed through sticky columns. */
 const ROTA_STICKY_EMP_BG = {
@@ -118,14 +118,27 @@ function EmployeeAvatar({ emp, className }: { emp: EmployeeRec; className?: stri
   );
 }
 
-function placeMenu(rect: DOMRect, w: number, menuH: number, preferUp: boolean) {
-  const width = Math.max(rect.width, w);
-  let x = rect.left;
-  if (x + width > window.innerWidth - 8) x = window.innerWidth - width - 8;
-  if (x < 8) x = 8;
-  const spaceBelow = window.innerHeight - rect.bottom;
-  const openUp = preferUp || spaceBelow < menuH;
-  const y = openUp ? Math.max(8, rect.top - menuH - 4) : rect.bottom + 4;
+function placeMenu(rect: DOMRect, w: number, menuH: number, _preferUp?: boolean) {
+  const width = Math.min(Math.max(w, 160), window.innerWidth - 16);
+  // Prefer opening beside the card (right), fall back to left, then below/above.
+  let x = rect.right + 6;
+  if (x + width > window.innerWidth - 8) {
+    x = rect.left - width - 6;
+  }
+  if (x < 8) {
+    x = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
+  }
+
+  let y = rect.top;
+  if (y + menuH > window.innerHeight - 8) {
+    y = Math.max(8, rect.bottom - menuH);
+  }
+  if (y < 8) y = 8;
+  // Keep the menu visually anchored to the clicked card
+  const cardMid = rect.top + rect.height / 2;
+  if (Math.abs(y - cardMid) > window.innerHeight * 0.35) {
+    y = Math.min(Math.max(8, rect.top), Math.max(8, window.innerHeight - menuH - 8));
+  }
   return { x, y, w: width };
 }
 
@@ -166,12 +179,17 @@ export function RotaCalendarClient() {
     setInclBreaks,
     publishRota,
     unpublishGuard,
+    unpublishRota,
+    publishedGuardIds,
     isEmployeePublished,
     setPublishedGuardIds,
   } = useRotaShifts();
 
   const [publishing, setPublishing] = useState(false);
   const [publishingEmpId, setPublishingEmpId] = useState<string | null>(null);
+  const [unpublishing, setUnpublishing] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameEditing, setNameEditing] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -207,9 +225,10 @@ export function RotaCalendarClient() {
           bootstrappedRef.current = true;
           const staffParam = searchParams.get('staffIds');
           const staffIds = staffParam ? staffParam.split(',').filter(Boolean) : undefined;
+          const rawView = plan.view_mode === 'dnd' ? 'table' : plan.view_mode;
           loadRotaPlan(plan, {
             name: plan.name,
-            view: (plan.view_mode as RotaViewMode) || 'table',
+            view: (rawView as RotaViewMode) || 'table',
             startDate: plan.start_date,
             dayCount: plan.day_count,
             budget: plan.budget,
@@ -876,9 +895,30 @@ export function RotaCalendarClient() {
       `Publish ${shiftCount} shift(s)?`,
       () => runPublish(),
       {
-        description:
-          'All staff shifts are published. Uncheck a staff member afterwards to unpublish only their shifts.',
+        description: 'All staff shifts are published. You can unpublish individual staff from their row afterwards.',
         label: 'Publish',
+      }
+    );
+  };
+
+  const unpublishAll = () => {
+    toast.confirm(
+      'Unpublish this entire rota?',
+      async () => {
+        setUnpublishing(true);
+        try {
+          await unpublishRota();
+          setPublishedGuardIds([]);
+          toast.success('Rota unpublished');
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Unpublish failed');
+        } finally {
+          setUnpublishing(false);
+        }
+      },
+      {
+        description: 'All published assignments for this rota will be removed.',
+        label: 'Unpublish',
       }
     );
   };
@@ -886,7 +926,7 @@ export function RotaCalendarClient() {
   const toggleEmployeePublished = (emp: { id: string; name: string }, nextPublished: boolean) => {
     const guardId = parseInt(emp.id, 10);
     if (!guardId) return;
-    if (publishingEmpId === emp.id || publishing) return;
+    if (publishingEmpId === emp.id || publishing || unpublishing) return;
 
     if (nextPublished) {
       const count = Object.values(state.shifts[emp.id] || {}).reduce(
@@ -909,6 +949,21 @@ export function RotaCalendarClient() {
         label: 'Unpublish',
       }
     );
+  };
+
+  const commitRotaName = () => {
+    const next = nameDraft.trim();
+    if (!next) {
+      toast.warning('Please enter a rota name');
+      setNameDraft(state.rotaName || '');
+      setNameEditing(false);
+      return;
+    }
+    if (next !== state.rotaName) {
+      setRotaName(next);
+      toast.success('Rota name updated');
+    }
+    setNameEditing(false);
   };
 
   const openReorder = () => {
@@ -1288,30 +1343,84 @@ export function RotaCalendarClient() {
             Back
           </Button>
           <div className="flex items-center gap-2 min-w-0 max-w-xl group">
-            <Input
-              value={state.rotaName}
-              onChange={(e) => setRotaName(e.target.value)}
-              placeholder="Untitled rota"
-              aria-label="Rota name"
-              className="text-xl font-bold h-10 border-transparent bg-transparent shadow-none px-0 rounded-none focus-visible:ring-0 focus-visible:border-b focus-visible:border-primary placeholder:text-muted-foreground/60"
-            />
-            <Pencil className="size-4 text-muted-foreground shrink-0 opacity-60 group-hover:opacity-100" aria-hidden />
+            {nameEditing ? (
+              <Input
+                autoFocus
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={commitRotaName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitRotaName();
+                  }
+                  if (e.key === 'Escape') {
+                    setNameDraft(state.rotaName || '');
+                    setNameEditing(false);
+                  }
+                }}
+                placeholder="Enter a clear rota name"
+                aria-label="Edit rota name"
+                className="text-xl font-bold h-10 border-primary bg-background shadow-sm px-2"
+              />
+            ) : (
+              <button
+                type="button"
+                className="text-xl font-bold h-10 px-0 text-left truncate hover:underline decoration-muted-foreground/40 underline-offset-4 max-w-full"
+                onClick={() => {
+                  setNameDraft(state.rotaName || '');
+                  setNameEditing(true);
+                }}
+                title="Click to rename this rota"
+                aria-label="Rename rota"
+              >
+                {state.rotaName || 'Untitled rota'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={() => {
+                setNameDraft(state.rotaName || '');
+                setNameEditing(true);
+              }}
+              title="Rename rota"
+              aria-label="Rename rota"
+            >
+              <Pencil className="size-4" />
+            </button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            {nameEditing ? 'Press Enter to save the new name, or Esc to cancel.' : 'Click the name or pencil to rename this rota.'}
+          </p>
           <p className="text-sm text-muted-foreground">{meta}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <Button variant="outline" size="sm" asChild>
             <Link href="/rota/attendance-report">Attendance report</Link>
           </Button>
-          <Button
-            size="sm"
-            className="bg-pink-600 hover:bg-pink-700"
-            type="button"
-            onClick={publish}
-            disabled={publishing}
-          >
-            {publishing ? 'Publishing…' : 'Publish'}
-          </Button>
+          {publishedGuardIds.size > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-sky-500/50 text-sky-800 dark:text-sky-200 hover:bg-sky-50 dark:hover:bg-sky-950"
+              type="button"
+              onClick={unpublishAll}
+              disabled={unpublishing || publishing}
+            >
+              {unpublishing ? 'Unpublishing…' : 'Unpublish'}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              className="bg-pink-600 hover:bg-pink-700"
+              type="button"
+              onClick={publish}
+              disabled={publishing || unpublishing}
+            >
+              {publishing ? 'Publishing…' : 'Publish'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1327,7 +1436,7 @@ export function RotaCalendarClient() {
             Add / manage shifts
           </Button>
           <div className="flex rounded-md border p-0.5 bg-muted/40">
-            {(['table', 'timeline', 'dnd'] as const).map((v) => (
+            {(['table', 'timeline'] as const).map((v) => (
               <Button
                 key={v}
                 type="button"
@@ -1336,19 +1445,10 @@ export function RotaCalendarClient() {
                 className="text-xs capitalize"
                 onClick={() => setRotaView(v)}
               >
-                {v === 'dnd' ? 'Drag & drop' : v}
+                {v}
               </Button>
             ))}
           </div>
-          <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
-            Total {formatHoursDecimal(totalRotaHours)}
-            <span className="text-muted-foreground font-normal ml-1">
-              ({state.inclBreaks ? 'incl. breaks' : 'excl. breaks'})
-            </span>
-          </span>
-          <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 px-2 py-1 tabular-nums">
-            Payable {formatMoney(totalRotaPayable)}
-          </span>
           <select
             className="h-8 rounded-md border border-input bg-background px-2 text-xs"
             value={statusFilter}
@@ -1434,6 +1534,17 @@ export function RotaCalendarClient() {
             </Button>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
+            Total {formatHoursDecimal(totalRotaHours)}
+            <span className="text-muted-foreground font-normal ml-1">
+              ({state.inclBreaks ? 'incl. breaks' : 'excl. breaks'})
+            </span>
+          </span>
+          <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 px-2 py-1 tabular-nums">
+            Payable {formatMoney(totalRotaPayable)}
+          </span>
+        </div>
       </div>
 
       {state.rotaView === 'table' && (
@@ -1483,7 +1594,7 @@ export function RotaCalendarClient() {
                   <button type="button" className="text-xs text-pink-600 font-medium hover:underline" onClick={openReorder}>
                     ⇅ Employee custom order
                   </button>
-                  <p className="text-[10px] text-muted-foreground mt-1">☑ Checked = published for that staff</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Green Publish / blue Unpublish on each row</p>
                   <p className="text-[10px] text-muted-foreground">Or drag the ⋮⋮ handle on a row</p>
                 </th>
                 {state.days.map((dk) => (
@@ -1538,7 +1649,7 @@ export function RotaCalendarClient() {
                   onDrop={(e) => onRowReorderDrop(e, emp.id)}
                 >
                   <td
-                    className="rota-sticky-emp sticky left-0 z-50 p-2 align-top border-r border-b shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    className="rota-sticky-emp sticky left-0 z-50 p-2 align-top border-r border-b shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18)] isolate"
                     style={
                       {
                         ['--rota-emp-cell-bg' as string]:
@@ -1552,7 +1663,7 @@ export function RotaCalendarClient() {
                       } as CSSProperties
                     }
                   >
-                    <div className="flex gap-1.5 items-start min-w-0 overflow-hidden">
+                    <div className="flex gap-1.5 items-start min-w-0">
                       <button
                         type="button"
                         draggable
@@ -1564,27 +1675,6 @@ export function RotaCalendarClient() {
                       >
                         <GripVertical className="size-4" />
                       </button>
-                      <label
-                        className="mt-2.5 shrink-0 flex items-center"
-                        title={
-                          isEmployeePublished(emp.id)
-                            ? 'Published — uncheck to unpublish this staff'
-                            : 'Not published — check to publish this staff'
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-input accent-pink-600"
-                          checked={isEmployeePublished(emp.id)}
-                          disabled={publishingEmpId === emp.id || publishing}
-                          onChange={(e) => toggleEmployeePublished(emp, e.target.checked)}
-                          aria-label={
-                            isEmployeePublished(emp.id)
-                              ? `Unpublish ${emp.name}`
-                              : `Publish ${emp.name}`
-                          }
-                        />
-                      </label>
                       {employeeSelectMode ? (
                         <input
                           type="checkbox"
@@ -1594,23 +1684,52 @@ export function RotaCalendarClient() {
                           aria-label={`Select ${emp.name}`}
                         />
                       ) : null}
-                      <button
-                        type="button"
-                        className="flex gap-2 text-left flex-1 min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
-                        onClick={(e) => toggleEmpMenu(e, emp.id)}
-                      >
-                        <EmployeeAvatar emp={emp} className="size-9 text-[11px] shrink-0" />
-                        <span className="min-w-0 flex-1 overflow-hidden">
-                          <span className="font-medium block truncate flex items-center gap-1">
-                            <span className="truncate">{emp.name}</span>
-                            {empHasConflict(emp.id) ? (
-                              <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-label="Has shift conflicts" />
-                            ) : null}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <button
+                          type="button"
+                          className="flex gap-2 text-left w-full min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
+                          onClick={(e) => toggleEmpMenu(e, emp.id)}
+                        >
+                          <EmployeeAvatar emp={emp} className="size-9 text-[11px] shrink-0" />
+                          <span className="min-w-0 flex-1">
+                            <span className="font-medium flex items-start gap-1 break-words whitespace-normal">
+                              <span className="break-words">{emp.name}</span>
+                              {empHasConflict(emp.id) ? (
+                                <AlertTriangle className="size-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" aria-label="Has shift conflicts" />
+                              ) : null}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground block break-words">{emp.role}</span>
                           </span>
-                          <span className="text-[11px] text-muted-foreground truncate block">{emp.role}</span>
-                        </span>
-                        <MoreHorizontal className="size-4 shrink-0 text-muted-foreground" />
-                      </button>
+                          <MoreHorizontal className="size-4 shrink-0 text-muted-foreground mt-1" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={publishingEmpId === emp.id || publishing || unpublishing}
+                          onClick={() => toggleEmployeePublished(emp, !isEmployeePublished(emp.id))}
+                          className={cn(
+                            'w-full text-[10px] font-semibold rounded px-2 py-1 border transition-colors',
+                            isEmployeePublished(emp.id)
+                              ? 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950 dark:text-sky-100 dark:border-sky-700'
+                              : 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-100 dark:border-emerald-700'
+                          )}
+                          title={
+                            isEmployeePublished(emp.id)
+                              ? 'Published — click to unpublish this staff'
+                              : 'Not published — click to publish this staff'
+                          }
+                          aria-label={
+                            isEmployeePublished(emp.id)
+                              ? `Unpublish ${emp.name}`
+                              : `Publish ${emp.name}`
+                          }
+                        >
+                          {publishingEmpId === emp.id
+                            ? 'Saving…'
+                            : isEmployeePublished(emp.id)
+                              ? 'Unpublish'
+                              : 'Publish'}
+                        </button>
+                      </div>
                     </div>
                   </td>
                   {state.days.map((dk) => {
@@ -1691,11 +1810,11 @@ export function RotaCalendarClient() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-8 w-full shrink-0 font-bold text-foreground/70 hover:text-foreground"
+                            className="h-6 w-full shrink-0 font-normal text-muted-foreground/80 hover:text-foreground"
                             onClick={() => openAddShift(dk, emp.id)}
                             aria-label="Add shift"
                           >
-                            <Plus className="size-4 stroke-[3]" />
+                            <Plus className="size-3 stroke-[1.5]" />
                           </Button>
                         </div>
                       </td>
@@ -1775,54 +1894,96 @@ export function RotaCalendarClient() {
       )}
 
       {state.rotaView === 'timeline' && (
-        <div className="space-y-4 overflow-x-auto">
-          {state.days.map((dk) => (
-            <div
-              key={dk}
-              className={cn(
-                'rounded-lg border bg-card transition-colors',
-                (draggingShift || dragEmpId) && dropDayKey === dk && 'ring-2 ring-pink-500/70 bg-pink-50/40 dark:bg-pink-950/20'
-              )}
-              onDragOver={(e) => onDayDragOver(e, dk)}
-              onDragLeave={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
-              }}
-              onDrop={(e) => onDropDay(e, dk)}
-            >
-              <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
-                <span className="font-medium text-sm">{fmtShortDate(dk)}</span>
-                <Button type="button" variant="link" size="sm" className="h-8 text-pink-600" onClick={() => rows[0] && openAddShift(dk, rows[0].id)}>
-                  Add shift
-                </Button>
-              </div>
-              <div className="p-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {state.employees.flatMap((emp) =>
-                  (state.shifts[emp.id]?.[dk] || []).map((sh, idx) => (
-                    <button
-                      key={`${emp.id}-${idx}`}
-                      type="button"
-                      draggable
-                      onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
-                      onDragEnd={onDragEnd}
-                      className="rounded-lg border text-left px-3 py-2 text-xs hover:bg-muted/50 flex gap-2 items-start cursor-grab active:cursor-grabbing min-w-0 overflow-hidden w-full max-w-full"
-                      onClick={() => openEditShift(emp.id, dk, idx)}
-                      title="Drag to another day to move"
-                    >
-                      <span className="size-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: emp.avatarColor }}>
-                        {initials(emp.name)}
-                      </span>
-                      <span className="min-w-0 flex-1 overflow-hidden">
-                        <span className="font-medium block truncate">{emp.name}</span>
-                        <span className="text-muted-foreground tabular-nums block truncate">{sh.start} · {sh.site || (!sh.notes ? 'One-off' : '')}</span>
-                        {sh.notes ? <span className="text-muted-foreground block line-clamp-2 break-all italic">{sh.notes}</span> : null}
-                      </span>
-                      <span className="ml-auto h-3 w-1 rounded-full shrink-0 mt-1" style={{ backgroundColor: sh.color }} />
-                    </button>
-                  ))
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Timeline shows shifts in chronological order along a 24-hour time flow for each day.
+          </p>
+          {state.days.map((dk) => {
+            const dayShifts = state.employees
+              .flatMap((emp) =>
+                (state.shifts[emp.id]?.[dk] || []).map((sh, idx) => {
+                  const [shH, shM] = (sh.start || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
+                  const [eh, em] = (sh.end || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
+                  let startMin = shH * 60 + shM;
+                  let endMin = eh * 60 + em;
+                  if (endMin <= startMin) endMin += 24 * 60;
+                  return { emp, sh, idx, startMin, endMin };
+                })
+              )
+              .sort((a, b) => a.startMin - b.startMin || a.emp.name.localeCompare(b.emp.name));
+            const axisHours = [0, 6, 12, 18, 24];
+            return (
+              <div
+                key={dk}
+                className={cn(
+                  'rounded-lg border bg-card transition-colors overflow-hidden',
+                  (draggingShift || dragEmpId) && dropDayKey === dk && 'ring-2 ring-pink-500/70 bg-pink-50/40 dark:bg-pink-950/20'
                 )}
+                onDragOver={(e) => onDayDragOver(e, dk)}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
+                }}
+                onDrop={(e) => onDropDay(e, dk)}
+              >
+                <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
+                  <span className="font-medium text-sm">{fmtShortDate(dk)}</span>
+                  <Button type="button" variant="link" size="sm" className="h-8 text-pink-600" onClick={() => rows[0] && openAddShift(dk, rows[0].id)}>
+                    Add shift
+                  </Button>
+                </div>
+                <div className="p-3 space-y-3 overflow-x-auto">
+                  <div className="relative h-6 min-w-[720px] border-b border-border">
+                    {axisHours.map((h) => (
+                      <div
+                        key={h}
+                        className="absolute top-0 bottom-0 border-l border-border/60"
+                        style={{ left: `${(h / 24) * 100}%` }}
+                      >
+                        <span className="absolute top-0 left-1 text-[10px] text-muted-foreground tabular-nums">
+                          {String(h).padStart(2, '0')}:00
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {dayShifts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4 text-center">No shifts on this day.</p>
+                  ) : (
+                    <div className="relative min-w-[720px] space-y-2">
+                      {dayShifts.map(({ emp, sh, idx, startMin, endMin }) => {
+                        const left = (startMin / (24 * 60)) * 100;
+                        const width = Math.max(((endMin - startMin) / (24 * 60)) * 100, 4);
+                        return (
+                          <div key={`${emp.id}-${idx}`} className="relative h-11">
+                            <button
+                              type="button"
+                              draggable
+                              onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
+                              onDragEnd={onDragEnd}
+                              className="absolute top-0 h-full rounded-md border bg-card text-left px-2 py-1 text-[10px] hover:bg-muted/50 cursor-grab active:cursor-grabbing overflow-hidden shadow-sm"
+                              style={{
+                                left: `${Math.min(left, 96)}%`,
+                                width: `${Math.min(width, 100 - Math.min(left, 96))}%`,
+                                borderLeftWidth: 4,
+                                borderLeftColor: sh.color || emp.avatarColor,
+                              }}
+                              onClick={() => openEditShift(emp.id, dk, idx)}
+                              title={`${emp.name} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
+                            >
+                              <span className="font-medium block truncate">{emp.name}</span>
+                              <span className="text-muted-foreground tabular-nums block truncate">
+                                {sh.start}–{sh.end}
+                                {sh.site ? ` · ${sh.site}` : ''}
+                              </span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <button
             type="button"
             className="w-full py-3 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40"
@@ -1830,81 +1991,6 @@ export function RotaCalendarClient() {
           >
             + Add guard
           </button>
-        </div>
-      )}
-
-      {state.rotaView === 'dnd' && (
-        <div className="grid lg:grid-cols-[220px_1fr] gap-4">
-          <div className="rounded-lg border bg-card p-3 space-y-2 max-h-[480px] overflow-y-auto">
-            <Input placeholder="Name, job title…" value={empFilter} onChange={(e) => setEmpFilter(e.target.value)} className="h-8 text-xs" />
-            <p className="text-xs font-medium text-muted-foreground">Drag staff to a day column →</p>
-            {state.employees.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">Add staff first, then drag them onto days.</p>
-            ) : rows.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">No staff match your search.</p>
-            ) : null}
-            {rows.map((emp) => (
-              <div
-                key={emp.id}
-                draggable
-                onDragStart={(e) => onDragStart(e, emp.id)}
-                onDragEnd={onDragEnd}
-                className={cn(
-                  'flex items-center gap-2 rounded-md border bg-background p-2 cursor-grab active:cursor-grabbing text-xs select-none',
-                  dragEmpId === emp.id && 'opacity-50 ring-2 ring-pink-500/50'
-                )}
-              >
-                <span className="size-8 rounded-full shrink-0 flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: emp.avatarColor }}>
-                  {initials(emp.name)}
-                </span>
-                <span className="min-w-0">
-                  <span className="truncate font-medium block">{emp.name}</span>
-                  {emp.role ? <span className="truncate text-[10px] text-muted-foreground block">{emp.role}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-          <div
-            className="grid gap-2 min-w-[640px]"
-            style={{ gridTemplateColumns: `repeat(${Math.min(state.days.length, 7)}, minmax(0, 1fr))` }}
-          >
-            {state.days.map((dk) => (
-              <div
-                key={dk}
-                className={cn(
-                  'rounded-lg border-2 border-dashed min-h-[160px] p-2 flex flex-col gap-1 transition-colors',
-                  dropDayKey === dk && (draggingShift || !!dragEmpId)
-                    ? 'border-pink-500 bg-pink-100/70 dark:bg-pink-950/40 ring-2 ring-pink-500/50'
-                    : dragEmpId || draggingShift
-                      ? 'border-pink-300/50 bg-pink-50/10 dark:bg-pink-950/10'
-                      : 'border-muted'
-                )}
-                onDragOverCapture={(e) => onDayDragOver(e, dk)}
-                onDragLeaveCapture={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
-                }}
-                onDropCapture={(e) => onDropDay(e, dk)}
-              >
-                <span className="text-[10px] font-semibold text-center border-b pb-1 pointer-events-none">{fmtShortDate(dk)}</span>
-                {state.employees.flatMap((emp) =>
-                  (state.shifts[emp.id]?.[dk] || []).map((sh, idx) => (
-                    <button
-                      key={`${emp.id}-${idx}`}
-                      type="button"
-                      draggable
-                      onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
-                      onDragEnd={onDragEnd}
-                      className="text-[10px] rounded bg-muted/60 px-1 py-0.5 truncate pointer-events-auto cursor-grab active:cursor-grabbing"
-                      onClick={() => openEditShift(emp.id, dk, idx)}
-                      title="Drag to another day to move"
-                    >
-                      {initials(emp.name)} {sh.start}
-                    </button>
-                  ))
-                )}
-              </div>
-            ))}
-          </div>
         </div>
       )}
 

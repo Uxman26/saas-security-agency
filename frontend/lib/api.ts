@@ -291,6 +291,8 @@ export const api = {
       ),
     unpublishGuard: (id: number, guardId: number): Promise<RotaPlanPublishResult> =>
       request<RotaPlanPublishResult>(`/rotas/${id}/unpublish/${guardId}`, { method: 'POST' }),
+    unpublish: (id: number): Promise<RotaPlanPublishResult> =>
+      request<RotaPlanPublishResult>(`/rotas/${id}/unpublish`, { method: 'POST' }),
     copy: (
       id: number,
       data: {

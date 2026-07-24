@@ -52,11 +52,15 @@ function overlapsRange(r: RotaPlanListItem, from: string, to: string) {
 function RotaRow({
   r,
   deletingId,
+  renamingId,
   onDelete,
+  onRename,
 }: {
   r: RotaPlanListItem;
   deletingId: number | null;
+  renamingId: number | null;
   onDelete: (id: number, name: string) => void;
+  onRename: (id: number, currentName: string) => void;
 }) {
   const published = r.status === 'published';
   return (
@@ -75,6 +79,16 @@ function RotaRow({
         </p>
       </div>
       <div className="flex items-center gap-1 shrink-0 sm:ml-auto">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          disabled={renamingId === r.id}
+          onClick={() => onRename(r.id, r.name)}
+          title="Rename rota"
+        >
+          {renamingId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : 'Rename'}
+        </Button>
         <Button variant="ghost" size="icon" className="size-8" asChild title="Copy to new rota">
           <Link href={`/rota/create?from=${r.id}`}>
             <Copy className="size-4" />
@@ -107,7 +121,9 @@ function RotaSection({
   expanded,
   onToggle,
   deletingId,
+  renamingId,
   onDelete,
+  onRename,
   empty,
 }: {
   title: string;
@@ -116,7 +132,9 @@ function RotaSection({
   expanded: boolean;
   onToggle: () => void;
   deletingId: number | null;
+  renamingId: number | null;
   onDelete: (id: number, name: string) => void;
+  onRename: (id: number, currentName: string) => void;
   empty: string;
 }) {
   return (
@@ -141,7 +159,14 @@ function RotaSection({
         ) : (
           <div>
             {items.map((r) => (
-              <RotaRow key={r.id} r={r} deletingId={deletingId} onDelete={onDelete} />
+              <RotaRow
+                key={r.id}
+                r={r}
+                deletingId={deletingId}
+                renamingId={renamingId}
+                onDelete={onDelete}
+                onRename={onRename}
+              />
             ))}
           </div>
         )
@@ -158,6 +183,7 @@ function RotaHubPage() {
   const [rotas, setRotas] = useState<RotaPlanListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [renamingId, setRenamingId] = useState<number | null>(null);
   const [nameFilter, setNameFilter] = useState('');
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
@@ -269,6 +295,29 @@ function RotaHubPage() {
       },
       { label: 'Delete', description: 'Published shifts linked to it will also be removed.' }
     );
+  };
+
+  const onRename = (id: number, currentName: string) => {
+    const next = window.prompt('Enter a new name for this rota', currentName);
+    if (next == null) return;
+    const trimmed = next.trim();
+    if (!trimmed) {
+      toast.warning('Please enter a rota name');
+      return;
+    }
+    if (trimmed === currentName) return;
+    void (async () => {
+      setRenamingId(id);
+      try {
+        await api.rotaPlans.update(id, { name: trimmed });
+        toast.success('Rota name updated');
+        load();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Rename failed');
+      } finally {
+        setRenamingId(null);
+      }
+    })();
   };
 
   const tabs: { id: Tab; label: string }[] = [
@@ -383,7 +432,14 @@ function RotaHubPage() {
                     <>
                       <div className="rounded-lg border bg-card overflow-hidden">
                         {pageRows.map((r) => (
-                          <RotaRow key={r.id} r={r} deletingId={deletingId} onDelete={onDelete} />
+                          <RotaRow
+                            key={r.id}
+                            r={r}
+                            deletingId={deletingId}
+                            renamingId={renamingId}
+                            onDelete={onDelete}
+                            onRename={onRename}
+                          />
                         ))}
                       </div>
                       <TablePaginationBar
@@ -417,7 +473,9 @@ function RotaHubPage() {
                       expanded={pubExpanded}
                       onToggle={() => setPubExpanded((v) => !v)}
                       deletingId={deletingId}
+                      renamingId={renamingId}
                       onDelete={onDelete}
+                      onRename={onRename}
                       empty="No published old rotas."
                     />
                     <RotaSection
@@ -427,7 +485,9 @@ function RotaHubPage() {
                       expanded={unpubExpanded}
                       onToggle={() => setUnpubExpanded((v) => !v)}
                       deletingId={deletingId}
+                      renamingId={renamingId}
                       onDelete={onDelete}
+                      onRename={onRename}
                       empty="No unpublished old rotas."
                     />
                   </div>

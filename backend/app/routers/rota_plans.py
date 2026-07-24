@@ -100,6 +100,15 @@ def publish_rota(
     return rota_plan_service.publish_rota_plan(db, current_user.id, plan_id, guard_id)
 
 
+@router.post("/{plan_id}/unpublish", response_model=RotaPlanPublishResult)
+def unpublish_rota(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+):
+    return rota_plan_service.unpublish_rota_plan(db, current_user.id, plan_id)
+
+
 @router.post("/{plan_id}/unpublish/{guard_id}", response_model=RotaPlanPublishResult)
 def unpublish_rota_guard(
     plan_id: int,

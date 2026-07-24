@@ -233,7 +233,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         type: 'steps',
         items: [
           'Open Rotas & Shifts and create a new rota (name, date range, employees).',
-          'Use Table, Timeline, or Drag & Drop to place shifts with times, site, break, and rate.',
+          'Use Table or Timeline to place shifts with times, site, break, and rate.',
           'Mark attendance on shifts when needed (for example On time, Late, Absent, No show — where available).',
           'Publish the rota so shifts sync into Assignments.',
         ],

@@ -670,3 +670,16 @@ def unpublish_rota_plan_guard(
     return RotaPlanPublishResult(
         created=0, skipped=0, errors=[], published_guard_ids=published_ids
     )
+
+
+def unpublish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublishResult:
+    """Unpublish the entire rota (remove all published assignments)."""
+    company = get_company_by_user_id(db, user_id)
+    plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Rota not found")
+    _delete_plan_assignments(db, plan.id)
+    plan.status = "draft"
+    plan.published_at = None
+    db.commit()
+    return RotaPlanPublishResult(created=0, skipped=0, errors=[], published_guard_ids=[])

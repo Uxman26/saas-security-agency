@@ -411,7 +411,27 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     setState((s) => {
       if (s.days.length === 0) return s;
       const start = s.days[0];
-      return { ...s, days: buildDayRange(start, Math.max(1, n)) };
+      const count = Math.max(1, Math.min(90, Math.floor(n)));
+      if (count === s.days.length) return s;
+      const days = buildDayRange(start, count);
+      if (count >= s.days.length) {
+        return { ...s, days };
+      }
+      const keep = new Set(days);
+      const shifts: RotaJsState['shifts'] = {};
+      for (const [empId, byDay] of Object.entries(s.shifts)) {
+        const nextByDay: Record<string, ShiftRec[]> = {};
+        for (const [dk, list] of Object.entries(byDay || {})) {
+          if (keep.has(dk) && list?.length) nextByDay[dk] = list;
+        }
+        shifts[empId] = nextByDay;
+      }
+      const attendance: RotaJsState['attendance'] = {};
+      for (const [key, rec] of Object.entries(s.attendance)) {
+        const dk = key.split(':')[1];
+        if (dk && keep.has(dk)) attendance[key] = rec;
+      }
+      return { ...s, days, shifts, attendance };
     });
   }, []);
 

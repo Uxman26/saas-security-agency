@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, buildShiftConflictMap, calcHours, countedHoursForAttendance, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
@@ -173,7 +173,7 @@ export function RotaCalendarClient() {
     moveShiftToEmployee,
     moveShiftToDay,
     clearEmployeeShifts,
-    addDaysDelta,
+    setDayCount,
     setAttendance,
     clearAttendance,
     setInclBreaks,
@@ -282,6 +282,8 @@ export function RotaCalendarClient() {
   const [reorderOpen, setReorderOpen] = useState(false);
   const [orderDraft, setOrderDraft] = useState<string[]>([]);
   const [daysOpen, setDaysOpen] = useState(false);
+  const [daysBaselineCount, setDaysBaselineCount] = useState(0);
+  const [pendingDayCount, setPendingDayCount] = useState(0);
   const [pickOpen, setPickOpen] = useState(false);
   const [pickSel, setPickSel] = useState<Set<string>>(new Set());
   const [pickSearch, setPickSearch] = useState('');
@@ -396,10 +398,95 @@ export function RotaCalendarClient() {
 
   const meta = useMemo(() => {
     if (!state.days.length) return '';
-    const a = fmtShortDate(state.days[0]);
-    const b = fmtShortDate(state.days[state.days.length - 1]);
-    return `${a} – ${b} | ${state.days.length} days | ${state.employees.length} employees`;
-  }, [state.days, state.employees.length]);
+    const start = state.days[0];
+    const count = daysOpen ? pendingDayCount : state.days.length;
+    const days = buildDayRange(start, Math.max(1, count));
+    const a = fmtShortDate(days[0]);
+    const b = fmtShortDate(days[days.length - 1]);
+    const preview = daysOpen && pendingDayCount !== daysBaselineCount ? ' (preview)' : '';
+    return `${a} – ${b} | ${count} days${preview} | ${state.employees.length} employees`;
+  }, [state.days, state.employees.length, daysOpen, pendingDayCount, daysBaselineCount]);
+
+  /** Days shown in the table — includes preview columns while editing length. */
+  const tableDays = useMemo(() => {
+    if (!state.days.length) return [] as string[];
+    if (!daysOpen) return state.days;
+    const len = Math.max(daysBaselineCount, pendingDayCount, 1);
+    return buildDayRange(state.days[0], len);
+  }, [state.days, daysOpen, daysBaselineCount, pendingDayCount]);
+
+  const dayEditMark = useCallback(
+    (index: number): 'adding' | 'removing' | null => {
+      if (!daysOpen) return null;
+      if (index >= pendingDayCount) return 'removing';
+      if (index >= daysBaselineCount) return 'adding';
+      return null;
+    },
+    [daysOpen, pendingDayCount, daysBaselineCount]
+  );
+
+  const openDaysEditor = () => {
+    const n = state.days.length;
+    setDaysBaselineCount(n);
+    setPendingDayCount(n);
+    setDaysOpen(true);
+  };
+
+  const adjustPendingDays = (delta: number) => {
+    setPendingDayCount((n) => Math.max(1, Math.min(90, n + delta)));
+  };
+
+  const resetPendingDays = () => {
+    setPendingDayCount(daysBaselineCount);
+  };
+
+  const applyPendingDays = () => {
+    if (!state.days.length) {
+      setDaysOpen(false);
+      return;
+    }
+    const next = Math.max(1, Math.min(90, pendingDayCount));
+    if (next === state.days.length) {
+      setDaysOpen(false);
+      return;
+    }
+    if (next < state.days.length) {
+      const removing = state.days.slice(next);
+      let shiftCount = 0;
+      for (const dk of removing) {
+        for (const emp of state.employees) {
+          shiftCount += state.shifts[emp.id]?.[dk]?.length || 0;
+        }
+      }
+      if (shiftCount > 0) {
+        toast.confirm(
+          `Remove ${removing.length} day(s) and ${shiftCount} shift(s)?`,
+          () => {
+            setDayCount(next);
+            setDaysOpen(false);
+            toast.success(
+              removing.length === 1
+                ? `Removed 1 day (${shiftCount} shift${shiftCount === 1 ? '' : 's'})`
+                : `Removed ${removing.length} days (${shiftCount} shifts)`
+            );
+          },
+          {
+            label: 'Remove days & shifts',
+            description: `${fmtShortDate(removing[0])}${removing.length > 1 ? ` – ${fmtShortDate(removing[removing.length - 1])}` : ''} will be deleted. This cannot be undone.`,
+          }
+        );
+        return;
+      }
+    }
+    const added = next - state.days.length;
+    setDayCount(next);
+    setDaysOpen(false);
+    if (added > 0) {
+      toast.success(added === 1 ? 'Added 1 day' : `Added ${added} days`);
+    } else {
+      toast.success(Math.abs(added) === 1 ? 'Removed 1 day' : `Removed ${Math.abs(added)} days`);
+    }
+  };
 
   useEffect(() => {
     if (!exportMenuOpen) return;
@@ -1466,7 +1553,7 @@ export function RotaCalendarClient() {
             <ArrowUpDown className="size-3.5 mr-1" />
             Reorder employees
           </Button>
-          <Button variant="outline" size="sm" type="button" onClick={() => setDaysOpen(true)}>
+          <Button variant="outline" size="sm" type="button" onClick={openDaysEditor}>
             <CalendarPlus className="size-3.5 mr-1" />
             Add days
           </Button>
@@ -1549,6 +1636,18 @@ export function RotaCalendarClient() {
 
       {state.rotaView === 'table' && (
         <div className="rounded-lg border bg-card">
+          {daysOpen ? (
+            <div className="px-3 py-2 border-b bg-muted/40 text-xs flex flex-wrap gap-3 items-center">
+              <span className="font-medium">Day length preview</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-emerald-500" /> Adding
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-red-500" /> Removing
+              </span>
+              <span className="text-muted-foreground">Changes apply when you click Done</span>
+            </div>
+          ) : null}
           <div
             className="overflow-auto max-h-[min(72vh,calc(100dvh-14rem))] min-h-[280px] overscroll-contain"
             ref={menuRef}
@@ -1556,12 +1655,12 @@ export function RotaCalendarClient() {
           <table
             className="table-fixed w-full text-sm border-separate border-spacing-0"
             style={{
-              minWidth: `${ROTA_EMP_COL_W + state.days.length * 128 + ROTA_HOURS_COL_W + ROTA_PAY_COL_W}px`,
+              minWidth: `${ROTA_EMP_COL_W + tableDays.length * 128 + ROTA_HOURS_COL_W + ROTA_PAY_COL_W}px`,
             }}
           >
             <colgroup>
               <col style={{ width: ROTA_EMP_COL_W }} />
-              {state.days.map((dk) => (
+              {tableDays.map((dk) => (
                 <col key={dk} style={{ width: 128 }} />
               ))}
               <col style={{ width: ROTA_HOURS_COL_W }} />
@@ -1597,20 +1696,37 @@ export function RotaCalendarClient() {
                   <p className="text-[10px] text-muted-foreground mt-1">Green Publish / blue Unpublish on each row</p>
                   <p className="text-[10px] text-muted-foreground">Or drag the ⋮⋮ handle on a row</p>
                 </th>
-                {state.days.map((dk) => (
+                {tableDays.map((dk, dayIdx) => {
+                  const mark = dayEditMark(dayIdx);
+                  return (
                   <th
                     key={dk}
-                    className="sticky top-0 z-30 bg-muted p-1.5 text-center text-xs font-medium border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]"
+                    className={cn(
+                      'sticky top-0 z-30 p-1.5 text-center text-xs font-medium border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
+                      mark === 'adding' && 'bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100',
+                      mark === 'removing' && 'bg-red-100 text-red-900 line-through dark:bg-red-950 dark:text-red-100',
+                      !mark && 'bg-muted'
+                    )}
                     style={{ backgroundClip: 'padding-box' }}
+                    title={
+                      mark === 'adding'
+                        ? 'Will be added'
+                        : mark === 'removing'
+                          ? 'Will be removed'
+                          : undefined
+                    }
                   >
                     <div className="flex flex-col items-center gap-0.5">
                       <span>{fmtShortDate(dk)}</span>
-                      {dayHasConflict.has(dk) ? (
+                      {mark === 'adding' ? <span className="text-[9px] font-semibold no-underline tracking-wide">ADD</span> : null}
+                      {mark === 'removing' ? <span className="text-[9px] font-semibold no-underline tracking-wide">REMOVE</span> : null}
+                      {!mark && dayHasConflict.has(dk) ? (
                         <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" aria-label="Shift conflicts on this day" />
                       ) : null}
                     </div>
                   </th>
-                ))}
+                  );
+                })}
                 <th
                   className="rota-sticky-hours sticky top-0 z-[60] p-2 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
                   style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
@@ -1732,31 +1848,50 @@ export function RotaCalendarClient() {
                       </div>
                     </div>
                   </td>
-                  {state.days.map((dk) => {
-                    const list = state.shifts[emp.id]?.[dk] || [];
+                  {tableDays.map((dk, dayIdx) => {
+                    const mark = dayEditMark(dayIdx);
+                    const list = mark === 'adding' ? [] : state.shifts[emp.id]?.[dk] || [];
                     const showCell = statusFilter === 'all' || list.some((_, idx) => {
                       const a = state.attendance[attKey(emp.id, dk, idx)];
                       return a && normalizeAttStatus(a.status) === statusFilter;
                     });
                     if (statusFilter !== 'all' && list.length > 0 && !showCell) {
                       return (
-                        <td key={dk} className="relative z-0 align-top p-1 border-l border-b border-border bg-muted overflow-hidden" />
+                        <td
+                          key={dk}
+                          className={cn(
+                            'relative z-0 align-top p-1 border-l border-b border-border overflow-hidden',
+                            mark === 'removing' ? 'bg-red-50 dark:bg-red-950/40 opacity-60' : 'bg-muted'
+                          )}
+                        />
                       );
                     }
                     return (
                       <td
                         key={dk}
                         className={cn(
-                          'relative z-0 align-top p-1 border-l border-b border-border bg-muted overflow-hidden transition-colors',
-                          list.some((_, idx) => (shiftConflicts.get(shiftConflictKey(emp.id, dk, idx)) || []).length > 0) &&
+                          'relative z-0 align-top p-1 border-l border-b border-border overflow-hidden transition-colors',
+                          mark === 'adding' && 'bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-inset ring-emerald-400/50',
+                          mark === 'removing' && 'bg-red-50 dark:bg-red-950/40 opacity-55',
+                          !mark && 'bg-muted',
+                          !mark &&
+                            list.some((_, idx) => (shiftConflicts.get(shiftConflictKey(emp.id, dk, idx)) || []).length > 0) &&
                             'bg-amber-50 dark:bg-amber-950',
-                          draggingShift && dropDayKey === dk && dropEmpId === emp.id && 'bg-pink-100 dark:bg-pink-950 ring-2 ring-inset ring-pink-500/70'
+                          !mark &&
+                            draggingShift &&
+                            dropDayKey === dk &&
+                            dropEmpId === emp.id &&
+                            'bg-pink-100 dark:bg-pink-950 ring-2 ring-inset ring-pink-500/70'
                         )}
-                        onDragOver={(e) => onDayDragOver(e, dk, emp.id)}
-                        onDragLeave={(e) => {
-                          if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
-                        }}
-                        onDrop={(e) => onDropDay(e, dk, emp.id)}
+                        onDragOver={mark ? undefined : (e) => onDayDragOver(e, dk, emp.id)}
+                        onDragLeave={
+                          mark
+                            ? undefined
+                            : (e) => {
+                                if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
+                              }
+                        }
+                        onDrop={mark ? undefined : (e) => onDropDay(e, dk, emp.id)}
                       >
                         <div className="flex flex-col gap-1 min-h-[48px] min-w-0">
                           {list.map((sh, idx) => {
@@ -1779,15 +1914,16 @@ export function RotaCalendarClient() {
                             <div key={idx} className="min-w-0">
                               <button
                                 type="button"
-                                draggable
-                                onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
-                                onDragEnd={onDragEnd}
+                                draggable={!mark}
+                                onDragStart={mark ? undefined : (e) => onShiftDragStart(e, emp.id, dk, idx)}
+                                onDragEnd={mark ? undefined : onDragEnd}
                                 className={cn(
-                                  'w-full max-w-full min-w-0 overflow-hidden rounded border border-border bg-card px-1 py-1 text-left text-[9px] leading-tight shadow-sm hover:bg-muted cursor-grab active:cursor-grabbing relative',
+                                  'w-full max-w-full min-w-0 overflow-hidden rounded border border-border bg-card px-1 py-1 text-left text-[9px] leading-tight shadow-sm relative',
+                                  mark ? 'pointer-events-none' : 'hover:bg-muted cursor-grab active:cursor-grabbing',
                                   menuOpen && 'ring-2 ring-pink-500/60',
                                   conflicts.length > 0 && 'border-amber-500 bg-amber-50 dark:bg-amber-950'
                                 )}
-                                onClick={(e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
+                                onClick={mark ? undefined : (e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
                                 title={tip || 'Drag to another day to move this shift'}
                               >
                                 <div className="h-0.5 rounded-full mb-0.5" style={{ backgroundColor: sh.color }} />
@@ -1806,6 +1942,11 @@ export function RotaCalendarClient() {
                             </div>
                             );
                           })}
+                          {mark === 'removing' ? (
+                            <span className="text-[9px] text-center text-red-700 dark:text-red-300 py-2">Removing</span>
+                          ) : mark === 'adding' ? (
+                            <span className="text-[9px] text-center text-emerald-700 dark:text-emerald-300 py-2">New day</span>
+                          ) : (
                           <Button
                             type="button"
                             variant="ghost"
@@ -1816,6 +1957,7 @@ export function RotaCalendarClient() {
                           >
                             <Plus className="size-3 stroke-[1.5]" />
                           </Button>
+                          )}
                         </div>
                       </td>
                     );
@@ -1843,15 +1985,23 @@ export function RotaCalendarClient() {
                 >
                   Daily total
                 </td>
-                {state.days.map((dk) => (
+                {tableDays.map((dk, dayIdx) => {
+                  const mark = dayEditMark(dayIdx);
+                  return (
                   <td
                     key={dk}
-                    className="sticky bottom-0 z-30 text-center p-2 border-l border-t tabular-nums bg-muted shadow-[0_-2px_4px_-2px_rgba(0,0,0,0.1)]"
+                    className={cn(
+                      'sticky bottom-0 z-30 text-center p-2 border-l border-t tabular-nums shadow-[0_-2px_4px_-2px_rgba(0,0,0,0.1)]',
+                      mark === 'adding' && 'bg-emerald-100 dark:bg-emerald-950',
+                      mark === 'removing' && 'bg-red-100 opacity-60 dark:bg-red-950',
+                      !mark && 'bg-muted'
+                    )}
                     style={{ backgroundClip: 'padding-box' }}
                   >
-                    {formatHoursDecimal(dayTotalHours(dk))}
+                    {mark === 'adding' ? '—' : formatHoursDecimal(dayTotalHours(dk))}
                   </td>
-                ))}
+                  );
+                })}
                 <td
                   className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-2 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
                   style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
@@ -2279,59 +2429,69 @@ export function RotaCalendarClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={daysOpen} onOpenChange={setDaysOpen}>
-        <DialogContent showCloseButton className="sm:max-w-sm">
+      <Dialog
+        open={daysOpen}
+        onOpenChange={(open) => {
+          if (!open) setDaysOpen(false);
+        }}
+      >
+        <DialogContent
+          showCloseButton
+          overlayClassName="bg-black/20"
+          className="sm:max-w-md sm:top-auto sm:bottom-6 sm:left-auto sm:right-6 sm:translate-x-0 sm:translate-y-0"
+        >
           <DialogHeader>
             <DialogTitle>Add / remove days</DialogTitle>
+            <DialogDescription>
+              Preview highlights on the rota: green = add, red = remove. Nothing is saved until Done.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm tabular-nums">Current length: {state.days.length} days</p>
+          <p className="text-sm tabular-nums">
+            Current length: <span className="font-semibold">{pendingDayCount}</span> days
+            {pendingDayCount !== daysBaselineCount ? (
+              <span className="text-muted-foreground"> (was {daysBaselineCount})</span>
+            ) : null}
+          </p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => addDaysDelta(1)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => adjustPendingDays(1)}>
               +1 day
             </Button>
-            <Button type="button" variant="outline" onClick={() => addDaysDelta(7)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => adjustPendingDays(7)}>
               +7 days
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                if (state.days.length <= 1) {
-                  toast.warning('Rota must keep at least 1 day');
-                  return;
-                }
-                const lastDk = state.days[state.days.length - 1];
-                let shiftCount = 0;
-                for (const emp of state.employees) {
-                  shiftCount += state.shifts[emp.id]?.[lastDk]?.length || 0;
-                }
-                if (shiftCount > 0) {
-                  toast.confirm(
-                    `Remove shifts on ${fmtShortDate(lastDk)} before removing this day?`,
-                    () => {
-                      addDaysDelta(-1);
-                      toast.success(
-                        shiftCount === 1
-                          ? 'Day and 1 shift removed'
-                          : `Day and ${shiftCount} shifts removed`
-                      );
-                    },
-                    {
-                      label: 'Remove day & shifts',
-                      description: `${fmtShortDate(lastDk)} has ${shiftCount} shift${shiftCount === 1 ? '' : 's'}. This cannot be undone.`,
-                    }
-                  );
-                  return;
-                }
-                addDaysDelta(-1);
-                toast.success('Day removed');
-              }}
+              size="sm"
+              disabled={pendingDayCount <= 1}
+              onClick={() => adjustPendingDays(-1)}
             >
               −1 day
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={pendingDayCount <= 1}
+              onClick={() => adjustPendingDays(-7)}
+            >
+              −7 days
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={pendingDayCount === daysBaselineCount}
+              onClick={resetPendingDays}
+            >
+              Reset
+            </Button>
           </div>
-          <DialogFooter>
-            <Button type="button" onClick={() => setDaysOpen(false)}>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button type="button" variant="ghost" onClick={() => setDaysOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={applyPendingDays}>
               Done
             </Button>
           </DialogFooter>

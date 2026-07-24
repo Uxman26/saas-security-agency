@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, attStatusBarColor, attStatusLabel, buildShiftConflictMap, calcHours, countedHoursForAttendance, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
@@ -2536,13 +2537,14 @@ export function RotaCalendarClient() {
               </div>
               {attRec.status === 'late' ? (
                 <div className="space-y-1">
-                  <LabelMini>Lateness (mins)</LabelMini>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={attRec.lateMinutes ?? ''}
-                    onChange={(e) => {
-                      const lateMinutes = parseInt(e.target.value, 10) || 0;
+                  <LabelMini>Lateness (hours + minutes)</LabelMini>
+                  <DurationHmField
+                    aria-label="Lateness"
+                    maxHours={12}
+                    hours={Math.floor(Math.max(0, Number(attRec.lateMinutes) || 0) / 60)}
+                    minutes={Math.max(0, Number(attRec.lateMinutes) || 0) % 60}
+                    onChange={({ hours, minutes }) => {
+                      const lateMinutes = hours * 60 + minutes;
                       const sh = attCtx ? state.shifts[attCtx.empId]?.[attCtx.dk]?.[attCtx.idx] : null;
                       if (!sh) {
                         setAttRec({ ...attRec, lateMinutes: lateMinutes || undefined });
@@ -2595,7 +2597,7 @@ export function RotaCalendarClient() {
           <div className="grid gap-3">
             <div className="space-y-1">
               <LabelMini>New end time</LabelMini>
-              <Input type="time" value={otEnd} onChange={(e) => setOtEnd(e.target.value)} />
+              <TimeHmField aria-label="Overtime end time" value={otEnd} onChange={setOtEnd} />
             </div>
             <div className="space-y-1">
               <LabelMini>Reason (required)</LabelMini>
@@ -2622,7 +2624,7 @@ export function RotaCalendarClient() {
           <div className="grid gap-3">
             <div className="space-y-1">
               <LabelMini>Actual end time</LabelMini>
-              <Input type="time" value={efEnd} onChange={(e) => setEfEnd(e.target.value)} />
+              <TimeHmField aria-label="Early finish end time" value={efEnd} onChange={setEfEnd} />
             </div>
             <div className="space-y-1">
               <LabelMini>Reason (required)</LabelMini>

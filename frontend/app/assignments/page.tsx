@@ -21,6 +21,7 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { TimeHmField } from '@/components/ui/time-hm-field';
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   day: 'Day',
@@ -99,12 +100,20 @@ function AssignmentForm({
         </div>
         <div className="space-y-1">
           <Label>Shift Start</Label>
-          <Input type="time" {...register('shift_start')} />
+          <TimeHmField
+            aria-label="Shift start"
+            value={watch('shift_start') || '00:00'}
+            onChange={(v) => setValue('shift_start', v, { shouldValidate: true })}
+          />
           {errors.shift_start && <p className="text-xs text-destructive">{errors.shift_start.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Shift End</Label>
-          <Input type="time" {...register('shift_end')} />
+          <TimeHmField
+            aria-label="Shift end"
+            value={watch('shift_end') || '00:00'}
+            onChange={(v) => setValue('shift_end', v, { shouldValidate: true })}
+          />
           {errors.shift_end && <p className="text-xs text-destructive">{errors.shift_end.message}</p>}
         </div>
         <div className="space-y-1">

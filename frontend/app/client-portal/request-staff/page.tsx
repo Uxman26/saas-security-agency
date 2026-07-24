@@ -17,6 +17,7 @@ import type { Client, Site, StaffRequest } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TimeHmField } from '@/components/ui/time-hm-field';
 
 type EntryMode = 'same' | 'different';
 
@@ -349,11 +350,11 @@ function RequestStaffPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label>Start time</Label>
-                        <Input type="time" value={shiftStart} onChange={(e) => setShiftStart(e.target.value)} />
+                        <TimeHmField aria-label="Start time" value={shiftStart} onChange={setShiftStart} />
                       </div>
                       <div className="space-y-1.5">
                         <Label>End time</Label>
-                        <Input type="time" value={shiftEnd} onChange={(e) => setShiftEnd(e.target.value)} />
+                        <TimeHmField aria-label="End time" value={shiftEnd} onChange={setShiftEnd} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -415,18 +416,18 @@ function RequestStaffPage() {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                               <Label>Start</Label>
-                              <Input
-                                type="time"
+                              <TimeHmField
+                                aria-label="Row start time"
                                 value={row.shift_start}
-                                onChange={(e) => updateRow(row.key, { shift_start: e.target.value })}
+                                onChange={(shift_start) => updateRow(row.key, { shift_start })}
                               />
                             </div>
                             <div className="space-y-1.5">
                               <Label>End</Label>
-                              <Input
-                                type="time"
+                              <TimeHmField
+                                aria-label="Row end time"
                                 value={row.shift_end}
-                                onChange={(e) => updateRow(row.key, { shift_end: e.target.value })}
+                                onChange={(shift_end) => updateRow(row.key, { shift_end })}
                               />
                             </div>
                           </div>

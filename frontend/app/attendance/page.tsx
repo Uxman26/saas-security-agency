@@ -20,6 +20,7 @@ import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout
 import { StatusPieChart } from '@/components/charts/status-chart';
 import { Clock, Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { TimeHmField, normalizeHm } from '@/components/ui/time-hm-field';
 
 const STATUS_STYLES: Record<string, string> = {
   on_time: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -37,6 +38,17 @@ const STATUS_OPTIONS = [
 
 function displayStatus(status?: string | null) {
   return attStatusLabel(normalizeAttStatus(status));
+}
+
+function splitLocalInput(v: string): { date: string; time: string } {
+  if (!v) return { date: '', time: '00:00' };
+  const [date = '', timeRaw = '00:00'] = v.split('T');
+  return { date, time: normalizeHm(timeRaw.slice(0, 5)) };
+}
+
+function joinLocalInput(date: string, time: string): string {
+  if (!date) return '';
+  return `${date}T${normalizeHm(time)}`;
 }
 
 function toLocalInput(iso?: string | null) {
@@ -534,29 +546,57 @@ export default function AttendancePage() {
                       rows={3}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label>Booked on</Label>
-                    <Input
-                      type="datetime-local"
-                      value={editBookedAt}
-                      max={maxLocalDateTime()}
-                      onChange={(e) => {
-                        setEditBookedAt(e.target.value);
-                        if (editDateError) setEditDateError('');
-                      }}
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Booked on (date)</Label>
+                      <Input
+                        type="date"
+                        value={splitLocalInput(editBookedAt).date}
+                        max={maxLocalDateTime().slice(0, 10)}
+                        onChange={(e) => {
+                          setEditBookedAt(joinLocalInput(e.target.value, splitLocalInput(editBookedAt).time));
+                          if (editDateError) setEditDateError('');
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Booked on (time)</Label>
+                      <TimeHmField
+                        aria-label="Booked on time"
+                        value={splitLocalInput(editBookedAt).time}
+                        onChange={(time) => {
+                          const date = splitLocalInput(editBookedAt).date || maxLocalDateTime().slice(0, 10);
+                          setEditBookedAt(joinLocalInput(date, time));
+                          if (editDateError) setEditDateError('');
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label>Booked off</Label>
-                    <Input
-                      type="datetime-local"
-                      value={editBookedOffAt}
-                      max={maxLocalDateTime()}
-                      onChange={(e) => {
-                        setEditBookedOffAt(e.target.value);
-                        if (editDateError) setEditDateError('');
-                      }}
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Booked off (date)</Label>
+                      <Input
+                        type="date"
+                        value={splitLocalInput(editBookedOffAt).date}
+                        max={maxLocalDateTime().slice(0, 10)}
+                        onChange={(e) => {
+                          setEditBookedOffAt(joinLocalInput(e.target.value, splitLocalInput(editBookedOffAt).time));
+                          if (editDateError) setEditDateError('');
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Booked off (time)</Label>
+                      <TimeHmField
+                        aria-label="Booked off time"
+                        value={splitLocalInput(editBookedOffAt).time}
+                        onChange={(time) => {
+                          const date = splitLocalInput(editBookedOffAt).date || maxLocalDateTime().slice(0, 10);
+                          setEditBookedOffAt(joinLocalInput(date, time));
+                          if (editDateError) setEditDateError('');
+                        }}
+                      />
+                    </div>
                   </div>
                   {editDateError ? <p className="text-sm text-destructive">{editDateError}</p> : null}
                   <DialogFooter>

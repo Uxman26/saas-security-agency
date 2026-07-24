@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import type { EmployeeRec, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
 import { findConflictsForDraft } from '@/lib/rota-shifts-utils';
@@ -210,11 +211,19 @@ export function ShiftDialog({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label>Start</Label>
-                <Input type="time" value={shift.start} onChange={(e) => setShift((s) => ({ ...s, start: e.target.value }))} />
+                <TimeHmField
+                  aria-label="Shift start"
+                  value={shift.start}
+                  onChange={(start) => setShift((s) => ({ ...s, start }))}
+                />
               </div>
               <div className="space-y-1">
                 <Label>End</Label>
-                <Input type="time" value={shift.end} onChange={(e) => setShift((s) => ({ ...s, end: e.target.value }))} />
+                <TimeHmField
+                  aria-label="Shift end"
+                  value={shift.end}
+                  onChange={(end) => setShift((s) => ({ ...s, end }))}
+                />
               </div>
             </div>
             {draftConflicts.length > 0 ? (
@@ -232,26 +241,15 @@ export function ShiftDialog({
                 </ul>
               </div>
             ) : null}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label>Break (hrs)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={shift.breakH}
-                  onChange={(e) => setShift((s) => ({ ...s, breakH: parseInt(e.target.value, 10) || 0 }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Break (mins)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={59}
-                  value={shift.breakM}
-                  onChange={(e) => setShift((s) => ({ ...s, breakM: parseInt(e.target.value, 10) || 0 }))}
-                />
-              </div>
+            <div className="space-y-1">
+              <Label>Break duration</Label>
+              <DurationHmField
+                aria-label="Break duration"
+                hours={shift.breakH || 0}
+                minutes={shift.breakM || 0}
+                maxHours={8}
+                onChange={({ hours, minutes }) => setShift((s) => ({ ...s, breakH: hours, breakM: minutes }))}
+              />
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">

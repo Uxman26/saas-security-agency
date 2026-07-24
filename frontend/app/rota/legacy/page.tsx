@@ -22,6 +22,7 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Calendar, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { TimeHmField } from '@/components/ui/time-hm-field';
 
 function fmt(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -339,11 +340,19 @@ export default function RotaPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Start</Label>
-                      <Input type="time" {...form.register('shift_start')} />
+                      <TimeHmField
+                        aria-label="Shift start"
+                        value={form.watch('shift_start') || '00:00'}
+                        onChange={(v) => form.setValue('shift_start', v, { shouldValidate: true })}
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>End</Label>
-                      <Input type="time" {...form.register('shift_end')} />
+                      <TimeHmField
+                        aria-label="Shift end"
+                        value={form.watch('shift_end') || '00:00'}
+                        onChange={(v) => form.setValue('shift_end', v, { shouldValidate: true })}
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>Break (min)</Label>

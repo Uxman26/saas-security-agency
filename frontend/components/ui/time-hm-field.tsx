@@ -251,8 +251,15 @@ export function TimeHmField({
               ref={popRef}
               role="dialog"
               aria-label={`${ariaLabel} picker`}
-              className="fixed z-[400] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
+              // pointer-events-auto: Radix Dialog sets body to pointer-events:none; without this,
+              // clicks/scroll pass through to fields underneath (e.g. Site select).
+              className="pointer-events-auto fixed z-[500] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-xl"
               style={{ top: pos.top, left: pos.left, width: pos.width }}
+              data-time-hm-picker=""
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onWheel={(e) => e.stopPropagation()}
             >
               <div className="grid grid-cols-2 border-b border-border">
                 <div className="border-r border-border px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
@@ -263,7 +270,7 @@ export function TimeHmField({
               <div className="grid h-52 grid-cols-2">
                 <div
                   ref={hourListRef}
-                  className="overflow-y-auto border-r border-border overscroll-contain"
+                  className="h-52 min-h-0 overflow-y-auto overscroll-contain border-r border-border"
                 >
                   {HOURS.map((h) => {
                     const selected = h === pickH;
@@ -276,7 +283,11 @@ export function TimeHmField({
                           'flex w-full items-center justify-between px-3 py-1.5 text-sm tabular-nums hover:bg-muted/70',
                           selected && 'bg-sky-100 font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-100'
                         )}
-                        onClick={() => setPickH(h)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPickH(h);
+                        }}
                       >
                         <span>{h}</span>
                         {selected ? <Check className="size-4 text-sky-600" /> : <span className="size-4" />}
@@ -284,7 +295,10 @@ export function TimeHmField({
                     );
                   })}
                 </div>
-                <div ref={minuteListRef} className="overflow-y-auto overscroll-contain">
+                <div
+                  ref={minuteListRef}
+                  className="h-52 min-h-0 overflow-y-auto overscroll-contain"
+                >
                   {MINUTES.map((m) => {
                     const selected = m === pickM;
                     return (
@@ -296,7 +310,11 @@ export function TimeHmField({
                           'flex w-full items-center justify-between px-3 py-1.5 text-sm tabular-nums hover:bg-muted/70',
                           selected && 'bg-sky-100 font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-100'
                         )}
-                        onClick={() => setPickM(m)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPickM(m);
+                        }}
                       >
                         <span>{m}</span>
                         {selected ? <Check className="size-4 text-sky-600" /> : <span className="size-4" />}
@@ -311,7 +329,10 @@ export function TimeHmField({
                   variant="outline"
                   size="sm"
                   className="border-pink-500 text-pink-600 hover:bg-pink-50 hover:text-pink-700"
-                  onClick={() => setOpen(false)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpen(false);
+                  }}
                 >
                   Cancel
                 </Button>
@@ -323,7 +344,10 @@ export function TimeHmField({
                   type="button"
                   size="sm"
                   className="bg-pink-600 text-white hover:bg-pink-700"
-                  onClick={applyPicker}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    applyPicker();
+                  }}
                 >
                   Apply
                 </Button>

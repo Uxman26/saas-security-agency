@@ -60,7 +60,7 @@ export function formatHoursDecimal(h: number) {
 }
 
 export function shiftSiteLine(sh: ShiftRec) {
-  return sh.site || sh.notes || 'One-off';
+  return (sh.site || sh.label || '').trim() || 'One-off';
 }
 
 export function timeMins(t: string) {

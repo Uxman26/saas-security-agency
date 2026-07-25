@@ -42,6 +42,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ROTA_PAY_COL_W = 96;
 const ROTA_HOURS_COL_W = 104;
 const ROTA_EMP_COL_W = 320;
+const ROTA_DAY_COL_W = 128;
 
 /** Solid fills so scrolled shift tiles cannot bleed through sticky columns. */
 const ROTA_STICKY_EMP_BG = {
@@ -284,6 +285,8 @@ export function RotaCalendarClient() {
   const [daysOpen, setDaysOpen] = useState(false);
   const [daysBaselineCount, setDaysBaselineCount] = useState(0);
   const [pendingDayCount, setPendingDayCount] = useState(0);
+  /** After Done adds days, scroll this column index into view once the table commits. */
+  const scrollDayAfterApplyRef = useRef<number | null>(null);
   const [pickOpen, setPickOpen] = useState(false);
   const [pickSel, setPickSel] = useState<Set<string>>(new Set());
   const [pickSearch, setPickSearch] = useState('');
@@ -425,6 +428,34 @@ export function RotaCalendarClient() {
     [daysOpen, pendingDayCount, daysBaselineCount]
   );
 
+  /** Keep the latest preview / target day visible beside sticky Total hours / Payable cols. */
+  const scrollDayColumnIntoView = useCallback((dayIndex: number) => {
+    const scroller = menuRef.current;
+    if (!scroller || dayIndex < 0) return;
+
+    const cell = scroller.querySelector(`[data-rota-day-idx="${dayIndex}"]`) as HTMLElement | null;
+
+    if (cell) {
+      const scRect = scroller.getBoundingClientRect();
+      const cellRect = cell.getBoundingClientRect();
+      const stickyRight = ROTA_HOURS_COL_W + ROTA_PAY_COL_W;
+      const visibleRight = scRect.right - stickyRight;
+      const visibleLeft = scRect.left + ROTA_EMP_COL_W;
+      if (cellRect.right > visibleRight - 4) {
+        scroller.scrollBy({ left: cellRect.right - visibleRight + 12, behavior: 'smooth' });
+      } else if (cellRect.left < visibleLeft + 4) {
+        scroller.scrollBy({ left: cellRect.left - visibleLeft - 12, behavior: 'smooth' });
+      }
+      return;
+    }
+
+    // Fallback before paint finds the cell (new columns just added)
+    const stickyRight = ROTA_HOURS_COL_W + ROTA_PAY_COL_W;
+    const targetLeft = ROTA_EMP_COL_W + dayIndex * ROTA_DAY_COL_W;
+    const scrollLeft = targetLeft + ROTA_DAY_COL_W - (scroller.clientWidth - stickyRight);
+    scroller.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+  }, []);
+
   const openDaysEditor = () => {
     const n = state.days.length;
     setDaysBaselineCount(n);
@@ -464,7 +495,7 @@ export function RotaCalendarClient() {
           () => {
             setDayCount(next);
             setDaysOpen(false);
-            toast.success(
+            toast.snack(
               removing.length === 1
                 ? `Removed 1 day (${shiftCount} shift${shiftCount === 1 ? '' : 's'})`
                 : `Removed ${removing.length} days (${shiftCount} shifts)`
@@ -479,14 +510,48 @@ export function RotaCalendarClient() {
       }
     }
     const added = next - state.days.length;
+    if (added > 0) scrollDayAfterApplyRef.current = next - 1;
     setDayCount(next);
     setDaysOpen(false);
     if (added > 0) {
-      toast.success(added === 1 ? 'Added 1 day' : `Added ${added} days`);
+      toast.snack(added === 1 ? 'Added 1 day' : `Added ${added} days`);
     } else {
-      toast.success(Math.abs(added) === 1 ? 'Removed 1 day' : `Removed ${Math.abs(added)} days`);
+      toast.snack(Math.abs(added) === 1 ? 'Removed 1 day' : `Removed ${Math.abs(added)} days`);
     }
   };
+
+  // While previewing length changes, keep the latest add / first remove in view.
+  useEffect(() => {
+    if (!daysOpen) return;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      if (pendingDayCount > daysBaselineCount) {
+        scrollDayColumnIntoView(pendingDayCount - 1);
+      } else if (pendingDayCount < daysBaselineCount) {
+        scrollDayColumnIntoView(Math.min(pendingDayCount, Math.max(0, tableDays.length - 1)));
+      }
+    };
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(run);
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(id);
+    };
+  }, [daysOpen, pendingDayCount, daysBaselineCount, tableDays.length, scrollDayColumnIntoView]);
+
+  // After Done commits new days, scroll to the newest column.
+  useEffect(() => {
+    if (daysOpen) return;
+    const idx = scrollDayAfterApplyRef.current;
+    if (idx == null) return;
+    scrollDayAfterApplyRef.current = null;
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => scrollDayColumnIntoView(idx));
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [state.days.length, daysOpen, scrollDayColumnIntoView]);
 
   useEffect(() => {
     if (!exportMenuOpen) return;
@@ -503,7 +568,7 @@ export function RotaCalendarClient() {
       return;
     }
     setExportMenuOpen(false);
-    toast.success('Rota exported as CSV');
+    toast.snack('Rota exported as CSV');
   }, [state, resolveShiftRate]);
 
   const exportRotaPdf = useCallback(async () => {
@@ -515,7 +580,7 @@ export function RotaCalendarClient() {
     try {
       await downloadPlannerRotaPdf(state);
       setExportMenuOpen(false);
-      toast.success('Rota exported as PDF');
+      toast.snack('Rota exported as PDF');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'PDF export failed');
     } finally {
@@ -574,7 +639,7 @@ export function RotaCalendarClient() {
     setCopyOpen(false);
     setCopyCtx(null);
     setCopyToEmployeeId(null);
-    toast.success('Shift copied');
+    toast.snack('Shift copied');
   };
 
   const startAtt = (empId: string, dk: string, idx: number) => {
@@ -691,7 +756,7 @@ export function RotaCalendarClient() {
 
     setAttendance(k, rec);
     setAttOpen(false);
-    toast.success('Attendance saved');
+    toast.snack('Attendance saved');
   };
 
   const clearShiftAttendance = (empId: string, dk: string, idx: number) => {
@@ -703,7 +768,7 @@ export function RotaCalendarClient() {
     }
     toast.confirm('Remove attendance from this shift?', () => {
       clearAttendance(k);
-      toast.success('Attendance removed');
+      toast.snack('Attendance removed');
     }, { label: 'Remove', description: 'This cannot be undone.' });
   };
 
@@ -718,7 +783,7 @@ export function RotaCalendarClient() {
     }
     toast.confirm('Remove overtime from this shift?', () => {
       removeShiftAdjustment(empId, dk, idx, 'overtime');
-      toast.success('Overtime removed');
+      toast.snack('Overtime removed');
     }, { label: 'Remove', description: 'Shift end time will return to the scheduled end.' });
   };
 
@@ -733,7 +798,7 @@ export function RotaCalendarClient() {
     }
     toast.confirm('Remove early finish from this shift?', () => {
       removeShiftAdjustment(empId, dk, idx, 'early_finish');
-      toast.success('Early finish removed');
+      toast.snack('Early finish removed');
     }, { label: 'Remove', description: 'Shift end time will return to the scheduled end.' });
   };
 
@@ -786,7 +851,7 @@ export function RotaCalendarClient() {
           const restoreEnd = removeShiftAdjustment(empId, dk, idx, 'early_finish');
           if (restoreEnd) {
             openOvertimeDialog(empId, dk, idx, restoreEnd);
-            toast.success('Early finish removed — enter an overtime end time');
+            toast.snack('Early finish removed — enter an overtime end time');
           }
         },
         {
@@ -812,7 +877,7 @@ export function RotaCalendarClient() {
           const restoreEnd = removeShiftAdjustment(empId, dk, idx, 'overtime');
           if (restoreEnd) {
             openEarlyFinishDialog(empId, dk, idx, restoreEnd);
-            toast.success('Overtime removed — enter a finish time earlier than scheduled end');
+            toast.snack('Overtime removed — enter a finish time earlier than scheduled end');
           }
         },
         {
@@ -894,7 +959,7 @@ export function RotaCalendarClient() {
     setAdjSaving(false);
     if (ok) {
       setOtOpen(false);
-      toast.success('Overtime recorded');
+      toast.snack('Overtime recorded');
     }
   };
 
@@ -922,7 +987,7 @@ export function RotaCalendarClient() {
     setAdjSaving(false);
     if (ok) {
       setEfOpen(false);
-      toast.success('Early finish recorded');
+      toast.snack('Early finish recorded');
     }
   };
 
@@ -946,7 +1011,7 @@ export function RotaCalendarClient() {
             : 'Nothing was saved'
         );
       } else {
-        toast.success(
+        toast.snack(
           `Saved ${created} shift(s) to assignments${skipped ? ` (${skipped} skipped)` : ''}`
         );
       }
@@ -965,7 +1030,7 @@ export function RotaCalendarClient() {
       if (result.published_guard_ids) {
         setPublishedGuardIds(result.published_guard_ids);
       }
-      toast.success('Unpublished for this employee');
+      toast.snack('Unpublished for this employee');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Unpublish failed');
     } finally {
@@ -996,7 +1061,7 @@ export function RotaCalendarClient() {
         try {
           await unpublishRota();
           setPublishedGuardIds([]);
-          toast.success('Rota unpublished');
+          toast.snack('Rota unpublished');
         } catch (e) {
           toast.error(e instanceof Error ? e.message : 'Unpublish failed');
         } finally {
@@ -1048,7 +1113,7 @@ export function RotaCalendarClient() {
     }
     if (next !== state.rotaName) {
       setRotaName(next);
-      toast.success('Rota name updated');
+      toast.snack('Rota name updated');
     }
     setNameEditing(false);
   };
@@ -1137,7 +1202,7 @@ export function RotaCalendarClient() {
   const handleDeleteShiftRow = (dayKey: string, idx: number) => {
     if (!deleteShiftsEmpId) return;
     deleteShift(deleteShiftsEmpId, dayKey, idx);
-    toast.success('Shift deleted');
+    toast.snack('1 shift deleted');
     if (deleteShiftsRows.length <= 1) {
       setDeleteShiftsOpen(false);
       setDeleteShiftsEmpId(null);
@@ -1148,6 +1213,9 @@ export function RotaCalendarClient() {
 
   const handleDeleteAllShifts = () => {
     if (!deleteShiftsEmpId) return;
+    const count = deleteShiftsDayKey
+      ? (state.shifts[deleteShiftsEmpId]?.[deleteShiftsDayKey] || []).length
+      : Object.values(state.shifts[deleteShiftsEmpId] || {}).reduce((n, list) => n + list.length, 0);
     if (deleteShiftsDayKey) {
       const list = [...(state.shifts[deleteShiftsEmpId]?.[deleteShiftsDayKey] || [])];
       for (let i = list.length - 1; i >= 0; i--) {
@@ -1160,7 +1228,7 @@ export function RotaCalendarClient() {
     setDeleteShiftsEmpId(null);
     setDeleteShiftsDayKey(null);
     if (viewShiftsEmpId === deleteShiftsEmpId) setViewShiftsOpen(false);
-    toast.success('Shifts deleted');
+    toast.snack(count === 1 ? '1 shift deleted' : `${count} shifts deleted`);
   };
 
   const openViewShifts = (empId: string) => {
@@ -1187,7 +1255,7 @@ export function RotaCalendarClient() {
       closeEmpMenu();
       if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
       if (previewEmpId === empId) setPreviewEmpId(null);
-      toast.success('Employee removed from rota');
+      toast.snack('Employee removed from rota');
     }, { label: 'Remove' });
   };
 
@@ -1236,7 +1304,7 @@ export function RotaCalendarClient() {
       closeEmpMenu();
       if (viewShiftsEmpId && ids.includes(viewShiftsEmpId)) setViewShiftsOpen(false);
       if (previewEmpId && ids.includes(previewEmpId)) setPreviewEmpId(null);
-      toast.success(ids.length === 1 ? 'Employee removed from rota' : `${ids.length} employees removed from rota`);
+      toast.snack(ids.length === 1 ? 'Employee removed from rota' : `${ids.length} employees removed from rota`);
     }, { label: 'Remove' });
   };
 
@@ -1363,7 +1431,7 @@ export function RotaCalendarClient() {
     const destEmp = rowEmpId || payload.empId;
     if (payload.dk === dk && payload.empId === destEmp) return;
     moveShiftToDay(payload.empId, payload.dk, payload.idx, dk, destEmp);
-    toast.success('Shift moved');
+    toast.snack('Shift moved');
   };
 
   const toggleShiftMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string, dk: string, idx: number, shiftsBelow: number) => {
@@ -1655,13 +1723,13 @@ export function RotaCalendarClient() {
           <table
             className="table-fixed w-full text-sm border-separate border-spacing-0"
             style={{
-              minWidth: `${ROTA_EMP_COL_W + tableDays.length * 128 + ROTA_HOURS_COL_W + ROTA_PAY_COL_W}px`,
+              minWidth: `${ROTA_EMP_COL_W + tableDays.length * ROTA_DAY_COL_W + ROTA_HOURS_COL_W + ROTA_PAY_COL_W}px`,
             }}
           >
             <colgroup>
               <col style={{ width: ROTA_EMP_COL_W }} />
               {tableDays.map((dk) => (
-                <col key={dk} style={{ width: 128 }} />
+                <col key={dk} style={{ width: ROTA_DAY_COL_W }} />
               ))}
               <col style={{ width: ROTA_HOURS_COL_W }} />
               <col style={{ width: ROTA_PAY_COL_W }} />
@@ -1701,6 +1769,7 @@ export function RotaCalendarClient() {
                   return (
                   <th
                     key={dk}
+                    data-rota-day-idx={dayIdx}
                     className={cn(
                       'sticky top-0 z-30 p-1.5 text-center text-xs font-medium border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
                       mark === 'adding' && 'bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100',
@@ -2431,13 +2500,15 @@ export function RotaCalendarClient() {
 
       <Dialog
         open={daysOpen}
+        modal={false}
         onOpenChange={(open) => {
           if (!open) setDaysOpen(false);
         }}
       >
         <DialogContent
           showCloseButton
-          overlayClassName="bg-black/20"
+          overlayClassName="pointer-events-none bg-transparent"
+          onOpenAutoFocus={(e) => e.preventDefault()}
           className="sm:max-w-md sm:top-auto sm:bottom-6 sm:left-auto sm:right-6 sm:translate-x-0 sm:translate-y-0"
         >
           <DialogHeader>

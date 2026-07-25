@@ -562,6 +562,8 @@ class RotaPlanUpdate(BaseModel):
     budget: Optional[float] = None
     planner_data: Optional[str] = None
     status: Optional[str] = None
+    day_count: Optional[int] = None
+    start_date: Optional[date] = None
 
 class RotaPlanListItem(BaseModel):
     id: int

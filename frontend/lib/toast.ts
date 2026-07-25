@@ -1,5 +1,7 @@
 import { toast as sonner, type ExternalToast } from 'sonner';
 
+export const SNACK_TOASTER_ID = 'snack';
+
 type ConfirmOpts = {
   description?: string;
   label?: string;
@@ -18,6 +20,19 @@ export const toast = {
   loading: (message: string, opts?: ExternalToast) => sonner.loading(message, opts),
   dismiss: (id?: string | number) => sonner.dismiss(id),
   promise: sonner.promise,
+  /** Bottom-left quick feedback (BrightHR-style). Use for rota actions — not confirmations/errors. */
+  snack: (message: string, opts?: ExternalToast) => {
+    const id = sonner(message, {
+      toasterId: SNACK_TOASTER_ID,
+      duration: opts?.duration ?? 4000,
+      ...opts,
+      action: opts?.action ?? {
+        label: 'Dismiss',
+        onClick: () => sonner.dismiss(id),
+      },
+    });
+    return id;
+  },
   confirm: (message: string, onConfirm: () => void | Promise<void>, opts?: ConfirmOpts) => {
     const id = sonner(message, {
       description: opts?.description,

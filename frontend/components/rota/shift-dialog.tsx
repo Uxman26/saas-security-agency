@@ -210,17 +210,17 @@ export function ShiftDialog({
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <Label>Start</Label>
+                <Label>Start time</Label>
                 <TimeHmField
-                  aria-label="Shift start"
+                  aria-label="Start time"
                   value={shift.start}
                   onChange={(start) => setShift((s) => ({ ...s, start }))}
                 />
               </div>
               <div className="space-y-1">
-                <Label>End</Label>
+                <Label>End time</Label>
                 <TimeHmField
-                  aria-label="Shift end"
+                  aria-label="End time"
                   value={shift.end}
                   onChange={(end) => setShift((s) => ({ ...s, end }))}
                 />
@@ -242,7 +242,7 @@ export function ShiftDialog({
               </div>
             ) : null}
             <div className="space-y-1">
-              <Label>Break duration</Label>
+              <Label>Set break duration</Label>
               <DurationHmField
                 aria-label="Break duration"
                 hours={shift.breakH || 0}
@@ -284,15 +284,26 @@ export function ShiftDialog({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea
-                placeholder="Location details, instructions, or one-off info"
-                value={shift.notes}
-                onChange={(e) => setShift((s) => ({ ...s, notes: e.target.value.slice(0, 200) }))}
-                rows={3}
-                maxLength={200}
-                className="min-h-[72px] resize-y"
+              <Label>Site name</Label>
+              <Input
+                maxLength={80}
+                placeholder="Enter site name if not selected"
+                value={shift.site}
+                onChange={(e) => {
+                  const name = e.target.value.slice(0, 80);
+                  setShift((s) => ({
+                    ...s,
+                    site: name,
+                    // Keep colour when typing a one-off name; clear rate prefs only if wiping site
+                    ...(name.trim()
+                      ? {}
+                      : { color: s.color || DEFAULT_SITE_COLOR }),
+                  }));
+                }}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Select a site above, or type a one-off site name here.
+              </p>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
@@ -358,13 +369,18 @@ export function ShiftDialog({
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Shift label</Label>
-              <Input
-                maxLength={20}
-                placeholder="Max 20 chars"
-                value={shift.label}
-                onChange={(e) => setShift((s) => ({ ...s, label: e.target.value.slice(0, 20) }))}
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="General notes about this shift"
+                value={shift.notes}
+                onChange={(e) => setShift((s) => ({ ...s, notes: e.target.value.slice(0, 500) }))}
+                rows={3}
+                maxLength={500}
+                className="min-h-[72px] resize-y"
               />
+              <p className="text-[11px] text-muted-foreground tabular-nums">
+                {shift.notes.length}/500
+              </p>
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">

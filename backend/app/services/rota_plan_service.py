@@ -40,6 +40,34 @@ def _count_staff_from_json(planner_data: Optional[str]) -> int:
     return len(data.get("employees") or [])
 
 
+def _span_from_planner_days(planner_data: Optional[str]) -> Optional[tuple]:
+    """Derive start/end/day_count from planner days[] when present."""
+    if not planner_data:
+        return None
+    try:
+        data = json.loads(planner_data)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    days = data.get("days") or []
+    if not isinstance(days, list) or not days:
+        return None
+    try:
+        start = date.fromisoformat(str(days[0])[:10])
+        end = date.fromisoformat(str(days[-1])[:10])
+    except ValueError:
+        return None
+    return start, end, len(days)
+
+
+def _apply_plan_span(plan: RotaPlan, start: date, day_count: int) -> None:
+    n = max(1, min(90, int(day_count)))
+    plan.start_date = start
+    plan.day_count = n
+    plan.end_date = _end_date(start, n)
+
+
 def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
     if plan.status == "published":
         shift_count = db.query(Assignment).filter(Assignment.rota_plan_id == plan.id).count()
@@ -52,12 +80,17 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
     else:
         shift_count = _count_shifts_from_json(plan.planner_data)
         staff_count = _count_staff_from_json(plan.planner_data)
+    # Prefer live planner length so list dates update when days are added/removed
+    span = _span_from_planner_days(plan.planner_data)
+    start_date = span[0] if span else plan.start_date
+    end_date = span[1] if span else plan.end_date
+    day_count = span[2] if span else plan.day_count
     return RotaPlanListItem(
         id=plan.id,
         name=plan.name,
-        start_date=plan.start_date,
-        end_date=plan.end_date,
-        day_count=plan.day_count,
+        start_date=start_date,
+        end_date=end_date,
+        day_count=day_count,
         view_mode=plan.view_mode,
         budget=float(plan.budget or 0),
         status=plan.status,
@@ -509,6 +542,18 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
         plan.budget = float(payload["budget"])
     if "planner_data" in payload:
         plan.planner_data = payload["planner_data"]
+        # Keep list date range in sync when days are added/removed in the planner
+        span = _span_from_planner_days(plan.planner_data)
+        if span:
+            _apply_plan_span(plan, span[0], span[2])
+    if "start_date" in payload and payload["start_date"] is not None:
+        start = payload["start_date"]
+        count = payload.get("day_count")
+        if count is None:
+            count = plan.day_count
+        _apply_plan_span(plan, start, count)
+    elif "day_count" in payload and payload["day_count"] is not None:
+        _apply_plan_span(plan, plan.start_date, payload["day_count"])
     if "status" in payload and payload["status"]:
         plan.status = payload["status"]
     db.commit()

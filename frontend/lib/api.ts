@@ -280,7 +280,14 @@ export const api = {
       request<RotaPlanDetail>('/rotas', { method: 'POST', body: JSON.stringify(data) }),
     update: (
       id: number,
-      data: Partial<{ name: string; view_mode: string; budget: number; planner_data: string }>
+      data: Partial<{
+        name: string;
+        view_mode: string;
+        budget: number;
+        planner_data: string;
+        day_count: number;
+        start_date: string;
+      }>
     ): Promise<RotaPlanDetail> =>
       request<RotaPlanDetail>(`/rotas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/rotas/${id}`, { method: 'DELETE' }),

@@ -302,6 +302,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       name: state.rotaName,
       view_mode: state.rotaView,
       budget: state.budget,
+      day_count: state.days.length,
+      start_date: state.days[0],
       planner_data: serializePlannerState(state),
     });
   }, [rotaPlanId, state]);
@@ -315,6 +317,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           name: state.rotaName,
           view_mode: state.rotaView,
           budget: state.budget,
+          day_count: state.days.length,
+          start_date: state.days[0],
           planner_data: serializePlannerState(state),
         })
         .catch(() => {});

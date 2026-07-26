@@ -5,6 +5,7 @@ import { ThemeProvider } from 'next-themes';
 import { ReactNode, useState } from 'react';
 import { AuthProvider } from '@/contexts/auth-context';
 import { LeadNotificationsProvider } from '@/components/lead-notifications-provider';
+import { HelpAssistant } from '@/components/help/help-assistant';
 import { Toaster } from '@/components/ui/sonner';
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -29,6 +30,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange={false}>
         <AuthProvider>
           <LeadNotificationsProvider>{children}</LeadNotificationsProvider>
+          <HelpAssistant />
           <Toaster />
         </AuthProvider>
       </ThemeProvider>

@@ -1,11 +1,20 @@
 'use client';
 
+import { createContext, useContext, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { MarketingFooter } from '@/components/marketing/marketing-footer';
-import { HELP_ARTICLES, HELP_CATEGORIES, type HelpArticle } from '@/lib/help-content';
+import {
+  HELP_ARTICLES,
+  HELP_CATEGORIES,
+  articleMatchesQuery,
+  type HelpArticle,
+} from '@/lib/help-content';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { BookOpen, ChevronRight } from 'lucide-react';
+import { BookOpen, ChevronRight, Search, X } from 'lucide-react';
+
+const HelpSearchContext = createContext('');
 
 type Props = {
   children: React.ReactNode;
@@ -13,6 +22,8 @@ type Props = {
 };
 
 export function HelpShell({ children, activeSlug }: Props) {
+  const [query, setQuery] = useState('');
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <MarketingNav active="help" />
@@ -34,11 +45,37 @@ export function HelpShell({ children, activeSlug }: Props) {
           <p className="mt-3 text-muted-foreground">
             Practical guides for ControlOps — signup, workforce ops, settings, and troubleshooting.
           </p>
+          <div className="relative mt-5 max-w-xl">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search help articles and FAQ…"
+              aria-label="Search help articles and FAQ"
+              className="h-11 pl-9 pr-9"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="size-4" />
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
-          <HelpSidebar activeSlug={activeSlug} />
-          <div className="min-w-0">{children}</div>
-        </div>
+        <HelpSearchContext.Provider value={query}>
+          <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)]">
+            <HelpSidebar activeSlug={activeSlug} />
+            <div className="min-w-0">{children}</div>
+          </div>
+        </HelpSearchContext.Provider>
       </div>
       <MarketingFooter />
     </div>
@@ -46,13 +83,16 @@ export function HelpShell({ children, activeSlug }: Props) {
 }
 
 function HelpSidebar({ activeSlug }: { activeSlug?: string }) {
+  const query = useContext(HelpSearchContext);
+  const hasQuery = Boolean(query.trim());
+
   return (
     <aside className="lg:sticky lg:top-24 lg:self-start space-y-6">
       <nav aria-label="Help topics" className="rounded-xl border bg-card p-4 space-y-5">
         {HELP_CATEGORIES.map((cat) => {
-          const articles = HELP_ARTICLES.filter((a) => a.category === cat.id).sort(
-            (a, b) => a.order - b.order
-          );
+          const articles = HELP_ARTICLES.filter(
+            (a) => a.category === cat.id && articleMatchesQuery(a, query)
+          ).sort((a, b) => a.order - b.order);
           if (!articles.length) return null;
           return (
             <div key={cat.id}>
@@ -85,6 +125,10 @@ function HelpSidebar({ activeSlug }: { activeSlug?: string }) {
             </div>
           );
         })}
+        {hasQuery &&
+        !HELP_ARTICLES.some((a) => articleMatchesQuery(a, query)) ? (
+          <p className="text-sm text-muted-foreground px-1">No matching topics.</p>
+        ) : null}
       </nav>
       <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
         <p className="font-medium text-foreground">Need a walkthrough?</p>
@@ -103,25 +147,51 @@ function HelpSidebar({ activeSlug }: { activeSlug?: string }) {
 }
 
 export function HelpHubGrid() {
+  const query = useContext(HelpSearchContext);
+  const hasQuery = Boolean(query.trim());
+
+  const sections = useMemo(
+    () =>
+      HELP_CATEGORIES.map((cat) => ({
+        cat,
+        articles: HELP_ARTICLES.filter(
+          (a) => a.category === cat.id && articleMatchesQuery(a, query)
+        ).sort((a, b) => a.order - b.order),
+      })).filter((s) => s.articles.length > 0),
+    [query]
+  );
+
+  if (hasQuery && sections.length === 0) {
+    return (
+      <div className="rounded-xl border bg-card p-8 text-center">
+        <p className="font-medium">No help articles match “{query.trim()}”</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Try a different keyword, or browse topics in the sidebar.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-10">
-      {HELP_CATEGORIES.map((cat) => {
-        const articles = HELP_ARTICLES.filter((a) => a.category === cat.id).sort(
-          (a, b) => a.order - b.order
-        );
-        if (!articles.length) return null;
-        return (
-          <section key={cat.id}>
-            <h2 className="text-xl font-semibold tracking-tight">{cat.title}</h2>
-            <p className="mt-1 text-sm text-muted-foreground mb-4">{cat.description}</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {articles.map((a) => (
-                <HelpArticleCard key={a.slug} article={a} />
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {hasQuery ? (
+        <p className="text-sm text-muted-foreground -mt-2">
+          Showing {sections.reduce((n, s) => n + s.articles.length, 0)} result
+          {sections.reduce((n, s) => n + s.articles.length, 0) === 1 ? '' : 's'} for “
+          {query.trim()}”
+        </p>
+      ) : null}
+      {sections.map(({ cat, articles }) => (
+        <section key={cat.id}>
+          <h2 className="text-xl font-semibold tracking-tight">{cat.title}</h2>
+          <p className="mt-1 text-sm text-muted-foreground mb-4">{cat.description}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {articles.map((a) => (
+              <HelpArticleCard key={a.slug} article={a} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

@@ -527,3 +527,38 @@ export function getAllHelpSlugs(): string[] {
 export function getHelpCategory(id: HelpCategoryId): HelpCategory | undefined {
   return HELP_CATEGORIES.find((c) => c.id === id);
 }
+
+function blockSearchText(block: HelpBlock): string {
+  switch (block.type) {
+    case 'paragraph':
+    case 'heading':
+    case 'tip':
+      return block.text;
+    case 'steps':
+    case 'bullets':
+      return block.items.join(' ');
+    case 'links':
+      return block.items.map((i) => i.label).join(' ');
+    default:
+      return '';
+  }
+}
+
+export function getArticleSearchText(article: HelpArticle): string {
+  const category = getHelpCategory(article.category);
+  return [
+    article.title,
+    article.description,
+    category?.title ?? '',
+    category?.description ?? '',
+    ...article.body.map(blockSearchText),
+  ]
+    .join(' ')
+    .toLowerCase();
+}
+
+export function articleMatchesQuery(article: HelpArticle, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return getArticleSearchText(article).includes(q);
+}

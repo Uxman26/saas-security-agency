@@ -1,0 +1,2161 @@
+{
+  "info": {
+    "_postman_id": "a8f3c2e1-mobile-controlops-2026",
+    "name": "ControlOps Mobile \u2014 Staff / Client / Admin",
+    "description": "Mobile app API collection for Staff, Client, and Admin modules.\\n\\n**Base URL:** `{{baseUrl}}` (default `https://controlops.co.uk/api`)\\n\\n**Auth:** Bearer JWT from Auth \u2192 Login (token auto-saved).\\n\\nStatus tags:\\n- *(live)* \u2014 implemented on current backend\\n- *(planned)* \u2014 required by mobile spec; contract for app/backend\\n\\n### Permission codes\\n| Code | Used by |\\n|------|--------|\\n| `portal.sites.read` | Staff, Client |\\n| `portal.rota.current` | Staff, Client |\\n| `portal.rota.upcoming` | Staff |\\n| `portal.rota.previous` | Staff |\\n| `portal.hours.read` | Staff, Client |\\n| `attend.read` / `attend.write` | Staff clock / attendance |\\n| `assign.read` / `assign.write` | OT / early finish |\\n| `staff_req.read` / `staff_req.write` | Client staff requests |\\n| `staff_req.review` | Admin/Controller approve/decline |\\n| `inv.read` | Client invoices |\\n| `portal.incident.write` *(planned)* | Staff/Client incidents |\\n| `portal.attendance.clock` *(planned)* | GPS clock in/out |\\n| `portal.invoice.query` *(planned)* | Client invoice comments |\\n| `staff_req.standdown` *(planned)* | Client cancel before approval |\\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://controlops.co.uk/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "staff_email",
+      "value": "staff@example.com",
+      "type": "string"
+    },
+    {
+      "key": "client_email",
+      "value": "client@example.com",
+      "type": "string"
+    },
+    {
+      "key": "admin_email",
+      "value": "admin@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "ChangeMe123!",
+      "type": "string"
+    },
+    {
+      "key": "assignment_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "guard_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "site_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "client_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "request_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "invoice_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "incident_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "reset_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "shift_date",
+      "value": "2026-07-29",
+      "type": "string"
+    },
+    {
+      "key": "shift_start",
+      "value": "17:00",
+      "type": "string"
+    },
+    {
+      "key": "site_name",
+      "value": "The Hive",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Auth (shared)",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "raw": "{{baseUrl}}/auth/login",
+              "query": []
+            },
+            "description": "Returns JWT. Use for Staff / Client / Admin accounts.\n\n**Permission:** public\n\n*(live)*",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staff_email}}\",\n  \"password\": \"{{password}}\",\n  \"remember_me\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  pm.collectionVariables.set('token', j.access_token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (Client account)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "raw": "{{baseUrl}}/auth/login",
+              "query": []
+            },
+            "description": "Same endpoint; use client credentials. *(live)*",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{client_email}}\",\n  \"password\": \"{{password}}\",\n  \"remember_me\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Admin account)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ],
+              "raw": "{{baseUrl}}/auth/login",
+              "query": []
+            },
+            "description": "Same endpoint; use company_admin / manager credentials. *(live)*",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{password}}\",\n  \"remember_me\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "forgot-password"
+              ],
+              "raw": "{{baseUrl}}/auth/forgot-password",
+              "query": []
+            },
+            "description": "Sends reset link if account exists. *(live)*",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staff_email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "reset-password"
+              ],
+              "raw": "{{baseUrl}}/auth/reset-password",
+              "query": []
+            },
+            "description": "Complete password reset with token from email. *(live)*",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{reset_token}}\",\n  \"new_password\": \"NewSecurePass1!\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Me / Session Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ],
+              "raw": "{{baseUrl}}/auth/me",
+              "query": []
+            },
+            "description": "Current user, role, permissions, company. Use after login. *(live)*"
+          },
+          "response": []
+        }
+      ],
+      "description": "Shared authentication for Staff, Client, and Admin mobile apps."
+    },
+    {
+      "name": "1. Staff Module",
+      "item": [
+        {
+          "name": "1.1 Profile",
+          "item": [
+            {
+              "name": "Get session (profile basics)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "me"
+                  ],
+                  "raw": "{{baseUrl}}/auth/me",
+                  "query": []
+                },
+                "description": "Email, name, role, permissions, company. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Get Guard photo *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "guards",
+                    "{{guard_id}}",
+                    "photo"
+                  ],
+                  "raw": "{{baseUrl}}/guards/{{guard_id}}/photo",
+                  "query": []
+                },
+                "description": "Profile photo binary. Requires guards permissions."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Guard record *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "guards",
+                    "{{guard_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/guards/{{guard_id}}",
+                  "query": []
+                },
+                "description": "Full name, designation, SIA number, expiry, email, phone, address, photo. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Staff Profile *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "me",
+                    "profile"
+                  ],
+                  "raw": "{{baseUrl}}/portal/me/profile",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Aggregated staff profile for mobile (photo, full_name, designation, sia_badge_number, sia_expiry, email, phone, address).\\nPermission: `portal.profile.read`"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "1.2 Attendance (Clock In/Out)",
+          "item": [
+            {
+              "name": "Clock In / Book On *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "attendance",
+                    "book"
+                  ],
+                  "raw": "{{baseUrl}}/attendance/book",
+                  "query": []
+                },
+                "description": "Clock in against assignment. Permission: `attend.write`.\\n\\nCurrent API has no GPS \u2014 see planned GPS clock endpoints.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assignment_id\": 1,\n  \"book_off\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Clock Out / Book Off *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "attendance",
+                    "book"
+                  ],
+                  "raw": "{{baseUrl}}/attendance/book",
+                  "query": []
+                },
+                "description": "Clock out. Permission: `attend.write`. *(live)*",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assignment_id\": 1,\n  \"book_off\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Upsert attendance by shift *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "attendance",
+                    "by-shift"
+                  ],
+                  "raw": "{{baseUrl}}/attendance/by-shift",
+                  "query": []
+                },
+                "description": "Mark attendance by shift identity. Permission: `attend.write`. *(live)*",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guard_id\": 1,\n  \"date\": \"2026-07-29\",\n  \"shift_start\": \"17:00\",\n  \"site_name\": \"The Hive\",\n  \"status\": \"on_time\",\n  \"note\": \"\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List attendance *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "attendance"
+                  ],
+                  "raw": "{{baseUrl}}/attendance?guard_id={{guard_id}}",
+                  "query": [
+                    {
+                      "key": "guard_id",
+                      "value": "{{guard_id}}",
+                      "description": "Filter by guard"
+                    }
+                  ]
+                },
+                "description": "Permission: `attend.read`. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Clock In with GPS *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "attendance",
+                    "clock-in"
+                  ],
+                  "raw": "{{baseUrl}}/portal/attendance/clock-in",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Clock in + store GPS.\\nPermission: `portal.attendance.clock`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assignment_id\": 1,\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 12.5,\n  \"captured_at\": \"2026-07-28T17:00:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Clock Out with GPS *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "attendance",
+                    "clock-out"
+                  ],
+                  "raw": "{{baseUrl}}/portal/attendance/clock-out",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Clock out + store GPS.\\nPermission: `portal.attendance.clock`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assignment_id\": 1,\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 10.0,\n  \"captured_at\": \"2026-07-28T22:00:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "1.3 Working Hours",
+          "item": [
+            {
+              "name": "Working hours summary *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "hours"
+                  ],
+                  "raw": "{{baseUrl}}/portal/hours?period=week&start_date=&end_date=",
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "week",
+                      "description": "week | month | custom"
+                    },
+                    {
+                      "key": "start_date",
+                      "value": "",
+                      "description": "YYYY-MM-DD optional"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "",
+                      "description": "YYYY-MM-DD optional"
+                    }
+                  ]
+                },
+                "description": "Total hours for period. Permission: `portal.hours.read`. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Overtime report *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "shift-overtime"
+                  ],
+                  "raw": "{{baseUrl}}/reports/shift-overtime?start_date=2026-07-01&end_date=2026-07-31&guard_id={{guard_id}}",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    },
+                    {
+                      "key": "guard_id",
+                      "value": "{{guard_id}}",
+                      "description": "optional"
+                    }
+                  ]
+                },
+                "description": "Permission: `rep.read`. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Early finish report *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "reports",
+                    "shift-early-finish"
+                  ],
+                  "raw": "{{baseUrl}}/reports/shift-early-finish?start_date=2026-07-01&end_date=2026-07-31&guard_id={{guard_id}}",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    },
+                    {
+                      "key": "guard_id",
+                      "value": "{{guard_id}}"
+                    }
+                  ]
+                },
+                "description": "Permission: `rep.read`. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Staff hours detail *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "hours",
+                    "detail"
+                  ],
+                  "raw": "{{baseUrl}}/portal/hours/detail?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "**PLANNED** \u2014 total_hours, overtime_hours, early_finish counts.\\nPermission: `portal.hours.read`"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "1.4 Rota & Shifts",
+          "item": [
+            {
+              "name": "Current rota *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "rota",
+                    "current"
+                  ],
+                  "raw": "{{baseUrl}}/portal/rota/current",
+                  "query": []
+                },
+                "description": "Permission: `portal.rota.current`"
+              },
+              "response": []
+            },
+            {
+              "name": "Upcoming shifts *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "rota",
+                    "upcoming"
+                  ],
+                  "raw": "{{baseUrl}}/portal/rota/upcoming?end_date=2026-08-31",
+                  "query": [
+                    {
+                      "key": "end_date",
+                      "value": "2026-08-31",
+                      "description": "optional"
+                    }
+                  ]
+                },
+                "description": "Permission: `portal.rota.upcoming`"
+              },
+              "response": []
+            },
+            {
+              "name": "Previous shifts *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "rota",
+                    "previous"
+                  ],
+                  "raw": "{{baseUrl}}/portal/rota/previous?start_date=2026-06-01",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-06-01",
+                      "description": "optional"
+                    }
+                  ]
+                },
+                "description": "Permission: `portal.rota.previous`"
+              },
+              "response": []
+            },
+            {
+              "name": "Portal sites *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "sites"
+                  ],
+                  "raw": "{{baseUrl}}/portal/sites",
+                  "query": []
+                },
+                "description": "Permission: `portal.sites.read`"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "1.5 Shift Management",
+          "item": [
+            {
+              "name": "Request overtime by assignment *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "assignments",
+                    "{{assignment_id}}",
+                    "overtime"
+                  ],
+                  "raw": "{{baseUrl}}/assignments/{{assignment_id}}/overtime",
+                  "query": []
+                },
+                "description": "Permission: `assign.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"new_end\": \"23:00\",\n  \"reason\": \"Client requested cover until close\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Request overtime by shift *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "assignments",
+                    "by-shift",
+                    "overtime"
+                  ],
+                  "raw": "{{baseUrl}}/assignments/by-shift/overtime",
+                  "query": []
+                },
+                "description": "Permission: `assign.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guard_id\": 1,\n  \"date\": \"2026-07-29\",\n  \"shift_start\": \"17:00\",\n  \"site_name\": \"The Hive\",\n  \"new_end\": \"23:30\",\n  \"reason\": \"Event overrun\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Mark finished early by assignment *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "assignments",
+                    "{{assignment_id}}",
+                    "early-finish"
+                  ],
+                  "raw": "{{baseUrl}}/assignments/{{assignment_id}}/early-finish",
+                  "query": []
+                },
+                "description": "Permission: `assign.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"actual_end\": \"20:00\",\n  \"reason\": \"Site closed early\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Mark finished early by shift *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "assignments",
+                    "by-shift",
+                    "early-finish"
+                  ],
+                  "raw": "{{baseUrl}}/assignments/by-shift/early-finish",
+                  "query": []
+                },
+                "description": "Permission: `assign.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"guard_id\": 1,\n  \"date\": \"2026-07-29\",\n  \"shift_start\": \"17:00\",\n  \"site_name\": \"The Hive\",\n  \"actual_end\": \"20:15\",\n  \"reason\": \"Released by site manager\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "My OT / early-finish counts *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "shift-adjustments",
+                    "summary"
+                  ],
+                  "raw": "{{baseUrl}}/portal/shift-adjustments/summary",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 counts for logged-in user.\\nPermission: `portal.hours.read`"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "1.6 Incident Reporting",
+          "item": [
+            {
+              "name": "Raise incident *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "incidents"
+                  ],
+                  "raw": "{{baseUrl}}/portal/incidents",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Auto location + datetime; notes required.\\nPermission: `portal.incident.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Suspicious activity near main gate\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 8.0,\n  \"occurred_at\": \"2026-07-28T18:45:00Z\",\n  \"site_id\": 1,\n  \"assignment_id\": 1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Raise incident with images *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "incidents"
+                  ],
+                  "raw": "{{baseUrl}}/portal/incidents",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 multipart with image attachments.\\nPermission: `portal.incident.write`",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "notes",
+                      "value": "Broken fence panel",
+                      "type": "text"
+                    },
+                    {
+                      "key": "latitude",
+                      "value": "51.5074",
+                      "type": "text"
+                    },
+                    {
+                      "key": "longitude",
+                      "value": "-0.1278",
+                      "type": "text"
+                    },
+                    {
+                      "key": "accuracy_m",
+                      "value": "5",
+                      "type": "text"
+                    },
+                    {
+                      "key": "occurred_at",
+                      "value": "2026-07-28T19:00:00Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "site_id",
+                      "value": "{{site_id}}",
+                      "type": "text"
+                    },
+                    {
+                      "key": "images",
+                      "type": "file",
+                      "src": [],
+                      "description": "One or more image files"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List my incidents *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "incidents"
+                  ],
+                  "raw": "{{baseUrl}}/portal/incidents",
+                  "query": []
+                },
+                "description": "**PLANNED**"
+              },
+              "response": []
+            },
+            {
+              "name": "Get incident *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "incidents",
+                    "{{incident_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/portal/incidents/{{incident_id}}",
+                  "query": []
+                },
+                "description": "**PLANNED**"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        }
+      ],
+      "description": "Staff mobile app endpoints."
+    },
+    {
+      "name": "2. Client Module",
+      "item": [
+        {
+          "name": "2.1 Profile",
+          "item": [
+            {
+              "name": "Get session *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "me"
+                  ],
+                  "raw": "{{baseUrl}}/auth/me",
+                  "query": []
+                },
+                "description": "Client user session + permissions."
+              },
+              "response": []
+            },
+            {
+              "name": "Get client record *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "clients",
+                    "{{client_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/clients/{{client_id}}",
+                  "query": []
+                },
+                "description": "Company/client name, email, phone, address. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Client Profile *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "me",
+                    "client-profile"
+                  ],
+                  "raw": "{{baseUrl}}/portal/me/client-profile",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 company_name, email, phone, address.\\nPermission: `portal.profile.read`"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "2.2 Staff Request",
+          "item": [
+            {
+              "name": "Create staff request *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "staff-requests"
+                  ],
+                  "raw": "{{baseUrl}}/staff-requests",
+                  "query": []
+                },
+                "description": "Permission: `staff_req.write`. *(live)*",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"client_id\": 1,\n  \"site_id\": 1,\n  \"shift_date\": \"2026-07-29\",\n  \"shift_start\": \"08:00\",\n  \"shift_end\": \"16:00\",\n  \"break_minutes\": 30,\n  \"staff_count\": 2,\n  \"client_notes\": \"Need 2 static guards for loading bay\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create staff request bulk *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "staff-requests",
+                    "bulk"
+                  ],
+                  "raw": "{{baseUrl}}/staff-requests/bulk",
+                  "query": []
+                },
+                "description": "Permission: `staff_req.write`. *(live)*",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"client_id\": 1,\n  \"site_id\": 1,\n  \"shift_start\": \"08:00\",\n  \"shift_end\": \"16:00\",\n  \"break_minutes\": 30,\n  \"staff_count\": 2,\n  \"client_notes\": \"Multi-day cover\",\n  \"shifts\": [\n    {\n      \"shift_date\": \"2026-07-29\"\n    },\n    {\n      \"shift_date\": \"2026-07-30\",\n      \"staff_count\": 3\n    },\n    {\n      \"shift_date\": \"2026-07-31\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create staff request (extended mobile) *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "staff-requests"
+                  ],
+                  "raw": "{{baseUrl}}/portal/staff-requests",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Matches mobile staff-request form.\\nsite_type: Construction | Corporate | Hotels | Hospitals | Event | Other\\nstaff_category: Static Guard | K9 Unit/Dog Handler | Housekeeping | Cleaners | Porters | Frontdesk/Receptionist | Mobile Patrol | Other\\npriority: urgent | normal\\nPermission: `staff_req.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staff_count\": 3,\n  \"site_type\": \"Construction\",\n  \"staff_category\": \"Static Guard\",\n  \"shift_type\": \"adhoc\",\n  \"days\": [\n    \"2026-07-29\",\n    \"2026-07-30\"\n  ],\n  \"shift_start\": \"08:00\",\n  \"shift_end\": \"18:00\",\n  \"location\": \"Canary Wharf site entrance\",\n  \"postcode\": \"E14 5AB\",\n  \"site_id\": 1,\n  \"notes\": \"High-vis required\",\n  \"priority\": \"urgent\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List my requests *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "staff-requests"
+                  ],
+                  "raw": "{{baseUrl}}/staff-requests?status=",
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "",
+                      "description": "optional status filter"
+                    }
+                  ]
+                },
+                "description": "Permission: `staff_req.read`. Track: requested/processing/approved/declined (map to live statuses). *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Get request *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "staff-requests",
+                    "{{request_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/staff-requests/{{request_id}}",
+                  "query": []
+                },
+                "description": "Includes reviewer notes when approved/declined. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Stand Down / Cancel *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "staff-requests",
+                    "{{request_id}}",
+                    "stand-down"
+                  ],
+                  "raw": "{{baseUrl}}/staff-requests/{{request_id}}/stand-down",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Cancel before approval only.\\nPermission: `staff_req.standdown`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"No longer required\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "2.3 Working Hours & Rota",
+          "item": [
+            {
+              "name": "Working hours *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "hours"
+                  ],
+                  "raw": "{{baseUrl}}/portal/hours?period=month&start_date=&end_date=",
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "month"
+                    },
+                    {
+                      "key": "start_date",
+                      "value": ""
+                    },
+                    {
+                      "key": "end_date",
+                      "value": ""
+                    }
+                  ]
+                },
+                "description": "Permission: `portal.hours.read`"
+              },
+              "response": []
+            },
+            {
+              "name": "Detailed hours breakdown *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "hours",
+                    "detail"
+                  ],
+                  "raw": "{{baseUrl}}/portal/hours/detail?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "**PLANNED**"
+              },
+              "response": []
+            },
+            {
+              "name": "Current shifts *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "rota",
+                    "current"
+                  ],
+                  "raw": "{{baseUrl}}/portal/rota/current",
+                  "query": []
+                },
+                "description": "Permission: `portal.rota.current`"
+              },
+              "response": []
+            },
+            {
+              "name": "Upcoming shifts *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "rota",
+                    "upcoming"
+                  ],
+                  "raw": "{{baseUrl}}/portal/rota/upcoming",
+                  "query": []
+                },
+                "description": "Grant client role `portal.rota.upcoming` if needed"
+              },
+              "response": []
+            },
+            {
+              "name": "Previous shifts *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "rota",
+                    "previous"
+                  ],
+                  "raw": "{{baseUrl}}/portal/rota/previous",
+                  "query": []
+                },
+                "description": "Grant client role `portal.rota.previous` if needed"
+              },
+              "response": []
+            },
+            {
+              "name": "Portal sites *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "sites"
+                  ],
+                  "raw": "{{baseUrl}}/portal/sites",
+                  "query": []
+                },
+                "description": "Permission: `portal.sites.read`"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "2.4 Invoices",
+          "item": [
+            {
+              "name": "List invoices *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "invoices"
+                  ],
+                  "raw": "{{baseUrl}}/invoices?client_id={{client_id}}&status=&search=",
+                  "query": [
+                    {
+                      "key": "client_id",
+                      "value": "{{client_id}}",
+                      "description": "scope to client"
+                    },
+                    {
+                      "key": "status",
+                      "value": "",
+                      "description": "optional"
+                    },
+                    {
+                      "key": "search",
+                      "value": "",
+                      "description": "optional"
+                    }
+                  ]
+                },
+                "description": "Permission: `inv.read`"
+              },
+              "response": []
+            },
+            {
+              "name": "Invoice breakdown *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "invoices",
+                    "{{invoice_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/invoices/{{invoice_id}}",
+                  "query": []
+                },
+                "description": "Full invoice + lines. *(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Invoice PDF *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "invoices",
+                    "{{invoice_id}}",
+                    "pdf"
+                  ],
+                  "raw": "{{baseUrl}}/invoices/{{invoice_id}}/pdf",
+                  "query": []
+                },
+                "description": "*(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Invoice audit *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "invoices",
+                    "{{invoice_id}}",
+                    "audit"
+                  ],
+                  "raw": "{{baseUrl}}/invoices/{{invoice_id}}/audit",
+                  "query": []
+                },
+                "description": "*(live)*"
+              },
+              "response": []
+            },
+            {
+              "name": "Add invoice query / comment *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "invoices",
+                    "{{invoice_id}}",
+                    "queries"
+                  ],
+                  "raw": "{{baseUrl}}/portal/invoices/{{invoice_id}}/queries",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Permission: `portal.invoice.query`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"comment\": \"Please clarify overtime line for 28 Jul\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List invoice queries *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "invoices",
+                    "{{invoice_id}}",
+                    "queries"
+                  ],
+                  "raw": "{{baseUrl}}/portal/invoices/{{invoice_id}}/queries",
+                  "query": []
+                },
+                "description": "**PLANNED**"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "2.5 Shift Management",
+          "item": [
+            {
+              "name": "Request overtime *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "assignments",
+                    "{{assignment_id}}",
+                    "overtime"
+                  ],
+                  "raw": "{{baseUrl}}/assignments/{{assignment_id}}/overtime",
+                  "query": []
+                },
+                "description": "Permission: `assign.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"new_end\": \"00:00\",\n  \"reason\": \"Client OT request\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Mark early finish *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "assignments",
+                    "{{assignment_id}}",
+                    "early-finish"
+                  ],
+                  "raw": "{{baseUrl}}/assignments/{{assignment_id}}/early-finish",
+                  "query": []
+                },
+                "description": "Permission: `assign.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"actual_end\": \"19:00\",\n  \"reason\": \"Client released staff\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "OT / early-finish counts *(planned)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "shift-adjustments",
+                    "summary"
+                  ],
+                  "raw": "{{baseUrl}}/portal/shift-adjustments/summary",
+                  "query": []
+                },
+                "description": "**PLANNED**"
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        },
+        {
+          "name": "2.6 Incident Reporting",
+          "item": [
+            {
+              "name": "Raise incident *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "incidents"
+                  ],
+                  "raw": "{{baseUrl}}/portal/incidents",
+                  "query": []
+                },
+                "description": "**PLANNED** \u2014 Permission: `portal.incident.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Theft reported at reception\",\n  \"latitude\": 51.515,\n  \"longitude\": -0.09,\n  \"accuracy_m\": 15,\n  \"occurred_at\": \"2026-07-28T21:10:00Z\",\n  \"site_id\": 1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Raise incident with images *(planned)*",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "incidents"
+                  ],
+                  "raw": "{{baseUrl}}/portal/incidents",
+                  "query": []
+                },
+                "description": "**PLANNED**",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "notes",
+                      "value": "Incident notes",
+                      "type": "text"
+                    },
+                    {
+                      "key": "latitude",
+                      "value": "51.515",
+                      "type": "text"
+                    },
+                    {
+                      "key": "longitude",
+                      "value": "-0.09",
+                      "type": "text"
+                    },
+                    {
+                      "key": "occurred_at",
+                      "value": "2026-07-28T21:10:00Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "images",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ],
+          "description": ""
+        }
+      ],
+      "description": "Client mobile app endpoints."
+    },
+    {
+      "name": "3. Admin / Controller",
+      "item": [
+        {
+          "name": "Approve staff request *(live)*",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "staff-requests",
+                "{{request_id}}",
+                "approve"
+              ],
+              "raw": "{{baseUrl}}/staff-requests/{{request_id}}/approve",
+              "query": []
+            },
+            "description": "On approve, shift is added to staff rota.\\nPermission: `staff_req.review`",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Approved \\u2014 added to rota\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Decline staff request *(live)*",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "staff-requests",
+                "{{request_id}}",
+                "reject"
+              ],
+              "raw": "{{baseUrl}}/staff-requests/{{request_id}}/reject",
+              "query": []
+            },
+            "description": "Permission: `staff_req.review`",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Insufficient lead time\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List all staff requests *(live)*",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "staff-requests"
+              ],
+              "raw": "{{baseUrl}}/staff-requests?status=",
+              "query": [
+                {
+                  "key": "status",
+                  "value": ""
+                }
+              ]
+            },
+            "description": "Permission: `staff_req.read`"
+          },
+          "response": []
+        },
+        {
+          "name": "List roles *(live)*",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "roles"
+              ],
+              "raw": "{{baseUrl}}/roles",
+              "query": []
+            },
+            "description": "Admin \u2014 manage role permissions."
+          },
+          "response": []
+        },
+        {
+          "name": "List company users *(live)*",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "raw": "{{baseUrl}}/users",
+              "query": []
+            },
+            "description": "Admin \u2014 assign staff/client roles."
+          },
+          "response": []
+        },
+        {
+          "name": "List incidents (admin) *(planned)*",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "incidents"
+              ],
+              "raw": "{{baseUrl}}/admin/incidents?status=open",
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open"
+                }
+              ]
+            },
+            "description": "**PLANNED**"
+          },
+          "response": []
+        },
+        {
+          "name": "Attendance GPS audit *(planned)*",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "attendance",
+                "locations"
+              ],
+              "raw": "{{baseUrl}}/admin/attendance/locations?start_date=2026-07-01&end_date=2026-07-31&guard_id={{guard_id}}",
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2026-07-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2026-07-31"
+                },
+                {
+                  "key": "guard_id",
+                  "value": "{{guard_id}}"
+                }
+              ]
+            },
+            "description": "**PLANNED** \u2014 verify stored GPS clock events."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin has full system access. Controllers use staff_req.review. Other roles only get granted permissions."
+    },
+    {
+      "name": "4. Permissions & Roles",
+      "item": [
+        {
+          "name": "Permission matrix (via /auth/me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ],
+              "raw": "{{baseUrl}}/auth/me",
+              "query": []
+            },
+            "description": "Inspect `permissions` after login.\\n\\n**Existing:** portal.sites.read, portal.rota.*, portal.hours.read, staff_req.*, attend.*, assign.*, inv.read\\n\\n**Planned to create:** portal.profile.read, portal.attendance.clock, portal.incident.read/write, portal.invoice.query, staff_req.standdown"
+          },
+          "response": []
+        }
+      ],
+      "description": ""
+    }
+  ]
+}

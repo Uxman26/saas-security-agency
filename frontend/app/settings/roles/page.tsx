@@ -58,6 +58,7 @@ const MODULE_KEYS = [
   'reports',
   'settings',
   'leads',
+  'portal',
 ] as const;
 
 const MODULE_LABELS: Record<string, string> = {
@@ -70,6 +71,7 @@ const MODULE_LABELS: Record<string, string> = {
   reports: 'Reports',
   settings: 'Settings',
   leads: 'Leads',
+  portal: 'Self-service portal (view= sites/current/hours, create= upcoming, edit= previous)',
 };
 
 const ACTIONS = ['view', 'create', 'edit', 'delete'] as const;

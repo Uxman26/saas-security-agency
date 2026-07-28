@@ -58,6 +58,7 @@ class UserResponse(UserBase):
     role_id: Optional[int] = None
     company_id: Optional[int] = None
     client_id: Optional[int] = None
+    guard_id: Optional[int] = None
     is_active: bool
     email_verified: bool = False
     auth_provider: Optional[str] = "local"
@@ -495,6 +496,8 @@ class SiteBase(BaseModel):
     contact_phone: Optional[str] = None
     contract_start_date: Optional[date] = None
     contract_end_date: Optional[date] = None
+    site_type: int = Field(ge=1, le=2, description="1=Regular, 2=Ad-hoc")
+    reference: Optional[str] = Field(default=None, max_length=200)
     default_hourly_rate: Optional[float] = None
     staff_hourly_rate: Optional[float] = None
     main_contractor_id: Optional[int] = None
@@ -1216,6 +1219,7 @@ class CompanyUserCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     role_id: int
     client_id: Optional[int] = None
+    guard_id: Optional[int] = None
 
     @field_validator("password")
     @classmethod
@@ -1228,6 +1232,8 @@ class CompanyUserUpdate(BaseModel):
     full_name: Optional[str] = Field(default=None, min_length=2, max_length=100)
     password: Optional[str] = None
     role_id: Optional[int] = None
+    client_id: Optional[int] = None
+    guard_id: Optional[int] = None
 
     @field_validator("password")
     @classmethod
@@ -1278,6 +1284,14 @@ class StaffRequestBulkCreate(BaseModel):
 
 class StaffRequestReview(BaseModel):
     comment: Optional[str] = None
+
+
+class PortalHoursResponse(BaseModel):
+    period: str
+    start_date: date
+    end_date: date
+    total_hours: float
+    shifts_count: int
 
 
 class StaffRequestResponse(BaseModel):

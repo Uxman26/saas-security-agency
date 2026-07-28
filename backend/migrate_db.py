@@ -345,6 +345,11 @@ def run():
             cur.execute("ALTER TABLE users ADD COLUMN client_id INTEGER REFERENCES clients(id)")
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "users") and not column_exists(cur, "users", "guard_id"):
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN guard_id INTEGER REFERENCES guards(id)")
+        except sqlite3.OperationalError:
+            pass
     if table_exists(cur, "users") and not column_exists(cur, "users", "email_verified"):
         try:
             cur.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
@@ -741,6 +746,8 @@ def run():
         ("sites", "contract_start_date", "TEXT"),
         ("sites", "contract_end_date", "TEXT"),
         ("sites", "staff_hourly_rate", "REAL"),
+        ("sites", "site_type", "INTEGER NOT NULL DEFAULT 1"),
+        ("sites", "reference", "TEXT"),
         ("clients", "postcode", "TEXT"),
         ("contractors", "postcode", "TEXT"),
         ("main_contractors", "postcode", "TEXT"),
@@ -868,14 +875,19 @@ def run():
         from app.database import SessionLocal
         from app.services.role_service import backfill_user_roles
         from app.models import Role
-        from app.rbac_matrix import default_matrix_client_portal, default_matrix_supervisor, parse_matrix_json, wrap_matrix, matrix_json_dumps
+        from app.rbac_matrix import default_matrix_client_portal, default_matrix_staff_portal, default_matrix_supervisor, parse_matrix_json, wrap_matrix, matrix_json_dumps
 
         db = SessionLocal()
         try:
             backfill_user_roles(db)
+            from app.services.role_service import ensure_roles_for_all_companies
+
+            ensure_roles_for_all_companies(db)
             for role in db.query(Role).all():
                 if role.slug == "client":
                     role.permissions_json = wrap_matrix(default_matrix_client_portal())
+                elif role.slug == "staff":
+                    role.permissions_json = wrap_matrix(default_matrix_staff_portal())
                 elif role.slug == "supervisor":
                     m = parse_matrix_json(role.permissions_json) or default_matrix_supervisor()
                     m["staff_requests"] = {"view": True, "create": False, "edit": True, "delete": False}

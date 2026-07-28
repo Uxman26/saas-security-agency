@@ -210,6 +210,8 @@ def create_staff_request(db: Session, user: User, data: StaffRequestCreate) -> S
     )
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    if site.client_id != client_id:
+        raise HTTPException(status_code=403, detail="Site is not assigned to your client account")
     notes = (data.client_notes or "").strip() or None
     req = _create_staff_request_row(
         db,
@@ -238,6 +240,8 @@ def create_staff_requests_bulk(db: Session, user: User, data: StaffRequestBulkCr
     )
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    if site.client_id != client_id:
+        raise HTTPException(status_code=403, detail="Site is not assigned to your client account")
     notes = (data.client_notes or "").strip() or None
     ids: list[int] = []
     for item in data.shifts:

@@ -60,6 +60,11 @@ from app.rbac import (
     PERM_LEADS_ASSIGN,
     PERM_LEADS_EXPORT,
     PERM_LEADS_REPORTS,
+    PERM_PORTAL_SITES,
+    PERM_PORTAL_ROTA_CURRENT,
+    PERM_PORTAL_ROTA_UPCOMING,
+    PERM_PORTAL_ROTA_PREVIOUS,
+    PERM_PORTAL_HOURS,
 )
 
 MODULE_KEYS = (
@@ -75,6 +80,7 @@ MODULE_KEYS = (
     "contractor_links",
     "staff_requests",
     "leads",
+    "portal",
 )
 
 
@@ -196,6 +202,13 @@ def matrix_to_codes(m: Optional[Dict[str, Any]]) -> FrozenSet[str]:
                 out.update([PERM_LEADS_WRITE, PERM_LEADS_ASSIGN])
             if d:
                 out.add(PERM_LEADS_DELETE)
+        elif mod == "portal":
+            if v:
+                out.update([PERM_PORTAL_SITES, PERM_PORTAL_ROTA_CURRENT, PERM_PORTAL_HOURS])
+            if c:
+                out.add(PERM_PORTAL_ROTA_UPCOMING)
+            if e:
+                out.add(PERM_PORTAL_ROTA_PREVIOUS)
     return frozenset(out)
 
 
@@ -244,20 +257,16 @@ def default_matrix_guard() -> Dict[str, Any]:
 
 
 def default_matrix_client_portal() -> Dict[str, Any]:
-    return {
-        "clients": {"view": True, "create": False, "edit": False, "delete": False},
-        "sites": {"view": True, "create": False, "edit": False, "delete": False},
-        "guards": {"view": False, "create": False, "edit": False, "delete": False},
-        "rota": {"view": True, "create": False, "edit": False, "delete": False},
-        "invoices": {"view": True, "create": False, "edit": False, "delete": False},
-        "contractors": {"view": False, "create": False, "edit": False, "delete": False},
-        "reports": {"view": False, "create": False, "edit": False, "delete": False},
-        "settings": {"view": False, "create": False, "edit": False, "delete": False},
-        "contractor_registry": {"view": False, "create": False, "edit": False, "delete": False},
-        "contractor_links": {"view": False, "create": False, "edit": False, "delete": False},
-        "staff_requests": {"view": True, "create": True, "edit": False, "delete": False},
-        "leads": {"view": False, "create": False, "edit": False, "delete": False},
-    }
+    base = {k: {"view": False, "create": False, "edit": False, "delete": False} for k in MODULE_KEYS}
+    base["portal"] = {"view": True, "create": False, "edit": False, "delete": False}
+    base["staff_requests"] = {"view": True, "create": True, "edit": False, "delete": False}
+    return base
+
+
+def default_matrix_staff_portal() -> Dict[str, Any]:
+    base = {k: {"view": False, "create": False, "edit": False, "delete": False} for k in MODULE_KEYS}
+    base["portal"] = {"view": True, "create": True, "edit": True, "delete": False}
+    return base
 
 
 def matrix_json_dumps(m: Dict[str, Any]) -> str:

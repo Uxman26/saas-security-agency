@@ -21,6 +21,7 @@ import {
   Shield,
   UserCog,
   Users,
+  UserCircle,
   MessageSquare,
   Receipt,
   Wallet,
@@ -52,6 +53,7 @@ const sections: { titleKey: string; items: NavItem[] }[] = [
   {
     titleKey: 'sectionOperations',
     items: [
+      { href: '/my-portal', labelKey: 'myPortal', perm: PERMS.portalSites, icon: UserCircle },
       { href: '/sites', labelKey: 'sites', perm: 'sites.read', icon: MapPin },
       { href: '/assignments', labelKey: 'assignments', perm: 'assign.read', icon: ClipboardList },
       { href: '/rota', labelKey: 'rota', perm: 'assign.read', icon: Calendar },
@@ -97,6 +99,7 @@ function active(pathname: string, href: string) {
   if (href === '/rota') return pathname.startsWith('/rota');
   if (href === '/leads') return pathname.startsWith('/leads');
   if (href === '/client-portal') return pathname.startsWith('/client-portal');
+  if (href === '/my-portal') return pathname.startsWith('/my-portal');
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

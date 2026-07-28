@@ -62,6 +62,11 @@ PERM_LEADS_DELETE = "leads.delete"
 PERM_LEADS_ASSIGN = "leads.assign"
 PERM_LEADS_EXPORT = "leads.export"
 PERM_LEADS_REPORTS = "leads.reports"
+PERM_PORTAL_SITES = "portal.sites.read"
+PERM_PORTAL_ROTA_CURRENT = "portal.rota.current"
+PERM_PORTAL_ROTA_UPCOMING = "portal.rota.upcoming"
+PERM_PORTAL_ROTA_PREVIOUS = "portal.rota.previous"
+PERM_PORTAL_HOURS = "portal.hours.read"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -121,6 +126,11 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_LEADS_ASSIGN,
         PERM_LEADS_EXPORT,
         PERM_LEADS_REPORTS,
+        PERM_PORTAL_SITES,
+        PERM_PORTAL_ROTA_CURRENT,
+        PERM_PORTAL_ROTA_UPCOMING,
+        PERM_PORTAL_ROTA_PREVIOUS,
+        PERM_PORTAL_HOURS,
     }
 )
 
@@ -161,13 +171,21 @@ _GUARD_LEGACY = frozenset(
 
 _CLIENT_LEGACY = frozenset(
     {
-        PERM_CLIENTS_READ,
-        PERM_SITES_READ,
-        PERM_ASSIGN_READ,
-        PERM_INV_READ,
-        PERM_PAY_READ,
+        PERM_PORTAL_SITES,
+        PERM_PORTAL_ROTA_CURRENT,
+        PERM_PORTAL_HOURS,
         PERM_STAFF_REQ_READ,
         PERM_STAFF_REQ_WRITE,
+    }
+)
+
+_STAFF_LEGACY = frozenset(
+    {
+        PERM_PORTAL_SITES,
+        PERM_PORTAL_ROTA_CURRENT,
+        PERM_PORTAL_ROTA_UPCOMING,
+        PERM_PORTAL_ROTA_PREVIOUS,
+        PERM_PORTAL_HOURS,
     }
 )
 
@@ -180,6 +198,7 @@ _ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "supervisor": _SUPERVISOR,
     "guard": _GUARD_LEGACY,
     "client": _CLIENT_LEGACY,
+    "staff": _STAFF_LEGACY,
 }
 
 

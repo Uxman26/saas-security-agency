@@ -126,6 +126,25 @@ function SiteForm({
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Site type <span className="text-destructive">*</span></Label>
+          <Select
+            value={String(watch('site_type') ?? 1)}
+            onValueChange={(v) => setValue('site_type', parseInt(v, 10) as 1 | 2, { shouldValidate: true })}
+          >
+            <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">Regular</SelectItem>
+              <SelectItem value="2">Ad-hoc</SelectItem>
+            </SelectContent>
+          </Select>
+          {errors.site_type && <p className="text-xs text-destructive">{errors.site_type.message}</p>}
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Reference <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Input {...register('reference')} placeholder="Who referred this site?" />
+          {errors.reference && <p className="text-xs text-destructive">{errors.reference.message}</p>}
+        </div>
         <div className="space-y-1">
           <Label>Staff Rate <span className="text-muted-foreground font-normal">(per hour)</span></Label>
           <Input type="number" step="0.01" min="0" {...register('staff_hourly_rate', { valueAsNumber: true })} placeholder="e.g. 12.50" />
@@ -223,7 +242,7 @@ export default function SitesPage() {
 
   const addForm = useForm<SiteFormData>({
     resolver: zodResolver(siteSchema) as Resolver<SiteFormData>,
-    defaultValues: { client_id: null, default_hourly_rate: undefined, staff_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
+    defaultValues: { client_id: null, site_type: 1, default_hourly_rate: undefined, staff_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
   });
 
   const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) as Resolver<SiteFormData> });
@@ -240,6 +259,8 @@ export default function SitesPage() {
       contact_phone: data.contact_phone || undefined,
       contract_start_date: data.contract_start_date?.trim() || undefined,
       contract_end_date: data.contract_end_date?.trim() || undefined,
+      site_type: data.site_type,
+      reference: data.reference?.trim() || undefined,
     };
     const rate = data.default_hourly_rate;
     if (rate != null && !Number.isNaN(Number(rate))) o.default_hourly_rate = rate;
@@ -284,6 +305,8 @@ export default function SitesPage() {
       contact_phone: site.contact_phone ?? '',
       contract_start_date: site.contract_start_date ?? '',
       contract_end_date: site.contract_end_date ?? '',
+      site_type: site.site_type ?? 1,
+      reference: site.reference ?? '',
       main_contractor_id: site.main_contractor_id ?? undefined,
       sub_contractor_id: site.sub_contractor_id ?? undefined,
       contractor_id: site.contractor_id ?? undefined,
@@ -309,7 +332,7 @@ export default function SitesPage() {
 
   const getSearchText = useCallback(
     (s: Site) =>
-      [s.name, s.address, s.postcode, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_email, s.contact_phone, String(s.default_hourly_rate ?? ''), String(s.staff_hourly_rate ?? '')]
+      [s.name, s.address, s.postcode, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_email, s.contact_phone, String(s.default_hourly_rate ?? ''), String(s.staff_hourly_rate ?? ''), s.site_type === 2 ? 'Ad-hoc' : 'Regular', s.reference ?? '']
         .filter(Boolean)
         .join(' '),
     [clientMap, contractorLabel]

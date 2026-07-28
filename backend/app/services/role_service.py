@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 from app.models import Role, User, Company
 from app.rbac_matrix import (
     default_matrix_admin,
+    default_matrix_client_portal,
+    default_matrix_staff_portal,
     MODULE_KEYS,
     wrap_matrix,
 )
@@ -13,6 +15,8 @@ from app.rbac_matrix import (
 def _seed_rows():
     return [
         ("Admin", "admin", True, wrap_matrix(default_matrix_admin())),
+        ("Client", "client", True, wrap_matrix(default_matrix_client_portal())),
+        ("Staff", "staff", True, wrap_matrix(default_matrix_staff_portal())),
     ]
 
 
@@ -28,7 +32,7 @@ def prune_legacy_roles(db: Session, company_id: int) -> None:
         .filter(
             Role.company_id == company_id,
             Role.is_system.is_(True),
-            Role.slug != "admin",
+            Role.slug.notin_(["admin", "client", "staff"]),
         )
         .all()
     )
@@ -43,9 +47,9 @@ def prune_legacy_roles(db: Session, company_id: int) -> None:
 
 
 def ensure_roles_for_company(db: Session, company_id: int) -> None:
-    if get_role_by_slug(db, company_id, "admin"):
-        return
     for name, slug, is_sys, pj in _seed_rows():
+        if get_role_by_slug(db, company_id, slug):
+            continue
         db.add(
             Role(
                 company_id=company_id,

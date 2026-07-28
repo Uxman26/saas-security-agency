@@ -4,6 +4,11 @@ export const PERMS = {
   contractorView: 'contractor:view',
   contractorManage: 'contractor:manage',
   contractorAssign: 'contractor:assign',
+  portalSites: 'portal.sites.read',
+  portalRotaCurrent: 'portal.rota.current',
+  portalRotaUpcoming: 'portal.rota.upcoming',
+  portalRotaPrevious: 'portal.rota.previous',
+  portalHours: 'portal.hours.read',
 } as const;
 
 export function can(user: User | null | undefined, code: string): boolean {

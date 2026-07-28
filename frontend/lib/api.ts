@@ -350,6 +350,20 @@ export const api = {
         body: JSON.stringify({ comment: comment || '' }),
       }),
   },
+  portal: {
+    sites: (): Promise<Site[]> => request<Site[]>('/portal/sites'),
+    rotaCurrent: (): Promise<RotaDetail[]> => request<RotaDetail[]>('/portal/rota/current'),
+    rotaUpcoming: (): Promise<RotaDetail[]> => request<RotaDetail[]>('/portal/rota/upcoming'),
+    rotaPrevious: (): Promise<RotaDetail[]> => request<RotaDetail[]>('/portal/rota/previous'),
+    hours: (params?: { period?: string; start_date?: string; end_date?: string }): Promise<import('./types').PortalHours> => {
+      const q = new URLSearchParams();
+      if (params?.period) q.set('period', params.period);
+      if (params?.start_date) q.set('start_date', params.start_date);
+      if (params?.end_date) q.set('end_date', params.end_date);
+      const qs = q.toString();
+      return request<import('./types').PortalHours>(`/portal/hours${qs ? `?${qs}` : ''}`);
+    },
+  },
   clients: {
     list: (): Promise<Client[]> => request<Client[]>('/clients'),
     get: (id: number): Promise<Client> => request<Client>(`/clients/${id}`),

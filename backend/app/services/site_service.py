@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Any
-from app.models import Site, Client
+from app.models import Site, Client, User
 from app.schemas import SiteCreate
 from app.services.company_service import get_company_by_user_id
 from app.services.plan_enforcement import enforce_site_quota
@@ -11,6 +11,11 @@ from app.services import contractor_scope
 
 def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
     company = get_company_by_user_id(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import is_portal_role
+
+    if user and is_portal_role(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     enforce_site_quota(db, company)
     if site.client_id and not db.query(Client).filter(Client.id == site.client_id, Client.company_id == company.id).first():
         raise HTTPException(status_code=400, detail="Client not found")
@@ -54,14 +59,29 @@ def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
 
 def get_sites(db: Session, user_id: int) -> List[Site]:
     company = get_company_by_user_id(db, user_id)
-    return db.query(Site).filter(Site.company_id == company.id).all()
+    user = db.query(User).filter(User.id == user_id).first()
+    q = db.query(Site).filter(Site.company_id == company.id)
+    if user:
+        from app.services.portal_access import filter_sites_for_user, is_portal_role
+
+        if is_portal_role(user):
+            q = filter_sites_for_user(db, user, q)
+    return q.all()
 
 
 def get_site_by_id(db: Session, site_id: int, user_id: int) -> Site:
     company = get_company_by_user_id(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
     site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    if user:
+        from app.services.portal_access import filter_sites_for_user, is_portal_role
+
+        if is_portal_role(user):
+            allowed = filter_sites_for_user(db, user, db.query(Site).filter(Site.id == site_id)).first()
+            if not allowed:
+                raise HTTPException(status_code=404, detail="Site not found")
     return site
 
 

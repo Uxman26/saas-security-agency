@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import Assignment, Guard, Site
+from app.models import Assignment, Guard, Site, User
 from app.schemas import AssignmentCreate, RotaResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.contractor_scope import guard_has_contractor, site_has_contractor
@@ -10,6 +10,11 @@ from app.services.rota_service import normalize_shift_type
 
 def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -> Assignment:
     company = get_company_by_user_id(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import is_portal_role
+
+    if user and is_portal_role(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     guard = db.query(Guard).filter(Guard.id == assignment.guard_id, Guard.company_id == company.id).first()
     if not guard:
@@ -47,6 +52,13 @@ def get_assignments(
     company = get_company_by_user_id(db, user_id)
     
     query = db.query(Assignment).join(Guard).join(Site).filter(Guard.company_id == company.id)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        from app.services.portal_access import filter_assignments_for_user, is_portal_role
+
+        if is_portal_role(user):
+            query = filter_assignments_for_user(db, user, query)
     
     if guard_id:
         query = query.filter(Assignment.guard_id == guard_id)

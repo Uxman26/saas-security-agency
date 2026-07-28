@@ -55,6 +55,7 @@ export interface User {
   sidebar_modules?: string[] | null;
   enabled_modules?: Record<string, boolean> | null;
   client_id?: number | null;
+  guard_id?: number | null;
 }
 
 export interface StaffRequest {
@@ -385,6 +386,9 @@ export interface Site {
   contact_phone?: string;
   contract_start_date?: string;
   contract_end_date?: string;
+  /** 1 = Regular, 2 = Ad-hoc */
+  site_type: number;
+  reference?: string | null;
   default_hourly_rate?: number;
   /** Staff pay rate for this site (£/hr) */
   staff_hourly_rate?: number;
@@ -486,6 +490,14 @@ export interface Rota {
   shift_end?: string;
   break_minutes?: number;
   shift_type?: string;
+}
+
+export interface PortalHours {
+  period: string;
+  start_date: string;
+  end_date: string;
+  total_hours: number;
+  shifts_count: number;
 }
 
 export interface RotaDetail {

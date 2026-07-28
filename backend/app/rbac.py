@@ -67,6 +67,13 @@ PERM_PORTAL_ROTA_CURRENT = "portal.rota.current"
 PERM_PORTAL_ROTA_UPCOMING = "portal.rota.upcoming"
 PERM_PORTAL_ROTA_PREVIOUS = "portal.rota.previous"
 PERM_PORTAL_HOURS = "portal.hours.read"
+PERM_PATROL_READ = "patrol.read"
+PERM_PATROL_WRITE = "patrol.write"
+PERM_PATROL_SCAN = "patrol.scan"
+PERM_PATROL_REPORTS = "patrol.reports"
+PERM_INCIDENT_READ = "incident.read"
+PERM_INCIDENT_WRITE = "incident.write"
+PERM_INCIDENT_REPORTS = "incident.reports"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -131,6 +138,13 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_PORTAL_ROTA_UPCOMING,
         PERM_PORTAL_ROTA_PREVIOUS,
         PERM_PORTAL_HOURS,
+        PERM_PATROL_READ,
+        PERM_PATROL_WRITE,
+        PERM_PATROL_SCAN,
+        PERM_PATROL_REPORTS,
+        PERM_INCIDENT_READ,
+        PERM_INCIDENT_WRITE,
+        PERM_INCIDENT_REPORTS,
     }
 )
 
@@ -156,6 +170,12 @@ _SUPERVISOR = frozenset(
         PERM_CONTRACTOR_VIEW,
         PERM_STAFF_REQ_READ,
         PERM_STAFF_REQ_REVIEW,
+        PERM_PATROL_READ,
+        PERM_PATROL_WRITE,
+        PERM_PATROL_REPORTS,
+        PERM_INCIDENT_READ,
+        PERM_INCIDENT_WRITE,
+        PERM_INCIDENT_REPORTS,
     }
 )
 
@@ -166,6 +186,10 @@ _GUARD_LEGACY = frozenset(
         PERM_ATTEND_READ,
         PERM_ATTEND_WRITE,
         PERM_DOC_READ,
+        PERM_PATROL_SCAN,
+        PERM_PATROL_READ,
+        PERM_INCIDENT_WRITE,
+        PERM_INCIDENT_READ,
     }
 )
 
@@ -176,6 +200,9 @@ _CLIENT_LEGACY = frozenset(
         PERM_PORTAL_HOURS,
         PERM_STAFF_REQ_READ,
         PERM_STAFF_REQ_WRITE,
+        PERM_PATROL_REPORTS,
+        PERM_INCIDENT_READ,
+        PERM_INCIDENT_WRITE,
     }
 )
 
@@ -186,6 +213,10 @@ _STAFF_LEGACY = frozenset(
         PERM_PORTAL_ROTA_UPCOMING,
         PERM_PORTAL_ROTA_PREVIOUS,
         PERM_PORTAL_HOURS,
+        PERM_PATROL_SCAN,
+        PERM_PATROL_READ,
+        PERM_INCIDENT_WRITE,
+        PERM_INCIDENT_READ,
     }
 )
 

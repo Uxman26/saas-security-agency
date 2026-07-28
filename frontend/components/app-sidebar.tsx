@@ -17,8 +17,10 @@ import {
   Gift,
   LayoutDashboard,
   MapPin,
+  MapPinned,
   PoundSterling,
   Shield,
+  AlertTriangle,
   UserCog,
   Users,
   UserCircle,
@@ -57,6 +59,8 @@ const sections: { titleKey: string; items: NavItem[] }[] = [
       { href: '/sites', labelKey: 'sites', perm: 'sites.read', icon: MapPin },
       { href: '/assignments', labelKey: 'assignments', perm: 'assign.read', icon: ClipboardList },
       { href: '/rota', labelKey: 'rota', perm: 'assign.read', icon: Calendar },
+      { href: '/patrol', labelKey: 'patrol', perm: 'patrol.read', icon: MapPinned },
+      { href: '/incidents', labelKey: 'incidents', perm: 'incident.read', icon: AlertTriangle },
       { href: '/client-portal', labelKey: 'clientPortal', perm: 'staff_req.write', icon: Building2 },
       { href: '/requests', labelKey: 'staffRequests', perm: 'staff_req.review', icon: ClipboardList },
     ],
@@ -97,6 +101,8 @@ const sections: { titleKey: string; items: NavItem[] }[] = [
 function active(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
   if (href === '/rota') return pathname.startsWith('/rota');
+  if (href === '/patrol') return pathname.startsWith('/patrol');
+  if (href === '/incidents') return pathname.startsWith('/incidents');
   if (href === '/leads') return pathname.startsWith('/leads');
   if (href === '/client-portal') return pathname.startsWith('/client-portal');
   if (href === '/my-portal') return pathname.startsWith('/my-portal');

@@ -21,6 +21,8 @@ import { sidebarPathAllowed } from '@/lib/sidebar-modules';
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
   if (href === '/rota') return pathname.startsWith('/rota');
+  if (href === '/patrol') return pathname.startsWith('/patrol');
+  if (href === '/incidents') return pathname.startsWith('/incidents');
   if (href === '/client-portal') return pathname.startsWith('/client-portal');
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -32,6 +34,8 @@ const mobileLinks = [
   { href: '/clients', labelKey: 'clients', perm: 'clients.read' },
   { href: '/assignments', labelKey: 'assignments', perm: 'assign.read' },
   { href: '/rota', labelKey: 'rota', perm: 'assign.read' },
+  { href: '/patrol', labelKey: 'patrol', perm: 'patrol.read' },
+  { href: '/incidents', labelKey: 'incidents', perm: 'incident.read' },
   { href: '/client-portal', labelKey: 'clientPortal', perm: 'staff_req.write' },
   { href: '/requests', labelKey: 'staffRequests', perm: 'staff_req.review' },
   { href: '/attendance', labelKey: 'attendance', perm: 'attend.read' },

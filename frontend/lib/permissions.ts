@@ -9,6 +9,13 @@ export const PERMS = {
   portalRotaUpcoming: 'portal.rota.upcoming',
   portalRotaPrevious: 'portal.rota.previous',
   portalHours: 'portal.hours.read',
+  patrolRead: 'patrol.read',
+  patrolWrite: 'patrol.write',
+  patrolScan: 'patrol.scan',
+  patrolReports: 'patrol.reports',
+  incidentRead: 'incident.read',
+  incidentWrite: 'incident.write',
+  incidentReports: 'incident.reports',
 } as const;
 
 export function can(user: User | null | undefined, code: string): boolean {

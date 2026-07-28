@@ -869,6 +869,156 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    for table, col, typedef in [
+        ("sites", "latitude", "REAL"),
+        ("sites", "longitude", "REAL"),
+    ]:
+        if table_exists(cur, table) and not column_exists(cur, table, col):
+            try:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
+            except sqlite3.OperationalError:
+                pass
+    # Tables for patrol + incidents
+    if not table_exists(cur, "patrol_routes"):
+        try:
+            cur.execute(
+                """CREATE TABLE patrol_routes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                site_id INTEGER NOT NULL REFERENCES sites(id),
+                name TEXT NOT NULL,
+                frequency_minutes INTEGER NOT NULL DEFAULT 60,
+                start_time TEXT NOT NULL DEFAULT '22:00',
+                end_time TEXT NOT NULL DEFAULT '06:00',
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "patrol_checkpoints"):
+        try:
+            cur.execute(
+                """CREATE TABLE patrol_checkpoints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                site_id INTEGER NOT NULL REFERENCES sites(id),
+                route_id INTEGER NOT NULL REFERENCES patrol_routes(id),
+                code TEXT NOT NULL,
+                name TEXT NOT NULL,
+                floor TEXT,
+                description TEXT,
+                qr_token TEXT NOT NULL UNIQUE,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                radius_m REAL DEFAULT 20,
+                sort_order INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "patrol_sessions"):
+        try:
+            cur.execute(
+                """CREATE TABLE patrol_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                guard_id INTEGER NOT NULL REFERENCES guards(id),
+                route_id INTEGER NOT NULL REFERENCES patrol_routes(id),
+                assignment_id INTEGER REFERENCES assignments(id),
+                started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                ended_at TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "patrol_logs"):
+        try:
+            cur.execute(
+                """CREATE TABLE patrol_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                guard_id INTEGER NOT NULL REFERENCES guards(id),
+                checkpoint_id INTEGER NOT NULL REFERENCES patrol_checkpoints(id),
+                route_id INTEGER NOT NULL REFERENCES patrol_routes(id),
+                session_id INTEGER REFERENCES patrol_sessions(id),
+                assignment_id INTEGER REFERENCES assignments(id),
+                scan_time TEXT DEFAULT CURRENT_TIMESTAMP,
+                latitude REAL,
+                longitude REAL,
+                accuracy REAL,
+                device_id TEXT,
+                photo_path TEXT,
+                distance_m REAL,
+                status TEXT DEFAULT 'completed',
+                notes TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "patrol_alerts"):
+        try:
+            cur.execute(
+                """CREATE TABLE patrol_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                route_id INTEGER NOT NULL REFERENCES patrol_routes(id),
+                checkpoint_id INTEGER REFERENCES patrol_checkpoints(id),
+                session_id INTEGER REFERENCES patrol_sessions(id),
+                guard_id INTEGER REFERENCES guards(id),
+                alert_type TEXT DEFAULT 'missed_checkpoint',
+                message TEXT,
+                window_start TEXT,
+                window_end TEXT,
+                notified_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "incidents"):
+        try:
+            cur.execute(
+                """CREATE TABLE incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                client_id INTEGER REFERENCES clients(id),
+                site_id INTEGER REFERENCES sites(id),
+                reported_by_user_id INTEGER NOT NULL REFERENCES users(id),
+                guard_id INTEGER REFERENCES guards(id),
+                assignment_id INTEGER REFERENCES assignments(id),
+                notes TEXT NOT NULL,
+                latitude REAL,
+                longitude REAL,
+                accuracy REAL,
+                occurred_at TEXT NOT NULL,
+                status TEXT DEFAULT 'open',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "incident_attachments"):
+        try:
+            cur.execute(
+                """CREATE TABLE incident_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                incident_id INTEGER NOT NULL REFERENCES incidents(id),
+                file_path TEXT NOT NULL,
+                mime_type TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:
@@ -891,6 +1041,8 @@ def run():
                 elif role.slug == "supervisor":
                     m = parse_matrix_json(role.permissions_json) or default_matrix_supervisor()
                     m["staff_requests"] = {"view": True, "create": False, "edit": True, "delete": False}
+                    m["patrol"] = {"view": True, "create": True, "edit": True, "delete": False}
+                    m["incidents"] = {"view": True, "create": True, "edit": True, "delete": False}
                     role.permissions_json = matrix_json_dumps(m)
             db.commit()
         finally:

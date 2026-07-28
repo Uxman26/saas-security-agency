@@ -18,6 +18,14 @@ def is_portal_role(user: User) -> bool:
     return role_slug(user) in {"client", "staff"}
 
 
+def is_client_portal_user(user: User) -> bool:
+    return role_slug(user) == "client"
+
+
+def is_staff_portal_user(user: User) -> bool:
+    return role_slug(user) == "staff"
+
+
 def get_linked_guard(db: Session, user: User) -> Optional[Guard]:
     if not user.company_id:
         return None

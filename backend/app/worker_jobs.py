@@ -28,3 +28,19 @@ def _scheduled_maintenance_sync() -> dict[str, Any]:
 
 async def scheduled_maintenance(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_scheduled_maintenance_sync)
+
+
+def _check_missed_patrols_sync() -> dict[str, Any]:
+    db: Session = SessionLocal()
+    try:
+        from app.services import patrol_service
+
+        result = patrol_service.detect_missed_patrols(db)
+        logger.info("missed patrols: %s", result)
+        return result
+    finally:
+        db.close()
+
+
+async def check_missed_patrols(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_check_missed_patrols_sync)

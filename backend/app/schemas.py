@@ -500,6 +500,8 @@ class SiteBase(BaseModel):
     reference: Optional[str] = Field(default=None, max_length=200)
     default_hourly_rate: Optional[float] = None
     staff_hourly_rate: Optional[float] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
     contractor_id: Optional[UUID] = None
@@ -1787,3 +1789,232 @@ class PushSubscribeRequest(BaseModel):
     endpoint: str
     p256dh: str
     auth: str
+
+
+# --- Patrol ---
+
+class PatrolRouteCreate(BaseModel):
+    site_id: int
+    name: str = Field(min_length=2, max_length=120)
+    frequency_minutes: int = Field(default=60, ge=5, le=24 * 60)
+    start_time: str = "22:00"
+    end_time: str = "06:00"
+    status: str = "active"
+
+
+class PatrolRouteUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    frequency_minutes: Optional[int] = Field(default=None, ge=5, le=24 * 60)
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    status: Optional[str] = None
+
+
+class PatrolCheckpointCreate(BaseModel):
+    route_id: int
+    name: str = Field(min_length=1, max_length=120)
+    floor: Optional[str] = None
+    description: Optional[str] = None
+    latitude: float
+    longitude: float
+    radius_m: float = Field(default=20, ge=5, le=500)
+    sort_order: int = 0
+    status: str = "active"
+
+
+class PatrolCheckpointUpdate(BaseModel):
+    name: Optional[str] = None
+    floor: Optional[str] = None
+    description: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    radius_m: Optional[float] = Field(default=None, ge=5, le=500)
+    sort_order: Optional[int] = None
+    status: Optional[str] = None
+
+
+class PatrolCheckpointResponse(BaseModel):
+    id: int
+    company_id: int
+    site_id: int
+    route_id: int
+    code: str
+    name: str
+    floor: Optional[str] = None
+    description: Optional[str] = None
+    qr_token: str
+    qr_url: str
+    latitude: float
+    longitude: float
+    radius_m: float
+    sort_order: int
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PatrolRouteResponse(BaseModel):
+    id: int
+    company_id: int
+    site_id: int
+    site_name: Optional[str] = None
+    name: str
+    frequency_minutes: int
+    start_time: str
+    end_time: str
+    status: str
+    checkpoint_count: int = 0
+    created_at: datetime
+    checkpoints: list[PatrolCheckpointResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class PatrolSessionStart(BaseModel):
+    route_id: int
+    assignment_id: Optional[int] = None
+    guard_id: Optional[int] = None
+
+
+class PatrolSessionResponse(BaseModel):
+    id: int
+    company_id: int
+    guard_id: int
+    route_id: int
+    assignment_id: Optional[int] = None
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    status: str
+
+    class Config:
+        from_attributes = True
+
+
+class PatrolScanRequest(BaseModel):
+    qr_token: str
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None
+    device_id: Optional[str] = None
+    session_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    photo: Optional[str] = None
+
+
+class PatrolLogResponse(BaseModel):
+    id: int
+    company_id: int
+    guard_id: int
+    guard_name: Optional[str] = None
+    checkpoint_id: int
+    checkpoint_name: Optional[str] = None
+    checkpoint_code: Optional[str] = None
+    route_id: int
+    route_name: Optional[str] = None
+    session_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    scan_time: datetime
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    device_id: Optional[str] = None
+    photo_url: Optional[str] = None
+    distance_m: Optional[float] = None
+    status: str
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PatrolComplianceRow(BaseModel):
+    site_id: int
+    site_name: str
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
+    route_id: int
+    route_name: str
+    guard_id: Optional[int] = None
+    guard_name: Optional[str] = None
+    date: date
+    required_patrols: int
+    completed: int
+    missed: int
+    late: int
+    compliance_pct: float
+
+
+class PatrolTodayResponse(BaseModel):
+    session: Optional[PatrolSessionResponse] = None
+    route_id: Optional[int] = None
+    route_name: Optional[str] = None
+    site_name: Optional[str] = None
+    next_checkpoint: Optional[PatrolCheckpointResponse] = None
+    due_at: Optional[str] = None
+    recent_logs: list[PatrolLogResponse] = []
+
+
+# --- Incidents ---
+
+class IncidentCreate(BaseModel):
+    notes: str = Field(min_length=1, max_length=5000)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    occurred_at: Optional[datetime] = None
+    site_id: Optional[int] = None
+    client_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    guard_id: Optional[int] = None
+
+
+class IncidentUpdate(BaseModel):
+    notes: Optional[str] = None
+    status: Optional[str] = None
+    site_id: Optional[int] = None
+
+
+class IncidentAttachmentResponse(BaseModel):
+    id: int
+    file_path: str
+    mime_type: Optional[str] = None
+    url: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class IncidentResponse(BaseModel):
+    id: int
+    company_id: int
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
+    site_id: Optional[int] = None
+    site_name: Optional[str] = None
+    reported_by_user_id: int
+    reported_by_name: Optional[str] = None
+    guard_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    notes: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    occurred_at: datetime
+    status: str
+    created_at: datetime
+    attachments: list[IncidentAttachmentResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class IncidentSummaryRow(BaseModel):
+    status: str
+    count: int
+    site_id: Optional[int] = None
+    site_name: Optional[str] = None

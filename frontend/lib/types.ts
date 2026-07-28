@@ -395,6 +395,8 @@ export interface Site {
   main_contractor_id?: number | null;
   sub_contractor_id?: number | null;
   contractor_id?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at: string;
 }
 
@@ -1060,4 +1062,118 @@ export interface ExpenseDashboard {
     invoice_vat: number;
     net_vat: number;
   }[];
+}
+
+export interface PatrolCheckpoint {
+  id: number;
+  company_id: number;
+  site_id: number;
+  route_id: number;
+  code: string;
+  name: string;
+  floor?: string | null;
+  description?: string | null;
+  qr_token: string;
+  qr_url: string;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  sort_order: number;
+  status: string;
+  created_at: string;
+}
+
+export interface PatrolRoute {
+  id: number;
+  company_id: number;
+  site_id: number;
+  site_name?: string | null;
+  name: string;
+  frequency_minutes: number;
+  start_time: string;
+  end_time: string;
+  status: string;
+  checkpoint_count: number;
+  created_at: string;
+  checkpoints?: PatrolCheckpoint[];
+}
+
+export interface PatrolLog {
+  id: number;
+  company_id: number;
+  guard_id: number;
+  guard_name?: string | null;
+  checkpoint_id: number;
+  checkpoint_name?: string | null;
+  checkpoint_code?: string | null;
+  route_id: number;
+  route_name?: string | null;
+  session_id?: number | null;
+  scan_time: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  distance_m?: number | null;
+  status: string;
+  notes?: string | null;
+  photo_url?: string | null;
+}
+
+export interface PatrolComplianceRow {
+  site_id: number;
+  site_name: string;
+  client_id?: number | null;
+  client_name?: string | null;
+  route_id: number;
+  route_name: string;
+  date: string;
+  required_patrols: number;
+  completed: number;
+  missed: number;
+  late: number;
+  compliance_pct: number;
+}
+
+export interface PatrolToday {
+  session?: { id: number; route_id: number; status: string } | null;
+  route_id?: number | null;
+  route_name?: string | null;
+  site_name?: string | null;
+  next_checkpoint?: PatrolCheckpoint | null;
+  due_at?: string | null;
+  recent_logs?: PatrolLog[];
+}
+
+export interface IncidentAttachment {
+  id: number;
+  file_path: string;
+  mime_type?: string | null;
+  url?: string | null;
+  created_at: string;
+}
+
+export interface Incident {
+  id: number;
+  company_id: number;
+  client_id?: number | null;
+  client_name?: string | null;
+  site_id?: number | null;
+  site_name?: string | null;
+  reported_by_user_id: number;
+  reported_by_name?: string | null;
+  guard_id?: number | null;
+  notes: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracy?: number | null;
+  occurred_at: string;
+  status: string;
+  created_at: string;
+  attachments?: IncidentAttachment[];
+}
+
+export interface IncidentSummaryRow {
+  status: string;
+  count: number;
+  site_id?: number | null;
+  site_name?: string | null;
 }

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Table,
   TableBody,
@@ -16,19 +17,31 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
-import type { PortalHours, RotaDetail, Site } from '@/lib/types';
-import { CalendarDays, Clock, MapPin, UserCircle } from 'lucide-react';
+import type {
+  Incident,
+  PatrolComplianceRow,
+  PatrolToday,
+  PortalHours,
+  RotaDetail,
+  Site,
+} from '@/lib/types';
+import { AlertTriangle, CalendarDays, Clock, MapPin, MapPinned, UserCircle } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
-type Tab = 'sites' | 'current' | 'upcoming' | 'previous' | 'hours';
+type Tab = 'sites' | 'current' | 'upcoming' | 'previous' | 'hours' | 'patrol' | 'incidents';
 
 export default function MyPortalPage() {
   const { user } = useAuth();
   const canUpcoming = can(user, 'portal.rota.upcoming');
   const canPrevious = can(user, 'portal.rota.previous');
+  const canPatrol = can(user, 'patrol.read') || can(user, 'patrol.scan') || can(user, 'patrol.reports');
+  const canIncidentRead = can(user, 'incident.read');
+  const canIncidentWrite = can(user, 'incident.write');
   const isStaff = (user?.role || '').toLowerCase() === 'staff' || canUpcoming;
 
   const tabs = useMemo(
@@ -39,8 +52,10 @@ export default function MyPortalPage() {
         ...(canUpcoming ? [{ id: 'upcoming' as const, label: 'Upcoming rota' }] : []),
         ...(canPrevious ? [{ id: 'previous' as const, label: 'Previous rota' }] : []),
         { id: 'hours' as const, label: 'Working hours' },
+        ...(canPatrol ? [{ id: 'patrol' as const, label: isStaff ? 'Today patrol' : 'Patrol compliance' }] : []),
+        ...(canIncidentRead || canIncidentWrite ? [{ id: 'incidents' as const, label: 'Incidents' }] : []),
       ],
-    [canUpcoming, canPrevious]
+    [canUpcoming, canPrevious, canPatrol, canIncidentRead, canIncidentWrite, isStaff]
   );
 
   const [tab, setTab] = useState<Tab>('sites');
@@ -51,6 +66,14 @@ export default function MyPortalPage() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [loading, setLoading] = useState(false);
+  const [patrolToday, setPatrolToday] = useState<PatrolToday | null>(null);
+  const [compliance, setCompliance] = useState<PatrolComplianceRow[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [raiseOpen, setRaiseOpen] = useState(false);
+  const [incForm, setIncForm] = useState({ notes: '', site_id: '', latitude: '', longitude: '' });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
   const loadTab = useCallback(async () => {
     if (!user) return;
@@ -72,17 +95,62 @@ export default function MyPortalPage() {
               : { period }
           )
         );
+      } else if (tab === 'patrol') {
+        if (isStaff) {
+          setPatrolToday(await api.portal.patrolToday());
+        } else {
+          setCompliance(await api.portal.patrolCompliance(weekAgo, today));
+        }
+        if (sites.length === 0) setSites(await api.portal.sites());
+      } else if (tab === 'incidents') {
+        setIncidents(await api.portal.incidents());
+        if (sites.length === 0) setSites(await api.portal.sites());
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
-  }, [tab, user, period, customStart, customEnd]);
+  }, [tab, user, period, customStart, customEnd, isStaff, weekAgo, today, sites.length]);
 
   useEffect(() => {
     loadTab();
   }, [loadTab]);
+
+  const raiseIncident = async () => {
+    if (!incForm.notes.trim()) {
+      toast.warning('Notes are required');
+      return;
+    }
+    try {
+      await api.portal.createIncident({
+        notes: incForm.notes.trim(),
+        site_id: incForm.site_id ? Number(incForm.site_id) : undefined,
+        latitude: incForm.latitude ? Number(incForm.latitude) : undefined,
+        longitude: incForm.longitude ? Number(incForm.longitude) : undefined,
+      });
+      toast.success('Incident submitted');
+      setRaiseOpen(false);
+      setIncForm({ notes: '', site_id: '', latitude: '', longitude: '' });
+      setIncidents(await api.portal.incidents());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to raise incident');
+    }
+  };
+
+  const startPatrol = async () => {
+    if (!patrolToday?.route_id) {
+      toast.warning('No active patrol route');
+      return;
+    }
+    try {
+      await api.patrol.startSession({ route_id: patrolToday.route_id });
+      toast.success('Patrol session started');
+      setPatrolToday(await api.portal.patrolToday());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not start session');
+    }
+  };
 
   return (
     <ProtectedRoute>
@@ -95,14 +163,12 @@ export default function MyPortalPage() {
                 {isStaff ? 'Staff portal' : 'Client portal'}
               </span>
             }
-            description="View only your assigned sites, rotas, and working hours."
+            description="View your sites, rotas, patrol status, and incidents."
           />
 
           <ModuleTabs tabs={tabs} value={tab} onChange={setTab} />
 
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : null}
+          {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
 
           {tab === 'sites' && (
             <Card>
@@ -194,25 +260,13 @@ export default function MyPortalPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant={period === 'week' ? 'default' : 'outline'}
-                    onClick={() => setPeriod('week')}
-                  >
+                  <Button size="sm" variant={period === 'week' ? 'default' : 'outline'} onClick={() => setPeriod('week')}>
                     This week
                   </Button>
-                  <Button
-                    size="sm"
-                    variant={period === 'month' ? 'default' : 'outline'}
-                    onClick={() => setPeriod('month')}
-                  >
+                  <Button size="sm" variant={period === 'month' ? 'default' : 'outline'} onClick={() => setPeriod('month')}>
                     This month
                   </Button>
-                  <Button
-                    size="sm"
-                    variant={period === 'custom' ? 'default' : 'outline'}
-                    onClick={() => setPeriod('custom')}
-                  >
+                  <Button size="sm" variant={period === 'custom' ? 'default' : 'outline'} onClick={() => setPeriod('custom')}>
                     Custom range
                   </Button>
                 </div>
@@ -242,6 +296,207 @@ export default function MyPortalPage() {
               </CardContent>
             </Card>
           )}
+
+          {tab === 'patrol' && isStaff && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MapPinned className="size-5 text-primary" />
+                  Today&apos;s patrol
+                </CardTitle>
+                {patrolToday?.route_id && !patrolToday.session ? (
+                  <Button size="sm" className="bg-pink-600 hover:bg-pink-700" onClick={startPatrol}>
+                    Start session
+                  </Button>
+                ) : null}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {patrolToday?.route_name ? (
+                  <div className="rounded-lg border bg-muted/30 p-4 space-y-1">
+                    <p className="font-medium">{patrolToday.route_name}</p>
+                    <p className="text-sm text-muted-foreground">{patrolToday.site_name}</p>
+                    {patrolToday.session ? (
+                      <p className="text-xs capitalize">Session: {patrolToday.session.status}</p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No active session</p>
+                    )}
+                    {patrolToday.next_checkpoint ? (
+                      <p className="text-sm pt-2">
+                        Next: <span className="font-medium">{patrolToday.next_checkpoint.name}</span>
+                        <span className="ml-2 font-mono text-xs text-muted-foreground">
+                          {patrolToday.next_checkpoint.code}
+                        </span>
+                      </p>
+                    ) : null}
+                    {patrolToday.due_at ? (
+                      <p className="text-xs text-muted-foreground">Due: {new Date(patrolToday.due_at).toLocaleString()}</p>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground pt-2">
+                      Use the mobile app to scan checkpoint QR codes with GPS validation.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No patrol assigned for today.</p>
+                )}
+                {(patrolToday?.recent_logs || []).length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Checkpoint</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {patrolToday!.recent_logs!.map((l) => (
+                        <TableRow key={l.id}>
+                          <TableCell className="text-xs">{new Date(l.scan_time).toLocaleString()}</TableCell>
+                          <TableCell>{l.checkpoint_name}</TableCell>
+                          <TableCell className="capitalize text-xs">{l.status.replace(/_/g, ' ')}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : null}
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'patrol' && !isStaff && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MapPinned className="size-5 text-primary" />
+                  Patrol compliance (7 days)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Site</TableHead>
+                      <TableHead>Route</TableHead>
+                      <TableHead>Done</TableHead>
+                      <TableHead>Missed</TableHead>
+                      <TableHead>%</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {compliance.map((c, i) => (
+                      <TableRow key={`${c.route_id}-${c.date}-${i}`}>
+                        <TableCell>{c.date}</TableCell>
+                        <TableCell>{c.site_name}</TableCell>
+                        <TableCell>{c.route_name}</TableCell>
+                        <TableCell className="tabular-nums">{c.completed}</TableCell>
+                        <TableCell className="tabular-nums">{c.missed}</TableCell>
+                        <TableCell className="tabular-nums font-medium">{c.compliance_pct}%</TableCell>
+                      </TableRow>
+                    ))}
+                    {compliance.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                          No compliance data for your sites.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'incidents' && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <AlertTriangle className="size-5 text-primary" />
+                  Incidents
+                </CardTitle>
+                {canIncidentWrite ? (
+                  <Button size="sm" className="bg-pink-600 hover:bg-pink-700" onClick={() => setRaiseOpen(true)}>
+                    Raise incident
+                  </Button>
+                ) : null}
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>Site</TableHead>
+                      <TableHead>Notes</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {incidents.map((inc) => (
+                      <TableRow key={inc.id}>
+                        <TableCell className="text-xs whitespace-nowrap">{new Date(inc.occurred_at).toLocaleString()}</TableCell>
+                        <TableCell>{inc.site_name || '—'}</TableCell>
+                        <TableCell className="max-w-xs truncate">{inc.notes}</TableCell>
+                        <TableCell className="capitalize text-xs">{inc.status}</TableCell>
+                      </TableRow>
+                    ))}
+                    {incidents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                          No incidents yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : null}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          <Dialog open={raiseOpen} onOpenChange={setRaiseOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Raise incident</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label>Notes</Label>
+                  <Textarea rows={4} value={incForm.notes} onChange={(e) => setIncForm((f) => ({ ...f, notes: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Site</Label>
+                  <Select value={incForm.site_id || undefined} onValueChange={(v) => setIncForm((f) => ({ ...f, site_id: v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select site" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sites.map((s) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label>Latitude</Label>
+                    <Input value={incForm.latitude} onChange={(e) => setIncForm((f) => ({ ...f, latitude: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Longitude</Label>
+                    <Input value={incForm.longitude} onChange={(e) => setIncForm((f) => ({ ...f, longitude: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRaiseOpen(false)}>
+                  Cancel
+                </Button>
+                <Button className="bg-pink-600 hover:bg-pink-700" onClick={raiseIncident}>
+                  Submit
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </ModulePage>
       </AppShell>
     </ProtectedRoute>

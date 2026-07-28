@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "a8f3c2e1-mobile-controlops-2026",
-    "name": "ControlOps Mobile \u2014 Staff / Client / Admin",
-    "description": "Mobile app API collection for Staff, Client, and Admin modules.\\n\\n**Base URL:** `{{baseUrl}}` (default `https://controlops.co.uk/api`)\\n\\n**Auth:** Bearer JWT from Auth \u2192 Login (token auto-saved).\\n\\nStatus tags:\\n- *(live)* \u2014 implemented on current backend\\n- *(planned)* \u2014 required by mobile spec; contract for app/backend\\n\\n### Permission codes\\n| Code | Used by |\\n|------|--------|\\n| `portal.sites.read` | Staff, Client |\\n| `portal.rota.current` | Staff, Client |\\n| `portal.rota.upcoming` | Staff |\\n| `portal.rota.previous` | Staff |\\n| `portal.hours.read` | Staff, Client |\\n| `attend.read` / `attend.write` | Staff clock / attendance |\\n| `assign.read` / `assign.write` | OT / early finish |\\n| `staff_req.read` / `staff_req.write` | Client staff requests |\\n| `staff_req.review` | Admin/Controller approve/decline |\\n| `inv.read` | Client invoices |\\n| `portal.incident.write` *(planned)* | Staff/Client incidents |\\n| `portal.attendance.clock` *(planned)* | GPS clock in/out |\\n| `portal.invoice.query` *(planned)* | Client invoice comments |\\n| `staff_req.standdown` *(planned)* | Client cancel before approval |\\n",
+    "name": "ControlOps Mobile — Staff / Client / Admin",
+    "description": "Mobile app API collection for Staff, Client, and Admin modules.\\n\\n**Base URL:** `{{baseUrl}}` (default `https://controlops.co.uk/api`)\\n\\n**Auth:** Bearer JWT from Auth → Login (token auto-saved).\\n\\nStatus tags:\\n- *(live)* — implemented on current backend\\n- *(planned)* — required by mobile spec; contract for app/backend\\n\\n### Permission codes\\n| Code | Used by |\\n|------|--------|\\n| `portal.sites.read` | Staff, Client |\\n| `portal.rota.current` | Staff, Client |\\n| `portal.rota.upcoming` | Staff |\\n| `portal.rota.previous` | Staff |\\n| `portal.hours.read` | Staff, Client |\\n| `attend.read` / `attend.write` | Staff clock / attendance |\\n| `assign.read` / `assign.write` | OT / early finish |\\n| `staff_req.read` / `staff_req.write` | Client staff requests |\\n| `staff_req.review` | Admin/Controller approve/decline |\\n| `inv.read` | Client invoices |\\n| `incident.write` *(live)* | Staff/Client incidents |\\n| `portal.attendance.clock` *(planned)* | GPS clock in/out |\\n| `portal.invoice.query` *(planned)* | Client invoice comments |\\n| `staff_req.standdown` *(planned)* | Client cancel before approval |\\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -412,7 +412,7 @@
                   "raw": "{{baseUrl}}/portal/me/profile",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Aggregated staff profile for mobile (photo, full_name, designation, sia_badge_number, sia_expiry, email, phone, address).\\nPermission: `portal.profile.read`"
+                "description": "**PLANNED** — Aggregated staff profile for mobile (photo, full_name, designation, sia_badge_number, sia_expiry, email, phone, address).\\nPermission: `portal.profile.read`"
               },
               "response": []
             }
@@ -443,7 +443,7 @@
                   "raw": "{{baseUrl}}/attendance/book",
                   "query": []
                 },
-                "description": "Clock in against assignment. Permission: `attend.write`.\\n\\nCurrent API has no GPS \u2014 see planned GPS clock endpoints.",
+                "description": "Clock in against assignment. Permission: `attend.write`.\\n\\nCurrent API has no GPS — see planned GPS clock endpoints.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assignment_id\": 1,\n  \"book_off\": false\n}",
@@ -571,7 +571,7 @@
                   "raw": "{{baseUrl}}/portal/attendance/clock-in",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Clock in + store GPS.\\nPermission: `portal.attendance.clock`",
+                "description": "**PLANNED** — Clock in + store GPS.\\nPermission: `portal.attendance.clock`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assignment_id\": 1,\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 12.5,\n  \"captured_at\": \"2026-07-28T17:00:00Z\"\n}",
@@ -606,7 +606,7 @@
                   "raw": "{{baseUrl}}/portal/attendance/clock-out",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Clock out + store GPS.\\nPermission: `portal.attendance.clock`",
+                "description": "**PLANNED** — Clock out + store GPS.\\nPermission: `portal.attendance.clock`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assignment_id\": 1,\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 10.0,\n  \"captured_at\": \"2026-07-28T22:00:00Z\"\n}",
@@ -754,7 +754,7 @@
                     }
                   ]
                 },
-                "description": "**PLANNED** \u2014 total_hours, overtime_hours, early_finish counts.\\nPermission: `portal.hours.read`"
+                "description": "**PLANNED** — total_hours, overtime_hours, early_finish counts.\\nPermission: `portal.hours.read`"
               },
               "response": []
             }
@@ -1022,7 +1022,7 @@
                   "raw": "{{baseUrl}}/portal/shift-adjustments/summary",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 counts for logged-in user.\\nPermission: `portal.hours.read`"
+                "description": "**PLANNED** — counts for logged-in user.\\nPermission: `portal.hours.read`"
               },
               "response": []
             }
@@ -1031,9 +1031,10 @@
         },
         {
           "name": "1.6 Incident Reporting",
+          "description": "Live incident APIs. Permission: `incident.read` / `incident.write`.",
           "item": [
             {
-              "name": "Raise incident *(planned)*",
+              "name": "Raise incident *(live)*",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1053,10 +1054,10 @@
                   "raw": "{{baseUrl}}/portal/incidents",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Auto location + datetime; notes required.\\nPermission: `portal.incident.write`",
+                "description": "Permission: `incident.write`",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"notes\": \"Suspicious activity near main gate\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 8.0,\n  \"occurred_at\": \"2026-07-28T18:45:00Z\",\n  \"site_id\": 1,\n  \"assignment_id\": 1\n}",
+                  "raw": "{\n  \"notes\": \"Suspicious activity near main gate\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy\": 8.0,\n  \"occurred_at\": \"2026-07-28T18:45:00Z\",\n  \"site_id\": 1,\n  \"assignment_id\": 1\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1067,7 +1068,7 @@
               "response": []
             },
             {
-              "name": "Raise incident with images *(planned)*",
+              "name": "Raise incident with images *(live)*",
               "request": {
                 "method": "POST",
                 "header": [],
@@ -1076,13 +1077,13 @@
                     "{{baseUrl}}"
                   ],
                   "path": [
-                    "portal",
-                    "incidents"
+                    "incidents",
+                    "with-images"
                   ],
-                  "raw": "{{baseUrl}}/portal/incidents",
+                  "raw": "{{baseUrl}}/incidents/with-images",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 multipart with image attachments.\\nPermission: `portal.incident.write`",
+                "description": "Multipart images. Permission: `incident.write`",
                 "body": {
                   "mode": "formdata",
                   "formdata": [
@@ -1102,7 +1103,7 @@
                       "type": "text"
                     },
                     {
-                      "key": "accuracy_m",
+                      "key": "accuracy",
                       "value": "5",
                       "type": "text"
                     },
@@ -1128,7 +1129,7 @@
               "response": []
             },
             {
-              "name": "List my incidents *(planned)*",
+              "name": "List my incidents *(live)*",
               "request": {
                 "method": "GET",
                 "header": [],
@@ -1143,12 +1144,390 @@
                   "raw": "{{baseUrl}}/portal/incidents",
                   "query": []
                 },
-                "description": "**PLANNED**"
+                "description": "Permission: `incident.read`"
               },
               "response": []
             },
             {
-              "name": "Get incident *(planned)*",
+              "name": "Get incident *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "incidents",
+                    "{{incident_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/incidents/{{incident_id}}",
+                  "query": []
+                },
+                "description": "Permission: `incident.read`"
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "1.7 Patrol Management *(live)*",
+          "description": "QR checkpoints, GPS scan, sessions, logs, compliance. Permissions: `patrol.read|write|scan|reports`.",
+          "item": [
+            {
+              "name": "List routes *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "routes"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/routes",
+                  "query": []
+                },
+                "description": "Permission: `patrol.read`"
+              },
+              "response": []
+            },
+            {
+              "name": "Create route *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "routes"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/routes",
+                  "query": []
+                },
+                "description": "Permission: `patrol.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"site_id\": {{site_id}},\n  \"name\": \"Night Patrol\",\n  \"frequency_minutes\": 60,\n  \"start_time\": \"22:00\",\n  \"end_time\": \"06:00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get route *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "routes",
+                    "{{route_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/routes/{{route_id}}",
+                  "query": []
+                },
+                "description": "Includes ordered checkpoints."
+              },
+              "response": []
+            },
+            {
+              "name": "Create checkpoint *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoints"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoints",
+                  "query": []
+                },
+                "description": "Auto qr_token + code. Permission: `patrol.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"route_id\": {{route_id}},\n  \"name\": \"Main entrance\",\n  \"floor\": \"G\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"radius_m\": 20,\n  \"sort_order\": 1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Download QR PNG *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoints",
+                    "{{checkpoint_id}}",
+                    "qr.png"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoints/{{checkpoint_id}}/qr.png",
+                  "query": []
+                },
+                "description": "Auth required. Sticker PNG."
+              },
+              "response": []
+            },
+            {
+              "name": "Download QR PDF *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoints",
+                    "{{checkpoint_id}}",
+                    "qr.pdf"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoints/{{checkpoint_id}}/qr.pdf",
+                  "query": []
+                },
+                "description": "Auth required. Printable sticker."
+              },
+              "response": []
+            },
+            {
+              "name": "Public check token *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "check",
+                    "{{qr_token}}"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/check/{{qr_token}}",
+                  "query": []
+                },
+                "description": "No auth. Returns `{ valid: true }` only."
+              },
+              "response": []
+            },
+            {
+              "name": "Start session *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "sessions",
+                    "start"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/sessions/start",
+                  "query": []
+                },
+                "description": "Permission: `patrol.scan`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"route_id\": {{route_id}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Checkpoint scan *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoint-scan"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoint-scan",
+                  "query": []
+                },
+                "description": "GPS-validated scan. Permission: `patrol.scan`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"qr_token\": \"{{qr_token}}\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy\": 8,\n  \"device_id\": \"postman-device\",\n  \"session_id\": {{session_id}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List logs *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "logs"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/logs?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Permission: `patrol.read`"
+              },
+              "response": []
+            },
+            {
+              "name": "Compliance report *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "reports",
+                    "compliance"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/reports/compliance?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Permission: `patrol.reports`"
+              },
+              "response": []
+            },
+            {
+              "name": "Detail report *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "reports",
+                    "detail"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/reports/detail?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Permission: `patrol.reports`"
+              },
+              "response": []
+            },
+            {
+              "name": "Today patrol (admin) *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "today"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/today",
+                  "query": []
+                },
+                "description": "Guard next checkpoint / due."
+              },
+              "response": []
+            },
+            {
+              "name": "Portal today patrol *(live)*",
               "request": {
                 "method": "GET",
                 "header": [],
@@ -1158,18 +1537,47 @@
                   ],
                   "path": [
                     "portal",
-                    "incidents",
-                    "{{incident_id}}"
+                    "patrol",
+                    "today"
                   ],
-                  "raw": "{{baseUrl}}/portal/incidents/{{incident_id}}",
+                  "raw": "{{baseUrl}}/portal/patrol/today",
                   "query": []
                 },
-                "description": "**PLANNED**"
+                "description": "Staff portal."
+              },
+              "response": []
+            },
+            {
+              "name": "Portal compliance *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "patrol",
+                    "compliance"
+                  ],
+                  "raw": "{{baseUrl}}/portal/patrol/compliance?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Client scoped compliance."
               },
               "response": []
             }
-          ],
-          "description": ""
+          ]
         }
       ],
       "description": "Staff mobile app endpoints."
@@ -1237,7 +1645,7 @@
                   "raw": "{{baseUrl}}/portal/me/client-profile",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 company_name, email, phone, address.\\nPermission: `portal.profile.read`"
+                "description": "**PLANNED** — company_name, email, phone, address.\\nPermission: `portal.profile.read`"
               },
               "response": []
             }
@@ -1335,7 +1743,7 @@
                   "raw": "{{baseUrl}}/portal/staff-requests",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Matches mobile staff-request form.\\nsite_type: Construction | Corporate | Hotels | Hospitals | Event | Other\\nstaff_category: Static Guard | K9 Unit/Dog Handler | Housekeeping | Cleaners | Porters | Frontdesk/Receptionist | Mobile Patrol | Other\\npriority: urgent | normal\\nPermission: `staff_req.write`",
+                "description": "**PLANNED** — Matches mobile staff-request form.\\nsite_type: Construction | Corporate | Hotels | Hospitals | Event | Other\\nstaff_category: Static Guard | K9 Unit/Dog Handler | Housekeeping | Cleaners | Porters | Frontdesk/Receptionist | Mobile Patrol | Other\\npriority: urgent | normal\\nPermission: `staff_req.write`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"staff_count\": 3,\n  \"site_type\": \"Construction\",\n  \"staff_category\": \"Static Guard\",\n  \"shift_type\": \"adhoc\",\n  \"days\": [\n    \"2026-07-29\",\n    \"2026-07-30\"\n  ],\n  \"shift_start\": \"08:00\",\n  \"shift_end\": \"18:00\",\n  \"location\": \"Canary Wharf site entrance\",\n  \"postcode\": \"E14 5AB\",\n  \"site_id\": 1,\n  \"notes\": \"High-vis required\",\n  \"priority\": \"urgent\"\n}",
@@ -1415,7 +1823,7 @@
                   "raw": "{{baseUrl}}/staff-requests/{{request_id}}/stand-down",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Cancel before approval only.\\nPermission: `staff_req.standdown`",
+                "description": "**PLANNED** — Cancel before approval only.\\nPermission: `staff_req.standdown`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"reason\": \"No longer required\"\n}",
@@ -1706,7 +2114,7 @@
                   "raw": "{{baseUrl}}/portal/invoices/{{invoice_id}}/queries",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Permission: `portal.invoice.query`",
+                "description": "**PLANNED** — Permission: `portal.invoice.query`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"comment\": \"Please clarify overtime line for 28 Jul\"\n}",
@@ -1843,9 +2251,10 @@
         },
         {
           "name": "2.6 Incident Reporting",
+          "description": "Client portal incidents. Permission: `incident.read` / `incident.write`.",
           "item": [
             {
-              "name": "Raise incident *(planned)*",
+              "name": "Raise incident *(live)*",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1865,10 +2274,10 @@
                   "raw": "{{baseUrl}}/portal/incidents",
                   "query": []
                 },
-                "description": "**PLANNED** \u2014 Permission: `portal.incident.write`",
+                "description": "Permission: `incident.write`",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"notes\": \"Theft reported at reception\",\n  \"latitude\": 51.515,\n  \"longitude\": -0.09,\n  \"accuracy_m\": 15,\n  \"occurred_at\": \"2026-07-28T21:10:00Z\",\n  \"site_id\": 1\n}",
+                  "raw": "{\n  \"notes\": \"Theft reported at reception\",\n  \"latitude\": 51.515,\n  \"longitude\": -0.09,\n  \"accuracy\": 15,\n  \"occurred_at\": \"2026-07-28T21:10:00Z\",\n  \"site_id\": 1\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1879,7 +2288,7 @@
               "response": []
             },
             {
-              "name": "Raise incident with images *(planned)*",
+              "name": "Raise incident with images *(live)*",
               "request": {
                 "method": "POST",
                 "header": [],
@@ -1888,13 +2297,13 @@
                     "{{baseUrl}}"
                   ],
                   "path": [
-                    "portal",
-                    "incidents"
+                    "incidents",
+                    "with-images"
                   ],
-                  "raw": "{{baseUrl}}/portal/incidents",
+                  "raw": "{{baseUrl}}/incidents/with-images",
                   "query": []
                 },
-                "description": "**PLANNED**",
+                "description": "Multipart. Permission: `incident.write`",
                 "body": {
                   "mode": "formdata",
                   "formdata": [
@@ -1919,6 +2328,11 @@
                       "type": "text"
                     },
                     {
+                      "key": "site_id",
+                      "value": "{{site_id}}",
+                      "type": "text"
+                    },
+                    {
                       "key": "images",
                       "type": "file",
                       "src": []
@@ -1927,9 +2341,48 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "List my incidents *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "incidents"
+                  ],
+                  "raw": "{{baseUrl}}/portal/incidents",
+                  "query": []
+                },
+                "description": "Permission: `incident.read`"
+              },
+              "response": []
+            },
+            {
+              "name": "Get incident *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "incidents",
+                    "{{incident_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/incidents/{{incident_id}}",
+                  "query": []
+                },
+                "description": "Permission: `incident.read`"
+              },
+              "response": []
             }
-          ],
-          "description": ""
+          ]
         }
       ],
       "description": "Client mobile app endpoints."
@@ -2046,7 +2499,7 @@
               "raw": "{{baseUrl}}/roles",
               "query": []
             },
-            "description": "Admin \u2014 manage role permissions."
+            "description": "Admin — manage role permissions."
           },
           "response": []
         },
@@ -2065,12 +2518,12 @@
               "raw": "{{baseUrl}}/users",
               "query": []
             },
-            "description": "Admin \u2014 assign staff/client roles."
+            "description": "Admin — assign staff/client roles."
           },
           "response": []
         },
         {
-          "name": "List incidents (admin) *(planned)*",
+          "name": "List incidents (admin) *(live)*",
           "request": {
             "method": "GET",
             "header": [],
@@ -2079,10 +2532,9 @@
                 "{{baseUrl}}"
               ],
               "path": [
-                "admin",
                 "incidents"
               ],
-              "raw": "{{baseUrl}}/admin/incidents?status=open",
+              "raw": "{{baseUrl}}/incidents?status=open",
               "query": [
                 {
                   "key": "status",
@@ -2090,7 +2542,71 @@
                 }
               ]
             },
-            "description": "**PLANNED**"
+            "description": "Permission: `incident.read`"
+          },
+          "response": []
+        },
+        {
+          "name": "Incident summary *(live)*",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "incidents",
+                "reports",
+                "summary"
+              ],
+              "raw": "{{baseUrl}}/incidents/reports/summary?start_date=2026-07-01&end_date=2026-07-31",
+              "query": [
+                {
+                  "key": "start_date",
+                  "value": "2026-07-01"
+                },
+                {
+                  "key": "end_date",
+                  "value": "2026-07-31"
+                }
+              ]
+            },
+            "description": "Permission: `incident.reports`"
+          },
+          "response": []
+        },
+        {
+          "name": "Patch incident status *(live)*",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "incidents",
+                "{{incident_id}}"
+              ],
+              "raw": "{{baseUrl}}/incidents/{{incident_id}}",
+              "query": []
+            },
+            "description": "Permission: `incident.write`",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"reviewing\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -2124,9 +2640,418 @@
                 }
               ]
             },
-            "description": "**PLANNED** \u2014 verify stored GPS clock events."
+            "description": "**PLANNED** — verify stored GPS clock events."
           },
           "response": []
+        },
+        {
+          "name": "Patrol Management *(live)*",
+          "description": "QR checkpoints, GPS scan, sessions, logs, compliance. Permissions: `patrol.read|write|scan|reports`.",
+          "item": [
+            {
+              "name": "List routes *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "routes"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/routes",
+                  "query": []
+                },
+                "description": "Permission: `patrol.read`"
+              },
+              "response": []
+            },
+            {
+              "name": "Create route *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "routes"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/routes",
+                  "query": []
+                },
+                "description": "Permission: `patrol.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"site_id\": {{site_id}},\n  \"name\": \"Night Patrol\",\n  \"frequency_minutes\": 60,\n  \"start_time\": \"22:00\",\n  \"end_time\": \"06:00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get route *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "routes",
+                    "{{route_id}}"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/routes/{{route_id}}",
+                  "query": []
+                },
+                "description": "Includes ordered checkpoints."
+              },
+              "response": []
+            },
+            {
+              "name": "Create checkpoint *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoints"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoints",
+                  "query": []
+                },
+                "description": "Auto qr_token + code. Permission: `patrol.write`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"route_id\": {{route_id}},\n  \"name\": \"Main entrance\",\n  \"floor\": \"G\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"radius_m\": 20,\n  \"sort_order\": 1\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Download QR PNG *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoints",
+                    "{{checkpoint_id}}",
+                    "qr.png"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoints/{{checkpoint_id}}/qr.png",
+                  "query": []
+                },
+                "description": "Auth required. Sticker PNG."
+              },
+              "response": []
+            },
+            {
+              "name": "Download QR PDF *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoints",
+                    "{{checkpoint_id}}",
+                    "qr.pdf"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoints/{{checkpoint_id}}/qr.pdf",
+                  "query": []
+                },
+                "description": "Auth required. Printable sticker."
+              },
+              "response": []
+            },
+            {
+              "name": "Public check token *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "check",
+                    "{{qr_token}}"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/check/{{qr_token}}",
+                  "query": []
+                },
+                "description": "No auth. Returns `{ valid: true }` only."
+              },
+              "response": []
+            },
+            {
+              "name": "Start session *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "sessions",
+                    "start"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/sessions/start",
+                  "query": []
+                },
+                "description": "Permission: `patrol.scan`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"route_id\": {{route_id}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Checkpoint scan *(live)*",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "checkpoint-scan"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/checkpoint-scan",
+                  "query": []
+                },
+                "description": "GPS-validated scan. Permission: `patrol.scan`",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"qr_token\": \"{{qr_token}}\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy\": 8,\n  \"device_id\": \"postman-device\",\n  \"session_id\": {{session_id}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List logs *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "logs"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/logs?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Permission: `patrol.read`"
+              },
+              "response": []
+            },
+            {
+              "name": "Compliance report *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "reports",
+                    "compliance"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/reports/compliance?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Permission: `patrol.reports`"
+              },
+              "response": []
+            },
+            {
+              "name": "Detail report *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "reports",
+                    "detail"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/reports/detail?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Permission: `patrol.reports`"
+              },
+              "response": []
+            },
+            {
+              "name": "Today patrol (admin) *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "patrol",
+                    "today"
+                  ],
+                  "raw": "{{baseUrl}}/patrol/today",
+                  "query": []
+                },
+                "description": "Guard next checkpoint / due."
+              },
+              "response": []
+            },
+            {
+              "name": "Portal today patrol *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "patrol",
+                    "today"
+                  ],
+                  "raw": "{{baseUrl}}/portal/patrol/today",
+                  "query": []
+                },
+                "description": "Staff portal."
+              },
+              "response": []
+            },
+            {
+              "name": "Portal compliance *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "patrol",
+                    "compliance"
+                  ],
+                  "raw": "{{baseUrl}}/portal/patrol/compliance?start_date=2026-07-01&end_date=2026-07-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-07-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-07-31"
+                    }
+                  ]
+                },
+                "description": "Client scoped compliance."
+              },
+              "response": []
+            }
+          ]
         }
       ],
       "description": "Admin has full system access. Controllers use staff_req.review. Other roles only get granted permissions."

@@ -363,6 +363,76 @@ export const api = {
       const qs = q.toString();
       return request<import('./types').PortalHours>(`/portal/hours${qs ? `?${qs}` : ''}`);
     },
+    patrolToday: (): Promise<import('./types').PatrolToday> => request('/portal/patrol/today'),
+    patrolCompliance: (start_date: string, end_date: string, site_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (site_id) q.set('site_id', String(site_id));
+      return request<import('./types').PatrolComplianceRow[]>(`/portal/patrol/compliance?${q}`);
+    },
+    incidents: (status?: string) =>
+      request<import('./types').Incident[]>(`/portal/incidents${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+    createIncident: (data: Partial<import('./types').Incident> & { notes: string }) =>
+      request<import('./types').Incident>('/portal/incidents', { method: 'POST', body: JSON.stringify(data) }),
+  },
+  patrol: {
+    listRoutes: (site_id?: number) =>
+      request<import('./types').PatrolRoute[]>(`/patrol/routes${site_id ? `?site_id=${site_id}` : ''}`),
+    getRoute: (id: number) => request<import('./types').PatrolRoute>(`/patrol/routes/${id}`),
+    createRoute: (data: Record<string, unknown>) =>
+      request<import('./types').PatrolRoute>('/patrol/routes', { method: 'POST', body: JSON.stringify(data) }),
+    updateRoute: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').PatrolRoute>(`/patrol/routes/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteRoute: (id: number) => request<void>(`/patrol/routes/${id}`, { method: 'DELETE' }),
+    createCheckpoint: (data: Record<string, unknown>) =>
+      request<import('./types').PatrolCheckpoint>('/patrol/checkpoints', { method: 'POST', body: JSON.stringify(data) }),
+    updateCheckpoint: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').PatrolCheckpoint>(`/patrol/checkpoints/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteCheckpoint: (id: number) => request<void>(`/patrol/checkpoints/${id}`, { method: 'DELETE' }),
+    qrPngUrl: (id: number) => `${API_URL}/patrol/checkpoints/${id}/qr.png`,
+    qrPdfUrl: (id: number) => `${API_URL}/patrol/checkpoints/${id}/qr.pdf`,
+    downloadQr: (id: number, kind: 'png' | 'pdf' = 'png') =>
+      requestBlob(`/patrol/checkpoints/${id}/qr.${kind}`),
+    startSession: (data: { route_id: number; guard_id?: number; assignment_id?: number }) =>
+      request('/patrol/sessions/start', { method: 'POST', body: JSON.stringify(data) }),
+    scan: (data: Record<string, unknown>) =>
+      request<import('./types').PatrolLog>('/patrol/checkpoint-scan', { method: 'POST', body: JSON.stringify(data) }),
+    logs: (params?: Record<string, string | number | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+      const qs = q.toString();
+      return request<import('./types').PatrolLog[]>(`/patrol/logs${qs ? `?${qs}` : ''}`);
+    },
+    compliance: (start_date: string, end_date: string, site_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (site_id) q.set('site_id', String(site_id));
+      return request<import('./types').PatrolComplianceRow[]>(`/patrol/reports/compliance?${q}`);
+    },
+    detail: (start_date: string, end_date: string, route_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (route_id) q.set('route_id', String(route_id));
+      return request<import('./types').PatrolLog[]>(`/patrol/reports/detail?${q}`);
+    },
+    today: (): Promise<import('./types').PatrolToday> => request('/patrol/today'),
+  },
+  incidents: {
+    list: (params?: Record<string, string | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+      const qs = q.toString();
+      return request<import('./types').Incident[]>(`/incidents${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: number) => request<import('./types').Incident>(`/incidents/${id}`),
+    create: (data: Record<string, unknown>) =>
+      request<import('./types').Incident>('/incidents', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').Incident>(`/incidents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    summary: (start_date?: string, end_date?: string) => {
+      const q = new URLSearchParams();
+      if (start_date) q.set('start_date', start_date);
+      if (end_date) q.set('end_date', end_date);
+      const qs = q.toString();
+      return request<import('./types').IncidentSummaryRow[]>(`/incidents/reports/summary${qs ? `?${qs}` : ''}`);
+    },
   },
   clients: {
     list: (): Promise<Client[]> => request<Client[]>('/clients'),

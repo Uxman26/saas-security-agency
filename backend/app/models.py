@@ -117,6 +117,12 @@ class Company(Base):
     email_logs = relationship("EmailLog", back_populates="company", cascade="all, delete-orphan")
     api_usage_logs = relationship("ApiUsageLog", back_populates="company", cascade="all, delete-orphan")
     leads = relationship("Lead", back_populates="company", cascade="all, delete-orphan")
+    patrol_routes = relationship("PatrolRoute", back_populates="company", cascade="all, delete-orphan")
+    patrol_checkpoints = relationship("PatrolCheckpoint", back_populates="company", cascade="all, delete-orphan")
+    patrol_sessions = relationship("PatrolSession", back_populates="company", cascade="all, delete-orphan")
+    patrol_logs = relationship("PatrolLog", back_populates="company", cascade="all, delete-orphan")
+    patrol_alerts = relationship("PatrolAlert", back_populates="company", cascade="all, delete-orphan")
+    incidents = relationship("Incident", back_populates="company", cascade="all, delete-orphan")
 
 
 class SmsLog(Base):
@@ -516,6 +522,8 @@ class Site(Base):
     reference = Column(String, nullable=True)
     default_hourly_rate = Column(Float)
     staff_hourly_rate = Column(Float)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="sites")
@@ -527,6 +535,9 @@ class Site(Base):
     contractor_assignments = relationship("ContractorAssignment", back_populates="site", cascade="all, delete-orphan")
     rates = relationship("SiteRate", back_populates="site", cascade="all, delete-orphan")
     invoice_lines = relationship("InvoiceLine", back_populates="site", cascade="all, delete-orphan")
+    patrol_routes = relationship("PatrolRoute", back_populates="site", cascade="all, delete-orphan")
+    patrol_checkpoints = relationship("PatrolCheckpoint", back_populates="site", cascade="all, delete-orphan")
+    incidents = relationship("Incident", back_populates="site")
 
 class RotaPlan(Base):
     __tablename__ = "rota_plans"
@@ -1087,3 +1098,143 @@ class AuditLog(Base):
     entity_id = Column(Integer)
     meta = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PatrolRoute(Base):
+    __tablename__ = "patrol_routes"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    frequency_minutes = Column(Integer, nullable=False, default=60)
+    start_time = Column(String, nullable=False, default="22:00")
+    end_time = Column(String, nullable=False, default="06:00")
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="patrol_routes")
+    site = relationship("Site", back_populates="patrol_routes")
+    checkpoints = relationship(
+        "PatrolCheckpoint", back_populates="route", cascade="all, delete-orphan", order_by="PatrolCheckpoint.sort_order"
+    )
+    sessions = relationship("PatrolSession", back_populates="route", cascade="all, delete-orphan")
+    logs = relationship("PatrolLog", back_populates="route")
+
+
+class PatrolCheckpoint(Base):
+    __tablename__ = "patrol_checkpoints"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
+    route_id = Column(Integer, ForeignKey("patrol_routes.id"), nullable=False, index=True)
+    code = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    floor = Column(String)
+    description = Column(Text)
+    qr_token = Column(String, nullable=False, unique=True, index=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    radius_m = Column(Float, default=20)
+    sort_order = Column(Integer, default=0)
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="patrol_checkpoints")
+    site = relationship("Site", back_populates="patrol_checkpoints")
+    route = relationship("PatrolRoute", back_populates="checkpoints")
+    logs = relationship("PatrolLog", back_populates="checkpoint")
+
+
+class PatrolSession(Base):
+    __tablename__ = "patrol_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    route_id = Column(Integer, ForeignKey("patrol_routes.id"), nullable=False, index=True)
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    ended_at = Column(DateTime(timezone=True))
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="patrol_sessions")
+    guard = relationship("Guard")
+    route = relationship("PatrolRoute", back_populates="sessions")
+    logs = relationship("PatrolLog", back_populates="session")
+
+
+class PatrolLog(Base):
+    __tablename__ = "patrol_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    checkpoint_id = Column(Integer, ForeignKey("patrol_checkpoints.id"), nullable=False, index=True)
+    route_id = Column(Integer, ForeignKey("patrol_routes.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("patrol_sessions.id"))
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    scan_time = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    accuracy = Column(Float)
+    device_id = Column(String)
+    photo_path = Column(String)
+    distance_m = Column(Float)
+    status = Column(String, default="completed")
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="patrol_logs")
+    guard = relationship("Guard")
+    checkpoint = relationship("PatrolCheckpoint", back_populates="logs")
+    route = relationship("PatrolRoute", back_populates="logs")
+    session = relationship("PatrolSession", back_populates="logs")
+
+
+class PatrolAlert(Base):
+    __tablename__ = "patrol_alerts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    route_id = Column(Integer, ForeignKey("patrol_routes.id"), nullable=False)
+    checkpoint_id = Column(Integer, ForeignKey("patrol_checkpoints.id"))
+    session_id = Column(Integer, ForeignKey("patrol_sessions.id"))
+    guard_id = Column(Integer, ForeignKey("guards.id"))
+    alert_type = Column(String, default="missed_checkpoint")
+    message = Column(Text)
+    window_start = Column(DateTime(timezone=True))
+    window_end = Column(DateTime(timezone=True))
+    notified_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company", back_populates="patrol_alerts")
+
+
+class Incident(Base):
+    __tablename__ = "incidents"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    site_id = Column(Integer, ForeignKey("sites.id"))
+    reported_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    guard_id = Column(Integer, ForeignKey("guards.id"))
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    notes = Column(Text, nullable=False)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    accuracy = Column(Float)
+    occurred_at = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String, default="open")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="incidents")
+    client = relationship("Client")
+    site = relationship("Site", back_populates="incidents")
+    reported_by = relationship("User", foreign_keys=[reported_by_user_id])
+    guard = relationship("Guard")
+    attachments = relationship("IncidentAttachment", back_populates="incident", cascade="all, delete-orphan")
+
+
+class IncidentAttachment(Base):
+    __tablename__ = "incident_attachments"
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("incidents.id"), nullable=False, index=True)
+    file_path = Column(String, nullable=False)
+    mime_type = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    incident = relationship("Incident", back_populates="attachments")

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
+import { addDays } from 'date-fns';
 
 const SHIFT_MENU_H = 420;
 const EMP_MENU_H = 132;
@@ -395,31 +396,65 @@ export function RotaCalendarClient() {
 
   const meta = useMemo(() => {
     if (!state.days.length) return '';
-    const start = state.days[0];
-    const count = daysOpen ? pendingDayCount : state.days.length;
-    const days = buildDayRange(start, Math.max(1, count));
+    let days: string[];
+    if (daysOpen) {
+      if (daysEditEdge === 'start') {
+        if (pendingDayCount >= daysBaselineCount) {
+          const add = pendingDayCount - daysBaselineCount;
+          const newStart = dateKey(addDays(parseDateKey(state.days[0]), -add));
+          days = buildDayRange(newStart, pendingDayCount);
+        } else {
+          const remove = daysBaselineCount - pendingDayCount;
+          days = state.days.slice(remove);
+        }
+      } else {
+        days = buildDayRange(state.days[0], Math.max(1, pendingDayCount));
+      }
+    } else {
+      days = state.days;
+    }
     const a = fmtShortDate(days[0]);
     const b = fmtShortDate(days[days.length - 1]);
     const preview = daysOpen && pendingDayCount !== daysBaselineCount ? ' (preview)' : '';
-    return `${a} – ${b} | ${count} days${preview} | ${state.employees.length} employees`;
-  }, [state.days, state.employees.length, daysOpen, pendingDayCount, daysBaselineCount]);
+    return `${a} – ${b} | ${days.length} days${preview} | ${state.employees.length} employees`;
+  }, [state.days, state.employees.length, daysOpen, pendingDayCount, daysBaselineCount, daysEditEdge]);
 
   /** Days shown in the table — includes preview columns while editing length. */
   const tableDays = useMemo(() => {
     if (!state.days.length) return [] as string[];
     if (!daysOpen) return state.days;
+    if (daysEditEdge === 'start') {
+      if (pendingDayCount >= daysBaselineCount) {
+        const add = pendingDayCount - daysBaselineCount;
+        const newStart = dateKey(addDays(parseDateKey(state.days[0]), -add));
+        return buildDayRange(newStart, Math.max(1, pendingDayCount));
+      }
+      // Removing from start — keep full baseline so leading days can show as red
+      return state.days;
+    }
     const len = Math.max(daysBaselineCount, pendingDayCount, 1);
     return buildDayRange(state.days[0], len);
-  }, [state.days, daysOpen, daysBaselineCount, pendingDayCount]);
+  }, [state.days, daysOpen, daysBaselineCount, pendingDayCount, daysEditEdge]);
 
   const dayEditMark = useCallback(
     (index: number): 'adding' | 'removing' | null => {
       if (!daysOpen) return null;
+      if (daysEditEdge === 'start') {
+        if (pendingDayCount > daysBaselineCount) {
+          const add = pendingDayCount - daysBaselineCount;
+          return index < add ? 'adding' : null;
+        }
+        if (pendingDayCount < daysBaselineCount) {
+          const remove = daysBaselineCount - pendingDayCount;
+          return index < remove ? 'removing' : null;
+        }
+        return null;
+      }
       if (index >= pendingDayCount) return 'removing';
       if (index >= daysBaselineCount) return 'adding';
       return null;
     },
-    [daysOpen, pendingDayCount, daysBaselineCount]
+    [daysOpen, pendingDayCount, daysBaselineCount, daysEditEdge]
   );
 
   const updateGridScrollHint = useCallback(() => {
@@ -495,6 +530,7 @@ export function RotaCalendarClient() {
     const n = state.days.length;
     setDaysBaselineCount(n);
     setPendingDayCount(n);
+    setDaysEditEdge('end');
     setDaysOpen(true);
   };
 
@@ -517,7 +553,10 @@ export function RotaCalendarClient() {
       return;
     }
     if (next < state.days.length) {
-      const removing = state.days.slice(next);
+      const removing =
+        daysEditEdge === 'start'
+          ? state.days.slice(0, state.days.length - next)
+          : state.days.slice(next);
       let shiftCount = 0;
       for (const dk of removing) {
         for (const emp of state.employees) {
@@ -528,7 +567,7 @@ export function RotaCalendarClient() {
         toast.confirm(
           `Remove ${removing.length} day(s) and ${shiftCount} shift(s)?`,
           () => {
-            setDayCount(next);
+            setDayCount(next, daysEditEdge);
             setDaysOpen(false);
             toast.snack(
               removing.length === 1
@@ -545,11 +584,17 @@ export function RotaCalendarClient() {
       }
     }
     const added = next - state.days.length;
-    if (added > 0) scrollDayAfterApplyRef.current = next - 1;
-    setDayCount(next);
+    if (added > 0) {
+      scrollDayAfterApplyRef.current = daysEditEdge === 'start' ? 0 : next - 1;
+    }
+    setDayCount(next, daysEditEdge);
     setDaysOpen(false);
     if (added > 0) {
-      toast.snack(added === 1 ? 'Added 1 day' : `Added ${added} days`);
+      toast.snack(
+        added === 1
+          ? `Added 1 day at the ${daysEditEdge}`
+          : `Added ${added} days at the ${daysEditEdge}`
+      );
     } else {
       toast.snack(Math.abs(added) === 1 ? 'Removed 1 day' : `Removed ${Math.abs(added)} days`);
     }
@@ -562,9 +607,13 @@ export function RotaCalendarClient() {
     const run = () => {
       if (cancelled) return;
       if (pendingDayCount > daysBaselineCount) {
-        scrollDayColumnIntoView(pendingDayCount - 1);
+        scrollDayColumnIntoView(daysEditEdge === 'start' ? 0 : pendingDayCount - 1);
       } else if (pendingDayCount < daysBaselineCount) {
-        scrollDayColumnIntoView(Math.min(pendingDayCount, Math.max(0, tableDays.length - 1)));
+        const idx =
+          daysEditEdge === 'start'
+            ? 0
+            : Math.min(pendingDayCount, Math.max(0, tableDays.length - 1));
+        scrollDayColumnIntoView(idx);
       }
     };
     const id = window.requestAnimationFrame(() => {
@@ -574,7 +623,7 @@ export function RotaCalendarClient() {
       cancelled = true;
       window.cancelAnimationFrame(id);
     };
-  }, [daysOpen, pendingDayCount, daysBaselineCount, tableDays.length, scrollDayColumnIntoView]);
+  }, [daysOpen, pendingDayCount, daysBaselineCount, tableDays.length, scrollDayColumnIntoView, daysEditEdge]);
 
   // After Done commits new days, scroll to the newest column.
   useEffect(() => {
@@ -2558,11 +2607,41 @@ export function RotaCalendarClient() {
               Preview highlights on the rota: green = add, red = remove. Nothing is saved until Done.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Apply changes at</p>
+            <div className="flex rounded-md border p-0.5 bg-muted/40">
+              <button
+                type="button"
+                className={cn(
+                  'flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors',
+                  daysEditEdge === 'start' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setDaysEditEdge('start')}
+              >
+                Start of rota
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  'flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors',
+                  daysEditEdge === 'end' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+                onClick={() => setDaysEditEdge('end')}
+              >
+                End of rota
+              </button>
+            </div>
+          </div>
           <p className="text-sm tabular-nums">
             Current length: <span className="font-semibold">{pendingDayCount}</span> days
             {pendingDayCount !== daysBaselineCount ? (
               <span className="text-muted-foreground"> (was {daysBaselineCount})</span>
             ) : null}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {daysEditEdge === 'start'
+              ? 'Days are added or removed before the first date.'
+              : 'Days are added or removed after the last date.'}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => adjustPendingDays(1)}>

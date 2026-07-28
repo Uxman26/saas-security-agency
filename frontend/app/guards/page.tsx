@@ -9,7 +9,7 @@ import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard } from '@/hooks/use-guards';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
@@ -226,6 +226,9 @@ export default function GuardsPage() {
                 <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
                   <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
                     <DialogTitle>Add staff member</DialogTitle>
+                    <DialogDescription className="sr-only">
+                      Enter employee and employment details to add a new staff member.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
                     <GuardFormWizard form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create staff" />
@@ -385,6 +388,7 @@ export default function GuardsPage() {
           <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
             <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
               <DialogTitle className="break-words">Edit staff — {editingGuard?.full_name}</DialogTitle>
+              <DialogDescription className="sr-only">Update this staff member&apos;s profile.</DialogDescription>
             </DialogHeader>
             <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
               <GuardFormWizard form={editForm} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save changes" />

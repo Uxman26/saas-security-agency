@@ -62,7 +62,9 @@ function DialogContent({
 }) {
   const isExternalOverlay = (target: EventTarget | null) => {
     const el = target as HTMLElement | null
-    return !!el?.closest?.("[data-time-hm-picker], [data-sonner-toaster], [data-sonner-toast]")
+    return !!el?.closest?.(
+      "[data-time-hm-picker], [data-sonner-toaster], [data-sonner-toast], [data-slot='select-content'], [data-slot='select-viewport'], [data-radix-select-content], [data-radix-popper-content-wrapper]"
+    )
   }
 
   return (

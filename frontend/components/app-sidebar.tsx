@@ -132,13 +132,13 @@ export function AppSidebar() {
 
   if (isSuperAdmin) {
     return (
-      <aside className="hidden h-dvh min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
-        <div className="shrink-0 p-4 border-b border-slate-700/80">
+      <aside className="hidden h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
+        <div className="shrink-0 p-3 border-b border-slate-700/80">
           <CompanyBrand />
         </div>
-        <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-2">
+        <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
           <div>
-            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{ts('sectionAdmin')}</p>
+            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{ts('sectionAdmin')}</p>
             <div className="space-y-0.5 mt-1">
               {[
                 { href: '/admin/companies', labelKey: 'adminCompanies', icon: Building2 },
@@ -155,14 +155,14 @@ export function AppSidebar() {
                   key={href}
                   href={href}
                   className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                     pathname === href || pathname.startsWith(`${href}/`)
                       ? 'bg-slate-800 text-white'
                       : 'text-slate-300 hover:bg-slate-800/80'
                   )}
                 >
                   <Icon className="size-4 shrink-0" />
-                  {ts(labelKey)}
+                  <span className="truncate">{ts(labelKey)}</span>
                 </Link>
               ))}
             </div>
@@ -173,14 +173,14 @@ export function AppSidebar() {
   }
 
   return (
-    <aside className="hidden h-dvh min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
-      <div className="shrink-0 p-4 border-b border-slate-700/80">
+    <aside className="hidden h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
+      <div className="shrink-0 p-3 border-b border-slate-700/80">
         <CompanyBrand />
       </div>
-      <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-2">
+      <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
         {grouped.map((section) => (
           <div key={section.titleKey}>
-            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               {section.titleKey === 'sectionSettings' ? <Settings className="size-3" /> : null}
               {ts(section.titleKey)}
             </p>
@@ -190,12 +190,12 @@ export function AppSidebar() {
                   key={href}
                   href={href}
                   className={cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
                     active(pathname, href) ? 'bg-slate-800 text-white font-medium' : 'text-slate-300 hover:bg-slate-800/80'
                   )}
                 >
                   <Icon className="size-4 shrink-0 opacity-90" />
-                  {ts(labelKey)}
+                  <span className="truncate">{ts(labelKey)}</span>
                 </Link>
               ))}
             </div>

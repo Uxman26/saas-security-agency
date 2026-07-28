@@ -53,37 +53,53 @@ function RotaRow({
   r,
   deletingId,
   renamingId,
+  selected,
+  onToggleSelect,
   onDelete,
   onRename,
+  bulkBusy,
 }: {
   r: RotaPlanListItem;
   deletingId: number | null;
   renamingId: number | null;
+  selected: boolean;
+  onToggleSelect: (id: number, checked: boolean) => void;
   onDelete: (id: number, name: string) => void;
   onRename: (id: number, currentName: string) => void;
+  bulkBusy?: boolean;
 }) {
   const published = r.status === 'published';
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-4 px-4 border-b last:border-b-0 hover:bg-muted/30">
-      <div className="sm:w-28 shrink-0">
-        <div className="text-sm font-semibold">{fmtShort(r.start_date)}</div>
-        <div className="text-[11px] text-muted-foreground capitalize">{published ? 'Published' : 'Draft'}</div>
+      <div className="flex items-start gap-3 min-w-0 flex-1">
+        <input
+          type="checkbox"
+          className="mt-1 size-4 shrink-0 rounded border-input"
+          checked={selected}
+          onChange={(e) => onToggleSelect(r.id, e.target.checked)}
+          aria-label={`Select ${r.name}`}
+          disabled={bulkBusy}
+        />
+        <div className="sm:w-28 shrink-0">
+          <div className="text-sm font-semibold">{fmtShort(r.start_date)}</div>
+          <div className="text-[11px] text-muted-foreground capitalize">{published ? 'Published' : 'Draft'}</div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <Link href={`/rota/calendar?id=${r.id}`} className="text-sm font-medium text-sky-600 hover:underline">
+            {fmtRange(r.start_date, r.end_date)}
+          </Link>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{r.name}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {r.day_count} days · {r.staff_count} staff · {r.shift_count} shifts
+          </p>
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <Link href={`/rota/calendar?id=${r.id}`} className="text-sm font-medium text-sky-600 hover:underline">
-          {fmtRange(r.start_date, r.end_date)}
-        </Link>
-        <p className="text-xs text-muted-foreground mt-0.5 truncate">{r.name}</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          {r.day_count} days · {r.staff_count} staff · {r.shift_count} shifts
-        </p>
-      </div>
-      <div className="flex items-center gap-1 shrink-0 sm:ml-auto">
+      <div className="flex items-center gap-1 shrink-0 sm:ml-auto pl-7 sm:pl-0">
         <Button
           variant="outline"
           size="sm"
           className="h-8 px-2 text-xs"
-          disabled={renamingId === r.id}
+          disabled={renamingId === r.id || bulkBusy}
           onClick={() => onRename(r.id, r.name)}
           title="Rename rota"
         >
@@ -103,13 +119,67 @@ function RotaRow({
           variant="ghost"
           size="icon"
           className="size-8 text-destructive hover:text-destructive"
-          disabled={deletingId === r.id}
+          disabled={deletingId === r.id || bulkBusy}
           onClick={() => onDelete(r.id, r.name)}
           title="Delete"
         >
           <Trash2 className="size-4" />
         </Button>
       </div>
+    </div>
+  );
+}
+
+function BulkDeleteBar({
+  selectedCount,
+  allVisibleSelected,
+  someVisibleSelected,
+  selectableCount,
+  bulkDeleting,
+  onToggleAll,
+  onBulkDelete,
+}: {
+  selectedCount: number;
+  allVisibleSelected: boolean;
+  someVisibleSelected: boolean;
+  selectableCount: number;
+  bulkDeleting: boolean;
+  onToggleAll: (checked: boolean) => void;
+  onBulkDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+      <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="size-4 rounded border-input"
+          checked={allVisibleSelected}
+          ref={(el) => {
+            if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
+          }}
+          onChange={(e) => onToggleAll(e.target.checked)}
+          disabled={bulkDeleting || selectableCount === 0}
+          aria-label="Select all visible rotas"
+        />
+        <span className="text-muted-foreground">
+          {selectedCount > 0 ? `${selectedCount} selected` : 'Select all'}
+        </span>
+      </label>
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        className="h-8"
+        disabled={selectedCount === 0 || bulkDeleting}
+        onClick={onBulkDelete}
+      >
+        {bulkDeleting ? (
+          <Loader2 className="size-3.5 animate-spin mr-1.5" />
+        ) : (
+          <Trash2 className="size-3.5 mr-1.5" />
+        )}
+        Delete selected
+      </Button>
     </div>
   );
 }
@@ -122,9 +192,12 @@ function RotaSection({
   onToggle,
   deletingId,
   renamingId,
+  selectedIds,
+  onToggleSelect,
   onDelete,
   onRename,
   empty,
+  bulkBusy,
 }: {
   title: string;
   hint?: string;
@@ -133,9 +206,12 @@ function RotaSection({
   onToggle: () => void;
   deletingId: number | null;
   renamingId: number | null;
+  selectedIds: Set<number>;
+  onToggleSelect: (id: number, checked: boolean) => void;
   onDelete: (id: number, name: string) => void;
   onRename: (id: number, currentName: string) => void;
   empty: string;
+  bulkBusy?: boolean;
 }) {
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -164,8 +240,11 @@ function RotaSection({
                 r={r}
                 deletingId={deletingId}
                 renamingId={renamingId}
+                selected={selectedIds.has(r.id)}
+                onToggleSelect={onToggleSelect}
                 onDelete={onDelete}
                 onRename={onRename}
+                bulkBusy={bulkBusy}
               />
             ))}
           </div>
@@ -184,6 +263,8 @@ function RotaHubPage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [nameFilter, setNameFilter] = useState('');
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
@@ -209,6 +290,7 @@ function RotaHubPage() {
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [tab, nameFilter, rangeFrom, rangeTo, sortKey, sortDir]);
 
   const tabRotas = useMemo(() => {
@@ -219,6 +301,15 @@ function RotaHubPage() {
       return overlapsRange(r, rangeFrom, rangeTo);
     });
   }, [rotas, tab, nameFilter, rangeFrom, rangeTo]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(tabRotas.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [tabRotas]);
 
   const getSortValue = useCallback((r: RotaPlanListItem, key: string) => {
     if (key === 'name') return r.name;
@@ -286,6 +377,11 @@ function RotaHubPage() {
         try {
           await api.rotaPlans.delete(id);
           toast.success('Rota deleted');
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
           load();
         } catch (e) {
           toast.error(e instanceof Error ? e.message : 'Delete failed');
@@ -294,6 +390,64 @@ function RotaHubPage() {
         }
       },
       { label: 'Delete', description: 'Published shifts linked to it will also be removed.' }
+    );
+  };
+
+  const toggleSelect = (id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const selectableIds = useMemo(() => {
+    if (tab === 'active') return pageRows.map((r) => r.id);
+    return sortedTabRotas.map((r) => r.id);
+  }, [tab, pageRows, sortedTabRotas]);
+
+  const allVisibleSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = selectableIds.some((id) => selectedIds.has(id));
+
+  const toggleSelectAllVisible = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) selectableIds.forEach((id) => next.add(id));
+      else selectableIds.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+  const onBulkDelete = () => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    toast.confirm(
+      `Delete ${ids.length} selected rota${ids.length === 1 ? '' : 's'}?`,
+      async () => {
+        setBulkDeleting(true);
+        let ok = 0;
+        let failed = 0;
+        for (const id of ids) {
+          try {
+            await api.rotaPlans.delete(id);
+            ok += 1;
+          } catch {
+            failed += 1;
+          }
+        }
+        setBulkDeleting(false);
+        setSelectedIds(new Set());
+        load();
+        if (ok && !failed) toast.success(`Deleted ${ok} rota${ok === 1 ? '' : 's'}`);
+        else if (ok && failed) toast.warning(`Deleted ${ok}, failed ${failed}`);
+        else toast.error('Bulk delete failed');
+      },
+      {
+        label: 'Delete all',
+        description: 'Published shifts linked to these rotas will also be removed.',
+      }
     );
   };
 
@@ -430,6 +584,15 @@ function RotaHubPage() {
                     </div>
                   ) : (
                     <>
+                      <BulkDeleteBar
+                        selectedCount={selectedIds.size}
+                        allVisibleSelected={allVisibleSelected}
+                        someVisibleSelected={someVisibleSelected}
+                        selectableCount={selectableIds.length}
+                        bulkDeleting={bulkDeleting}
+                        onToggleAll={toggleSelectAllVisible}
+                        onBulkDelete={onBulkDelete}
+                      />
                       <div className="rounded-lg border bg-card overflow-hidden">
                         {pageRows.map((r) => (
                           <RotaRow
@@ -437,8 +600,11 @@ function RotaHubPage() {
                             r={r}
                             deletingId={deletingId}
                             renamingId={renamingId}
+                            selected={selectedIds.has(r.id)}
+                            onToggleSelect={toggleSelect}
                             onDelete={onDelete}
                             onRename={onRename}
+                            bulkBusy={bulkDeleting}
                           />
                         ))}
                       </div>
@@ -466,6 +632,15 @@ function RotaHubPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
+                    <BulkDeleteBar
+                      selectedCount={selectedIds.size}
+                      allVisibleSelected={allVisibleSelected}
+                      someVisibleSelected={someVisibleSelected}
+                      selectableCount={selectableIds.length}
+                      bulkDeleting={bulkDeleting}
+                      onToggleAll={toggleSelectAllVisible}
+                      onBulkDelete={onBulkDelete}
+                    />
                     <RotaSection
                       title="Published rotas"
                       hint="Rotas that are no longer active but are still published will appear here."
@@ -474,9 +649,12 @@ function RotaHubPage() {
                       onToggle={() => setPubExpanded((v) => !v)}
                       deletingId={deletingId}
                       renamingId={renamingId}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
                       onDelete={onDelete}
                       onRename={onRename}
                       empty="No published old rotas."
+                      bulkBusy={bulkDeleting}
                     />
                     <RotaSection
                       title="Unpublished rotas"
@@ -486,9 +664,12 @@ function RotaHubPage() {
                       onToggle={() => setUnpubExpanded((v) => !v)}
                       deletingId={deletingId}
                       renamingId={renamingId}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
                       onDelete={onDelete}
                       onRename={onRename}
                       empty="No unpublished old rotas."
+                      bulkBusy={bulkDeleting}
                     />
                   </div>
                 )}

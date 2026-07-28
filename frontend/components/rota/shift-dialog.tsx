@@ -16,6 +16,7 @@ import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Plus } from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 type Props = {
   open: boolean;
@@ -141,7 +142,12 @@ export function ShiftDialog({
 
   const submit = () => {
     if (assignees.length === 0 || !dk) return;
-    onApply(assignees, dk, normalizeShiftForm(shift));
+    const siteName = (shift.site || '').trim();
+    if (!siteName) {
+      toast.warning('Site is required — select a site or enter a site name');
+      return;
+    }
+    onApply(assignees, dk, normalizeShiftForm({ ...shift, site: siteName }));
     onOpenChange(false);
   };
 
@@ -160,7 +166,7 @@ export function ShiftDialog({
     setAddSiteOpen(false);
   };
 
-  const siteValue = shift.site || '__none__';
+  const siteValue = shift.site.trim() || undefined;
 
   const assigneeStaffRates = useMemo(() => {
     return assignees
@@ -253,7 +259,9 @@ export function ShiftDialog({
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <Label>Site / location</Label>
+                <Label>
+                  Site / location <span className="text-destructive">*</span>
+                </Label>
                 <Button type="button" variant="link" size="sm" className="h-auto p-0 text-sky-600" onClick={openAddSite}>
                   <Plus className="size-3.5 mr-1" />
                   Add site
@@ -261,13 +269,12 @@ export function ShiftDialog({
               </div>
               <Select
                 value={siteValue}
-                onValueChange={(v) => applySite(v === '__none__' ? '' : v)}
+                onValueChange={(v) => applySite(v)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Optional — select site" />
+                  <SelectValue placeholder="Select Site" />
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-[250]">
-                  <SelectItem value="__none__">No site (one-off / temporary)</SelectItem>
                   {siteOptions.map((name) => {
                     const rec = siteByName.get(name);
                     const c = rec?.color || DEFAULT_SITE_COLOR;
@@ -284,17 +291,19 @@ export function ShiftDialog({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Site name</Label>
+              <Label>
+                Site name <span className="text-destructive">*</span>
+              </Label>
               <Input
                 maxLength={80}
-                placeholder="Enter site name if not selected"
+                placeholder="Enter site name"
+                required
                 value={shift.site}
                 onChange={(e) => {
                   const name = e.target.value.slice(0, 80);
                   setShift((s) => ({
                     ...s,
                     site: name,
-                    // Keep colour when typing a one-off name; clear rate prefs only if wiping site
                     ...(name.trim()
                       ? {}
                       : { color: s.color || DEFAULT_SITE_COLOR }),
@@ -302,7 +311,7 @@ export function ShiftDialog({
                 }}
               />
               <p className="text-[11px] text-muted-foreground">
-                Select a site above, or type a one-off site name here.
+                Required — select a site above, or type the site name here.
               </p>
             </div>
             <div className="space-y-1">
@@ -321,8 +330,6 @@ export function ShiftDialog({
                   <span className="text-xs text-muted-foreground tabular-nums">
                     Staff rates: {assigneeStaffRates.map((r) => r.rate.toFixed(2)).join(' / ')}
                   </span>
-                ) : assignees.length > 0 ? (
-                  <span className="text-xs text-muted-foreground">No staff rate set</span>
                 ) : null}
               </div>
               <Input
@@ -369,9 +376,9 @@ export function ShiftDialog({
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Notes</Label>
+              <Label>Notes / description</Label>
               <Textarea
-                placeholder="General notes about this shift"
+                placeholder="Shown on the rota shift and in Description"
                 value={shift.notes}
                 onChange={(e) => setShift((s) => ({ ...s, notes: e.target.value.slice(0, 500) }))}
                 rows={3}
@@ -379,7 +386,7 @@ export function ShiftDialog({
                 className="min-h-[72px] resize-y"
               />
               <p className="text-[11px] text-muted-foreground tabular-nums">
-                {shift.notes.length}/500
+                {shift.notes.length}/500 — appears on the shift tile in the rota
               </p>
             </div>
           </div>
@@ -387,7 +394,12 @@ export function ShiftDialog({
             <Button type="button" variant="outline" onClick={reset}>
               Reset form
             </Button>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={submit} disabled={assignees.length === 0}>
+            <Button
+              type="button"
+              className="bg-pink-600 hover:bg-pink-700"
+              onClick={submit}
+              disabled={assignees.length === 0 || !(shift.site || '').trim()}
+            >
               {edit ? 'Update shift' : 'Add shift'}
             </Button>
           </DialogFooter>

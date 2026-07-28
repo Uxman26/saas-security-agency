@@ -95,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {drawer && (
           <div className="fixed inset-0 z-50 md:hidden">
             <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close menu" onClick={() => setDrawer(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
+            <div className="absolute left-0 top-0 bottom-0 w-56 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
               <div className="p-4 border-b border-slate-700">
                 <CompanyBrand className="mb-2" />
                 <div className="flex justify-end">
@@ -148,7 +148,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         )}
-        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">{children}</main>
+        <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain">{children}</main>
       </div>
     </div>
   );

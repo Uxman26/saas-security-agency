@@ -87,8 +87,10 @@
   --rota-hours-bg: #e0f2fe;
   --rota-pay-bg: #d1fae5;
   --rota-publish-bg: #fce7f3;
-  --rota-emp-bg: #ffffff;
+  --rota-emp-bg: #e8eef7;
   --rota-emp-conflict-bg: #fffbeb;
+  --rota-day-header-bg: #fef3c7;
+  --rota-day-total-bg: #ede9fe;
 }
 
 .dark {
@@ -126,8 +128,10 @@
   --rota-hours-bg: #0c4a6e;
   --rota-pay-bg: #064e3b;
   --rota-publish-bg: #831843;
-  --rota-emp-bg: #161E2C;
+  --rota-emp-bg: #1e293b;
   --rota-emp-conflict-bg: #451a03;
+  --rota-day-header-bg: #422006;
+  --rota-day-total-bg: #2e1065;
 }
 
 @layer base {
@@ -258,5 +262,45 @@
 }
 .rota-sticky-publish {
   background-color: var(--rota-publish-bg) !important;
+}
+.rota-day-header {
+  background-color: var(--rota-day-header-bg) !important;
+}
+.rota-day-total {
+  background-color: var(--rota-day-total-bg) !important;
+}
+
+/* Always-visible rota grid scrollbars (X + Y position) */
+.rota-grid-scroll {
+  overflow: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent) color-mix(in oklab, var(--muted) 80%, transparent);
+}
+.rota-grid-scroll::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+.rota-grid-scroll::-webkit-scrollbar-track {
+  background: color-mix(in oklab, var(--muted) 85%, transparent);
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+.rota-grid-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted-foreground) 45%, var(--muted));
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.rota-grid-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted-foreground) 65%, var(--muted));
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+.rota-grid-scroll::-webkit-scrollbar-corner {
+  background: color-mix(in oklab, var(--muted) 85%, transparent);
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
 }
 

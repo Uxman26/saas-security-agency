@@ -13,10 +13,11 @@ import {
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
-import { buildDayRange, attKey, countedHoursForAttendance, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
+import { buildDayRange, attKey, countedHoursForAttendance, dateKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
+import { addDays } from 'date-fns';
 
 type InitPayload = {
   name: string;
@@ -111,7 +112,7 @@ type Ctx = {
   setRotaName: (name: string) => void;
   setBudget: (n: number) => void;
   addDaysDelta: (delta: number) => void;
-  setDayCount: (n: number) => void;
+  setDayCount: (n: number, edge?: 'start' | 'end') => void;
   addEmployeesById: (ids: string[]) => void;
   removeEmployee: (id: string) => void;
   removeEmployees: (ids: string[]) => void;
@@ -411,31 +412,45 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const setDayCount = useCallback((n: number) => {
+  const setDayCount = useCallback((n: number, edge: 'start' | 'end' = 'end') => {
     setState((s) => {
       if (s.days.length === 0) return s;
-      const start = s.days[0];
       const count = Math.max(1, Math.min(90, Math.floor(n)));
       if (count === s.days.length) return s;
-      const days = buildDayRange(start, count);
+
+      const pruneToDays = (days: string[]) => {
+        const keep = new Set(days);
+        const shifts: RotaJsState['shifts'] = {};
+        for (const [empId, byDay] of Object.entries(s.shifts)) {
+          const nextByDay: Record<string, ShiftRec[]> = {};
+          for (const [dk, list] of Object.entries(byDay || {})) {
+            if (keep.has(dk) && list?.length) nextByDay[dk] = list;
+          }
+          shifts[empId] = nextByDay;
+        }
+        const attendance: RotaJsState['attendance'] = {};
+        for (const [key, rec] of Object.entries(s.attendance)) {
+          const dk = key.split(':')[1];
+          if (dk && keep.has(dk)) attendance[key] = rec;
+        }
+        return { ...s, days, shifts, attendance };
+      };
+
+      if (edge === 'start') {
+        if (count > s.days.length) {
+          const add = count - s.days.length;
+          const newStart = dateKey(addDays(parseDateKey(s.days[0]), -add));
+          return { ...s, days: buildDayRange(newStart, count) };
+        }
+        const remove = s.days.length - count;
+        return pruneToDays(s.days.slice(remove));
+      }
+
+      const days = buildDayRange(s.days[0], count);
       if (count >= s.days.length) {
         return { ...s, days };
       }
-      const keep = new Set(days);
-      const shifts: RotaJsState['shifts'] = {};
-      for (const [empId, byDay] of Object.entries(s.shifts)) {
-        const nextByDay: Record<string, ShiftRec[]> = {};
-        for (const [dk, list] of Object.entries(byDay || {})) {
-          if (keep.has(dk) && list?.length) nextByDay[dk] = list;
-        }
-        shifts[empId] = nextByDay;
-      }
-      const attendance: RotaJsState['attendance'] = {};
-      for (const [key, rec] of Object.entries(s.attendance)) {
-        const dk = key.split(':')[1];
-        if (dk && keep.has(dk)) attendance[key] = rec;
-      }
-      return { ...s, days, shifts, attendance };
+      return pruneToDays(days);
     });
   }, []);
 

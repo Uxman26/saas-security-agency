@@ -305,7 +305,7 @@ export default function SitesPage() {
       contact_phone: site.contact_phone ?? '',
       contract_start_date: site.contract_start_date ?? '',
       contract_end_date: site.contract_end_date ?? '',
-      site_type: site.site_type ?? 1,
+      site_type: site.site_type === 2 ? 2 : 1,
       reference: site.reference ?? '',
       main_contractor_id: site.main_contractor_id ?? undefined,
       sub_contractor_id: site.sub_contractor_id ?? undefined,

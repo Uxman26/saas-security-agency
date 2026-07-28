@@ -161,7 +161,12 @@ export function ShiftDialog({
   const saveNewSite = async () => {
     const name = newSiteName.trim();
     if (name.length < 2 || !newSiteContractor) return;
-    const site = await createSite.mutateAsync({ name, contractor_id: newSiteContractor, color: newSiteColor });
+    const site = await createSite.mutateAsync({
+      name,
+      contractor_id: newSiteContractor,
+      color: newSiteColor,
+      site_type: 1,
+    });
     setShift((s) => ({ ...s, site: site.name, color: site.color || newSiteColor }));
     setAddSiteOpen(false);
   };

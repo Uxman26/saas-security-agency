@@ -387,7 +387,7 @@ export interface Site {
   contract_start_date?: string;
   contract_end_date?: string;
   /** 1 = Regular, 2 = Ad-hoc */
-  site_type: number;
+  site_type: 1 | 2;
   reference?: string | null;
   default_hourly_rate?: number;
   /** Staff pay rate for this site (£/hr) */

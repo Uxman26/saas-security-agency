@@ -215,7 +215,9 @@ export const siteSchema = z
     contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
     contract_start_date: z.string().optional().or(z.literal('')),
     contract_end_date: z.string().optional().or(z.literal('')),
-    site_type: z.coerce.number().refine((n) => n === 1 || n === 2, 'Select Regular or Ad-hoc'),
+    site_type: z.union([z.literal(1), z.literal(2)], {
+      error: 'Select Regular or Ad-hoc',
+    }),
     reference: z.string().max(200).optional().or(z.literal('')),
     default_hourly_rate: z.number().min(0).optional().nullable(),
     staff_hourly_rate: z.number().min(0).optional().nullable(),

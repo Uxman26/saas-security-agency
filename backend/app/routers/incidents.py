@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import PERM_INCIDENT_READ, PERM_INCIDENT_REPORTS, PERM_INCIDENT_WRITE, require_perm
+from app.rbac import require_module
 from app.schemas import IncidentCreate, IncidentResponse, IncidentSummaryRow, IncidentUpdate
 from app.services import incident_service
 from app.services.image_avif_service import is_image_filename, save_upload_as_avif
@@ -24,7 +24,7 @@ def list_incidents(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INCIDENT_READ)),
+    current_user: User = Depends(require_module("incidents", "view")),
 ):
     return incident_service.list_incidents(
         db, current_user, status=status, site_id=site_id, start_date=start_date, end_date=end_date
@@ -35,7 +35,7 @@ def list_incidents(
 def create_incident(
     body: IncidentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INCIDENT_WRITE)),
+    current_user: User = Depends(require_module("incidents", "create")),
 ):
     return incident_service.create_incident(db, current_user, body)
 
@@ -53,7 +53,7 @@ async def create_incident_with_images(
     guard_id: Optional[int] = Form(None),
     images: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INCIDENT_WRITE)),
+    current_user: User = Depends(require_module("incidents", "edit")),
 ):
     from datetime import datetime
 
@@ -90,7 +90,7 @@ def summary(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INCIDENT_REPORTS)),
+    current_user: User = Depends(require_module("incidents", "view")),
 ):
     return incident_service.summary_report(db, current_user, start_date, end_date)
 
@@ -99,7 +99,7 @@ def summary(
 def get_incident(
     incident_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INCIDENT_READ)),
+    current_user: User = Depends(require_module("incidents", "view")),
 ):
     return incident_service.get_incident(db, current_user, incident_id)
 
@@ -109,6 +109,6 @@ def patch_incident(
     incident_id: int,
     body: IncidentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INCIDENT_WRITE)),
+    current_user: User = Depends(require_module("incidents", "edit")),
 ):
     return incident_service.update_incident(db, current_user, incident_id, body)

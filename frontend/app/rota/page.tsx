@@ -4,6 +4,9 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
+import { ModuleGuard } from '@/components/module-guard';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,6 +61,9 @@ function RotaRow({
   onDelete,
   onRename,
   bulkBusy,
+  canEdit,
+  canCreate,
+  canDelete,
 }: {
   r: RotaPlanListItem;
   deletingId: number | null;
@@ -67,6 +73,9 @@ function RotaRow({
   onDelete: (id: number, name: string) => void;
   onRename: (id: number, currentName: string) => void;
   bulkBusy?: boolean;
+  canEdit?: boolean;
+  canCreate?: boolean;
+  canDelete?: boolean;
 }) {
   const published = r.status === 'published';
   return (
@@ -78,7 +87,7 @@ function RotaRow({
           checked={selected}
           onChange={(e) => onToggleSelect(r.id, e.target.checked)}
           aria-label={`Select ${r.name}`}
-          disabled={bulkBusy}
+          disabled={bulkBusy || !canDelete}
         />
         <div className="sm:w-28 shrink-0">
           <div className="text-sm font-semibold">{fmtShort(r.start_date)}</div>
@@ -95,36 +104,42 @@ function RotaRow({
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0 sm:ml-auto pl-7 sm:pl-0">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 text-xs"
-          disabled={renamingId === r.id || bulkBusy}
-          onClick={() => onRename(r.id, r.name)}
-          title="Rename rota"
-        >
-          {renamingId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : 'Rename'}
-        </Button>
-        <Button variant="ghost" size="icon" className="size-8" asChild title="Copy to new rota">
-          <Link href={`/rota/create?from=${r.id}`}>
-            <Copy className="size-4" />
-          </Link>
-        </Button>
+        {canEdit ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 text-xs"
+            disabled={renamingId === r.id || bulkBusy}
+            onClick={() => onRename(r.id, r.name)}
+            title="Rename rota"
+          >
+            {renamingId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : 'Rename'}
+          </Button>
+        ) : null}
+        {canCreate ? (
+          <Button variant="ghost" size="icon" className="size-8" asChild title="Copy to new rota">
+            <Link href={`/rota/create?from=${r.id}`}>
+              <Copy className="size-4" />
+            </Link>
+          </Button>
+        ) : null}
         <Button variant="ghost" size="icon" className="size-8" asChild title="Open planner">
           <Link href={`/rota/calendar?id=${r.id}`}>
             <Pencil className="size-4" />
           </Link>
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8 text-destructive hover:text-destructive"
-          disabled={deletingId === r.id || bulkBusy}
-          onClick={() => onDelete(r.id, r.name)}
-          title="Delete"
-        >
-          <Trash2 className="size-4" />
-        </Button>
+        {canDelete ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-destructive hover:text-destructive"
+            disabled={deletingId === r.id || bulkBusy}
+            onClick={() => onDelete(r.id, r.name)}
+            title="Delete"
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        ) : null}
       </div>
     </div>
   );
@@ -198,6 +213,9 @@ function RotaSection({
   onRename,
   empty,
   bulkBusy,
+  canEdit,
+  canCreate,
+  canDelete,
 }: {
   title: string;
   hint?: string;
@@ -212,6 +230,9 @@ function RotaSection({
   onRename: (id: number, currentName: string) => void;
   empty: string;
   bulkBusy?: boolean;
+  canEdit?: boolean;
+  canCreate?: boolean;
+  canDelete?: boolean;
 }) {
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -245,6 +266,9 @@ function RotaSection({
                 onDelete={onDelete}
                 onRename={onRename}
                 bulkBusy={bulkBusy}
+                canEdit={canEdit}
+                canCreate={canCreate}
+                canDelete={canDelete}
               />
             ))}
           </div>
@@ -255,6 +279,10 @@ function RotaSection({
 }
 
 function RotaHubPage() {
+  const { user } = useAuth();
+  const canCreateRota = canModule(user, 'rota', 'create');
+  const canEditRota = canModule(user, 'rota', 'edit');
+  const canDeleteRota = canModule(user, 'rota', 'delete');
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') === 'old' ? 'old' : 'active';
 
@@ -481,7 +509,8 @@ function RotaHubPage() {
 
   return (
     <ProtectedRoute>
-      <AppShell>
+      <ModuleGuard moduleKey="rota">
+        <AppShell>
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
           <div className="container mx-auto px-4 py-8 space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -492,12 +521,14 @@ function RotaHubPage() {
                 </h1>
                 <p className="text-muted-foreground text-sm mt-1">Manage current and past rotas. Publish drafts to save shifts as assignments.</p>
               </div>
-              <Button className="bg-pink-600 hover:bg-pink-700" asChild>
-                <Link href="/rota/create">
-                  <Plus className="size-4 mr-1.5" />
-                  Create rota
-                </Link>
-              </Button>
+              {canCreateRota ? (
+                <Button className="bg-pink-600 hover:bg-pink-700" asChild>
+                  <Link href="/rota/create">
+                    <Plus className="size-4 mr-1.5" />
+                    Create rota
+                  </Link>
+                </Button>
+              ) : null}
             </div>
 
             <div className="border-b flex flex-wrap gap-1">
@@ -584,15 +615,17 @@ function RotaHubPage() {
                     </div>
                   ) : (
                     <>
-                      <BulkDeleteBar
-                        selectedCount={selectedIds.size}
-                        allVisibleSelected={allVisibleSelected}
-                        someVisibleSelected={someVisibleSelected}
-                        selectableCount={selectableIds.length}
-                        bulkDeleting={bulkDeleting}
-                        onToggleAll={toggleSelectAllVisible}
-                        onBulkDelete={onBulkDelete}
-                      />
+                      {canDeleteRota ? (
+                        <BulkDeleteBar
+                          selectedCount={selectedIds.size}
+                          allVisibleSelected={allVisibleSelected}
+                          someVisibleSelected={someVisibleSelected}
+                          selectableCount={selectableIds.length}
+                          bulkDeleting={bulkDeleting}
+                          onToggleAll={toggleSelectAllVisible}
+                          onBulkDelete={onBulkDelete}
+                        />
+                      ) : null}
                       <div className="rounded-lg border bg-card overflow-hidden">
                         {pageRows.map((r) => (
                           <RotaRow
@@ -605,6 +638,9 @@ function RotaHubPage() {
                             onDelete={onDelete}
                             onRename={onRename}
                             bulkBusy={bulkDeleting}
+                            canEdit={canEditRota}
+                            canCreate={canCreateRota}
+                            canDelete={canDeleteRota}
                           />
                         ))}
                       </div>
@@ -632,15 +668,17 @@ function RotaHubPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <BulkDeleteBar
-                      selectedCount={selectedIds.size}
-                      allVisibleSelected={allVisibleSelected}
-                      someVisibleSelected={someVisibleSelected}
-                      selectableCount={selectableIds.length}
-                      bulkDeleting={bulkDeleting}
-                      onToggleAll={toggleSelectAllVisible}
-                      onBulkDelete={onBulkDelete}
-                    />
+                    {canDeleteRota ? (
+                      <BulkDeleteBar
+                        selectedCount={selectedIds.size}
+                        allVisibleSelected={allVisibleSelected}
+                        someVisibleSelected={someVisibleSelected}
+                        selectableCount={selectableIds.length}
+                        bulkDeleting={bulkDeleting}
+                        onToggleAll={toggleSelectAllVisible}
+                        onBulkDelete={onBulkDelete}
+                      />
+                    ) : null}
                     <RotaSection
                       title="Published rotas"
                       hint="Rotas that are no longer active but are still published will appear here."
@@ -655,6 +693,9 @@ function RotaHubPage() {
                       onRename={onRename}
                       empty="No published old rotas."
                       bulkBusy={bulkDeleting}
+                      canEdit={canEditRota}
+                      canCreate={canCreateRota}
+                      canDelete={canDeleteRota}
                     />
                     <RotaSection
                       title="Unpublished rotas"
@@ -670,6 +711,9 @@ function RotaHubPage() {
                       onRename={onRename}
                       empty="No unpublished old rotas."
                       bulkBusy={bulkDeleting}
+                      canEdit={canEditRota}
+                      canCreate={canCreateRota}
+                      canDelete={canDeleteRota}
                     />
                   </div>
                 )}
@@ -709,6 +753,7 @@ function RotaHubPage() {
           </div>
         </div>
       </AppShell>
+      </ModuleGuard>
     </ProtectedRoute>
   );
 }

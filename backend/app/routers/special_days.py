@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.schemas import SpecialDayCreate, SpecialDayResponse, SeedUkYear
-from app.rbac import require_perm, PERM_ALLOW_READ, PERM_ALLOW_WRITE, PERM_ALLOW_DELETE
+from app.rbac import require_module
 from app.services import special_day_service
 
 router = APIRouter(prefix="/special-days", tags=["special-days"])
@@ -18,7 +18,7 @@ def list_special_days(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ALLOW_READ)),
+    current_user: User = Depends(require_module("allowances", "view")),
 ):
     if start_date is not None and end_date is not None:
         return special_day_service.list_in_range(db, current_user.id, start_date, end_date)
@@ -29,7 +29,7 @@ def list_special_days(
 def create_special_day(
     data: SpecialDayCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ALLOW_WRITE)),
+    current_user: User = Depends(require_module("allowances", "edit")),
 ):
     return special_day_service.create_day(db, current_user.id, data.date, data.label)
 
@@ -38,7 +38,7 @@ def create_special_day(
 def seed_uk_holidays(
     body: SeedUkYear,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ALLOW_WRITE)),
+    current_user: User = Depends(require_module("allowances", "edit")),
 ):
     n = special_day_service.seed_uk_bank_holidays(db, current_user.id, body.year)
     return {"added": n, "year": body.year}
@@ -48,7 +48,7 @@ def seed_uk_holidays(
 def delete_special_day(
     day_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ALLOW_DELETE)),
+    current_user: User = Depends(require_module("allowances", "delete")),
 ):
     special_day_service.delete_day(db, current_user.id, day_id)
     return None

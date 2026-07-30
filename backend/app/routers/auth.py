@@ -22,7 +22,8 @@ from app.schemas import (
 )
 from app.auth import get_current_user, SUPER_ADMIN_ROLE
 from app.services import auth_service
-from app.rbac import permissions_for_user_db
+from app.rbac import permissions_for_user_db, permission_bypass
+from app.services.module_service import ensure_app_modules, module_access_for_role
 from app.services.plan_enforcement import plan_summary
 from app.services.receipt_service import parse_sidebar_modules
 from app.services.module_service import parse_modules, path_allowed_by_modules
@@ -135,10 +136,17 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         sidebar_modules = parse_sidebar_modules(current_user.sidebar_modules_json)
         if sidebar_modules and co:
             sidebar_modules = [p for p in sidebar_modules if path_allowed_by_modules(co, p)]
+    ensure_app_modules(db)
+    module_access = module_access_for_role(
+        db,
+        current_user.role_id,
+        permission_bypass(db, current_user),
+    )
     base = UserResponse.model_validate(current_user)
     return UserMeResponse(
         **base.model_dump(),
         permissions=perms,
+        module_access=module_access,
         plan=plan,
         company_name=company_name,
         logo_url=logo_url,

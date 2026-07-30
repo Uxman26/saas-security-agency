@@ -56,6 +56,31 @@ export interface User {
   enabled_modules?: Record<string, boolean> | null;
   client_id?: number | null;
   guard_id?: number | null;
+  module_access?: ModuleAccess[];
+}
+
+export interface ModuleAccess {
+  key: string;
+  name: string;
+  icon: string;
+  sidebar_path: string;
+  sidebar_order: number;
+  section_key: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
+export interface AppModule {
+  id: number;
+  key: string;
+  name: string;
+  icon: string;
+  sidebar_path: string;
+  sidebar_order: number;
+  section_key: string;
+  is_active: boolean;
 }
 
 export interface StaffRequest {

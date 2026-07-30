@@ -5,8 +5,10 @@ import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/auth-context';
-import { can, PERMS } from '@/lib/permissions';
+import { isAdminBypass } from '@/lib/permissions';
+import type { ModuleAccess } from '@/lib/types';
 import {
+  AlertTriangle,
   Building2,
   Calendar,
   ClipboardList,
@@ -16,107 +18,70 @@ import {
   FolderOpen,
   Gift,
   LayoutDashboard,
+  LucideIcon,
+  Mail,
   MapPin,
   MapPinned,
+  MessageSquare,
   PoundSterling,
+  Receipt,
+  Settings,
   Shield,
-  AlertTriangle,
+  Target,
+  UserCircle,
   UserCog,
   Users,
-  UserCircle,
-  MessageSquare,
-  Receipt,
   Wallet,
-  Mail,
-  Target,
-  Settings,
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
-import { sidebarPathAllowed } from '@/lib/sidebar-modules';
+import { moduleNavAllowed } from '@/lib/nav-modules';
 
-type NavItem = { href: string; labelKey: string; perm: string; icon: typeof Users };
+const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  Users,
+  FolderOpen,
+  UserCog,
+  Clock,
+  Shield,
+  UserCircle,
+  MapPin,
+  ClipboardList,
+  Calendar,
+  MapPinned,
+  AlertTriangle,
+  Building2,
+  Target,
+  PoundSterling,
+  FileText,
+  CreditCard,
+  Receipt,
+  Gift,
+  MessageSquare,
+  Mail,
+};
 
-const sections: { titleKey: string; items: NavItem[] }[] = [
-  {
-    titleKey: 'sectionOverview',
-    items: [{ href: '/dashboard', labelKey: 'dashboard', perm: 'guards.read', icon: LayoutDashboard }],
-  },
-  {
-    titleKey: 'sectionHr',
-    items: [
-      { href: '/guards', labelKey: 'staff', perm: 'guards.read', icon: Users },
-      { href: '/documents', labelKey: 'documents', perm: 'doc.read', icon: FolderOpen },
-      { href: '/contractors', labelKey: 'contractors', perm: PERMS.contractorView, icon: UserCog },
-      { href: '/attendance', labelKey: 'attendance', perm: 'attend.read', icon: Clock },
-      { href: '/settings/roles', labelKey: 'roles', perm: 'roles.read', icon: Shield },
-    ],
-  },
-  {
-    titleKey: 'sectionOperations',
-    items: [
-      { href: '/my-portal', labelKey: 'myPortal', perm: PERMS.portalSites, icon: UserCircle },
-      { href: '/sites', labelKey: 'sites', perm: 'sites.read', icon: MapPin },
-      { href: '/assignments', labelKey: 'assignments', perm: 'assign.read', icon: ClipboardList },
-      { href: '/rota', labelKey: 'rota', perm: 'assign.read', icon: Calendar },
-      { href: '/patrol', labelKey: 'patrol', perm: 'patrol.read', icon: MapPinned },
-      { href: '/incidents', labelKey: 'incidents', perm: 'incident.read', icon: AlertTriangle },
-      { href: '/client-portal', labelKey: 'clientPortal', perm: 'staff_req.write', icon: Building2 },
-      { href: '/requests', labelKey: 'staffRequests', perm: 'staff_req.review', icon: ClipboardList },
-    ],
-  },
-  {
-    titleKey: 'sectionSales',
-    items: [
-      { href: '/clients', labelKey: 'clients', perm: 'clients.read', icon: Building2 },
-      { href: '/leads', labelKey: 'leads', perm: 'leads.read', icon: Target },
-    ],
-  },
-  {
-    titleKey: 'sectionFinance',
-    items: [
-      { href: '/payroll', labelKey: 'payroll', perm: 'payroll.read', icon: PoundSterling },
-      { href: '/invoices', labelKey: 'invoices', perm: 'inv.read', icon: FileText },
-      { href: '/payments', labelKey: 'payments', perm: 'pay.read', icon: CreditCard },
-      { href: '/expenses', labelKey: 'expenses', perm: 'exp.read', icon: Receipt },
-      { href: '/allowances', labelKey: 'allowances', perm: 'allow.read', icon: Gift },
-    ],
-  },
-  {
-    titleKey: 'sectionReports',
-    items: [{ href: '/reports', labelKey: 'reports', perm: 'rep.read', icon: ClipboardList }],
-  },
-  {
-    titleKey: 'sectionSettings',
-    items: [
-      { href: '/settings/company', labelKey: 'company', perm: 'sub.read', icon: Building2 },
-      { href: '/settings/billing', labelKey: 'billing', perm: 'sub.read', icon: CreditCard },
-      { href: '/settings/special-days', labelKey: 'specialDays', perm: 'allow.read', icon: Calendar },
-      { href: '/settings/sms', labelKey: 'sms', perm: 'email.send', icon: MessageSquare },
-      { href: '/settings/email', labelKey: 'email', perm: 'email.send', icon: Mail },
-    ],
-  },
+const SECTION_ORDER = [
+  'sectionOverview',
+  'sectionHr',
+  'sectionOperations',
+  'sectionSales',
+  'sectionFinance',
+  'sectionReports',
+  'sectionSettings',
 ];
+
+function moduleIcon(name: string): LucideIcon {
+  return ICON_MAP[name] || LayoutDashboard;
+}
 
 function active(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
-  if (href === '/rota') return pathname.startsWith('/rota');
-  if (href === '/patrol') return pathname.startsWith('/patrol');
-  if (href === '/incidents') return pathname.startsWith('/incidents');
-  if (href === '/leads') return pathname.startsWith('/leads');
-  if (href === '/client-portal') return pathname.startsWith('/client-portal');
-  if (href === '/my-portal') return pathname.startsWith('/my-portal');
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function filterItem(user: ReturnType<typeof useAuth>['user'], item: NavItem) {
-  if (!sidebarPathAllowed(user?.sidebar_modules, item.href)) return false;
-  if (item.href === '/contractors') return can(user, PERMS.contractorView);
-  if (item.href === '/expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
-  if (item.href === '/leads' && user?.enabled_modules && user.enabled_modules.leads === false) return false;
-  if (item.href === '/settings/sms' && user?.enabled_modules && user.enabled_modules.whatsapp === false) return false;
-  if (item.href === '/settings/email' && user?.enabled_modules && user.enabled_modules.email === false) return false;
-  return can(user, item.perm);
+function moduleNavAllowedLocal(user: ReturnType<typeof useAuth>['user'], m: ModuleAccess) {
+  return moduleNavAllowed(user, m);
 }
 
 export function AppSidebar() {
@@ -125,16 +90,23 @@ export function AppSidebar() {
   const ts = useTranslations('sidebar');
   const isSuperAdmin = user?.role === 'super_admin';
 
-  const grouped = useMemo(
-    () =>
-      sections
-        .map((section) => ({
-          ...section,
-          items: section.items.filter((item) => filterItem(user, item)),
-        }))
-        .filter((section) => section.items.length > 0),
-    [user]
-  );
+  const grouped = useMemo(() => {
+    const access = user?.module_access;
+    if (!access?.length) return [];
+    const bySection: Record<string, ModuleAccess[]> = {};
+    for (const m of access) {
+      if (!moduleNavAllowedLocal(user, m)) continue;
+      const sec = m.section_key || 'sectionOperations';
+      if (!bySection[sec]) bySection[sec] = [];
+      bySection[sec].push(m);
+    }
+    return SECTION_ORDER
+      .filter((sec) => bySection[sec]?.length)
+      .map((sec) => ({
+        titleKey: sec,
+        items: bySection[sec].sort((a, b) => a.sidebar_order - b.sidebar_order),
+      }));
+  }, [user]);
 
   if (isSuperAdmin) {
     return (
@@ -191,19 +163,22 @@ export function AppSidebar() {
               {ts(section.titleKey)}
             </p>
             <div className="space-y-0.5 mt-1">
-              {section.items.map(({ href, labelKey, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                    active(pathname, href) ? 'bg-slate-800 text-white font-medium' : 'text-slate-300 hover:bg-slate-800/80'
-                  )}
-                >
-                  <Icon className="size-4 shrink-0 opacity-90" />
-                  <span className="truncate">{ts(labelKey)}</span>
-                </Link>
-              ))}
+              {section.items.map((m) => {
+                const Icon = moduleIcon(m.icon);
+                return (
+                  <Link
+                    key={m.key}
+                    href={m.sidebar_path}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      active(pathname, m.sidebar_path) ? 'bg-slate-800 text-white font-medium' : 'text-slate-300 hover:bg-slate-800/80'
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0 opacity-90" />
+                    <span className="truncate">{m.name}</span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ))}

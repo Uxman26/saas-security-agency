@@ -7,7 +7,7 @@ from typing import Optional
 from datetime import date
 from app.database import get_db
 from app.models import User
-from app.rbac import require_perm, PERM_ASSIGN_READ, PERM_ASSIGN_WRITE, PERM_ASSIGN_DELETE
+from app.rbac import require_module
 from app.services import assignment_service
 from app.services import rota_service
 from app.services import rota_export
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 
 
 @router.post("", response_model=AssignmentResponse, status_code=status.HTTP_201_CREATED)
-def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE))):
+def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("rota", "create"))):
     return assignment_service.create_assignment(db, assignment, current_user.id)
 
 
@@ -44,7 +44,7 @@ def get_assignments(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+    current_user: User = Depends(require_module("rota", "view")),
 ):
     return assignment_service.get_assignments(
         db, current_user.id, guard_id, site_id, client_id, start_date, end_date
@@ -59,7 +59,7 @@ def get_rota_detail(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+    current_user: User = Depends(require_module("rota", "view")),
 ):
     return rota_service.list_rota_details(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
 
@@ -72,7 +72,7 @@ def get_rota_summary(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+    current_user: User = Depends(require_module("rota", "view")),
 ):
     return rota_service.rota_summary(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
 
@@ -86,7 +86,7 @@ def export_rota(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+    current_user: User = Depends(require_module("rota", "view")),
 ):
     details = rota_service.list_rota_details(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
     summary = rota_service.rota_summary(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
@@ -114,7 +114,7 @@ def get_rota(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+    current_user: User = Depends(require_module("rota", "view")),
 ):
     return assignment_service.get_rota(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
 
@@ -123,7 +123,7 @@ def get_rota(
 def record_shift_overtime(
     body: ShiftAdjustmentByShiftRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     if not body.new_end:
         raise HTTPException(status_code=400, detail="new_end is required")
@@ -136,7 +136,7 @@ def record_shift_overtime(
 def record_shift_early_finish(
     body: ShiftAdjustmentByShiftRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     if not body.actual_end:
         raise HTTPException(status_code=400, detail="actual_end is required")
@@ -149,7 +149,7 @@ def record_shift_early_finish(
 def record_shift_lateness(
     body: ShiftLatenessByShiftRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return shift_adjustment_service.record_lateness_by_shift(
         db,
@@ -164,17 +164,17 @@ def record_shift_lateness(
 
 
 @router.get("/{assignment_id}", response_model=AssignmentResponse)
-def get_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_READ))):
+def get_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("rota", "view"))):
     return assignment_service.get_assignment_by_id(db, assignment_id, current_user.id)
 
 
 @router.put("/{assignment_id}", response_model=AssignmentResponse)
-def update_assignment(assignment_id: int, assignment: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE))):
+def update_assignment(assignment_id: int, assignment: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("rota", "edit"))):
     return assignment_service.update_assignment(db, assignment_id, assignment, current_user.id)
 
 
 @router.delete("/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_DELETE))):
+def delete_assignment(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("rota", "delete"))):
     assignment_service.delete_assignment(db, assignment_id, current_user.id)
     return None
 
@@ -184,7 +184,7 @@ def record_assignment_overtime(
     assignment_id: int,
     body: ShiftOvertimeRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return shift_adjustment_service.record_overtime(db, current_user.id, assignment_id, body.new_end, body.reason)
 
@@ -194,7 +194,7 @@ def record_assignment_early_finish(
     assignment_id: int,
     body: ShiftEarlyFinishRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return shift_adjustment_service.record_early_finish(db, current_user.id, assignment_id, body.actual_end, body.reason)
 
@@ -204,7 +204,7 @@ def record_assignment_lateness(
     assignment_id: int,
     body: ShiftLatenessRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return shift_adjustment_service.record_lateness_for_assignment(
         db, current_user.id, assignment_id, body.late_minutes, body.scheduled_start, body.note

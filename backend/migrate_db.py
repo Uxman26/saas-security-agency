@@ -1019,36 +1019,75 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    if not table_exists(cur, "app_modules"):
+        try:
+            cur.execute(
+                """CREATE TABLE app_modules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                icon TEXT NOT NULL DEFAULT 'LayoutDashboard',
+                sidebar_path TEXT NOT NULL,
+                sidebar_order INTEGER DEFAULT 0,
+                section_key TEXT DEFAULT 'sectionOperations',
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "role_module_permissions"):
+        try:
+            cur.execute(
+                """CREATE TABLE role_module_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_id INTEGER NOT NULL REFERENCES roles(id),
+                module_id INTEGER NOT NULL REFERENCES app_modules(id),
+                can_view INTEGER DEFAULT 0,
+                can_create INTEGER DEFAULT 0,
+                can_edit INTEGER DEFAULT 0,
+                can_delete INTEGER DEFAULT 0,
+                UNIQUE(role_id, module_id)
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:
         from app.database import SessionLocal
         from app.services.role_service import backfill_user_roles
+        from app.services.module_service import ensure_app_modules, backfill_role_module_permissions
         from app.models import Role
-        from app.rbac_matrix import default_matrix_client_portal, default_matrix_staff_portal, default_matrix_supervisor, parse_matrix_json, wrap_matrix, matrix_json_dumps
+        from app.rbac_matrix import default_matrix_client_portal, default_matrix_staff_portal, default_matrix_supervisor, wrap_matrix
 
         db = SessionLocal()
         try:
+            ensure_app_modules(db)
+            db.commit()
             backfill_user_roles(db)
-            from app.services.role_service import ensure_roles_for_all_companies
-
-            ensure_roles_for_all_companies(db)
+            backfill_role_module_permissions(db)
             for role in db.query(Role).all():
                 if role.slug == "client":
                     role.permissions_json = wrap_matrix(default_matrix_client_portal())
                 elif role.slug == "staff":
                     role.permissions_json = wrap_matrix(default_matrix_staff_portal())
                 elif role.slug == "supervisor":
-                    m = parse_matrix_json(role.permissions_json) or default_matrix_supervisor()
+                    from app.services.role_service import matrix_from_permissions_json
+
+                    m = matrix_from_permissions_json(role.permissions_json) or default_matrix_supervisor()
                     m["staff_requests"] = {"view": True, "create": False, "edit": True, "delete": False}
                     m["patrol"] = {"view": True, "create": True, "edit": True, "delete": False}
                     m["incidents"] = {"view": True, "create": True, "edit": True, "delete": False}
-                    role.permissions_json = matrix_json_dumps(m)
+                    role.permissions_json = wrap_matrix(m)
             db.commit()
+            backfill_role_module_permissions(db)
         finally:
             db.close()
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning("RBAC backfill failed: %s", e)
 
 if __name__ == "__main__":
     run()

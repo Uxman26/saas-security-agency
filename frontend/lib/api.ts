@@ -1031,6 +1031,14 @@ export const api = {
       request<Role>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/roles/${id}`, { method: 'DELETE' }),
   },
+  modules: {
+    list: (opts?: { all_modules?: boolean }): Promise<import('./types').AppModule[]> =>
+      request(`/modules${opts?.all_modules ? '?all_modules=true' : ''}`),
+    create: (data: Partial<import('./types').AppModule>): Promise<import('./types').AppModule> =>
+      request('/modules', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<import('./types').AppModule>): Promise<import('./types').AppModule> =>
+      request(`/modules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  },
   users: {
     list: (): Promise<CompanyUser[]> => request<CompanyUser[]>('/users'),
     get: (id: number): Promise<CompanyUser> => request<CompanyUser>(`/users/${id}`),

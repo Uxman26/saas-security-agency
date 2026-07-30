@@ -27,6 +27,38 @@ class Role(Base):
     permissions_json = Column(Text, nullable=False, default="{}")
     company = relationship("Company", back_populates="roles")
     users = relationship("User", back_populates="role_row")
+    module_permissions = relationship(
+        "RoleModulePermission", back_populates="role", cascade="all, delete-orphan"
+    )
+
+
+class AppModule(Base):
+    """Platform module registry — sidebar sections and permission matrix rows."""
+    __tablename__ = "app_modules"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    icon = Column(String, nullable=False, default="LayoutDashboard")
+    sidebar_path = Column(String, nullable=False)
+    sidebar_order = Column(Integer, default=0)
+    section_key = Column(String, default="sectionOperations")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    role_permissions = relationship("RoleModulePermission", back_populates="module")
+
+
+class RoleModulePermission(Base):
+    __tablename__ = "role_module_permissions"
+    __table_args__ = (UniqueConstraint("role_id", "module_id", name="uq_role_module_perm"),)
+    id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False, index=True)
+    module_id = Column(Integer, ForeignKey("app_modules.id"), nullable=False, index=True)
+    can_view = Column(Boolean, default=False)
+    can_create = Column(Boolean, default=False)
+    can_edit = Column(Boolean, default=False)
+    can_delete = Column(Boolean, default=False)
+    role = relationship("Role", back_populates="module_permissions")
+    module = relationship("AppModule", back_populates="role_permissions")
 
 class User(Base):
     __tablename__ = "users"

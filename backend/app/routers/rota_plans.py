@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import PERM_ASSIGN_DELETE, PERM_ASSIGN_READ, PERM_ASSIGN_WRITE, require_perm
+from app.rbac import require_module
 from app.schemas import PlannerExportRequest, RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
 from app.services import rota_export, rota_plan_service
 
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/rotas", tags=["rotas"])
 @router.post("/export")
 def export_planner_rota(
     body: PlannerExportRequest,
-    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+    current_user: User = Depends(require_module("rota", "view")),
 ):
     fmt = (body.format or "pdf").lower()
     if fmt != "pdf":
@@ -39,7 +39,7 @@ def export_planner_rota(
 
 
 @router.get("", response_model=list[RotaPlanListItem])
-def list_rotas(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_ASSIGN_READ))):
+def list_rotas(db: Session = Depends(get_db), current_user: User = Depends(require_module("rota", "view"))):
     return rota_plan_service.list_rota_plans(db, current_user.id)
 
 
@@ -47,7 +47,7 @@ def list_rotas(db: Session = Depends(get_db), current_user: User = Depends(requi
 def create_rota(
     body: RotaPlanCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "create")),
 ):
     return rota_plan_service.create_rota_plan(db, current_user.id, body)
 
@@ -57,7 +57,7 @@ def copy_rota(
     plan_id: int,
     body: RotaPlanCopy,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "create")),
 ):
     return rota_plan_service.copy_rota_plan(db, current_user.id, plan_id, body)
 
@@ -66,7 +66,7 @@ def copy_rota(
 def get_rota(
     plan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_READ)),
+    current_user: User = Depends(require_module("rota", "view")),
 ):
     return rota_plan_service.get_rota_plan(db, current_user.id, plan_id)
 
@@ -76,7 +76,7 @@ def update_rota(
     plan_id: int,
     body: RotaPlanUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return rota_plan_service.update_rota_plan(db, current_user.id, plan_id, body)
 
@@ -85,7 +85,7 @@ def update_rota(
 def delete_rota(
     plan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_DELETE)),
+    current_user: User = Depends(require_module("rota", "delete")),
 ):
     rota_plan_service.delete_rota_plan(db, current_user.id, plan_id)
 
@@ -95,7 +95,7 @@ def publish_rota(
     plan_id: int,
     guard_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return rota_plan_service.publish_rota_plan(db, current_user.id, plan_id, guard_id)
 
@@ -104,7 +104,7 @@ def publish_rota(
 def unpublish_rota(
     plan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return rota_plan_service.unpublish_rota_plan(db, current_user.id, plan_id)
 
@@ -114,6 +114,6 @@ def unpublish_rota_guard(
     plan_id: int,
     guard_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_ASSIGN_WRITE)),
+    current_user: User = Depends(require_module("rota", "edit")),
 ):
     return rota_plan_service.unpublish_rota_plan_guard(db, current_user.id, plan_id, guard_id)

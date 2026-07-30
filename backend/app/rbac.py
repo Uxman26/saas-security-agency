@@ -74,6 +74,10 @@ PERM_PATROL_REPORTS = "patrol.reports"
 PERM_INCIDENT_READ = "incident.read"
 PERM_INCIDENT_WRITE = "incident.write"
 PERM_INCIDENT_REPORTS = "incident.reports"
+PERM_ROTA_VIEW = "rota.view"
+PERM_ROTA_CREATE = "rota.create"
+PERM_ROTA_EDIT = "rota.edit"
+PERM_ROTA_DELETE = "rota.delete"
 
 ALL_PERMISSION_CODES: frozenset[str] = frozenset(
     {
@@ -145,6 +149,10 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         PERM_INCIDENT_READ,
         PERM_INCIDENT_WRITE,
         PERM_INCIDENT_REPORTS,
+        PERM_ROTA_VIEW,
+        PERM_ROTA_CREATE,
+        PERM_ROTA_EDIT,
+        PERM_ROTA_DELETE,
     }
 )
 
@@ -254,28 +262,59 @@ def permissions_for_user(user: User) -> list[str]:
     return sorted(_ROLE_PERMISSIONS[effective_role(user)])
 
 
-def user_has_permission_db(db: Session, user: User, code: str) -> bool:
+# Module-scoped permission codes (database-driven matrix)
+
+def permission_bypass(db: Session, user: User) -> bool:
     if getattr(user, "role", None) == SUPER_ADMIN_ROLE:
         return True
-    from app.rbac_matrix import permissions_json_to_codes
-
+    er = effective_role(user)
+    if er in ("super_admin", "company_admin"):
+        return True
     if user.role_id:
         r = db.query(Role).filter(Role.id == user.role_id).first()
-        if r and r.company_id == user.company_id:
-            return code in permissions_json_to_codes(r.permissions_json)
-    return user_has_permission(user, code)
+        if r and r.slug == "admin":
+            return True
+    return False
+
+
+def user_has_permission_db(db: Session, user: User, code: str) -> bool:
+    if permission_bypass(db, user):
+        return True
+    return code in permissions_for_user_db(db, user)
 
 
 def permissions_for_user_db(db: Session, user: User) -> list[str]:
-    if getattr(user, "role", None) == SUPER_ADMIN_ROLE:
-        return sorted(ALL_PERMISSION_CODES)
-    from app.rbac_matrix import permissions_json_to_codes
+    if permission_bypass(db, user):
+        from app.services.module_service import all_module_action_codes
 
+        codes = set(ALL_PERMISSION_CODES)
+        codes.update(all_module_action_codes(db))
+        return sorted(codes)
+    from app.services.module_service import module_permission_codes_for_role
+
+    codes: set[str] = set()
     if user.role_id:
         r = db.query(Role).filter(Role.id == user.role_id).first()
         if r and r.company_id == user.company_id:
-            return sorted(permissions_json_to_codes(r.permissions_json))
-    return permissions_for_user(user)
+            codes.update(module_permission_codes_for_role(db, r.id))
+    if not codes:
+        return permissions_for_user(user)
+    return sorted(codes)
+
+
+def require_module(module_key: str, action: str):
+    """Check permission for module action (e.g. rota + view -> rota.view)."""
+
+    def checker(
+        db: Session = Depends(get_db),
+        user: User = Depends(get_current_user),
+    ) -> User:
+        code = f"{module_key}.{action}"
+        if not user_has_permission_db(db, user, code):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        return user
+
+    return checker
 
 
 def require_perm(code: str):

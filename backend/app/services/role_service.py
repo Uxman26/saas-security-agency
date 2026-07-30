@@ -47,6 +47,16 @@ def prune_legacy_roles(db: Session, company_id: int) -> None:
 
 
 def ensure_roles_for_company(db: Session, company_id: int) -> None:
+    from app.services.module_service import (
+        ensure_app_modules,
+        expand_coarse_matrix_to_app_modules,
+        default_admin_app_matrix,
+        list_active_modules,
+        sync_role_permissions_from_matrix,
+    )
+
+    ensure_app_modules(db)
+    modules = list_active_modules(db)
     for name, slug, is_sys, pj in _seed_rows():
         if get_role_by_slug(db, company_id, slug):
             continue
@@ -59,6 +69,13 @@ def ensure_roles_for_company(db: Session, company_id: int) -> None:
                 permissions_json=pj,
             )
         )
+    db.flush()
+    for role in db.query(Role).filter(Role.company_id == company_id).all():
+        if role.slug == "admin":
+            sync_role_permissions_from_matrix(db, role, default_admin_app_matrix(modules))
+        else:
+            coarse = matrix_from_permissions_json(role.permissions_json)
+            sync_role_permissions_from_matrix(db, role, expand_coarse_matrix_to_app_modules(coarse, modules))
     db.flush()
 
 
@@ -130,5 +147,13 @@ def permissions_is_matrix(raw: str | None) -> bool:
     return isinstance(d, dict) and "matrix" in d
 
 
-def set_permissions_matrix(role: Role, matrix: dict) -> None:
+def set_permissions_matrix(role: Role, matrix: dict, db: Session | None = None) -> None:
+    from sqlalchemy.orm import object_session
+
+    from app.services.module_service import sync_role_permissions_from_matrix
+
     role.permissions_json = wrap_matrix(matrix)
+    session = db or object_session(role)
+    if session is not None and role.id:
+        sync_role_permissions_from_matrix(session, role, matrix)
+

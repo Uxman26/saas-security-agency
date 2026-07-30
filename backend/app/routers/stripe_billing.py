@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Company, User
 from app.auth import get_current_user
-from app.rbac import PERM_SUB_READ, PERM_SUB_MANAGE, require_perm
+from app.rbac import require_module
 from app.services import stripe_subscription_service as stripe_svc
 
 router = APIRouter(prefix="/stripe", tags=["stripe"])
@@ -63,27 +63,27 @@ async def stripe_webhook(
 
 
 @router.post("/portal")
-def billing_portal(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_READ))):
+def billing_portal(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "view"))):
     return stripe_svc.create_billing_portal(db, current_user)
 
 
 @router.post("/preview-change")
-def preview_change(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_READ))):
+def preview_change(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "view"))):
     return stripe_svc.preview_plan_change(db, current_user, body.tier, body.billing_cycle)
 
 
 @router.post("/change-plan")
-def change_plan(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_MANAGE))):
+def change_plan(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "edit"))):
     return stripe_svc.change_plan(db, current_user, body.tier, body.billing_cycle, body.proration_behavior)
 
 
 @router.post("/cancel")
-def cancel_sub(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_MANAGE))):
+def cancel_sub(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "edit"))):
     return stripe_svc.cancel_subscription(db, current_user)
 
 
 @router.post("/reactivate")
-def reactivate_sub(db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUB_MANAGE))):
+def reactivate_sub(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "edit"))):
     return stripe_svc.reactivate_subscription(db, current_user)
 
 

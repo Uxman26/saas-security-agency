@@ -17,7 +17,7 @@ from app.schemas import (
     InvoiceAuditEntry,
     PaymentResponse,
 )
-from app.rbac import require_perm, PERM_INV_READ, PERM_INV_WRITE, PERM_INV_DELETE
+from app.rbac import require_module
 from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
 from app.services.invoice_payment_service import invoice_amount_paid
@@ -138,7 +138,7 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
 def create_invoice(
     data: InvoiceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     inv = invoice_service.create_invoice(db, data, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
@@ -152,7 +152,7 @@ def generate_invoice(
     client_id: Optional[int] = None,
     site_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     inv = invoice_service.generate_from_assignments(
         db, period_start, period_end, current_user.id, client_id=client_id, site_id=site_id
@@ -170,7 +170,7 @@ def list_invoices(
     due_to: Optional[date] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_READ)),
+    current_user: User = Depends(require_module("invoices", "view")),
 ):
     rows = invoice_service.get_invoices(
         db,
@@ -189,7 +189,7 @@ def list_invoices(
 def invoice_audit(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_READ)),
+    current_user: User = Depends(require_module("invoices", "view")),
 ):
     raw = invoice_service.get_invoice_audit_logs(db, invoice_id, current_user.id)
     return [InvoiceAuditEntry(**r) for r in raw]
@@ -199,7 +199,7 @@ def invoice_audit(
 def invoice_pdf(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_READ)),
+    current_user: User = Depends(require_module("invoices", "view")),
 ):
     inv = invoice_service.get_invoice(db, invoice_id, current_user.id)
     lines = sorted(inv.lines, key=lambda x: x.id)
@@ -217,7 +217,7 @@ def patch_invoice(
     invoice_id: int,
     data: InvoiceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     inv = invoice_service.update_invoice(db, invoice_id, data, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
@@ -230,7 +230,7 @@ def update_line(
     line_id: int,
     data: InvoiceLineUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     line = invoice_service.update_invoice_line(db, invoice_id, line_id, data, current_user.id)
     db.refresh(line)
@@ -256,7 +256,7 @@ def delete_line(
     invoice_id: int,
     line_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     invoice_service.delete_invoice_line(db, invoice_id, line_id, current_user.id)
 
@@ -265,7 +265,7 @@ def delete_line(
 def duplicate_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     inv = invoice_service.duplicate_invoice(db, invoice_id, current_user.id)
     return _serialize_invoice(inv, True, db)
@@ -275,7 +275,7 @@ def duplicate_invoice(
 def get_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_READ)),
+    current_user: User = Depends(require_module("invoices", "view")),
 ):
     inv = invoice_service.get_invoice(db, invoice_id, current_user.id)
     return _serialize_invoice(inv, True, db)
@@ -286,7 +286,7 @@ def update_status(
     invoice_id: int,
     status: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     inv = invoice_service.update_invoice_status(db, invoice_id, status, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
@@ -298,7 +298,7 @@ def add_line(
     invoice_id: int,
     data: InvoiceLineBase,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_WRITE)),
+    current_user: User = Depends(require_module("invoices", "edit")),
 ):
     line = invoice_service.add_invoice_line(db, invoice_id, data, current_user.id)
     db.refresh(line)
@@ -323,7 +323,7 @@ def add_line(
 def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_INV_DELETE)),
+    current_user: User = Depends(require_module("invoices", "delete")),
 ):
     invoice_service.delete_invoice(db, invoice_id, current_user.id)
     return None

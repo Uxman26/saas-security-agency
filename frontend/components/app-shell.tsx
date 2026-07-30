@@ -12,44 +12,16 @@ import { CompanyBrand } from '@/components/company-brand';
 import { AlertsPanel } from '@/components/alerts-panel';
 import { usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import { can } from '@/lib/permissions';
 import { useTranslations } from 'next-intl';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { cn } from '@/lib/utils';
-import { sidebarPathAllowed } from '@/lib/sidebar-modules';
+import { navModulesFromUser } from '@/lib/nav-modules';
+import { useModulePathGuard } from '@/components/module-guard';
 
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
-  if (href === '/rota') return pathname.startsWith('/rota');
-  if (href === '/patrol') return pathname.startsWith('/patrol');
-  if (href === '/incidents') return pathname.startsWith('/incidents');
-  if (href === '/client-portal') return pathname.startsWith('/client-portal');
   return pathname === href || pathname.startsWith(`${href}/`);
 }
-
-const mobileLinks = [
-  { href: '/dashboard', labelKey: 'dashboard', perm: 'guards.read' },
-  { href: '/guards', labelKey: 'staff', perm: 'guards.read' },
-  { href: '/sites', labelKey: 'sites', perm: 'sites.read' },
-  { href: '/clients', labelKey: 'clients', perm: 'clients.read' },
-  { href: '/assignments', labelKey: 'assignments', perm: 'assign.read' },
-  { href: '/rota', labelKey: 'rota', perm: 'assign.read' },
-  { href: '/patrol', labelKey: 'patrol', perm: 'patrol.read' },
-  { href: '/incidents', labelKey: 'incidents', perm: 'incident.read' },
-  { href: '/client-portal', labelKey: 'clientPortal', perm: 'staff_req.write' },
-  { href: '/requests', labelKey: 'staffRequests', perm: 'staff_req.review' },
-  { href: '/attendance', labelKey: 'attendance', perm: 'attend.read' },
-  { href: '/documents', labelKey: 'documents', perm: 'doc.read' },
-  { href: '/contractors', labelKey: 'contractors', perm: 'subs.read' },
-  { href: '/payroll', labelKey: 'payroll', perm: 'payroll.read' },
-  { href: '/reports', labelKey: 'reports', perm: 'rep.read' },
-  { href: '/invoices', labelKey: 'invoices', perm: 'inv.read' },
-  { href: '/expenses', labelKey: 'expenses', perm: 'exp.read' },
-  { href: '/payments', labelKey: 'payments', perm: 'pay.read' },
-  { href: '/allowances', labelKey: 'allowances', perm: 'allow.read' },
-  { href: '/settings/special-days', labelKey: 'specialDays', perm: 'allow.read' },
-  { href: '/settings/roles', labelKey: 'roles', perm: 'roles.read' },
-];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -58,15 +30,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const isSuperAdmin = user?.role === 'super_admin';
-  const links = useMemo(() => {
-    const showSubs = can(user, 'subs.read'); /* && user?.plan?.features?.subcontractors === true */
-    return mobileLinks.filter((i) => {
-      if (!sidebarPathAllowed(user?.sidebar_modules, i.href)) return false;
-      if (i.href === '/contractors') return showSubs;
-      if (i.href === '/expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
-      return can(user, i.perm);
-    });
-  }, [user]);
+  useModulePathGuard(pathname);
+
+  const links = useMemo(() => navModulesFromUser(user), [user]);
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -134,17 +100,17 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </Link>
                   ))
                 ) : (
-                  links.map(({ href, labelKey }) => (
+                  links.map((m) => (
                     <Link
-                      key={href}
-                      href={href}
+                      key={m.key}
+                      href={m.sidebar_path}
                       className={cn(
                         'block rounded-md px-3 py-2 text-sm',
-                        mActive(pathname, href) ? 'bg-slate-800 font-medium' : 'hover:bg-slate-800'
+                        mActive(pathname, m.sidebar_path) ? 'bg-slate-800 font-medium' : 'hover:bg-slate-800'
                       )}
                       onClick={() => setDrawer(false)}
                     >
-                      {ts(labelKey)}
+                      {m.name}
                     </Link>
                   ))
                 )}

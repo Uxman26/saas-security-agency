@@ -38,8 +38,8 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import { can } from '@/lib/permissions';
-import type { Role, CompanyUser, PermissionMatrix } from '@/lib/types';
+import { canModule, isAdminBypass } from '@/lib/permissions';
+import type { Role, CompanyUser, PermissionMatrix, AppModule } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Shield, Trash2, UserPlus, Eye, Pencil, KeyRound } from 'lucide-react';
@@ -48,41 +48,11 @@ type CompanyUserFormData = z.infer<typeof companyUserSchema>;
 type CompanyUserUpdateFormData = z.infer<typeof companyUserUpdateSchema>;
 import { toast } from '@/lib/toast';
 
-const MODULE_KEYS = [
-  'clients',
-  'sites',
-  'guards',
-  'rota',
-  'invoices',
-  'contractors',
-  'reports',
-  'settings',
-  'leads',
-  'portal',
-  'patrol',
-  'incidents',
-] as const;
-
-const MODULE_LABELS: Record<string, string> = {
-  clients: 'Clients',
-  sites: 'Sites',
-  guards: 'Staff',
-  rota: 'Rota',
-  invoices: 'Invoices',
-  contractors: 'Contractors',
-  reports: 'Reports',
-  settings: 'Settings',
-  leads: 'Leads',
-  portal: 'Self-service portal (view= sites/current/hours, create= upcoming, edit= previous)',
-  patrol: 'Patrol (view=read, create/edit=write/scan)',
-  incidents: 'Incidents (view=read, create/edit=write)',
-};
-
 const ACTIONS = ['view', 'create', 'edit', 'delete'] as const;
 
-function emptyMatrix(): PermissionMatrix {
+function emptyMatrix(modules: AppModule[]): PermissionMatrix {
   const row = () => ({ view: false, create: false, edit: false, delete: false });
-  return Object.fromEntries(MODULE_KEYS.map((k) => [k, row()]));
+  return Object.fromEntries(modules.map((m) => [m.key, row()]));
 }
 
 function cloneMatrix(m: PermissionMatrix): PermissionMatrix {
@@ -91,10 +61,12 @@ function cloneMatrix(m: PermissionMatrix): PermissionMatrix {
 
 function MatrixTable({
   matrix,
+  modules,
   onToggle,
   readOnly,
 }: {
   matrix: PermissionMatrix;
+  modules: AppModule[];
   onToggle: (mod: string, act: string, v: boolean) => void;
   readOnly: boolean;
 }) {
@@ -103,26 +75,26 @@ function MatrixTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-40">Module</TableHead>
+            <TableHead className="w-48">Module</TableHead>
             {ACTIONS.map((a) => (
               <TableHead key={a} className="text-center capitalize w-24">
-                {a}
+                {a === 'create' ? 'Add' : a}
               </TableHead>
             ))}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {MODULE_KEYS.map((mod) => (
-            <TableRow key={mod}>
-              <TableCell className="font-medium">{MODULE_LABELS[mod] ?? mod}</TableCell>
+          {modules.map((mod) => (
+            <TableRow key={mod.key}>
+              <TableCell className="font-medium">{mod.name}</TableCell>
               {ACTIONS.map((act) => (
                 <TableCell key={act} className="text-center">
                   <input
                     type="checkbox"
                     className="size-4 accent-primary cursor-pointer disabled:opacity-50"
-                    checked={Boolean((matrix[mod] as Record<string, boolean> | undefined)?.[act])}
+                    checked={Boolean((matrix[mod.key] as Record<string, boolean> | undefined)?.[act])}
                     disabled={readOnly}
-                    onChange={(e) => onToggle(mod, act, e.target.checked)}
+                    onChange={(e) => onToggle(mod.key, act, e.target.checked)}
                   />
                 </TableCell>
               ))}
@@ -138,13 +110,14 @@ export default function RolesSettingsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]);
+  const [appModules, setAppModules] = useState<AppModule[]>([]);
   const [users, setUsers] = useState<CompanyUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newMatrix, setNewMatrix] = useState<PermissionMatrix>(emptyMatrix);
+  const [newMatrix, setNewMatrix] = useState<PermissionMatrix>({});
   const [editId, setEditId] = useState<number | null>(null);
-  const [editMatrix, setEditMatrix] = useState<PermissionMatrix>(emptyMatrix);
+  const [editMatrix, setEditMatrix] = useState<PermissionMatrix>({});
   const [saving, setSaving] = useState(false);
   const [roleSearch, setRoleSearch] = useState('');
   const [roleKind, setRoleKind] = useState<'all' | 'system' | 'custom'>('all');
@@ -161,7 +134,16 @@ export default function RolesSettingsPage() {
   const [editUser, setEditUser] = useState<CompanyUser | null>(null);
   const [resetUser, setResetUser] = useState<CompanyUser | null>(null);
   const [resetPassword, setResetPassword] = useState('');
-  const [tab, setTab] = useState<'roles' | 'users'>('roles');
+  const [editName, setEditName] = useState('');
+  const [viewMatrixRole, setViewMatrixRole] = useState<Role | null>(null);
+  const [viewMatrix, setViewMatrix] = useState<PermissionMatrix>({});
+  const [allModules, setAllModules] = useState<AppModule[]>([]);
+  const [moduleEdit, setModuleEdit] = useState<AppModule | null>(null);
+  const [moduleCreateOpen, setModuleCreateOpen] = useState(false);
+  const [newModuleKey, setNewModuleKey] = useState('');
+  const [newModuleName, setNewModuleName] = useState('');
+  const [newModulePath, setNewModulePath] = useState('');
+  const [tab, setTab] = useState<'roles' | 'users' | 'modules'>('roles');
 
   const userForm = useForm<CompanyUserFormData>({
     resolver: zodResolver(companyUserSchema),
@@ -191,14 +173,22 @@ export default function RolesSettingsPage() {
   };
 
   const load = useCallback(async () => {
-    const [r, u] = await Promise.all([api.roles.list(), api.users.list()]);
+    const [r, u, mods, allMods] = await Promise.all([
+      api.roles.list(),
+      api.users.list(),
+      api.modules.list(),
+      api.modules.list({ all_modules: true }),
+    ]);
     setRoles(r);
     setUsers(u);
+    setAppModules(mods);
+    setAllModules(allMods);
+    setNewMatrix(emptyMatrix(mods));
   }, []);
 
   useEffect(() => {
     if (!user) return;
-    if (!can(user, 'roles.read')) {
+    if (!canModule(user, 'roles', 'view')) {
       router.replace('/dashboard');
       return;
     }
@@ -222,8 +212,14 @@ export default function RolesSettingsPage() {
   };
 
   const startEdit = (role: Role) => {
-    if (role.is_system || !role.uses_matrix) return;
+    if (role.slug === 'admin') {
+      setViewMatrixRole(role);
+      setViewMatrix(cloneMatrix(role.matrix));
+      return;
+    }
+    if (!role.uses_matrix) return;
     setEditId(role.id);
+    setEditName(role.name);
     setEditMatrix(cloneMatrix(role.matrix));
   };
 
@@ -231,7 +227,12 @@ export default function RolesSettingsPage() {
     if (editId == null) return;
     setSaving(true);
     try {
-      await api.roles.update(editId, { matrix: editMatrix });
+      const payload: { matrix: PermissionMatrix; name?: string } = { matrix: editMatrix };
+      const role = roles.find((r) => r.id === editId);
+      if (role && !role.is_system && editName.trim() && editName.trim() !== role.name) {
+        payload.name = editName.trim();
+      }
+      await api.roles.update(editId, payload);
       await load();
       setEditId(null);
     } finally {
@@ -247,7 +248,7 @@ export default function RolesSettingsPage() {
       await api.roles.create({ name, matrix: newMatrix });
       setCreateOpen(false);
       setNewName('');
-      setNewMatrix(emptyMatrix());
+      setNewMatrix(emptyMatrix(appModules));
       await load();
     } finally {
       setSaving(false);
@@ -280,6 +281,48 @@ export default function RolesSettingsPage() {
       toast.success('User created');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to create user');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createModule = async () => {
+    const key = newModuleKey.trim();
+    const name = newModuleName.trim();
+    const path = newModulePath.trim();
+    if (!key || !name || !path) return;
+    setSaving(true);
+    try {
+      await api.modules.create({ key, name, sidebar_path: path, icon: 'LayoutDashboard', section_key: 'sectionOperations' });
+      setModuleCreateOpen(false);
+      setNewModuleKey('');
+      setNewModuleName('');
+      setNewModulePath('');
+      await load();
+      toast.success('Module created');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to create module');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveModuleEdit = async () => {
+    if (!moduleEdit) return;
+    setSaving(true);
+    try {
+      await api.modules.update(moduleEdit.id, {
+        name: moduleEdit.name,
+        sidebar_path: moduleEdit.sidebar_path,
+        section_key: moduleEdit.section_key,
+        is_active: moduleEdit.is_active,
+        icon: moduleEdit.icon,
+      });
+      setModuleEdit(null);
+      await load();
+      toast.success('Module updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update module');
     } finally {
       setSaving(false);
     }
@@ -366,8 +409,9 @@ export default function RolesSettingsPage() {
     }
   };
 
-  const canWrite = user && can(user, 'roles.write');
-  const canDelete = user && can(user, 'roles.delete');
+  const canWrite = user && canModule(user, 'roles', 'edit');
+  const canDelete = user && canModule(user, 'roles', 'delete');
+  const canManageModules = user && isAdminBypass(user);
   const editing = editId != null ? roles.find((r) => r.id === editId) : null;
 
   const rolesForTable = useMemo(() => {
@@ -470,6 +514,7 @@ export default function RolesSettingsPage() {
                 tabs={[
                   { id: 'roles', label: 'Roles' },
                   { id: 'users', label: 'Users' },
+                  { id: 'modules', label: 'Modules' },
                 ]}
                 value={tab}
                 onChange={setTab}
@@ -527,7 +572,12 @@ export default function RolesSettingsPage() {
                           <TableCell className="text-muted-foreground text-sm">{r.slug}</TableCell>
                           <TableCell>{r.is_system ? 'System' : 'Custom'}</TableCell>
                           <TableCell className="text-right space-x-1 whitespace-nowrap">
-                            {!r.is_system && r.slug !== 'admin' && r.uses_matrix && canWrite && (
+                            {r.slug === 'admin' && (
+                              <Button variant="outline" size="sm" onClick={() => startEdit(r)}>
+                                View matrix
+                              </Button>
+                            )}
+                            {r.slug !== 'admin' && r.uses_matrix && canWrite && (
                               <Button variant="outline" size="sm" onClick={() => startEdit(r)}>
                                 Edit matrix
                               </Button>
@@ -567,7 +617,20 @@ export default function RolesSettingsPage() {
                   {editing && (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <p className="font-medium">Editing: {editing.name}</p>
+                        <div className="space-y-2">
+                          <p className="font-medium">Editing: {editing.name}</p>
+                          {!editing.is_system && (
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor="edit-role-name" className="text-sm text-muted-foreground">Name</Label>
+                              <Input
+                                id="edit-role-name"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                className="max-w-xs"
+                              />
+                            </div>
+                          )}
+                        </div>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => setEditId(null)}>
                             Cancel
@@ -579,17 +642,83 @@ export default function RolesSettingsPage() {
                       </div>
                       <MatrixTable
                         matrix={editMatrix}
+                        modules={appModules}
                         readOnly={false}
                         onToggle={(mod, act, v) => toggleCell(editMatrix, setEditMatrix, mod, act, v)}
                       />
                     </div>
                   )}
 
-                  {roles.some((r) => r.slug === 'admin') && (
+                  {viewMatrixRole && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <p className="font-medium">Admin role matrix (read-only)</p>
+                        <Button variant="outline" size="sm" onClick={() => setViewMatrixRole(null)}>
+                          Close
+                        </Button>
+                      </div>
+                      <MatrixTable
+                        matrix={viewMatrix}
+                        modules={appModules}
+                        readOnly={true}
+                        onToggle={() => {}}
+                      />
+                    </div>
+                  )}
+
+                  {roles.some((r) => r.slug === 'admin') && !viewMatrixRole && (
                     <p className="text-sm text-muted-foreground">
                       The Admin role is fixed and cannot be renamed, edited, or deleted.
                     </p>
                   )}
+                </CardContent>
+              </Card>
+              )}
+
+              {tab === 'modules' && (
+              <Card className="border-border/60">
+                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>App modules</CardTitle>
+                    <CardDescription>Sidebar modules and permission keys. New modules appear in the role matrix after refresh.</CardDescription>
+                  </div>
+                  {canManageModules && (
+                    <Button size="sm" onClick={() => setModuleCreateOpen(true)}>
+                      New module
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Key</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Path</TableHead>
+                        <TableHead>Section</TableHead>
+                        <TableHead>Active</TableHead>
+                        {canManageModules && <TableHead className="text-right">Actions</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allModules.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-mono text-xs">{m.key}</TableCell>
+                          <TableCell>{m.name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{m.sidebar_path}</TableCell>
+                          <TableCell className="text-sm">{m.section_key}</TableCell>
+                          <TableCell>{m.is_active ? 'Yes' : 'No'}</TableCell>
+                          {canManageModules && (
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm" onClick={() => setModuleEdit(m)}>
+                                Edit
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
               )}
@@ -934,6 +1063,7 @@ export default function RolesSettingsPage() {
                 </div>
                 <MatrixTable
                   matrix={newMatrix}
+                  modules={appModules}
                   readOnly={false}
                   onToggle={(mod, act, v) => toggleCell(newMatrix, setNewMatrix, mod, act, v)}
                 />
@@ -945,6 +1075,75 @@ export default function RolesSettingsPage() {
                 <Button onClick={createRole} disabled={saving || !newName.trim()}>
                   Create role
                 </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={moduleCreateOpen} onOpenChange={setModuleCreateOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>New module</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Key</Label>
+                  <Input value={newModuleKey} onChange={(e) => setNewModuleKey(e.target.value)} placeholder="e.g. sub_contractors" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Name</Label>
+                  <Input value={newModuleName} onChange={(e) => setNewModuleName(e.target.value)} placeholder="Sub-contractors" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Sidebar path</Label>
+                  <Input value={newModulePath} onChange={(e) => setNewModulePath(e.target.value)} placeholder="/sub-contractors" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setModuleCreateOpen(false)}>Cancel</Button>
+                <Button onClick={createModule} disabled={saving || !newModuleKey.trim() || !newModuleName.trim() || !newModulePath.trim()}>
+                  Create
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={!!moduleEdit} onOpenChange={(open) => !open && setModuleEdit(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit module</DialogTitle>
+              </DialogHeader>
+              {moduleEdit && (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Key</Label>
+                    <Input value={moduleEdit.key} disabled />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Name</Label>
+                    <Input value={moduleEdit.name} onChange={(e) => setModuleEdit({ ...moduleEdit, name: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Sidebar path</Label>
+                    <Input value={moduleEdit.sidebar_path} onChange={(e) => setModuleEdit({ ...moduleEdit, sidebar_path: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Section key</Label>
+                    <Input value={moduleEdit.section_key} onChange={(e) => setModuleEdit({ ...moduleEdit, section_key: e.target.value })} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-primary"
+                      checked={moduleEdit.is_active}
+                      onChange={(e) => setModuleEdit({ ...moduleEdit, is_active: e.target.checked })}
+                    />
+                    <Label>Active</Label>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setModuleEdit(null)}>Cancel</Button>
+                <Button onClick={saveModuleEdit} disabled={saving}>Save</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

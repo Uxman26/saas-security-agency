@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import PERM_STAFF_REQ_READ, PERM_STAFF_REQ_REVIEW, PERM_STAFF_REQ_WRITE, require_perm
+from app.rbac import require_module
 from app.schemas import StaffRequestBulkCreate, StaffRequestCreate, StaffRequestResponse, StaffRequestReview
 from app.services import staff_request_service
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/staff-requests", tags=["staff-requests"])
 def list_requests(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_STAFF_REQ_READ)),
+    current_user: User = Depends(require_module("staff_requests", "view")),
 ):
     return staff_request_service.list_staff_requests(db, current_user, status)
 
@@ -25,7 +25,7 @@ def list_requests(
 def create_request(
     body: StaffRequestCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_STAFF_REQ_WRITE)),
+    current_user: User = Depends(require_module("client_portal", "create")),
 ):
     return staff_request_service.create_staff_request(db, current_user, body)
 
@@ -34,7 +34,7 @@ def create_request(
 def create_requests_bulk(
     body: StaffRequestBulkCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_STAFF_REQ_WRITE)),
+    current_user: User = Depends(require_module("client_portal", "create")),
 ):
     return staff_request_service.create_staff_requests_bulk(db, current_user, body)
 
@@ -43,7 +43,7 @@ def create_requests_bulk(
 def get_request(
     request_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_STAFF_REQ_READ)),
+    current_user: User = Depends(require_module("staff_requests", "view")),
 ):
     return staff_request_service.get_staff_request(db, current_user, request_id)
 
@@ -53,7 +53,7 @@ def approve_request(
     request_id: int,
     body: StaffRequestReview,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_STAFF_REQ_REVIEW)),
+    current_user: User = Depends(require_module("staff_requests", "edit")),
 ):
     return staff_request_service.approve_staff_request(db, current_user, request_id, body)
 
@@ -63,6 +63,6 @@ def reject_request(
     request_id: int,
     body: StaffRequestReview,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_STAFF_REQ_REVIEW)),
+    current_user: User = Depends(require_module("staff_requests", "edit")),
 ):
     return staff_request_service.reject_staff_request(db, current_user, request_id, body)

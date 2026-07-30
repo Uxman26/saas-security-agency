@@ -4,32 +4,32 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.schemas import SubContractorCreate, SubContractorResponse
-from app.rbac import require_perm, PERM_SUBS_READ, PERM_SUBS_WRITE, PERM_SUBS_DELETE
+from app.rbac import require_module
 from app.services import sub_contractor_service
 
 router = APIRouter(prefix="/sub-contractors", tags=["sub-contractors"])
 
 @router.post("", response_model=SubContractorResponse, status_code=status.HTTP_201_CREATED)
-def create_sub_contractor(sub_contractor: SubContractorCreate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUBS_WRITE))):
+def create_sub_contractor(sub_contractor: SubContractorCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("sub_contractors", "create"))):
     return sub_contractor_service.create_sub_contractor(db, sub_contractor, current_user.id)
 
 @router.get("", response_model=list[SubContractorResponse])
 def get_sub_contractors(
     main_contractor_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_perm(PERM_SUBS_READ)),
+    current_user: User = Depends(require_module("sub_contractors", "view")),
 ):
     return sub_contractor_service.get_sub_contractors(db, current_user.id, main_contractor_id=main_contractor_id)
 
 @router.get("/{sub_contractor_id}", response_model=SubContractorResponse)
-def get_sub_contractor(sub_contractor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUBS_READ))):
+def get_sub_contractor(sub_contractor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("sub_contractors", "view"))):
     return sub_contractor_service.get_sub_contractor_by_id(db, sub_contractor_id, current_user.id)
 
 @router.put("/{sub_contractor_id}", response_model=SubContractorResponse)
-def update_sub_contractor(sub_contractor_id: int, sub_contractor: SubContractorCreate, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUBS_WRITE))):
+def update_sub_contractor(sub_contractor_id: int, sub_contractor: SubContractorCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("sub_contractors", "edit"))):
     return sub_contractor_service.update_sub_contractor(db, sub_contractor_id, sub_contractor, current_user.id)
 
 @router.delete("/{sub_contractor_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_sub_contractor(sub_contractor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_perm(PERM_SUBS_DELETE))):
+def delete_sub_contractor(sub_contractor_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("sub_contractors", "delete"))):
     sub_contractor_service.delete_sub_contractor(db, sub_contractor_id, current_user.id)
     return None

@@ -70,6 +70,7 @@ class UserResponse(UserBase):
 
 class UserMeResponse(UserResponse):
     permissions: List[str] = Field(default_factory=list)
+    module_access: List[dict[str, Any]] = Field(default_factory=list)
     plan: Optional[dict[str, Any]] = None
     company_name: Optional[str] = None
     logo_url: Optional[str] = None
@@ -1200,6 +1201,35 @@ class RoleCreate(BaseModel):
 class RoleUpdate(BaseModel):
     name: Optional[str] = None
     matrix: Optional[dict[str, Any]] = None
+
+
+class AppModuleOut(BaseModel):
+    id: int
+    key: str
+    name: str
+    icon: str
+    sidebar_path: str
+    sidebar_order: int
+    section_key: str
+    is_active: bool
+
+
+class AppModuleCreate(BaseModel):
+    key: str = Field(min_length=2, max_length=64)
+    name: str = Field(min_length=2, max_length=120)
+    icon: str = "LayoutDashboard"
+    sidebar_path: str = Field(min_length=1, max_length=200)
+    sidebar_order: int = 0
+    section_key: str = "sectionOperations"
+
+
+class AppModuleUpdate(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    sidebar_path: Optional[str] = None
+    sidebar_order: Optional[int] = None
+    section_key: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 class CompanyUserOut(BaseModel):

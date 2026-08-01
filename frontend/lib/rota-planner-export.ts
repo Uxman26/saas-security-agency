@@ -34,7 +34,9 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export function downloadPlannerRotaCsv(
   state: RotaJsState,
-  resolveShiftRate: (shift: ShiftRec, empId: string) => number
+  resolveShiftRate: (shift: ShiftRec, empId: string) => number,
+  /** Mirrors the rota's Payable column permission — omits the column entirely when false. */
+  includePayable = true
 ) {
   if (!state.days.length) return false;
 
@@ -48,7 +50,7 @@ export function downloadPlannerRotaCsv(
     'Hours',
     'Status',
     'Rate',
-    'Payable',
+    ...(includePayable ? ['Payable'] : []),
     'Note',
   ];
   const lines = [header.map(csvCell).join(',')];
@@ -76,7 +78,7 @@ export function downloadPlannerRotaCsv(
             hours.toFixed(2),
             status ? attStatusLabel(status) : '',
             rate.toFixed(2),
-            payable.toFixed(2),
+            ...(includePayable ? [payable.toFixed(2)] : []),
             a?.note || '',
           ]
             .map(csvCell)
@@ -85,7 +87,11 @@ export function downloadPlannerRotaCsv(
       });
     }
     if (!wrote) {
-      lines.push([emp.name, emp.role, '', '', '', '', '0.00', '', '', '0.00', ''].map(csvCell).join(','));
+      lines.push(
+        [emp.name, emp.role, '', '', '', '', '0.00', '', '', ...(includePayable ? ['0.00'] : []), '']
+          .map(csvCell)
+          .join(',')
+      );
     }
   }
 

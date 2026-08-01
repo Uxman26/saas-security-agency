@@ -1,8 +1,14 @@
 import type { User, ModuleAccess } from './types';
 import { sidebarPathAllowed } from './sidebar-modules';
 
+/** Permission-only modules gate a capability inside another screen and have no page. */
+export function isCapabilityModule(m: ModuleAccess): boolean {
+  return !m.sidebar_path || !m.sidebar_path.startsWith('/');
+}
+
 export function moduleNavAllowed(user: User | null | undefined, m: ModuleAccess): boolean {
   if (!m.can_view) return false;
+  if (isCapabilityModule(m)) return false;
   if (!sidebarPathAllowed(user?.sidebar_modules, m.sidebar_path)) return false;
   if (m.key === 'expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
   if (m.key === 'leads' && user?.enabled_modules && user.enabled_modules.leads === false) return false;

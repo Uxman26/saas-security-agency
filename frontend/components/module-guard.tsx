@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule, isAdminBypass } from '@/lib/permissions';
+import { isCapabilityModule } from '@/lib/nav-modules';
 
 type ModuleAction = 'view' | 'create' | 'edit' | 'delete';
 
@@ -67,7 +68,8 @@ export function useModulePathGuard(pathname: string) {
     if (user.role === 'super_admin' || isAdminBypass(user)) return;
     if (pathGuardExempt(pathname)) return;
 
-    const modules = user.module_access || [];
+    // Capability modules carry no path — matching them would swallow every route.
+    const modules = (user.module_access || []).filter((m) => !isCapabilityModule(m));
     const match = [...modules]
       .sort((a, b) => b.sidebar_path.length - a.sidebar_path.length)
       .find((m) => pathname === m.sidebar_path || pathname.startsWith(`${m.sidebar_path}/`));

@@ -82,6 +82,8 @@ export function ShiftDialog({
     [shift.site, siteNames]
   );
   const [assignees, setAssignees] = useState<string[]>([defaultEmpId]);
+  /** Once the rate box is edited we show it verbatim, so it can be cleared back to empty. */
+  const [rateTouched, setRateTouched] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteContractor, setNewSiteContractor] = useState('');
@@ -89,32 +91,19 @@ export function ShiftDialog({
 
   const applySite = (siteName: string) => {
     const rec = siteName ? siteByName.get(siteName) : undefined;
-    const staff =
-      rec?.staff_hourly_rate != null && !Number.isNaN(Number(rec.staff_hourly_rate))
-        ? Number(rec.staff_hourly_rate)
-        : null;
-    const siteRate =
-      rec?.default_hourly_rate != null && !Number.isNaN(Number(rec.default_hourly_rate))
-        ? Number(rec.default_hourly_rate)
-        : null;
-    const prefer = staff != null && staff > 0 ? staff : siteRate;
+    // Deliberately does not touch shiftRate: the rate box only ever shows the staff
+    // member's own rate. Payable still falls back to site rates via resolveShiftRate.
     setShift((s) => ({
       ...s,
       site: siteName,
       color: rec?.color || DEFAULT_SITE_COLOR,
-      // Prefill from site staff rate (then site rate) when empty so Payable can calculate
-      shiftRate:
-        s.shiftRate != null && !Number.isNaN(Number(s.shiftRate))
-          ? s.shiftRate
-          : prefer != null && prefer > 0
-            ? prefer
-            : s.shiftRate,
     }));
   };
 
   useEffect(() => {
     if (!open) return;
     setDk(defaultDk);
+    setRateTouched(false);
     if (edit) {
       setShift(normalizeShiftForm({ ...edit.shift }));
       setAssignees([edit.empId]);
@@ -146,7 +135,7 @@ export function ShiftDialog({
       toast.warning('Site is required — select a site or enter a site name');
       return;
     }
-    onApply(assignees, dk, normalizeShiftForm({ ...shift, site: siteName }));
+    onApply(assignees, dk, normalizeShiftForm({ ...shift, site: siteName, shiftRate: rateValue }));
     onOpenChange(false);
   };
 
@@ -185,6 +174,18 @@ export function ShiftDialog({
   }, [assignees, employees]);
 
   const primaryStaffRate = assigneeStaffRates.length === 1 ? assigneeStaffRates[0] : null;
+
+  /**
+   * What the rate box shows: the assigned staff member's own rate, and nothing at all when
+   * they have no rate. Existing shifts show exactly what was saved, so opening one for edit
+   * never silently reprices it.
+   */
+  const rateValue =
+    edit || rateTouched
+      ? shift.shiftRate
+      : primaryStaffRate && primaryStaffRate.rate > 0
+        ? primaryStaffRate.rate
+        : null;
 
   const draftConflicts = useMemo(() => {
     if (!open || !allShifts) return [] as ReturnType<typeof findConflictsForDraft>;
@@ -326,7 +327,10 @@ export function ShiftDialog({
                     type="button"
                     className="text-xs font-medium text-sky-600 hover:underline tabular-nums"
                     title="Use this staff hourly rate"
-                    onClick={() => setShift((s) => ({ ...s, shiftRate: primaryStaffRate.rate }))}
+                    onClick={() => {
+                      setRateTouched(true);
+                      setShift((s) => ({ ...s, shiftRate: primaryStaffRate.rate }));
+                    }}
                   >
                     Staff rate: {primaryStaffRate.rate.toFixed(2)}
                   </button>
@@ -341,9 +345,10 @@ export function ShiftDialog({
                 step="0.01"
                 min={0}
                 placeholder="e.g. 12.50"
-                value={shift.shiftRate ?? ''}
+                value={rateValue ?? ''}
                 onChange={(e) => {
                   const v = e.target.value;
+                  setRateTouched(true);
                   setShift((s) => ({
                     ...s,
                     shiftRate: v === '' ? null : parseFloat(v) || null,

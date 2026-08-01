@@ -49,9 +49,10 @@ import { addDays } from 'date-fns';
 const SHIFT_MENU_H = 420;
 const EMP_MENU_H = 132;
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const ROTA_PAY_COL_W = 72;
-const ROTA_HOURS_COL_W = 80;
-const ROTA_EMP_COL_W = 220;
+const ROTA_PAY_COL_W = 62;
+const ROTA_HOURS_COL_W = 68;
+const ROTA_PUBLISH_COL_W = 92;
+const ROTA_EMP_COL_W = 182;
 const ROTA_DAY_COL_W = 160;
 /** Timeline: px per hour — wide enough that the day is horizontally scrollable */
 const TIMELINE_PX_PER_HOUR = 72;
@@ -112,6 +113,11 @@ const ROTA_STICKY_PAY_BG = {
   backgroundClip: 'padding-box',
   isolation: 'isolate',
 } as const;
+const ROTA_STICKY_PUBLISH_BG = {
+  backgroundColor: 'var(--rota-publish-bg)',
+  backgroundClip: 'padding-box',
+  isolation: 'isolate',
+} as const;
 
 const ATT_STATUS_OPTIONS: { value: AttStatus; label: string }[] = [
   { value: 'on_time', label: 'On time' },
@@ -164,6 +170,76 @@ function EmployeeAvatar({ emp, className }: { emp: EmployeeRec; className?: stri
   );
 }
 
+/** Per-staff publish state + actions. Independent of the whole-rota toolbar buttons. */
+function EmployeePublishCell({
+  published,
+  busy,
+  disabled,
+  name,
+  onPublish,
+  onUnpublish,
+}: {
+  published: boolean;
+  busy: boolean;
+  disabled: boolean;
+  name: string;
+  onPublish: () => void;
+  onUnpublish: () => void;
+}) {
+  const btn = 'w-full rounded px-1.5 py-1 text-[10px] font-semibold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+  return (
+    <div className="flex flex-col items-stretch gap-1">
+      <span
+        className={cn(
+          'rounded-full px-1.5 py-0.5 text-center text-[9px] font-semibold leading-tight',
+          published
+            ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'
+            : 'bg-muted text-muted-foreground'
+        )}
+      >
+        {busy ? 'Saving…' : published ? 'Published' : 'Draft'}
+      </span>
+      <button
+        type="button"
+        className={cn(btn, 'bg-sky-600 text-white border-sky-700 hover:bg-sky-700')}
+        disabled={disabled || published}
+        onClick={onPublish}
+        title={published ? `${name} is already published` : `Publish ${name} only`}
+        aria-label={`Publish ${name}`}
+      >
+        Publish
+      </button>
+      <button
+        type="button"
+        className={cn(btn, 'bg-background text-foreground border-input hover:bg-muted')}
+        disabled={disabled || !published}
+        onClick={onUnpublish}
+        title={published ? `Unpublish ${name} only` : `${name} is not published`}
+        aria-label={`Unpublish ${name}`}
+      >
+        Unpublish
+      </button>
+    </div>
+  );
+}
+
+/** sm:max-w-md, plus size estimates for the first paint before the panel is measured. */
+const DAYS_PANEL_EST_W = 448;
+const DAYS_PANEL_EST_H = 400;
+
+type AnchorBox = { bottom: number; left: number };
+
+/** Drop the days panel just under the button that opened it, kept inside the viewport. */
+function placeDaysPanel(anchor: AnchorBox, panelW: number, panelH: number) {
+  const margin = 8;
+  const maxLeft = Math.max(margin, window.innerWidth - margin - panelW);
+  const maxTop = Math.max(margin, window.innerHeight - margin - panelH);
+  return {
+    left: Math.min(Math.max(margin, anchor.left), maxLeft),
+    top: Math.min(Math.max(margin, anchor.bottom + 8), maxTop),
+  };
+}
+
 function placeMenu(rect: DOMRect, w: number, menuH: number, _preferUp?: boolean) {
   const width = Math.min(Math.max(w, 160), window.innerWidth - 16);
   // Prefer opening beside the card (right), fall back to left, then below/above.
@@ -194,6 +270,11 @@ export function RotaCalendarClient() {
   const planIdParam = searchParams.get('id');
   const { user } = useAuth();
   const canCreateStaff = canModule(user, 'guards', 'create');
+  /** Payable money is a separate permission — the column collapses entirely without it. */
+  const showPayable = canModule(user, 'rota_payable', 'view');
+  const payColW = showPayable ? ROTA_PAY_COL_W : 0;
+  const stickyRightW = ROTA_HOURS_COL_W + payColW + ROTA_PUBLISH_COL_W;
+  const hoursColRight = payColW + ROTA_PUBLISH_COL_W;
   const createGuard = useCreateGuard();
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
   const mains = useMemo(
@@ -348,6 +429,10 @@ export function RotaCalendarClient() {
   const [daysBaselineCount, setDaysBaselineCount] = useState(0);
   const [pendingDayCount, setPendingDayCount] = useState(0);
   const [daysEditEdge, setDaysEditEdge] = useState<'start' | 'end'>('end');
+  /** Where the Add days button sat when clicked, so the panel opens against it. */
+  const [daysAnchor, setDaysAnchor] = useState<AnchorBox | null>(null);
+  const [daysPanelPos, setDaysPanelPos] = useState<{ top: number; left: number } | null>(null);
+  const daysPanelRef = useRef<HTMLDivElement>(null);
   /** After Done adds days, scroll this column index into view once the table commits. */
   const scrollDayAfterApplyRef = useRef<number | null>(null);
   const timelineDayScrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -457,6 +542,12 @@ export function RotaCalendarClient() {
     });
   }, [state.employees, empFilter, empMatchesStatusFilter, pool]);
 
+  /** Published count for the rows actually on screen — filters change the denominator. */
+  const publishedRowCount = useMemo(
+    () => rows.reduce((n, e) => n + (isEmployeePublished(e.id) ? 1 : 0), 0),
+    [rows, isEmployeePublished]
+  );
+
   useEffect(() => {
     const alive = new Set(state.employees.map((e) => e.id));
     setSelectedEmpIds((prev) => {
@@ -469,6 +560,46 @@ export function RotaCalendarClient() {
       return changed ? next : prev;
     });
   }, [state.employees]);
+
+  const todayKey = dateKey(new Date());
+
+  // Keep "now" marker fresh while timeline is open
+  useEffect(() => {
+    if (state.rotaView !== 'timeline') {
+      timelineScrolledFor.current = null;
+      return;
+    }
+    const tick = () => {
+      const n = new Date();
+      setNowMins(n.getHours() * 60 + n.getMinutes());
+    };
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, [state.rotaView]);
+
+  // Auto-scroll each day's time axis to current time (today), or to morning for other days
+  useEffect(() => {
+    if (state.rotaView !== 'timeline' || !state.days.length) return;
+    const stamp = `${state.rotaView}:${state.days.join(',')}`;
+    if (timelineScrolledFor.current === stamp) return;
+    const timer = window.setTimeout(() => {
+      // Re-read "now" at scroll time so we don't depend on the ticking state
+      const n = new Date();
+      const mins = n.getHours() * 60 + n.getMinutes();
+      const today = dateKey(n);
+      timelineScrolledFor.current = stamp;
+      for (const dk of state.days) {
+        const el = timelineDayScrollRefs.current.get(dk);
+        if (!el) continue;
+        const targetMins = dk === today ? mins : 8 * 60;
+        const px = (targetMins / (24 * 60)) * TIMELINE_WIDTH_PX;
+        const left = Math.max(0, px - el.clientWidth * 0.25);
+        el.scrollTo({ left, behavior: 'smooth' });
+      }
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [state.rotaView, state.days]);
 
   const meta = useMemo(() => {
     if (!state.days.length) return '';
@@ -538,7 +669,7 @@ export function RotaCalendarClient() {
     if (!el) return;
     const dayCount = tableDays.length;
     const rowCount = Math.max(rows.length, 1);
-    const dayBand = Math.max(el.clientWidth - ROTA_EMP_COL_W - ROTA_HOURS_COL_W - ROTA_PAY_COL_W, 1);
+    const dayBand = Math.max(el.clientWidth - ROTA_EMP_COL_W - stickyRightW, 1);
     const firstDay = dayCount
       ? Math.min(dayCount - 1, Math.max(0, Math.floor(el.scrollLeft / ROTA_DAY_COL_W)))
       : 0;
@@ -558,7 +689,7 @@ export function RotaCalendarClient() {
     setGridScrollHint(
       `X ${xPct}% · ${dayLabel} (${firstDay + 1}–${lastDay + 1} of ${dayCount || 0})  ·  Y ${yPct}% · ${rowCount} staff`
     );
-  }, [tableDays, rows.length]);
+  }, [tableDays, rows.length, stickyRightW]);
 
   useEffect(() => {
     const el = menuRef.current;
@@ -584,8 +715,7 @@ export function RotaCalendarClient() {
     if (cell) {
       const scRect = scroller.getBoundingClientRect();
       const cellRect = cell.getBoundingClientRect();
-      const stickyRight = ROTA_HOURS_COL_W + ROTA_PAY_COL_W;
-      const visibleRight = scRect.right - stickyRight;
+      const visibleRight = scRect.right - stickyRightW;
       const visibleLeft = scRect.left + ROTA_EMP_COL_W;
       if (cellRect.right > visibleRight - 4) {
         scroller.scrollBy({ left: cellRect.right - visibleRight + 12, behavior: 'smooth' });
@@ -596,19 +726,40 @@ export function RotaCalendarClient() {
     }
 
     // Fallback before paint finds the cell (new columns just added)
-    const stickyRight = ROTA_HOURS_COL_W + ROTA_PAY_COL_W;
     const targetLeft = ROTA_EMP_COL_W + dayIndex * ROTA_DAY_COL_W;
-    const scrollLeft = targetLeft + ROTA_DAY_COL_W - (scroller.clientWidth - stickyRight);
+    const scrollLeft = targetLeft + ROTA_DAY_COL_W - (scroller.clientWidth - stickyRightW);
     scroller.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
-  }, []);
+  }, [stickyRightW]);
 
-  const openDaysEditor = () => {
+  const openDaysEditor = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const anchor: AnchorBox = { bottom: r.bottom, left: r.left };
+    setDaysAnchor(anchor);
+    setDaysPanelPos(placeDaysPanel(anchor, DAYS_PANEL_EST_W, DAYS_PANEL_EST_H));
     const n = state.days.length;
     setDaysBaselineCount(n);
     setPendingDayCount(n);
     setDaysEditEdge('end');
     setDaysOpen(true);
   };
+
+  /** Re-clamp against the panel's real size once rendered, on resize, and as it grows. */
+  useEffect(() => {
+    if (!daysOpen || !daysAnchor) return;
+    const reposition = () => {
+      const el = daysPanelRef.current;
+      setDaysPanelPos(
+        placeDaysPanel(
+          daysAnchor,
+          el?.offsetWidth || DAYS_PANEL_EST_W,
+          el?.offsetHeight || DAYS_PANEL_EST_H
+        )
+      );
+    };
+    reposition();
+    window.addEventListener('resize', reposition);
+    return () => window.removeEventListener('resize', reposition);
+  }, [daysOpen, daysAnchor, pendingDayCount, daysEditEdge]);
 
   const adjustPendingDays = (delta: number) => {
     setPendingDayCount((n) => Math.max(1, Math.min(90, n + delta)));
@@ -723,13 +874,13 @@ export function RotaCalendarClient() {
   }, [exportMenuOpen]);
 
   const exportRotaCsv = useCallback(() => {
-    if (!downloadPlannerRotaCsv(state, resolveShiftRate)) {
+    if (!downloadPlannerRotaCsv(state, resolveShiftRate, showPayable)) {
       toast.warning('No days to export');
       return;
     }
     setExportMenuOpen(false);
     toast.snack('Rota exported as CSV');
-  }, [state, resolveShiftRate]);
+  }, [state, resolveShiftRate, showPayable]);
 
   const exportRotaPdf = useCallback(async () => {
     if (!state.days.length) {
@@ -1739,7 +1890,7 @@ export function RotaCalendarClient() {
       <div className="flex shrink-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" className="bg-pink-600 hover:bg-pink-700" type="button" onClick={() => setPickOpen(true)}>
-            Add Staff In Rota
+            Add Staff
           </Button>
           <div className="flex rounded-md border p-0.5 bg-muted/40">
             {(['table', 'timeline'] as const).map((v) => (
@@ -1865,9 +2016,11 @@ export function RotaCalendarClient() {
               ({state.inclBreaks ? 'incl. breaks' : 'excl. breaks'})
             </span>
           </span>
-          <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 px-2 py-1 tabular-nums">
-            Payable {formatMoney(totalRotaPayable)}
-          </span>
+          {showPayable ? (
+            <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 px-2 py-1 tabular-nums">
+              Payable {formatMoney(totalRotaPayable)}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -1892,7 +2045,7 @@ export function RotaCalendarClient() {
           <table
             className="w-full table-fixed border-separate border-spacing-0 text-sm"
             style={{
-              minWidth: `${ROTA_EMP_COL_W + tableDays.length * ROTA_DAY_COL_W + ROTA_HOURS_COL_W + ROTA_PAY_COL_W}px`,
+              minWidth: `${ROTA_EMP_COL_W + tableDays.length * ROTA_DAY_COL_W + stickyRightW}px`,
               width: '100%',
             }}
           >
@@ -1902,7 +2055,8 @@ export function RotaCalendarClient() {
                 <col key={dk} style={{ width: ROTA_DAY_COL_W, minWidth: ROTA_DAY_COL_W }} />
               ))}
               <col style={{ width: ROTA_HOURS_COL_W, minWidth: ROTA_HOURS_COL_W }} />
-              <col style={{ width: ROTA_PAY_COL_W, minWidth: ROTA_PAY_COL_W }} />
+              {showPayable ? <col style={{ width: ROTA_PAY_COL_W, minWidth: ROTA_PAY_COL_W }} /> : null}
+              <col style={{ width: ROTA_PUBLISH_COL_W, minWidth: ROTA_PUBLISH_COL_W }} />
             </colgroup>
             <thead>
               <tr>
@@ -1936,7 +2090,7 @@ export function RotaCalendarClient() {
                   <button type="button" className="text-xs text-pink-600 font-medium hover:underline" onClick={openReorder}>
                     ⇅ Employee custom order
                   </button>
-                  <p className="text-[10px] text-muted-foreground mt-1">Use Publish / Unpublish on the toolbar for the whole rota</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Publish each staff in the Status column</p>
                   <p className="text-[10px] text-muted-foreground">Or drag the ⋮⋮ handle on a row</p>
                 </th>
                 {tableDays.map((dk, dayIdx) => {
@@ -1972,25 +2126,34 @@ export function RotaCalendarClient() {
                   );
                 })}
                 <th
-                  className="rota-sticky-hours sticky top-0 z-[60] p-2 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                  style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
+                  className="rota-sticky-hours sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                  style={{ right: hoursColRight, ...ROTA_STICKY_HOURS_BG }}
                 >
-                  <div className="font-semibold">Total hours</div>
-                  <label className="mt-1.5 flex items-center justify-center gap-1.5 font-normal text-[10px] text-muted-foreground cursor-pointer">
+                  <div className="font-semibold leading-tight">Total hours</div>
+                  <label className="mt-1 flex items-start justify-center gap-1 font-normal text-[9px] leading-tight text-muted-foreground cursor-pointer">
                     <input
                       type="checkbox"
-                      className="size-3.5 rounded border-input"
+                      className="size-3 shrink-0 rounded border-input"
                       checked={state.inclBreaks}
                       onChange={(e) => setInclBreaks(e.target.checked)}
                     />
                     Incl. breaks?
                   </label>
                 </th>
+                {showPayable ? (
+                  <th
+                    className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                  >
+                    <div className="font-semibold leading-tight">Payable</div>
+                  </th>
+                ) : null}
                 <th
-                  className="rota-sticky-pay sticky top-0 right-0 z-[60] p-2 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                  style={{ ...ROTA_STICKY_PAY_BG }}
+                  className="rota-sticky-publish sticky top-0 right-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                  style={{ ...ROTA_STICKY_PUBLISH_BG }}
                 >
-                  <div className="font-semibold">Payable</div>
+                  <div className="font-semibold leading-tight">Status</div>
+                  <p className="mt-1 font-normal text-[9px] leading-tight text-muted-foreground">Per staff only</p>
                 </th>
               </tr>
             </thead>
@@ -2044,50 +2207,23 @@ export function RotaCalendarClient() {
                           aria-label={`Select ${emp.name}`}
                         />
                       ) : null}
-                      <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex-1 min-w-0">
                         <button
                           type="button"
-                          className="flex gap-2 text-left w-full min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
+                          className="flex gap-1.5 text-left w-full min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
                           onClick={(e) => toggleEmpMenu(e, emp.id)}
                         >
-                          <EmployeeAvatar emp={emp} className="size-8 text-[10px] shrink-0" />
+                          <EmployeeAvatar emp={emp} className="size-7 text-[9px] shrink-0" />
                           <span className="min-w-0 flex-1">
-                            <span className="text-xs font-medium flex items-start gap-1 break-words whitespace-normal leading-snug">
+                            <span className="text-[11px] font-medium flex items-start gap-1 break-words whitespace-normal leading-snug">
                               <span className="break-words">{emp.name}</span>
                               {empHasConflict(emp.id) ? (
                                 <AlertTriangle className="size-3 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" aria-label="Has shift conflicts" />
                               ) : null}
                             </span>
-                            <span className="text-[10px] text-muted-foreground block break-words">{emp.role}</span>
+                            <span className="text-[9px] text-muted-foreground block break-words leading-tight">{emp.role}</span>
                           </span>
-                          <MoreHorizontal className="size-4 shrink-0 text-muted-foreground mt-1" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={publishingEmpId === emp.id || publishing || unpublishing}
-                          onClick={() => toggleEmployeePublished(emp, !isEmployeePublished(emp.id))}
-                          className={cn(
-                            'w-full text-[10px] font-semibold rounded px-2 py-1 border transition-colors',
-                            isEmployeePublished(emp.id)
-                              ? 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950 dark:text-sky-100 dark:border-sky-700'
-                              : 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-100 dark:border-emerald-700'
-                          )}
-                          title={
-                            isEmployeePublished(emp.id)
-                              ? 'Published — click to unpublish this staff'
-                              : 'Not published — click to publish this staff'
-                          }
-                          aria-label={
-                            isEmployeePublished(emp.id)
-                              ? `Unpublish ${emp.name}`
-                              : `Publish ${emp.name}`
-                          }
-                        >
-                          {publishingEmpId === emp.id
-                            ? 'Saving…'
-                            : isEmployeePublished(emp.id)
-                              ? 'Unpublish'
-                              : 'Publish'}
+                          <MoreHorizontal className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
                         </button>
                       </div>
                     </div>
@@ -2208,16 +2344,31 @@ export function RotaCalendarClient() {
                     );
                   })}
                   <td
-                    className="rota-sticky-hours sticky z-50 text-center align-top p-2 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
+                    className="rota-sticky-hours sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    style={{ right: hoursColRight, ...ROTA_STICKY_HOURS_BG }}
                   >
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
+                  {showPayable ? (
+                    <td
+                      className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                      style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                    >
+                      {formatMoney(empTotalPayable(emp.id))}
+                    </td>
+                  ) : null}
                   <td
-                    className="rota-sticky-pay sticky right-0 z-50 text-center align-top p-2 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ ...ROTA_STICKY_PAY_BG }}
+                    className="rota-sticky-publish sticky right-0 z-50 align-top p-1.5 border-l border-b shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    style={{ ...ROTA_STICKY_PUBLISH_BG }}
                   >
-                    {formatMoney(empTotalPayable(emp.id))}
+                    <EmployeePublishCell
+                      published={isEmployeePublished(emp.id)}
+                      busy={publishingEmpId === emp.id}
+                      disabled={publishingEmpId === emp.id || publishing || unpublishing}
+                      name={emp.name}
+                      onPublish={() => toggleEmployeePublished(emp, true)}
+                      onUnpublish={() => toggleEmployeePublished(emp, false)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -2248,16 +2399,24 @@ export function RotaCalendarClient() {
                   );
                 })}
                 <td
-                  className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-2 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                  style={{ right: ROTA_PAY_COL_W, ...ROTA_STICKY_HOURS_BG }}
+                  className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                  style={{ right: hoursColRight, ...ROTA_STICKY_HOURS_BG }}
                 >
                   {formatHoursDecimal(totalRotaHours)}
                 </td>
+                {showPayable ? (
+                  <td
+                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                    style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                  >
+                    {formatMoney(totalRotaPayable)}
+                  </td>
+                ) : null}
                 <td
-                  className="rota-sticky-pay sticky right-0 bottom-0 z-[55] text-center p-2 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                  style={{ ...ROTA_STICKY_PAY_BG }}
+                  className="rota-sticky-publish sticky right-0 bottom-0 z-[55] text-center p-1.5 border-l border-t text-[10px] font-normal text-muted-foreground shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                  style={{ ...ROTA_STICKY_PUBLISH_BG }}
                 >
-                  {formatMoney(totalRotaPayable)}
+                  {publishedRowCount}/{rows.length} published
                 </td>
               </tr>
             </tfoot>
@@ -2274,106 +2433,156 @@ export function RotaCalendarClient() {
       )}
 
       {state.rotaView === 'timeline' && (
-        <div className="rota-grid-scroll min-h-0 flex-1 space-y-4 pb-4">
-          <p className="text-xs text-muted-foreground">
-            Timeline shows shifts in chronological order along a 24-hour time flow for each day.
-          </p>
-          {state.days.map((dk) => {
-            const dayShifts = state.employees
-              .flatMap((emp) =>
-                (state.shifts[emp.id]?.[dk] || []).map((sh, idx) => {
-                  const [shH, shM] = (sh.start || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
-                  const [eh, em] = (sh.end || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
-                  let startMin = shH * 60 + shM;
-                  let endMin = eh * 60 + em;
-                  if (endMin <= startMin) endMin += 24 * 60;
-                  return { emp, sh, idx, startMin, endMin };
-                })
-              )
-              .sort((a, b) => a.startMin - b.startMin || a.emp.name.localeCompare(b.emp.name));
-            const axisHours = [0, 6, 12, 18, 24];
-            return (
-              <div
-                key={dk}
-                className={cn(
-                  'rounded-lg border bg-card transition-colors overflow-hidden',
-                  (draggingShift || dragEmpId) && dropDayKey === dk && 'ring-2 ring-pink-500/70 bg-pink-50/40 dark:bg-pink-950/20'
-                )}
-                onDragOver={(e) => onDayDragOver(e, dk)}
-                onDragLeave={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
-                }}
-                onDrop={(e) => onDropDay(e, dk)}
-              >
-                <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
-                  <span className="font-medium text-sm">{fmtShortDate(dk)}</span>
-                  <Button type="button" variant="link" size="sm" className="h-8 text-pink-600" onClick={() => rows[0] && openAddShift(dk, rows[0].id)}>
-                    Add shift
-                  </Button>
-                </div>
-                <div className="p-3 space-y-3 overflow-x-auto">
-                  <div className="relative h-6 min-w-[720px] border-b border-border">
-                    {axisHours.map((h) => (
-                      <div
-                        key={h}
-                        className="absolute top-0 bottom-0 border-l border-border/60"
-                        style={{ left: `${(h / 24) * 100}%` }}
-                      >
-                        <span className="absolute top-0 left-1 text-[10px] text-muted-foreground tabular-nums">
-                          {String(h).padStart(2, '0')}:00
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {dayShifts.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-4 text-center">No shifts on this day.</p>
-                  ) : (
-                    <div className="relative min-w-[720px] space-y-2">
-                      {dayShifts.map(({ emp, sh, idx, startMin, endMin }) => {
-                        const left = (startMin / (24 * 60)) * 100;
-                        const width = Math.max(((endMin - startMin) / (24 * 60)) * 100, 4);
-                        return (
-                          <div key={`${emp.id}-${idx}`} className="relative h-14">
-                            <button
-                              type="button"
-                              draggable
-                              onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
-                              onDragEnd={onDragEnd}
-                              className="absolute top-0 h-full rounded-md border bg-card text-left px-2 py-1 text-[10px] hover:bg-muted/50 cursor-grab active:cursor-grabbing overflow-hidden shadow-sm"
-                              style={{
-                                left: `${Math.min(left, 96)}%`,
-                                width: `${Math.min(width, 100 - Math.min(left, 96))}%`,
-                                borderLeftWidth: 4,
-                                borderLeftColor: sh.color || emp.avatarColor,
-                              }}
-                              onClick={() => openEditShift(emp.id, dk, idx)}
-                              title={`${emp.name}${emp.role ? ` · ${emp.role}` : ''} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
-                            >
-                              <span className="font-medium block truncate">{emp.name}</span>
-                              {emp.role ? (
-                                <span className="text-muted-foreground block truncate leading-tight">{emp.role}</span>
-                              ) : null}
-                              <span className="text-muted-foreground tabular-nums block truncate">
-                                {sh.start}–{sh.end}
-                                {sh.site ? ` · ${sh.site}` : ''}
-                              </span>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+          <div className="rota-grid-scroll min-h-[min(50vh,420px)] flex-1 space-y-3 p-3 sm:min-h-[min(60vh,520px)] lg:min-h-0">
+            <p className="text-xs text-muted-foreground shrink-0">
+              Scroll each day left/right along the 24-hour axis. Today auto-scrolls to the current time.
+            </p>
+            {state.days.map((dk, dayIdx) => {
+              const tone = TIMELINE_DAY_TONES[dayIdx % TIMELINE_DAY_TONES.length];
+              const isToday = dk === todayKey;
+              const dayShifts = state.employees
+                .flatMap((emp) =>
+                  (state.shifts[emp.id]?.[dk] || []).map((sh, idx) => {
+                    const [shH, shM] = (sh.start || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
+                    const [eh, em] = (sh.end || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
+                    const startMin = shH * 60 + shM;
+                    let endMin = eh * 60 + em;
+                    if (endMin <= startMin) endMin += 24 * 60;
+                    return { emp, sh, idx, startMin, endMin };
+                  })
+                )
+                .sort((a, b) => a.startMin - b.startMin || a.emp.name.localeCompare(b.emp.name));
+              const axisHours = Array.from({ length: 25 }, (_, h) => h);
+              const nowLeftPx = (nowMins / (24 * 60)) * TIMELINE_WIDTH_PX;
+              return (
+                <div
+                  key={dk}
+                  className={cn(
+                    'rounded-lg border transition-colors',
+                    tone.shell,
+                    (draggingShift || dragEmpId) && dropDayKey === dk && 'ring-2 ring-pink-500/70'
                   )}
+                  onDragOver={(e) => onDayDragOver(e, dk)}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) clearDropHighlight();
+                  }}
+                  onDrop={(e) => onDropDay(e, dk)}
+                >
+                  <div className={cn('flex items-center justify-between px-3 py-2 border-b', tone.header)}>
+                    <span className="font-medium text-sm flex items-center gap-2">
+                      <span
+                        className="size-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: tone.accent }}
+                        aria-hidden
+                      />
+                      {fmtShortDate(dk)}
+                      {isToday ? (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-pink-600 text-white">
+                          Today
+                        </span>
+                      ) : null}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="h-8 text-pink-600"
+                      onClick={() => rows[0] && openAddShift(dk, rows[0].id)}
+                    >
+                      Add shift
+                    </Button>
+                  </div>
+                  <div
+                    className="overflow-x-scroll overflow-y-hidden overscroll-x-contain p-3 [scrollbar-gutter:stable] [scrollbar-width:auto]"
+                    ref={(el) => {
+                      if (el) timelineDayScrollRefs.current.set(dk, el);
+                      else timelineDayScrollRefs.current.delete(dk);
+                    }}
+                  >
+                    <div className="relative space-y-3" style={{ width: TIMELINE_WIDTH_PX }}>
+                      <div className="relative h-6 border-b border-border/70">
+                        {axisHours.map((h) => (
+                          <div
+                            key={h}
+                            className="absolute top-0 bottom-0 border-l border-border/50"
+                            style={{ left: (h / 24) * TIMELINE_WIDTH_PX }}
+                          >
+                            <span className="absolute top-0 left-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                              {String(h).padStart(2, '0')}:00
+                            </span>
+                          </div>
+                        ))}
+                        {isToday ? (
+                          <div
+                            className="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-pink-600"
+                            style={{ left: nowLeftPx }}
+                            title="Current time"
+                          >
+                            <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 rounded bg-pink-600 px-1 text-[9px] font-semibold text-white whitespace-nowrap">
+                              Now
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                      {dayShifts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground py-4 text-center">No shifts on this day.</p>
+                      ) : (
+                        <div className="relative space-y-2">
+                          {dayShifts.map(({ emp, sh, idx, startMin, endMin }) => {
+                            const left = (startMin / (24 * 60)) * TIMELINE_WIDTH_PX;
+                            const width = Math.max(((endMin - startMin) / (24 * 60)) * TIMELINE_WIDTH_PX, 48);
+                            return (
+                              <div key={`${emp.id}-${idx}`} className="relative h-14">
+                                <button
+                                  type="button"
+                                  draggable
+                                  onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
+                                  onDragEnd={onDragEnd}
+                                  className="absolute top-0 h-full rounded-md border bg-card/95 text-left px-2 py-1 text-[10px] hover:bg-muted/50 cursor-grab active:cursor-grabbing overflow-hidden shadow-sm"
+                                  style={{
+                                    left,
+                                    width,
+                                    borderLeftWidth: 4,
+                                    borderLeftColor: sh.color || emp.avatarColor,
+                                  }}
+                                  onClick={() => openEditShift(emp.id, dk, idx)}
+                                  title={`${emp.name}${emp.role ? ` · ${emp.role}` : ''} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
+                                >
+                                  <span className="font-medium block truncate leading-tight">{emp.name}</span>
+                                  {emp.role ? (
+                                    <span className="text-muted-foreground block truncate leading-tight">{emp.role}</span>
+                                  ) : null}
+                                  <span className="text-muted-foreground tabular-nums block truncate leading-tight">
+                                    {sh.start}–{sh.end}
+                                    {sh.site ? ` · ${sh.site}` : ''}
+                                  </span>
+                                </button>
+                                {isToday ? (
+                                  <div
+                                    className="pointer-events-none absolute inset-y-0 z-[5] w-0.5 bg-pink-500/70"
+                                    style={{ left: nowLeftPx }}
+                                    aria-hidden
+                                  />
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-          <button
-            type="button"
-            className="w-full py-3 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40"
-            onClick={() => setPickOpen(true)}
-          >
-            + Add Staff In Rota
-          </button>
+              );
+            })}
+            <button
+              type="button"
+              className="w-full py-3 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40"
+              onClick={() => setPickOpen(true)}
+            >
+              + Add Staff
+            </button>
+          </div>
         </div>
       )}
 
@@ -2680,10 +2889,16 @@ export function RotaCalendarClient() {
         }}
       >
         <DialogContent
+          ref={daysPanelRef}
           showCloseButton
           overlayClassName="pointer-events-none bg-transparent"
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="sm:max-w-md sm:top-auto sm:bottom-6 sm:left-auto sm:right-6 sm:translate-x-0 sm:translate-y-0"
+          className="sm:max-w-md"
+          style={
+            daysPanelPos
+              ? { top: daysPanelPos.top, left: daysPanelPos.left, right: 'auto', bottom: 'auto', transform: 'none' }
+              : undefined
+          }
         >
           <DialogHeader>
             <DialogTitle>Add / remove days</DialogTitle>
@@ -3349,6 +3564,17 @@ export function RotaCalendarClient() {
           </button>
           <button type="button" className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium" onClick={() => openViewShifts(empMenu)}>
             Edit/view employee shifts
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+            onClick={() => {
+              const id = parseInt(empMenu, 10);
+              closeEmpMenu();
+              if (id) router.push(`/guards/${id}`);
+            }}
+          >
+            Staff profile / add photo
           </button>
           <button
             type="button"

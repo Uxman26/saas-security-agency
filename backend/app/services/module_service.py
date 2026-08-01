@@ -10,6 +10,10 @@ from app.models import AppModule, Role, RoleModulePermission
 from app.rbac_matrix import matrix_to_codes, wrap_matrix
 
 # Seed: key, name, icon (lucide), sidebar_path, order, section_key
+#
+# A module with an empty sidebar_path is permission-only: it grants a capability inside
+# another screen instead of being a page, so it is never shown in the sidebar and never
+# takes part in URL guarding.
 MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     ("dashboard", "Dashboard", "LayoutDashboard", "/dashboard", 1, "sectionOverview"),
     ("guards", "Staff", "Users", "/guards", 10, "sectionHr"),
@@ -22,6 +26,7 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     ("sites", "Sites", "MapPin", "/sites", 21, "sectionOperations"),
     ("assignments", "Assignments", "ClipboardList", "/assignments", 22, "sectionOperations"),
     ("rota", "Rotas & Shifts", "Calendar", "/rota", 23, "sectionOperations"),
+    ("rota_payable", "Rota — Payable amounts", "PoundSterling", "", 231, "sectionOperations"),
     ("patrol", "Patrol", "MapPinned", "/patrol", 24, "sectionOperations"),
     ("incidents", "Incidents", "AlertTriangle", "/incidents", 25, "sectionOperations"),
     ("client_portal", "Client portal", "Building2", "/client-portal", 26, "sectionOperations"),
@@ -285,11 +290,53 @@ def default_admin_app_matrix(modules: list[AppModule]) -> dict[str, Any]:
     return {m.key: dict(row) for m in modules}
 
 
+def coarse_unmappable_module_keys(modules: list[AppModule]) -> set[str]:
+    """Modules the legacy coarse matrix cannot express.
+
+    Derived rather than hard-coded: expand an all-true coarse matrix and see which app
+    modules it never reaches. Capability modules such as ``rota_payable`` land here, as do
+    fine-grained modules with no legacy counterpart.
+    """
+    from app.rbac_matrix import MODULE_KEYS
+
+    all_true = {k: {a: True for a in ACTIONS} for k in MODULE_KEYS}
+    expanded = expand_coarse_matrix_to_app_modules(all_true, modules)
+    return {m.key for m in modules if not any(expanded.get(m.key, {}).values())}
+
+
+def stored_cells_for_keys(db: Session, role_id: int | None, keys: set[str]) -> dict[str, Any]:
+    """Currently saved matrix cells for the given module keys."""
+    if not role_id or not keys:
+        return {}
+    out: dict[str, Any] = {}
+    rows = (
+        db.query(RoleModulePermission)
+        .join(AppModule)
+        .filter(RoleModulePermission.role_id == role_id)
+        .all()
+    )
+    for rmp in rows:
+        if rmp.module.key in keys:
+            out[rmp.module.key] = {
+                "view": bool(rmp.can_view),
+                "create": bool(rmp.can_create),
+                "edit": bool(rmp.can_edit),
+                "delete": bool(rmp.can_delete),
+            }
+    return out
+
+
 def backfill_role_module_permissions(db: Session) -> None:
-    """Populate role_module_permissions from permissions_json for all roles."""
+    """Populate role_module_permissions from permissions_json for all roles.
+
+    This runs on every startup, and the coarse matrix it rebuilds from cannot represent
+    every app module. Grants for those modules are carried over from the rows already
+    saved, otherwise anything an admin ticked there would be wiped on the next restart.
+    """
     ensure_app_modules(db)
     roles = db.query(Role).all()
     modules = list_active_modules(db)
+    preserve_keys = coarse_unmappable_module_keys(modules)
     from app.services.role_service import matrix_from_permissions_json
 
     for role in roles:
@@ -298,5 +345,6 @@ def backfill_role_module_permissions(db: Session) -> None:
         else:
             coarse = matrix_from_permissions_json(role.permissions_json)
             full = expand_coarse_matrix_to_app_modules(coarse, modules)
+            full.update(stored_cells_for_keys(db, role.id, preserve_keys))
         sync_role_permissions_from_matrix(db, role, full)
     db.commit()

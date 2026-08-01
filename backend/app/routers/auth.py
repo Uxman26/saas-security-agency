@@ -20,7 +20,7 @@ from app.schemas import (
     UserResponse,
     VerifyEmailRequest,
 )
-from app.auth import get_current_user, SUPER_ADMIN_ROLE
+from app.auth import current_session_jti, get_current_user, SUPER_ADMIN_ROLE
 from app.services import auth_service
 from app.rbac import permissions_for_user_db, permission_bypass
 from app.services.module_service import ensure_app_modules, module_access_for_role
@@ -84,6 +84,29 @@ def swagger_login(
         user_agent=ua,
         remember_me=False,
     )
+
+
+@router.post("/logout", response_model=MessageResponse)
+def logout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    jti: str | None = Depends(current_session_jti),
+):
+    """Revoke this session server-side.
+
+    Clearing the token client-side left the session usable from any other tab or a
+    copy of the token. Revoking the row means the next request on it fails, wherever it
+    comes from.
+    """
+    auth_service.logout(db, jti)
+    return {"message": "Signed out."}
+
+
+@router.post("/logout-all", response_model=MessageResponse)
+def logout_all(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Sign out of every device, for use after a suspected compromise."""
+    count = auth_service.logout_everywhere(db, current_user.id)
+    return {"message": f"Signed out of {count} session(s)."}
 
 
 @router.post("/forgot-password", response_model=MessageResponse)

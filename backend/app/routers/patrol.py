@@ -2,7 +2,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -197,6 +197,17 @@ def logs(
     return patrol_service.list_logs(
         db, current_user, site_id=site_id, route_id=route_id, guard_id=guard_id, start_date=start_date, end_date=end_date
     )
+
+
+@router.get("/logs/{log_id}/photo")
+def log_photo(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("patrol", "view")),
+):
+    """Serve a patrol scan photo behind the same permission check as the log itself."""
+    path, mime = patrol_service.log_photo_file(db, current_user, log_id)
+    return FileResponse(path, media_type=mime)
 
 
 @router.get("/reports/compliance", response_model=list[PatrolComplianceRow])

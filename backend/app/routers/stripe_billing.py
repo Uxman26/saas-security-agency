@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -9,6 +11,8 @@ from app.rbac import require_module
 from app.services import stripe_subscription_service as stripe_svc
 
 router = APIRouter(prefix="/stripe", tags=["stripe"])
+
+_CHECKOUT_SESSION_ID = re.compile(r"cs_[A-Za-z0-9_]{10,255}")
 
 
 class CheckoutRequest(BaseModel):
@@ -46,7 +50,12 @@ def checkout_session(body: CheckoutRequest, db: Session = Depends(get_db)):
 
 @router.get("/session-status")
 def session_status(session_id: str, db: Session = Depends(get_db)):
-    if not session_id:
+    # Necessarily unauthenticated: this is polled on return from Stripe Checkout during
+    # signup, before the account exists to log into. The Checkout session id is the
+    # capability, so reject anything that is not one rather than forwarding arbitrary
+    # object ids to Stripe, and return only payment status + our own receipt ref.
+    session_id = (session_id or "").strip()
+    if not session_id or not _CHECKOUT_SESSION_ID.fullmatch(session_id):
         raise HTTPException(status_code=400, detail="session_id required")
     return stripe_svc.verify_checkout_session(db, session_id)
 

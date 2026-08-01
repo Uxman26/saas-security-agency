@@ -120,6 +120,10 @@ export const api = {
       return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
     },
     me: (): Promise<User> => request<User>('/auth/me'),
+    logout: (): Promise<{ message: string }> =>
+      request<{ message: string }>('/auth/logout', { method: 'POST' }),
+    logoutAll: (): Promise<{ message: string }> =>
+      request<{ message: string }>('/auth/logout-all', { method: 'POST' }),
     forgotPassword: (email: string): Promise<{ message: string }> =>
       request<{ message: string }>('/auth/forgot-password', {
         method: 'POST',

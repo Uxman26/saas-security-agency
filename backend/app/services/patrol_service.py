@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import mimetypes
 import secrets
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
@@ -41,6 +42,7 @@ from app.schemas import (
 from app.services.company_service import get_company_by_user_id
 from app.services.geo_utils import haversine_m
 from app.services.portal_access import is_client_portal_user, is_staff_portal_user
+from app.storage_paths import resolve_storage_path
 
 
 def _qr_base_url() -> str:
@@ -100,9 +102,9 @@ def _route_out(route: PatrolRoute, include_cps: bool = False) -> PatrolRouteResp
 
 
 def _log_out(log: PatrolLog) -> PatrolLogResponse:
-    photo = None
-    if log.photo_path:
-        photo = f"/uploads/{log.photo_path.split('uploads/')[-1]}" if "uploads/" in (log.photo_path or "") else log.photo_path
+    # Authenticated endpoint rather than a public static path — see attachment handling
+    # in incident_service for the same reasoning.
+    photo = f"/patrol/logs/{log.id}/photo" if log.photo_path else None
     return PatrolLogResponse(
         id=log.id,
         company_id=log.company_id,
@@ -470,6 +472,29 @@ def list_logs(
         q = q.filter(PatrolLog.scan_time <= datetime.combine(end_date, time.max))
     rows = q.order_by(PatrolLog.scan_time.desc()).limit(500).all()
     return [_log_out(r) for r in rows]
+
+
+def log_photo_file(db: Session, user: User, log_id: int) -> tuple[str, str]:
+    """Resolve a patrol scan photo, applying the same scoping as list_logs.
+
+    Client-portal users see only their own sites' scans and staff-portal users only
+    their own, so the narrowing is repeated here rather than trusting the log's
+    company_id alone.
+    """
+    company = get_company_by_user_id(db, user.id)
+    q = db.query(PatrolLog).filter(PatrolLog.id == log_id, PatrolLog.company_id == company.id)
+    if is_client_portal_user(user) and user.client_id:
+        q = q.join(PatrolRoute).join(Site).filter(Site.client_id == user.client_id)
+    if is_staff_portal_user(user) and user.guard_id:
+        q = q.filter(PatrolLog.guard_id == user.guard_id)
+    log = q.first()
+    if not log or not log.photo_path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    path = resolve_storage_path(log.photo_path)
+    if not path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    mime, _ = mimetypes.guess_type(path)
+    return path, mime or "application/octet-stream"
 
 
 def compliance_report(

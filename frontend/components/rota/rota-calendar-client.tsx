@@ -48,11 +48,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
+import { useAuthBlobUrl } from '@/lib/use-auth-blob-url';
 import { addDays } from 'date-fns';
 
 const SHIFT_MENU_H = 420;
 const EMP_MENU_H = 132;
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ROTA_PAY_COL_W = 62;
 const ROTA_HOURS_COL_W = 68;
 const ROTA_PUBLISH_COL_W = 92;
@@ -130,37 +130,9 @@ const ATT_STATUS_OPTIONS: { value: AttStatus; label: string }[] = [
   { value: 'no_show', label: 'No show' },
 ];
 
-function useAuthImageUrl(url?: string | null) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    if (!url) {
-      setSrc(null);
-      return;
-    }
-    let cancelled = false;
-    let blobUrl: string | null = null;
-    const token = localStorage.getItem('token')?.trim();
-    void fetch(`${API_URL}${url}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((r) => (r.ok ? r.blob() : null))
-      .then((blob) => {
-        if (cancelled || !blob) return;
-        blobUrl = URL.createObjectURL(blob);
-        setSrc(blobUrl);
-      })
-      .catch(() => setSrc(null));
-    return () => {
-      cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [url]);
-  return src;
-}
-
 function EmployeeAvatar({ emp, className }: { emp: EmployeeRec; className?: string }) {
   const poolPhoto = emp.photoUrl;
-  const src = useAuthImageUrl(poolPhoto);
+  const src = useAuthBlobUrl(poolPhoto);
   if (src) {
     return <img src={src} alt="" className={cn('rounded-full object-cover shrink-0', className)} />;
   }

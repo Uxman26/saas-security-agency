@@ -38,6 +38,38 @@ LongTextStr = Annotated[str, _capped(LONG_TEXT_MAX)]
 OptShortTextStr = Optional[ShortTextStr]
 OptNoteStr = Optional[NoteStr]
 
+# Credential fields.
+#
+# Length caps bound the work an unauthenticated caller can make us do: bcrypt hashes
+# the input on every attempt, so an uncapped password field is a cheap CPU-burn vector.
+# bcrypt itself only reads the first 72 bytes.
+LOGIN_PASSWORD_MAX = 128
+
+# Signed JWTs are the only values submitted here. Generous enough for a JWT with room
+# to grow, tight enough that the field is not an unbounded upload.
+TOKEN_MAX = 4096
+
+TokenStr = Annotated[str, _capped(TOKEN_MAX, min_length=1)]
+
+
+def validate_login_password(password: str) -> str:
+    """Bound and sanity-check a submitted password without constraining its alphabet.
+
+    Deliberately does NOT reject quotes, semicolons or other SQL meta-characters.
+    Every query in this codebase goes through SQLAlchemy with bound parameters, so
+    those characters are inert — while banning them from passwords would shrink the
+    keyspace and rule out legitimate passphrases. What we do reject is input that
+    cannot be anyone's real password: empty, or nothing but whitespace.
+    """
+    if password is None:
+        raise ValueError("Password is required")
+    if not password.strip():
+        raise ValueError("Password is required")
+    if len(password) > LOGIN_PASSWORD_MAX:
+        raise ValueError(f"Password must be {LOGIN_PASSWORD_MAX} characters or fewer")
+    return password
+
+
 PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{9,}$")
 PASSWORD_REQUIREMENTS_MSG = (
     "Password must be at least 9 characters and include uppercase, lowercase, number, and special character"
@@ -45,6 +77,8 @@ PASSWORD_REQUIREMENTS_MSG = (
 
 
 def validate_password_strength(password: str) -> str:
+    if len(password or "") > LOGIN_PASSWORD_MAX:
+        raise ValueError(f"Password must be {LOGIN_PASSWORD_MAX} characters or fewer")
     if not PASSWORD_PATTERN.match(password or ""):
         raise ValueError(PASSWORD_REQUIREMENTS_MSG)
     return password

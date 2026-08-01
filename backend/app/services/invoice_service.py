@@ -3,7 +3,8 @@ from datetime import date, timedelta
 from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
-from app.models import Allowance, Assignment, AuditLog, Client, Invoice, InvoiceLine, Payment, Site, User
+from app.authz import assert_owned_by_company
+from app.models import Allowance, Assignment, AuditLog, Client, Guard, Invoice, InvoiceLine, Payment, Site, User
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
@@ -189,6 +190,7 @@ def add_invoice_line(db: Session, invoice_id: int, data: InvoiceLineBase, user_i
     site = db.query(Site).filter(Site.id == data.site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    assert_owned_by_company(db, Guard, data.guard_id, company.id, field_name="guard_id")
     amount = data.hours * data.rate + (data.allowance_amount or 0)
     line = InvoiceLine(
         invoice_id=invoice_id,
@@ -221,6 +223,7 @@ def update_invoice_line(db: Session, invoice_id: int, line_id: int, data: Invoic
         site = db.query(Site).filter(Site.id == payload["site_id"], Site.company_id == company.id).first()
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
+    assert_owned_by_company(db, Guard, payload.get("guard_id"), company.id, field_name="guard_id")
     for k, v in payload.items():
         setattr(line, k, v)
     line.amount = (line.hours or 0) * (line.rate or 0) + (line.allowance_amount or 0)

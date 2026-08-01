@@ -15,7 +15,7 @@ from app.auth import (
     AUTH_PROVIDER_LOCAL,
     OAUTH_AUTH_PROVIDERS,
 )
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from app.config import settings
 from app.services.role_service import ensure_roles_for_company, get_role_by_slug
 from app.services.receipt_service import company_subscription_blocked, create_receipt_for_signup, latest_pending_receipt
@@ -138,7 +138,10 @@ def signup_with_receipt(db: Session, user_data: UserCreate):
 
 def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None, remember_me: bool = False) -> dict:
     from app.auth import verify_password
-    from app.services import login_log_service
+    from app.services import login_guard_service, login_log_service, session_service
+
+    # Before the password is verified, so a locked-out caller never reaches bcrypt.
+    login_guard_service.assert_login_allowed(db, email, ip_address)
 
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.password_hash):
@@ -172,10 +175,35 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
         access_token_expires = timedelta(days=settings.remember_me_expire_days)
     else:
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+
+    jti = session_service.new_jti()
+    session_service.create_session(
+        db,
+        user.id,
+        jti,
+        expires_at=datetime.now(timezone.utc) + access_token_expires,
+        remember_me=remember_me,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
     access_token = create_access_token(
-        data={"sub": user.id}, expires_delta=access_token_expires
+        data={"sub": user.id, "jti": jti}, expires_delta=access_token_expires
     )
     return {"access_token": str(access_token), "token_type": "bearer"}
+
+
+def logout(db: Session, jti: str | None) -> None:
+    """Revoke the presented session. Idempotent, so a double logout is not an error."""
+    from app.services import session_service
+
+    if jti:
+        session_service.revoke(db, jti)
+
+
+def logout_everywhere(db: Session, user_id: int) -> int:
+    from app.services import session_service
+
+    return session_service.revoke_all_for_user(db, user_id)
 
 
 def request_password_reset(db: Session, email: str) -> None:
@@ -195,9 +223,14 @@ def request_password_reset(db: Session, email: str) -> None:
 
 
 def reset_password_with_token(db: Session, token: str, new_password: str) -> None:
+    from app.services import session_service
+
     user_id = verify_password_reset_token(token)
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=400, detail="Invalid or expired reset link")
     user.password_hash = get_password_hash(new_password)
     db.commit()
+    # Whoever prompted the reset may be holding a live token. Changing the password has
+    # to end every existing session, or a compromised one survives the recovery.
+    session_service.revoke_all_for_user(db, user.id)

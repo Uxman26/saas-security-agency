@@ -16,7 +16,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import type { Incident, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
+import { openAuthFile } from '@/lib/use-auth-blob-url';
 import { AlertTriangle, BarChart3, Plus } from 'lucide-react';
+
+/** Attachments are served from an authenticated endpoint, so a plain link cannot load them. */
+async function openAttachment(url: string) {
+  if (!(await openAuthFile(url))) toast.error('Could not open attachment');
+}
 
 export default function IncidentsPage() {
   const [items, setItems] = useState<Incident[]>([]);
@@ -242,9 +248,13 @@ export default function IncidentsPage() {
                         {detail.attachments!.map((a) => (
                           <li key={a.id}>
                             {a.url ? (
-                              <a href={a.url} target="_blank" rel="noreferrer" className="text-primary underline">
+                              <button
+                                type="button"
+                                onClick={() => void openAttachment(a.url!)}
+                                className="text-primary underline"
+                              >
                                 View file
-                              </a>
+                              </button>
                             ) : (
                               a.file_path
                             )}

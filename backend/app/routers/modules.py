@@ -70,6 +70,10 @@ def update_module(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("roles", "edit")),
 ):
+    # AppModule is a platform-wide table with no company_id, so an edit here is
+    # visible to every tenant. Mirror the admin-only gate on create_module.
+    if not permission_bypass(db, current_user):
+        raise HTTPException(status_code=403, detail="Only admins can edit modules")
     m = db.query(AppModule).filter(AppModule.id == module_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Module not found")

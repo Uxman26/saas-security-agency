@@ -22,7 +22,12 @@ def _scheduled_maintenance_sync() -> dict[str, Any]:
         )
         due = q.count()
         logger.info("maintenance: guards with SIA expiry within 30 days: %s", due)
-        return {"sia_expiry_due_count": due}
+
+        from app.services import session_service
+
+        purged = session_service.purge_expired(db)
+        logger.info("maintenance: purged %s dead sessions", purged)
+        return {"sia_expiry_due_count": due, "sessions_purged": purged}
     finally:
         db.close()
 

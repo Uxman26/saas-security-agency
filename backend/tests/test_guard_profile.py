@@ -11,10 +11,11 @@ def _seed(session, email: str) -> None:
         password_hash=get_password_hash("secret"),
         full_name="T",
         role="company_admin",
+        email_verified=True,
     )
     session.add(u)
     session.flush()
-    co = Company(name="Co", admin_id=u.id, subscription_tier="premium")
+    co = Company(name="Co", admin_id=u.id, subscription_tier="premium", subscription_status="active")
     session.add(co)
     session.flush()
     u.company_id = co.id

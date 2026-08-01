@@ -1,28 +1,57 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import date, datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from app.validators import SiteNameStr, validate_password_strength
+from app.validators import (
+    CompanyNameStr,
+    EMAIL_MAX,
+    NameStr,
+    SiteNameStr,
+    ShortTextStr,
+    TokenStr,
+    validate_login_password,
+    validate_password_strength,
+)
+
+
+class StrictModel(BaseModel):
+    """Request model that rejects unknown fields outright.
+
+    Pydantic's default is to silently discard extras, which already blocks mass
+    assignment. Forbidding them turns a tampered payload into a 422 instead of a
+    quietly-ignored field, which is what we want on anything touching credentials,
+    identity or permissions.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
 
 class UserBase(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=EMAIL_MAX)
     full_name: str
 
-class UserCreate(UserBase):
+class UserCreate(StrictModel):
+    email: EmailStr = Field(max_length=EMAIL_MAX)
+    full_name: NameStr
     password: str
-    company_name: str
-    subscription_tier: Optional[str] = None
+    company_name: CompanyNameStr
+    subscription_tier: Optional[ShortTextStr] = None
 
     @field_validator("password")
     @classmethod
     def password_rules(cls, v: str) -> str:
         return validate_password_strength(v)
 
-class UserLogin(BaseModel):
-    email: EmailStr
+class UserLogin(StrictModel):
+    email: EmailStr = Field(max_length=EMAIL_MAX)
     password: str
     remember_me: Optional[bool] = False
+
+    @field_validator("password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_login_password(v)
 
 
 class TokenResponse(BaseModel):
@@ -34,11 +63,11 @@ class MessageResponse(BaseModel):
     message: str
 
 
-class ForgotPasswordRequest(BaseModel):
-    email: EmailStr
+class ForgotPasswordRequest(StrictModel):
+    email: EmailStr = Field(max_length=EMAIL_MAX)
 
-class ResetPasswordRequest(BaseModel):
-    token: str
+class ResetPasswordRequest(StrictModel):
+    token: TokenStr
     new_password: str
 
     @field_validator("new_password")
@@ -46,11 +75,11 @@ class ResetPasswordRequest(BaseModel):
     def password_rules(cls, v: str) -> str:
         return validate_password_strength(v)
 
-class ResendVerificationRequest(BaseModel):
-    email: EmailStr
+class ResendVerificationRequest(StrictModel):
+    email: EmailStr = Field(max_length=EMAIL_MAX)
 
-class VerifyEmailRequest(BaseModel):
-    token: str
+class VerifyEmailRequest(StrictModel):
+    token: TokenStr
 
 class UserResponse(UserBase):
     id: int
@@ -1195,13 +1224,13 @@ class RoleOut(BaseModel):
     uses_matrix: bool
 
 
-class RoleCreate(BaseModel):
-    name: str
+class RoleCreate(StrictModel):
+    name: NameStr
     matrix: dict[str, Any]
 
 
-class RoleUpdate(BaseModel):
-    name: Optional[str] = None
+class RoleUpdate(StrictModel):
+    name: Optional[NameStr] = None
     matrix: Optional[dict[str, Any]] = None
 
 
@@ -1216,21 +1245,21 @@ class AppModuleOut(BaseModel):
     is_active: bool
 
 
-class AppModuleCreate(BaseModel):
+class AppModuleCreate(StrictModel):
     key: str = Field(min_length=2, max_length=64)
     name: str = Field(min_length=2, max_length=120)
-    icon: str = "LayoutDashboard"
+    icon: str = Field(default="LayoutDashboard", max_length=64)
     sidebar_path: str = Field(min_length=1, max_length=200)
     sidebar_order: int = 0
-    section_key: str = "sectionOperations"
+    section_key: str = Field(default="sectionOperations", max_length=64)
 
 
-class AppModuleUpdate(BaseModel):
-    name: Optional[str] = None
-    icon: Optional[str] = None
-    sidebar_path: Optional[str] = None
+class AppModuleUpdate(StrictModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    icon: Optional[str] = Field(default=None, max_length=64)
+    sidebar_path: Optional[str] = Field(default=None, max_length=200)
     sidebar_order: Optional[int] = None
-    section_key: Optional[str] = None
+    section_key: Optional[str] = Field(default=None, max_length=64)
     is_active: Optional[bool] = None
 
 
@@ -1243,12 +1272,12 @@ class CompanyUserOut(BaseModel):
     role_name: Optional[str] = None
 
 
-class UserRolePatch(BaseModel):
+class UserRolePatch(StrictModel):
     role_id: int
 
 
-class CompanyUserCreate(BaseModel):
-    email: EmailStr
+class CompanyUserCreate(StrictModel):
+    email: EmailStr = Field(max_length=EMAIL_MAX)
     password: str
     full_name: str = Field(min_length=2, max_length=100)
     role_id: int
@@ -1261,8 +1290,8 @@ class CompanyUserCreate(BaseModel):
         return validate_password_strength(v)
 
 
-class CompanyUserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
+class CompanyUserUpdate(StrictModel):
+    email: Optional[EmailStr] = Field(default=None, max_length=EMAIL_MAX)
     full_name: Optional[str] = Field(default=None, min_length=2, max_length=100)
     password: Optional[str] = None
     role_id: Optional[int] = None
@@ -1277,7 +1306,7 @@ class CompanyUserUpdate(BaseModel):
         return validate_password_strength(v)
 
 
-class CompanyUserResetPassword(BaseModel):
+class CompanyUserResetPassword(StrictModel):
     new_password: str
 
     @field_validator("new_password")
@@ -1695,6 +1724,31 @@ class LeadQuotationCreate(BaseModel):
     amount: Optional[float] = 0
     status: Optional[str] = "draft"
     notes: Optional[str] = None
+
+
+class LeadDocumentResponse(BaseModel):
+    """Deliberately omits file_path — that is an absolute path on the server."""
+
+    id: int
+    lead_id: int
+    file_name: str
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class LeadQuotationResponse(BaseModel):
+    id: int
+    lead_id: int
+    title: str
+    amount: Optional[float] = 0
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 class LeadConvertRequest(BaseModel):

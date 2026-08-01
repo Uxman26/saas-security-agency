@@ -12,38 +12,9 @@ import { api } from '@/lib/api';
 import { can } from '@/lib/permissions';
 import { formatDateUK } from '@/lib/date-format';
 import type { Guard } from '@/lib/types';
+import { useAuthBlobUrl } from '@/lib/use-auth-blob-url';
 import { ArrowLeft, Pencil, Upload } from 'lucide-react';
 import { toast } from '@/lib/toast';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-function useAuthImageUrl(url?: string | null) {
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    if (!url) {
-      setSrc(null);
-      return;
-    }
-    let cancelled = false;
-    let blobUrl: string | null = null;
-    const token = localStorage.getItem('token')?.trim();
-    void fetch(`${API_URL}${url}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((r) => (r.ok ? r.blob() : null))
-      .then((blob) => {
-        if (cancelled || !blob) return;
-        blobUrl = URL.createObjectURL(blob);
-        setSrc(blobUrl);
-      })
-      .catch(() => setSrc(null));
-    return () => {
-      cancelled = true;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-  }, [url]);
-  return src;
-}
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -72,7 +43,7 @@ export default function GuardViewPage() {
   const [guard, setGuard] = useState<Guard | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const photoSrc = useAuthImageUrl(guard?.photo_url);
+  const photoSrc = useAuthBlobUrl(guard?.photo_url);
 
   const load = useCallback(async () => {
     if (!id || Number.isNaN(id)) return;

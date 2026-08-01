@@ -18,6 +18,7 @@ from app.schemas import (
     LeadConversionResponse,
     LeadCreate,
     LeadCustomStatusCreate,
+    LeadDocumentResponse,
     LeadDuplicateCheck,
     LeadFilterPresetCreate,
     LeadFollowUpCreate,
@@ -25,6 +26,7 @@ from app.schemas import (
     LeadNoteCreate,
     LeadNoteResponse,
     LeadQuotationCreate,
+    LeadQuotationResponse,
     LeadResponse,
     LeadStatusChange,
     LeadUpdate,
@@ -312,11 +314,11 @@ def convert_lead(lead_id: int, body: LeadConvertRequest, db: Session = Depends(g
     return lead_service.convert_lead(db, current_user.id, lead_id, body.target_type, body.note)
 
 
-@router.post("/{lead_id}/quotations")
+@router.post("/{lead_id}/quotations", response_model=LeadQuotationResponse)
 def add_quotation(lead_id: int, body: LeadQuotationCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
     return lead_service.add_quotation(db, current_user.id, lead_id, body.model_dump())
 
 
-@router.post("/{lead_id}/documents")
+@router.post("/{lead_id}/documents", response_model=LeadDocumentResponse)
 async def upload_document(lead_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
     return await lead_service.upload_document(db, current_user.id, lead_id, file)

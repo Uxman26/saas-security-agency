@@ -312,6 +312,34 @@ class LoginLog(Base):
     status = Column(String, nullable=False)
 
 
+class UserSession(Base):
+    """Server-side record of one signed-in session.
+
+    Access tokens carry a `jti` that points here. Holding the session in the database
+    is what makes logout and idle timeout real: a stateless JWT cannot be withdrawn
+    before it expires, so "log out" used to mean nothing more than the tab forgetting
+    its token. Every authenticated request checks the row, so revoking it takes effect
+    on the next call from any tab or device.
+    """
+
+    __tablename__ = "user_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    jti = Column(String(64), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Bumped on use; the idle window is measured from here.
+    last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    # Hard ceiling, independent of activity.
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    # Idle window for this session specifically, so a "remember me" sign-in can be more
+    # forgiving than a shared-terminal one without the expiry check needing to know why.
+    idle_timeout_minutes = Column(Integer, nullable=False, default=30)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    ip_address = Column(String)
+    user_agent = Column(String)
+    user = relationship("User")
+
+
 class Contractor(Base):
     __tablename__ = "contractors"
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)

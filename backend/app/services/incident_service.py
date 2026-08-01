@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, time, timezone
 from typing import Optional
 
@@ -7,7 +8,8 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Client, Guard, Incident, IncidentAttachment, Site, User
+from app.authz import assert_owned_by_company
+from app.models import Assignment, Client, Guard, Incident, IncidentAttachment, Site, User
 from app.schemas import (
     IncidentAttachmentResponse,
     IncidentCreate,
@@ -17,19 +19,43 @@ from app.schemas import (
 )
 from app.services.company_service import get_company_by_user_id
 from app.services.portal_access import is_client_portal_user, is_staff_portal_user
+from app.storage_paths import resolve_storage_path
 
 
 def _att_out(a: IncidentAttachment) -> IncidentAttachmentResponse:
-    url = a.file_path
-    if url and "uploads/" in url:
-        url = "/uploads/" + url.split("uploads/")[-1]
+    # Points at an authenticated endpoint, not the raw file. Incident photos used to be
+    # served from a public static mount, so anyone with the path could read another
+    # tenant's evidence without logging in.
     return IncidentAttachmentResponse(
         id=a.id,
         file_path=a.file_path,
         mime_type=a.mime_type,
-        url=url,
+        url=f"/incidents/{a.incident_id}/attachments/{a.id}/file",
         created_at=a.created_at,
     )
+
+
+def attachment_file(db: Session, user: User, incident_id: int, attachment_id: int) -> tuple[str, str]:
+    """Resolve an attachment to an on-disk path, scoped to the caller's tenant.
+
+    Goes through get_incident so the client-portal and staff-portal narrowing applies
+    here exactly as it does when listing incidents.
+    """
+    incident = get_incident(db, user, incident_id)
+    att = (
+        db.query(IncidentAttachment)
+        .filter(
+            IncidentAttachment.id == attachment_id,
+            IncidentAttachment.incident_id == incident.id,
+        )
+        .first()
+    )
+    if not att or not att.file_path:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    path = resolve_storage_path(att.file_path)
+    if not path or not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return path, (att.mime_type or "application/octet-stream")
 
 
 def _out(inc: Incident) -> IncidentResponse:
@@ -76,6 +102,17 @@ def create_incident(
     guard_id = data.guard_id
     if is_staff_portal_user(user) and user.guard_id:
         guard_id = user.guard_id
+    assert_owned_by_company(db, Guard, guard_id, company.id, field_name="guard_id")
+    assert_owned_by_company(db, Client, client_id, company.id, field_name="client_id")
+    if data.assignment_id is not None:
+        owns_assignment = (
+            db.query(Assignment.id)
+            .join(Guard, Assignment.guard_id == Guard.id)
+            .filter(Assignment.id == data.assignment_id, Guard.company_id == company.id)
+            .first()
+        )
+        if not owns_assignment:
+            raise HTTPException(status_code=422, detail="Invalid assignment_id")
     occurred = data.occurred_at or datetime.now(timezone.utc)
     inc = Incident(
         company_id=company.id,

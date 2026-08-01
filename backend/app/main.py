@@ -1,7 +1,6 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, modules
 from app.middleware.api_usage import ApiUsageMiddleware
@@ -98,9 +97,17 @@ app.include_router(portal.router)
 app.include_router(patrol.router)
 app.include_router(incidents.router)
 
+# The uploads directory is deliberately NOT mounted as static files. It holds guard
+# documents, incident photos and patrol scans, so serving it publicly would let anyone
+# holding a URL read another tenant's files with no login and no permission check.
+# Every upload is reachable only through an authenticated, tenant-scoped route:
+#   guard documents   -> GET /documents/{doc_id}/file
+#   incident photos   -> GET /incidents/{incident_id}/attachments/{attachment_id}/file
+#   patrol scans      -> GET /patrol/logs/{log_id}/photo
+#   company logo      -> GET /auth/company-logo
+#   guard photo       -> GET /guards/{guard_id}/photo
 _uploads = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(_uploads, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=_uploads), name="uploads")
 
 @app.get("/")
 def root():

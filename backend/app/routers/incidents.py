@@ -4,6 +4,7 @@ import os
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -93,6 +94,18 @@ def summary(
     current_user: User = Depends(require_module("incidents", "view")),
 ):
     return incident_service.summary_report(db, current_user, start_date, end_date)
+
+
+@router.get("/{incident_id}/attachments/{attachment_id}/file")
+def download_attachment(
+    incident_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("incidents", "view")),
+):
+    """Serve an incident photo behind the same permission check as the incident itself."""
+    path, mime = incident_service.attachment_file(db, current_user, incident_id, attachment_id)
+    return FileResponse(path, media_type=mime)
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)

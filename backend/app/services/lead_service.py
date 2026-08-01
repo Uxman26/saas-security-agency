@@ -12,6 +12,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import SUPER_ADMIN_ROLE
+from app.authz import assert_owned_by_company
 from app.models import (
     DEFAULT_LEAD_STATUSES,
     AppNotification,
@@ -138,6 +139,15 @@ def _lead_title(data: dict) -> str:
     return org or title
 
 
+def _assert_assignee_in_company(db: Session, assigned_user_id, company_id: int) -> None:
+    """An assignee must be a colleague.
+
+    Assigning to a user in another company would post a notification containing this
+    lead's title into that company's feed.
+    """
+    assert_owned_by_company(db, User, assigned_user_id, company_id, field_name="assigned_user_id")
+
+
 def _notify(
     db: Session,
     company_id: int,
@@ -181,6 +191,7 @@ def create_lead(db: Session, user_id: int, data: dict, force_duplicate: bool = F
             raise HTTPException(status_code=409, detail={"message": "Duplicate lead detected", "duplicates": dupes})
     title = _lead_title(data)
     status = data.get("status") or "new"
+    _assert_assignee_in_company(db, data.get("assigned_user_id"), company.id)
     lead = Lead(
         company_id=company.id,
         title=title,
@@ -346,6 +357,8 @@ def update_lead(db: Session, user_id: int, lead_id: int, data: dict, force_dupli
         raise HTTPException(status_code=409, detail={"message": "Duplicate lead detected", "duplicates": dupes})
     prev_assignee = lead.assigned_user_id
     prev_status = lead.status
+    if "assigned_user_id" in data:
+        _assert_assignee_in_company(db, data["assigned_user_id"], lead.company_id)
     if "organization" in data or "title" in data:
         title = _lead_title({**data, "organization": data.get("organization", lead.organization), "title": data.get("title", lead.title)})
         if title:
@@ -486,6 +499,7 @@ def add_follow_up(db: Session, user_id: int, lead_id: int, data: dict) -> LeadFo
     due = data.get("due_at")
     if not due:
         raise HTTPException(status_code=400, detail="Due date required")
+    _assert_assignee_in_company(db, data.get("assigned_user_id"), company.id)
     fu = LeadFollowUp(
         lead_id=lead.id,
         company_id=company.id,

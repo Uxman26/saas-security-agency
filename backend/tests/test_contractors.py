@@ -11,10 +11,11 @@ def _seed_user_company(session, email: str, tier: str, role: str) -> tuple[User,
         password_hash=get_password_hash("secret"),
         full_name="T",
         role=role,
+        email_verified=True,
     )
     session.add(u)
     session.flush()
-    co = Company(name="Co", admin_id=u.id, subscription_tier=tier)
+    co = Company(name="Co", admin_id=u.id, subscription_tier=tier, subscription_status="active")
     session.add(co)
     session.flush()
     u.company_id = co.id
@@ -95,6 +96,7 @@ def test_manager_assign_not_manage(session, client):
         full_name="M",
         role="manager",
         company_id=co.id,
+        email_verified=True,
     )
     session.add(mgr)
     session.commit()
@@ -129,6 +131,7 @@ def test_supervisor_cannot_assign(session, client):
         full_name="S",
         role="supervisor",
         company_id=co.id,
+        email_verified=True,
     )
     session.add(sup)
     session.commit()

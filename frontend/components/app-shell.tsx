@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ThemeToggle />
             <AlertsPanel />
             <EmailDialog />
-            <Button variant="outline" size="sm" onClick={logout}>
+            <Button variant="outline" size="sm" onClick={() => void logout()}>
               {tc('logout')}
             </Button>
           </div>

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TEXT_LIMITS, tooLongMessage } from '@/lib/text-limits';
 
 export const PASSWORD_REQUIREMENTS_MSG =
   'Password must be at least 9 characters and include uppercase, lowercase, number, and special character';
@@ -8,16 +9,26 @@ const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{9,}$
 export const passwordFieldSchema = z
   .string()
   .min(9, PASSWORD_REQUIREMENTS_MSG)
+  .max(TEXT_LIMITS.text, tooLongMessage('Password', TEXT_LIMITS.text))
   .regex(passwordPattern, PASSWORD_REQUIREMENTS_MSG);
 
+/** Every email field shares the RFC ceiling so none of them is unbounded. */
+const emailFieldSchema = z
+  .string()
+  .email('Invalid email address')
+  .max(TEXT_LIMITS.email, tooLongMessage('Email', TEXT_LIMITS.email));
+
 export const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email: emailFieldSchema,
+  password: z
+    .string()
+    .min(6, 'Password must be at least 6 characters')
+    .max(TEXT_LIMITS.text, tooLongMessage('Password', TEXT_LIMITS.text)),
   remember_me: z.boolean().optional().default(true),
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: emailFieldSchema,
 });
 
 export const resetPasswordSchema = z
@@ -31,21 +42,21 @@ export const resetPasswordSchema = z
   });
 
 export const companyUserSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: emailFieldSchema,
   password: passwordFieldSchema,
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   role_id: z.number().int().positive('Select a role'),
 });
 
 export const companyUserUpdateSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: emailFieldSchema,
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   password: z.union([z.literal(''), passwordFieldSchema]).optional(),
   role_id: z.number().int().positive('Select a role'),
 });
 
 export const signupSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: emailFieldSchema,
   password: passwordFieldSchema,
   full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
   company_name: z.string().min(2, 'Company name must be at least 2 characters').max(100),
@@ -205,13 +216,16 @@ export type GuardFormData = z.infer<typeof guardSchema>;
 
 export const siteSchema = z
   .object({
-    name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+    name: z
+      .string()
+      .min(2, 'Name must be at least 2 characters')
+      .max(TEXT_LIMITS.siteName, tooLongMessage('Site name', TEXT_LIMITS.siteName)),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     client_id: z.number().int().optional().nullable(),
     address: z.string().max(200).optional().or(z.literal('')),
     postcode: z.string().max(20).optional().or(z.literal('')),
     contact_person: z.string().max(100).optional().or(z.literal('')),
-    contact_email: z.string().email('Invalid email address').optional().or(z.literal('')),
+    contact_email: emailFieldSchema.optional().or(z.literal('')),
     contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
     contract_start_date: z.string().optional().or(z.literal('')),
     contract_end_date: z.string().optional().or(z.literal('')),
@@ -262,8 +276,8 @@ export const assignmentSchema = z.object({
 export type AssignmentFormData = z.infer<typeof assignmentSchema>;
 
 export const clientSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(TEXT_LIMITS.companyName),
+  email: emailFieldSchema.optional().or(z.literal('')),
   phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
   postcode: z.string().max(20).optional().or(z.literal('')),
@@ -279,10 +293,10 @@ export const clientRenewSchema = z.object({
 });
 
 export const mainContractorSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  contact_person: z.string().max(100).optional().or(z.literal('')),
+  name: z.string().min(2, 'Name must be at least 2 characters').max(TEXT_LIMITS.companyName),
+  contact_person: z.string().max(TEXT_LIMITS.companyName).optional().or(z.literal('')),
   phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  email: emailFieldSchema.optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
   postcode: z.string().max(20).optional().or(z.literal('')),
   registration_number: z.string().max(80).optional().or(z.literal('')),

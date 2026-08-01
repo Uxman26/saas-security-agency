@@ -91,6 +91,7 @@
   --rota-emp-conflict-bg: #fffbeb;
   --rota-day-header-bg: #fef3c7;
   --rota-day-total-bg: #ede9fe;
+  --rota-row-line: #aab8ca;
 }
 
 .dark {
@@ -128,10 +129,13 @@
   --rota-hours-bg: #0c4a6e;
   --rota-pay-bg: #064e3b;
   --rota-publish-bg: #831843;
-  --rota-emp-bg: #1e293b;
+  /* Navy: slate read as uncoloured beside the other bands. Kept at the same depth
+     as them so the small muted text in this column stays legible. */
+  --rota-emp-bg: #172554;
   --rota-emp-conflict-bg: #451a03;
   --rota-day-header-bg: #422006;
   --rota-day-total-bg: #2e1065;
+  --rota-row-line: #5b6b80;
 }
 
 @layer base {
@@ -258,6 +262,14 @@
 }
 .rota-day-total {
   background-color: var(--rota-day-total-bg) !important;
+}
+
+/* Row dividers span the whole grid, so a staff member's row can be traced from
+   their name across to their cells. Deliberately stronger than --border. */
+.rota-grid-table td,
+.rota-grid-table th {
+  border-top-color: var(--rota-row-line);
+  border-bottom-color: var(--rota-row-line);
 }
 
 /* Always-visible rota grid scrollbars (X + Y position) */

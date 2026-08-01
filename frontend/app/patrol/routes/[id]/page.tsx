@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
+import { TEXT_LIMITS } from '@/lib/text-limits';
 import type { PatrolRoute } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, Download, Plus, QrCode } from 'lucide-react';
@@ -203,7 +204,11 @@ export default function PatrolRouteDetailPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Description</Label>
-                  <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+                  <Input
+                    maxLength={TEXT_LIMITS.note}
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  />
                 </div>
               </div>
               <DialogFooter>

@@ -16,6 +16,7 @@ import { useSites, useCreateSite, useUpdateSite, useDeleteSite } from '@/hooks/u
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
+import { TEXT_LIMITS } from '@/lib/text-limits';
 import { siteSchema, type SiteFormData } from '@/lib/validation';
 import type { Client, Site } from '@/lib/types';
 import { api } from '@/lib/api';
@@ -108,8 +109,12 @@ function SiteForm({
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Site Name <span className="text-destructive">*</span></Label>
-          <Input {...register('name')} placeholder="City Centre Office" />
-          {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+          <Input {...register('name')} maxLength={TEXT_LIMITS.siteName} placeholder="City Centre Office" />
+          {errors.name ? (
+            <p className="text-xs text-destructive">{errors.name.message}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Up to {TEXT_LIMITS.siteName} characters.</p>
+          )}
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Client <span className="text-muted-foreground font-normal">(optional)</span></Label>

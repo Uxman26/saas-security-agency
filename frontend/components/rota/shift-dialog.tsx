@@ -16,6 +16,8 @@ import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { AlertTriangle, Plus } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { TEXT_LIMITS, charsRemaining, clampText, tooLongMessage } from '@/lib/text-limits';
+import { cn } from '@/lib/utils';
 
 type Props = {
   open: boolean;
@@ -131,8 +133,16 @@ export function ShiftDialog({
   const submit = () => {
     if (assignees.length === 0 || !dk) return;
     const siteName = (shift.site || '').trim();
-    if (!siteName) {
-      toast.warning('Site is required — select a site or enter a site name');
+    if (siteNameTooLong) {
+      toast.warning(tooLongMessage('Site name', TEXT_LIMITS.siteName));
+      return;
+    }
+    if (!siteNameValid) {
+      toast.warning('Site name is required — select a site or type the site name');
+      return;
+    }
+    if (!rateValid) {
+      toast.warning('Shift rate is required — enter the hourly rate for this shift');
       return;
     }
     onApply(assignees, dk, normalizeShiftForm({ ...shift, site: siteName, shiftRate: rateValue }));
@@ -147,7 +157,7 @@ export function ShiftDialog({
   };
 
   const saveNewSite = async () => {
-    const name = newSiteName.trim();
+    const name = clampText(newSiteName.trim(), TEXT_LIMITS.siteName);
     if (name.length < 2 || !newSiteContractor) return;
     const site = await createSite.mutateAsync({
       name,
@@ -186,6 +196,13 @@ export function ShiftDialog({
       : primaryStaffRate && primaryStaffRate.rate > 0
         ? primaryStaffRate.rate
         : null;
+
+  // A site saved before the cap existed can still arrive over-length, so editing
+  // an old shift surfaces the error instead of silently sending it back.
+  const siteNameTooLong = (shift.site || '').trim().length > TEXT_LIMITS.siteName;
+  const siteNameValid = (shift.site || '').trim().length > 0 && !siteNameTooLong;
+  const rateValid = rateValue != null && rateValue > 0;
+  const canSubmit = assignees.length > 0 && !!dk && siteNameValid && rateValid;
 
   const draftConflicts = useMemo(() => {
     if (!open || !allShifts) return [] as ReturnType<typeof findConflictsForDraft>;
@@ -285,9 +302,9 @@ export function ShiftDialog({
                     const c = rec?.color || DEFAULT_SITE_COLOR;
                     return (
                       <SelectItem key={name} value={name}>
-                        <span className="flex items-center gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
                           <span className="size-3 rounded-full shrink-0 border border-border/50" style={{ backgroundColor: c }} />
-                          {name}
+                          <span className="truncate">{name}</span>
                         </span>
                       </SelectItem>
                     );
@@ -300,12 +317,12 @@ export function ShiftDialog({
                 Site name <span className="text-destructive">*</span>
               </Label>
               <Input
-                maxLength={80}
+                maxLength={TEXT_LIMITS.siteName}
                 placeholder="Enter site name"
                 required
                 value={shift.site}
                 onChange={(e) => {
-                  const name = e.target.value.slice(0, 80);
+                  const name = clampText(e.target.value, TEXT_LIMITS.siteName);
                   setShift((s) => ({
                     ...s,
                     site: name,
@@ -315,13 +332,20 @@ export function ShiftDialog({
                   }));
                 }}
               />
-              <p className="text-[11px] text-muted-foreground">
-                Required — select a site above, or type the site name here.
+              <p className={cn('text-[11px]', siteNameTooLong ? 'text-destructive' : 'text-muted-foreground')}>
+                {siteNameTooLong
+                  ? tooLongMessage('Site name', TEXT_LIMITS.siteName)
+                  : `Required — select a site above, or type the site name here. ${charsRemaining(
+                      shift.site,
+                      TEXT_LIMITS.siteName
+                    )} of ${TEXT_LIMITS.siteName} characters left.`}
               </p>
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <Label>Shift rate (per hour, optional)</Label>
+                <Label>
+                  Shift rate (per hour) <span className="text-destructive">*</span>
+                </Label>
                 {primaryStaffRate ? (
                   <button
                     type="button"
@@ -343,7 +367,8 @@ export function ShiftDialog({
               <Input
                 type="number"
                 step="0.01"
-                min={0}
+                min={0.01}
+                required
                 placeholder="e.g. 12.50"
                 value={rateValue ?? ''}
                 onChange={(e) => {
@@ -355,6 +380,9 @@ export function ShiftDialog({
                   }));
                 }}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Required — enter the hourly rate, or use the staff rate above.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Assign to employees</Label>
@@ -397,7 +425,8 @@ export function ShiftDialog({
               type="button"
               className="bg-pink-600 hover:bg-pink-700"
               onClick={submit}
-              disabled={assignees.length === 0 || !(shift.site || '').trim()}
+              disabled={!canSubmit}
+              title={canSubmit ? undefined : 'Site name and shift rate are required'}
             >
               {edit ? 'Update shift' : 'Add shift'}
             </Button>
@@ -413,7 +442,15 @@ export function ShiftDialog({
           <div className="grid gap-3">
             <div className="space-y-1">
               <Label>Site name</Label>
-              <Input value={newSiteName} onChange={(e) => setNewSiteName(e.target.value)} placeholder="e.g. Chiswick Hotel" />
+              <Input
+                maxLength={TEXT_LIMITS.siteName}
+                value={newSiteName}
+                onChange={(e) => setNewSiteName(clampText(e.target.value, TEXT_LIMITS.siteName))}
+                placeholder="e.g. Chiswick Hotel"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                {charsRemaining(newSiteName, TEXT_LIMITS.siteName)} of {TEXT_LIMITS.siteName} characters left.
+              </p>
             </div>
             <div className="space-y-1">
               <Label>Contractor</Label>

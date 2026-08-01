@@ -37,12 +37,14 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
   const hasExtras = showAtt || showOt || showEarly;
 
   const labelCls = compact
-    ? 'text-[9px] font-semibold leading-tight normal-case'
+    ? 'text-[10px] font-semibold leading-tight normal-case'
     : 'text-xs font-semibold uppercase tracking-wide';
-  const bodyCls = compact ? 'text-[11px] leading-tight' : 'text-sm leading-snug';
-  const timeCls = compact ? 'text-xs font-semibold leading-tight tabular-nums' : 'text-sm leading-snug font-medium tabular-nums';
+  const bodyCls = compact ? 'text-[12px] leading-tight' : 'text-sm leading-snug';
+  const timeCls = compact
+    ? 'text-[13px] font-semibold leading-tight tabular-nums'
+    : 'text-sm leading-snug font-medium tabular-nums';
   const noteCls = compact
-    ? 'text-[8px] text-muted-foreground italic line-clamp-2 break-all'
+    ? 'text-[9px] text-muted-foreground italic line-clamp-2 break-all'
     : 'text-xs text-muted-foreground italic break-words';
 
   return (
@@ -50,7 +52,16 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
       <div className={cn(timeCls, 'truncate')}>
         {compact ? `${shift.start}–${shift.end}` : `Time: ${shift.start} – ${shift.end}`}
       </div>
-      <div className={cn(bodyCls, 'font-bold text-foreground truncate')} title={site}>
+      <div
+        className={cn(
+          bodyCls,
+          'font-bold text-foreground',
+          // In a grid cell the site name breaks onto another line after roughly 20 characters
+          // instead of being cut off.
+          compact ? 'whitespace-normal break-words max-w-[20ch]' : 'truncate'
+        )}
+        title={site}
+      >
         {compact ? site : `Site: ${site}`}
       </div>
       {description ? (

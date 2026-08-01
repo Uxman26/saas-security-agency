@@ -63,6 +63,15 @@ export function shiftSiteLine(sh: ShiftRec) {
   return (sh.site || sh.label || '').trim() || 'One-off';
 }
 
+/** Address + postcode for display / WhatsApp. Empty when neither is set. */
+export function formatSiteAddress(
+  site: { address?: string | null; postcode?: string | null } | null | undefined
+): string {
+  if (!site) return '';
+  const parts = [(site.address || '').trim(), (site.postcode || '').trim()].filter(Boolean);
+  return parts.join(', ');
+}
+
 export function timeMins(t: string) {
   const parts = t.split(':');
   return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);

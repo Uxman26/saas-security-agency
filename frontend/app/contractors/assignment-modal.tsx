@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { TEXT_LIMITS } from '@/lib/text-limits';
 import type { DirectoryContractorList, Site } from '@/lib/types';
 import { api } from '@/lib/api';
 
@@ -137,7 +138,7 @@ export function AssignmentModal({
           </div>
           <div className="space-y-1">
             <Label>Notes</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <Input maxLength={TEXT_LIMITS.note} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
           <Button className="w-full" disabled={loading || !mainId || !subId} onClick={() => void submit()}>
             {loading ? 'Saving…' : 'Create assignment'}

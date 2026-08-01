@@ -15,6 +15,7 @@ import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
+import type { RotaPlanListItem } from '@/lib/types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
@@ -32,6 +33,8 @@ import {
   ArrowUpDown,
   CalendarPlus,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileSpreadsheet,
   GripVertical,
@@ -39,6 +42,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Search,
   Trash2,
   UserPlus,
 } from 'lucide-react';
@@ -327,6 +331,7 @@ export function RotaCalendarClient() {
     publishedGuardIds,
     isEmployeePublished,
     setPublishedGuardIds,
+    saveRotaPlan,
   } = useRotaShifts();
 
   const [publishing, setPublishing] = useState(false);
@@ -338,6 +343,8 @@ export function RotaCalendarClient() {
   const [exporting, setExporting] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
+  const [siblingPlans, setSiblingPlans] = useState<RotaPlanListItem[]>([]);
+  const [switchingPlan, setSwitchingPlan] = useState<'prev' | 'next' | null>(null);
   const [previewEmpId, setPreviewEmpId] = useState<string | null>(null);
   const previewEmployee = useMemo(() => {
     if (!previewEmpId) return null;
@@ -394,6 +401,56 @@ export function RotaCalendarClient() {
     };
   }, [planIdParam, searchParams, loadRotaPlan, router]);
 
+  /** Backs the Previous/Next rota buttons — the list is small, so one fetch is enough. */
+  useEffect(() => {
+    let cancelled = false;
+    void api.rotaPlans
+      .list()
+      .then((plans) => {
+        if (!cancelled) setSiblingPlans(plans);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Neighbours in date order, which is how rotas are read — "previous" is the
+   * earlier period, not the previously created record.
+   */
+  const { prevPlan, nextPlan } = useMemo(() => {
+    const currentId = parseInt(planIdParam || '', 10);
+    if (!currentId || siblingPlans.length < 2) return { prevPlan: null, nextPlan: null };
+    const ordered = [...siblingPlans].sort(
+      (a, b) => a.start_date.localeCompare(b.start_date) || a.id - b.id
+    );
+    const idx = ordered.findIndex((p) => p.id === currentId);
+    if (idx === -1) return { prevPlan: null, nextPlan: null };
+    return {
+      prevPlan: idx > 0 ? ordered[idx - 1] : null,
+      nextPlan: idx < ordered.length - 1 ? ordered[idx + 1] : null,
+    };
+  }, [planIdParam, siblingPlans]);
+
+  const planRangeLabel = (plan: RotaPlanListItem) =>
+    `${plan.name} · ${fmtShortDate(plan.start_date)} – ${fmtShortDate(plan.end_date)}`;
+
+  /** Flushes the debounced autosave first so switching rotas cannot drop recent edits. */
+  const goToPlan = async (plan: RotaPlanListItem | null, dir: 'prev' | 'next') => {
+    if (!plan || switchingPlan) return;
+    setSwitchingPlan(dir);
+    try {
+      await saveRotaPlan();
+    } catch {
+      toast.error('Could not save this rota — staying here so your changes are not lost');
+      setSwitchingPlan(null);
+      return;
+    }
+    router.push(`/rota/calendar?id=${plan.id}`);
+    setSwitchingPlan(null);
+  };
+
   const shiftCount = useMemo(() => {
     let n = 0;
     for (const empId of Object.keys(state.shifts)) {
@@ -414,6 +471,7 @@ export function RotaCalendarClient() {
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
   const [copyToEmployeeId, setCopyToEmployeeId] = useState<string | null>(null);
+  const [copyEmpSearch, setCopyEmpSearch] = useState('');
   const [xferOpen, setXferOpen] = useState(false);
   const [xferFrom, setXferFrom] = useState<string | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -929,8 +987,22 @@ export function RotaCalendarClient() {
     setCopyCtx({ empId, dk, idx });
     setCopyTargets(new Set());
     setCopyToEmployeeId(null);
+    setCopyEmpSearch('');
     setCopyOpen(true);
   };
+
+  /**
+   * Newest staff first (rota appends on add), then filter by name/role.
+   * Source employee is excluded — you can't copy a shift onto yourself.
+   */
+  const copyEmployeeTargets = useMemo(() => {
+    if (!copyCtx) return [] as EmployeeRec[];
+    const q = copyEmpSearch.trim().toLowerCase();
+    return [...state.employees]
+      .reverse()
+      .filter((e) => e.id !== copyCtx.empId)
+      .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q));
+  }, [copyCtx, copyEmpSearch, state.employees]);
 
   const startMove = (empId: string, dk: string, idx: number) => {
     closeShiftMenu();
@@ -1948,6 +2020,36 @@ export function RotaCalendarClient() {
               </div>
             ) : null}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => void goToPlan(prevPlan, 'prev')}
+            disabled={!prevPlan || !!switchingPlan}
+            title={prevPlan ? `Open ${planRangeLabel(prevPlan)}` : 'No earlier rota'}
+          >
+            {switchingPlan === 'prev' ? (
+              <Loader2 className="size-3.5 mr-1 animate-spin" />
+            ) : (
+              <ChevronLeft className="size-3.5 mr-1" />
+            )}
+            View Previous Rota
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => void goToPlan(nextPlan, 'next')}
+            disabled={!nextPlan || !!switchingPlan}
+            title={nextPlan ? `Open ${planRangeLabel(nextPlan)}` : 'No later rota'}
+          >
+            View Next Rota
+            {switchingPlan === 'next' ? (
+              <Loader2 className="size-3.5 ml-1 animate-spin" />
+            ) : (
+              <ChevronRight className="size-3.5 ml-1" />
+            )}
+          </Button>
           {employeeSelectMode ? (
             <>
               <Button variant="outline" size="sm" type="button" onClick={exitEmployeeSelectMode}>
@@ -2043,7 +2145,7 @@ export function RotaCalendarClient() {
             ref={menuRef}
           >
           <table
-            className="w-full table-fixed border-separate border-spacing-0 text-sm"
+            className="rota-grid-table w-full table-fixed border-separate border-spacing-0 text-sm"
             style={{
               minWidth: `${ROTA_EMP_COL_W + tableDays.length * ROTA_DAY_COL_W + stickyRightW}px`,
               width: '100%',
@@ -2087,7 +2189,11 @@ export function RotaCalendarClient() {
                       className="h-8 text-xs flex-1 min-w-0 text-left"
                     />
                   </div>
-                  <button type="button" className="text-xs text-pink-600 font-medium hover:underline" onClick={openReorder}>
+                  <button
+                    type="button"
+                    className="text-xs text-pink-600 dark:text-pink-300 font-medium hover:underline"
+                    onClick={openReorder}
+                  >
                     ⇅ Employee custom order
                   </button>
                   <p className="text-[10px] text-muted-foreground mt-1">Publish each staff in the Status column</p>
@@ -2100,7 +2206,7 @@ export function RotaCalendarClient() {
                     key={dk}
                     data-rota-day-idx={dayIdx}
                     className={cn(
-                      'sticky top-0 z-30 p-1.5 text-center text-xs font-medium border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
+                      'sticky top-0 z-30 p-1.5 text-center text-[13px] font-medium border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
                       mark === 'adding' && 'bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100',
                       mark === 'removing' && 'bg-red-100 text-red-900 line-through dark:bg-red-950 dark:text-red-100',
                       !mark && 'rota-day-header'
@@ -2299,7 +2405,7 @@ export function RotaCalendarClient() {
                                 onDragStart={mark ? undefined : (e) => onShiftDragStart(e, emp.id, dk, idx)}
                                 onDragEnd={mark ? undefined : onDragEnd}
                                 className={cn(
-                                  'w-full max-w-full min-w-0 overflow-hidden rounded border border-border bg-card px-1 py-1 text-left text-[9px] leading-tight shadow-sm relative',
+                                  'w-full max-w-full min-w-0 overflow-hidden rounded border border-border bg-card px-1 py-1 text-left text-[10px] leading-tight shadow-sm relative',
                                   mark ? 'pointer-events-none' : 'hover:bg-muted cursor-grab active:cursor-grabbing',
                                   menuOpen && 'ring-2 ring-pink-500/60',
                                   conflicts.length > 0 && 'border-amber-500 bg-amber-50 dark:bg-amber-950'
@@ -2307,7 +2413,7 @@ export function RotaCalendarClient() {
                                 onClick={mark ? undefined : (e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
                                 title={tip || 'Drag to another day to move this shift'}
                               >
-                                <div className="h-0.5 rounded-full mb-0.5" style={{ backgroundColor: sh.color }} />
+                                <div className="h-1 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
                                 {conflicts.length > 0 ? (
                                   <AlertTriangle className="absolute top-1 right-1 size-3 text-amber-600 dark:text-amber-400" />
                                 ) : null}
@@ -2675,6 +2781,7 @@ export function RotaCalendarClient() {
           if (!v) {
             setCopyCtx(null);
             setCopyToEmployeeId(null);
+            setCopyEmpSearch('');
           }
         }}
       >
@@ -2725,27 +2832,40 @@ export function RotaCalendarClient() {
             ))}
           </div>
           <p className="text-xs font-medium pt-1">Copy to employee (same day)</p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={copyEmpSearch}
+              onChange={(e) => setCopyEmpSearch(e.target.value)}
+              placeholder="Search staff…"
+              className="h-8 pl-8 text-xs"
+              aria-label="Search staff"
+            />
+          </div>
           <div className="grid gap-1 max-h-36 overflow-y-auto">
-            {copyCtx
-              ? state.employees
-                  .filter((e) => e.id !== copyCtx.empId)
-                  .map((e) => (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => setCopyToEmployeeId((id) => (id === e.id ? null : e.id))}
-                      className={cn(
-                        'flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
-                        copyToEmployeeId === e.id ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30' : 'hover:bg-muted'
-                      )}
-                    >
-                      <span className="size-7 rounded-full flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: e.avatarColor }}>
-                        {initials(e.name)}
-                      </span>
-                      <span className="truncate">{e.name}</span>
-                    </button>
-                  ))
-              : null}
+            {copyEmployeeTargets.length === 0 ? (
+              <p className="px-1 py-2 text-xs text-muted-foreground">
+                {copyEmpSearch.trim() ? 'No staff match that search.' : 'No other staff on this rota.'}
+              </p>
+            ) : (
+              copyEmployeeTargets.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setCopyToEmployeeId((id) => (id === e.id ? null : e.id))}
+                  className={cn(
+                    'flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+                    copyToEmployeeId === e.id ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30' : 'hover:bg-muted'
+                  )}
+                >
+                  <EmployeeAvatar emp={e} className="size-7 text-[10px] shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="truncate block">{e.name}</span>
+                    {e.role ? <span className="truncate block text-[10px] text-muted-foreground">{e.role}</span> : null}
+                  </span>
+                </button>
+              ))
+            )}
           </div>
           <DialogFooter>
             <Button

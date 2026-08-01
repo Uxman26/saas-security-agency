@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from app.validators import validate_password_strength
+from app.validators import SiteNameStr, validate_password_strength
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -516,7 +516,9 @@ class SiteBase(BaseModel):
         return self
 
 class SiteCreate(SiteBase):
-    pass
+    # Capped on the way in only. SiteResponse keeps SiteBase's plain str so sites
+    # saved before this limit existed still serialise.
+    name: SiteNameStr
 
 class SiteResponse(SiteBase):
     id: int

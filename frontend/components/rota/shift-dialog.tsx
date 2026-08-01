@@ -14,7 +14,6 @@ import { findConflictsForDraft } from '@/lib/rota-shifts-utils';
 import { useCreateSite, useSites } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
-import { cn } from '@/lib/utils';
 import { AlertTriangle, Plus } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
@@ -365,20 +364,10 @@ export function ShiftDialog({
             </div>
             <div className="space-y-2">
               <Label>Shift colour</Label>
-              <div className="flex flex-wrap gap-2">
-                {SHIFT_COLOR_OPTS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className={cn(
-                      'size-8 rounded-full border-2 shadow-sm',
-                      shift.color === c ? 'border-foreground scale-110' : 'border-transparent'
-                    )}
-                    style={{ backgroundColor: c }}
-                    onClick={() => setShift((s) => ({ ...s, color: c }))}
-                  />
-                ))}
-              </div>
+              <SiteColorPicker
+                value={shift.color || DEFAULT_SITE_COLOR}
+                onChange={(c) => setShift((s) => ({ ...s, color: c }))}
+              />
             </div>
             <div className="space-y-1">
               <Label>Notes / description</Label>

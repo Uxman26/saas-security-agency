@@ -51,7 +51,7 @@ function ToastBackdrop({ active }: { active: boolean }) {
   );
 }
 
-/** BrightHR-style bottom-left snack — quick rota feedback only */
+/** Bottom-left snack — success / quick feedback (non-blocking) */
 function SnackToaster() {
   return (
     <Sonner
@@ -60,17 +60,19 @@ function SnackToaster() {
       offset={20}
       gap={10}
       visibleToasts={3}
-      duration={4000}
+      duration={1500}
       className="toaster snack-toaster !z-[99990]"
       toastOptions={{
         unstyled: true,
         classNames: {
           toast:
-            'flex w-[min(360px,calc(100vw-2.5rem))] items-center justify-between gap-4 rounded-md bg-[#9a4d28] px-4 py-3 text-white shadow-md',
+            'flex w-[min(360px,calc(100vw-2.5rem))] items-center justify-between gap-3 rounded-md bg-[#9a4d28] px-4 py-3 text-white shadow-md',
           title: 'text-sm font-medium leading-snug text-white',
           description: 'text-xs text-white/85',
           actionButton:
             'shrink-0 rounded border border-white/80 bg-transparent px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/10',
+          success: 'bg-emerald-700',
+          info: 'bg-[#9a4d28]',
         },
       }}
     />
@@ -83,6 +85,7 @@ export function Toaster({ ...props }: ToasterProps) {
 
   return (
     <>
+      {/* Backdrop only for center modal toasts (confirm / error / warning) */}
       <ToastBackdrop active={activeCount > 0} />
       <Sonner
         theme={theme as ToasterProps['theme']}
@@ -99,7 +102,7 @@ export function Toaster({ ...props }: ToasterProps) {
           } as CSSProperties
         }
         toastOptions={{
-          duration: 1000,
+          duration: 2500,
           classNames: {
             toast:
               'group toast !bg-card !text-card-foreground !border-border !shadow-lg !rounded-lg',

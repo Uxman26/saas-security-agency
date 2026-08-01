@@ -280,7 +280,12 @@ function CreateRotaPage() {
                                 });
                               }}
                             />
-                            <span className="font-medium">{g.full_name}</span>
+                            <span className="min-w-0">
+                              <span className="font-medium block">{g.full_name}</span>
+                              {g.job_title ? (
+                                <span className="text-xs text-muted-foreground block">{g.job_title}</span>
+                              ) : null}
+                            </span>
                           </label>
                         ))}
                     </div>

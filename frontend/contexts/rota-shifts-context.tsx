@@ -114,6 +114,10 @@ type Ctx = {
   addDaysDelta: (delta: number) => void;
   setDayCount: (n: number, edge?: 'start' | 'end') => void;
   addEmployeesById: (ids: string[]) => void;
+  /** Refresh staff pool from API; returns latest list. */
+  refreshPool: () => Promise<EmployeeRec[]>;
+  /** Add employee records to pool + rota (avoids stale pool after create). */
+  addEmployeeRecords: (emps: EmployeeRec[]) => void;
   removeEmployee: (id: string) => void;
   removeEmployees: (ids: string[]) => void;
   reorderEmployees: (ids: string[]) => void;
@@ -184,7 +188,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       try {
         const [guards, sites] = await Promise.all([api.guards.list(), api.sites.list()]);
         if (cancelled) return;
-        setPool(guardsToEmployees(guards));
+        const freshPool = guardsToEmployees(guards);
+        setPool(freshPool);
         setSiteNames(sites.map((s) => s.name));
         const rates: Record<string, number> = {};
         for (const s of sites) {
@@ -225,10 +230,26 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           if (row) gRates[row[0]] = row[1];
         }
         setGuardRateById(gRates);
-        setPool((prev) => prev.map((e) => (gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e)));
+        const poolWithRates = freshPool.map((e) =>
+          gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e
+        );
+        setPool(poolWithRates);
+        const byId = new Map(poolWithRates.map((e) => [e.id, e]));
+        // Keep rota staff name + job title in sync with Staff profile
         setState((prev) => ({
           ...prev,
-          employees: prev.employees.map((e) => (gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e)),
+          employees: prev.employees.map((e) => {
+            const live = byId.get(e.id);
+            if (!live) return gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e;
+            return {
+              ...e,
+              name: live.name || e.name,
+              role: live.role || e.role,
+              photoUrl: live.photoUrl ?? e.photoUrl,
+              phone: live.phone ?? e.phone,
+              hourlyRate: gRates[e.id] ?? e.hourlyRate ?? live.hourlyRate,
+            };
+          }),
         }));
       } catch {
         if (!cancelled) {
@@ -333,8 +354,27 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     (plan: RotaPlanDetail, bootstrap?: InitPayload) => {
       setRotaPlanId(plan.id);
       setPublishedGuardIds(plan.published_guard_ids || []);
+      const syncFromPool = (employees: EmployeeRec[]): EmployeeRec[] => {
+        if (!pool.length) return employees;
+        const byId = new Map(pool.map((e) => [e.id, e]));
+        return employees.map((e) => {
+          const live = byId.get(e.id);
+          if (!live) return e;
+          return {
+            ...e,
+            name: live.name || e.name,
+            role: live.role || e.role,
+            photoUrl: live.photoUrl ?? e.photoUrl,
+            phone: live.phone ?? e.phone,
+            hourlyRate: live.hourlyRate ?? e.hourlyRate,
+          };
+        });
+      };
       if (plan.planner_data) {
-        setState((s) => applyPlannerPayload(s, plan.planner_data, plan.name));
+        setState((s) => {
+          const next = applyPlannerPayload(s, plan.planner_data, plan.name);
+          return { ...next, employees: syncFromPool(next.employees) };
+        });
         return;
       }
       if (bootstrap) {
@@ -356,7 +396,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           rotaView: (plan.view_mode === 'dnd' ? 'table' : plan.view_mode as RotaViewMode) || bootstrap.view,
           days,
           budget: plan.budget ?? bootstrap.budget,
-          employees,
+          employees: syncFromPool(employees),
           shifts,
           selectedColor: SHIFT_COLOR_OPTS[0],
         });
@@ -466,6 +506,29 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     },
     [pool]
   );
+
+  const refreshPool = useCallback(async () => {
+    const guards = await api.guards.list();
+    const fresh = guardsToEmployees(guards).map((e) =>
+      guardRateById[e.id] != null ? { ...e, hourlyRate: guardRateById[e.id] } : e
+    );
+    setPool(fresh);
+    return fresh;
+  }, [guardRateById]);
+
+  const addEmployeeRecords = useCallback((emps: EmployeeRec[]) => {
+    if (!emps.length) return;
+    setPool((prev) => {
+      const have = new Set(prev.map((e) => e.id));
+      const add = emps.filter((e) => !have.has(e.id));
+      return add.length ? [...prev, ...add] : prev;
+    });
+    setState((s) => {
+      const have = new Set(s.employees.map((e) => e.id));
+      const add = emps.filter((e) => !have.has(e.id));
+      return add.length ? { ...s, employees: [...s.employees, ...add] } : s;
+    });
+  }, []);
 
   const removeEmployee = useCallback((id: string) => {
     setState((s) => {
@@ -1022,6 +1085,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       addDaysDelta,
       setDayCount,
       addEmployeesById,
+      refreshPool,
+      addEmployeeRecords,
       removeEmployee,
       removeEmployees,
       reorderEmployees,
@@ -1072,6 +1137,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       addDaysDelta,
       setDayCount,
       addEmployeesById,
+      refreshPool,
+      addEmployeeRecords,
       removeEmployee,
       removeEmployees,
       reorderEmployees,

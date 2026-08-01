@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useForm, type Resolver } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +19,13 @@ import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
 import { ShiftRotaSections } from '@/components/rota/shift-rota-sections';
+import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
+import { useCreateGuard } from '@/hooks/use-guards';
+import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
+import { guardFormDefaults, formToGuardPayload } from '@/lib/guard-form-map';
+import { guardSubmitSchema, type GuardFormData } from '@/lib/validation';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -31,6 +40,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
@@ -43,6 +53,48 @@ const ROTA_PAY_COL_W = 72;
 const ROTA_HOURS_COL_W = 80;
 const ROTA_EMP_COL_W = 220;
 const ROTA_DAY_COL_W = 160;
+/** Timeline: px per hour — wide enough that the day is horizontally scrollable */
+const TIMELINE_PX_PER_HOUR = 72;
+const TIMELINE_WIDTH_PX = TIMELINE_PX_PER_HOUR * 24;
+
+/** Alternating soft tints so consecutive date sections are visually distinct */
+const TIMELINE_DAY_TONES = [
+  {
+    shell: 'border-sky-200/70 bg-sky-50/70 dark:border-sky-800/50 dark:bg-sky-950/35',
+    header: 'border-sky-200/70 bg-sky-100/80 dark:border-sky-800/50 dark:bg-sky-900/50',
+    accent: '#0ea5e9',
+  },
+  {
+    shell: 'border-violet-200/70 bg-violet-50/70 dark:border-violet-800/50 dark:bg-violet-950/35',
+    header: 'border-violet-200/70 bg-violet-100/80 dark:border-violet-800/50 dark:bg-violet-900/50',
+    accent: '#8b5cf6',
+  },
+  {
+    shell: 'border-emerald-200/70 bg-emerald-50/70 dark:border-emerald-800/50 dark:bg-emerald-950/35',
+    header: 'border-emerald-200/70 bg-emerald-100/80 dark:border-emerald-800/50 dark:bg-emerald-900/50',
+    accent: '#10b981',
+  },
+  {
+    shell: 'border-amber-200/70 bg-amber-50/70 dark:border-amber-800/50 dark:bg-amber-950/35',
+    header: 'border-amber-200/70 bg-amber-100/80 dark:border-amber-800/50 dark:bg-amber-900/50',
+    accent: '#f59e0b',
+  },
+  {
+    shell: 'border-rose-200/70 bg-rose-50/70 dark:border-rose-800/50 dark:bg-rose-950/35',
+    header: 'border-rose-200/70 bg-rose-100/80 dark:border-rose-800/50 dark:bg-rose-900/50',
+    accent: '#f43f5e',
+  },
+  {
+    shell: 'border-cyan-200/70 bg-cyan-50/70 dark:border-cyan-800/50 dark:bg-cyan-950/35',
+    header: 'border-cyan-200/70 bg-cyan-100/80 dark:border-cyan-800/50 dark:bg-cyan-900/50',
+    accent: '#06b6d4',
+  },
+  {
+    shell: 'border-orange-200/70 bg-orange-50/70 dark:border-orange-800/50 dark:bg-orange-950/35',
+    header: 'border-orange-200/70 bg-orange-100/80 dark:border-orange-800/50 dark:bg-orange-900/50',
+    accent: '#f97316',
+  },
+] as const;
 
 /** Solid fills so scrolled shift tiles cannot bleed through sticky columns. */
 const ROTA_STICKY_EMP_BG = {
@@ -140,6 +192,22 @@ export function RotaCalendarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const planIdParam = searchParams.get('id');
+  const { user } = useAuth();
+  const canCreateStaff = canModule(user, 'guards', 'create');
+  const createGuard = useCreateGuard();
+  const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
+  const mains = useMemo(
+    () => dirRows.filter((c) => c.type === 'main').map((c) => ({ id: c.id, name: c.name })),
+    [dirRows]
+  );
+  const subs = useMemo(
+    () => dirRows.filter((c) => c.type === 'sub').map((c) => ({ id: c.id, name: c.name })),
+    [dirRows]
+  );
+  const addStaffForm = useForm<GuardFormData>({
+    resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData>,
+    defaultValues: guardFormDefaults,
+  });
   const [planLoading, setPlanLoading] = useState(!!planIdParam);
   const {
     state,
@@ -160,6 +228,7 @@ export function RotaCalendarClient() {
     copyShiftToDates,
     copyShiftToEmployee,
     addEmployeesById,
+    refreshPool,
     removeEmployee,
     removeEmployees,
     reorderEmployees,
@@ -281,9 +350,16 @@ export function RotaCalendarClient() {
   const [daysEditEdge, setDaysEditEdge] = useState<'start' | 'end'>('end');
   /** After Done adds days, scroll this column index into view once the table commits. */
   const scrollDayAfterApplyRef = useRef<number | null>(null);
+  const timelineDayScrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const timelineScrolledFor = useRef<string | null>(null);
+  const [nowMins, setNowMins] = useState(() => {
+    const n = new Date();
+    return n.getHours() * 60 + n.getMinutes();
+  });
   const [pickOpen, setPickOpen] = useState(false);
   const [pickSel, setPickSel] = useState<Set<string>>(new Set());
   const [pickSearch, setPickSearch] = useState('');
+  const [addStaffOpen, setAddStaffOpen] = useState(false);
   const [attOpen, setAttOpen] = useState(false);
   const [attRec, setAttRec] = useState<AttendanceRec | null>(null);
   const [attCtx, setAttCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
@@ -1663,7 +1739,7 @@ export function RotaCalendarClient() {
       <div className="flex shrink-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" className="bg-pink-600 hover:bg-pink-700" type="button" onClick={() => setPickOpen(true)}>
-            Add Staff
+            Add Staff In Rota
           </Button>
           <div className="flex rounded-md border p-0.5 bg-muted/40">
             {(['table', 'timeline'] as const).map((v) => (
@@ -2257,7 +2333,7 @@ export function RotaCalendarClient() {
                         const left = (startMin / (24 * 60)) * 100;
                         const width = Math.max(((endMin - startMin) / (24 * 60)) * 100, 4);
                         return (
-                          <div key={`${emp.id}-${idx}`} className="relative h-11">
+                          <div key={`${emp.id}-${idx}`} className="relative h-14">
                             <button
                               type="button"
                               draggable
@@ -2271,9 +2347,12 @@ export function RotaCalendarClient() {
                                 borderLeftColor: sh.color || emp.avatarColor,
                               }}
                               onClick={() => openEditShift(emp.id, dk, idx)}
-                              title={`${emp.name} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
+                              title={`${emp.name}${emp.role ? ` · ${emp.role}` : ''} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
                             >
                               <span className="font-medium block truncate">{emp.name}</span>
+                              {emp.role ? (
+                                <span className="text-muted-foreground block truncate leading-tight">{emp.role}</span>
+                              ) : null}
                               <span className="text-muted-foreground tabular-nums block truncate">
                                 {sh.start}–{sh.end}
                                 {sh.site ? ` · ${sh.site}` : ''}
@@ -2293,7 +2372,7 @@ export function RotaCalendarClient() {
             className="w-full py-3 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40"
             onClick={() => setPickOpen(true)}
           >
-            + Add guard
+            + Add Staff In Rota
           </button>
         </div>
       )}
@@ -2536,7 +2615,12 @@ export function RotaCalendarClient() {
                   <span className="size-8 rounded-full flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: emp.avatarColor }}>
                     {initials(emp.name)}
                   </span>
-                  <span className="flex-1 truncate">{emp.name}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block truncate font-medium">{emp.name}</span>
+                    {emp.role ? (
+                      <span className="block truncate text-[11px] text-muted-foreground">{emp.role}</span>
+                    ) : null}
+                  </span>
                   <div className="flex gap-1 shrink-0">
                     <Button
                       type="button"
@@ -2689,17 +2773,26 @@ export function RotaCalendarClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={pickOpen} onOpenChange={setPickOpen}>
+      <Dialog
+        open={pickOpen}
+        onOpenChange={(o) => {
+          setPickOpen(o);
+          if (!o) {
+            setPickSel(new Set());
+            setPickSearch('');
+          }
+        }}
+      >
         <DialogContent showCloseButton className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Choose staff</DialogTitle>
+            <DialogTitle>Choose staff to add in rota</DialogTitle>
           </DialogHeader>
           <Input placeholder="Search by name" value={pickSearch} onChange={(e) => setPickSearch(e.target.value)} className="mb-3" />
           {poolLoading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Loading guards…</p>
           ) : pool.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
-              No staff yet. Add them under <strong>Staff</strong> in the sidebar, then open this again.
+              No staff yet. Use <strong>Add New Staff</strong> below, or add them under Staff in the sidebar.
             </p>
           ) : null}
           <div className="grid grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto">
@@ -2718,11 +2811,26 @@ export function RotaCalendarClient() {
               </button>
             ))}
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:justify-between">
+            {canCreateStaff ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  addStaffForm.reset(guardFormDefaults);
+                  setAddStaffOpen(true);
+                }}
+              >
+                <UserPlus className="size-4 mr-1.5" />
+                Add New Staff
+              </Button>
+            ) : (
+              <span />
+            )}
             <Button
               type="button"
               className="bg-pink-600 hover:bg-pink-700"
-              disabled={poolLoading || pool.length === 0}
+              disabled={poolLoading || pickSel.size === 0}
               onClick={() => {
                 addEmployeesById([...pickSel]);
                 setPickOpen(false);
@@ -2732,6 +2840,43 @@ export function RotaCalendarClient() {
               Add to rota
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={addStaffOpen}
+        onOpenChange={(o) => {
+          setAddStaffOpen(o);
+          if (!o) addStaffForm.reset(guardFormDefaults);
+        }}
+      >
+        <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0 z-[110]">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+            <DialogTitle>Add New Staff</DialogTitle>
+            <DialogDescription className="sr-only">
+              Create a new staff member and add them to this rota.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
+            <GuardFormWizard
+              form={addStaffForm}
+              mains={mains}
+              subs={subs}
+              isPending={createGuard.isPending}
+              submitLabel="Create staff"
+              onSubmit={async (data) => {
+                try {
+                  const created = await createGuard.mutateAsync(formToGuardPayload(data));
+                  await refreshPool();
+                  setPickSel((prev) => new Set([...prev, String(created.id)]));
+                  setAddStaffOpen(false);
+                  addStaffForm.reset(guardFormDefaults);
+                } catch {
+                  /* toast via mutation hook */
+                }
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -323,11 +323,12 @@ def _merge_planner_with_assignments(planner: dict, built: dict, plan: RotaPlan) 
         seen.add(eid)
         pe = p_emps.get(eid, {})
         be = b_emps.get(eid, {})
+        # Prefer live guard name/job_title (built) so rota always reflects Staff profile
         employees.append(
             {
                 "id": eid,
-                "name": pe.get("name") or be.get("name") or "",
-                "role": pe.get("role") or be.get("role") or "Staff",
+                "name": be.get("name") or pe.get("name") or "",
+                "role": be.get("role") or pe.get("role") or "Staff",
                 "avatarColor": pe.get("avatarColor") or be.get("avatarColor") or _AVATAR_PALETTE[len(employees) % len(_AVATAR_PALETTE)],
             }
         )

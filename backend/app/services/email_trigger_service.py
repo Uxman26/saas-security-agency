@@ -3,6 +3,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.html_safe import esc_map
 from app.models import Assignment, Client, Guard, Invoice, Site, User
 from app.services import email_config_service, email_service
 from app.services.company_service import get_company_by_user_id
@@ -30,7 +31,9 @@ def _safe_send(db: Session, user_id: int, recipient: Optional[str], subject: str
             return
         templates = email_config_service.parse_templates(company.email_templates_json)
         tpl = templates.get(template_key) or email_config_service.DEFAULT_TEMPLATES.get(template_key, "")
-        body = tpl.format(**{k: str(v) for k, v in ctx.items()})
+        # Escaped: templates are HTML and the context carries site names, notes and
+        # other values typed by users.
+        body = tpl.format(**esc_map(ctx))
         email_service.send_and_log(db, company.id, recipient, subject, body, template_key)
     except Exception:
         pass

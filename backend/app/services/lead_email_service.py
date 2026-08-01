@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.html_safe import esc_map
 from app.models import Lead, User
 from app.services import email_config_service, email_service
 from app.services.company_service import get_company_by_user_id
@@ -39,7 +40,8 @@ def notify_lead_email(
             return
         templates = email_config_service.parse_templates(company.email_templates_json)
         tpl = templates.get(template_key) or _lead_templates().get(template_key, "<p>{message}</p>")
-        body = tpl.format(**{k: str(v) for k, v in ctx.items()})
+        # Escaped: the context carries lead titles and notes typed by users.
+        body = tpl.format(**esc_map(ctx))
         email_service.send_and_log(db, company.id, user.email, subject, body, template_key)
     except Exception:
         pass

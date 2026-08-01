@@ -12,6 +12,28 @@ export const passwordFieldSchema = z
   .max(TEXT_LIMITS.text, tooLongMessage('Password', TEXT_LIMITS.text))
   .regex(passwordPattern, PASSWORD_REQUIREMENTS_MSG);
 
+/**
+ * A text field the user must actually fill in.
+ *
+ * `.trim()` runs before the length checks, so a value of spaces fails `min` instead of
+ * satisfying it — `z.string().min(2)` alone accepts "  " and stores a blank record.
+ * Trimming also means the value sent matches what the server stores, since the
+ * matching Pydantic types strip too.
+ *
+ * Deliberately no character allow-list: names legitimately contain apostrophes and
+ * ampersands, and output is escaped where it is rendered rather than filtered here.
+ */
+export function requiredText(
+  label: string,
+  { min = 1, max = TEXT_LIMITS.text }: { min?: number; max?: number } = {}
+) {
+  return z
+    .string()
+    .trim()
+    .min(min, min > 1 ? `${label} must be at least ${min} characters` : `${label} is required`)
+    .max(max, tooLongMessage(label, max));
+}
+
 /** Every email field shares the RFC ceiling so none of them is unbounded. */
 const emailFieldSchema = z
   .string()
@@ -44,13 +66,13 @@ export const resetPasswordSchema = z
 export const companyUserSchema = z.object({
   email: emailFieldSchema,
   password: passwordFieldSchema,
-  full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  full_name: requiredText('Name', { min: 2, max: TEXT_LIMITS.companyName }),
   role_id: z.number().int().positive('Select a role'),
 });
 
 export const companyUserUpdateSchema = z.object({
   email: emailFieldSchema,
-  full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  full_name: requiredText('Name', { min: 2, max: TEXT_LIMITS.companyName }),
   password: z.union([z.literal(''), passwordFieldSchema]).optional(),
   role_id: z.number().int().positive('Select a role'),
 });
@@ -58,8 +80,8 @@ export const companyUserUpdateSchema = z.object({
 export const signupSchema = z.object({
   email: emailFieldSchema,
   password: passwordFieldSchema,
-  full_name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  company_name: z.string().min(2, 'Company name must be at least 2 characters').max(100),
+  full_name: requiredText('Name', { min: 2, max: TEXT_LIMITS.companyName }),
+  company_name: requiredText('Company name', { min: 2, max: TEXT_LIMITS.companyName }),
   industry: z.string().min(1, 'Select an industry'),
   workforce_size: z.string().min(1, 'Select workforce size'),
   verification_code: z.string().max(50).optional().or(z.literal('')),
@@ -116,9 +138,9 @@ const toOptMonth = (v: unknown) => {
 
 export const guardSchema = z.object({
   title: optStr,
-  first_name: z.string().min(1, 'First name is required').max(80),
+  first_name: requiredText('First name', { max: TEXT_LIMITS.name }),
   middle_name: optStr,
-  last_name: z.string().min(1, 'Last name is required').max(80),
+  last_name: requiredText('Last name', { max: TEXT_LIMITS.name }),
   gender: optStr,
   ethnicity: optStr,
   date_of_birth: optDate,

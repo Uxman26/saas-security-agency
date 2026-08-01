@@ -7,6 +7,10 @@ from app.validators import (
     CompanyNameStr,
     EMAIL_MAX,
     NameStr,
+    OptNoteStr,
+    OptShortTextStr,
+    RequiredNoteStr,
+    RequiredShortTextStr,
     SiteNameStr,
     ShortTextStr,
     TokenStr,
@@ -579,7 +583,7 @@ class AssignmentResponse(AssignmentBase):
         from_attributes = True
 
 class RotaPlanCreate(BaseModel):
-    name: str
+    name: RequiredShortTextStr
     start_date: date
     day_count: int
     view_mode: str = "table"
@@ -587,7 +591,7 @@ class RotaPlanCreate(BaseModel):
     planner_data: Optional[str] = None
 
 class RotaPlanCopy(BaseModel):
-    name: str
+    name: RequiredShortTextStr
     start_date: date
     day_count: Optional[int] = None
     view_mode: Optional[str] = None
@@ -695,7 +699,7 @@ class ClientBase(BaseModel):
 
 class SpecialDayCreate(BaseModel):
     date: date
-    label: str
+    label: RequiredShortTextStr
 
 
 class SpecialDayResponse(BaseModel):
@@ -713,7 +717,10 @@ class SeedUkYear(BaseModel):
 
 
 class ClientCreate(ClientBase):
-    pass
+    # Tightened on input only; ClientResponse keeps ClientBase's plain str.
+    # 100 to match clientSchema in frontend/lib/validation.ts — a tighter cap here
+    # would 422 input the UI accepted.
+    name: CompanyNameStr
 
 class ClientResponse(ClientBase):
     id: int
@@ -761,7 +768,9 @@ class MainContractorBase(BaseModel):
 
 
 class MainContractorCreate(MainContractorBase):
-    pass
+    # Tightened on input only; the Response model keeps the base's plain str.
+    # 100 to match mainContractorSchema in frontend/lib/validation.ts.
+    name: CompanyNameStr
 
 
 class MainContractorResponse(MainContractorBase):
@@ -788,6 +797,8 @@ class SubContractorBase(BaseModel):
 
 class SubContractorCreate(SubContractorBase):
     main_contractor_id: int
+    # Tightened on input only; the Response model keeps the base's plain str.
+    name: CompanyNameStr
 
 
 class SubContractorResponse(SubContractorBase):
@@ -894,10 +905,12 @@ class GuardDocumentBase(BaseModel):
     expiry_date: Optional[date] = None
 
 class GuardDocumentCreate(GuardDocumentBase):
-    pass
+    # Tightened on input only; GuardDocumentResponse keeps the base's plain str.
+    document_type: RequiredShortTextStr
 
 class GuardDocumentCreateFlat(GuardDocumentBase):
     guard_id: int
+    document_type: RequiredShortTextStr
 
 class GuardDocumentResponse(GuardDocumentBase):
     id: int
@@ -945,7 +958,10 @@ class AllowanceBase(BaseModel):
     in_invoice: bool = True
 
 class AllowanceCreate(AllowanceBase):
-    pass
+    # Tightened on input only; AllowanceResponse keeps the base's plain str.
+    # 255: this field uses the UI's default input cap, so anything lower would reject
+    # values the form allows.
+    name: RequiredShortTextStr
 
 class AllowanceResponse(AllowanceBase):
     id: int
@@ -1397,7 +1413,8 @@ class ExpenseBase(BaseModel):
 
 
 class ExpenseCreate(ExpenseBase):
-    pass
+    # Tightened on input only; ExpenseResponse is a separate model already.
+    category: RequiredShortTextStr
 
 
 class ExpenseUpdate(BaseModel):
@@ -1576,22 +1593,24 @@ class SmsLogResponse(BaseModel):
 
 class ShiftOvertimeRequest(BaseModel):
     new_end: str
-    reason: str
+    reason: RequiredShortTextStr
 
 
 class ShiftEarlyFinishRequest(BaseModel):
     actual_end: str
-    reason: str
+    reason: RequiredShortTextStr
 
 
 class ShiftAdjustmentByShiftRequest(BaseModel):
     guard_id: int
     date: date
     shift_start: str
-    site_name: str
+    # A lookup key, not a new name: capped generously so a site saved before
+    # SITE_NAME_MAX existed can still be matched, but never blank.
+    site_name: RequiredShortTextStr
     new_end: Optional[str] = None
     actual_end: Optional[str] = None
-    reason: str
+    reason: RequiredShortTextStr
 
 
 class ShiftAdjustmentLogResponse(BaseModel):
@@ -1628,9 +1647,10 @@ class ShiftLatenessByShiftRequest(BaseModel):
     guard_id: int
     date: date
     shift_start: str
-    site_name: str
+    # A lookup key — see ShiftAdjustmentByShiftRequest.site_name.
+    site_name: RequiredShortTextStr
     late_minutes: int
-    note: Optional[str] = None
+    note: OptNoteStr = None
 
 
 class ShiftLateLogResponse(BaseModel):
@@ -1702,28 +1722,28 @@ class LeadStatusChange(BaseModel):
 
 
 class LeadNoteCreate(BaseModel):
-    body: str
+    body: RequiredNoteStr
 
 
 class LeadFollowUpCreate(BaseModel):
-    activity_type: str
-    title: Optional[str] = None
+    activity_type: RequiredShortTextStr
+    title: OptShortTextStr = None
     due_at: datetime
     assigned_user_id: Optional[int] = None
-    notes: Optional[str] = None
+    notes: OptNoteStr = None
 
 
 class LeadCommunicationCreate(BaseModel):
-    channel: str
-    subject: Optional[str] = None
-    body: Optional[str] = None
+    channel: RequiredShortTextStr
+    subject: OptShortTextStr = None
+    body: OptNoteStr = None
 
 
 class LeadQuotationCreate(BaseModel):
-    title: str
+    title: RequiredShortTextStr
     amount: Optional[float] = 0
-    status: Optional[str] = "draft"
-    notes: Optional[str] = None
+    status: OptShortTextStr = "draft"
+    notes: OptNoteStr = None
 
 
 class LeadDocumentResponse(BaseModel):
@@ -1757,7 +1777,7 @@ class LeadConvertRequest(BaseModel):
 
 
 class LeadFilterPresetCreate(BaseModel):
-    name: str
+    name: RequiredShortTextStr
     filters: dict
 
 
@@ -1768,7 +1788,7 @@ class LeadDuplicateCheck(BaseModel):
 
 
 class LeadCustomStatusCreate(BaseModel):
-    name: str
+    name: RequiredShortTextStr
 
 
 class LeadResponse(BaseModel):

@@ -35,6 +35,13 @@ ShortTextStr = Annotated[str, _capped(TEXT_MAX)]
 NoteStr = Annotated[str, _capped(NOTE_MAX)]
 LongTextStr = Annotated[str, _capped(LONG_TEXT_MAX)]
 
+# The `min_length=1` variants, for fields that are required rather than merely
+# present. Because strip_whitespace runs before the length check, these reject a
+# whitespace-only value — "   " strips to "" and fails. A plain `str` field accepts it
+# and stores a blank that the UI then renders as an unnamed record.
+RequiredShortTextStr = Annotated[str, _capped(TEXT_MAX, min_length=1)]
+RequiredNoteStr = Annotated[str, _capped(NOTE_MAX, min_length=1)]
+
 OptShortTextStr = Optional[ShortTextStr]
 OptNoteStr = Optional[NoteStr]
 

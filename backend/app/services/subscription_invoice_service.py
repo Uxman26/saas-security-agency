@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
+from app.html_safe import esc
 from app.models import Company, SubscriptionInvoice, User
 from app.plan_config import normalize_tier, price_for_tier
 from app.services import email_service
@@ -90,11 +91,11 @@ def _email_body(inv: SubscriptionInvoice, co: Company) -> str:
     return (
         f"<div style='font-family:sans-serif;max-width:600px'>"
         f"<h2 style='color:#1e293b'>Subscription Invoice</h2>"
-        f"<p>Hi {co.name},</p>"
+        f"<p>Hi {esc(co.name)},</p>"
         f"<p>Your ControlOps subscription invoice is ready.</p>"
         f"<table style='width:100%;border-collapse:collapse;margin:16px 0'>"
         f"<tr><td style='padding:8px;border-bottom:1px solid #e2e8f0'>Invoice</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'><strong>{inv.invoice_number}</strong></td></tr>"
+        f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'><strong>{esc(inv.invoice_number)}</strong></td></tr>"
         f"<tr><td style='padding:8px;border-bottom:1px solid #e2e8f0'>Plan</td>"
         f"<td style='padding:8px;border-bottom:1px solid #e2e8f0'>{inv.subscription_tier.title()} ({inv.billing_cycle})</td></tr>"
         f"<tr><td style='padding:8px;border-bottom:1px solid #e2e8f0'>Due date</td>"

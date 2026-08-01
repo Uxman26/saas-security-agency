@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
+from app.html_safe import esc
 from app.models import Client, User, Company
 from app.services.email_service import is_configured, send_and_log
 from app.services.module_service import is_module_enabled
@@ -75,7 +76,7 @@ def notify_admin_contract_expiry(db: Session, company_id: int) -> None:
     if not is_module_enabled(company, "email"):
         return
     lines = "".join(
-        f"<li><strong>{c.name}</strong> — ends {c.contract_end_date.isoformat()}</li>" for c in need_send
+        f"<li><strong>{esc(c.name)}</strong> — ends {c.contract_end_date.isoformat()}</li>" for c in need_send
     )
     body = f"""<p>The following client contract(s) expire within 30 days:</p><ul>{lines}</ul><p>Open Clients in your dashboard to renew or update dates.</p>"""
     try:

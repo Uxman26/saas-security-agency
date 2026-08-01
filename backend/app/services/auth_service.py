@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
+from app.html_safe import esc
 from app.models import User, Company
 from app.schemas import UserCreate
 from app.auth import (
@@ -29,7 +30,7 @@ def send_verification_email(user: User) -> None:
     token = create_email_verification_token(user.id)
     link = f"{settings.frontend_url.rstrip('/')}/verify-email?token={token}"
     body = (
-        f"<p>Hi {user.full_name},</p>"
+        f"<p>Hi {esc(user.full_name)},</p>"
         f"<p>Please verify your email address to activate your ControlOps account.</p>"
         f'<p><a href="{link}">Verify email</a></p>'
         f"<p>This link expires in 24 hours. If you did not create an account, you can ignore this email.</p>"
@@ -213,7 +214,7 @@ def request_password_reset(db: Session, email: str) -> None:
     token = create_password_reset_token(user.id)
     link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
     body = (
-        f"<p>Hi {user.full_name},</p>"
+        f"<p>Hi {esc(user.full_name)},</p>"
         f"<p>Click the link below to reset your password. This link expires in 1 hour.</p>"
         f'<p><a href="{link}">Reset password</a></p>'
         f"<p>If you did not request this, you can ignore this email.</p>"

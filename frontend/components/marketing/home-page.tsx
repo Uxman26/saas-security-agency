@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { MarketingFooter } from '@/components/marketing/marketing-footer';
 import { MarketingCta } from '@/components/marketing/marketing-cta';
@@ -16,12 +15,11 @@ import { RotaShowcase } from '@/components/marketing/rota-showcase';
 import { PatrolShowcase } from '@/components/marketing/patrol-showcase';
 import { VisionRobotSection } from '@/components/marketing/vision-robot-section';
 import { ModulesTimelineSection } from '@/components/marketing/modules-timeline-section';
+import { IndustriesBentoSection } from '@/components/marketing/industries-bento-section';
 import { BlurFade } from '@/components/ui/blur-fade';
 import { TextAnimate } from '@/components/ui/text-animate';
-import { MagicCard } from '@/components/ui/magic-card';
 import { BorderBeam } from '@/components/ui/border-beam';
 import { Ripple } from '@/components/ui/ripple';
-import { ArrowRight } from 'lucide-react';
 import type { TimelineModule } from '@/components/ui/modules-timeline';
 
 type Industry = { title: string; text: string; href: string; cta: string };
@@ -148,48 +146,11 @@ export function HomePage() {
         </div>
       </MarketingSection>
 
-      <MarketingSection variant="muted">
-        <div className="container mx-auto px-4">
-          <BlurFade delay={0.05} inView>
-            <SectionHeading
-              title={<RichInline text={t('industriesTitle')} variant="hero" />}
-              subtitle={<RichInline text={t('industriesIntro')} />}
-            />
-          </BlurFade>
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {industries.slice(0, 3).map((ind, i) => (
-              <BlurFade key={ind.title} delay={0.12 + i * 0.1} inView>
-                <MagicCard
-                  className="h-full rounded-xl"
-                  gradientFrom="#E04E00"
-                  gradientTo="#FDBA74"
-                  gradientColor="rgba(224,78,0,0.08)"
-                  gradientOpacity={0.5}
-                  gradientSize={240}
-                >
-                  <div className="flex h-full flex-col overflow-hidden">
-                    <div className="h-1 bg-foreground" />
-                    <CardHeader>
-                      <CardTitle className="text-lg font-bold">{ind.title}</CardTitle>
-                      <CardDescription className="mt-2 text-sm leading-relaxed">
-                        <RichInline text={ind.text} />
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="mt-auto pt-0">
-                      <Button asChild variant="outline" size="sm" className="border-border hover:bg-muted">
-                        <Link href={ind.href}>
-                          {ind.cta}
-                          <ArrowRight className="ms-1 size-3.5 rtl:rotate-180" />
-                        </Link>
-                      </Button>
-                    </CardContent>
-                  </div>
-                </MagicCard>
-              </BlurFade>
-            ))}
-          </div>
-        </div>
-      </MarketingSection>
+      <IndustriesBentoSection
+        title={t('industriesTitle')}
+        intro={t('industriesIntro')}
+        industries={industries}
+      />
 
       <MarketingSection>
         <div className="container mx-auto max-w-2xl px-4 text-center">

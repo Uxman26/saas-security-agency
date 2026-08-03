@@ -20,6 +20,7 @@ import { BlurFade } from '@/components/ui/blur-fade';
 import { TextAnimate } from '@/components/ui/text-animate';
 import { BorderBeam } from '@/components/ui/border-beam';
 import { Ripple } from '@/components/ui/ripple';
+import { FlickeringGrid } from '@/components/ui/flickering-grid';
 import type { TimelineModule } from '@/components/ui/modules-timeline';
 
 type Industry = { title: string; text: string; href: string; cta: string };
@@ -98,8 +99,16 @@ export function HomePage() {
         cta={t('patrolCta')}
       />
 
-      <MarketingSection>
-        <div className="container mx-auto px-4">
+      <MarketingSection className="relative overflow-hidden bg-background">
+        <FlickeringGrid
+          className="pointer-events-none absolute inset-0 z-0 [mask-image:radial-gradient(ellipse_70%_60%_at_50%_40%,black,transparent)]"
+          squareSize={3}
+          gridGap={5}
+          flickerChance={0.28}
+          color="#E04E00"
+          maxOpacity={0.35}
+        />
+        <div className="container relative z-10 mx-auto px-4">
           <BlurFade delay={0.05} inView className="text-center">
             <TextAnimate
               as="h2"

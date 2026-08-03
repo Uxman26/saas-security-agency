@@ -49,7 +49,7 @@ export function MarketingDashboardPreview({
     <div className="relative">
       <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-foreground/8 via-transparent to-transparent blur-2xl pointer-events-none" />
       <div className="relative rounded-2xl border border-border bg-card shadow-2xl shadow-foreground/8 overflow-hidden">
-        <div className="bg-gradient-to-r from-[#161E2C] to-[#1F2937] px-4 py-3 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-[#0B0F14] to-[#11161D] px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="size-3 rounded-full bg-red-400/90" />
             <div className="size-3 rounded-full bg-amber-400/90" />

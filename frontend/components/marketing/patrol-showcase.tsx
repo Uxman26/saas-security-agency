@@ -1,8 +1,10 @@
 'use client';
 
 import { QrCode, ScanLine, MapPinned, ClipboardCheck } from 'lucide-react';
-import { SpotlightCard } from '@/components/ui/spotlight-card';
-import { GsapReveal } from '@/components/marketing/gsap-reveal';
+import { MagicCard } from '@/components/ui/magic-card';
+import { BlurFade } from '@/components/ui/blur-fade';
+import { AnimatedGradientText } from '@/components/ui/animated-gradient-text';
+import { TextAnimate } from '@/components/ui/text-animate';
 import { MarketingCta } from '@/components/marketing/marketing-cta';
 
 type Props = {
@@ -14,16 +16,10 @@ type Props = {
 };
 
 const ICONS = [QrCode, ScanLine, MapPinned, ClipboardCheck];
-const SPOTS = [
-  'rgba(20, 184, 166, 0.12)',
-  'rgba(224, 78, 0, 0.12)',
-  'rgba(99, 102, 241, 0.1)',
-  'rgba(34, 197, 94, 0.1)',
-];
 
 export function PatrolShowcase({ eyebrow, title, text, items, cta }: Props) {
   return (
-    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24">
+    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24 dark:bg-[#0B0F14]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-60"
@@ -35,40 +31,63 @@ export function PatrolShowcase({ eyebrow, title, text, items, cta }: Props) {
         }}
       />
       <div className="container relative mx-auto px-4">
-        <GsapReveal className="mx-auto mb-12 max-w-3xl text-center md:mb-14">
-          <p data-reveal className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
-            {eyebrow}
-          </p>
-          <h2 data-reveal className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            {title}
-          </h2>
-          <p data-reveal className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-            {text}
-          </p>
-        </GsapReveal>
+        <div className="mx-auto mb-12 max-w-3xl text-center md:mb-14">
+          <BlurFade delay={0.05} inView>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
+              <AnimatedGradientText
+                colorFrom="#E04E00"
+                colorTo="#F59E0B"
+                speed={1.2}
+                className="font-semibold uppercase tracking-[0.2em]"
+              >
+                {eyebrow}
+              </AnimatedGradientText>
+            </p>
+          </BlurFade>
+          <BlurFade delay={0.12} inView>
+            <TextAnimate
+              as="h2"
+              by="word"
+              animation="blurInUp"
+              startOnView
+              once
+              className="text-3xl font-bold tracking-tight text-foreground md:text-4xl"
+            >
+              {title}
+            </TextAnimate>
+          </BlurFade>
+          <BlurFade delay={0.22} inView>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">{text}</p>
+          </BlurFade>
+        </div>
 
-        <GsapReveal className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" stagger={0.09}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {items.map((item, i) => {
             const Icon = ICONS[i % ICONS.length];
             return (
-              <div key={item.title} data-reveal>
-                <SpotlightCard spotlightColor={SPOTS[i % SPOTS.length]} className="h-full">
+              <BlurFade key={item.title} delay={0.12 + i * 0.08} inView>
+                <MagicCard
+                  className="h-full rounded-2xl"
+                  gradientFrom="#E04E00"
+                  gradientTo="#F59E0B"
+                  gradientColor="rgba(224,78,0,0.1)"
+                  gradientOpacity={0.55}
+                  gradientSize={220}
+                >
                   <div className="flex h-full flex-col p-5 md:p-6">
-                    <Icon className="mb-4 size-6 text-teal-700" />
+                    <Icon className="mb-4 size-6 text-orange-700 dark:text-orange-400" />
                     <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.text}</p>
                   </div>
-                </SpotlightCard>
-              </div>
+                </MagicCard>
+              </BlurFade>
             );
           })}
-        </GsapReveal>
+        </div>
 
-        <GsapReveal className="mt-12 text-center">
-          <div data-reveal>
-            <MarketingCta href="/book-demo">{cta}</MarketingCta>
-          </div>
-        </GsapReveal>
+        <BlurFade delay={0.5} inView className="mt-12 text-center">
+          <MarketingCta href="/book-demo">{cta}</MarketingCta>
+        </BlurFade>
       </div>
     </section>
   );

@@ -193,7 +193,7 @@ export function TimeHmField({
         className={cn(
           'flex h-9 w-full items-center rounded-md border border-input bg-transparent shadow-xs',
           'focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]',
-          open && 'border-sky-400 ring-[3px] ring-sky-400/30',
+          open && 'border-primary ring-[3px] ring-primary/30',
           disabled && 'pointer-events-none opacity-50'
         )}
       >
@@ -281,7 +281,7 @@ export function TimeHmField({
                         data-val={h}
                         className={cn(
                           'flex w-full items-center justify-between px-3 py-1.5 text-sm tabular-nums hover:bg-muted/70',
-                          selected && 'bg-sky-100 font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-100'
+                          selected && 'bg-orange-100 font-semibold text-orange-900 dark:bg-orange-950 dark:text-orange-100'
                         )}
                         onClick={(e) => {
                           e.preventDefault();
@@ -290,7 +290,7 @@ export function TimeHmField({
                         }}
                       >
                         <span>{h}</span>
-                        {selected ? <Check className="size-4 text-sky-600" /> : <span className="size-4" />}
+                        {selected ? <Check className="size-4 text-primary" /> : <span className="size-4" />}
                       </button>
                     );
                   })}
@@ -308,7 +308,7 @@ export function TimeHmField({
                         data-val={m}
                         className={cn(
                           'flex w-full items-center justify-between px-3 py-1.5 text-sm tabular-nums hover:bg-muted/70',
-                          selected && 'bg-sky-100 font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-100'
+                          selected && 'bg-orange-100 font-semibold text-orange-900 dark:bg-orange-950 dark:text-orange-100'
                         )}
                         onClick={(e) => {
                           e.preventDefault();
@@ -317,7 +317,7 @@ export function TimeHmField({
                         }}
                       >
                         <span>{m}</span>
-                        {selected ? <Check className="size-4 text-sky-600" /> : <span className="size-4" />}
+                        {selected ? <Check className="size-4 text-primary" /> : <span className="size-4" />}
                       </button>
                     );
                   })}

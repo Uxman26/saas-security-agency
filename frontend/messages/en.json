@@ -361,7 +361,7 @@
       "learnMore": "Learn more",
       "timelineEyebrow": "Platform modules",
       "timelineTitle": "Every module your control room needs",
-      "timelineIntro": "Built from the same module map that powers ControlOps RBAC — staff, sites, rotas, patrol, finance and more, permissioned per role.",
+      "timelineIntro": "The core ControlOps modules for security operations — staff, sites, permissions, rotas, patrol and billing.",
       "timelineModules": [
         {
           "id": "guards",
@@ -383,7 +383,7 @@
           "id": "roles",
           "category": "HR & People",
           "title": "Roles & permissions",
-          "description": "Fine-grained RBAC across modules — view, create, edit and delete rights per role, including rota payable visibility.",
+          "description": "Fine-grained RBAC across modules — view, create, edit and delete rights per role.",
           "href": "/platform",
           "image": "none"
         },
@@ -404,43 +404,11 @@
           "image": "none"
         },
         {
-          "id": "incidents",
-          "category": "Operations",
-          "title": "Incidents",
-          "description": "Log incidents with photos and status by site and date — keep control room and managers aligned.",
-          "href": "/platform",
-          "image": "none"
-        },
-        {
-          "id": "attendance",
-          "category": "HR & People",
-          "title": "Attendance",
-          "description": "Book on/off and lateness against shifts so payroll and ops work from the same attendance truth.",
-          "href": "/platform",
-          "image": "none"
-        },
-        {
-          "id": "clients",
-          "category": "Sales",
-          "title": "Clients & client portal",
-          "description": "Client accounts, contracts and a portal for staff requests — clients ask, your team reviews.",
-          "href": "/platform",
-          "image": "none"
-        },
-        {
           "id": "invoices",
           "category": "Finance",
           "title": "Payroll & invoicing",
           "description": "Turn published assignments into payroll-ready hours and client invoices — same shift data, no spreadsheet rework.",
           "href": "/platform#payroll",
-          "image": "none"
-        },
-        {
-          "id": "reports",
-          "category": "Reports",
-          "title": "Reports",
-          "description": "Attendance, overtime, lateness, financial and compliance reporting from one reports library.",
-          "href": "/platform#reporting",
           "image": "none"
         }
       ],

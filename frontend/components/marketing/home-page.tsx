@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { MarketingFooter } from '@/components/marketing/marketing-footer';
 import { MarketingCta } from '@/components/marketing/marketing-cta';
@@ -16,7 +16,11 @@ import { RotaShowcase } from '@/components/marketing/rota-showcase';
 import { PatrolShowcase } from '@/components/marketing/patrol-showcase';
 import { VisionRobotSection } from '@/components/marketing/vision-robot-section';
 import { ModulesTimelineSection } from '@/components/marketing/modules-timeline-section';
-import { GsapReveal } from '@/components/marketing/gsap-reveal';
+import { BlurFade } from '@/components/ui/blur-fade';
+import { TextAnimate } from '@/components/ui/text-animate';
+import { MagicCard } from '@/components/ui/magic-card';
+import { BorderBeam } from '@/components/ui/border-beam';
+import { Ripple } from '@/components/ui/ripple';
 import { ArrowRight } from 'lucide-react';
 import type { TimelineModule } from '@/components/ui/modules-timeline';
 
@@ -24,7 +28,7 @@ type Industry = { title: string; text: string; href: string; cta: string };
 type Faq = { q: string; a: string };
 type Step = { title: string; text: string };
 
-const FEATURE_TONES: FeatureItem['tone'][] = ['ember', 'slate', 'teal', 'forest', 'indigo', 'steel'];
+const FEATURE_TONES: FeatureItem['tone'][] = ['ember', 'slate', 'teal', 'forest', 'amber', 'steel'];
 
 export function HomePage() {
   const t = useTranslations('marketing.home');
@@ -98,109 +102,161 @@ export function HomePage() {
 
       <MarketingSection>
         <div className="container mx-auto px-4">
-          <GsapReveal>
-            <div data-reveal>
-              <SectionHeading title={t('howTitle')} align="center" />
-            </div>
-          </GsapReveal>
-          <GsapReveal className="mx-auto grid max-w-4xl gap-8 md:grid-cols-3" stagger={0.12}>
+          <BlurFade delay={0.05} inView className="text-center">
+            <TextAnimate
+              as="h2"
+              by="word"
+              animation="blurInUp"
+              startOnView
+              once
+              className="text-3xl font-bold tracking-tight text-foreground md:text-4xl"
+            >
+              {t('howTitle')}
+            </TextAnimate>
+          </BlurFade>
+
+          <div className="mx-auto mt-12 grid max-w-4xl gap-8 md:grid-cols-3">
             {steps.map((step, i) => (
-              <div key={step.title} data-reveal className="relative text-center">
-                {i < steps.length - 1 && (
-                  <div className="absolute start-[calc(50%+2.5rem)] top-8 hidden h-0.5 w-[calc(100%-5rem)] bg-gradient-to-r from-foreground/20 to-transparent md:block" />
-                )}
-                <div className="mx-auto mb-5 flex size-14 items-center justify-center rounded-2xl bg-foreground text-xl font-bold text-background">
-                  {i + 1}
+              <BlurFade key={step.title} delay={0.12 + i * 0.1} inView>
+                <div className="relative text-center">
+                  {i < steps.length - 1 && (
+                    <div className="absolute start-[calc(50%+2.5rem)] top-8 hidden h-0.5 w-[calc(100%-5rem)] bg-gradient-to-r from-foreground/20 to-transparent md:block" />
+                  )}
+                  <div className="relative mx-auto mb-5 flex size-14 items-center justify-center overflow-hidden rounded-2xl bg-foreground text-xl font-bold text-background">
+                    {i + 1}
+                    <BorderBeam
+                      size={40}
+                      duration={6}
+                      delay={i * 1.5}
+                      colorFrom="#E04E00"
+                      colorTo="#FDBA74"
+                      borderWidth={1.5}
+                    />
+                  </div>
+                  <h3 className="text-lg font-bold">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    <RichInline text={step.text} />
+                  </p>
                 </div>
-                <h3 className="text-lg font-bold">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  <RichInline text={step.text} />
-                </p>
-              </div>
+              </BlurFade>
             ))}
-          </GsapReveal>
-          <GsapReveal className="mt-12 text-center">
-            <div data-reveal>
-              <MarketingCta href="/book-demo">{t('howCta')}</MarketingCta>
-            </div>
-          </GsapReveal>
+          </div>
+
+          <BlurFade delay={0.45} inView className="mt-12 text-center">
+            <MarketingCta href="/book-demo">{t('howCta')}</MarketingCta>
+          </BlurFade>
         </div>
       </MarketingSection>
 
       <MarketingSection variant="muted">
         <div className="container mx-auto px-4">
-          <GsapReveal>
-            <div data-reveal>
-              <SectionHeading
-                title={<RichInline text={t('industriesTitle')} variant="hero" />}
-                subtitle={<RichInline text={t('industriesIntro')} />}
-              />
-            </div>
-          </GsapReveal>
-          <GsapReveal className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" stagger={0.08}>
-            {industries.slice(0, 3).map((ind) => (
-              <div key={ind.title} data-reveal>
-                <Card className="flex h-full flex-col overflow-hidden shadow-sm marketing-card-hover">
-                  <div className="h-1 bg-foreground" />
-                  <CardHeader>
-                    <CardTitle className="text-lg font-bold">{ind.title}</CardTitle>
-                    <CardDescription className="mt-2 text-sm leading-relaxed">
-                      <RichInline text={ind.text} />
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="mt-auto pt-0">
-                    <Button asChild variant="outline" size="sm" className="border-border hover:bg-muted">
-                      <Link href={ind.href}>
-                        {ind.cta}
-                        <ArrowRight className="ms-1 size-3.5 rtl:rotate-180" />
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
+          <BlurFade delay={0.05} inView>
+            <SectionHeading
+              title={<RichInline text={t('industriesTitle')} variant="hero" />}
+              subtitle={<RichInline text={t('industriesIntro')} />}
+            />
+          </BlurFade>
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {industries.slice(0, 3).map((ind, i) => (
+              <BlurFade key={ind.title} delay={0.12 + i * 0.1} inView>
+                <MagicCard
+                  className="h-full rounded-xl"
+                  gradientFrom="#E04E00"
+                  gradientTo="#FDBA74"
+                  gradientColor="rgba(224,78,0,0.08)"
+                  gradientOpacity={0.5}
+                  gradientSize={240}
+                >
+                  <div className="flex h-full flex-col overflow-hidden">
+                    <div className="h-1 bg-foreground" />
+                    <CardHeader>
+                      <CardTitle className="text-lg font-bold">{ind.title}</CardTitle>
+                      <CardDescription className="mt-2 text-sm leading-relaxed">
+                        <RichInline text={ind.text} />
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="mt-auto pt-0">
+                      <Button asChild variant="outline" size="sm" className="border-border hover:bg-muted">
+                        <Link href={ind.href}>
+                          {ind.cta}
+                          <ArrowRight className="ms-1 size-3.5 rtl:rotate-180" />
+                        </Link>
+                      </Button>
+                    </CardContent>
+                  </div>
+                </MagicCard>
+              </BlurFade>
             ))}
-          </GsapReveal>
+          </div>
         </div>
       </MarketingSection>
 
       <MarketingSection>
         <div className="container mx-auto max-w-2xl px-4 text-center">
-          <SectionHeading
-            title={t('pricingTitle')}
-            subtitle={<RichInline text={t('pricingText')} />}
-            align="center"
-          />
-          <div className="flex flex-wrap justify-center gap-4">
-            <MarketingCta href="/pricing">{t('comparePlans')}</MarketingCta>
-            <Button asChild variant="outline" size="lg" className="border-border hover:bg-muted">
-              <Link href="/book-demo">{tc('discussRequirements')}</Link>
-            </Button>
-          </div>
+          <BlurFade delay={0.05} inView>
+            <SectionHeading
+              title={t('pricingTitle')}
+              subtitle={<RichInline text={t('pricingText')} />}
+              align="center"
+            />
+          </BlurFade>
+          <BlurFade delay={0.2} inView>
+            <div className="flex flex-wrap justify-center gap-4">
+              <MarketingCta href="/pricing">{t('comparePlans')}</MarketingCta>
+              <Button asChild variant="outline" size="lg" className="border-border hover:bg-muted">
+                <Link href="/book-demo">{tc('discussRequirements')}</Link>
+              </Button>
+            </div>
+          </BlurFade>
         </div>
       </MarketingSection>
 
       <MarketingSection variant="muted">
         <div className="container mx-auto max-w-2xl px-4">
-          <SectionHeading title={t('faqTitle')} align="center" />
-          <MarketingFaqAccordion items={faqs} />
+          <BlurFade delay={0.05} inView>
+            <SectionHeading title={t('faqTitle')} align="center" />
+          </BlurFade>
+          <BlurFade delay={0.15} inView>
+            <MarketingFaqAccordion items={faqs} />
+          </BlurFade>
         </div>
       </MarketingSection>
 
-      <MarketingSection border={false} className="py-20 marketing-cta-bg">
-        <GsapReveal className="container relative mx-auto max-w-2xl px-4 text-center">
-          <h2 data-reveal className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            {t('finalSecurityTitle')}
-          </h2>
-          <p data-reveal className="mt-4 text-lg leading-relaxed text-muted-foreground">
-            {t('finalSecurityText')}
-          </p>
-          <div data-reveal className="mt-10 flex flex-wrap justify-center gap-4">
-            <MarketingCta href="/book-demo">{tc('bookDemo')}</MarketingCta>
-            <Button asChild variant="outline" size="lg" className="border-border hover:bg-muted">
-              <Link href="/pricing">{tc('viewPricing')}</Link>
-            </Button>
-          </div>
-        </GsapReveal>
+      <MarketingSection border={false} className="relative overflow-hidden py-20 marketing-cta-bg">
+        <Ripple
+          className="opacity-25"
+          mainCircleSize={180}
+          mainCircleOpacity={0.16}
+          numCircles={6}
+        />
+        <div className="container relative mx-auto max-w-2xl px-4 text-center">
+          <BlurFade delay={0.05} inView>
+            <TextAnimate
+              as="h2"
+              by="word"
+              animation="blurInUp"
+              startOnView
+              once
+              className="text-3xl font-bold tracking-tight text-foreground md:text-4xl"
+            >
+              {t('finalSecurityTitle')}
+            </TextAnimate>
+          </BlurFade>
+          <BlurFade delay={0.18} inView>
+            <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
+              {t('finalSecurityText')}
+            </p>
+          </BlurFade>
+          <BlurFade delay={0.3} inView>
+            <div className="relative mx-auto mt-10 inline-flex flex-wrap justify-center gap-4 overflow-hidden rounded-2xl p-1">
+              <MarketingCta href="/book-demo">{tc('bookDemo')}</MarketingCta>
+              <Button asChild variant="outline" size="lg" className="border-border hover:bg-muted">
+                <Link href="/pricing">{tc('viewPricing')}</Link>
+              </Button>
+              <BorderBeam size={80} duration={7} colorFrom="#E04E00" colorTo="#FDBA74" />
+            </div>
+          </BlurFade>
+        </div>
       </MarketingSection>
 
       <MarketingFooter />

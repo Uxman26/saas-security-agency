@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Mail, MapPin, MessageCircle } from 'lucide-react';
 import { MarketingBrand } from '@/components/marketing/marketing-brand';
-import { GsapReveal } from '@/components/marketing/gsap-reveal';
+import { BlurFade } from '@/components/ui/blur-fade';
+import { BorderBeam } from '@/components/ui/border-beam';
 import { cn } from '@/lib/utils';
 
 const ACCENT = '#E8590C';
 const ACCENT_SOLID = '#E04E00';
-const FOOTER_BG = '#0B0F14';
 
 const aboutLinks = [
   { href: '/about', key: 'about' as const },
@@ -47,7 +47,7 @@ function SocialIcon({
       target="_blank"
       rel="noopener noreferrer"
       aria-label={label}
-      className="flex size-9 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+      className="flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground dark:text-stone-300 dark:hover:bg-white/10 dark:hover:text-white"
     >
       {children}
     </a>
@@ -68,49 +68,62 @@ export function MarketingFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="relative overflow-hidden text-white" style={{ backgroundColor: FOOTER_BG }}>
+    <footer
+      className={cn(
+        'relative overflow-hidden border-t border-border/60',
+        'bg-[#F7F6F4] text-foreground',
+        'dark:border-transparent dark:bg-[#0B0F14] dark:text-white'
+      )}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 70% 50% at 50% 100%, rgba(224,78,0,0.10), transparent 55%)',
+            'radial-gradient(ellipse 70% 50% at 50% 100%, rgba(224,78,0,0.08), transparent 55%)',
         }}
       />
 
       <div className="container relative mx-auto px-4 pb-10 pt-16 md:pb-12 md:pt-20">
-        <GsapReveal className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12" stagger={0.08}>
-          <div data-reveal className="max-w-sm">
-            <div className="[&_img]:brightness-0 [&_img]:invert">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12">
+          <BlurFade delay={0.05} inView className="max-w-sm">
+            <div className="dark:[&_img]:brightness-0 dark:[&_img]:invert">
               <MarketingBrand linked size="default" />
             </div>
-            <p className="mt-4 text-sm leading-relaxed text-slate-400">{t('desc')}</p>
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground dark:text-stone-400">
+              {t('desc')}
+            </p>
             <p className="mt-3 text-xs font-medium tracking-wide" style={{ color: ACCENT }}>
               {t('tagline')}
             </p>
-          </div>
+          </BlurFade>
 
-          <div data-reveal>
-            <p className="mb-4 text-sm font-semibold text-white">{t('aboutUs')}</p>
-            <ul className="space-y-3 text-sm text-slate-400">
+          <BlurFade delay={0.12} inView>
+            <p className="mb-4 text-sm font-semibold text-foreground dark:text-white">{t('aboutUs')}</p>
+            <ul className="space-y-3 text-sm text-muted-foreground dark:text-stone-400">
               {aboutLinks.map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="transition-colors hover:text-white">
+                  <Link
+                    href={l.href}
+                    className="transition-colors hover:text-foreground dark:hover:text-white"
+                  >
                     {l.key === 'securityIndustry' ? tn('security') : t(l.key)}
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
+          </BlurFade>
 
-          <div data-reveal>
-            <p className="mb-4 text-sm font-semibold text-white">{t('helpfulLinks')}</p>
-            <ul className="space-y-3 text-sm text-slate-400">
+          <BlurFade delay={0.2} inView>
+            <p className="mb-4 text-sm font-semibold text-foreground dark:text-white">
+              {t('helpfulLinks')}
+            </p>
+            <ul className="space-y-3 text-sm text-muted-foreground dark:text-stone-400">
               {helpfulLinks.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="inline-flex items-center gap-2 transition-colors hover:text-white"
+                    className="inline-flex items-center gap-2 transition-colors hover:text-foreground dark:hover:text-white"
                   >
                     {l.key === 'signIn' || l.key === 'bookDemo' ? tn(l.key) : t(l.key)}
                     {l.badge && (
@@ -125,25 +138,32 @@ export function MarketingFooter() {
                 </li>
               ))}
             </ul>
-            <p className="mb-3 mt-8 text-sm font-semibold text-white">{t('legal')}</p>
-            <ul className="space-y-2.5 text-sm text-slate-400">
+            <p className="mb-3 mt-8 text-sm font-semibold text-foreground dark:text-white">
+              {t('legal')}
+            </p>
+            <ul className="space-y-2.5 text-sm text-muted-foreground dark:text-stone-400">
               {legalLinks.map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="transition-colors hover:text-white">
+                  <Link
+                    href={l.href}
+                    className="transition-colors hover:text-foreground dark:hover:text-white"
+                  >
                     {t(l.key)}
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
+          </BlurFade>
 
-          <div data-reveal>
-            <p className="mb-4 text-sm font-semibold text-white">{t('contactUs')}</p>
-            <ul className="space-y-4 text-sm text-slate-400">
+          <BlurFade delay={0.28} inView>
+            <p className="mb-4 text-sm font-semibold text-foreground dark:text-white">
+              {t('contactUs')}
+            </p>
+            <ul className="space-y-4 text-sm text-muted-foreground dark:text-stone-400">
               <li>
                 <a
                   href={`mailto:${t('email')}`}
-                  className="inline-flex items-start gap-3 transition-colors hover:text-white"
+                  className="inline-flex items-start gap-3 transition-colors hover:text-foreground dark:hover:text-white"
                 >
                   <AccentIcon>
                     <Mail className="size-4" />
@@ -154,7 +174,7 @@ export function MarketingFooter() {
               <li>
                 <Link
                   href="/contact"
-                  className="inline-flex items-start gap-3 transition-colors hover:text-white"
+                  className="inline-flex items-start gap-3 transition-colors hover:text-foreground dark:hover:text-white"
                 >
                   <AccentIcon>
                     <MessageCircle className="size-4" />
@@ -169,10 +189,15 @@ export function MarketingFooter() {
                 <span>{t('location')}</span>
               </li>
             </ul>
-          </div>
-        </GsapReveal>
+          </BlurFade>
+        </div>
 
-        <div className="relative mt-14 border-t border-white/10 pt-10 md:mt-16 md:pt-12">
+        <BlurFade
+          delay={0.35}
+          inView
+          className="relative mt-14 overflow-hidden border-t border-border/70 pt-10 md:mt-16 md:pt-12 dark:border-white/10"
+        >
+          <BorderBeam size={160} duration={12} colorFrom="#E04E00" colorTo="#FDBA74" borderWidth={1} />
           <div
             aria-hidden
             className={cn(
@@ -180,9 +205,16 @@ export function MarketingFooter() {
               'text-center font-bold uppercase leading-none tracking-[-0.04em]',
               'text-[clamp(3.5rem,18vw,11rem)] text-transparent'
             )}
-            style={{ WebkitTextStroke: '1px rgba(224, 78, 0, 0.35)' }}
           >
-            CONTROLOPS
+            <span className="block dark:hidden" style={{ WebkitTextStroke: '1px rgba(22, 30, 44, 0.14)' }}>
+              CONTROLOPS
+            </span>
+            <span
+              className="hidden dark:block"
+              style={{ WebkitTextStroke: '1px rgba(224, 78, 0, 0.35)' }}
+            >
+              CONTROLOPS
+            </span>
           </div>
 
           <div className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-between gap-4 px-1 sm:flex-row sm:items-end">
@@ -209,11 +241,11 @@ export function MarketingFooter() {
                 </svg>
               </SocialIcon>
             </div>
-            <p className="text-xs text-slate-400 sm:text-sm">
+            <p className="text-xs text-muted-foreground sm:text-sm dark:text-stone-400">
               © {year} {t('rights')}
             </p>
           </div>
-        </div>
+        </BlurFade>
       </div>
     </footer>
   );

@@ -1,7 +1,11 @@
 'use client';
 
 import { InteractiveRobotSpline } from '@/components/marketing/interactive-3d-robot';
-import { GsapReveal } from '@/components/marketing/gsap-reveal';
+import { BlurFade } from '@/components/ui/blur-fade';
+import { AnimatedGradientText } from '@/components/ui/animated-gradient-text';
+import { TextAnimate } from '@/components/ui/text-animate';
+import { Ripple } from '@/components/ui/ripple';
+import { BorderBeam } from '@/components/ui/border-beam';
 
 const ROBOT_SCENE_URL = 'https://prod.spline.design/PyzDhpQ9E5f1E3MT/scene.splinecode';
 
@@ -24,39 +28,66 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
       />
 
       <div className="container relative mx-auto grid min-h-[480px] items-center gap-8 px-4 py-16 md:min-h-[560px] md:grid-cols-2 md:gap-10 md:py-20">
-        <GsapReveal className="relative z-10 order-2 md:order-1">
-          <p
-            data-reveal
-            className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]"
-            style={{ color: '#E04E00' }}
-          >
-            {eyebrow}
-          </p>
-          <blockquote data-reveal className="max-w-xl">
-            <p className="text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl lg:text-[2.6rem]">
-              <span className="me-1" style={{ color: '#E04E00' }}>
-                &ldquo;
-              </span>
-              {quote}
-              <span className="ms-1" style={{ color: '#E04E00' }}>
-                &rdquo;
-              </span>
+        <div className="relative z-10 order-2 md:order-1">
+          <BlurFade delay={0.05} inView>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
+              <AnimatedGradientText
+                colorFrom="#E04E00"
+                colorTo="#F97316"
+                speed={1.2}
+                className="font-semibold uppercase tracking-[0.2em]"
+              >
+                {eyebrow}
+              </AnimatedGradientText>
             </p>
-            <footer className="mt-6 text-sm font-medium text-muted-foreground">{attribution}</footer>
+          </BlurFade>
+          <blockquote className="max-w-xl">
+            <BlurFade delay={0.12} inView>
+              <p className="text-3xl font-bold leading-tight tracking-tight text-foreground md:text-4xl lg:text-[2.6rem]">
+                <span className="me-1" style={{ color: '#E04E00' }}>
+                  &ldquo;
+                </span>
+                <TextAnimate
+                  as="span"
+                  by="word"
+                  animation="fadeIn"
+                  startOnView
+                  once
+                  className="inline"
+                  segmentClassName="inline"
+                >
+                  {quote}
+                </TextAnimate>
+                <span className="ms-1" style={{ color: '#E04E00' }}>
+                  &rdquo;
+                </span>
+              </p>
+            </BlurFade>
+            <BlurFade delay={0.35} inView>
+              <footer className="mt-6 text-sm font-medium text-muted-foreground">{attribution}</footer>
+            </BlurFade>
           </blockquote>
-        </GsapReveal>
+        </div>
 
-        <div className="relative order-1 h-[300px] w-full md:order-2 md:h-[440px] lg:h-[500px]">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-[15%] bottom-[8%] h-16 rounded-full opacity-50 blur-2xl"
-            style={{ background: 'radial-gradient(ellipse, rgba(224,78,0,0.35), transparent 70%)' }}
+        <BlurFade
+          delay={0.2}
+          direction="right"
+          offset={28}
+          inView
+          className="relative order-1 h-[300px] w-full overflow-hidden rounded-2xl bg-transparent md:order-2 md:h-[440px] lg:h-[500px]"
+        >
+          <Ripple
+            className="opacity-30"
+            mainCircleSize={140}
+            mainCircleOpacity={0.2}
+            numCircles={5}
           />
           <InteractiveRobotSpline
             scene={ROBOT_SCENE_URL}
-            className="absolute inset-0 h-full w-full"
+            className="absolute inset-0 h-full w-full bg-transparent"
           />
-        </div>
+          <BorderBeam size={100} duration={9} colorFrom="#E04E00" colorTo="#FDBA74" />
+        </BlurFade>
       </div>
     </section>
   );

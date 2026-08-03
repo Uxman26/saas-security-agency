@@ -124,7 +124,7 @@ function TimelineCard({
             </div>
             <span
               className="absolute end-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
-              style={{ backgroundColor: '#161E2C' }}
+              style={{ backgroundColor: '#11161D' }}
             >
               {event.category}
             </span>

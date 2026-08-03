@@ -1,7 +1,9 @@
 'use client';
 
 import { ModulesTimeline, type TimelineModule } from '@/components/ui/modules-timeline';
-import { GsapReveal } from '@/components/marketing/gsap-reveal';
+import { BlurFade } from '@/components/ui/blur-fade';
+import { AnimatedGradientText } from '@/components/ui/animated-gradient-text';
+import { TextAnimate } from '@/components/ui/text-animate';
 
 type Props = {
   eyebrow: string;
@@ -23,23 +25,39 @@ export function ModulesTimelineSection({ eyebrow, title, intro, learnMore, modul
         }}
       />
       <div className="container relative mx-auto px-4">
-        <GsapReveal className="mx-auto mb-12 max-w-3xl text-center md:mb-16">
-          <p
-            data-reveal
-            className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]"
-            style={{ color: '#E04E00' }}
-          >
-            {eyebrow}
-          </p>
-          <h2 data-reveal className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            {title}
-          </h2>
-          <p data-reveal className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">
-            {intro}
-          </p>
-        </GsapReveal>
+        <div className="mx-auto mb-12 max-w-3xl text-center md:mb-16">
+          <BlurFade delay={0.05} inView>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
+              <AnimatedGradientText
+                colorFrom="#E04E00"
+                colorTo="#F97316"
+                speed={1.2}
+                className="font-semibold uppercase tracking-[0.2em]"
+              >
+                {eyebrow}
+              </AnimatedGradientText>
+            </p>
+          </BlurFade>
+          <BlurFade delay={0.12} inView>
+            <TextAnimate
+              as="h2"
+              by="word"
+              animation="blurInUp"
+              startOnView
+              once
+              className="text-3xl font-bold tracking-tight text-foreground md:text-4xl"
+            >
+              {title}
+            </TextAnimate>
+          </BlurFade>
+          <BlurFade delay={0.22} inView>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">{intro}</p>
+          </BlurFade>
+        </div>
 
-        <ModulesTimeline events={modules} learnMore={learnMore} />
+        <BlurFade delay={0.28} inView>
+          <ModulesTimeline events={modules} learnMore={learnMore} />
+        </BlurFade>
       </div>
     </section>
   );

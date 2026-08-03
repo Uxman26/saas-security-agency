@@ -49,7 +49,34 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
-}
+  --animate-gradient: gradient 8s linear infinite;
+  @keyframes gradient {
+  to {
+    background-position: var(--bg-size, 300%) 0;
+    }
+  }
+  --animate-shine: shine var(--duration) infinite linear
+;
+  @keyframes shine {
+  0% {
+    background-position: 0% 0%;
+    }
+  50% {
+    background-position: 100% 100%;
+    }
+  to {
+    background-position: 0% 0%;
+    }
+  }
+  --animate-ripple: ripple var(--duration,2s) ease calc(var(--i, 0)*.2s) infinite;
+  @keyframes ripple {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    }
+  50% {
+    transform: translate(-50%, -50%) scale(0.9);
+    }
+  }}
 
 :root {
   --radius: 0.5rem;
@@ -95,47 +122,46 @@
 }
 
 .dark {
-  --background: #0F1419;
+  --background: #0B0F14;
   --foreground: #F9FAFB;
-  --card: #161E2C;
+  --card: #11161D;
   --card-foreground: #F9FAFB;
-  --popover: #161E2C;
+  --popover: #11161D;
   --popover-foreground: #F9FAFB;
   --primary: #E8590C;
   --primary-foreground: #FFFFFF;
-  --secondary: #1F2937;
+  --secondary: #151A22;
   --secondary-foreground: #F9FAFB;
-  --muted: #1F2937;
+  --muted: #151A22;
   --muted-foreground: #9CA3AF;
-  --accent: #1F2937;
+  --accent: #151A22;
   --accent-foreground: #F9FAFB;
   --destructive: #EF4444;
-  --border: #374151;
-  --input: #374151;
+  --border: #1F2630;
+  --input: #1F2630;
   --ring: #9CA3AF;
   --chart-1: #F9FAFB;
   --chart-2: #E8590C;
   --chart-3: #9CA3AF;
   --chart-4: #6B7280;
   --chart-5: #4B5563;
-  --sidebar: #0F1419;
+  --sidebar: #0B0F14;
   --sidebar-foreground: #F9FAFB;
   --sidebar-primary: #E8590C;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #161E2C;
+  --sidebar-accent: #11161D;
   --sidebar-accent-foreground: #F9FAFB;
-  --sidebar-border: #374151;
+  --sidebar-border: #1F2630;
   --sidebar-ring: #E8590C;
-  --rota-hours-bg: #0c4a6e;
+  --rota-hours-bg: #3b2410;
   --rota-pay-bg: #064e3b;
   --rota-publish-bg: #831843;
-  /* Navy: slate read as uncoloured beside the other bands. Kept at the same depth
-     as them so the small muted text in this column stays legible. */
-  --rota-emp-bg: #172554;
+  /* Neutral charcoal band — avoid blue/navy in dark mode. */
+  --rota-emp-bg: #151A22;
   --rota-emp-conflict-bg: #451a03;
   --rota-day-header-bg: #422006;
-  --rota-day-total-bg: #2e1065;
-  --rota-row-line: #5b6b80;
+  --rota-day-total-bg: #2a1a10;
+  --rota-row-line: #4b5563;
 }
 
 @layer base {
@@ -309,4 +335,3 @@
   border-left: 1px solid var(--border);
   border-top: 1px solid var(--border);
 }
-

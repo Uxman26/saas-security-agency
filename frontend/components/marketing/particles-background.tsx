@@ -16,9 +16,9 @@ function ParticlesCanvas({ className, id = 'particles-canvas' }: { className?: s
       fpsLimit: 60,
       particles: {
         number: { value: 72, density: { enable: true } },
-        color: { value: ['#3b82f6', '#6366f1', '#8b5cf6', '#06b6d4'] },
+        color: { value: ['#E04E00', '#F59E0B', '#FB923C', '#A8A29E'] },
         links: {
-          color: '#6366f1',
+          color: '#E04E00',
           distance: 140,
           enable: true,
           opacity: 0.25,

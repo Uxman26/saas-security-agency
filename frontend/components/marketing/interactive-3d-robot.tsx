@@ -11,14 +11,35 @@ type Props = {
   className?: string;
 };
 
-const GROUND_NAME_RE = /ground|floor|plane|platform|base|pedestal|stand|shadow|bg|background|terrain/i;
+const GROUND_NAME_RE =
+  /ground|floor|plane|platform|base|pedestal|stand|shadow|bg|background|terrain|badge|watermark|logo|spline/i;
 
 function hideSplineWatermark(root: HTMLElement | null) {
   if (!root) return;
-  root.querySelectorAll('a[href*="spline"]').forEach((el) => el.remove());
-  root.querySelectorAll('[class*="logo"], [id*="logo"]').forEach((el) => {
-    const t = (el.textContent || '').toLowerCase();
-    if (t.includes('spline') || t.includes('built with')) el.remove();
+
+  root.querySelectorAll('a').forEach((el) => {
+    const href = (el.getAttribute('href') || '').toLowerCase();
+    const text = (el.textContent || '').toLowerCase();
+    if (href.includes('spline') || text.includes('spline') || text.includes('built with')) {
+      el.remove();
+    }
+  });
+
+  root.querySelectorAll('div, span, button, p').forEach((el) => {
+    const text = (el.textContent || '').trim().toLowerCase();
+    if (!text) return;
+    if (
+      text === 'built with spline' ||
+      text === 'spline' ||
+      (text.includes('built with') && text.includes('spline'))
+    ) {
+      const target = (el.closest('a') || el) as HTMLElement;
+      target.style.setProperty('display', 'none', 'important');
+      target.style.setProperty('visibility', 'hidden', 'important');
+      target.style.setProperty('opacity', '0', 'important');
+      target.style.setProperty('pointer-events', 'none', 'important');
+      target.remove();
+    }
   });
 }
 
@@ -31,7 +52,6 @@ function hideGroundObjects(app: Application) {
     }
   }
 
-  // Extra explicit names commonly used in Whobee / Spline demos
   for (const name of [
     'Ground',
     'ground',
@@ -44,11 +64,16 @@ function hideGroundObjects(app: Application) {
     'Cube 2',
     'Floor Plane',
     'Shadow Catcher',
+    'Built with Spline',
   ]) {
     const obj = app.findObjectByName(name);
     if (obj) obj.visible = false;
   }
 }
+
+/** Nudge Whobee purple/magenta materials toward ControlOps orange via CSS filter. */
+const ORANGE_BOT_FILTER =
+  'hue-rotate(118deg) saturate(1.55) brightness(1.14) contrast(1.04)';
 
 function RobotFallback({ className }: { className?: string }) {
   return (
@@ -62,7 +87,7 @@ function RobotFallback({ className }: { className?: string }) {
         <div
           className="absolute inset-x-[22%] top-[12%] h-[38%] rounded-2xl border border-white/10 shadow-lg"
           style={{
-            background: 'linear-gradient(160deg, #E8590C 0%, #DF3C01 55%, #9a2a00 100%)',
+            background: 'linear-gradient(160deg, #FB923C 0%, #E04E00 55%, #C2410C 100%)',
           }}
         >
           <div className="absolute inset-0 flex items-center justify-center gap-5">
@@ -75,7 +100,10 @@ function RobotFallback({ className }: { className?: string }) {
   );
 }
 
-class SplineErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { error: boolean }> {
+class SplineErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { error: boolean }
+> {
   state = { error: false };
 
   static getDerivedStateFromError() {
@@ -93,31 +121,40 @@ export function InteractiveRobotSpline({ scene, className }: Props) {
   const onLoad = useCallback((app: Application) => {
     hideGroundObjects(app);
 
-    // Watermark is a DOM overlay injected after load — strip it and watch for re-inject
     const root = document.querySelector('[data-spline-robot]') as HTMLElement | null;
     hideSplineWatermark(root);
+
     const observer = new MutationObserver(() => hideSplineWatermark(root));
     if (root) observer.observe(root, { childList: true, subtree: true });
+
+    // Spline often re-injects the badge after a delay
+    const timers = [500, 1500, 3000, 6000].map((ms) =>
+      window.setTimeout(() => hideSplineWatermark(root), ms)
+    );
     window.setTimeout(() => {
-      hideSplineWatermark(root);
       observer.disconnect();
-    }, 4000);
+      timers.forEach(clearTimeout);
+    }, 7000);
   }, []);
 
   return (
     <div
       data-spline-robot
       className={cn(
-        'relative bg-transparent',
-        // Hide Built with Spline badge (DOM watermark)
-        '[&_a[href*="spline"]]:!hidden [&_a[href*="spline.design"]]:!pointer-events-none [&_a[href*="spline.design"]]:!opacity-0',
+        'relative overflow-hidden bg-transparent',
+        '[&_a]:!pointer-events-none [&_a]:!absolute [&_a]:!-z-10 [&_a]:!opacity-0',
+        '[&_a[href*="spline"]]:!hidden',
         className
       )}
     >
-      {/* Cover residual "Built with Spline" watermark */}
+      {/* Opaque mask over Built-with-Spline badge — matches page black / light bg */}
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-0 end-0 z-20 h-12 w-40 bg-background"
+        className="pointer-events-none absolute bottom-0 end-0 z-30 h-[72px] w-[180px] bg-background dark:bg-[#0B0F14]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 end-0 z-30 h-20 w-48 bg-gradient-to-tl from-background from-50% via-background/90 to-transparent dark:from-[#0B0F14] dark:via-[#0B0F14]/95"
       />
 
       <SplineErrorBoundary fallback={<RobotFallback className="h-full w-full" />}>
@@ -132,11 +169,8 @@ export function InteractiveRobotSpline({ scene, className }: Props) {
           }
         >
           <div
-            className="h-full w-full bg-transparent [&_canvas]:bg-transparent"
-            style={{
-              // Shift Spline magenta/purple accents toward ControlOps orange
-              filter: 'hue-rotate(95deg) saturate(1.15) brightness(1.02)',
-            }}
+            className="h-full w-full origin-center scale-[1.05] bg-transparent [&_canvas]:bg-transparent"
+            style={{ filter: ORANGE_BOT_FILTER }}
           >
             <Spline scene={scene} className="h-full w-full bg-transparent" onLoad={onLoad} />
           </div>

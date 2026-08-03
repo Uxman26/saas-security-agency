@@ -20,8 +20,8 @@ export function MarketingCta({
       variant={variant}
       size={size}
       className={cn(
-        variant === 'default' && 'gap-2 shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/25',
-        variant === 'outline' && 'border-primary/30 hover:bg-primary/5'
+        variant === 'default' && 'gap-2 shadow-sm shadow-foreground/10 hover:shadow-md hover:shadow-foreground/10',
+        variant === 'outline' && 'border-border hover:bg-muted'
       )}
     >
       <Link href={href}>
@@ -34,7 +34,7 @@ export function MarketingCta({
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-gradient-to-r from-primary/10 to-primary/5 px-4 py-1.5 text-sm font-medium text-primary shadow-sm">
+    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-muted/70 px-4 py-1.5 text-sm font-medium text-muted-foreground">
       {children}
     </div>
   );

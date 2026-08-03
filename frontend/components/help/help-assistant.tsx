@@ -229,7 +229,7 @@ export function HelpAssistant() {
         type="button"
         size="icon-lg"
         onClick={() => setOpen((v) => !v)}
-        className="pointer-events-auto size-14 rounded-full shadow-lg shadow-primary/30"
+        className="pointer-events-auto size-14 rounded-full shadow-lg shadow-foreground/20"
         aria-label={open ? 'Close help assistant' : 'Open help assistant'}
         aria-expanded={open}
       >

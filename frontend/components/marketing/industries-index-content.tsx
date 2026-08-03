@@ -44,7 +44,7 @@ export function IndustriesIndexContent() {
             return (
               <Card key={HREFS[i]} className="marketing-card-hover group">
                 <CardHeader>
-                  <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground group-hover:bg-foreground group-hover:text-background transition-colors">
                     <Icon className="size-5" />
                   </div>
                   <CardTitle>{item.title}</CardTitle>
@@ -53,14 +53,14 @@ export function IndustriesIndexContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button asChild variant="outline" size="sm" className="border-primary/30 hover:bg-primary/5">
+                  <Button asChild variant="outline" size="sm" className="border-border hover:bg-muted">
                     <Link href={HREFS[i]}>{t('learnMore')} <ArrowRight className="size-3.5 ms-1 rtl:rotate-180" /></Link>
                   </Button>
                 </CardContent>
               </Card>
             );
           })}
-          <Card className="md:col-span-2 marketing-card-hover border-2 border-dashed border-primary/30 bg-primary/5">
+          <Card className="md:col-span-2 marketing-card-hover border-2 border-dashed border-border bg-muted/40">
             <CardHeader>
               <CardTitle>{t('otherTitle')}</CardTitle>
               <CardDescription className="text-sm leading-relaxed">

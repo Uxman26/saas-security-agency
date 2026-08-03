@@ -53,7 +53,7 @@ function ParticlesCanvas({ className, id = 'particles-canvas' }: { className?: s
   return (
     <div className={className}>
       <Particles id={id} className="absolute inset-0" options={options} />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,var(--primary)/12%,transparent)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgb(22_30_44_/6%),transparent)] pointer-events-none" />
       <div className="absolute inset-0 bg-gradient-to-b from-background/30 via-background/70 to-background pointer-events-none" />
     </div>
   );

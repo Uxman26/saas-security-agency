@@ -59,31 +59,31 @@
   --card-foreground: #161E2C;
   --popover: #FFFFFF;
   --popover-foreground: #161E2C;
-  --primary: #FD6203;
+  --primary: #E04E00;
   --primary-foreground: #FFFFFF;
   --secondary: #F3F4F6;
   --secondary-foreground: #161E2C;
   --muted: #F9FAFB;
   --muted-foreground: #4B5563;
-  --accent: #FFF4ED;
+  --accent: #F3F4F6;
   --accent-foreground: #161E2C;
   --destructive: #DC2626;
   --border: #E5E7EB;
   --input: #E5E7EB;
-  --ring: #FD8018;
-  --chart-1: #FD6203;
-  --chart-2: #161E2C;
-  --chart-3: #FD8018;
-  --chart-4: #DF3C01;
-  --chart-5: #4B5563;
+  --ring: #161E2C;
+  --chart-1: #161E2C;
+  --chart-2: #E04E00;
+  --chart-3: #6B7280;
+  --chart-4: #9CA3AF;
+  --chart-5: #D1D5DB;
   --sidebar: #161E2C;
   --sidebar-foreground: #F9FAFB;
-  --sidebar-primary: #FD6203;
+  --sidebar-primary: #E04E00;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #1F2937;
   --sidebar-accent-foreground: #F9FAFB;
   --sidebar-border: #374151;
-  --sidebar-ring: #FD8018;
+  --sidebar-ring: #E04E00;
   --rota-hours-bg: #e0f2fe;
   --rota-pay-bg: #d1fae5;
   --rota-publish-bg: #fce7f3;
@@ -101,31 +101,31 @@
   --card-foreground: #F9FAFB;
   --popover: #161E2C;
   --popover-foreground: #F9FAFB;
-  --primary: #FD6203;
+  --primary: #E8590C;
   --primary-foreground: #FFFFFF;
   --secondary: #1F2937;
   --secondary-foreground: #F9FAFB;
   --muted: #1F2937;
   --muted-foreground: #9CA3AF;
-  --accent: #2D1A0A;
+  --accent: #1F2937;
   --accent-foreground: #F9FAFB;
   --destructive: #EF4444;
   --border: #374151;
   --input: #374151;
-  --ring: #FD8018;
-  --chart-1: #FD6203;
-  --chart-2: #FD8018;
-  --chart-3: #DF3C01;
-  --chart-4: #9CA3AF;
-  --chart-5: #F9FAFB;
+  --ring: #9CA3AF;
+  --chart-1: #F9FAFB;
+  --chart-2: #E8590C;
+  --chart-3: #9CA3AF;
+  --chart-4: #6B7280;
+  --chart-5: #4B5563;
   --sidebar: #0F1419;
   --sidebar-foreground: #F9FAFB;
-  --sidebar-primary: #FD6203;
+  --sidebar-primary: #E8590C;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #161E2C;
   --sidebar-accent-foreground: #F9FAFB;
   --sidebar-border: #374151;
-  --sidebar-ring: #FD8018;
+  --sidebar-ring: #E8590C;
   --rota-hours-bg: #0c4a6e;
   --rota-pay-bg: #064e3b;
   --rota-publish-bg: #831843;
@@ -148,13 +148,13 @@
 }
 
 @keyframes shield-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 0 rgb(253 98 3 / 0.4)); }
-  50% { opacity: 0.95; transform: scale(1.03); filter: drop-shadow(0 0 24px rgb(253 98 3 / 0.25)); }
+  0%, 100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 0 rgb(22 30 44 / 0.25)); }
+  50% { opacity: 0.95; transform: scale(1.03); filter: drop-shadow(0 0 20px rgb(224 78 0 / 0.18)); }
 }
 
 @keyframes radar-ring {
-  0% { transform: scale(0.6); opacity: 0.6; border-color: rgb(253 98 3 / 0.4); }
-  100% { transform: scale(1.8); opacity: 0; border-color: rgb(253 98 3 / 0); }
+  0% { transform: scale(0.6); opacity: 0.5; border-color: rgb(22 30 44 / 0.3); }
+  100% { transform: scale(1.8); opacity: 0; border-color: rgb(22 30 44 / 0); }
 }
 
 @keyframes scan-line {
@@ -218,30 +218,34 @@
 
 .marketing-hero-bg {
   background:
-    radial-gradient(ellipse 90% 70% at 10% -10%, rgb(253 98 3 / 0.12), transparent 55%),
-    radial-gradient(ellipse 60% 50% at 90% 20%, rgb(253 128 24 / 0.08), transparent 50%),
+    radial-gradient(ellipse 80% 60% at 8% -8%, rgb(22 30 44 / 0.05), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 92% 12%, rgb(224 78 0 / 0.04), transparent 50%),
     var(--background);
 }
 
 .marketing-accent-bg {
   background:
-    radial-gradient(ellipse 70% 50% at 100% 0%, rgb(253 98 3 / 0.06), transparent 50%),
+    radial-gradient(ellipse 70% 50% at 100% 0%, rgb(22 30 44 / 0.03), transparent 50%),
     var(--muted);
 }
 
 .marketing-cta-bg {
   background:
-    linear-gradient(135deg, rgb(253 98 3 / 0.08) 0%, transparent 50%),
-    linear-gradient(225deg, rgb(22 30 44 / 0.04) 0%, transparent 50%),
+    linear-gradient(135deg, rgb(22 30 44 / 0.04) 0%, transparent 50%),
+    linear-gradient(225deg, rgb(224 78 0 / 0.03) 0%, transparent 50%),
     var(--background);
 }
 
 .marketing-card-hover {
-  @apply transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5;
+  @apply transition-all duration-300 hover:border-foreground/15 hover:shadow-lg hover:shadow-foreground/5 hover:-translate-y-0.5;
 }
 
 .marketing-gradient-text {
-  @apply bg-gradient-to-r from-primary via-[#FD8018] to-[#DF3C01] bg-clip-text text-transparent;
+  @apply text-foreground;
+}
+
+[data-reveal] {
+  opacity: 0;
 }
 
 /* Opaque sticky rota columns — solid fills, no shift bleed-through */

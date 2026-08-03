@@ -52,8 +52,8 @@ export function MarketingShiftStory() {
 
       <div
         className={cn(
-          'rounded-2xl border-2 border-primary/30 bg-[#FFF8F0] p-7 md:p-9 shadow-sm',
-          'dark:border-primary/35 dark:bg-[#1a1410]'
+          'rounded-2xl border border-border bg-muted/50 p-7 md:p-9 shadow-sm',
+          'dark:border-border/80 dark:bg-muted/30'
         )}
       >
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">
@@ -73,7 +73,7 @@ export function MarketingShiftStory() {
             <ol className="mt-4 space-y-3.5">
               {workflowSteps.map((step, i) => (
                 <li key={step} className="flex items-center gap-3.5">
-                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-background">
                     {i + 1}
                   </span>
                   <span className="text-sm font-medium text-foreground md:text-[0.95rem]">{step}</span>

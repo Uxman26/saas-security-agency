@@ -29,9 +29,9 @@ export function AboutContent() {
       </MarketingSection>
       <MarketingSection variant="muted">
         <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-6">
-          <Card className="marketing-card-hover border-t-2 border-t-primary/50">
+          <Card className="marketing-card-hover border-t-2 border-t-foreground/40">
             <CardHeader>
-              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
                 <Users className="size-5" />
               </div>
               <CardTitle>{t('whoTitle')}</CardTitle>
@@ -40,9 +40,9 @@ export function AboutContent() {
               <RichInline text={t('whoText')} />
             </CardContent>
           </Card>
-          <Card className="marketing-card-hover border-t-2 border-t-primary/50">
+          <Card className="marketing-card-hover border-t-2 border-t-foreground/40">
             <CardHeader>
-              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
                 <Target className="size-5" />
               </div>
               <CardTitle>{t('missionTitle')}</CardTitle>
@@ -61,8 +61,8 @@ export function AboutContent() {
               <RichInline text={t('audienceText')} />
             </p>
           </div>
-          <div className="rounded-2xl border bg-card p-6 marketing-card-hover border-s-4 border-s-primary">
-            <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="rounded-2xl border bg-card p-6 marketing-card-hover border-s-4 border-s-foreground">
+            <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
               <Shield className="size-5" />
             </div>
             <h2 className="text-2xl font-bold">{t('securityTitle')}</h2>

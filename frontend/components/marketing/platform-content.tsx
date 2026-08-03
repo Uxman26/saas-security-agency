@@ -51,7 +51,7 @@ export function PlatformContent() {
                 className="scroll-mt-24 rounded-2xl border bg-card p-6 md:p-8 marketing-card-hover group"
               >
                 <div className="flex gap-4 items-start">
-                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary group-hover:from-primary group-hover:to-[#DF3C01] group-hover:text-primary-foreground transition-all">
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground group-hover:bg-foreground group-hover:text-background transition-all">
                     <Icon className="size-6" />
                   </div>
                   <div>

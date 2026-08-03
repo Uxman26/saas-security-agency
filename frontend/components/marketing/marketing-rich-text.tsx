@@ -4,16 +4,14 @@ import { cn } from '@/lib/utils';
 
 export const richTags = {
   hl: (chunks: React.ReactNode) => (
-    <span className="font-bold bg-gradient-to-r from-[#FD6203] via-[#FD8018] to-[#DF3C01] bg-clip-text text-transparent">
-      {chunks}
-    </span>
+    <span className="font-semibold text-foreground">{chunks}</span>
   ),
   b: (chunks: React.ReactNode) => (
-    <strong className="font-bold text-foreground">{chunks}</strong>
+    <strong className="font-semibold text-foreground">{chunks}</strong>
   ),
 };
 
-const hlClass = 'font-semibold text-[#FD6203] bg-[#FD6203]/10 px-1.5 py-0.5 rounded-md';
+const hlClass = 'font-semibold text-foreground';
 
 export function RichInline({
   text,
@@ -33,15 +31,16 @@ export function RichInline({
     if (m.index > last) parts.push(text.slice(last, m.index));
     parts.push(
       m[1] === 'hl' ? (
-        variant === 'hero' ? (
-          <span key={key++} className="font-bold bg-gradient-to-r from-[#FD6203] via-[#FD8018] to-[#DF3C01] bg-clip-text text-transparent">
-            {m[2]}
-          </span>
-        ) : (
-          <span key={key++} className={hlClass}>{m[2]}</span>
-        )
+        <span
+          key={key++}
+          className={variant === 'hero' ? 'font-semibold text-foreground' : hlClass}
+        >
+          {m[2]}
+        </span>
       ) : (
-        <strong key={key++} className="font-bold text-foreground">{m[2]}</strong>
+        <strong key={key++} className="font-semibold text-foreground">
+          {m[2]}
+        </strong>
       )
     );
     last = m.index + m[0].length;

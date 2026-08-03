@@ -236,7 +236,8 @@
       "viewPricing": "View pricing",
       "discussRequirements": "Discuss your requirements",
       "getStarted": "Get started",
-      "bookDemoLink": "Book a demonstration"
+      "bookDemoLink": "Book a demonstration",
+      "explorePlatform": "Explore the platform"
     },
     "footer": {
       "desc": "ControlOps is workforce operations software for shift-based service businesses that manage employees, contractors, sites and client assignments.",
@@ -246,6 +247,9 @@
       "company": "Company",
       "legal": "Legal",
       "about": "About",
+      "aboutUs": "About us",
+      "helpfulLinks": "Helpful links",
+      "contactUs": "Contact us",
       "platform": "Platform",
       "workforce": "Workforce management",
       "rota": "Rota and scheduling",
@@ -256,14 +260,18 @@
       "reporting": "Reporting",
       "pricing": "Pricing",
       "contact": "Contact",
+      "contactCta": "Book a demo or get in touch",
       "help": "Help",
+      "email": "hello@controlops.co.uk",
+      "location": "United Kingdom",
       "privacy": "Privacy Policy",
       "terms": "Terms of Service",
       "cookies": "Cookie Policy",
       "dpa": "Data Processing Agreement",
       "accessibility": "Accessibility Statement",
       "security": "Security",
-      "copyright": "ControlOps. Workforce operations software for shift-based service businesses."
+      "copyright": "ControlOps. Workforce operations software for shift-based service businesses.",
+      "rights": "ControlOps. All rights reserved."
     },
     "pricing": {
       "badge": "ControlOps pricing",
@@ -335,6 +343,83 @@
       "cta": "See whether ControlOps fits your operation"
     },
     "home": {
+      "securityBadge": "Security workforce operations",
+      "securityHeroTitle": "Command your guards, sites and shifts.",
+      "securityHeroText": "ControlOps is the operations platform for security companies — SIA-ready guard records, multi-site coverage, live rotas, barcode patrol, incidents, payroll and client billing in one system.",
+      "spotlightEyebrow": "Platform capabilities",
+      "spotlightTitle": "Built for how security companies actually run",
+      "spotlightIntro": "Every module is designed around guards on sites, shift coverage, compliance and proof of presence — not generic HR software.",
+      "learnMore": "Learn more",
+      "visionEyebrow": "Always on watch",
+      "visionQuote": "We have vision everywhere — because security never looks away.",
+      "visionAttribution": "— ControlOps",
+      "spotlightFeatures": [
+        {
+          "title": "Guard & SIA compliance",
+          "text": "Guard profiles, SIA licences, right-to-work and document expiry alerts — so compliance stays ahead of every assignment.",
+          "href": "/platform#workforce"
+        },
+        {
+          "title": "Sites & coverage",
+          "text": "Client sites, contacts and default rates in one place. Know who is covering which location, every shift.",
+          "href": "/platform#sites"
+        },
+        {
+          "title": "Live rota planner",
+          "text": "Table and timeline views, publish/unpublish, hours and payable totals — schedule day and night cover with confidence.",
+          "href": "/platform#rota"
+        },
+        {
+          "title": "Patrol & barcode scanning",
+          "text": "QR checkpoints with GPS validation, scan logs and compliance reports that prove patrols happened when and where they should.",
+          "href": "/platform"
+        },
+        {
+          "title": "Incidents & attendance",
+          "text": "Capture incidents, track book-on/book-off and lateness, and keep operational exceptions visible to control room and managers.",
+          "href": "/platform"
+        },
+        {
+          "title": "Payroll & client billing",
+          "text": "Turn published shifts into payroll-ready hours and client invoices from the same assignment data — no spreadsheet rework.",
+          "href": "/platform#payroll"
+        }
+      ],
+      "rotaEyebrow": "Rotas & shifts",
+      "rotaTitle": "The rota your control room actually uses",
+      "rotaText": "Build weekly schedules across sites, assign guards, track attendance on each shift, then publish so payroll and invoicing use the same live data.",
+      "rotaPoints": [
+        "Table and timeline views for dense multi-site weeks",
+        "Per-guard hours, payable totals and publish status",
+        "Attendance markers — on time, late, absent and more",
+        "Export and share rotas with ops and payroll teams"
+      ],
+      "rotaSecondaryCta": "See rota features",
+      "rotaCaption": "ControlOps · Rotas & Shifts",
+      "patrolEyebrow": "Patrol & proof of presence",
+      "patrolTitle": "Barcode checkpoints your clients can trust",
+      "patrolText": "Design patrol routes, print QR checkpoints, and verify scans with GPS. Compliance reports show missed points before a client asks.",
+      "patrolItems": [
+        {
+          "title": "QR checkpoints",
+          "text": "Generate PNG or PDF codes per checkpoint and place them on site."
+        },
+        {
+          "title": "Mobile scanning",
+          "text": "Guards scan on patrol; sessions and logs stay tied to the route."
+        },
+        {
+          "title": "GPS validation",
+          "text": "Confirm the scan happened near the checkpoint coordinates."
+        },
+        {
+          "title": "Compliance reports",
+          "text": "See completed vs missed checkpoints across sites and date ranges."
+        }
+      ],
+      "patrolCta": "Book a patrol walkthrough",
+      "finalSecurityTitle": "Run security operations from one command centre",
+      "finalSecurityText": "Guards, sites, rotas, patrol scans, incidents, payroll and invoices — connected so nothing falls between spreadsheets.",
       "heroBadge": "Workforce operations software for shift-based service businesses",
       "heroTitle": "Manage your <hl>workforce, shifts, sites</hl>, payroll and client billing in one place.",
       "heroText": "ControlOps helps service businesses organise <hl>employees and contractors</hl>, schedule work across locations, manage workforce records, prepare <hl>payroll information</hl> and create <hl>client invoices</hl> — without disconnected spreadsheets.",
@@ -397,7 +482,7 @@
       "industriesIntro": "ControlOps is especially suited to service businesses that deploy employees and contractors across <hl>client sites</hl>, manage changing rotas, maintain workforce records and connect completed work to <hl>payroll and billing</hl>.",
       "qualifyTitle": "Is ControlOps right for your business?",
       "qualifyIntro": "ControlOps is designed for <hl>growing service businesses</hl> that need more than a basic rota calendar.",
-      "howTitle": "Get your shift operations organised",
+      "howTitle": "Go live with your security operation",
       "demoTitle": "See ControlOps using your operational workflow",
       "demoText": "Book a <hl>tailored demonstration</hl> using examples that reflect your workforce, locations, rota process, rates and billing requirements.",
       "demoCta": "Book a tailored demo",
@@ -447,9 +532,9 @@
         "Needs operations, payroll and finance to work from the <hl>same information</hl>"
       ],
       "steps": [
-        { "title": "Configure your company", "text": "Add company information, users, permissions, document types, rates and operational settings." },
-        { "title": "Add your workforce and locations", "text": "Create employee or contractor records and add business locations or client sites." },
-        { "title": "Schedule and manage work", "text": "Build rotas, assign shifts, maintain workforce records and prepare payroll and billing information." }
+        { "title": "Configure your company", "text": "Add company details, roles, SIA document types, rates and the modules your control room needs." },
+        { "title": "Add guards and sites", "text": "Create guard and contractor records, upload licences, and set up client sites with default rates." },
+        { "title": "Schedule, patrol and bill", "text": "Build rotas, run barcode patrols, log incidents, then prepare payroll and client invoices from the same shifts." }
       ],
       "faqs": [
         { "q": "Is ControlOps only for security companies?", "a": "No. ControlOps is designed for <hl>shift-based service businesses</hl> that manage employees, contractors, locations or client assignments. It includes specialist workflows for security operations, but its core workforce, rota, payroll-preparation and billing features can support other service businesses." },

@@ -19,7 +19,7 @@ export function MarketingFaqAccordion({ items, className }: { items: Faq[]; clas
             key={f.q}
             className={cn(
               'rounded-xl border bg-card shadow-sm transition-all duration-200',
-              isOpen && 'border-primary/40 shadow-md shadow-primary/5 ring-1 ring-primary/10'
+              isOpen && 'border-foreground/20 shadow-md shadow-foreground/5'
             )}
           >
             <button
@@ -27,14 +27,14 @@ export function MarketingFaqAccordion({ items, className }: { items: Faq[]; clas
               onClick={() => setOpen(isOpen ? null : i)}
               className={cn(
                 'flex w-full items-center gap-4 p-5 text-start transition-colors',
-                isOpen ? 'bg-primary/5' : 'hover:bg-muted/40'
+                isOpen ? 'bg-muted/50' : 'hover:bg-muted/40'
               )}
               aria-expanded={isOpen}
             >
               <span
                 className={cn(
                   'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
-                  isOpen ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                  isOpen ? 'bg-foreground text-background' : 'bg-muted text-muted-foreground'
                 )}
               >
                 <HelpCircle className="size-4" />
@@ -43,7 +43,7 @@ export function MarketingFaqAccordion({ items, className }: { items: Faq[]; clas
               <ChevronDown
                 className={cn(
                   'size-5 shrink-0 text-muted-foreground transition-transform duration-200',
-                  isOpen && 'rotate-180 text-primary'
+                  isOpen && 'rotate-180 text-foreground'
                 )}
               />
             </button>

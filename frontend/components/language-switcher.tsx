@@ -25,8 +25,8 @@ export function LanguageSwitcher({ className, variant = 'default' }: Props) {
         'px-2 py-1 rounded text-xs font-medium transition-colors',
         locale === code
           ? variant === 'auth'
-            ? 'bg-[#FD6203] text-white'
-            : 'bg-primary text-primary-foreground'
+            ? 'bg-[#161E2C] text-white'
+            : 'bg-foreground text-background'
           : variant === 'auth'
             ? 'text-[#4B5563] hover:text-[#161E2C]'
             : 'text-muted-foreground hover:text-foreground'

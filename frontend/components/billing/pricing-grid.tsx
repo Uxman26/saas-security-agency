@@ -69,15 +69,15 @@ export function PricingGrid({
         return (
           <Card
             key={tier.tier}
-            className={`relative flex flex-col ${highlighted ? 'border-primary shadow-lg shadow-primary/10 ring-1 ring-primary/20' : 'border-border/80'}`}
+            className={`relative flex flex-col ${highlighted ? 'border-foreground shadow-lg shadow-foreground/10 ring-1 ring-foreground/10' : 'border-border/80'}`}
           >
             {highlighted && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-xs font-medium text-primary-foreground">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-foreground px-3 py-0.5 text-xs font-medium text-background">
                 {tcommon('popular')}
               </div>
             )}
             {isCurrent && (
-              <div className="absolute -top-3 right-4 rounded-full border bg-background px-3 py-0.5 text-xs font-medium text-primary">
+              <div className="absolute -top-3 right-4 rounded-full border bg-background px-3 py-0.5 text-xs font-medium text-foreground">
                 {currentPlanLabel}
               </div>
             )}
@@ -99,7 +99,7 @@ export function PricingGrid({
             <CardContent className="flex-1 space-y-2.5">
               {features.map((f) => (
                 <div key={f} className="flex items-start gap-2 text-sm">
-                  <Check className="size-4 shrink-0 text-primary mt-0.5" />
+                  <Check className="size-4 shrink-0 text-foreground mt-0.5" />
                   <span>{f}</span>
                 </div>
               ))}

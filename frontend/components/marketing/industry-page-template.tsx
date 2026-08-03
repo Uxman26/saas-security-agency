@@ -54,7 +54,7 @@ export function IndustryPageTemplate({
             <MarketingCta href="/book-demo">{cta}</MarketingCta>
           </div>
           {disclaimer && (
-            <p className="mt-8 text-sm text-muted-foreground rounded-lg border border-primary/20 bg-primary/5 p-4 border-s-4 border-s-primary">
+            <p className="mt-8 text-sm text-muted-foreground rounded-lg border border-border bg-muted/40 p-4 border-s-4 border-s-foreground">
               <RichInline text={disclaimer} />
             </p>
           )}
@@ -87,7 +87,7 @@ export function IndustryPageTemplate({
             {capabilities.map((c) => (
               <div key={c.title} className="rounded-xl border bg-card p-5 marketing-card-hover group">
                 <div className="flex gap-3 items-start">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground group-hover:bg-foreground group-hover:text-background transition-colors">
                     <CheckCircle2 className="size-4" />
                   </div>
                   <div>
@@ -108,7 +108,7 @@ export function IndustryPageTemplate({
           <ol className="space-y-4">
             {workflow.map((step, i) => (
               <li key={i} className="flex gap-4 rounded-xl border bg-card p-4 marketing-card-hover">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-sm">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background font-bold text-sm">
                   {i + 1}
                 </span>
                 <span className="text-muted-foreground pt-1 leading-relaxed">

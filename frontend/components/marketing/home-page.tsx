@@ -15,8 +15,10 @@ import { SecurityFeatureGrid, type FeatureItem } from '@/components/marketing/se
 import { RotaShowcase } from '@/components/marketing/rota-showcase';
 import { PatrolShowcase } from '@/components/marketing/patrol-showcase';
 import { VisionRobotSection } from '@/components/marketing/vision-robot-section';
+import { ModulesTimelineSection } from '@/components/marketing/modules-timeline-section';
 import { GsapReveal } from '@/components/marketing/gsap-reveal';
 import { ArrowRight } from 'lucide-react';
+import type { TimelineModule } from '@/components/ui/modules-timeline';
 
 type Industry = { title: string; text: string; href: string; cta: string };
 type Faq = { q: string; a: string };
@@ -38,18 +40,28 @@ export function HomePage() {
   const industries = t.raw('industries') as Industry[];
   const steps = t.raw('steps') as Step[];
   const faqs = t.raw('faqs') as Faq[];
+  const timelineModules = t.raw('timelineModules') as TimelineModule[];
 
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav active="home" />
 
       <SecurityHero
-        badge={t('securityBadge')}
-        title={t('securityHeroTitle')}
-        text={t('securityHeroText')}
+        status={t('globeStatus')}
+        titleLead={t('globeTitleLead')}
+        titleAccent={t('globeTitleAccent')}
+        text={t('globeText')}
+        stats={t.raw('globeStats') as { value: string; label: string }[]}
         primaryCta={tc('bookDemo')}
         secondaryCta={tc('explorePlatform')}
-        imageCaption={t('rotaCaption')}
+      />
+
+      <ModulesTimelineSection
+        eyebrow={t('timelineEyebrow')}
+        title={t('timelineTitle')}
+        intro={t('timelineIntro')}
+        learnMore={t('learnMore')}
+        modules={timelineModules}
       />
 
       <SecurityFeatureGrid
@@ -174,35 +186,22 @@ export function HomePage() {
         </div>
       </MarketingSection>
 
-      <section className="relative overflow-hidden border-b border-white/5 bg-[#0B0F14] py-20 md:py-24">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 60% 50% at 50% 100%, rgba(224,78,0,0.12), transparent 60%)',
-          }}
-        />
+      <MarketingSection border={false} className="py-20 marketing-cta-bg">
         <GsapReveal className="container relative mx-auto max-w-2xl px-4 text-center">
-          <h2 data-reveal className="text-3xl font-bold tracking-tight text-white md:text-4xl">
+          <h2 data-reveal className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
             {t('finalSecurityTitle')}
           </h2>
-          <p data-reveal className="mt-4 text-lg leading-relaxed text-slate-400">
+          <p data-reveal className="mt-4 text-lg leading-relaxed text-muted-foreground">
             {t('finalSecurityText')}
           </p>
           <div data-reveal className="mt-10 flex flex-wrap justify-center gap-4">
             <MarketingCta href="/book-demo">{tc('bookDemo')}</MarketingCta>
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
-            >
+            <Button asChild variant="outline" size="lg" className="border-border hover:bg-muted">
               <Link href="/pricing">{tc('viewPricing')}</Link>
             </Button>
           </div>
         </GsapReveal>
-      </section>
+      </MarketingSection>
 
       <MarketingFooter />
     </div>

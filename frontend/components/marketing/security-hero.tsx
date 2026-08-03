@@ -3,125 +3,119 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import gsap from 'gsap';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { MarketingCta } from '@/components/marketing/marketing-cta';
-import { MarketingBrand } from '@/components/marketing/marketing-brand';
-import { ProductScreenshot } from '@/components/marketing/product-screenshot';
+import { InteractiveGlobe } from '@/components/ui/interactive-globe';
+
+type Stat = { value: string; label: string };
 
 type Props = {
-  badge: string;
-  title: string;
+  status: string;
+  titleLead: string;
+  titleAccent: string;
   text: string;
+  stats: Stat[];
   primaryCta: string;
   secondaryCta: string;
-  imageCaption: string;
 };
 
 export function SecurityHero({
-  badge,
-  title,
+  status,
+  titleLead,
+  titleAccent,
   text,
+  stats,
   primaryCta,
   secondaryCta,
-  imageCaption,
 }: Props) {
   const root = useRef<HTMLElement>(null);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
     const el = root.current;
     if (!el) return;
     const ctx = gsap.context(() => {
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
-      tl.from('[data-hero="brand"]', { opacity: 0, y: 20, duration: 0.7 })
-        .from('[data-hero="badge"]', { opacity: 0, y: 16, duration: 0.55 }, '-=0.35')
-        .from('[data-hero="title"]', { opacity: 0, y: 28, duration: 0.75 }, '-=0.3')
-        .from('[data-hero="text"]', { opacity: 0, y: 20, duration: 0.6 }, '-=0.4')
-        .from('[data-hero="cta"]', { opacity: 0, y: 16, duration: 0.55 }, '-=0.35')
-        .from('[data-hero="media"]', { opacity: 0, y: 40, scale: 0.97, duration: 1 }, '-=0.55');
+      tl.from('[data-hero="badge"]', { opacity: 0, y: 14, duration: 0.5 })
+        .from('[data-hero="title"]', { opacity: 0, y: 24, duration: 0.7 }, '-=0.25')
+        .from('[data-hero="text"]', { opacity: 0, y: 16, duration: 0.55 }, '-=0.35')
+        .from('[data-hero="stats"]', { opacity: 0, y: 14, duration: 0.5 }, '-=0.3')
+        .from('[data-hero="cta"]', { opacity: 0, y: 12, duration: 0.45 }, '-=0.25')
+        .from('[data-hero="globe"]', { opacity: 0, scale: 0.94, duration: 0.9 }, '-=0.55');
     }, el);
     return () => ctx.revert();
   }, []);
 
   return (
-    <section
-      ref={root}
-      className="relative overflow-hidden border-b border-white/5 bg-[#0B0F14] text-white"
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 90% 70% at 15% -20%, rgba(224,78,0,0.16), transparent 50%), radial-gradient(ellipse 60% 50% at 90% 10%, rgba(22,30,44,0.9), transparent 55%)',
-        }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.35]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
-          backgroundSize: '56px 56px',
-          maskImage: 'linear-gradient(to bottom, black 0%, transparent 85%)',
-        }}
-      />
+    <section ref={root} className="relative overflow-hidden border-b border-border/50 bg-background py-10 md:py-16">
+      <div className="container mx-auto px-4">
+        <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -end-10 top-0 size-96 rounded-full blur-3xl"
+            style={{ background: 'rgba(224, 78, 0, 0.06)' }}
+          />
 
-      <div className="container relative mx-auto px-4 pb-16 pt-14 md:pb-24 md:pt-20">
-        <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-10">
-          <div className="max-w-xl">
-            <div data-hero="brand" className="mb-8 [&_img]:brightness-0 [&_img]:invert">
-              <MarketingBrand size="nav" />
-            </div>
-            <p
-              data-hero="badge"
-              className="mb-5 inline-flex rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-medium tracking-wide text-slate-300"
-            >
-              {badge}
-            </p>
-            <h1
-              data-hero="title"
-              className="text-4xl font-bold leading-[1.1] tracking-tight text-white md:text-5xl lg:text-[3.4rem]"
-            >
-              {title}
-            </h1>
-            <p data-hero="text" className="mt-5 text-lg leading-relaxed text-slate-400 md:text-xl">
-              {text}
-            </p>
-            <div data-hero="cta" className="mt-8 flex flex-wrap gap-3">
-              <MarketingCta href="/book-demo">{primaryCta}</MarketingCta>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
+          <div className="relative flex min-h-[500px] flex-col md:flex-row">
+            <div className="relative z-10 flex flex-1 flex-col justify-center p-8 md:p-12 lg:p-14">
+              <div
+                data-hero="badge"
+                className="mb-6 inline-flex w-fit items-center gap-2 rounded-full border border-border bg-muted/50 px-3 py-1 text-xs text-muted-foreground"
               >
-                <Link href="/platform">{secondaryCta}</Link>
-              </Button>
-            </div>
-          </div>
-
-          <div data-hero="media" className="relative lg:-me-4">
-            <div
-              aria-hidden
-              className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-[#E04E00]/25 via-transparent to-teal-500/10 blur-3xl"
-            />
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#121820] shadow-2xl shadow-black/50">
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-                <div className="flex gap-1.5">
-                  <span className="size-2.5 rounded-full bg-red-400/80" />
-                  <span className="size-2.5 rounded-full bg-amber-400/80" />
-                  <span className="size-2.5 rounded-full bg-emerald-400/80" />
-                </div>
-                <span className="text-[11px] font-medium text-white/55">{imageCaption}</span>
+                <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+                {status}
               </div>
-              <ProductScreenshot
-                alt={imageCaption}
-                width={1400}
-                height={900}
-                className="h-auto w-full object-cover object-left-top"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                priority
-              />
+
+              <h1
+                data-hero="title"
+                className="mb-4 text-3xl font-bold leading-[1.1] tracking-tight text-foreground md:text-4xl lg:text-5xl"
+              >
+                {titleLead}
+                <br />
+                <span
+                  className="bg-clip-text text-transparent"
+                  style={{
+                    backgroundImage: 'linear-gradient(90deg, #E04E00, #FD8018)',
+                  }}
+                >
+                  {titleAccent}
+                </span>
+              </h1>
+
+              <p
+                data-hero="text"
+                className="mb-8 max-w-md text-sm leading-relaxed text-muted-foreground md:text-base"
+              >
+                {text}
+              </p>
+
+              <div data-hero="stats" className="mb-8 flex flex-wrap items-center gap-x-6 gap-y-4">
+                {stats.map((s, i) => (
+                  <div key={s.label} className="flex items-center gap-6">
+                    {i > 0 && <div className="h-8 w-px bg-border" aria-hidden />}
+                    <div>
+                      <p className="text-2xl font-bold text-foreground">{s.value}</p>
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div data-hero="cta" className="flex flex-wrap gap-3">
+                <MarketingCta href="/book-demo">{primaryCta}</MarketingCta>
+                <Button asChild variant="outline" size="lg" className="border-border hover:bg-muted">
+                  <Link href="/platform">{secondaryCta}</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div
+              data-hero="globe"
+              className="flex min-h-[360px] flex-1 items-center justify-center p-4 md:min-h-[480px] md:p-6"
+            >
+              <InteractiveGlobe size={440} dark={isDark} />
             </div>
           </div>
         </div>

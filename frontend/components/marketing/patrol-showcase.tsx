@@ -15,34 +15,34 @@ type Props = {
 
 const ICONS = [QrCode, ScanLine, MapPinned, ClipboardCheck];
 const SPOTS = [
-  'rgba(45, 212, 191, 0.2)',
-  'rgba(224, 78, 0, 0.18)',
-  'rgba(129, 140, 248, 0.18)',
-  'rgba(74, 222, 128, 0.16)',
+  'rgba(20, 184, 166, 0.12)',
+  'rgba(224, 78, 0, 0.12)',
+  'rgba(99, 102, 241, 0.1)',
+  'rgba(34, 197, 94, 0.1)',
 ];
 
 export function PatrolShowcase({ eyebrow, title, text, items, cta }: Props) {
   return (
-    <section className="relative overflow-hidden border-b border-white/5 bg-[#0B0F14] py-20 md:py-28">
+    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 opacity-60"
         style={{
           backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
+            'linear-gradient(rgba(22,30,44,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(22,30,44,0.04) 1px, transparent 1px)',
           backgroundSize: '48px 48px',
           maskImage: 'radial-gradient(ellipse 70% 60% at 50% 40%, black, transparent)',
         }}
       />
       <div className="container relative mx-auto px-4">
         <GsapReveal className="mx-auto mb-12 max-w-3xl text-center md:mb-14">
-          <p data-reveal className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-teal-400/90">
+          <p data-reveal className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
             {eyebrow}
           </p>
-          <h2 data-reveal className="text-3xl font-bold tracking-tight text-white md:text-5xl">
+          <h2 data-reveal className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
             {title}
           </h2>
-          <p data-reveal className="mt-4 text-base leading-relaxed text-slate-400 md:text-lg">
+          <p data-reveal className="mt-4 text-base leading-relaxed text-muted-foreground md:text-lg">
             {text}
           </p>
         </GsapReveal>
@@ -54,9 +54,9 @@ export function PatrolShowcase({ eyebrow, title, text, items, cta }: Props) {
               <div key={item.title} data-reveal>
                 <SpotlightCard spotlightColor={SPOTS[i % SPOTS.length]} className="h-full">
                   <div className="flex h-full flex-col p-5 md:p-6">
-                    <Icon className="mb-4 size-6 text-teal-300" />
-                    <h3 className="text-base font-semibold text-white">{item.title}</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-slate-400">{item.text}</p>
+                    <Icon className="mb-4 size-6 text-teal-700" />
+                    <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.text}</p>
                   </div>
                 </SpotlightCard>
               </div>

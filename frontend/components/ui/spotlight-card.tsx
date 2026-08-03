@@ -42,8 +42,8 @@ export function SpotlightCard({
       onMouseMove={onMove}
       onMouseLeave={onLeave}
       className={cn(
-        'group relative overflow-hidden rounded-2xl border border-white/10 bg-[#121820]',
-        'transition-[border-color,transform] duration-300 hover:border-white/20',
+        'group relative overflow-hidden rounded-2xl border border-border bg-card',
+        'transition-[border-color,transform] duration-300 hover:border-foreground/20',
         className
       )}
       style={

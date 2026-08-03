@@ -346,10 +346,104 @@
       "securityBadge": "Security workforce operations",
       "securityHeroTitle": "Command your guards, sites and shifts.",
       "securityHeroText": "ControlOps is the operations platform for security companies — SIA-ready guard records, multi-site coverage, live rotas, barcode patrol, incidents, payroll and client billing in one system.",
+      "globeStatus": "All systems operational",
+      "globeTitleLead": "Security coverage",
+      "globeTitleAccent": "everywhere",
+      "globeText": "Guards, sites and patrol checkpoints connected across every location you protect. Drag the globe to explore — ControlOps keeps vision on every shift.",
+      "globeStats": [
+        { "value": "24/7", "label": "Shift coverage" },
+        { "value": "SIA", "label": "Compliance ready" },
+        { "value": "1", "label": "Ops platform" }
+      ],
       "spotlightEyebrow": "Platform capabilities",
       "spotlightTitle": "Built for how security companies actually run",
       "spotlightIntro": "Every module is designed around guards on sites, shift coverage, compliance and proof of presence — not generic HR software.",
       "learnMore": "Learn more",
+      "timelineEyebrow": "Platform modules",
+      "timelineTitle": "Every module your control room needs",
+      "timelineIntro": "Built from the same module map that powers ControlOps RBAC — staff, sites, rotas, patrol, finance and more, permissioned per role.",
+      "timelineModules": [
+        {
+          "id": "guards",
+          "category": "HR & People",
+          "title": "Staff & guards",
+          "description": "Guard and staff profiles, photos, area filters and workforce records — the people who cover every site.",
+          "href": "/platform#workforce",
+          "image": "none"
+        },
+        {
+          "id": "sites",
+          "category": "Operations",
+          "title": "Sites",
+          "description": "Client locations with contacts and default rates. Know who is covering which site on every shift.",
+          "href": "/platform#sites",
+          "image": "none"
+        },
+        {
+          "id": "roles",
+          "category": "HR & People",
+          "title": "Roles & permissions",
+          "description": "Fine-grained RBAC across modules — view, create, edit and delete rights per role, including rota payable visibility.",
+          "href": "/platform",
+          "image": "none"
+        },
+        {
+          "id": "rota",
+          "category": "Operations",
+          "title": "Rotas & shifts",
+          "description": "Table and timeline planners, publish/unpublish, hours and payable totals — schedule day and night cover with confidence.",
+          "href": "/platform#rota",
+          "image": "rota"
+        },
+        {
+          "id": "patrol",
+          "category": "Operations",
+          "title": "Patrol & barcode scanning",
+          "description": "QR checkpoints, GPS validation, scan sessions and compliance reports that prove patrols happened.",
+          "href": "/platform",
+          "image": "none"
+        },
+        {
+          "id": "incidents",
+          "category": "Operations",
+          "title": "Incidents",
+          "description": "Log incidents with photos and status by site and date — keep control room and managers aligned.",
+          "href": "/platform",
+          "image": "none"
+        },
+        {
+          "id": "attendance",
+          "category": "HR & People",
+          "title": "Attendance",
+          "description": "Book on/off and lateness against shifts so payroll and ops work from the same attendance truth.",
+          "href": "/platform",
+          "image": "none"
+        },
+        {
+          "id": "clients",
+          "category": "Sales",
+          "title": "Clients & client portal",
+          "description": "Client accounts, contracts and a portal for staff requests — clients ask, your team reviews.",
+          "href": "/platform",
+          "image": "none"
+        },
+        {
+          "id": "invoices",
+          "category": "Finance",
+          "title": "Payroll & invoicing",
+          "description": "Turn published assignments into payroll-ready hours and client invoices — same shift data, no spreadsheet rework.",
+          "href": "/platform#payroll",
+          "image": "none"
+        },
+        {
+          "id": "reports",
+          "category": "Reports",
+          "title": "Reports",
+          "description": "Attendance, overtime, lateness, financial and compliance reporting from one reports library.",
+          "href": "/platform#reporting",
+          "image": "none"
+        }
+      ],
       "visionEyebrow": "Always on watch",
       "visionQuote": "We have vision everywhere — because security never looks away.",
       "visionAttribution": "— ControlOps",

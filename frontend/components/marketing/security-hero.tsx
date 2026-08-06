@@ -36,9 +36,9 @@ const GLOBE_MARKERS: COBEOptions['markers'] = [
 ];
 
 const MARKER_ORANGE: [number, number, number] = [224 / 255, 78 / 255, 0];
-/** Soft peach / light orange for dark-mode globe body + glow. */
-const LIGHT_ORANGE: [number, number, number] = [1, 0.72, 0.42];
-const LIGHT_ORANGE_GLOW: [number, number, number] = [1, 0.68, 0.38];
+/** Theme orange (#E04E00) for dark-mode globe body + glow. */
+const THEME_ORANGE: [number, number, number] = [224 / 255, 78 / 255, 0];
+const THEME_ORANGE_GLOW: [number, number, number] = [253 / 255, 128 / 255, 24 / 255];
 const LIGHT_BASE: [number, number, number] = [0.94, 0.94, 0.96];
 const LIGHT_GLOW: [number, number, number] = [0.98, 0.98, 0.99];
 
@@ -55,9 +55,9 @@ function buildGlobeConfig(isDark: boolean): COBEOptions {
     mapSamples: 16000,
     mapBrightness: isDark ? 6.5 : 8,
     mapBaseBrightness: 0.08,
-    baseColor: isDark ? LIGHT_ORANGE : LIGHT_BASE,
+    baseColor: isDark ? THEME_ORANGE : LIGHT_BASE,
     markerColor: MARKER_ORANGE,
-    glowColor: isDark ? LIGHT_ORANGE_GLOW : LIGHT_GLOW,
+    glowColor: isDark ? THEME_ORANGE_GLOW : LIGHT_GLOW,
     markers: GLOBE_MARKERS,
   };
 }

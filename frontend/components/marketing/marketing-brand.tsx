@@ -14,27 +14,50 @@ const horizontalClass = {
   default: 'h-11 w-auto sm:h-12 object-contain',
 } as const;
 
+const LOGO = {
+  horizontal: {
+    light: '/ControlOps-Logos/controlOps-horizontal-logo.png',
+    dark: '/ControlOps-Logos/controlOps-horizontal-logo-dark.png',
+    width: 360,
+    height: 180,
+  },
+  icon: {
+    light: '/ControlOps-Logos/controlOps-logo.png',
+    dark: '/ControlOps-Logos/controlOps-logo-dark.png',
+    width: 72,
+    height: 72,
+  },
+} as const;
+
 export function MarketingBrand({ className, variant = 'horizontal', linked = true, size = 'default' }: Props) {
-  const img =
-    variant === 'horizontal' ? (
+  const asset = LOGO[variant];
+  const sizeClass =
+    variant === 'horizontal'
+      ? horizontalClass[size]
+      : size === 'nav'
+        ? 'h-12 w-auto sm:h-14 object-contain'
+        : 'h-11 w-auto object-contain';
+
+  const img = (
+    <>
       <Image
-        src="/ControlOps-Logos/controlOps-horizontal-logo.avif"
+        src={asset.light}
         alt="ControlOps workforce operations platform"
-        width={360}
-        height={180}
-        className={horizontalClass[size]}
+        width={asset.width}
+        height={asset.height}
+        className={cn(sizeClass, 'dark:hidden')}
         priority
       />
-    ) : (
       <Image
-        src="/ControlOps-Logos/controlOps-logo.avif"
+        src={asset.dark}
         alt="ControlOps workforce operations platform"
-        width={72}
-        height={72}
-        className={size === 'nav' ? 'h-12 w-auto sm:h-14 object-contain' : 'h-11 w-auto object-contain'}
+        width={asset.width}
+        height={asset.height}
+        className={cn(sizeClass, 'hidden dark:block')}
         priority
       />
-    );
+    </>
+  );
 
   if (!linked) return <div className={cn('flex shrink-0 items-center', className)}>{img}</div>;
 

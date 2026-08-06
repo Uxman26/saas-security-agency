@@ -28,7 +28,7 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
         </div>
         <div className="relative">
           <Image
-            src="/ControlOps-Logos/controlOps-horizontal-logo.avif"
+            src="/ControlOps-Logos/controlOps-horizontal-logo.png"
             alt="ControlOps workforce operations platform"
             width={480}
             height={125}
@@ -61,7 +61,7 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
           <div className="w-full max-w-[420px]">
             <div className="lg:hidden flex justify-center mb-8">
               <Image
-                src="/ControlOps-Logos/controlOps-logo.avif"
+                src="/ControlOps-Logos/controlOps-logo.png"
                 alt="ControlOps"
                 width={280}
                 height={280}

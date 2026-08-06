@@ -87,9 +87,7 @@ export function MarketingFooter() {
       <div className="container relative mx-auto px-4 pb-10 pt-16 md:pb-12 md:pt-20">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12">
           <BlurFade delay={0.05} inView className="max-w-sm">
-            <div className="dark:[&_img]:brightness-0 dark:[&_img]:invert">
-              <MarketingBrand linked size="default" />
-            </div>
+            <MarketingBrand linked size="default" />
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground dark:text-stone-400">
               {t('desc')}
             </p>

@@ -27,8 +27,8 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
       />
 
       <div className="container relative mx-auto px-4 py-16 md:py-20">
-        <div className="grid min-h-[480px] items-center gap-10 md:min-h-[560px] md:grid-cols-12 md:gap-8 lg:gap-12">
-          <div className="relative z-20 order-2 md:order-1 md:col-span-5 lg:col-span-5">
+        <div className="grid min-h-[480px] items-center gap-10 md:min-h-[560px] md:grid-cols-12 md:gap-6 lg:gap-10">
+          <div className="relative z-20 order-2 max-w-xl md:order-1 md:col-span-5 md:max-w-none lg:col-span-5">
             <BlurFade delay={0.05} inView>
               <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
                 <AnimatedGradientText
@@ -41,9 +41,9 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
                 </AnimatedGradientText>
               </p>
             </BlurFade>
-            <blockquote className="max-w-md lg:max-w-lg">
+            <blockquote className="w-full max-w-[22rem] sm:max-w-sm md:max-w-[20rem] lg:max-w-md xl:max-w-lg">
               <BlurFade delay={0.12} inView>
-                <p className="text-3xl font-bold leading-snug tracking-tight text-foreground md:text-[2rem] lg:text-[2.35rem] xl:text-[2.5rem]">
+                <p className="text-pretty text-3xl font-bold leading-snug tracking-tight text-foreground md:text-[1.85rem] lg:text-[2.15rem] xl:text-[2.35rem]">
                   <span className="me-1" style={{ color: '#E04E00' }}>
                     &ldquo;
                   </span>
@@ -76,7 +76,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
             direction="right"
             offset={28}
             inView
-            className="relative order-1 h-[300px] w-full overflow-hidden bg-transparent md:order-2 md:col-span-7 md:h-[440px] lg:h-[520px]"
+            className="relative order-1 h-[300px] w-full overflow-hidden bg-transparent md:order-2 md:col-span-7 md:h-[440px] md:ps-10 lg:h-[520px] lg:ps-14"
           >
             <Ripple
               className="opacity-25"
@@ -86,7 +86,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
             />
             <InteractiveRobotSpline
               scene={ROBOT_SCENE_URL}
-              className="absolute inset-0 h-full w-full bg-transparent"
+              className="absolute inset-0 h-full w-full translate-x-[12%] bg-transparent sm:translate-x-[14%] md:translate-x-[18%] lg:translate-x-[22%]"
             />
           </BlurFade>
         </div>

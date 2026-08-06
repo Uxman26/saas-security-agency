@@ -209,7 +209,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: 'heading', text: 'Assignments' },
       {
         type: 'paragraph',
-        text: 'Assignments are scheduled shifts for a guard at a site on a date, with start/end times, break minutes, shift type, and optional rate. Published rotas create assignments that feed payroll and invoices.',
+        text: 'Assignments are scheduled shifts for a guard at a site on a date, with start/end times, break minutes, shift type, and optional rate. Publishing a rota creates assignments for attendance, portals, and operational reports. Payroll and invoices read published rota planner data directly — not the Assignments list.',
       },
       {
         type: 'tip',
@@ -268,12 +268,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: 'heading', text: 'Payroll' },
       {
         type: 'paragraph',
-        text: 'Calculate payroll from published assignments for a period. Hours come from shift start/end minus breaks; rates resolve from the assignment, then guard rate, then site rate. Allowances flagged for payroll can be included. Review bank/cash amounts and payment mode on each record.',
+        text: 'Import payroll from published rota payable totals (by employee, site, or rota). Hours and amounts come from On time / Late shifts already calculated on the rota — payroll does not recalculate rates. Use Edit on any record to correct hours, rate, allowances, or bank/cash split.',
       },
       { type: 'heading', text: 'Invoices' },
       {
         type: 'paragraph',
-        text: 'Generate or manage client invoices for a billing period. Filter by customer, status, and date; open an invoice to view, edit, duplicate, record payment, export PDF, or delete. Company logo and bank details from Company settings appear on invoices.',
+        text: 'Generate client invoices from published rota shift hours for a billing period (by client or site). Filter by customer, status, and date; open an invoice to view, edit, duplicate, record payment, export PDF, or delete. Company logo and bank details from Company settings appear on invoices.',
       },
       { type: 'heading', text: 'Payments' },
       {
@@ -464,7 +464,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: 'heading', text: 'Why do rota hours differ from payroll hours?' },
       {
         type: 'paragraph',
-        text: 'The rota grid can show hours with or without breaks. Payroll and invoicing use assignment duration minus break minutes. Align the “Incl. breaks?” toggle when comparing totals.',
+        text: 'The rota grid can show hours with or without breaks. Payroll uses On time / Late planner hours; invoicing uses published rota shift duration minus break minutes. Align the “Incl. breaks?” toggle when comparing totals.',
       },
       { type: 'heading', text: 'Dark mode and language' },
       {

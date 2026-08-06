@@ -4,13 +4,13 @@ from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
 from app.authz import assert_owned_by_company
-from app.models import Allowance, Assignment, AuditLog, Client, Guard, Invoice, InvoiceLine, Payment, Site, User
+from app.models import Allowance, AuditLog, Client, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_billing_rate
 from app.services.special_day_service import special_date_set
-from app.services.rota_service import list_rota_details
+from app.services.rota_service import calc_shift_hours, normalize_shift_type
 
 
 DEFAULT_INVOICE_VAT_RATE = 20.0
@@ -250,7 +250,87 @@ def delete_invoice_line(db: Session, invoice_id: int, line_id: int, user_id: int
     db.commit()
 
 
-def generate_from_assignments(
+def _parse_planner_json(raw: Any) -> dict:
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+
+
+def _rota_invoice_shift_lines(
+    db: Session,
+    company_id: int,
+    period_start: date,
+    period_end: date,
+    client_id: int,
+    site_id: Optional[int] = None,
+) -> list[dict]:
+    """Billable shift rows from published rota planner data (not Assignment rows)."""
+    sites_q = db.query(Site).filter(Site.company_id == company_id, Site.client_id == client_id)
+    if site_id:
+        sites_q = sites_q.filter(Site.id == site_id)
+    sites = sites_q.all()
+    if not sites:
+        return []
+    allowed_ids = {s.id for s in sites}
+    site_by_name = {(s.name or "").strip().lower(): s for s in sites if s.name}
+
+    plans = (
+        db.query(RotaPlan)
+        .filter(
+            RotaPlan.company_id == company_id,
+            RotaPlan.status == "published",
+            RotaPlan.end_date >= period_start,
+            RotaPlan.start_date <= period_end,
+        )
+        .all()
+    )
+
+    lines: list[dict] = []
+    for plan in plans:
+        data = _parse_planner_json(plan.planner_data)
+        shifts = data.get("shifts") or {}
+        for emp_id, by_day in shifts.items():
+            try:
+                guard_id = int(emp_id)
+            except (TypeError, ValueError):
+                continue
+            for day_key, day_shifts in (by_day or {}).items():
+                try:
+                    shift_date = date.fromisoformat(str(day_key)[:10])
+                except ValueError:
+                    continue
+                if shift_date < period_start or shift_date > period_end:
+                    continue
+                for sh in day_shifts or []:
+                    if not isinstance(sh, dict):
+                        continue
+                    site_name = str(sh.get("site") or "").strip()
+                    site = site_by_name.get(site_name.lower()) if site_name else None
+                    if not site or site.id not in allowed_ids:
+                        continue
+                    break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
+                    hours = calc_shift_hours(sh.get("start"), sh.get("end"), break_m)
+                    if hours <= 0:
+                        continue
+                    lines.append(
+                        {
+                            "guard_id": guard_id,
+                            "site_id": site.id,
+                            "date": shift_date,
+                            "hours": hours,
+                            "shift_type": normalize_shift_type(sh.get("shiftType") or sh.get("shift_type") or "day"),
+                        }
+                    )
+    return lines
+
+
+def generate_from_rota(
     db: Session,
     period_start: date,
     period_end: date,
@@ -258,6 +338,7 @@ def generate_from_assignments(
     client_id: Optional[int] = None,
     site_id: Optional[int] = None,
 ) -> Invoice:
+    """Create a draft invoice from published rota planner shifts for a client/site period."""
     if period_start > period_end:
         raise HTTPException(status_code=400, detail="Period start cannot be after period end")
     company = get_company_by_user_id(db, user_id)
@@ -276,14 +357,15 @@ def generate_from_assignments(
     sites = db.query(Site).filter(Site.company_id == company.id, Site.client_id == client_id).all()
     if not sites:
         raise HTTPException(status_code=400, detail="No sites linked to this client")
-    details = list_rota_details(
-        db, user_id, period_start, period_end, client_id=client_id, site_id=site_id
+
+    details = _rota_invoice_shift_lines(
+        db, company.id, period_start, period_end, client_id=client_id, site_id=site_id
     )
     allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
     if not details and not allowance_inv:
         raise HTTPException(
             status_code=400,
-            detail="No shifts found for this client in the selected period. Publish the rota or add assignments first.",
+            detail="No published rota shifts found for this client in the selected period. Publish the rota first.",
         )
     due = period_end + timedelta(days=30)
     inv = Invoice(
@@ -304,16 +386,18 @@ def generate_from_assignments(
     special_dates = special_date_set(db, company.id)
     double_client = bool(getattr(client, "double_rate_special_days", False))
     for d in details:
-        r = resolve_billing_rate(db, company.id, d.guard_id, d.site_id, d.shift_type or "day", d.date)
-        if double_client and d.date in special_dates:
+        r = resolve_billing_rate(
+            db, company.id, d["guard_id"], d["site_id"], d["shift_type"], d["date"]
+        )
+        if double_client and d["date"] in special_dates:
             r = r * 2.0
-        amt = round(d.hours * r, 2)
+        amt = round(d["hours"] * r, 2)
         db.add(
             InvoiceLine(
                 invoice_id=inv.id,
-                site_id=d.site_id,
-                guard_id=d.guard_id,
-                hours=d.hours,
+                site_id=d["site_id"],
+                guard_id=d["guard_id"],
+                hours=d["hours"],
                 rate=r,
                 amount=amt,
                 allowance_amount=0,
@@ -334,9 +418,20 @@ def generate_from_assignments(
     recalc_invoice_totals(db, inv)
     db.commit()
     db.refresh(inv)
-    log_invoice_audit(db, company.id, user_id, inv.id, "invoice_generated", {"client_id": client_id, "period_start": str(period_start), "period_end": str(period_end)})
+    log_invoice_audit(
+        db,
+        company.id,
+        user_id,
+        inv.id,
+        "invoice_generated",
+        {"client_id": client_id, "period_start": str(period_start), "period_end": str(period_end), "source": "rota"},
+    )
     db.commit()
     return inv
+
+
+# Backward-compatible alias — generation no longer reads Assignment rows.
+generate_from_assignments = generate_from_rota
 
 
 def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: int) -> Invoice:

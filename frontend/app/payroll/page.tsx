@@ -16,7 +16,7 @@ import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { PoundSterling, Calculator, Trash2, Pencil, Eye, Download } from 'lucide-react';
+import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
@@ -101,19 +101,19 @@ export default function PayrollPage() {
     return { bank: base.toFixed(2), cash: '0' };
   }, []);
 
-  const handleCalculate = async () => {
+  const handleImportFromRota = async () => {
     if (!calcStart || !calcEnd) return;
     if (calcMode === 'employee' && !calcGuardId) return;
     if (calcMode === 'site' && !calcSiteId) return;
     if (calcMode === 'rota' && !calcRotaId) return;
     setCalcLoading(true);
     try {
-      let created: Payroll[] = [];
+      let imported: Payroll[] = [];
       if (calcMode === 'employee') {
         const rec = await api.payroll.calculate(parseInt(calcGuardId, 10), calcStart, calcEnd);
-        created = [rec];
+        imported = [rec];
       } else {
-        created = await api.payroll.calculateBatch({
+        imported = await api.payroll.calculateBatch({
           mode: calcMode,
           period_start: calcStart,
           period_end: calcEnd,
@@ -121,10 +121,10 @@ export default function PayrollPage() {
           ...(calcMode === 'rota' ? { rota_plan_id: parseInt(calcRotaId, 10) } : {}),
         });
       }
-      if (!created.length) {
-        toast.error('No payroll records created — check the published rota has On time or Late shifts in this period');
+      if (!imported.length) {
+        toast.error('No payroll records found — check the published rota has On time or Late shifts in this period');
       } else {
-        for (const rec of created) {
+        for (const rec of imported) {
           const split = applyModeSplit(
             calcPaymentMode,
             rec.total_hours,
@@ -140,7 +140,7 @@ export default function PayrollPage() {
             cash_amount: parseFloat(split.cash),
           });
         }
-        toast.success(`Created ${created.length} payroll record(s)`);
+        toast.success(`Imported ${imported.length} payroll record(s) from rota`);
       }
       setCalcOpen(false);
       setCalcGuardId('');
@@ -151,7 +151,7 @@ export default function PayrollPage() {
       setCalcPaymentMode('100_bank');
       loadPayrolls();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Payroll calculation failed');
+      toast.error(err instanceof Error ? err.message : 'Import from rota failed');
     } finally {
       setCalcLoading(false);
     }
@@ -368,7 +368,7 @@ export default function PayrollPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Site filter applies when batch was calculated by site; date range filters by pay period overlap.</p>
+                        <p className="text-xs text-muted-foreground">Date range filters by pay period overlap. Site filter is optional context for your export.</p>
                       </div>
                       <Button className="w-full" onClick={exportCsv}>
                         Download CSV ({filteredPayrolls.length} records)
@@ -379,20 +379,20 @@ export default function PayrollPage() {
                 <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
                   <DialogTrigger asChild>
                     <Button>
-                      <Calculator className="size-4 mr-2" />
-                      Calculate Payroll
+                      <FileInput className="size-4 mr-2" />
+                      Import from Rota
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                      <DialogTitle>Calculate Payroll</DialogTitle>
+                      <DialogTitle>Import from Rota</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
                       <p className="text-sm text-muted-foreground">
-                        Import payable hours and amounts directly from published rota attendance for a given period.
+                        Pay is already calculated on the published rota. This imports those payable hours and amounts into payroll records — it does not recalculate rates. Use Edit on a record if anything needs correcting.
                       </p>
                       <div className="space-y-1">
-                        <Label>Generate by</Label>
+                        <Label>Import by</Label>
                         <Select value={calcMode} onValueChange={(v) => setCalcMode(v as 'employee' | 'site' | 'rota')}>
                           <SelectTrigger>
                             <SelectValue />
@@ -469,11 +469,13 @@ export default function PayrollPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">Applied to each record after calculation (bank/cash split from hours × rate + allowances).</p>
+                        <p className="text-xs text-muted-foreground">
+                          Splits the imported rota payable into bank and/or cash. Existing records for the same guard and period are updated, not duplicated.
+                        </p>
                       </div>
                       <Button
                         className="w-full"
-                        onClick={handleCalculate}
+                        onClick={() => void handleImportFromRota()}
                         disabled={
                           calcLoading ||
                           !calcStart ||
@@ -483,7 +485,7 @@ export default function PayrollPage() {
                           (calcMode === 'rota' && !calcRotaId)
                         }
                       >
-                        {calcLoading ? 'Calculating...' : 'Calculate & Save Payroll'}
+                        {calcLoading ? 'Importing…' : 'Import from Rota'}
                       </Button>
                     </div>
                   </DialogContent>
@@ -553,7 +555,7 @@ export default function PayrollPage() {
                 <div className="text-center py-8 text-muted-foreground">Loading payroll records...</div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search || exportFrom || exportTo ? 'No records match your filters.' : 'No payroll records yet. Use "Calculate Payroll" to generate records.'}
+                  {search || exportFrom || exportTo ? 'No records match your filters.' : 'No payroll records yet. Use “Import from Rota” to pull payable totals, then Edit if anything needs correcting.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -597,8 +599,9 @@ export default function PayrollPage() {
                               <Button variant="ghost" size="sm" onClick={() => setViewRec(p)} title="View record">
                                 <Eye className="size-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit record">
+                              <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payroll">
                                 <Pencil className="size-4" />
+                                <span className="sr-only">Edit</span>
                               </Button>
                               <Button
                                 variant="ghost"
@@ -640,17 +643,31 @@ export default function PayrollPage() {
             <DialogTitle>Payroll details</DialogTitle>
           </DialogHeader>
           {viewRec && (
-            <dl className="grid gap-3 text-sm">
-              <div><dt className="text-muted-foreground">Guard</dt><dd className="font-medium">{guardMap.get(viewRec.guard_id) ?? `#${viewRec.guard_id}`}</dd></div>
-              <div><dt className="text-muted-foreground">Period</dt><dd>{viewRec.period_start} – {viewRec.period_end}</dd></div>
-              <div><dt className="text-muted-foreground">Hours</dt><dd>{(viewRec.total_hours ?? 0).toFixed(2)}</dd></div>
-              <div><dt className="text-muted-foreground">Rate</dt><dd>{formatMoney(viewRec.hourly_rate)}/hr</dd></div>
-              <div><dt className="text-muted-foreground">Bank</dt><dd>{formatMoney(viewRec.bank_amount)}</dd></div>
-              <div><dt className="text-muted-foreground">Cash</dt><dd>{formatMoney(viewRec.cash_amount)}</dd></div>
-              <div><dt className="text-muted-foreground">Allowances</dt><dd>{formatMoney(viewRec.allowance_total)}</dd></div>
-              <div><dt className="text-muted-foreground">Payable</dt><dd className="font-semibold">{formatMoney(payableAmount(viewRec))}</dd></div>
-              <div><dt className="text-muted-foreground">Payment mode</dt><dd>{PAYMENT_MODE_LABELS[viewRec.payment_mode] ?? viewRec.payment_mode}</dd></div>
-            </dl>
+            <>
+              <dl className="grid gap-3 text-sm">
+                <div><dt className="text-muted-foreground">Guard</dt><dd className="font-medium">{guardMap.get(viewRec.guard_id) ?? `#${viewRec.guard_id}`}</dd></div>
+                <div><dt className="text-muted-foreground">Period</dt><dd>{viewRec.period_start} – {viewRec.period_end}</dd></div>
+                <div><dt className="text-muted-foreground">Hours</dt><dd>{(viewRec.total_hours ?? 0).toFixed(2)}</dd></div>
+                <div><dt className="text-muted-foreground">Rate</dt><dd>{formatMoney(viewRec.hourly_rate)}/hr</dd></div>
+                <div><dt className="text-muted-foreground">Bank</dt><dd>{formatMoney(viewRec.bank_amount)}</dd></div>
+                <div><dt className="text-muted-foreground">Cash</dt><dd>{formatMoney(viewRec.cash_amount)}</dd></div>
+                <div><dt className="text-muted-foreground">Allowances</dt><dd>{formatMoney(viewRec.allowance_total)}</dd></div>
+                <div><dt className="text-muted-foreground">Payable</dt><dd className="font-semibold">{formatMoney(payableAmount(viewRec))}</dd></div>
+                <div><dt className="text-muted-foreground">Payment mode</dt><dd>{PAYMENT_MODE_LABELS[viewRec.payment_mode] ?? viewRec.payment_mode}</dd></div>
+              </dl>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    openEdit(viewRec);
+                    setViewRec(null);
+                  }}
+                >
+                  <Pencil className="size-4 mr-2" />
+                  Edit
+                </Button>
+              </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>
@@ -663,7 +680,7 @@ export default function PayrollPage() {
           {editRec && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                {guardMap.get(editRec.guard_id) ?? `Guard #${editRec.guard_id}`}
+                {guardMap.get(editRec.guard_id) ?? `Guard #${editRec.guard_id}`} — correct hours, rate, allowances, or bank/cash if the imported rota figures need a change.
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -764,7 +781,7 @@ export default function PayrollPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Base pay = hours × rate + allowances. Changing payment mode recalculates bank and cash (you can still override amounts).
+                Changing hours, rate, allowances, or payment mode updates bank/cash automatically — you can still override those amounts before saving.
               </p>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setEditRec(null)}>

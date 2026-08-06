@@ -154,7 +154,7 @@ def generate_invoice(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("invoices", "edit")),
 ):
-    inv = invoice_service.generate_from_assignments(
+    inv = invoice_service.generate_from_rota(
         db, period_start, period_end, current_user.id, client_id=client_id, site_id=site_id
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)

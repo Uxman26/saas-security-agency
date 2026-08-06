@@ -290,11 +290,11 @@ export default function InvoicesPage() {
                   </DialogTrigger>
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Generate Invoice from Assignments</DialogTitle>
+                    <DialogTitle>Generate Invoice from Rota</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 py-2">
                     <p className="text-sm text-muted-foreground">
-                      Generate an invoice from published assignments and shift hours in the selected period.
+                      Generate an invoice from published rota shift hours in the selected period.
                     </p>
                     <div className="space-y-1">
                       <Label>Generate by</Label>

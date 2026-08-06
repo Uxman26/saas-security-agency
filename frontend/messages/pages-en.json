@@ -56,8 +56,8 @@
         { "id": "rota", "title": "Rotas and shifts", "text": "Build rotas, assign available team members and organise day, night, weekend and holiday work." },
         { "id": "records", "title": "Workforce documents", "text": "Record licences, right-to-work information and document expiry dates, with reminders before action is required." },
         { "id": "rates", "title": "Rates and allowances", "text": "Apply employee pay rates, client charge rates and allowances to the work they relate to." },
-        { "id": "payroll", "title": "Payroll preparation", "text": "Prepare pay information from scheduled or completed assignments, including supported rates and allowances." },
-        { "id": "invoicing", "title": "Client invoicing", "text": "Prepare client invoices using assignment information, charge rates and approved adjustments." },
+        { "id": "payroll", "title": "Payroll preparation", "text": "Prepare pay information from published rota shifts, including supported rates and allowances." },
+        { "id": "invoicing", "title": "Client invoicing", "text": "Prepare client invoices using published rota hours, charge rates and approved adjustments." },
         { "id": "reporting", "title": "Operational dashboards", "text": "Review upcoming shifts, workforce status, document warnings and financial information from one dashboard." }
       ]
     },
@@ -137,7 +137,7 @@
           { "title": "Rota and assignments", "text": "Build rotas and assign guards across day, night, weekend and holiday work." },
           { "title": "SIA and document records", "text": "Record licence and right-to-work information with expiry reminders." },
           { "title": "Payroll preparation", "text": "Prepare pay information from scheduled or completed assignments." },
-          { "title": "Client invoicing", "text": "Prepare invoices using assignment information and charge rates." }
+          { "title": "Client invoicing", "text": "Prepare invoices using published rota hours and charge rates." }
         ],
         "workflow": ["Configure company settings, document types and rates.", "Add guards, subcontractors and client sites.", "Build rotas, maintain records and prepare payroll and billing information."],
         "faqs": [
@@ -212,7 +212,7 @@
           { "title": "Rota and scheduling", "text": "Plan shifts and assignments across your workforce." },
           { "title": "Pay and charge rates", "text": "Apply rates to the assignments they relate to." },
           { "title": "Payroll preparation", "text": "Prepare pay information from completed work." },
-          { "title": "Client invoicing", "text": "Prepare invoices from assignment and rate data." }
+          { "title": "Client invoicing", "text": "Prepare invoices from published rota and rate data." }
         ],
         "workflow": ["Set up agency settings, rates and permissions.", "Add workers and client assignment locations.", "Schedule work and prepare payroll and client billing."],
         "faqs": [

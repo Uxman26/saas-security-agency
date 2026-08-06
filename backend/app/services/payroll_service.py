@@ -76,33 +76,75 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
     return lines
 
 
-def _create_from_rota_lines(
+def _apply_payment_split(pr: Payroll, base: float) -> None:
+    """Set bank/cash from total payable using the record's payment_mode."""
+    mode = (pr.payment_mode or "100_bank").strip().lower()
+    base = max(0.0, float(base))
+    if mode == "100_cash":
+        pr.bank_amount = 0.0
+        pr.cash_amount = round(base, 2)
+    elif mode == "split":
+        prev = float(pr.bank_amount or 0) + float(pr.cash_amount or 0)
+        if prev > 0:
+            bank_share = float(pr.bank_amount or 0) / prev
+            pr.bank_amount = round(base * bank_share, 2)
+            pr.cash_amount = round(base - pr.bank_amount, 2)
+        else:
+            half = round(base / 2, 2)
+            pr.bank_amount = half
+            pr.cash_amount = round(base - half, 2)
+    else:
+        pr.bank_amount = round(base, 2)
+        pr.cash_amount = 0.0
+
+
+def _upsert_from_rota_lines(
     db: Session,
     company_id: int,
     guard_id: int,
     lines: list[dict],
     period_start: date,
     period_end: date,
-) -> Payroll:
+) -> tuple[Payroll, bool]:
+    """Import rota payable totals into a payroll row. Returns (record, created)."""
     total_hours = sum(max(0.0, _number(line.get("hours"))) for line in lines)
     total_amount = sum(max(0.0, _number(line.get("amount"))) for line in lines)
     if total_hours <= 0:
         raise HTTPException(status_code=400, detail="No payable rota hours found for this employee")
-    mode = "100_bank"
+    hourly_rate = total_amount / total_hours
+
+    existing = (
+        db.query(Payroll)
+        .filter(
+            Payroll.company_id == company_id,
+            Payroll.guard_id == guard_id,
+            Payroll.period_start == period_start,
+            Payroll.period_end == period_end,
+        )
+        .first()
+    )
+    if existing:
+        existing.total_hours = total_hours
+        existing.hourly_rate = hourly_rate
+        base = total_amount + float(existing.allowance_total or 0)
+        _apply_payment_split(existing, base)
+        return existing, False
+
     pr = Payroll(
         company_id=company_id,
         guard_id=guard_id,
         period_start=period_start,
         period_end=period_end,
         total_hours=total_hours,
-        hourly_rate=total_amount / total_hours,
+        hourly_rate=hourly_rate,
         bank_amount=total_amount,
         cash_amount=0.0,
         allowance_total=0.0,
-        payment_mode=mode,
+        payment_mode="100_bank",
     )
     db.add(pr)
-    return pr
+    return pr, True
+
 
 def create_payroll(db: Session, data: PayrollCreate, user_id: int) -> Payroll:
     company = get_company_by_user_id(db, user_id)
@@ -220,16 +262,15 @@ def calculate_payroll_batch(
         guard = db.query(Guard).filter(Guard.id == gid, Guard.company_id == company.id).first()
         if not guard:
             continue
-        created.append(
-            _create_from_rota_lines(
-                db,
-                company.id,
-                gid,
-                lines,
-                period_start,
-                period_end,
-            )
+        pr, _was_created = _upsert_from_rota_lines(
+            db,
+            company.id,
+            gid,
+            lines,
+            period_start,
+            period_end,
         )
+        created.append(pr)
     if not created:
         raise HTTPException(status_code=400, detail="No valid employee payroll records could be created")
     db.commit()

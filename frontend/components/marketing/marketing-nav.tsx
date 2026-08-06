@@ -40,7 +40,7 @@ export function MarketingNav({ active }: Props) {
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur-md">
-      <div className="container mx-auto flex h-16 md:h-[4.5rem] items-center justify-between gap-4 px-4">
+      <div className="container mx-auto flex h-[4.25rem] md:h-[5rem] items-center justify-between gap-4 px-4">
         <MarketingBrand size="nav" />
         <div className="hidden lg:flex items-center gap-6 text-sm">
           {navLink('/platform', t('product'), active === 'platform')}

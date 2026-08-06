@@ -52,8 +52,8 @@
       "guards": { "title": "Guard management", "desc": "Track guards, SIA licences, documents and compliance with expiry alerts." },
       "sites": { "title": "Sites & clients", "desc": "Manage sites, clients and contact details with default rates per site." },
       "rota": { "title": "Assignments & rota", "desc": "Schedule shifts, day/night/holiday rates and view rota by date range." },
-      "payroll": { "title": "Payroll", "desc": "Calculate pay from assignments, bank/cash split, allowances and payslips." },
-      "invoices": { "title": "Invoicing", "desc": "Generate client invoices from assignments with PDF export." },
+      "payroll": { "title": "Payroll", "desc": "Calculate pay from published rota shifts, bank/cash split, allowances and payslips." },
+      "invoices": { "title": "Invoicing", "desc": "Generate client invoices from published rota hours with PDF export." },
       "compliance": { "title": "Compliance", "desc": "Expiring document alerts so you stay on top of SIA and right-to-work." },
       "subs": { "title": "Sub-contractors", "desc": "Manage sub-contractor details and licence numbers." },
       "rates": { "title": "Allowances & rates", "desc": "Guard and site rates, allowances in payroll and invoices." },
@@ -407,7 +407,7 @@
           "id": "invoices",
           "category": "Finance",
           "title": "Payroll & invoicing",
-          "description": "Turn published assignments into payroll-ready hours and client invoices — same shift data, no spreadsheet rework.",
+          "description": "Turn published rota shifts into payroll-ready hours and client invoices — same shift data, no spreadsheet rework.",
           "href": "/platform#payroll",
           "image": "invoices"
         }
@@ -443,7 +443,7 @@
         },
         {
           "title": "Payroll & client billing",
-          "text": "Turn published shifts into payroll-ready hours and client invoices from the same assignment data — no spreadsheet rework.",
+          "text": "Turn published shifts into payroll-ready hours and client invoices from the same rota data — no spreadsheet rework.",
           "href": "/platform#payroll"
         }
       ],
@@ -572,8 +572,8 @@
         { "title": "Rotas and shifts", "text": "Build rotas, assign available team members and organise <hl>day, night, weekend and holiday</hl> work.", "href": "/platform#rota" },
         { "title": "Workforce documents", "text": "Record <hl>licences, right-to-work information and expiry dates</hl>, with reminders before action is required.", "href": "/platform#records" },
         { "title": "Rates and allowances", "text": "Apply <hl>employee pay rates and client charge rates</hl> and allowances to the work they relate to.", "href": "/platform#rates" },
-        { "title": "Payroll preparation", "text": "Prepare pay information from <hl>scheduled or completed assignments</hl>, including supported rates and allowances.", "href": "/platform#payroll" },
-        { "title": "Client invoicing", "text": "Prepare client invoices using <hl>assignment information, charge rates</hl> and approved adjustments.", "href": "/platform#invoicing" },
+        { "title": "Payroll preparation", "text": "Prepare pay information from <hl>published rota shifts</hl>, including supported rates and allowances.", "href": "/platform#payroll" },
+        { "title": "Client invoicing", "text": "Prepare client invoices using <hl>published rota hours, charge rates</hl> and approved adjustments.", "href": "/platform#invoicing" },
         { "title": "Operational dashboards", "text": "Review <hl>upcoming shifts, workforce status, document warnings and financial information</hl> from one dashboard.", "href": "/platform#reporting" }
       ],
       "industries": [
@@ -588,7 +588,7 @@
         "Schedules people across <hl>multiple locations or client sites</hl>",
         "Uses different <hl>pay rates and client charge rates</hl>",
         "Maintains <hl>licences, documents or workforce expiry dates</hl>",
-        "Prepares <hl>payroll information from shifts or assignments</hl>",
+        "Prepares <hl>payroll information from published rota shifts</hl>",
         "Invoices clients for <hl>delivered work</hl>",
         "Currently relies on <hl>several spreadsheets or disconnected systems</hl>",
         "Needs operations, payroll and finance to work from the <hl>same information</hl>"

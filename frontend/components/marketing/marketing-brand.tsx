@@ -10,22 +10,22 @@ type Props = {
 };
 
 const horizontalClass = {
-  nav: 'h-12 w-auto sm:h-14 md:h-16 max-h-16 object-contain',
-  default: 'h-11 w-auto sm:h-12 object-contain',
+  nav: 'h-14 w-auto sm:h-16 md:h-[4.25rem] max-h-[4.25rem] object-contain object-left',
+  default: 'h-14 w-auto sm:h-16 md:h-[4.5rem] object-contain object-left',
 } as const;
 
 const LOGO = {
   horizontal: {
     light: '/ControlOps-Logos/controlOps-horizontal-logo.png',
     dark: '/ControlOps-Logos/controlOps-horizontal-logo-dark.png',
-    width: 360,
-    height: 180,
+    width: 1505,
+    height: 409,
   },
   icon: {
     light: '/ControlOps-Logos/controlOps-logo.png',
     dark: '/ControlOps-Logos/controlOps-logo-dark.png',
-    width: 72,
-    height: 72,
+    width: 931,
+    height: 851,
   },
 } as const;
 
@@ -35,8 +35,8 @@ export function MarketingBrand({ className, variant = 'horizontal', linked = tru
     variant === 'horizontal'
       ? horizontalClass[size]
       : size === 'nav'
-        ? 'h-12 w-auto sm:h-14 object-contain'
-        : 'h-11 w-auto object-contain';
+        ? 'h-14 w-auto sm:h-16 object-contain'
+        : 'h-14 w-auto sm:h-16 object-contain';
 
   const img = (
     <>

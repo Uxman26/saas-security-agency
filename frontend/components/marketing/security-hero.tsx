@@ -100,7 +100,7 @@ export function SecurityHero({
   const globeConfig = useMemo(() => buildGlobeConfig(isDark), [isDark]);
 
   return (
-    <section className="relative flex min-h-[calc(100svh-4rem)] w-full flex-col overflow-hidden border-b border-border/50 bg-background md:min-h-[calc(100svh-4.5rem)]">
+    <section className="relative flex min-h-[calc(100svh-4.25rem)] w-full flex-col overflow-hidden border-b border-border/50 bg-background md:min-h-[calc(100svh-5rem)]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"

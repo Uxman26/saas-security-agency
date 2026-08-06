@@ -369,7 +369,7 @@
           "title": "Staff & guards",
           "description": "Guard and staff profiles, photos, area filters and workforce records — the people who cover every site.",
           "href": "/platform#workforce",
-          "image": "none"
+          "image": "guards"
         },
         {
           "id": "sites",
@@ -377,7 +377,7 @@
           "title": "Sites",
           "description": "Client locations with contacts and default rates. Know who is covering which site on every shift.",
           "href": "/platform#sites",
-          "image": "none"
+          "image": "sites"
         },
         {
           "id": "roles",
@@ -385,7 +385,7 @@
           "title": "Roles & permissions",
           "description": "Fine-grained RBAC across modules — view, create, edit and delete rights per role.",
           "href": "/platform",
-          "image": "none"
+          "image": "roles"
         },
         {
           "id": "rota",
@@ -401,7 +401,7 @@
           "title": "Patrol & barcode scanning",
           "description": "QR checkpoints, GPS validation, scan sessions and compliance reports that prove patrols happened.",
           "href": "/platform",
-          "image": "none"
+          "image": "patrol"
         },
         {
           "id": "invoices",
@@ -409,7 +409,7 @@
           "title": "Payroll & invoicing",
           "description": "Turn published assignments into payroll-ready hours and client invoices — same shift data, no spreadsheet rework.",
           "href": "/platform#payroll",
-          "image": "none"
+          "image": "invoices"
         }
       ],
       "visionEyebrow": "Always on watch",

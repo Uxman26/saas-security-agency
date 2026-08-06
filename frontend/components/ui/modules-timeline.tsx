@@ -28,7 +28,8 @@ export type TimelineModule = {
   title: string;
   description: string;
   href: string;
-  image?: 'rota' | 'none';
+  /** Screenshot key (`rota`, `guards`, …) or `none` for icon placeholder. */
+  image?: string;
 };
 
 const ICONS: Record<string, LucideIcon> = {
@@ -42,6 +43,16 @@ const ICONS: Record<string, LucideIcon> = {
   invoices: FileText,
   clients: Building2,
   reports: BarChart3,
+};
+
+/** Product screenshots for timeline cards (light / optional dark). */
+const MODULE_SCREENSHOTS: Record<string, { light: string; dark?: string }> = {
+  rota: { light: '/image.png', dark: '/image-dark.png' },
+  guards: { light: '/ControlOps-Logos/landingpage/guards-add-staff.jpeg' },
+  sites: { light: '/ControlOps-Logos/landingpage/sites-add-site.jpeg' },
+  roles: { light: '/ControlOps-Logos/landingpage/roles-permissions.jpeg' },
+  patrol: { light: '/ControlOps-Logos/landingpage/staff-portal.jpeg' },
+  invoices: { light: '/ControlOps-Logos/landingpage/invoices-generate.jpeg' },
 };
 
 type Props = {
@@ -63,6 +74,10 @@ function TimelineCard({
 }) {
   const Icon = ICONS[event.id] ?? Shield;
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const shot =
+    event.image && event.image !== 'none'
+      ? MODULE_SCREENSHOTS[event.image]
+      : undefined;
 
   return (
     <div
@@ -85,22 +100,27 @@ function TimelineCard({
       onMouseLeave={() => setTilt({ x: 0, y: 0 })}
     >
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-md shadow-foreground/5 transition-shadow duration-300 group-hover:shadow-xl group-hover:shadow-foreground/10">
-        {event.image === 'rota' ? (
+        {shot ? (
           <div className="relative aspect-[16/9] overflow-hidden bg-muted">
             <Image
-              src="/image.png"
+              src={shot.light}
               alt={event.title}
               fill
-              className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.03] dark:hidden"
+              className={cn(
+                'object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]',
+                shot.dark && 'dark:hidden'
+              )}
               sizes="(max-width: 768px) 100vw, 28rem"
             />
-            <Image
-              src="/image-dark.png"
-              alt={event.title}
-              fill
-              className="hidden object-cover object-top transition-transform duration-500 group-hover:scale-[1.03] dark:block"
-              sizes="(max-width: 768px) 100vw, 28rem"
-            />
+            {shot.dark ? (
+              <Image
+                src={shot.dark}
+                alt={event.title}
+                fill
+                className="hidden object-cover object-top transition-transform duration-500 group-hover:scale-[1.03] dark:block"
+                sizes="(max-width: 768px) 100vw, 28rem"
+              />
+            ) : null}
             <span
               className="absolute end-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
               style={{ backgroundColor: '#E04E00' }}

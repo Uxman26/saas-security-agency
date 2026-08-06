@@ -1,7 +1,9 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import type { COBEOptions } from 'cobe';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Globe } from '@/components/ui/globe';
 import { BlurFade } from '@/components/ui/blur-fade';
@@ -23,31 +25,42 @@ type Props = {
 };
 
 /** ControlOps markers — UK + key ops cities (orange accent). */
-const CONTROL_OPS_GLOBE = {
-  width: 1000,
-  height: 1000,
-  onRender: () => {},
-  devicePixelRatio: 2,
-  phi: 0,
-  theta: 0.28,
-  dark: 0,
-  diffuse: 1.2,
-  mapSamples: 16000,
-  mapBrightness: 8,
-  mapBaseBrightness: 0.08,
-  baseColor: [0.94, 0.94, 0.96] as [number, number, number],
-  markerColor: [224 / 255, 78 / 255, 0] as [number, number, number],
-  glowColor: [0.98, 0.98, 0.99] as [number, number, number],
-  markers: [
-    { location: [51.5074, -0.1278] as [number, number], size: 0.08 },
-    { location: [53.4808, -2.2426] as [number, number], size: 0.05 },
-    { location: [25.2048, 55.2708] as [number, number], size: 0.07 },
-    { location: [24.7136, 46.6753] as [number, number], size: 0.06 },
-    { location: [28.6139, 77.209] as [number, number], size: 0.06 },
-    { location: [40.7128, -74.006] as [number, number], size: 0.05 },
-    { location: [1.3521, 103.8198] as [number, number], size: 0.05 },
-  ],
-} as COBEOptions;
+const GLOBE_MARKERS: COBEOptions['markers'] = [
+  { location: [51.5074, -0.1278], size: 0.08 },
+  { location: [53.4808, -2.2426], size: 0.05 },
+  { location: [25.2048, 55.2708], size: 0.07 },
+  { location: [24.7136, 46.6753], size: 0.06 },
+  { location: [28.6139, 77.209], size: 0.06 },
+  { location: [40.7128, -74.006], size: 0.05 },
+  { location: [1.3521, 103.8198], size: 0.05 },
+];
+
+const MARKER_ORANGE: [number, number, number] = [224 / 255, 78 / 255, 0];
+/** Soft peach / light orange for dark-mode globe body + glow. */
+const LIGHT_ORANGE: [number, number, number] = [1, 0.72, 0.42];
+const LIGHT_ORANGE_GLOW: [number, number, number] = [1, 0.68, 0.38];
+const LIGHT_BASE: [number, number, number] = [0.94, 0.94, 0.96];
+const LIGHT_GLOW: [number, number, number] = [0.98, 0.98, 0.99];
+
+function buildGlobeConfig(isDark: boolean): COBEOptions {
+  return {
+    width: 1000,
+    height: 1000,
+    onRender: () => {},
+    devicePixelRatio: 2,
+    phi: 0,
+    theta: 0.28,
+    dark: 0,
+    diffuse: 1.2,
+    mapSamples: 16000,
+    mapBrightness: isDark ? 6.5 : 8,
+    mapBaseBrightness: 0.08,
+    baseColor: isDark ? LIGHT_ORANGE : LIGHT_BASE,
+    markerColor: MARKER_ORANGE,
+    glowColor: isDark ? LIGHT_ORANGE_GLOW : LIGHT_GLOW,
+    markers: GLOBE_MARKERS,
+  };
+}
 
 function StatValue({ value }: { value: string }) {
   if (value === '24/7') {
@@ -82,6 +95,10 @@ export function SecurityHero({
   primaryCta,
   secondaryCta,
 }: Props) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+  const globeConfig = useMemo(() => buildGlobeConfig(isDark), [isDark]);
+
   return (
     <section className="relative flex min-h-[calc(100svh-4rem)] w-full flex-col overflow-hidden border-b border-border/50 bg-background md:min-h-[calc(100svh-4.5rem)]">
       <div
@@ -162,7 +179,7 @@ export function SecurityHero({
               numCircles={7}
             />
             <div className="relative aspect-square w-full max-w-[560px] lg:max-w-[640px] xl:max-w-[720px]">
-              <Globe className="top-0" config={CONTROL_OPS_GLOBE} />
+              <Globe className="top-0" config={globeConfig} />
             </div>
           </BlurFade>
         </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { InlineFormSkeleton } from '@/components/skeletons';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -168,7 +169,7 @@ export default function MyPortalPage() {
 
           <ModuleTabs tabs={tabs} value={tab} onChange={setTab} />
 
-          {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : null}
+          {loading ? <InlineFormSkeleton /> : null}
 
           {tab === 'sites' && (
             <Card>

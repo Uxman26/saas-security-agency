@@ -1,4 +1,5 @@
 'use client';
+import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
@@ -372,7 +373,7 @@ export default function ClientsPage() {
             </CardHeader>
             <CardContent className="min-h-[280px]">
               {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading clients...</div>
+                <InlineTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search || statusFilter !== 'all'

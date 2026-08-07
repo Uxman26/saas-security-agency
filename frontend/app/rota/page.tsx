@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleGuard } from '@/components/module-guard';
+import { InlineTableSkeleton } from '@/components/skeletons';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { AppShell } from '@/components/app-shell';
@@ -601,10 +602,7 @@ function RotaHubPage() {
                 </div>
 
                 {loading ? (
-                  <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
-                    <Loader2 className="size-5 animate-spin" />
-                    Loading rotas…
-                  </div>
+                  <InlineTableSkeleton rows={5} />
                 ) : tab === 'active' ? (
                   tabRotas.length === 0 ? (
                     <div className="py-12 text-center text-sm text-muted-foreground">

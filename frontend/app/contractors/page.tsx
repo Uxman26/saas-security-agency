@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { InlineTableSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -158,7 +159,7 @@ export default function ContractorsDirectoryPage() {
             </CardHeader>
             <CardContent className="min-w-0">
               {loading ? (
-                <p className="text-muted-foreground py-8 text-center">Loading…</p>
+                <InlineTableSkeleton />
               ) : filtered.length === 0 ? (
                 <p className="text-muted-foreground py-8 text-center">No contractors yet.</p>
               ) : (

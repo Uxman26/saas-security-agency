@@ -1,4 +1,5 @@
 'use client';
+import { InlineKpiTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -416,7 +417,7 @@ export default function AttendancePage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading attendance records...</div>
+                <InlineKpiTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search || tab === 'late' ? 'No records match your filter.' : 'No attendance records yet. Click "Book Attendance" to get started.'}

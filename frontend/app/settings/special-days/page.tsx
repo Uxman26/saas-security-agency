@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { InlineFormSkeleton } from '@/components/skeletons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -204,7 +205,7 @@ export default function SpecialDaysSettingsPage() {
             <CardContent className="space-y-3">
               <Input placeholder="Search by date or label..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-md" />
               {loading ? (
-                <p className="text-muted-foreground">Loading…</p>
+                <InlineFormSkeleton />
               ) : rows.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No special days yet. Seed UK holidays or add a date.</p>
               ) : total === 0 ? (

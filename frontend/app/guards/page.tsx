@@ -1,4 +1,5 @@
 'use client';
+import { InlineTableSkeleton } from '@/components/skeletons';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -261,7 +262,7 @@ export default function GuardsPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading staff...</div>
+                <InlineTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search || areaQ || postcodeQ || nearbyQ ? 'No staff match your filters.' : 'No staff yet. Click "Add staff" to get started.'}

@@ -167,7 +167,7 @@ export function MagicCard(props: MagicCardProps) {
       onPointerEnter={() => reset("enter")}
       style={{
         background: useMotionTemplate`
-          linear-gradient(var(--color-background) 0 0) padding-box,
+          linear-gradient(var(--color-card, var(--color-background)) 0 0) padding-box,
           radial-gradient(${gradientSize}px circle at ${mouseX}px ${mouseY}px,
             ${gradientFrom},
             ${gradientTo},
@@ -176,7 +176,7 @@ export function MagicCard(props: MagicCardProps) {
         `,
       }}
     >
-      <div className="bg-background absolute inset-px z-20 rounded-[inherit]" />
+      <div className="absolute inset-px z-20 rounded-[inherit] bg-card" />
 
       {mode === "gradient" && (
         <motion.div

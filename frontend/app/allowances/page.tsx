@@ -1,4 +1,5 @@
 'use client';
+import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -252,7 +253,7 @@ export default function AllowancesPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                <InlineTableSkeleton />
               ) : allowances.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   No allowances configured yet. Click "Add Allowance" to get started.

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { InlineDetailSkeleton } from '@/components/skeletons';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -69,7 +70,9 @@ export default function AdminSubscriptionInvoicePage() {
     return (
       <ProtectedRoute>
         <AppShell>
-          <div className="container mx-auto px-4 py-8 text-muted-foreground">{loading ? 'Loading...' : 'Invoice not found'}</div>
+          <div className="container mx-auto px-4 py-8">
+            {loading ? <InlineDetailSkeleton /> : <p className="text-muted-foreground">Invoice not found</p>}
+          </div>
         </AppShell>
       </ProtectedRoute>
     );

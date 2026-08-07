@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { InlineDetailSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -135,7 +136,7 @@ export default function ContractorDetailPage() {
           </div>
 
           {loading || !row ? (
-            <p className="text-muted-foreground">{loading ? 'Loading…' : 'Not found.'}</p>
+            loading ? <InlineDetailSkeleton /> : <p className="text-muted-foreground">Not found.</p>
           ) : (
             <>
               <div className="min-w-0">

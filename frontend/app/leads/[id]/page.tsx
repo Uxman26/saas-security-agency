@@ -4,6 +4,7 @@ import { use, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { InlineDetailSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -142,7 +143,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
     return (
       <ProtectedRoute>
         <AppShell>
-          <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">Loading…</div>
+          <div className="container mx-auto px-4 py-8">
+            <InlineDetailSkeleton />
+          </div>
         </AppShell>
       </ProtectedRoute>
     );

@@ -4,13 +4,12 @@ import { Suspense } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { RotaCalendarClient } from '@/components/rota/rota-calendar-client';
-import { Loader2 } from 'lucide-react';
+import { InlineFormSkeleton } from '@/components/skeletons';
 
 function CalendarFallback() {
   return (
-    <div className="flex flex-1 items-center justify-center gap-2 px-4 py-16 text-muted-foreground">
-      <Loader2 className="size-5 animate-spin" />
-      Loading…
+    <div className="container mx-auto px-4 py-8">
+      <InlineFormSkeleton />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { InlineKpiTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -626,7 +627,7 @@ export default function ExpensesPage() {
                 </CardHeader>
                 <CardContent>
                   {loading ? (
-                    <div className="text-center py-8 text-muted-foreground">Loading…</div>
+                    <InlineKpiTableSkeleton />
                   ) : pageRows.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       {search ? 'No expenses match your search.' : 'No expenses in this period.'}

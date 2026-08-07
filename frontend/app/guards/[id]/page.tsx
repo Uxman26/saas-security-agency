@@ -1,4 +1,5 @@
 'use client';
+import { InlineDetailSkeleton } from '@/components/skeletons';
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -99,7 +100,7 @@ export default function GuardViewPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Loading staff...</div>
+            <InlineDetailSkeleton />
           ) : !guard ? (
             <div className="text-center py-12 text-muted-foreground">Staff member not found.</div>
           ) : (

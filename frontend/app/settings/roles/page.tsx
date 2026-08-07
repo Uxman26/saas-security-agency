@@ -9,6 +9,7 @@ import type { z } from 'zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { AppShell } from '@/components/app-shell';
+import { InlineFormSkeleton } from '@/components/skeletons';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -507,7 +508,7 @@ export default function RolesSettingsPage() {
           />
 
           {loading ? (
-            <p className="text-muted-foreground">Loading…</p>
+            <InlineFormSkeleton />
           ) : (
             <>
               <ModuleTabs

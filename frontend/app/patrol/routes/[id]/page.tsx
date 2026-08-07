@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
+import { InlineDetailSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -89,18 +90,18 @@ export default function PatrolRouteDetailPage() {
     <ProtectedRoute>
       <AppShell>
         <ModulePage>
+          {!route ? (
+            <InlineDetailSkeleton />
+          ) : (
+            <>
           <ModuleHeader
             title={
               <span className="flex items-center gap-2">
                 <QrCode className="size-7 text-primary" />
-                {route?.name || 'Patrol route'}
+                {route.name}
               </span>
             }
-            description={
-              route
-                ? `${route.site_name || 'Site'} · ${route.start_time}–${route.end_time} · every ${route.frequency_minutes} mins`
-                : 'Loading…'
-            }
+            description={`${route.site_name || 'Site'} · ${route.start_time}–${route.end_time} · every ${route.frequency_minutes} mins`}
             actions={
               <div className="flex gap-2">
                 <Button variant="outline" asChild>
@@ -134,7 +135,7 @@ export default function PatrolRouteDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(route?.checkpoints || []).map((cp) => (
+                  {(route.checkpoints || []).map((cp) => (
                     <TableRow key={cp.id}>
                       <TableCell className="font-mono text-xs">{cp.code}</TableCell>
                       <TableCell className="font-medium">{cp.name}</TableCell>
@@ -156,7 +157,7 @@ export default function PatrolRouteDetailPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!route?.checkpoints?.length ? (
+                  {!route.checkpoints?.length ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                         No checkpoints yet. Add one with GPS coordinates for scan validation.
@@ -221,6 +222,8 @@ export default function PatrolRouteDetailPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+            </>
+          )}
         </ModulePage>
       </AppShell>
     </ProtectedRoute>

@@ -1,4 +1,5 @@
 'use client';
+import { InlineKpiTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -496,7 +497,7 @@ export default function InvoicesPage() {
           <Card>
             <CardContent className="pt-6">
               {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
+                <InlineKpiTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No invoices match your search.' : 'No invoices yet. Use "Generate Invoice" to create one.'}

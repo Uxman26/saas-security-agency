@@ -1,4 +1,5 @@
 'use client';
+import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
@@ -442,7 +443,7 @@ export default function SitesPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading sites...</div>
+                <InlineTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No sites match your search.' : 'No sites yet. Click "Add Site" to get started.'}

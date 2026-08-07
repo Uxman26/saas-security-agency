@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { InlineTableSkeleton } from '@/components/skeletons';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
@@ -460,7 +461,7 @@ export default function RotaPage() {
             </CardHeader>
             <CardContent className="overflow-x-auto">
               {isLoading ? (
-                <div className="py-12 text-center text-muted-foreground">Loading rota…</div>
+                <div className="py-12"><InlineTableSkeleton /></div>
               ) : guardRows.length === 0 ? (
                 <div className="py-12 text-center text-muted-foreground">No shifts in this period. Add a shift or widen filters.</div>
               ) : (

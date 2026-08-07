@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { InlineDashboardSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLeadDashboard } from '@/hooks/use-leads';
@@ -30,7 +31,7 @@ export default function LeadsDashboardPage() {
           </div>
 
           {isLoading || !data ? (
-            <p className="text-muted-foreground">Loading…</p>
+            <InlineDashboardSkeleton />
           ) : (
             <>
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">

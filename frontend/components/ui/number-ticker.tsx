@@ -50,7 +50,7 @@ export function NumberTicker({
     () =>
       springValue.on("change", (latest) => {
         if (ref.current) {
-          ref.current.textContent = Intl.NumberFormat("en-US", {
+          ref.current.textContent = Intl.NumberFormat("en-GB", {
             minimumFractionDigits: decimalPlaces,
             maximumFractionDigits: decimalPlaces,
           }).format(Number(latest.toFixed(decimalPlaces)))
@@ -63,12 +63,15 @@ export function NumberTicker({
     <span
       ref={ref}
       className={cn(
-        "inline-block tracking-wider text-black tabular-nums dark:text-white",
+        "inline-block tabular-nums tracking-tight text-foreground",
         className
       )}
       {...props}
     >
-      {startValue}
+      {Intl.NumberFormat("en-GB", {
+        minimumFractionDigits: decimalPlaces,
+        maximumFractionDigits: decimalPlaces,
+      }).format(startValue)}
     </span>
   )
 }

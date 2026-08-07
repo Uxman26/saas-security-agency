@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { InlineKpiTableSkeleton } from '@/components/skeletons';
 import { StatusPieChart } from '@/components/charts/status-chart';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -149,10 +150,7 @@ export default function StaffRequestsReviewPage() {
           />
 
           {loading ? (
-            <div className="flex justify-center py-12 text-muted-foreground gap-2">
-              <Loader2 className="size-5 animate-spin" />
-              Loading…
-            </div>
+            <InlineKpiTableSkeleton />
           ) : requests.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-sm text-muted-foreground">No requests found.</CardContent>

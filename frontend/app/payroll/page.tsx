@@ -1,4 +1,5 @@
 'use client';
+import { InlineKpiTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -552,7 +553,7 @@ export default function PayrollPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading payroll records...</div>
+                <InlineKpiTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search || exportFrom || exportTo ? 'No records match your filters.' : 'No payroll records yet. Use “Import from Rota” to pull payable totals, then Edit if anything needs correcting.'}

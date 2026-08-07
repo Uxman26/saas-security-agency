@@ -116,13 +116,13 @@
   --chart-3: oklch(0.58 0.14 38);
   --chart-4: oklch(0.55 0.12 66);
   --chart-5: oklch(0.5 0.18 27);
-  --sidebar: #161E2C;
-  --sidebar-foreground: #F9FAFB;
+  --sidebar: oklch(0.985 0.004 85);
+  --sidebar-foreground: oklch(0.28 0.02 55);
   --sidebar-primary: #E04E00;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1F2937;
-  --sidebar-accent-foreground: #F9FAFB;
-  --sidebar-border: #374151;
+  --sidebar-accent: oklch(0.955 0.015 70);
+  --sidebar-accent-foreground: oklch(0.22 0.02 55);
+  --sidebar-border: oklch(0.9 0.01 75);
   --sidebar-ring: #E04E00;
   --rota-hours-bg: #e0f2fe;
   --rota-pay-bg: #d1fae5;

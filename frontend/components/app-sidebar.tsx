@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/auth-context';
-import { isAdminBypass } from '@/lib/permissions';
 import type { ModuleAccess } from '@/lib/types';
 import {
   AlertTriangle,
@@ -84,6 +83,18 @@ function moduleNavAllowedLocal(user: ReturnType<typeof useAuth>['user'], m: Modu
   return moduleNavAllowed(user, m);
 }
 
+const asideClass =
+  'hidden h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex';
+
+function navLinkClass(isActive: boolean) {
+  return cn(
+    'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
+    isActive
+      ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-border'
+      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
+  );
+}
+
 export function AppSidebar() {
   const { user } = useAuth();
   const pathname = usePathname();
@@ -100,24 +111,24 @@ export function AppSidebar() {
       if (!bySection[sec]) bySection[sec] = [];
       bySection[sec].push(m);
     }
-    return SECTION_ORDER
-      .filter((sec) => bySection[sec]?.length)
-      .map((sec) => ({
-        titleKey: sec,
-        items: bySection[sec].sort((a, b) => a.sidebar_order - b.sidebar_order),
-      }));
+    return SECTION_ORDER.filter((sec) => bySection[sec]?.length).map((sec) => ({
+      titleKey: sec,
+      items: bySection[sec].sort((a, b) => a.sidebar_order - b.sidebar_order),
+    }));
   }, [user]);
 
   if (isSuperAdmin) {
     return (
-      <aside className="hidden h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
-        <div className="shrink-0 p-3 border-b border-slate-700/80">
+      <aside className={asideClass}>
+        <div className="shrink-0 border-b border-sidebar-border p-3">
           <CompanyBrand />
         </div>
         <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
           <div>
-            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{ts('sectionAdmin')}</p>
-            <div className="space-y-0.5 mt-1">
+            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
+              {ts('sectionAdmin')}
+            </p>
+            <div className="mt-1 space-y-0.5">
               {[
                 { href: '/admin/companies', labelKey: 'adminCompanies', icon: Building2 },
                 { href: '/admin/users', labelKey: 'adminUsers', icon: Users },
@@ -132,12 +143,7 @@ export function AppSidebar() {
                 <Link
                   key={href}
                   href={href}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                    pathname === href || pathname.startsWith(`${href}/`)
-                      ? 'bg-slate-800 text-white'
-                      : 'text-slate-300 hover:bg-slate-800/80'
-                  )}
+                  className={navLinkClass(pathname === href || pathname.startsWith(`${href}/`))}
                 >
                   <Icon className="size-4 shrink-0" />
                   <span className="truncate">{ts(labelKey)}</span>
@@ -151,28 +157,25 @@ export function AppSidebar() {
   }
 
   return (
-    <aside className="hidden h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-r bg-slate-900 text-slate-100 md:flex">
-      <div className="shrink-0 p-3 border-b border-slate-700/80">
+    <aside className={asideClass}>
+      <div className="shrink-0 border-b border-sidebar-border p-3">
         <CompanyBrand />
       </div>
       <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
         {grouped.map((section) => (
           <div key={section.titleKey}>
-            <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
               {section.titleKey === 'sectionSettings' ? <Settings className="size-3" /> : null}
               {ts(section.titleKey)}
             </p>
-            <div className="space-y-0.5 mt-1">
+            <div className="mt-1 space-y-0.5">
               {section.items.map((m) => {
                 const Icon = moduleIcon(m.icon);
                 return (
                   <Link
                     key={m.key}
                     href={m.sidebar_path}
-                    className={cn(
-                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                      active(pathname, m.sidebar_path) ? 'bg-slate-800 text-white font-medium' : 'text-slate-300 hover:bg-slate-800/80'
-                    )}
+                    className={navLinkClass(active(pathname, m.sidebar_path))}
                   >
                     <Icon className="size-4 shrink-0 opacity-90" />
                     <span className="truncate">{m.name}</span>

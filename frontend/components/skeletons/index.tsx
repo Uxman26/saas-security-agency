@@ -1,58 +1,58 @@
+'use client';
+
+import { useEffect, useState, type ReactNode } from 'react';
+import { AppSidebar } from '@/components/app-sidebar';
+import CubeLoader from '@/components/ui/cube-loader';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-/** Sidebar + header chrome matching AppShell (see 21st/shadcn skeleton mock). */
+const CUBE_MS = 700;
+
+/**
+ * Real sidebar (no skeleton) + header chrome.
+ * Main area: CubeLoader first, then content skeletons.
+ */
 export function ShellChromeSkeleton({
   children,
   className,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
+  const [phase, setPhase] = useState<'cube' | 'skeleton'>('cube');
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setPhase('skeleton'), CUBE_MS);
+    return () => window.clearTimeout(t);
+  }, []);
+
   return (
     <div className={cn('flex h-dvh overflow-hidden bg-background', className)}>
-      {/* Sidebar */}
-      <aside className="hidden w-56 shrink-0 flex-col border-e border-border bg-card p-3 md:flex dark:bg-[#0B0F14]">
-        <div className="mb-4 flex items-center gap-2 px-1">
-          <Skeleton className="size-8 rounded-lg" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-        <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg px-2 py-2">
-              <Skeleton className="size-4 shrink-0 rounded-full" />
-              <Skeleton className="h-3.5 w-[70%]" />
-            </div>
-          ))}
-        </div>
-        <div className="my-3 border-t border-border" />
-        <div className="mt-auto space-y-2 pb-2">
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg px-2 py-2">
-              <Skeleton className="size-4 shrink-0 rounded-full" />
-              <Skeleton className="h-3.5 w-20" />
-            </div>
-          ))}
-          <div className="flex items-center gap-2 rounded-lg px-2 py-2">
-            <Skeleton className="size-8 shrink-0 rounded-full" />
-            <Skeleton className="h-3.5 w-24" />
-          </div>
-        </div>
-      </aside>
+      {/* Keep the real nav — never skeletonize the sidebar */}
+      <AppSidebar />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
-          <Skeleton className="h-8 w-full max-w-xs rounded-lg" />
+        <header className="z-40 flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4">
+          <div className="hidden flex-1 md:block" />
           <div className="flex items-center gap-2">
-            <Skeleton className="h-8 w-16 rounded-lg" />
-            <Skeleton className="size-8 rounded-lg" />
+            <Skeleton className="h-8 w-24 rounded-full" />
+            <Skeleton className="h-8 w-24 rounded-full" />
             <Skeleton className="size-8 rounded-lg" />
           </div>
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="container mx-auto space-y-6 px-4 py-6">{children}</div>
+          {phase === 'cube' ? (
+            <div className="flex min-h-[min(70vh,560px)] items-center justify-center">
+              <CubeLoader
+                compact
+                label="Loading"
+                description="Preparing the next page…"
+              />
+            </div>
+          ) : (
+            <div className="container mx-auto space-y-6 px-4 py-6">{children}</div>
+          )}
         </main>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Shield } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { cn } from '@/lib/utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -41,11 +42,14 @@ export function CompanyBrand({ className = '' }: { className?: string }) {
   }, [user?.logo_url]);
 
   return (
-    <Link href="/dashboard" className={`flex items-center gap-2 font-semibold text-white min-w-0 ${className}`}>
+    <Link
+      href="/dashboard"
+      className={cn('flex min-w-0 items-center gap-2 font-semibold text-sidebar-foreground', className)}
+    >
       {logoSrc ? (
         <img src={logoSrc} alt="" className="h-11 w-auto max-w-[180px] object-contain shrink-0" />
       ) : (
-        <Shield className="size-5 text-sky-400 shrink-0" />
+        <Shield className="size-5 shrink-0 text-sidebar-primary" />
       )}
       <span className="truncate">{name}</span>
     </Link>

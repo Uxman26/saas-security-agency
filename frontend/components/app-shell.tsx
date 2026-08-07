@@ -65,16 +65,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         {drawer && (
           <div className="fixed inset-0 z-50 md:hidden">
             <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close menu" onClick={() => setDrawer(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-56 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
-              <div className="p-4 border-b border-slate-700">
+            <div className="absolute start-0 top-0 bottom-0 flex w-56 flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl">
+              <div className="border-b border-sidebar-border p-4">
                 <CompanyBrand className="mb-2" />
                 <div className="flex justify-end">
-                  <Button type="button" variant="ghost" size="sm" className="text-slate-300" onClick={() => setDrawer(false)}>
+                  <Button type="button" variant="ghost" size="sm" className="text-sidebar-foreground/70" onClick={() => setDrawer(false)}>
                     ✕
                   </Button>
                 </div>
               </div>
-              <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
                 {isSuperAdmin ? (
                   [
                     { href: '/admin/companies', labelKey: 'adminCompanies' },
@@ -91,8 +91,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={href}
                       href={href}
                       className={cn(
-                        'block rounded-md px-3 py-2 text-sm',
-                        pathname === href ? 'bg-slate-800' : 'hover:bg-slate-800'
+                        'block rounded-lg px-3 py-2 text-sm transition-colors',
+                        pathname === href
+                          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
                       )}
                       onClick={() => setDrawer(false)}
                     >
@@ -105,8 +107,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={m.key}
                       href={m.sidebar_path}
                       className={cn(
-                        'block rounded-md px-3 py-2 text-sm',
-                        mActive(pathname, m.sidebar_path) ? 'bg-slate-800 font-medium' : 'hover:bg-slate-800'
+                        'block rounded-lg px-3 py-2 text-sm transition-colors',
+                        mActive(pathname, m.sidebar_path)
+                          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
                       )}
                       onClick={() => setDrawer(false)}
                     >

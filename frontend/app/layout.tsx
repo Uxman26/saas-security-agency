@@ -16,10 +16,10 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       icon: [
         { url: '/ControlOps-Logos/favicon_io/favicon.ico', sizes: 'any' },
-        { url: '/ControlOps-Logos/favicon_io/favicon-16x16.avif', sizes: '16x16', type: 'image/avif' },
-        { url: '/ControlOps-Logos/favicon_io/favicon-32x32.avif', sizes: '32x32', type: 'image/avif' },
+        { url: '/ControlOps-Logos/favicon_io/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+        { url: '/ControlOps-Logos/favicon_io/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
       ],
-      apple: '/ControlOps-Logos/favicon_io/apple-touch-icon.avif',
+      apple: '/ControlOps-Logos/favicon_io/apple-touch-icon.png',
       shortcut: '/ControlOps-Logos/favicon_io/favicon.ico',
     },
     manifest: '/ControlOps-Logos/favicon_io/site.webmanifest',

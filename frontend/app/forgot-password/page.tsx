@@ -8,12 +8,20 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AuthShell } from '@/components/auth/auth-shell';
+import { Auth3DShell } from '@/components/auth/auth-3d-shell';
 import { forgotPasswordSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import { authFieldClass, authIconClass, authLabelClass } from '@/lib/auth-styles';
+import {
+  authDarkBtnClass,
+  authDarkErrorClass,
+  authDarkFieldClass,
+  authDarkIconClass,
+  authDarkLabelClass,
+  authDarkLinkClass,
+} from '@/lib/auth-styles';
 import { ArrowLeft, Mail } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth');
@@ -44,7 +52,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <AuthShell
+    <Auth3DShell
       title={t('forgotTitle')}
       subtitle={sent ? t('forgotSentSubtitle', { email: getValues('email') }) : t('forgotSubtitle')}
       topLink={{ href: '/login', label: tc('backToSignIn') }}
@@ -52,32 +60,37 @@ export default function ForgotPasswordPage() {
       {!sent ? (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="email" className={authLabelClass}>{t('email')}</Label>
+            <Label htmlFor="email" className={authDarkLabelClass}>
+              {t('email')}
+            </Label>
             <div className="relative">
-              <Mail className={authIconClass} />
+              <Mail className={authDarkIconClass} />
               <Input
                 id="email"
                 type="email"
                 placeholder="name@company.com"
-                className={`ps-10 ${authFieldClass}`}
+                className={cn(authDarkFieldClass, 'ps-10')}
                 {...register('email')}
               />
             </div>
-            {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
+            {errors.email && <p className={authDarkErrorClass}>{errors.email.message as string}</p>}
           </div>
-          <Button type="submit" className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold" disabled={loading}>
+          <Button type="submit" className={authDarkBtnClass} disabled={loading}>
             {loading ? t('sending') : t('sendResetLink')}
           </Button>
         </form>
       ) : (
-        <Button asChild className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold">
+        <Button asChild className={authDarkBtnClass}>
           <Link href="/login">{tc('backToSignIn')}</Link>
         </Button>
       )}
-      <Link href="/login" className="mt-6 flex items-center justify-center gap-1 text-sm text-[#4B5563] hover:text-[#161E2C]">
+      <Link
+        href="/login"
+        className="mt-6 flex items-center justify-center gap-1 text-sm text-white/50 transition-colors hover:text-white lg:justify-start"
+      >
         <ArrowLeft className="size-4 rtl:rotate-180" />
         {t('backToLogin')}
       </Link>
-    </AuthShell>
+    </Auth3DShell>
   );
 }

@@ -9,13 +9,21 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AuthShell } from '@/components/auth/auth-shell';
+import { Auth3DShell } from '@/components/auth/auth-3d-shell';
 import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
 import { parsePaymentPending, parseEmailVerificationRequired } from '@/lib/sidebar-modules';
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
-import { authFieldClass, authIconClass, authLabelClass } from '@/lib/auth-styles';
+import { Eye, EyeOff } from 'lucide-react';
+import {
+  authDarkBtnClass,
+  authDarkErrorClass,
+  authDarkFieldClass,
+  authDarkLinkClass,
+} from '@/lib/auth-styles';
+import { cn } from '@/lib/utils';
+
+const fieldClass = authDarkFieldClass;
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -63,14 +71,14 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell
+    <Auth3DShell
       title={t('loginTitle')}
       subtitle={t('loginSubtitle')}
       topLink={{ href: '/pricing', label: tc('viewPlans') }}
       footer={
         <>
           {tc('dontHaveAccount')}{' '}
-          <Link href="/pricing" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
+          <Link href="/pricing" className={authDarkLinkClass}>
             {tc('signUp')}
           </Link>
         </>
@@ -84,66 +92,63 @@ export default function LoginPage() {
         className="space-y-5"
       >
         <div className="space-y-2">
-          <Label htmlFor="email" className={authLabelClass}>
+          <Label htmlFor="email" className="text-sm font-medium text-white/70">
             {t('email')}
           </Label>
-          <div className="relative">
-            <Mail className={authIconClass} />
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@company.com"
-              className={`ps-10 ${authFieldClass}`}
-              {...register('email')}
-            />
-          </div>
-          {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="name@company.com"
+            className={fieldClass}
+            {...register('email')}
+          />
+          {errors.email && <p className={authDarkErrorClass}>{errors.email.message as string}</p>}
         </div>
+
         <div className="space-y-2">
-          <Label htmlFor="password" className={authLabelClass}>
+          <Label htmlFor="password" className="text-sm font-medium text-white/70">
             {t('password')}
           </Label>
           <div className="relative">
-            <Lock className={authIconClass} />
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
               placeholder="Enter your password"
-              className={`ps-10 pe-10 ${authFieldClass}`}
+              className={cn(fieldClass, 'pe-11')}
               {...register('password')}
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute end-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
+              className="absolute end-3 top-1/2 -translate-y-1/2 text-white/40 transition-colors hover:text-white"
               aria-label={showPassword ? t('hidePassword') : t('showPassword')}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
+          {errors.password && <p className={authDarkErrorClass}>{errors.password.message as string}</p>}
         </div>
+
         <div className="flex items-center justify-between gap-3 text-sm">
-          <label className="flex items-center gap-2 cursor-pointer text-[#4B5563]">
+          <label className="flex cursor-pointer items-center gap-2 text-white/60">
             <input
               type="checkbox"
-              className="size-4 rounded border-[#D1D5DB] accent-[#FD6203]"
+              className="size-4 rounded border-white/20 bg-white/5 accent-[#E04E00]"
               {...register('remember_me')}
             />
             <span>{t('rememberMe')}</span>
           </label>
-          <Link href="/forgot-password" className="font-medium text-[#FD6203] hover:text-[#DF3C01]">
+          <Link href="/forgot-password" className={authDarkLinkClass}>
             {t('forgotPassword')}
           </Link>
         </div>
-        <Button
-          type="submit"
-          className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold shadow-sm"
-          disabled={loading}
-        >
+
+        <Button type="submit" className={authDarkBtnClass} disabled={loading}>
           {loading ? t('signingIn') : tc('signIn')}
         </Button>
       </form>
-    </AuthShell>
+    </Auth3DShell>
   );
 }

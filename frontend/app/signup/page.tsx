@@ -9,15 +9,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AuthShell } from '@/components/auth/auth-shell';
+import { Auth3DShell } from '@/components/auth/auth-3d-shell';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { useTranslations } from 'next-intl';
 import { Building2, Eye, EyeOff, Lock, Mail, User, Loader2 } from 'lucide-react';
 import { parseEmailVerificationRequired } from '@/lib/sidebar-modules';
-import { authFieldClass, authIconClass, authLabelClass, authSelectClass } from '@/lib/auth-styles';
+import {
+  authDarkBtnClass,
+  authDarkErrorClass,
+  authDarkFieldClass,
+  authDarkIconClass,
+  authDarkLabelClass,
+  authDarkLinkClass,
+  authDarkSelectClass,
+} from '@/lib/auth-styles';
 import { INDUSTRY_VALUES, WORKFORCE_VALUES } from '@/lib/industry-options';
+import { cn } from '@/lib/utils';
 
 const INDUSTRIES = INDUSTRY_VALUES;
 const WORKFORCE = WORKFORCE_VALUES;
@@ -96,109 +105,156 @@ function SignupForm() {
 
   if (!subscription_tier) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#F3F4F6] text-[#161E2C] px-4">
-        <Loader2 className="size-8 animate-spin text-[#FD6203]" />
-        <p>{t('signupLoadingPlan')}</p>
-        <p className="text-sm text-[#4B5563]">
-          <Link href="/pricing" className="text-[#FD6203] hover:underline">{tc('viewPlans')}</Link>
+      <div className="dark flex min-h-svh flex-col items-center justify-center gap-4 bg-[#05070a] px-4 text-white">
+        <Loader2 className="size-8 animate-spin text-[#FD8018]" />
+        <p className="text-white/70">{t('signupLoadingPlan')}</p>
+        <p className="text-sm text-white/45">
+          <Link href="/pricing" className={authDarkLinkClass}>
+            {tc('viewPlans')}
+          </Link>
           {' · '}
-          <Link href="/login" className="text-[#FD6203] hover:underline">{tc('signIn')}</Link>
+          <Link href="/login" className={authDarkLinkClass}>
+            {tc('signIn')}
+          </Link>
         </p>
       </div>
     );
   }
 
   return (
-    <AuthShell
+    <Auth3DShell
+      compact
       title={t('signupTitle')}
       subtitle={subscription_tier ? t('signupSubtitlePlan', { tier: subscription_tier }) : t('signupSubtitle')}
       topLink={{ href: '/login', label: tc('signIn') }}
       footer={
         <>
           {tc('alreadyHaveAccount')}{' '}
-          <Link href="/login" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
+          <Link href="/login" className={authDarkLinkClass}>
             {tc('signIn')}
           </Link>
           {' · '}
-          <Link href="/pricing" className="font-semibold text-[#FD6203] hover:text-[#DF3C01]">
+          <Link href="/pricing" className={authDarkLinkClass}>
             {tc('viewPlans')}
           </Link>
         </>
       }
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="full_name" className={authLabelClass}>{t('fullName')}</Label>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
+        <div className="space-y-1.5">
+          <Label htmlFor="full_name" className={authDarkLabelClass}>
+            {t('fullName')}
+          </Label>
           <div className="relative">
-            <User className={authIconClass} />
-            <Input id="full_name" placeholder="John Smith" className={`ps-10 ${authFieldClass}`} {...register('full_name')} />
+            <User className={authDarkIconClass} />
+            <Input
+              id="full_name"
+              placeholder="John Smith"
+              className={cn(authDarkFieldClass, 'h-11 ps-10')}
+              {...register('full_name')}
+            />
           </div>
-          {errors.full_name && <p className="text-sm text-destructive">{errors.full_name.message as string}</p>}
+          {errors.full_name && <p className={authDarkErrorClass}>{errors.full_name.message as string}</p>}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="email" className={authLabelClass}>{t('email')}</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className={authDarkLabelClass}>
+            {t('email')}
+          </Label>
           <div className="relative">
-            <Mail className={authIconClass} />
-            <Input id="email" type="email" placeholder="name@company.com" className={`ps-10 ${authFieldClass}`} {...register('email')} />
+            <Mail className={authDarkIconClass} />
+            <Input
+              id="email"
+              type="email"
+              placeholder="name@company.com"
+              className={cn(authDarkFieldClass, 'h-11 ps-10')}
+              {...register('email')}
+            />
           </div>
-          {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
+          {errors.email && <p className={authDarkErrorClass}>{errors.email.message as string}</p>}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="password" className={authLabelClass}>{t('password')}</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className={authDarkLabelClass}>
+            {t('password')}
+          </Label>
           <div className="relative">
-            <Lock className={authIconClass} />
+            <Lock className={authDarkIconClass} />
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
               placeholder="Create a password"
-              className={`ps-10 pe-10 ${authFieldClass}`}
+              className={cn(authDarkFieldClass, 'h-11 ps-10 pe-10')}
               {...register('password')}
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute end-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#161E2C]"
+              className="absolute end-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
               aria-label={showPassword ? t('hidePassword') : t('showPassword')}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
           </div>
-          {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
+          {errors.password && <p className={authDarkErrorClass}>{errors.password.message as string}</p>}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="company_name" className={authLabelClass}>{t('companyName')}</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="company_name" className={authDarkLabelClass}>
+            {t('companyName')}
+          </Label>
           <div className="relative">
-            <Building2 className={authIconClass} />
-            <Input id="company_name" placeholder="Acme Services Ltd" className={`ps-10 ${authFieldClass}`} {...register('company_name')} />
+            <Building2 className={authDarkIconClass} />
+            <Input
+              id="company_name"
+              placeholder="Acme Services Ltd"
+              className={cn(authDarkFieldClass, 'h-11 ps-10')}
+              {...register('company_name')}
+            />
           </div>
-          {errors.company_name && <p className="text-sm text-destructive">{errors.company_name.message as string}</p>}
+          {errors.company_name && (
+            <p className={authDarkErrorClass}>{errors.company_name.message as string}</p>
+          )}
         </div>
-        <div className="space-y-2">
-          <Label className={authLabelClass}>{t('industry')}</Label>
+        <div className="space-y-1.5">
+          <Label className={authDarkLabelClass}>{t('industry')}</Label>
           <Select onValueChange={(v) => setValue('industry', v, { shouldValidate: true })}>
-            <SelectTrigger className={authSelectClass}><SelectValue placeholder={t('selectIndustry')} /></SelectTrigger>
-            <SelectContent>
-              {INDUSTRIES.map((v, i) => <SelectItem key={v} value={v}>{industryLabels[i] ?? v}</SelectItem>)}
+            <SelectTrigger className={cn(authDarkSelectClass, 'h-11')}>
+              <SelectValue placeholder={t('selectIndustry')} />
+            </SelectTrigger>
+            <SelectContent className="border-white/10 bg-[#11161D] text-white">
+              {INDUSTRIES.map((v, i) => (
+                <SelectItem key={v} value={v} className="focus:bg-white/10 focus:text-white">
+                  {industryLabels[i] ?? v}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {errors.industry && <p className="text-sm text-destructive">{errors.industry.message as string}</p>}
+          {errors.industry && <p className={authDarkErrorClass}>{errors.industry.message as string}</p>}
         </div>
-        <div className="space-y-2">
-          <Label className={authLabelClass}>{t('workforceSize')}</Label>
+        <div className="space-y-1.5">
+          <Label className={authDarkLabelClass}>{t('workforceSize')}</Label>
           <Select onValueChange={(v) => setValue('workforce_size', v, { shouldValidate: true })}>
-            <SelectTrigger className={authSelectClass}><SelectValue placeholder={t('selectSize')} /></SelectTrigger>
-            <SelectContent>
-              {WORKFORCE.map((v, i) => <SelectItem key={v} value={v}>{workforceLabels[i] ?? v}</SelectItem>)}
+            <SelectTrigger className={cn(authDarkSelectClass, 'h-11')}>
+              <SelectValue placeholder={t('selectSize')} />
+            </SelectTrigger>
+            <SelectContent className="border-white/10 bg-[#11161D] text-white">
+              {WORKFORCE.map((v, i) => (
+                <SelectItem key={v} value={v} className="focus:bg-white/10 focus:text-white">
+                  {workforceLabels[i] ?? v}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          {errors.workforce_size && <p className="text-sm text-destructive">{errors.workforce_size.message as string}</p>}
+          {errors.workforce_size && (
+            <p className={authDarkErrorClass}>{errors.workforce_size.message as string}</p>
+          )}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="verification_code" className={authLabelClass}>Verification / promo code (optional)</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="verification_code" className={authDarkLabelClass}>
+            Verification / promo code (optional)
+          </Label>
           <Input
             id="verification_code"
             placeholder="Enter code if you have one"
-            className={authFieldClass}
+            className={cn(authDarkFieldClass, 'h-11')}
             value={verificationCode}
             onChange={(e) => {
               setVerificationCode(e.target.value);
@@ -206,17 +262,22 @@ function SignupForm() {
             }}
           />
         </div>
-        <p className="text-xs text-[#4B5563] leading-relaxed">
+        <p className="text-xs leading-relaxed text-white/45">
           {t('signupPrivacyPrefix')}{' '}
-          <Link href="/terms" className="text-[#FD6203] hover:underline">{t('signupPrivacyTerms')}</Link>
-          {' '}{t('signupPrivacyAnd')}{' '}
-          <Link href="/privacy" className="text-[#FD6203] hover:underline">{t('signupPrivacyPolicy')}</Link>.
+          <Link href="/terms" className={authDarkLinkClass}>
+            {t('signupPrivacyTerms')}
+          </Link>{' '}
+          {t('signupPrivacyAnd')}{' '}
+          <Link href="/privacy" className={authDarkLinkClass}>
+            {t('signupPrivacyPolicy')}
+          </Link>
+          .
         </p>
-        <Button type="submit" className="w-full h-11 bg-[#FD6203] hover:bg-[#DF3C01] text-white font-semibold" disabled={loading}>
+        <Button type="submit" className={authDarkBtnClass} disabled={loading}>
           {loading ? t('creatingAccount') : t('createAccount')}
         </Button>
       </form>
-    </AuthShell>
+    </Auth3DShell>
   );
 }
 
@@ -224,13 +285,17 @@ function SignupFallback() {
   const t = useTranslations('auth');
   const tc = useTranslations('common');
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#F3F4F6] text-[#161E2C] px-4">
-      <Loader2 className="size-8 animate-spin text-[#FD6203]" />
-      <p>{t('signupPreparing')}</p>
-      <p className="text-sm text-[#4B5563]">
-        <Link href="/pricing" className="text-[#FD6203] hover:underline">{tc('viewPlans')}</Link>
+    <div className="dark flex min-h-svh flex-col items-center justify-center gap-4 bg-[#05070a] px-4 text-white">
+      <Loader2 className="size-8 animate-spin text-[#FD8018]" />
+      <p className="text-white/70">{t('signupPreparing')}</p>
+      <p className="text-sm text-white/45">
+        <Link href="/pricing" className={authDarkLinkClass}>
+          {tc('viewPlans')}
+        </Link>
         {' · '}
-        <Link href="/login" className="text-[#FD6203] hover:underline">{tc('signIn')}</Link>
+        <Link href="/login" className={authDarkLinkClass}>
+          {tc('signIn')}
+        </Link>
       </p>
     </div>
   );

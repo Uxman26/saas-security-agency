@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { setLocale } from '@/actions/locale';
 import { cn } from '@/lib/utils';
 
-type Props = { className?: string; variant?: 'default' | 'auth' };
+type Props = { className?: string; variant?: 'default' | 'auth' | 'dark' };
 
 export function LanguageSwitcher({ className, variant = 'default' }: Props) {
   const locale = useLocale();
@@ -26,10 +26,14 @@ export function LanguageSwitcher({ className, variant = 'default' }: Props) {
         locale === code
           ? variant === 'auth'
             ? 'bg-[#161E2C] text-white'
-            : 'bg-foreground text-background'
+            : variant === 'dark'
+              ? 'bg-white/15 text-white'
+              : 'bg-foreground text-background'
           : variant === 'auth'
             ? 'text-[#4B5563] hover:text-[#161E2C]'
-            : 'text-muted-foreground hover:text-foreground'
+            : variant === 'dark'
+              ? 'text-white/45 hover:text-white'
+              : 'text-muted-foreground hover:text-foreground'
       )}
     >
       {label}

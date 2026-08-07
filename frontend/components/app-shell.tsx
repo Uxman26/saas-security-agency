@@ -11,12 +11,14 @@ import { Menu } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { AlertsPanel } from '@/components/alerts-panel';
 import { usePathname } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { cn } from '@/lib/utils';
 import { navModulesFromUser } from '@/lib/nav-modules';
 import { useModulePathGuard } from '@/components/module-guard';
+import { api } from '@/lib/api';
 
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
@@ -30,7 +32,37 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const isSuperAdmin = user?.role === 'super_admin';
+  const queryClient = useQueryClient();
   useModulePathGuard(pathname);
+
+  // Warm dashboard cache so navigating to /dashboard is near-instant
+  useEffect(() => {
+    if (!user) return;
+    if (isSuperAdmin) {
+      void queryClient.prefetchQuery({
+        queryKey: ['admin-dashboard'],
+        queryFn: () => api.admin.dashboard(),
+        staleTime: 60_000,
+      });
+      return;
+    }
+    void queryClient.prefetchQuery({
+      queryKey: ['dashboard-overview'],
+      queryFn: () => api.reports.dashboard(),
+      staleTime: 60_000,
+    });
+    void queryClient.prefetchQuery({
+      queryKey: ['dashboard-alerts', 30],
+      queryFn: async () => {
+        const [compliance, contracts] = await Promise.all([
+          api.reports.compliance(30),
+          api.reports.contractsExpiring(30),
+        ]);
+        return { compliance, contracts };
+      },
+      staleTime: 60_000,
+    });
+  }, [user, isSuperAdmin, queryClient]);
 
   const links = useMemo(() => navModulesFromUser(user), [user]);
 

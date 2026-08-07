@@ -6,7 +6,7 @@ import CubeLoader from '@/components/ui/cube-loader';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
-const CUBE_MS = 700;
+const CUBE_MS = 1000;
 
 /**
  * Real sidebar (no skeleton) + header chrome.

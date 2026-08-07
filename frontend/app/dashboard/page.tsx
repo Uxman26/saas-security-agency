@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { OverviewCharts } from '@/components/dashboard/overview-charts';
@@ -42,11 +42,14 @@ import {
   BadgeCheck,
   TrendingUp,
 } from 'lucide-react';
-import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can, PERMS } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
-import type { DashboardOverview, ComplianceAlert, ContractExpiryAlert, AdminDashboard } from '@/lib/types';
+import {
+  useAdminDashboard,
+  useDashboardAlerts,
+  useDashboardOverview,
+} from '@/hooks/use-dashboard';
 
 const companyTiles = [
   { href: '/guards', title: 'Staff', desc: 'Manage staff & compliance', icon: Users, color: 'text-blue-600 dark:text-blue-400', perm: 'guards.read' },
@@ -159,33 +162,29 @@ function AlertPanel({
 export default function DashboardPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
-  const [overview, setOverview] = useState<DashboardOverview | null>(null);
-  const [adminStats, setAdminStats] = useState<AdminDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [alerts, setAlerts] = useState<ComplianceAlert[]>([]);
-  const [contractAlerts, setContractAlerts] = useState<ContractExpiryAlert[]>([]);
-  const [alertsError, setAlertsError] = useState('');
 
-  useEffect(() => {
-    if (isSuperAdmin) {
-      setLoading(true);
-      api.admin.dashboard().then(setAdminStats).catch(() => setAdminStats(null)).finally(() => setLoading(false));
-      return;
-    }
-    setAlertsError('');
-    setLoading(true);
-    api.reports
-      .dashboard()
-      .then(setOverview)
-      .catch(() => setOverview(null))
-      .finally(() => setLoading(false));
-    void Promise.all([api.reports.compliance(30), api.reports.contractsExpiring(30)])
-      .then(([a, c]) => {
-        setAlerts(a);
-        setContractAlerts(c);
-      })
-      .catch((e: Error) => setAlertsError(e.message || 'Could not load alerts'));
-  }, [isSuperAdmin]);
+  const {
+    data: overview,
+    isLoading: overviewLoading,
+  } = useDashboardOverview(!isSuperAdmin && Boolean(user));
+
+  const {
+    data: alertsData,
+    isError: alertsIsError,
+    error: alertsQueryError,
+  } = useDashboardAlerts(!isSuperAdmin && Boolean(user));
+
+  const { data: adminStats, isLoading: adminLoading } = useAdminDashboard(
+    isSuperAdmin && Boolean(user)
+  );
+
+  // Only block UI when we have no cached data yet
+  const loading = isSuperAdmin ? adminLoading && !adminStats : overviewLoading && !overview;
+  const alerts = alertsData?.compliance ?? [];
+  const contractAlerts = alertsData?.contracts ?? [];
+  const alertsError = alertsIsError
+    ? (alertsQueryError as Error)?.message || 'Could not load alerts'
+    : '';
 
   const tiles = useMemo(() => {
     if (isSuperAdmin) return adminTiles;

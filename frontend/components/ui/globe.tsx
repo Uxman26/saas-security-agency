@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 const MOVEMENT_DAMPING = 1400
 
 const GLOBE_CONFIG: Omit<COBEOptions, "width" | "height"> = {
+  devicePixelRatio: 2,
   phi: 0,
   theta: 0.3,
   dark: 0,

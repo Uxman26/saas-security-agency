@@ -1,13 +1,15 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { MarketingNav } from '@/components/marketing/marketing-nav';
-import { MarketingFooter } from '@/components/marketing/marketing-footer';
+import { Marketing3DHero, Marketing3DShell } from '@/components/marketing/marketing-3d-shell';
 import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
-import { MarketingSection, SectionHeading } from '@/components/marketing/marketing-section';
+import { SectionHeading } from '@/components/marketing/marketing-section';
 import { MarketingFaqAccordion } from '@/components/marketing/marketing-faq-accordion';
 import { RichInline } from '@/components/marketing/marketing-rich-text';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { MagicCard } from '@/components/ui/magic-card';
+import { SpotlightCard } from '@/components/ui/spotlight-card';
+import { BorderBeam } from '@/components/ui/border-beam';
+import { BlurFade } from '@/components/ui/blur-fade';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 type Props = {
@@ -39,106 +41,140 @@ export function IndustryPageTemplate({
   const tc = useTranslations('marketing.cta');
 
   return (
-    <div className="min-h-screen bg-background">
-      <MarketingNav active={activeNav} />
-      <MarketingSection variant="hero" className="py-16 md:py-24">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <Eyebrow>{eyebrow}</Eyebrow>
-          <h1 className="text-3xl md:text-5xl font-bold tracking-tight leading-tight">
-            <RichInline text={title} />
-          </h1>
-          <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
+    <Marketing3DShell active={activeNav}>
+      <div className="mx-auto w-full max-w-6xl space-y-14 px-4 py-12 md:py-16">
+        <Marketing3DHero
+          eyebrow={<Eyebrow>{eyebrow}</Eyebrow>}
+          title={<RichInline text={title} />}
+        >
+          <p className="text-base leading-relaxed text-muted-foreground md:text-lg">
             <RichInline text={paragraph} />
           </p>
-          <div className="mt-8">
+          <div className="pt-2">
             <MarketingCta href="/book-demo">{cta}</MarketingCta>
           </div>
-          {disclaimer && (
-            <p className="mt-8 text-sm text-muted-foreground rounded-lg border border-border bg-muted/40 p-4 border-s-4 border-s-foreground">
+          {disclaimer ? (
+            <p className="rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm text-muted-foreground border-s-4 border-s-primary dark:bg-white/5">
               <RichInline text={disclaimer} />
             </p>
-          )}
-        </div>
-      </MarketingSection>
-      <MarketingSection variant="muted">
-        <div className="container mx-auto px-4 max-w-5xl">
-          <SectionHeading title={ts('problems')} />
-          <div className="grid md:grid-cols-3 gap-5">
-            {problems.map((p) => (
-              <Card key={p.title} className="marketing-card-hover border-t-2 border-t-amber-500/50">
-                <CardHeader className="pb-2">
-                  <div className="mb-2 flex size-9 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
-                    <AlertTriangle className="size-4" />
-                  </div>
-                  <CardTitle className="text-base">{p.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground leading-relaxed">
-                  <RichInline text={p.text} />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </MarketingSection>
-      <MarketingSection>
-        <div className="container mx-auto px-4 max-w-5xl">
-          <SectionHeading title={ts('capabilities')} />
-          <div className="grid sm:grid-cols-2 gap-5">
-            {capabilities.map((c) => (
-              <div key={c.title} className="rounded-xl border bg-card p-5 marketing-card-hover group">
-                <div className="flex gap-3 items-start">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground group-hover:bg-foreground group-hover:text-background transition-colors">
-                    <CheckCircle2 className="size-4" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{c.title}</h3>
-                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                      <RichInline text={c.text} />
+          ) : null}
+        </Marketing3DHero>
+
+        <section className="space-y-6">
+          <BlurFade delay={0.06} inView>
+            <SectionHeading title={ts('problems')} />
+          </BlurFade>
+          <div className="grid gap-4 md:grid-cols-3">
+            {problems.map((p, i) => (
+              <BlurFade key={p.title} delay={0.08 + i * 0.04} inView>
+                <MagicCard
+                  className="h-full rounded-2xl"
+                  gradientFrom="#F59E0B"
+                  gradientTo="#FBBF24"
+                  gradientColor="rgba(245,158,11,0.1)"
+                  gradientOpacity={0.5}
+                >
+                  <div className="p-5">
+                    <span className="mb-3 inline-flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/25 dark:text-amber-400">
+                      <AlertTriangle className="size-4" />
+                    </span>
+                    <h3 className="font-semibold leading-snug">{p.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      <RichInline text={p.text} />
                     </p>
                   </div>
-                </div>
-              </div>
+                </MagicCard>
+              </BlurFade>
             ))}
           </div>
-        </div>
-      </MarketingSection>
-      <MarketingSection variant="accent">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <SectionHeading title={ts('workflow')} />
-          <ol className="space-y-4">
+        </section>
+
+        <section className="space-y-6">
+          <BlurFade delay={0.06} inView>
+            <SectionHeading title={ts('capabilities')} />
+          </BlurFade>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {capabilities.map((c, i) => (
+              <BlurFade key={c.title} delay={0.08 + i * 0.03} inView>
+                <SpotlightCard
+                  className="h-full rounded-2xl border-border/70 bg-card/80 p-5 backdrop-blur-md dark:border-white/10 dark:bg-[#11161D]/80"
+                  spotlightColor="rgba(224, 78, 0, 0.14)"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/20">
+                      <CheckCircle2 className="size-4" />
+                    </span>
+                    <div>
+                      <h3 className="font-semibold">{c.title}</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                        <RichInline text={c.text} />
+                      </p>
+                    </div>
+                  </div>
+                </SpotlightCard>
+              </BlurFade>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-6">
+          <BlurFade delay={0.06} inView>
+            <SectionHeading title={ts('workflow')} />
+          </BlurFade>
+          <ol className="mx-auto max-w-3xl space-y-3">
             {workflow.map((step, i) => (
-              <li key={i} className="flex gap-4 rounded-xl border bg-card p-4 marketing-card-hover">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background font-bold text-sm">
-                  {i + 1}
-                </span>
-                <span className="text-muted-foreground pt-1 leading-relaxed">
-                  <RichInline text={step} />
-                </span>
-              </li>
+              <BlurFade key={i} delay={0.08 + i * 0.04} inView>
+                <MagicCard
+                  className="rounded-2xl"
+                  gradientFrom="#E04E00"
+                  gradientTo="#FD8018"
+                  gradientColor="rgba(224,78,0,0.08)"
+                  gradientOpacity={0.45}
+                >
+                  <li className="flex gap-4 p-4">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
+                      {i + 1}
+                    </span>
+                    <span className="pt-1 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+                      <RichInline text={step} />
+                    </span>
+                  </li>
+                </MagicCard>
+              </BlurFade>
             ))}
           </ol>
-        </div>
-      </MarketingSection>
-      <MarketingSection variant="muted">
-        <div className="container mx-auto px-4 max-w-3xl">
-          <SectionHeading title={ts('faqs')} />
-          <MarketingFaqAccordion items={faqs} />
-        </div>
-      </MarketingSection>
-      <MarketingSection border={false} variant="cta" className="py-16">
-        <div className="container mx-auto px-4 text-center max-w-2xl">
-          <SectionHeading
-            title={ts('finalTitle')}
-            subtitle={<RichInline text={ts('finalText')} />}
-            align="center"
-          />
-          <div className="flex flex-wrap justify-center gap-4">
-            <MarketingCta href="/book-demo">{cta}</MarketingCta>
-            <MarketingCta href="/pricing" variant="outline">{tc('viewPricing')}</MarketingCta>
+        </section>
+
+        <section className="mx-auto max-w-3xl space-y-6">
+          <BlurFade delay={0.06} inView>
+            <SectionHeading title={ts('faqs')} />
+          </BlurFade>
+          <BlurFade delay={0.1} inView>
+            <div className="rounded-2xl border border-border/70 bg-card/70 p-2 backdrop-blur-md dark:border-white/10 dark:bg-[#11161D]/70">
+              <MarketingFaqAccordion items={faqs} />
+            </div>
+          </BlurFade>
+        </section>
+
+        <BlurFade delay={0.1} inView>
+          <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/60 px-6 py-12 text-center backdrop-blur-md dark:border-white/10 dark:bg-[#11161D]/60">
+            <BorderBeam size={120} duration={11} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1.5} />
+            <div className="relative mx-auto max-w-2xl space-y-6">
+              <SectionHeading
+                title={ts('finalTitle')}
+                subtitle={<RichInline text={ts('finalText')} />}
+                align="center"
+              />
+              <div className="flex flex-wrap justify-center gap-4">
+                <MarketingCta href="/book-demo">{cta}</MarketingCta>
+                <MarketingCta href="/pricing" variant="outline">
+                  {tc('viewPricing')}
+                </MarketingCta>
+              </div>
+            </div>
           </div>
-        </div>
-      </MarketingSection>
-      <MarketingFooter />
-    </div>
+        </BlurFade>
+      </div>
+    </Marketing3DShell>
   );
 }

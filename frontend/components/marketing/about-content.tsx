@@ -1,83 +1,115 @@
 'use client';
 
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { MarketingNav } from '@/components/marketing/marketing-nav';
-import { MarketingFooter } from '@/components/marketing/marketing-footer';
+import { Marketing3DHero, Marketing3DShell } from '@/components/marketing/marketing-3d-shell';
 import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
-import { MarketingSection, SectionHeading } from '@/components/marketing/marketing-section';
 import { RichInline } from '@/components/marketing/marketing-rich-text';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Target, Users, Shield } from 'lucide-react';
+import { MagicCard } from '@/components/ui/magic-card';
+import { SpotlightCard } from '@/components/ui/spotlight-card';
+import { BorderBeam } from '@/components/ui/border-beam';
+import { BlurFade } from '@/components/ui/blur-fade';
+import { Shield, Target, Users } from 'lucide-react';
 
 export function AboutContent() {
   const t = useTranslations('marketing.about');
+  const tc = useTranslations('marketing.cta');
 
   return (
-    <div className="min-h-screen bg-background">
-      <MarketingNav active="about" />
-      <MarketingSection variant="hero" className="py-16 md:py-24">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <Eyebrow>{t('badge')}</Eyebrow>
-          <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{t('title')}</h1>
-          <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
+    <Marketing3DShell active="about">
+      <div className="mx-auto w-full max-w-6xl space-y-12 px-4 py-12 md:py-16">
+        <Marketing3DHero eyebrow={<Eyebrow>{t('badge')}</Eyebrow>} title={t('title')}>
+          <p className="text-base leading-relaxed text-muted-foreground md:text-lg">
             <RichInline text={t('hero')} />
           </p>
-          <p className="mt-4 text-muted-foreground leading-relaxed">
+          <p className="text-base leading-relaxed text-muted-foreground md:text-lg">
             <RichInline text={t('hero2')} />
           </p>
-        </div>
-      </MarketingSection>
-      <MarketingSection variant="muted">
-        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-6">
-          <Card className="marketing-card-hover border-t-2 border-t-foreground/40">
-            <CardHeader>
-              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
-                <Users className="size-5" />
+        </Marketing3DHero>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <BlurFade delay={0.08} inView>
+            <MagicCard
+              className="h-full rounded-2xl"
+              gradientFrom="#E04E00"
+              gradientTo="#FD8018"
+              gradientColor="rgba(224,78,0,0.1)"
+              gradientOpacity={0.55}
+            >
+              <div className="p-6 md:p-7">
+                <span className="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
+                  <Users className="size-5 text-primary" />
+                </span>
+                <h2 className="text-xl font-bold tracking-tight">{t('whoTitle')}</h2>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+                  <RichInline text={t('whoText')} />
+                </p>
               </div>
-              <CardTitle>{t('whoTitle')}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-muted-foreground leading-relaxed">
-              <RichInline text={t('whoText')} />
-            </CardContent>
-          </Card>
-          <Card className="marketing-card-hover border-t-2 border-t-foreground/40">
-            <CardHeader>
-              <div className="mb-2 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
-                <Target className="size-5" />
+            </MagicCard>
+          </BlurFade>
+
+          <BlurFade delay={0.12} inView>
+            <MagicCard
+              className="h-full rounded-2xl"
+              gradientFrom="#E04E00"
+              gradientTo="#FD8018"
+              gradientColor="rgba(224,78,0,0.1)"
+              gradientOpacity={0.55}
+            >
+              <div className="p-6 md:p-7">
+                <span className="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-primary/12 ring-1 ring-primary/20">
+                  <Target className="size-5 text-primary" />
+                </span>
+                <h2 className="text-xl font-bold tracking-tight">{t('missionTitle')}</h2>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+                  <RichInline text={t('missionText')} />
+                </p>
               </div>
-              <CardTitle>{t('missionTitle')}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-muted-foreground leading-relaxed">
-              <RichInline text={t('missionText')} />
-            </CardContent>
-          </Card>
+            </MagicCard>
+          </BlurFade>
         </div>
-      </MarketingSection>
-      <MarketingSection>
-        <div className="container mx-auto px-4 max-w-4xl grid md:grid-cols-2 gap-10">
-          <div className="rounded-2xl border bg-card p-6 marketing-card-hover">
-            <h2 className="text-2xl font-bold">{t('audienceTitle')}</h2>
-            <p className="mt-4 text-muted-foreground leading-relaxed">
-              <RichInline text={t('audienceText')} />
-            </p>
-          </div>
-          <div className="rounded-2xl border bg-card p-6 marketing-card-hover border-s-4 border-s-foreground">
-            <div className="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
-              <Shield className="size-5" />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <BlurFade delay={0.1} inView>
+            <SpotlightCard
+              className="h-full rounded-2xl border-border/70 bg-card/80 p-6 backdrop-blur-md md:p-7 dark:border-white/10 dark:bg-[#11161D]/80"
+              spotlightColor="rgba(224, 78, 0, 0.16)"
+            >
+              <h2 className="text-xl font-bold tracking-tight">{t('audienceTitle')}</h2>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+                <RichInline text={t('audienceText')} />
+              </p>
+            </SpotlightCard>
+          </BlurFade>
+
+          <BlurFade delay={0.14} inView>
+            <div className="relative h-full overflow-hidden rounded-2xl border border-primary/25 bg-primary/5 p-6 md:p-7 dark:bg-primary/10">
+              <BorderBeam size={90} duration={9} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1} />
+              <span className="relative mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/25">
+                <Shield className="size-5 text-primary" />
+              </span>
+              <h2 className="relative text-xl font-bold tracking-tight">{t('securityTitle')}</h2>
+              <p className="relative mt-3 text-sm leading-relaxed text-muted-foreground md:text-[15px]">
+                <RichInline text={t('securityText')} />
+              </p>
             </div>
-            <h2 className="text-2xl font-bold">{t('securityTitle')}</h2>
-            <p className="mt-4 text-muted-foreground leading-relaxed">
-              <RichInline text={t('securityText')} />
-            </p>
+          </BlurFade>
+        </div>
+
+        <BlurFade delay={0.12} inView>
+          <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/60 px-6 py-12 text-center backdrop-blur-md dark:border-white/10 dark:bg-[#11161D]/60">
+            <BorderBeam size={120} duration={11} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1.5} />
+            <div className="relative">
+              <MarketingCta href="/book-demo">{t('cta')}</MarketingCta>
+              <p className="mt-4 text-sm text-muted-foreground">
+                <Link href="/pricing" className="font-medium text-primary hover:underline">
+                  {tc('viewPricing')}
+                </Link>
+              </p>
+            </div>
           </div>
-        </div>
-      </MarketingSection>
-      <MarketingSection border={false} variant="cta" className="py-16">
-        <div className="container mx-auto px-4 text-center">
-          <MarketingCta href="/book-demo">{t('cta')}</MarketingCta>
-        </div>
-      </MarketingSection>
-      <MarketingFooter />
-    </div>
+        </BlurFade>
+      </div>
+    </Marketing3DShell>
   );
 }

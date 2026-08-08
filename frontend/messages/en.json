@@ -347,12 +347,12 @@
       "securityHeroTitle": "Command your guards, sites and shifts.",
       "securityHeroText": "ControlOps is the operations platform for security companies — SIA-ready guard records, multi-site coverage, live rotas, barcode patrol, incidents, payroll and client billing in one system.",
       "globeStatus": "All systems operational",
-      "globeTitleLead": "Security coverage",
+      "globeTitleLead": "Shift coverage",
       "globeTitleAccent": "everywhere",
-      "globeText": "Guards, sites and patrol checkpoints connected across every location you protect. Drag the globe to explore — ControlOps keeps vision on every shift.",
+      "globeText": "Workforce, sites and rotas connected across every location you run — security, cleaning, facilities, events and more. Drag the globe to explore — ControlOps keeps every shift in view.",
       "globeStats": [
         { "value": "24/7", "label": "Shift coverage" },
-        { "value": "SIA", "label": "Compliance ready" },
+        { "value": "Multi-site", "label": "Locations ready" },
         { "value": "1", "label": "Ops platform" }
       ],
       "spotlightEyebrow": "Platform capabilities",
@@ -413,7 +413,7 @@
         }
       ],
       "visionEyebrow": "Always on watch",
-      "visionQuote": "We have vision everywhere — because security never looks away.",
+      "visionQuote": "We keep every shift in view — wherever your teams work.",
       "visionAttribution": "— ControlOps",
       "spotlightFeatures": [
         {

@@ -217,14 +217,17 @@ export function MarketingFooter() {
 
           <div className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-between gap-4 px-1 sm:flex-row sm:items-end">
             <div className="flex items-center gap-1">
-              <SocialIcon label="LinkedIn" href="https://www.linkedin.com/">
+              <SocialIcon label="LinkedIn" href="https://www.linkedin.com/showcase/control-operations">
                 <svg viewBox="0 0 24 24" className="size-4 fill-current" aria-hidden>
                   <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 110-4.12 2.06 2.06 0 010 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.8 0 0 .77 0 1.73v20.54C0 23.22.8 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z" />
                 </svg>
               </SocialIcon>
-              <SocialIcon label="X" href="https://x.com/">
+              <SocialIcon
+                label="Facebook"
+                href="https://www.facebook.com/people/Control-Operations/61591486731565/"
+              >
                 <svg viewBox="0 0 24 24" className="size-4 fill-current" aria-hidden>
-                  <path d="M18.9 2H21.7l-7.1 8.1L23 22h-6.4l-5-6.5L6 22H3.2l7.6-8.7L1 2h6.6l4.5 5.9L18.9 2zm-1.1 18h1.6L7.3 3.9H5.6L17.8 20z" />
+                  <path d="M22 12.07C22 6.48 17.52 2 11.93 2S1.86 6.48 1.86 12.07c0 5.02 3.66 9.18 8.44 9.93v-7.03H7.9v-2.9h2.4V9.85c0-2.37 1.41-3.68 3.56-3.68 1.03 0 2.12.18 2.12.18v2.33h-1.2c-1.18 0-1.55.73-1.55 1.48v1.78h2.64l-.42 2.9h-2.22V22c4.78-.75 8.44-4.91 8.44-9.93z" />
                 </svg>
               </SocialIcon>
               <SocialIcon label="Website" href="https://controlops.co.uk">

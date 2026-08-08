@@ -165,7 +165,7 @@ function EmployeePublishCell({
         className={cn(
           'rounded-full px-1.5 py-0.5 text-center text-[9px] font-semibold leading-tight',
           published
-            ? 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100'
+            ? 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-100'
             : 'bg-muted text-muted-foreground'
         )}
       >

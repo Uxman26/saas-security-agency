@@ -29,7 +29,7 @@ const DEFAULT_MARKERS: GlobeMarker[] = [
   { id: 'singapore', location: [1.3521, 103.8198], label: 'Singapore', size: 0.04 },
 ];
 
-/** Interactive COBE globe — 21st.dev Interactive Globe pattern (Yad Hakim / COBE). */
+/** Interactive COBE globe — markers + arcs (cobe v2). */
 export function InteractiveGlobe({
   size = 460,
   className,
@@ -40,8 +40,8 @@ export function InteractiveGlobe({
   const pointerRef = useRef({
     dragging: false,
     lastX: 0,
-    phi: 0,
-    theta: 0.25,
+    phi: 2.4,
+    theta: 0.28,
     velocity: 0,
   });
 
@@ -49,15 +49,14 @@ export function InteractiveGlobe({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    let width = size * 2;
     const ptr = pointerRef.current;
     ptr.phi = 2.4;
     ptr.theta = 0.28;
 
     const globe = createGlobe(canvas, {
       devicePixelRatio: 2,
-      width,
-      height: width,
+      width: size * 2,
+      height: size * 2,
       phi: ptr.phi,
       theta: ptr.theta,
       dark: dark ? 1 : 0,
@@ -85,17 +84,18 @@ export function InteractiveGlobe({
       arcWidth: 0.55,
       arcHeight: 0.28,
       markerElevation: 0.015,
-      onRender: (state: { phi?: number; theta?: number }) => {
-        if (!ptr.dragging) {
-          ptr.phi += 0.003 + ptr.velocity;
-          ptr.velocity *= 0.93;
-        }
-        state.phi = ptr.phi;
-        state.theta = ptr.theta;
-      },
-    } as Parameters<typeof createGlobe>[1] & {
-      onRender: (state: { phi?: number; theta?: number }) => void;
     });
+
+    let raf = 0;
+    const tick = () => {
+      if (!ptr.dragging) {
+        ptr.phi += 0.003 + ptr.velocity;
+        ptr.velocity *= 0.93;
+      }
+      globe.update({ phi: ptr.phi, theta: ptr.theta });
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
 
     const onDown = (e: PointerEvent) => {
       ptr.dragging = true;
@@ -125,6 +125,7 @@ export function InteractiveGlobe({
     canvas.addEventListener('pointercancel', onUp);
 
     return () => {
+      cancelAnimationFrame(raf);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
@@ -146,7 +147,6 @@ export function InteractiveGlobe({
         style={{ contain: 'layout paint size' }}
         aria-label="Interactive globe"
       />
-      {/* City labels (decorative; globe itself is interactive) */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {markers.slice(0, 5).map((m, i) => (
           <span

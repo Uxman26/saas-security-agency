@@ -8,11 +8,7 @@ import { cn } from "@/lib/utils"
 
 const MOVEMENT_DAMPING = 1400
 
-const GLOBE_CONFIG: COBEOptions = {
-  width: 800,
-  height: 800,
-  onRender: () => {},
-  devicePixelRatio: 2,
+const GLOBE_CONFIG: Omit<COBEOptions, "width" | "height"> = {
   phi: 0,
   theta: 0.3,
   dark: 0,
@@ -32,14 +28,14 @@ const GLOBE_CONFIG: COBEOptions = {
     { location: [1.3521, 103.8198], size: 0.05 },
     { location: [-23.5505, -46.6333], size: 0.06 },
   ],
-} as COBEOptions
+}
 
 export function Globe({
   className,
   config = GLOBE_CONFIG,
 }: {
   className?: string
-  config?: COBEOptions
+  config?: Omit<COBEOptions, "width" | "height">
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const phiRef = useRef(0)
@@ -70,29 +66,41 @@ export function Globe({
   }
 
   useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
     const onResize = () => {
-      if (canvasRef.current) {
-        widthRef.current = canvasRef.current.offsetWidth
-      }
+      widthRef.current = canvas.offsetWidth
     }
 
     window.addEventListener("resize", onResize)
     onResize()
 
-    const globe = createGlobe(canvasRef.current!, {
+    const globe = createGlobe(canvas, {
       ...config,
       width: widthRef.current * 2,
       height: widthRef.current * 2,
-      onRender: (state) => {
-        if (!pointerInteracting.current) phiRef.current += 0.005
-        state.phi = phiRef.current + rs.get()
-        state.width = widthRef.current * 2
-        state.height = widthRef.current * 2
-      },
+      devicePixelRatio: 2,
     })
 
-    setTimeout(() => (canvasRef.current!.style.opacity = "1"), 0)
+    let raf = 0
+    const tick = () => {
+      if (!pointerInteracting.current) phiRef.current += 0.005
+      globe.update({
+        phi: phiRef.current + rs.get(),
+        width: widthRef.current * 2,
+        height: widthRef.current * 2,
+      })
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+
+    setTimeout(() => {
+      canvas.style.opacity = "1"
+    }, 0)
+
     return () => {
+      cancelAnimationFrame(raf)
       globe.destroy()
       window.removeEventListener("resize", onResize)
     }

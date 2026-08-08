@@ -207,7 +207,7 @@ def _normalize_shift(block: dict, idx: int = 0) -> dict:
     color = (b.get("color") or "").strip()
     if not color:
         color = _SHIFT_COLOR_OPTS[idx % len(_SHIFT_COLOR_OPTS)]
-    return {
+    out = {
         "start": b.get("start") or "09:00",
         "end": b.get("end") or "17:00",
         "site": b.get("site") or "",
@@ -220,6 +220,10 @@ def _normalize_shift(block: dict, idx: int = 0) -> dict:
         "scheduledEnd": b.get("scheduledEnd") or "",
         "adjustments": b.get("adjustments") or [],
     }
+    scheduled_start = (b.get("scheduledStart") or "").strip()
+    if scheduled_start:
+        out["scheduledStart"] = scheduled_start
+    return out
 
 
 def _normalize_employee(emp: dict, idx: int) -> dict:
@@ -233,6 +237,7 @@ def _normalize_employee(emp: dict, idx: int) -> dict:
         "name": e.get("name") or "",
         "role": e.get("role") or "Staff",
         "avatarColor": color,
+        "rotaPending": bool(e.get("rotaPending")),
     }
 
 
@@ -595,12 +600,18 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
                 new_data = json.loads(plan.planner_data or "{}")
             except json.JSONDecodeError:
                 new_data = {}
-            before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id)
-            after_fp = rota_notify_service.fingerprint_from_planner_shifts(new_data.get("shifts"))
-            if before_fp != after_fp:
-                # Structural shift change → auto-republish + staff notifications
-                publish_rota_plan(db, user_id, plan.id, guard_id=None)
-            else:
+            # Only touch guards who already have published assignments — do not auto-publish drafts.
+            published_ids = _published_guard_ids(db, plan.id)
+            structural = False
+            for gid in published_ids:
+                before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, gid)
+                after_fp = rota_notify_service.fingerprint_from_planner_shifts(
+                    new_data.get("shifts"), gid
+                )
+                if before_fp != after_fp:
+                    publish_rota_plan(db, user_id, plan.id, guard_id=gid)
+                    structural = True
+            if not structural:
                 # Attendance / notes / OT-only edits stay on existing assignments
                 shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
                 shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
@@ -651,6 +662,37 @@ def publish_rota_plan(
     sites = db.query(Site).filter(Site.company_id == company.id).all()
     site_by_name = {s.name.strip().lower(): s.id for s in sites}
 
+    def _resolve_site_id(raw_name: Optional[str], color: Optional[str] = None) -> Optional[int]:
+        """Match existing site by name (case-insensitive) or create it from the shift form name."""
+        name = (raw_name or "").strip()
+        if not name:
+            return None
+        key = name.lower()
+        existing = site_by_name.get(key)
+        if existing:
+            return existing
+        # Collapse internal whitespace variants (e.g. double spaces)
+        compact = " ".join(name.split()).lower()
+        for k, sid in site_by_name.items():
+            if " ".join(k.split()) == compact:
+                return sid
+        from app.services.plan_enforcement import enforce_site_quota
+
+        try:
+            enforce_site_quota(db, company)
+        except HTTPException:
+            return None
+        site = Site(
+            company_id=company.id,
+            name=name,
+            color=(color or "").strip() or "#3b82f6",
+            site_type=1,
+        )
+        db.add(site)
+        db.flush()
+        site_by_name[key] = site.id
+        return site.id
+
     _delete_plan_assignments(db, plan.id, guard_id)
 
     created = 0
@@ -673,12 +715,14 @@ def publish_rota_plan(
             continue
         for dk, day_shifts in (by_d or {}).items():
             for idx, sh in enumerate(day_shifts or []):
-                site_key = (sh.get("site") or "").strip().lower()
-                site_id = site_by_name.get(site_key)
+                site_name = (sh.get("site") or "").strip()
+                site_id = _resolve_site_id(site_name, sh.get("color"))
                 if not site_id:
                     skipped += 1
                     errors.append(
-                        f'No site named "{sh.get("site")}" ({dk})' if site_key else f"Missing site on {dk}"
+                        f'No site named "{sh.get("site")}" ({dk}) — create it under Sites or free up site quota'
+                        if site_name
+                        else f"Missing site on {dk}"
                     )
                     continue
                 break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60

@@ -17,10 +17,25 @@ DEFAULT_INVOICE_VAT_RATE = 20.0
 
 def recalc_invoice_totals(db: Session, inv: Invoice) -> None:
     lines = db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv.id).all()
-    subtotal = sum((l.amount or 0) for l in lines)
+    subtotal = 0.0
+    for l in lines:
+        try:
+            subtotal += float(l.amount or 0)
+        except (TypeError, ValueError):
+            continue
     if not lines:
-        subtotal = float(inv.subtotal or inv.total or 0)
-    rate = inv.tax_rate or 0
+        try:
+            subtotal = float(inv.subtotal or inv.total or 0)
+        except (TypeError, ValueError):
+            subtotal = 0.0
+    try:
+        rate = float(inv.tax_rate or 0)
+    except (TypeError, ValueError):
+        rate = 0.0
+    # VAT rate is a percentage (e.g. 20); reject corrupt values
+    if rate < 0 or rate > 100:
+        rate = DEFAULT_INVOICE_VAT_RATE
+        inv.tax_rate = rate
     tax = round(subtotal * rate / 100.0, 2)
     inv.subtotal = round(subtotal, 2)
     inv.tax_amount = tax
@@ -347,7 +362,13 @@ def generate_from_rota(
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
         if not site.client_id:
-            raise HTTPException(status_code=400, detail="Site is not linked to a client")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f'Site "{site.name}" is not linked to a client. '
+                    "Open Sites, edit this site, and assign a client before generating an invoice."
+                ),
+            )
         client_id = site.client_id
     if not client_id:
         raise HTTPException(status_code=400, detail="client_id or site_id required")
@@ -386,18 +407,27 @@ def generate_from_rota(
     special_dates = special_date_set(db, company.id)
     double_client = bool(getattr(client, "double_rate_special_days", False))
     for d in details:
-        r = resolve_billing_rate(
-            db, company.id, d["guard_id"], d["site_id"], d["shift_type"], d["date"]
+        r = float(
+            resolve_billing_rate(
+                db, company.id, d["guard_id"], d["site_id"], d["shift_type"], d["date"]
+            )
+            or 0
         )
+        # Guard against corrupt rate data blowing up invoice totals
+        if r < 0 or r > 10_000:
+            r = 0.0
         if double_client and d["date"] in special_dates:
             r = r * 2.0
-        amt = round(d["hours"] * r, 2)
+        hours = float(d["hours"] or 0)
+        if hours < 0 or hours > 24 * 14:
+            continue
+        amt = round(hours * r, 2)
         db.add(
             InvoiceLine(
                 invoice_id=inv.id,
                 site_id=d["site_id"],
                 guard_id=d["guard_id"],
-                hours=d["hours"],
+                hours=hours,
                 rate=r,
                 amount=amt,
                 allowance_amount=0,

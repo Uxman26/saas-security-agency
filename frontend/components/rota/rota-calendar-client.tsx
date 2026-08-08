@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, type Resolver } from 'react-hook-form';
@@ -19,6 +19,7 @@ import type { RotaPlanListItem } from '@/lib/types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
+import { RatePreviewDialog } from '@/components/rota/rate-preview-dialog';
 import { ShiftRotaSections } from '@/components/rota/shift-rota-sections';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { useCreateGuard } from '@/hooks/use-guards';
@@ -284,6 +285,7 @@ export function RotaCalendarClient() {
     removeEmployee,
     removeEmployees,
     reorderEmployees,
+    setEmployeeRotaPending,
     copyAllShiftsBetweenEmployees,
     moveShiftToEmployee,
     moveShiftToDay,
@@ -313,6 +315,7 @@ export function RotaCalendarClient() {
   const [siblingPlans, setSiblingPlans] = useState<RotaPlanListItem[]>([]);
   const [switchingPlan, setSwitchingPlan] = useState<'prev' | 'next' | null>(null);
   const [previewEmpId, setPreviewEmpId] = useState<string | null>(null);
+  const [ratePreviewEmpId, setRatePreviewEmpId] = useState<string | null>(null);
   const previewEmployee = useMemo(() => {
     if (!previewEmpId) return null;
     const emp = state.employees.find((e) => e.id === previewEmpId);
@@ -320,6 +323,15 @@ export function RotaCalendarClient() {
     const fromPool = pool.find((p) => p.id === previewEmpId);
     return fromPool ? { ...emp, phone: emp.phone || fromPool.phone } : emp;
   }, [previewEmpId, state.employees, pool]);
+  const ratePreviewEmployee = useMemo(() => {
+    if (!ratePreviewEmpId) return null;
+    const emp = state.employees.find((e) => e.id === ratePreviewEmpId);
+    if (!emp) return null;
+    const fromPool = pool.find((p) => p.id === ratePreviewEmpId);
+    return fromPool
+      ? { ...emp, phone: emp.phone || fromPool.phone, hourlyRate: emp.hourlyRate ?? fromPool.hourlyRate }
+      : emp;
+  }, [ratePreviewEmpId, state.employees, pool]);
 
   useEffect(() => {
     if (!planIdParam) {
@@ -443,6 +455,9 @@ export function RotaCalendarClient() {
   const [xferFrom, setXferFrom] = useState<string | null>(null);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveCtx, setMoveCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
+  const [moveEmpSearch, setMoveEmpSearch] = useState('');
+  const [moveTargetDate, setMoveTargetDate] = useState('');
+  const [moveToEmployeeId, setMoveToEmployeeId] = useState<string | null>(null);
   const [viewShiftsOpen, setViewShiftsOpen] = useState(false);
   const [viewShiftsEmpId, setViewShiftsEmpId] = useState<string | null>(null);
   const [deleteShiftsOpen, setDeleteShiftsOpen] = useState(false);
@@ -972,10 +987,35 @@ export function RotaCalendarClient() {
       .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q));
   }, [copyCtx, copyEmpSearch, state.employees]);
 
+  const moveEmployeeTargets = useMemo(() => {
+    if (!moveCtx) return [] as EmployeeRec[];
+    const q = moveEmpSearch.trim().toLowerCase();
+    return [...state.employees]
+      .reverse()
+      .filter((e) => e.id !== moveCtx.empId)
+      .filter((e) => !q || e.name.toLowerCase().includes(q) || (e.role || '').toLowerCase().includes(q));
+  }, [moveCtx, moveEmpSearch, state.employees]);
+
   const startMove = (empId: string, dk: string, idx: number) => {
     closeShiftMenu();
     setMoveCtx({ empId, dk, idx });
+    setMoveTargetDate(dk);
+    setMoveEmpSearch('');
+    setMoveToEmployeeId(null);
     setMoveOpen(true);
+  };
+
+  const confirmMove = () => {
+    if (!moveCtx || !moveToEmployeeId || !moveTargetDate) {
+      toast.warning('Select a date and an employee to move to');
+      return;
+    }
+    moveShiftToDay(moveCtx.empId, moveCtx.dk, moveCtx.idx, moveTargetDate, moveToEmployeeId);
+    setMoveOpen(false);
+    setMoveCtx(null);
+    setMoveToEmployeeId(null);
+    setMoveEmpSearch('');
+    toast.snack('Shift moved');
   };
 
   const doCopy = () => {
@@ -1035,6 +1075,8 @@ export function RotaCalendarClient() {
     const lateM = Math.max(0, parseInt(String(attRec.lateMinutes ?? ''), 10) || 0);
     let rec: AttendanceRec = { ...attRec, status: status as AttendanceRec['status'], empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx, note: noteTrimmed };
     let nextShift = sh;
+    const published = isEmployeePublished(attCtx.empId);
+    const guardId = parseInt(attCtx.empId, 10);
 
     if (rec.status === 'late' && lateM > 0) {
       const scheduled = sh.scheduledStart || sh.start;
@@ -1042,58 +1084,15 @@ export function RotaCalendarClient() {
       rec = { ...rec, status: 'late', lateMinutes: lateM };
       nextShift = { ...sh, scheduledStart: scheduled, start: newStart };
       rec.hours = calcHours(nextShift).toFixed(2);
-
-      if (isEmployeePublished(attCtx.empId)) {
-        setAttSaving(true);
-        try {
-          await api.assignments.latenessByShift({
-            guard_id: parseInt(attCtx.empId, 10),
-            date: attCtx.dk,
-            shift_start: scheduled,
-            site_name: sh.site,
-            late_minutes: lateM,
-            note: attRec.note.trim() || undefined,
-          });
-          rec.synced = true;
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : 'Failed to record lateness');
-          setAttSaving(false);
-          return;
-        }
-        setAttSaving(false);
-      }
-
-      updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift);
+      flushSync(() => updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift));
     } else if (rec.status !== 'late' && sh.scheduledStart) {
       nextShift = { ...sh, start: sh.scheduledStart, scheduledStart: undefined };
       rec = { ...rec, lateMinutes: undefined, synced: undefined };
-      updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift);
+      flushSync(() => updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift));
     } else if (rec.status === 'late' && lateM <= 0) {
       rec = { ...rec, lateMinutes: undefined };
     } else {
       rec = { ...rec, lateMinutes: rec.status === 'late' ? lateM || undefined : undefined };
-    }
-
-    if (isEmployeePublished(attCtx.empId)) {
-      setAttSaving(true);
-      try {
-        const scheduled = sh.scheduledStart || sh.start;
-        await api.attendance.upsertByShift({
-          guard_id: parseInt(attCtx.empId, 10),
-          date: attCtx.dk,
-          shift_start: scheduled,
-          site_name: sh.site,
-          status: rec.status,
-          note: rec.note || undefined,
-          hours: rec.hours,
-        });
-        rec.synced = true;
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Failed to sync attendance');
-        setAttSaving(false);
-        return;
-      }
-      setAttSaving(false);
     }
 
     // Persist resolved rate onto shift so Payable stays correct after save
@@ -1101,8 +1100,79 @@ export function RotaCalendarClient() {
       const rate = resolveShiftRate(nextShift, attCtx.empId);
       if (rate > 0) {
         nextShift = { ...nextShift, shiftRate: rate };
-        updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift);
+        flushSync(() => updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift));
       }
+    }
+
+    if (published && guardId) {
+      setAttSaving(true);
+      try {
+        // Flush planner then re-publish this staff so new/edited shifts have assignments.
+        await saveRotaPlan();
+        await publishRota(guardId);
+
+        const lookupStarts = Array.from(
+          new Set(
+            [nextShift.scheduledStart || nextShift.start, nextShift.start, sh.scheduledStart || sh.start, sh.start]
+              .map((t) => (t || '').trim())
+              .filter(Boolean)
+          )
+        );
+        const siteName = (nextShift.site || sh.site || '').trim();
+
+        if (rec.status === 'late' && lateM > 0) {
+          let lateOk = false;
+          let lateErr: unknown;
+          for (const start of lookupStarts) {
+            try {
+              await api.assignments.latenessByShift({
+                guard_id: guardId,
+                date: attCtx.dk,
+                shift_start: start,
+                site_name: siteName,
+                late_minutes: lateM,
+                note: noteTrimmed || undefined,
+              });
+              lateOk = true;
+              break;
+            } catch (e) {
+              lateErr = e;
+            }
+          }
+          if (!lateOk) {
+            throw lateErr instanceof Error ? lateErr : new Error('Failed to record lateness');
+          }
+        }
+
+        let attOk = false;
+        let attErr: unknown;
+        for (const start of lookupStarts) {
+          try {
+            await api.attendance.upsertByShift({
+              guard_id: guardId,
+              date: attCtx.dk,
+              shift_start: start,
+              site_name: siteName,
+              status: rec.status,
+              note: rec.note || undefined,
+              hours: rec.hours,
+            });
+            attOk = true;
+            break;
+          } catch (e) {
+            attErr = e;
+          }
+        }
+        if (!attOk) {
+          throw attErr instanceof Error ? attErr : new Error('Failed to sync attendance');
+        }
+        rec.synced = true;
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to sync attendance');
+        setAttSaving(false);
+        return;
+      }
+      setAttSaving(false);
     }
 
     setAttendance(k, rec);
@@ -1358,7 +1428,7 @@ export function RotaCalendarClient() {
       if (created === 0) {
         toast.warning(
           skipped
-            ? `${skipped} shift(s) skipped — check site names match your Sites list`
+            ? `${skipped} shift(s) skipped — check site names or site plan quota`
             : 'Nothing was saved'
         );
       } else {
@@ -1617,6 +1687,7 @@ export function RotaCalendarClient() {
       closeEmpMenu();
       if (viewShiftsEmpId === empId) setViewShiftsOpen(false);
       if (previewEmpId === empId) setPreviewEmpId(null);
+      if (ratePreviewEmpId === empId) setRatePreviewEmpId(null);
       toast.snack('Employee removed from rota');
     }, { label: 'Remove' });
   };
@@ -1666,6 +1737,7 @@ export function RotaCalendarClient() {
       closeEmpMenu();
       if (viewShiftsEmpId && ids.includes(viewShiftsEmpId)) setViewShiftsOpen(false);
       if (previewEmpId && ids.includes(previewEmpId)) setPreviewEmpId(null);
+      if (ratePreviewEmpId && ids.includes(ratePreviewEmpId)) setRatePreviewEmpId(null);
       toast.snack(ids.length === 1 ? 'Employee removed from rota' : `${ids.length} employees removed from rota`);
     }, { label: 'Remove' });
   };
@@ -2238,7 +2310,7 @@ export function RotaCalendarClient() {
                   className={cn(
                     'border-b border-border/60',
                     employeeSelectMode && selectedEmpIds.has(emp.id) && 'bg-muted',
-                    empHasConflict(emp.id) && 'bg-amber-50 dark:bg-amber-950',
+                    (empHasConflict(emp.id) || emp.rotaPending) && 'bg-amber-50 dark:bg-amber-950',
                     rowDragId === emp.id && 'opacity-50',
                     rowDropId === emp.id && rowDragId && rowDragId !== emp.id && 'ring-2 ring-inset ring-pink-500/70'
                   )}
@@ -2246,13 +2318,16 @@ export function RotaCalendarClient() {
                   onDrop={(e) => onRowReorderDrop(e, emp.id)}
                 >
                   <td
-                    className="rota-sticky-emp sticky left-0 z-50 p-2 align-top border-r border-b shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18)] isolate"
+                    className={cn(
+                      'rota-sticky-emp sticky left-0 z-50 p-2 align-top border-r border-b shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18)] isolate',
+                      emp.rotaPending && 'border-amber-500'
+                    )}
                     style={
                       {
                         ['--rota-emp-cell-bg' as string]:
                           employeeSelectMode && selectedEmpIds.has(emp.id)
                             ? 'var(--muted)'
-                            : empHasConflict(emp.id)
+                            : empHasConflict(emp.id) || emp.rotaPending
                               ? 'var(--rota-emp-conflict-bg)'
                               : 'var(--rota-emp-bg)',
                         backgroundClip: 'padding-box',
@@ -2284,18 +2359,27 @@ export function RotaCalendarClient() {
                       <div className="flex-1 min-w-0">
                         <button
                           type="button"
-                          className="flex gap-1.5 text-left w-full min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1"
+                          className={cn(
+                            'flex gap-1.5 text-left w-full min-w-0 rounded-md hover:bg-muted/60 p-1 -m-1',
+                            emp.rotaPending && 'border border-amber-500 bg-amber-50 dark:bg-amber-950'
+                          )}
                           onClick={(e) => toggleEmpMenu(e, emp.id)}
                         >
                           <EmployeeAvatar emp={emp} className="size-7 text-[9px] shrink-0" />
                           <span className="min-w-0 flex-1">
                             <span className="text-[11px] font-medium flex items-start gap-1 break-words whitespace-normal leading-snug">
                               <span className="break-words">{emp.name}</span>
-                              {empHasConflict(emp.id) ? (
-                                <AlertTriangle className="size-3 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" aria-label="Has shift conflicts" />
+                              {empHasConflict(emp.id) || emp.rotaPending ? (
+                                <AlertTriangle
+                                  className="size-3 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400"
+                                  aria-label={emp.rotaPending ? 'Rota pending' : 'Has shift conflicts'}
+                                />
                               ) : null}
                             </span>
                             <span className="text-[9px] text-muted-foreground block break-words leading-tight">{emp.role}</span>
+                            {emp.rotaPending ? (
+                              <span className="text-[8px] font-semibold text-amber-700 dark:text-amber-300">Pending</span>
+                            ) : null}
                           </span>
                           <MoreHorizontal className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
                         </button>
@@ -3372,40 +3456,101 @@ export function RotaCalendarClient() {
         open={moveOpen}
         onOpenChange={(o) => {
           setMoveOpen(o);
-          if (!o) setMoveCtx(null);
+          if (!o) {
+            setMoveCtx(null);
+            setMoveEmpSearch('');
+            setMoveTargetDate('');
+            setMoveToEmployeeId(null);
+          }
         }}
       >
-        <DialogContent showCloseButton className="sm:max-w-sm">
+        <DialogContent showCloseButton className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Move shift to another employee</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-2 max-h-64 overflow-y-auto">
-            {moveCtx
-              ? state.employees
-                  .filter((e) => e.id !== moveCtx.empId)
-                  .map((e) => (
-                    <Button
-                      key={e.id}
-                      type="button"
-                      variant="outline"
-                      className="justify-start h-auto py-2"
-                      onClick={() => {
-                        moveShiftToEmployee(moveCtx.empId, moveCtx.dk, moveCtx.idx, e.id);
-                        setMoveOpen(false);
-                        setMoveCtx(null);
-                      }}
-                    >
-                      <span className="size-8 rounded-full mr-2 flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: e.avatarColor }}>
-                        {initials(e.name)}
-                      </span>
-                      <span className="text-left">
-                        <span className="font-medium block">{e.name}</span>
-                        <span className="text-xs text-muted-foreground">{e.role}</span>
-                      </span>
-                    </Button>
-                  ))
-              : null}
+          {moveCtx ? (
+            <p className="text-xs text-muted-foreground">
+              From {fmtShortDate(moveCtx.dk)} ·{' '}
+              {state.employees.find((e) => e.id === moveCtx.empId)?.name ?? moveCtx.empId} ·{' '}
+              {state.shifts[moveCtx.empId]?.[moveCtx.dk]?.[moveCtx.idx]
+                ? `${state.shifts[moveCtx.empId][moveCtx.dk][moveCtx.idx].start}–${state.shifts[moveCtx.empId][moveCtx.dk][moveCtx.idx].end} · ${shiftSiteLine(state.shifts[moveCtx.empId][moveCtx.dk][moveCtx.idx])}`
+                : ''}
+            </p>
+          ) : null}
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium">Move to date</p>
+            <select
+              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              value={moveTargetDate}
+              onChange={(e) => setMoveTargetDate(e.target.value)}
+              aria-label="Move to date"
+            >
+              {state.days.map((dk) => (
+                <option key={dk} value={dk}>
+                  {fmtShortDate(dk)}
+                  {moveCtx && dk === moveCtx.dk ? ' (current)' : ''}
+                </option>
+              ))}
+            </select>
           </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium">Move to employee</p>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={moveEmpSearch}
+                onChange={(e) => setMoveEmpSearch(e.target.value)}
+                placeholder="Search staff…"
+                className="h-8 pl-8 text-xs"
+                aria-label="Search staff"
+              />
+            </div>
+            <div className="grid gap-1.5 max-h-64 overflow-y-auto">
+              {moveEmployeeTargets.length === 0 ? (
+                <p className="px-1 py-2 text-xs text-muted-foreground">
+                  {moveEmpSearch.trim() ? 'No staff match that search.' : 'No other staff on this rota.'}
+                </p>
+              ) : (
+                moveEmployeeTargets.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => setMoveToEmployeeId((id) => (id === e.id ? null : e.id))}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md border px-2 py-2 text-left text-xs transition-colors',
+                      moveToEmployeeId === e.id
+                        ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30'
+                        : 'hover:bg-muted'
+                    )}
+                  >
+                    <EmployeeAvatar emp={e} className="size-8 text-[10px] shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="font-medium truncate block">{e.name}</span>
+                      {e.role ? <span className="truncate block text-[10px] text-muted-foreground">{e.role}</span> : null}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setMoveOpen(false);
+                setMoveCtx(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={confirmMove} disabled={!moveToEmployeeId || !moveTargetDate}>
+              Move shift
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -3643,6 +3788,10 @@ export function RotaCalendarClient() {
       )}
 
       {typeof document !== 'undefined' && empMenu && empMenuAnchor && createPortal(
+        (() => {
+          const menuEmp = state.employees.find((e) => e.id === empMenu);
+          const isPending = !!menuEmp?.rotaPending;
+          return (
         <div
           ref={empMenuPortalRef}
           className="fixed z-[200] rounded-md border border-border bg-background text-foreground shadow-xl overflow-hidden isolate py-1 text-sm"
@@ -3665,6 +3814,17 @@ export function RotaCalendarClient() {
           </button>
           <button
             type="button"
+            className="w-full text-left px-4 py-2.5 text-amber-700 dark:text-amber-400 hover:bg-muted font-medium"
+            onClick={() => {
+              setEmployeeRotaPending(empMenu, !isPending);
+              closeEmpMenu();
+              toast.snack(isPending ? 'Pending highlight cleared' : 'Marked as pending');
+            }}
+          >
+            {isPending ? 'Clear pending highlight' : 'Mark rota as pending'}
+          </button>
+          <button
+            type="button"
             className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
             onClick={() => {
               const id = parseInt(empMenu, 10);
@@ -3673,6 +3833,16 @@ export function RotaCalendarClient() {
             }}
           >
             Staff profile / add photo
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+            onClick={() => {
+              setRatePreviewEmpId(empMenu);
+              closeEmpMenu();
+            }}
+          >
+            Rate preview
           </button>
           <button
             type="button"
@@ -3690,7 +3860,9 @@ export function RotaCalendarClient() {
           <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => removeEmpFromRota(empMenu)}>
             Remove from rota
           </button>
-        </div>,
+        </div>
+          );
+        })(),
         document.body
       )}
 
@@ -3699,6 +3871,13 @@ export function RotaCalendarClient() {
         onOpenChange={(o) => !o && setPreviewEmpId(null)}
         employee={previewEmployee}
         state={state}
+      />
+      <RatePreviewDialog
+        open={!!ratePreviewEmpId}
+        onOpenChange={(o) => !o && setRatePreviewEmpId(null)}
+        employee={ratePreviewEmployee}
+        state={state}
+        resolveShiftRate={resolveShiftRate}
       />
     </div>
   );

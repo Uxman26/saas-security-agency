@@ -121,6 +121,7 @@ type Ctx = {
   removeEmployee: (id: string) => void;
   removeEmployees: (ids: string[]) => void;
   reorderEmployees: (ids: string[]) => void;
+  setEmployeeRotaPending: (id: string, pending: boolean) => void;
   addShift: (empId: string, dk: string, s: ShiftRec) => void;
   updateShift: (empId: string, dk: string, idx: number, s: ShiftRec) => void;
   applyShiftChange: (
@@ -171,6 +172,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const [siteRateByName, setSiteRateByName] = useState<Record<string, number>>({});
   const [guardRateById, setGuardRateById] = useState<Record<string, number>>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const setPublishedGuardIds = useCallback((ids: number[] | string[]) => {
     setPublishedGuardIdsState(new Set(ids.map(String)));
@@ -319,36 +322,46 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveRotaPlan = useCallback(async () => {
-    if (!rotaPlanId || state.days.length === 0) return;
-    await api.rotaPlans.update(rotaPlanId, {
-      name: state.rotaName,
-      view_mode: state.rotaView,
-      budget: state.budget,
-      day_count: state.days.length,
-      start_date: state.days[0],
-      planner_data: serializePlannerState(state),
+    const s = stateRef.current;
+    if (!rotaPlanId || s.days.length === 0) return;
+    const updated = await api.rotaPlans.update(rotaPlanId, {
+      name: s.rotaName,
+      view_mode: s.rotaView,
+      budget: s.budget,
+      day_count: s.days.length,
+      start_date: s.days[0],
+      planner_data: serializePlannerState(s),
     });
-  }, [rotaPlanId, state]);
+    if (updated.published_guard_ids) {
+      setPublishedGuardIds(updated.published_guard_ids);
+    }
+  }, [rotaPlanId, setPublishedGuardIds]);
 
   useEffect(() => {
     if (!rotaPlanId || state.days.length === 0) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
+      const s = stateRef.current;
       void api.rotaPlans
         .update(rotaPlanId, {
-          name: state.rotaName,
-          view_mode: state.rotaView,
-          budget: state.budget,
-          day_count: state.days.length,
-          start_date: state.days[0],
-          planner_data: serializePlannerState(state),
+          name: s.rotaName,
+          view_mode: s.rotaView,
+          budget: s.budget,
+          day_count: s.days.length,
+          start_date: s.days[0],
+          planner_data: serializePlannerState(s),
+        })
+        .then((updated) => {
+          if (updated.published_guard_ids) {
+            setPublishedGuardIds(updated.published_guard_ids);
+          }
         })
         .catch(() => {});
     }, 1500);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [rotaPlanId, state]);
+  }, [rotaPlanId, state, setPublishedGuardIds]);
 
   const loadRotaPlan = useCallback(
     (plan: RotaPlanDetail, bootstrap?: InitPayload) => {
@@ -575,6 +588,15 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const rest = s.employees.filter((e) => !ids.includes(e.id));
       return { ...s, employees: [...employees, ...rest] };
     });
+  }, []);
+
+  const setEmployeeRotaPending = useCallback((id: string, pending: boolean) => {
+    setState((s) => ({
+      ...s,
+      employees: s.employees.map((e) =>
+        e.id === id ? { ...e, rotaPending: pending ? true : undefined } : e
+      ),
+    }));
   }, []);
 
   const addShift = useCallback((empId: string, dk: string, sh: ShiftRec) => {
@@ -1090,6 +1112,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       removeEmployee,
       removeEmployees,
       reorderEmployees,
+      setEmployeeRotaPending,
       addShift,
       updateShift,
       applyShiftChange,
@@ -1142,6 +1165,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       removeEmployee,
       removeEmployees,
       reorderEmployees,
+      setEmployeeRotaPending,
       addShift,
       updateShift,
       applyShiftChange,

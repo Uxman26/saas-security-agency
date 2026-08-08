@@ -17,7 +17,7 @@ import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput } from 'lucide-react';
+import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, Search } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
@@ -53,6 +53,10 @@ export default function PayrollPage() {
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
   const [search, setSearch] = useState('');
+  const [dateFromDraft, setDateFromDraft] = useState('');
+  const [dateToDraft, setDateToDraft] = useState('');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
   const [exportSiteId, setExportSiteId] = useState('');
@@ -221,11 +225,29 @@ export default function PayrollPage() {
 
   const filteredPayrolls = useMemo(() => {
     let list = payrolls;
-    if (exportFrom || exportTo) {
-      list = list.filter((p) => periodOverlaps(p, exportFrom, exportTo));
+    if (filterFrom || filterTo) {
+      list = list.filter((p) => periodOverlaps(p, filterFrom, filterTo));
     }
     return list;
-  }, [payrolls, exportFrom, exportTo]);
+  }, [payrolls, filterFrom, filterTo]);
+
+  const applyDateFilter = () => {
+    if (dateFromDraft && dateToDraft && dateFromDraft > dateToDraft) {
+      toast.error('From date cannot be after to date');
+      return;
+    }
+    setFilterFrom(dateFromDraft);
+    setFilterTo(dateToDraft);
+    setPage(1);
+  };
+
+  const clearDateFilter = () => {
+    setDateFromDraft('');
+    setDateToDraft('');
+    setFilterFrom('');
+    setFilterTo('');
+    setPage(1);
+  };
 
   const getSearchText = useCallback(
     (p: Payroll) =>
@@ -275,7 +297,7 @@ export default function PayrollPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, exportFrom, exportTo]);
+  }, [search, filterFrom, filterTo]);
   useEffect(() => {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
@@ -533,17 +555,38 @@ export default function PayrollPage() {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
             <Input
               placeholder="Search by guard name or period..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-md"
             />
-            <div className="flex gap-2 items-center">
-              <Input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} className="w-auto" aria-label="Filter from" />
+            <div className="flex flex-wrap gap-2 items-center">
+              <Input
+                type="date"
+                value={dateFromDraft}
+                onChange={(e) => setDateFromDraft(e.target.value)}
+                className="w-auto"
+                aria-label="Filter from"
+              />
               <span className="text-muted-foreground text-sm">to</span>
-              <Input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} className="w-auto" aria-label="Filter to" />
+              <Input
+                type="date"
+                value={dateToDraft}
+                onChange={(e) => setDateToDraft(e.target.value)}
+                className="w-auto"
+                aria-label="Filter to"
+              />
+              <Button type="button" variant="secondary" onClick={applyDateFilter}>
+                <Search className="size-4 mr-1.5" />
+                Search
+              </Button>
+              {(filterFrom || filterTo) && (
+                <Button type="button" variant="ghost" size="sm" onClick={clearDateFilter}>
+                  Clear dates
+                </Button>
+              )}
             </div>
           </div>
 
@@ -556,7 +599,7 @@ export default function PayrollPage() {
                 <InlineKpiTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search || exportFrom || exportTo ? 'No records match your filters.' : 'No payroll records yet. Use “Import from Rota” to pull payable totals, then Edit if anything needs correcting.'}
+                  {search || filterFrom || filterTo ? 'No records match your filters.' : 'No payroll records yet. Use “Import from Rota” to pull payable totals, then Edit if anything needs correcting.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">

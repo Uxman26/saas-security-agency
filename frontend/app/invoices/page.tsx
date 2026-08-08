@@ -23,6 +23,7 @@ import { can } from '@/lib/permissions';
 import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { StatusPieChart } from '@/components/charts/status-chart';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -36,6 +37,12 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
+
+function formatGbp(n: unknown): string {
+  const v = typeof n === 'number' ? n : Number(n);
+  if (!Number.isFinite(v) || Math.abs(v) > 1e12) return '£—';
+  return `£${v.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export default function InvoicesPage() {
   const { user } = useAuth();
@@ -66,6 +73,26 @@ export default function InvoicesPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+
+  /** Sites that can be used for invoice generation (must have a client). */
+  const invoiceableSites = useMemo(
+    () => sites.filter((s) => s.client_id != null && s.client_id > 0),
+    [sites]
+  );
+  const unlinkedSiteCount = sites.length - invoiceableSites.length;
+
+  const clientOptions = useMemo(
+    () => clients.map((c) => ({ value: String(c.id), label: c.name })),
+    [clients]
+  );
+  const siteOptions = useMemo(
+    () =>
+      invoiceableSites.map((s) => ({
+        value: String(s.id),
+        label: `${s.name}${s.client_id && clientMap.get(s.client_id) ? ` · ${clientMap.get(s.client_id)}` : ''}`,
+      })),
+    [invoiceableSites, clientMap]
+  );
 
   const loadInvoices = useCallback(() => {
     setLoading(true);
@@ -299,7 +326,14 @@ export default function InvoicesPage() {
                     </p>
                     <div className="space-y-1">
                       <Label>Generate by</Label>
-                      <Select value={genMode} onValueChange={(v) => setGenMode(v as 'client' | 'site')}>
+                      <Select
+                        value={genMode}
+                        onValueChange={(v) => {
+                          setGenMode(v as 'client' | 'site');
+                          setGenClientId('');
+                          setGenSiteId('');
+                        }}
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -312,30 +346,38 @@ export default function InvoicesPage() {
                     {genMode === 'client' ? (
                       <div className="space-y-1">
                         <Label>Client <span className="text-destructive">*</span></Label>
-                        <Select value={genClientId} onValueChange={setGenClientId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select client" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {clients.map((c) => (
-                              <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={genClientId}
+                          options={clientOptions}
+                          placeholder="Select client"
+                          searchPlaceholder="Search clients…"
+                          onChange={setGenClientId}
+                        />
                       </div>
                     ) : (
                       <div className="space-y-1">
                         <Label>Site <span className="text-destructive">*</span></Label>
-                        <Select value={genSiteId} onValueChange={setGenSiteId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select site" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sites.map((s) => (
-                              <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                          value={genSiteId}
+                          options={siteOptions}
+                          placeholder={
+                            invoiceableSites.length ? 'Select site' : 'No sites linked to a client'
+                          }
+                          searchPlaceholder="Search sites…"
+                          emptyText="No matching sites"
+                          onChange={setGenSiteId}
+                          disabled={invoiceableSites.length === 0}
+                        />
+                        {unlinkedSiteCount > 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            {unlinkedSiteCount} site{unlinkedSiteCount === 1 ? '' : 's'} hidden because{' '}
+                            {unlinkedSiteCount === 1 ? 'it is' : 'they are'} not linked to a client.{' '}
+                            <Link href="/sites" className="text-primary underline underline-offset-2">
+                              Edit sites
+                            </Link>{' '}
+                            to assign a client first.
+                          </p>
+                        ) : null}
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
@@ -399,7 +441,7 @@ export default function InvoicesPage() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Total Invoiced</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <span className="text-2xl font-bold">£{totalAmount.toFixed(2)}</span>
+                  <span className="text-2xl font-bold">{formatGbp(totalAmount)}</span>
                 </CardContent>
               </Card>
               <Card>
@@ -407,7 +449,7 @@ export default function InvoicesPage() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Draft</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <span className="text-2xl font-bold">£{draftTotal.toFixed(2)}</span>
+                  <span className="text-2xl font-bold">{formatGbp(draftTotal)}</span>
                   <p className="text-xs text-muted-foreground mt-1">{draftInvoices.length} invoice{draftInvoices.length !== 1 ? 's' : ''}</p>
                 </CardContent>
               </Card>
@@ -416,7 +458,7 @@ export default function InvoicesPage() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Sent</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <span className="text-2xl font-bold text-blue-600">£{sentTotal.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-blue-600">{formatGbp(sentTotal)}</span>
                   <p className="text-xs text-muted-foreground mt-1">{sentInvoices.length} invoice{sentInvoices.length !== 1 ? 's' : ''}</p>
                 </CardContent>
               </Card>
@@ -425,7 +467,7 @@ export default function InvoicesPage() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Paid</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <span className="text-2xl font-bold text-green-600">£{paidAmount.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-green-600">{formatGbp(paidAmount)}</span>
                 </CardContent>
               </Card>
               <Card>
@@ -433,7 +475,7 @@ export default function InvoicesPage() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Outstanding</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <span className="text-2xl font-bold text-amber-600">£{outstanding.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-amber-600">{formatGbp(outstanding)}</span>
                 </CardContent>
               </Card>
             </div>
@@ -519,7 +561,13 @@ export default function InvoicesPage() {
                     <TableBody>
                       {pageRows.map((inv) => {
                         const pastDue = isInvoicePastDue(inv);
-                        const balance = inv.balance_due ?? (inv.status === 'paid' ? 0 : inv.total);
+                        const rawBalance = inv.balance_due ?? (inv.status === 'paid' ? 0 : inv.total);
+                        const balance = Number(rawBalance);
+                        const safeBalance = Number.isFinite(balance) && Math.abs(balance) <= 1e12 ? balance : 0;
+                        const customer =
+                          (inv.client_name && String(inv.client_name).trim()) ||
+                          (inv.client_id != null ? clientMap.get(inv.client_id) : undefined) ||
+                          (inv.client_id != null ? `Client #${inv.client_id}` : '—');
                         return (
                         <TableRow
                           key={inv.id}
@@ -534,11 +582,11 @@ export default function InvoicesPage() {
                             {formatDueLabel(inv)}
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>
-                          <TableCell className="font-medium">#{inv.id}</TableCell>
-                          <TableCell className="font-medium max-w-[200px] truncate">
-                            {inv.client_name ?? clientMap.get(inv.client_id) ?? `Client #${inv.client_id}`}
+                          <TableCell className="font-medium tabular-nums">#{inv.id}</TableCell>
+                          <TableCell className="font-medium max-w-[200px] truncate" title={customer}>
+                            {customer}
                           </TableCell>
-                          <TableCell className="font-semibold whitespace-nowrap">£{balance.toFixed(2)}</TableCell>
+                          <TableCell className="font-semibold whitespace-nowrap tabular-nums">{formatGbp(safeBalance)}</TableCell>
                           <TableCell className="text-right relative">
                             <Button variant="outline" size="sm" onClick={() => setOpenMenuId(openMenuId === inv.id ? null : inv.id)}>
                               Actions <ChevronDown className="size-3.5 ml-1" />
@@ -560,11 +608,11 @@ export default function InvoicesPage() {
                                       <Copy className="size-4" /> Duplicate
                                     </button>
                                   )}
-                                  {can(user, 'pay.write') && balance > 0 && (
+                                  {can(user, 'pay.write') && safeBalance > 0 && (
                                     <button
                                       type="button"
                                       className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted"
-                                      onClick={() => { setPayInvoice(inv); setPayAmount(balance.toFixed(2)); setOpenMenuId(null); }}
+                                      onClick={() => { setPayInvoice(inv); setPayAmount(safeBalance.toFixed(2)); setOpenMenuId(null); }}
                                     >
                                       <CreditCard className="size-4" /> Record payment
                                     </button>

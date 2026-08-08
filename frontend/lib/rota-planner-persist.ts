@@ -1,4 +1,4 @@
-import { buildDayRange, normalizeAttStatus } from './rota-shifts-utils';
+import { buildDayRange, calcHours, normalizeAttStatus } from './rota-shifts-utils';
 import type { AttendanceRec, RotaJsState, ShiftRec } from './rota-shifts-types';
 import { SHIFT_COLOR_OPTS, AVATAR_PALETTE } from './rota-shifts-types';
 
@@ -69,19 +69,9 @@ export function serializePlannerState(state: RotaJsState): string {
         const attendance = state.attendance[`${guardId}:${date}:${index}`];
         const status = normalizeAttStatus(attendance?.status ?? null);
         if (status !== 'on_time' && status !== 'late') return;
-        const attendanceHours =
-          attendance?.hours != null && String(attendance.hours).trim() !== ''
-            ? Number(attendance.hours)
-            : Number.NaN;
-        let hours = attendanceHours;
-        if (!Number.isFinite(hours) || hours < 0) {
-          const [startH, startM] = shift.start.split(':').map(Number);
-          const [endH, endM] = shift.end.split(':').map(Number);
-          let minutes = endH * 60 + endM - (startH * 60 + startM);
-          if (minutes < 0) minutes += 24 * 60;
-          if (!state.inclBreaks) minutes -= (shift.breakH || 0) * 60 + (shift.breakM || 0);
-          hours = Math.max(0, minutes / 60);
-        }
+        // Always derive from shift + inclBreaks (ignore stored attendance.hours)
+        const hours = calcHours(shift, state.inclBreaks);
+        if (hours <= 0) return;
         const rate = Number(shift.shiftRate) || 0;
         payrollLines.push({
           guardId,
@@ -161,6 +151,7 @@ function normalizePayload(p: PlannerPayload): PlannerPayload {
       role: e.role ?? 'Staff',
       avatarColor: e.avatarColor?.trim() || AVATAR_PALETTE[i % AVATAR_PALETTE.length],
       ...(e.photoUrl != null ? { photoUrl: e.photoUrl } : {}),
+      ...(e.rotaPending ? { rotaPending: true } : {}),
     })),
     shifts: normalizeShifts(p.shifts),
     attendance: normalizeAttendance(p.attendance),

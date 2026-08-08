@@ -38,11 +38,8 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
     except (json.JSONDecodeError, TypeError):
         return []
 
-    stored = payload.get("payrollLines")
-    if isinstance(stored, list):
-        return [line for line in stored if isinstance(line, dict)]
-
-    # Compatibility for rotas saved before payroll snapshots were introduced.
+    # Always derive from live shifts + attendance status so hours respect inclBreaks
+    # and are not frozen by stale attendance.hours / payrollLines snapshots.
     lines: list[dict] = []
     attendance = payload.get("attendance") or {}
     include_breaks = bool(payload.get("inclBreaks", False))
@@ -57,10 +54,9 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
                     status = "on_time"
                 if status not in {"on_time", "late"}:
                     continue
-                raw_hours = record.get("hours")
-                hours = _number(raw_hours, -1)
-                if hours < 0:
-                    hours = _hours_from_shift(shift, include_breaks)
+                hours = _hours_from_shift(shift, include_breaks)
+                if hours <= 0:
+                    continue
                 rate = _number(shift.get("shiftRate"))
                 lines.append(
                     {

@@ -130,7 +130,7 @@ export function ShiftDialog({
       breakM: 0,
     }));
 
-  const submit = () => {
+  const submit = async () => {
     if (assignees.length === 0 || !dk) return;
     const siteName = (shift.site || '').trim();
     if (siteNameTooLong) {
@@ -145,7 +145,22 @@ export function ShiftDialog({
       toast.warning('Shift rate is required — enter the hourly rate for this shift');
       return;
     }
-    onApply(assignees, dk, normalizeShiftForm({ ...shift, site: siteName, shiftRate: rateValue }));
+    let resolvedName = siteName;
+    const known = sites.some((s) => s.name.trim().toLowerCase() === siteName.toLowerCase());
+    if (!known) {
+      try {
+        const created = await createSite.mutateAsync({
+          name: siteName,
+          color: shift.color || DEFAULT_SITE_COLOR,
+          site_type: 1,
+        });
+        resolvedName = created.name;
+      } catch {
+        // toast already shown by mutation; still allow saving the shift name —
+        // publish will also try to create the site.
+      }
+    }
+    onApply(assignees, dk, normalizeShiftForm({ ...shift, site: resolvedName, shiftRate: rateValue }));
     onOpenChange(false);
   };
 
@@ -335,7 +350,7 @@ export function ShiftDialog({
               <p className={cn('text-[11px]', siteNameTooLong ? 'text-destructive' : 'text-muted-foreground')}>
                 {siteNameTooLong
                   ? tooLongMessage('Site name', TEXT_LIMITS.siteName)
-                  : `Required — select a site above, or type the site name here. ${charsRemaining(
+                  : `Required — select a site, use Add site, or type a new name (it will be created automatically). ${charsRemaining(
                       shift.site,
                       TEXT_LIMITS.siteName
                     )} of ${TEXT_LIMITS.siteName} characters left.`}
@@ -424,11 +439,11 @@ export function ShiftDialog({
             <Button
               type="button"
               className="bg-pink-600 hover:bg-pink-700"
-              onClick={submit}
-              disabled={!canSubmit}
+              onClick={() => void submit()}
+              disabled={!canSubmit || createSite.isPending}
               title={canSubmit ? undefined : 'Site name and shift rate are required'}
             >
-              {edit ? 'Update shift' : 'Add shift'}
+              {createSite.isPending ? 'Saving…' : edit ? 'Update shift' : 'Add shift'}
             </Button>
           </DialogFooter>
         </DialogContent>

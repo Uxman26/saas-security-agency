@@ -39,6 +39,20 @@ def _assignment_for_company(db: Session, company_id: int, assignment_id: int) ->
     return a
 
 
+def _norm_hhmm(t: Optional[str]) -> str:
+    """Normalize '9:00' / '09:00:00' → '09:00' for assignment matching."""
+    raw = (t or "").strip()
+    if not raw:
+        return ""
+    try:
+        parts = raw.split(":")
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        return f"{h:02d}:{m:02d}"
+    except (ValueError, IndexError):
+        return raw
+
+
 def find_assignment(
     db: Session,
     company_id: int,
@@ -47,31 +61,69 @@ def find_assignment(
     shift_start: str,
     site_name: Optional[str] = None,
 ) -> Optional[Assignment]:
-    base = (
+    want_start = _norm_hhmm(shift_start)
+    site_key = " ".join((site_name or "").strip().lower().split())
+
+    rows = (
         db.query(Assignment)
         .join(Guard)
-        .join(Site)
+        .outerjoin(Site)
+        .options(joinedload(Assignment.site))
         .filter(
             Guard.company_id == company_id,
             Assignment.guard_id == guard_id,
             Assignment.date == shift_date,
         )
-    )
-    if site_name:
-        base = base.filter(Site.name == site_name)
-
-    exact = base.filter(Assignment.shift_start == shift_start).order_by(Assignment.id.desc()).first()
-    if exact:
-        return exact
-
-    # Late shifts store the actual start on Assignment and retain the original
-    # scheduled start in ShiftLateLog. Accept either value for later updates.
-    return (
-        base.join(ShiftLateLog, ShiftLateLog.assignment_id == Assignment.id)
-        .filter(ShiftLateLog.scheduled_start == shift_start)
         .order_by(Assignment.id.desc())
-        .first()
+        .all()
     )
+    if not rows:
+        return None
+
+    def site_ok(a: Assignment) -> bool:
+        if not site_key:
+            return True
+        name = " ".join(((a.site.name if a.site else "") or "").strip().lower().split())
+        return name == site_key
+
+    candidates = [a for a in rows if site_ok(a)] or rows
+
+    for a in candidates:
+        if _norm_hhmm(a.shift_start) == want_start:
+            return a
+
+    # Late shifts: Assignment.shift_start is the actual (late) start; scheduled is in ShiftLateLog.
+    late_hits = (
+        db.query(Assignment)
+        .join(ShiftLateLog, ShiftLateLog.assignment_id == Assignment.id)
+        .join(Guard)
+        .options(joinedload(Assignment.site))
+        .filter(
+            Guard.company_id == company_id,
+            Assignment.guard_id == guard_id,
+            Assignment.date == shift_date,
+        )
+        .order_by(Assignment.id.desc())
+        .all()
+    )
+    for a in late_hits:
+        if not site_ok(a) and site_key:
+            continue
+        late = (
+            db.query(ShiftLateLog)
+            .filter(ShiftLateLog.assignment_id == a.id)
+            .order_by(ShiftLateLog.id.desc())
+            .first()
+        )
+        if not late:
+            continue
+        if _norm_hhmm(late.scheduled_start) == want_start or _norm_hhmm(a.shift_start) == want_start:
+            return a
+
+    # Single shift that day (+ matching site when given): accept even if times drifted.
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
 
 
 def record_overtime(

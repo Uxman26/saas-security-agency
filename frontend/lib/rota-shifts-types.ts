@@ -33,6 +33,8 @@ export type EmployeeRec = {
   photoUrl?: string | null;
   /** Latest guard hourly rate (fallback for Payable when shift has no rate) */
   hourlyRate?: number | null;
+  /** Manual “pending rota” highlight on the staff name cell */
+  rotaPending?: boolean;
 };
 
 export type AttStatus = 'on_time' | 'late' | 'absent' | 'no_show';

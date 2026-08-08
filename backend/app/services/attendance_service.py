@@ -222,6 +222,12 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
         raise HTTPException(status_code=400, detail="Note is required for Late, Absent, and No show")
     a = find_assignment(db, company.id, data.guard_id, data.date, data.shift_start, data.site_name or "")
     if not a:
+        # Published staff may have new/edited shifts that are not yet mirrored to assignments.
+        # Re-publish that guard from any covering published rota, then retry the lookup.
+        a = _ensure_assignment_from_published_rota(
+            db, user_id, company.id, data.guard_id, data.date, data.shift_start, data.site_name or ""
+        )
+    if not a:
         raise HTTPException(status_code=404, detail="Assignment not found for this shift (publish the rota first)")
     att = (
         db.query(Attendance)
@@ -250,6 +256,58 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
         .first()
     )
     return _att_out(att)
+
+
+def _ensure_assignment_from_published_rota(
+    db: Session,
+    user_id: int,
+    company_id: int,
+    guard_id: int,
+    shift_date: date,
+    shift_start: str,
+    site_name: str,
+):
+    from app.models import RotaPlan
+    from app.services import rota_plan_service
+
+    # Prefer plans that already have assignments for this guard (actively published).
+    plan_ids = [
+        int(r[0])
+        for r in (
+            db.query(Assignment.rota_plan_id)
+            .filter(
+                Assignment.guard_id == guard_id,
+                Assignment.rota_plan_id.isnot(None),
+            )
+            .distinct()
+            .all()
+        )
+        if r[0] is not None
+    ]
+    # Also consider published plans covering this date (in case assignments were wiped).
+    covering = (
+        db.query(RotaPlan)
+        .filter(
+            RotaPlan.company_id == company_id,
+            RotaPlan.status == "published",
+            RotaPlan.start_date <= shift_date,
+            RotaPlan.end_date >= shift_date,
+        )
+        .all()
+    )
+    for p in covering:
+        if p.id not in plan_ids:
+            plan_ids.append(p.id)
+
+    for plan_id in plan_ids:
+        try:
+            rota_plan_service.publish_rota_plan(db, user_id, plan_id, guard_id=guard_id)
+        except HTTPException:
+            continue
+        a = find_assignment(db, company_id, guard_id, shift_date, shift_start, site_name)
+        if a:
+            return a
+    return None
 
 
 def sync_published_plan_attendance(db: Session, user_id: int, plan) -> None:

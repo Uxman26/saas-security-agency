@@ -90,8 +90,8 @@ function navLinkClass(isActive: boolean) {
   return cn(
     'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
     isActive
-      ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-border'
-      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
+      ? 'bg-[color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)] font-medium text-sidebar-primary shadow-sm ring-1 ring-[color-mix(in_oklab,var(--sidebar-primary)_35%,transparent)]'
+      : 'text-sidebar-foreground/70 hover:bg-[color-mix(in_oklab,var(--sidebar-primary)_12%,transparent)] hover:text-sidebar-primary'
   );
 }
 
@@ -123,7 +123,7 @@ export function AppSidebar() {
         <div className="shrink-0 border-b border-sidebar-border p-3">
           <CompanyBrand />
         </div>
-        <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
+        <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
           <div>
             <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
               {ts('sectionAdmin')}
@@ -161,7 +161,7 @@ export function AppSidebar() {
       <div className="shrink-0 border-b border-sidebar-border p-3">
         <CompanyBrand />
       </div>
-      <nav className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
+      <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
         {grouped.map((section) => (
           <div key={section.titleKey}>
             <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">

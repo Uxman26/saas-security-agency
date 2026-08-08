@@ -106,7 +106,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Button>
                 </div>
               </div>
-              <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+              <nav className="sidebar-nav-scroll flex-1 space-y-0.5 overflow-y-auto p-2">
                 {isSuperAdmin ? (
                   [
                     { href: '/admin/companies', labelKey: 'adminCompanies' },
@@ -125,8 +125,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                       className={cn(
                         'block rounded-lg px-3 py-2 text-sm transition-colors',
                         pathname === href
-                          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
+                          ? 'bg-[color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)] font-medium text-sidebar-primary'
+                          : 'text-sidebar-foreground/70 hover:bg-[color-mix(in_oklab,var(--sidebar-primary)_12%,transparent)] hover:text-sidebar-primary'
                       )}
                       onClick={() => setDrawer(false)}
                     >
@@ -141,8 +141,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                       className={cn(
                         'block rounded-lg px-3 py-2 text-sm transition-colors',
                         mActive(pathname, m.sidebar_path)
-                          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
+                          ? 'bg-[color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)] font-medium text-sidebar-primary'
+                          : 'text-sidebar-foreground/70 hover:bg-[color-mix(in_oklab,var(--sidebar-primary)_12%,transparent)] hover:text-sidebar-primary'
                       )}
                       onClick={() => setDrawer(false)}
                     >

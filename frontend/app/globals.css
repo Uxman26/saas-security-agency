@@ -214,6 +214,20 @@
   50% { opacity: 0.25; }
 }
 
+@keyframes spotlight {
+  0% {
+    opacity: 0;
+    transform: translate(-72%, -62%) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -40%) scale(1);
+  }
+}
+.animate-spotlight {
+  animation: spotlight 2s ease 0.75s 1 forwards;
+}
+
 @keyframes lock-shine {
   0% { background-position: -200% center; }
   100% { background-position: 200% center; }

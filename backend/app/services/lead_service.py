@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from typing import Any, List, Optional
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import SUPER_ADMIN_ROLE
@@ -819,10 +819,44 @@ def mark_notification_read(db: Session, user_id: int, notification_id: int) -> A
     )
     if not n:
         raise HTTPException(status_code=404, detail="Notification not found")
-    n.read_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(n)
+    if n.read_at is None:
+        n.read_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(n)
     return n
+
+
+def mark_all_notifications_read(db: Session, user_id: int) -> int:
+    """Mark all unread notifications for this user as read. Returns count updated."""
+    company = get_company_by_user_id(db, user_id)
+    now = datetime.now(timezone.utc)
+    q = (
+        db.query(AppNotification)
+        .filter(
+            AppNotification.company_id == company.id,
+            AppNotification.user_id == user_id,
+            AppNotification.read_at.is_(None),
+        )
+    )
+    count = q.count()
+    if count:
+        q.update({AppNotification.read_at: now}, synchronize_session=False)
+        db.commit()
+    return count
+
+
+def unread_notification_count(db: Session, user_id: int) -> int:
+    company = get_company_by_user_id(db, user_id)
+    return (
+        db.query(func.count(AppNotification.id))
+        .filter(
+            AppNotification.company_id == company.id,
+            AppNotification.user_id == user_id,
+            AppNotification.read_at.is_(None),
+        )
+        .scalar()
+        or 0
+    )
 
 
 def export_leads_csv(db: Session, user_id: int, **filters) -> str:

@@ -566,7 +566,6 @@ export default function PayrollPage() {
                         <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Hours" colKey="hours" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Bank" colKey="bank" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Cash" colKey="cash" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Allowances" colKey="allowances" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -585,7 +584,6 @@ export default function PayrollPage() {
                             {p.period_start} – {p.period_end}
                           </TableCell>
                           <TableCell>{(p.total_hours ?? 0).toFixed(2)}h</TableCell>
-                          <TableCell>{formatMoney(p.hourly_rate)}/hr</TableCell>
                           <TableCell className="font-medium">{formatMoney(p.bank_amount)}</TableCell>
                           <TableCell className="font-medium">{formatMoney(p.cash_amount)}</TableCell>
                           <TableCell>{formatMoney(p.allowance_total)}</TableCell>

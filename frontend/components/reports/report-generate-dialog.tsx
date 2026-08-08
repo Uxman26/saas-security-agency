@@ -5,13 +5,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { ReportResultView } from '@/components/reports/report-result-view';
-import type { Guard } from '@/lib/types';
+import type { Guard, Site } from '@/lib/types';
 import { FileSpreadsheet, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const WIDE_REPORTS = new Set(['shift-overtime', 'shift-early-finish', 'login-logs', 'attendance', 'sms-logs']);
+const WIDE_REPORTS = new Set(['shift-overtime', 'shift-early-finish', 'login-logs', 'attendance', 'sms-logs', 'shifts']);
 const STAFF_FILTER_REPORTS = new Set(['shifts', 'attendance', 'shift-overtime', 'shift-early-finish']);
+const SITE_FILTER_REPORTS = new Set(['shifts']);
+const GROUP_BY_REPORTS = new Set(['staff-monthly', 'overtime']);
 
 type ReportView =
   | { kind: 'individual'; data: import('@/lib/types').StaffIndividualReport }
@@ -34,13 +37,18 @@ type Props = {
   startDate: string;
   endDate: string;
   guardId: string;
+  siteId: string;
+  groupBy: string;
   guards: Guard[];
+  sites: Site[];
   loading: boolean;
   result: ReportView | null;
   onClose: () => void;
   onStartDate: (v: string) => void;
   onEndDate: (v: string) => void;
   onGuardId: (v: string) => void;
+  onSiteId: (v: string) => void;
+  onGroupBy: (v: string) => void;
   onGenerate: () => void;
   onExport: (format: string) => void;
 };
@@ -51,19 +59,29 @@ export function ReportGenerateDialog({
   startDate,
   endDate,
   guardId,
+  siteId,
+  groupBy,
   guards,
+  sites,
   loading,
   result,
   onClose,
   onStartDate,
   onEndDate,
   onGuardId,
+  onSiteId,
+  onGroupBy,
   onGenerate,
   onExport,
 }: Props) {
   const showStaff = report ? STAFF_FILTER_REPORTS.has(report.id) : false;
+  const showSite = report ? SITE_FILTER_REPORTS.has(report.id) : false;
+  const showGroupBy = report ? GROUP_BY_REPORTS.has(report.id) : false;
   const wide = report ? WIDE_REPORTS.has(report.id) : false;
   const canExport = report && !report.noExport && report.exportType !== 'expenses' && report.exportType !== 'usage';
+
+  const staffOptions = guards.map((g) => ({ value: String(g.id), label: g.full_name }));
+  const siteOptions = sites.map((s) => ({ value: String(s.id), label: s.name }));
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -97,13 +115,43 @@ export function ReportGenerateDialog({
               {showStaff && (
                 <div className="space-y-1.5">
                   <Label>Staff (optional)</Label>
-                  <Select value={guardId || 'all'} onValueChange={(v) => onGuardId(v === 'all' ? '' : v)}>
-                    <SelectTrigger><SelectValue placeholder="All staff" /></SelectTrigger>
+                  <SearchableSelect
+                    value={guardId || 'all'}
+                    options={staffOptions}
+                    noneOption={{ value: 'all', label: 'All staff' }}
+                    placeholder="All staff"
+                    searchPlaceholder="Search staff…"
+                    onChange={(v) => onGuardId(v === 'all' ? '' : v)}
+                  />
+                </div>
+              )}
+
+              {showSite && (
+                <div className="space-y-1.5">
+                  <Label>Site (optional)</Label>
+                  <SearchableSelect
+                    value={siteId || 'all'}
+                    options={siteOptions}
+                    noneOption={{ value: 'all', label: 'All sites' }}
+                    placeholder="All sites"
+                    searchPlaceholder="Search sites…"
+                    onChange={(v) => onSiteId(v === 'all' ? '' : v)}
+                  />
+                </div>
+              )}
+
+              {showGroupBy && (
+                <div className="space-y-1.5">
+                  <Label>Group by</Label>
+                  <Select value={groupBy || 'guard'} onValueChange={onGroupBy}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All staff</SelectItem>
-                      {guards.map((g) => (
-                        <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>
-                      ))}
+                      <SelectItem value="guard">By employee</SelectItem>
+                      <SelectItem value="site">By site</SelectItem>
+                      <SelectItem value="client">By client</SelectItem>
+                      <SelectItem value="site_client">By site &amp; client</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -119,16 +167,15 @@ export function ReportGenerateDialog({
                 </Button>
                 {canExport && (
                   <>
-                    <Button variant="outline" size="sm" onClick={() => onExport('csv')}>
-                      <FileSpreadsheet className="size-4 mr-1.5" />
+                    <Button type="button" variant="outline" size="sm" onClick={() => onExport('csv')} disabled={loading}>
+                      <FileText className="size-3.5 me-1" />
                       CSV
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => onExport('xlsx')}>
-                      <FileSpreadsheet className="size-4 mr-1.5" />
+                    <Button type="button" variant="outline" size="sm" onClick={() => onExport('xlsx')} disabled={loading}>
+                      <FileSpreadsheet className="size-3.5 me-1" />
                       Excel
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => onExport('pdf')}>
-                      <FileText className="size-4 mr-1.5" />
+                    <Button type="button" variant="outline" size="sm" onClick={() => onExport('pdf')} disabled={loading}>
                       PDF
                     </Button>
                   </>
@@ -136,7 +183,7 @@ export function ReportGenerateDialog({
               </div>
 
               {result && (
-                <div className="min-w-0 overflow-hidden pt-1">
+                <div className="pt-2 border-t">
                   <ReportResultView view={result} />
                 </div>
               )}

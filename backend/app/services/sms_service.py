@@ -11,6 +11,7 @@ from app.services.module_service import is_module_enabled
 
 DEFAULT_TEMPLATES = {
     "shift_reminder": "Reminder: You have a shift on {date} at {site}. {shift}",
+    "rota_change": "Rota update: {message}",
     "invoice_sent": "Invoice #{invoice_id} for {amount} is due on {due_date}.",
     "payment_reminder": "Payment reminder: {amount} outstanding on invoice #{invoice_id}.",
     "appointment": "Appointment reminder for {date} at {time}.",

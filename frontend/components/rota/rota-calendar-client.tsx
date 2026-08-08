@@ -48,7 +48,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
-import { useAuthBlobUrl } from '@/lib/use-auth-blob-url';
 import { addDays } from 'date-fns';
 
 const SHIFT_MENU_H = 420;
@@ -131,11 +130,7 @@ const ATT_STATUS_OPTIONS: { value: AttStatus; label: string }[] = [
 ];
 
 function EmployeeAvatar({ emp, className }: { emp: EmployeeRec; className?: string }) {
-  const poolPhoto = emp.photoUrl;
-  const src = useAuthBlobUrl(poolPhoto);
-  if (src) {
-    return <img src={src} alt="" className={cn('rounded-full object-cover shrink-0', className)} />;
-  }
+  // Initials only on the rota — staff photos belong on the staff profile / add form.
   return (
     <span
       className={cn('rounded-full shrink-0 flex items-center justify-center text-white font-semibold', className)}
@@ -475,6 +470,7 @@ export function RotaCalendarClient() {
   const [pickSel, setPickSel] = useState<Set<string>>(new Set());
   const [pickSearch, setPickSearch] = useState('');
   const [addStaffOpen, setAddStaffOpen] = useState(false);
+  const [addStaffPhoto, setAddStaffPhoto] = useState<File | null>(null);
   const [attOpen, setAttOpen] = useState(false);
   const [attRec, setAttRec] = useState<AttendanceRec | null>(null);
   const [attCtx, setAttCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
@@ -3171,9 +3167,19 @@ export function RotaCalendarClient() {
               subs={subs}
               isPending={createGuard.isPending}
               submitLabel="Create staff"
+              photoFile={addStaffPhoto}
+              onPhotoFileChange={setAddStaffPhoto}
               onSubmit={async (data) => {
                 try {
                   const created = await createGuard.mutateAsync(formToGuardPayload(data));
+                  if (addStaffPhoto && created?.id) {
+                    try {
+                      await api.guards.uploadPhoto(created.id, addStaffPhoto);
+                    } catch {
+                      toast.error('Staff created, but photo upload failed');
+                    }
+                  }
+                  setAddStaffPhoto(null);
                   await refreshPool();
                   setPickSel((prev) => new Set([...prev, String(created.id)]));
                   setAddStaffOpen(false);

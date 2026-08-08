@@ -166,10 +166,8 @@ export function countedHoursForAttendance(
 ): number {
   const status = normalizeAttStatus(att?.status ?? null);
   if (status === 'absent' || status === 'no_show') return 0;
-  if (status === 'on_time' || status === 'late') {
-    const fromAtt = att?.hours != null && String(att.hours).trim() !== '' ? parseFloat(String(att.hours)) : NaN;
-    if (!Number.isNaN(fromAtt) && fromAtt >= 0) return fromAtt;
-  }
+  // Always derive from the shift + inclBreaks so the Incl./Excl. breaks toggle works.
+  // (Stored att.hours often ignored the toggle and froze totals.)
   return calcHours(sh, inclBreaks);
 }
 
@@ -181,8 +179,6 @@ export function payableHoursForAttendance(
 ): number {
   const status = normalizeAttStatus(att?.status ?? null);
   if (status !== 'on_time' && status !== 'late') return 0;
-  const fromAtt = att?.hours != null && String(att.hours).trim() !== '' ? parseFloat(String(att.hours)) : NaN;
-  if (!Number.isNaN(fromAtt) && fromAtt >= 0) return fromAtt;
   return calcHours(sh, inclBreaks);
 }
 

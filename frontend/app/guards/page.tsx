@@ -28,6 +28,8 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Pencil, Trash2, Users, Eye } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { api } from '@/lib/api';
+import { persistJobTitle } from '@/lib/guard-options';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
   const daysLeft = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
@@ -42,6 +44,7 @@ export default function GuardsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingGuard, setEditingGuard] = useState<Guard | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [search, setSearch] = useState('');
   const [filterArea, setFilterArea] = useState('');
   const [filterPostcode, setFilterPostcode] = useState('');
@@ -86,7 +89,16 @@ export default function GuardsPage() {
 
   const handleCreate = async (data: GuardFormData) => {
     try {
-      await createGuard.mutateAsync(formToGuardPayload(data));
+      if (data.job_title) persistJobTitle(data.job_title);
+      const created = await createGuard.mutateAsync(formToGuardPayload(data));
+      if (photoFile && created?.id) {
+        try {
+          await api.guards.uploadPhoto(created.id, photoFile);
+        } catch {
+          toast.error('Staff created, but photo upload failed');
+        }
+      }
+      setPhotoFile(null);
       setAddOpen(false);
       addForm.reset(guardFormDefaults);
     } catch {
@@ -232,7 +244,17 @@ export default function GuardsPage() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
-                    <GuardFormWizard form={addForm} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createGuard.isPending} submitLabel="Create staff" />
+                    <GuardFormWizard
+                      form={addForm}
+                      mains={mains}
+                      subs={subs}
+                      onSubmit={handleCreate}
+                      isPending={createGuard.isPending}
+                      submitLabel="Create staff"
+                      photoFile={photoFile}
+                      onPhotoFileChange={setPhotoFile}
+                      existingJobTitles={guards.map((g) => g.job_title || '').filter(Boolean)}
+                    />
                   </div>
                 </DialogContent>
               </Dialog>
@@ -392,7 +414,15 @@ export default function GuardsPage() {
               <DialogDescription className="sr-only">Update this staff member&apos;s profile.</DialogDescription>
             </DialogHeader>
             <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
-              <GuardFormWizard form={editForm} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateGuard.isPending} submitLabel="Save changes" />
+              <GuardFormWizard
+                form={editForm}
+                mains={mains}
+                subs={subs}
+                onSubmit={handleUpdate}
+                isPending={updateGuard.isPending}
+                submitLabel="Save changes"
+                existingJobTitles={guards.map((g) => g.job_title || '').filter(Boolean)}
+              />
             </div>
           </DialogContent>
         </Dialog>

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   PHONE_COUNTRIES,
   composePhone,
@@ -31,6 +31,15 @@ export function PhoneInput({ value = '', onChange, disabled, className, id, plac
     setNational(next.national);
   }, [value]);
 
+  const countryOptions = useMemo(
+    () =>
+      PHONE_COUNTRIES.map((c) => ({
+        value: c.code,
+        label: `${c.code} +${c.dial}`,
+      })),
+    []
+  );
+
   const emit = (c: CountryDial, nat: string) => {
     onChange(composePhone(c.dial, nat, c.dropLeadingZero));
   };
@@ -57,18 +66,15 @@ export function PhoneInput({ value = '', onChange, disabled, className, id, plac
 
   return (
     <div className={cn('flex gap-2', className)}>
-      <Select value={country.code} onValueChange={onCountryChange} disabled={disabled}>
-        <SelectTrigger className="w-[132px] shrink-0" aria-label="Country code">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent className="max-h-72">
-          {PHONE_COUNTRIES.map((c) => (
-            <SelectItem key={`${c.code}-${c.dial}`} value={c.code}>
-              {c.code} +{c.dial}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        className="w-[148px] shrink-0"
+        value={country.code}
+        options={countryOptions}
+        disabled={disabled}
+        searchPlaceholder="Search country…"
+        placeholder="Country"
+        onChange={onCountryChange}
+      />
       <Input
         id={id}
         type="tel"

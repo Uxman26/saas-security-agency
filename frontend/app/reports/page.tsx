@@ -13,6 +13,7 @@ import { api, ApiError } from '@/lib/api';
 import type {
   Guard,
   ReportsHub,
+  Site,
   StaffIndividualReport,
   StaffMonthlyReport,
   SubscriptionReportSummary,
@@ -46,7 +47,7 @@ type ReportDef = {
 
 const REPORTS: ReportDef[] = [
   { id: 'attendance', title: 'Attendance', desc: 'Shift attendance with on-time, late, and absent status per employee.', category: 'staff', icon: Clock, exportType: 'attendance' },
-  { id: 'shifts', title: 'Shift hours', desc: 'Individual staff shift and hours breakdown for any date range.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
+  { id: 'shifts', title: 'Shift hours', desc: 'Shift and hours breakdown by employee, site, and date range.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
   { id: 'shift-overtime', title: 'Overtime report', desc: 'Shift extensions with reasons recorded from the rota.', category: 'staff', icon: BarChart3, exportType: 'shift-overtime' },
   { id: 'shift-early-finish', title: 'Finished early report', desc: 'Shifts ended before schedule with recorded reasons.', category: 'staff', icon: Clock, exportType: 'shift-early-finish' },
   { id: 'shift-lateness', title: 'Lateness report', desc: 'Late arrivals with scheduled vs actual start times per employee.', category: 'staff', icon: Clock, exportType: 'shift-lateness' },
@@ -81,8 +82,11 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState(end);
   const [hub, setHub] = useState<ReportsHub | null>(null);
   const [guards, setGuards] = useState<Guard[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [selected, setSelected] = useState<ReportDef | null>(null);
   const [guardId, setGuardId] = useState('');
+  const [siteId, setSiteId] = useState('');
+  const [groupBy, setGroupBy] = useState('guard');
   const [result, setResult] = useState<ReportView | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<'library' | 'custom'>('library');
@@ -95,6 +99,7 @@ export default function ReportsPage() {
   useEffect(() => {
     loadHub();
     api.guards.list().then(setGuards).catch(() => {});
+    api.sites.list().then(setSites).catch(() => {});
   }, [loadHub]);
 
   const filtered = useMemo(() => {
@@ -106,6 +111,8 @@ export default function ReportsPage() {
     setSelected(r);
     setResult(null);
     setGuardId('');
+    setSiteId('');
+    setGroupBy('guard');
     setStartDate(start);
     setEndDate(end);
   };
@@ -120,12 +127,27 @@ export default function ReportsPage() {
     setResult(null);
     try {
       let view: ReportView | null = null;
-      if (selected.id === 'shifts' && guardId) {
-        const data = await api.reports.staffIndividual(parseInt(guardId), startDate, endDate);
-        view = { kind: 'individual', data };
-      } else if (selected.id === 'shifts') {
-        const data = await api.reports.staffMonthly(startDate, endDate);
-        view = { kind: 'monthly', data };
+      if (selected.id === 'shifts') {
+        const data = await api.reports.shiftHours(
+          startDate,
+          endDate,
+          guardId ? parseInt(guardId, 10) : undefined,
+          siteId ? parseInt(siteId, 10) : undefined
+        );
+        view = {
+          kind: 'rows',
+          columns: [
+            { key: 'guard', label: 'Employee' },
+            { key: 'site', label: 'Site' },
+            { key: 'date', label: 'Date' },
+            { key: 'shift_start', label: 'Start' },
+            { key: 'shift_end', label: 'End' },
+            { key: 'break_minutes', label: 'Break mins' },
+            { key: 'hours', label: 'Hours' },
+            { key: 'status', label: 'Status' },
+          ],
+          rows: (data.shifts || []) as Record<string, unknown>[],
+        };
       } else if (selected.id === 'sms-logs') {
         const data = await api.sms.logs();
         view = {
@@ -237,7 +259,7 @@ export default function ReportsPage() {
           rows: data,
         };
       } else if (selected.id === 'overtime' || selected.id === 'staff-monthly') {
-        const data = await api.reports.staffMonthly(startDate, endDate);
+        const data = await api.reports.staffMonthly(startDate, endDate, groupBy);
         view = { kind: 'monthly', data };
       }
       if (view) {
@@ -260,7 +282,9 @@ export default function ReportsPage() {
         startDate,
         endDate,
         format,
-        guardId ? parseInt(guardId) : undefined
+        guardId ? parseInt(guardId) : undefined,
+        siteId ? parseInt(siteId) : undefined,
+        selected.id === 'staff-monthly' || selected.id === 'overtime' ? groupBy : undefined
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -338,13 +362,18 @@ export default function ReportsPage() {
           startDate={startDate}
           endDate={endDate}
           guardId={guardId}
+          siteId={siteId}
+          groupBy={groupBy}
           guards={guards}
+          sites={sites}
           loading={loading}
           result={result}
           onClose={() => setSelected(null)}
           onStartDate={setStartDate}
           onEndDate={setEndDate}
           onGuardId={setGuardId}
+          onSiteId={setSiteId}
+          onGroupBy={setGroupBy}
           onGenerate={generate}
           onExport={exportFmt}
         />

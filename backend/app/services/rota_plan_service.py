@@ -481,6 +481,32 @@ def _remap_payload(
     return out
 
 
+def _strip_attendance_and_notes(payload: dict) -> dict:
+    """Remove attendance records and shift notes / OT / early-finish adjustments."""
+    out = dict(payload)
+    out["attendance"] = {}
+    cleaned_shifts: dict = {}
+    for emp_id, by_d in (out.get("shifts") or {}).items():
+        emp_map: dict = {}
+        for dk, blocks in (by_d or {}).items():
+            cleaned = []
+            for i, b in enumerate(blocks or []):
+                if not isinstance(b, dict):
+                    continue
+                sh = _normalize_shift(b, i)
+                sh["notes"] = ""
+                sh["adjustments"] = []
+                sh["scheduledEnd"] = ""
+                sh.pop("scheduledStart", None)
+                cleaned.append(sh)
+            if cleaned:
+                emp_map[dk] = cleaned
+        if emp_map:
+            cleaned_shifts[str(emp_id)] = emp_map
+    out["shifts"] = cleaned_shifts
+    return out
+
+
 def copy_rota_plan(db: Session, user_id: int, source_id: int, data: RotaPlanCopy) -> RotaPlanDetail:
     company = get_company_by_user_id(db, user_id)
     source = db.query(RotaPlan).filter(RotaPlan.id == source_id, RotaPlan.company_id == company.id).first()
@@ -490,6 +516,8 @@ def copy_rota_plan(db: Session, user_id: int, source_id: int, data: RotaPlanCopy
     day_count = max(1, min(90, data.day_count if data.day_count is not None else source.day_count))
     payload = _extract_payload(db, source)
     remapped = _remap_payload(payload, source.start_date, source.day_count, data.start_date, day_count)
+    if not getattr(data, "include_attendance_and_notes", False):
+        remapped = _strip_attendance_and_notes(remapped)
     if data.view_mode:
         remapped["rotaView"] = data.view_mode
     if data.budget is not None:
@@ -535,6 +563,7 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
     if not plan:
         raise HTTPException(status_code=404, detail="Rota not found")
     payload = data.model_dump(exclude_unset=True)
+    was_published = plan.status == "published"
     if "name" in payload and payload["name"]:
         plan.name = payload["name"].strip()
     if "view_mode" in payload and payload["view_mode"]:
@@ -559,10 +588,28 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
         plan.status = payload["status"]
     db.commit()
     if "planner_data" in payload:
-        from app.services import attendance_service, shift_adjustment_service
-        shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
-        shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
-        attendance_service.sync_published_plan_attendance(db, user_id, plan)
+        if was_published:
+            from app.services import attendance_service, rota_notify_service, shift_adjustment_service
+
+            try:
+                new_data = json.loads(plan.planner_data or "{}")
+            except json.JSONDecodeError:
+                new_data = {}
+            before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id)
+            after_fp = rota_notify_service.fingerprint_from_planner_shifts(new_data.get("shifts"))
+            if before_fp != after_fp:
+                # Structural shift change → auto-republish + staff notifications
+                publish_rota_plan(db, user_id, plan.id, guard_id=None)
+            else:
+                # Attendance / notes / OT-only edits stay on existing assignments
+                shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
+                shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
+                attendance_service.sync_published_plan_attendance(db, user_id, plan)
+        else:
+            from app.services import attendance_service, shift_adjustment_service
+            shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
+            shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
+            attendance_service.sync_published_plan_attendance(db, user_id, plan)
     db.refresh(plan)
     return get_rota_plan(db, user_id, plan.id)
 
@@ -596,6 +643,10 @@ def publish_rota_plan(
         guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
         if not guard:
             raise HTTPException(status_code=404, detail="Staff not found")
+
+    from app.services import rota_notify_service
+
+    before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, guard_id)
 
     sites = db.query(Site).filter(Site.company_id == company.id).all()
     site_by_name = {s.name.strip().lower(): s.id for s in sites}
@@ -689,6 +740,12 @@ def publish_rota_plan(
         plan.status = "draft"
         plan.published_at = None
     db.commit()
+
+    after_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, guard_id)
+    changes = rota_notify_service.diff_shift_fingerprints(before_fp, after_fp)
+    if changes:
+        rota_notify_service.notify_shift_changes(db, user_id, plan, changes)
+
     return RotaPlanPublishResult(
         created=created, skipped=skipped, errors=errors, published_guard_ids=published_ids
     )
@@ -705,6 +762,9 @@ def unpublish_rota_plan_guard(
     if not guard:
         raise HTTPException(status_code=404, detail="Staff not found")
 
+    from app.services import rota_notify_service
+
+    before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, guard_id)
     _delete_plan_assignments(db, plan.id, guard_id)
     published_ids = _published_guard_ids(db, plan.id)
     if published_ids:
@@ -713,6 +773,9 @@ def unpublish_rota_plan_guard(
         plan.status = "draft"
         plan.published_at = None
     db.commit()
+    changes = rota_notify_service.diff_shift_fingerprints(before_fp, set())
+    if changes:
+        rota_notify_service.notify_shift_changes(db, user_id, plan, changes)
     return RotaPlanPublishResult(
         created=0, skipped=0, errors=[], published_guard_ids=published_ids
     )
@@ -724,8 +787,14 @@ def unpublish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPubl
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Rota not found")
+    from app.services import rota_notify_service
+
+    before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id)
     _delete_plan_assignments(db, plan.id)
     plan.status = "draft"
     plan.published_at = None
     db.commit()
+    changes = rota_notify_service.diff_shift_fingerprints(before_fp, set())
+    if changes:
+        rota_notify_service.notify_shift_changes(db, user_id, plan, changes)
     return RotaPlanPublishResult(created=0, skipped=0, errors=[], published_guard_ids=[])

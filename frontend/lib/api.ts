@@ -312,6 +312,7 @@ export const api = {
         day_count?: number;
         view_mode?: string;
         budget?: number;
+        include_attendance_and_notes?: boolean;
       }
     ): Promise<RotaPlanDetail> =>
       request<RotaPlanDetail>(`/rotas/${id}/copy`, { method: 'POST', body: JSON.stringify(data) }),
@@ -535,8 +536,12 @@ export const api = {
       request<{ ok: boolean }>('/leads/push/subscribe', { method: 'POST', body: JSON.stringify(data) }),
     notifications: (unread_only?: boolean) =>
       request<Record<string, unknown>[]>(`/leads/notifications${unread_only ? '?unread_only=true' : ''}`),
+    unreadNotificationCount: () =>
+      request<{ count: number }>('/leads/notifications/unread-count'),
     readNotification: (id: number) =>
       request<Record<string, unknown>>(`/leads/notifications/${id}/read`, { method: 'POST' }),
+    readAllNotifications: () =>
+      request<{ updated: number }>('/leads/notifications/read-all', { method: 'POST' }),
     exportUrl: (params?: Record<string, string>) => {
       const q = new URLSearchParams(params);
       return `/api/leads/export?${q}`;
@@ -673,6 +678,17 @@ export const api = {
       request<import('./types').StaffIndividualReport>(`/reports/staff/${guard_id}?start_date=${start_date}&end_date=${end_date}`),
     staffMonthly: (start_date: string, end_date: string, group_by = 'guard') =>
       request<import('./types').StaffMonthlyReport>(`/reports/staff/monthly?start_date=${start_date}&end_date=${end_date}&group_by=${group_by}`),
+    shiftHours: (start_date: string, end_date: string, guard_id?: number, site_id?: number) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (guard_id) q.append('guard_id', String(guard_id));
+      if (site_id) q.append('site_id', String(site_id));
+      return request<{
+        shifts: Record<string, unknown>[];
+        by_employee: Record<string, unknown>[];
+        total_shifts: number;
+        workforce_total_hours: number;
+      }>(`/reports/staff/shift-hours?${q}`);
+    },
     attendance: (start_date: string, end_date: string, guard_id?: number) => {
       const q = new URLSearchParams({ start_date, end_date });
       if (guard_id) q.append('guard_id', String(guard_id));
@@ -706,9 +722,19 @@ export const api = {
       const q = new URLSearchParams({ start_date, end_date });
       return request<import('./types').UsageSummary>(`/reports/usage/summary?${q}`);
     },
-    export: async (report_type: string, start_date: string, end_date: string, format: string, guard_id?: number) => {
+    export: async (
+      report_type: string,
+      start_date: string,
+      end_date: string,
+      format: string,
+      guard_id?: number,
+      site_id?: number,
+      group_by?: string
+    ) => {
       const q = new URLSearchParams({ start_date, end_date, format });
       if (guard_id) q.append('guard_id', String(guard_id));
+      if (site_id) q.append('site_id', String(site_id));
+      if (group_by) q.append('group_by', group_by);
       return requestBlob(`/reports/export/${report_type}?${q}`);
     },
   },

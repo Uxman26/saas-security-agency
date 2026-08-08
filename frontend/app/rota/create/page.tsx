@@ -43,6 +43,7 @@ function CreateRotaPage() {
   const [guardsLoading, setGuardsLoading] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<Set<number>>(new Set());
   const [staffSearch, setStaffSearch] = useState('');
+  const [copyAttendanceAndNotes, setCopyAttendanceAndNotes] = useState(false);
 
   useEffect(() => {
     if (mode !== 'new') return;
@@ -107,8 +108,13 @@ function CreateRotaPage() {
           day_count: dayCount,
           view_mode: view,
           budget: parseFloat(budget.replace(/,/g, '')) || 0,
+          include_attendance_and_notes: copyAttendanceAndNotes,
         });
-        toast.success('Rota copied — review shifts and publish when ready');
+        toast.success(
+          copyAttendanceAndNotes
+            ? 'Rota copied with attendance and notes — review and publish when ready'
+            : 'Rota copied (attendance and notes skipped) — review and publish when ready'
+        );
         router.push(`/rota/calendar?id=${plan.id}`);
         return;
       }
@@ -237,6 +243,20 @@ function CreateRotaPage() {
                       from <strong>{fmtPeriod(source)}</strong>. Shifts are moved to your new start date.
                     </p>
                   ) : null}
+                  <label className="flex items-start gap-3 rounded-md border p-3 text-sm cursor-pointer hover:bg-muted/30">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={copyAttendanceAndNotes}
+                      onChange={(e) => setCopyAttendanceAndNotes(e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium">Copy attendance records and notes as well?</span>
+                      <span className="block text-xs text-muted-foreground mt-1">
+                        Off by default. Includes overtime, early finish, on-time status, attendance, and shift notes.
+                      </span>
+                    </span>
+                  </label>
                 </CardContent>
               </Card>
             ) : null}

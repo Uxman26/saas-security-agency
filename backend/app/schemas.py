@@ -596,6 +596,8 @@ class RotaPlanCopy(BaseModel):
     day_count: Optional[int] = None
     view_mode: Optional[str] = None
     budget: Optional[float] = None
+    # When false (default), attendance, notes, OT, early finish are not copied
+    include_attendance_and_notes: bool = False
 
 class RotaPlanUpdate(BaseModel):
     name: Optional[str] = None

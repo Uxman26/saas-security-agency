@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import {
   TITLES,
@@ -20,6 +21,8 @@ import {
   LEAVE_MONTHS,
   WEEKDAYS,
   PAY_FREQUENCIES,
+  loadJobTitles,
+  persistJobTitle,
 } from '@/lib/guard-options';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { cn } from '@/lib/utils';
@@ -122,6 +125,9 @@ export function GuardFormWizard({
   onSubmit,
   isPending,
   submitLabel,
+  photoFile,
+  onPhotoFileChange,
+  existingJobTitles,
 }: {
   form: ReturnType<typeof useForm<GuardFormData>>;
   mains: { id: string; name: string }[];
@@ -129,14 +135,28 @@ export function GuardFormWizard({
   onSubmit: (data: GuardFormData) => void;
   isPending: boolean;
   submitLabel: string;
+  photoFile?: File | null;
+  onPhotoFileChange?: (file: File | null) => void;
+  existingJobTitles?: string[];
 }) {
   const [step, setStep] = useState(0);
+  const [jobTitles, setJobTitles] = useState<string[]>(() => loadJobTitles(existingJobTitles));
   const { register, handleSubmit, setValue, watch, trigger, clearErrors, getValues, formState: { errors } } = form;
   const cid = watch('contractor_id');
   const employeeType = watch('employee_type') ?? '';
   const entitlementUnit = watch('entitlement_unit') ?? '';
   const first = watch('first_name');
   const last = watch('last_name');
+  const jobTitle = watch('job_title') || '';
+
+  useEffect(() => {
+    setJobTitles(loadJobTitles(existingJobTitles));
+  }, [existingJobTitles]);
+
+  const jobTitleOptions = useMemo(
+    () => jobTitles.map((t) => ({ value: t, label: t })),
+    [jobTitles]
+  );
 
   const displayName = [first, last].filter(Boolean).join(' ') || 'New employee';
 
@@ -279,6 +299,21 @@ export function GuardFormWizard({
           </div>
 
           <Section title="Basic details">
+            {onPhotoFileChange ? (
+              <div className="space-y-1.5 mb-3">
+                <Label>Staff photo (optional)</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => onPhotoFileChange(e.target.files?.[0] ?? null)}
+                />
+                {photoFile ? (
+                  <p className="text-xs text-muted-foreground">Selected: {photoFile.name}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Shown on the staff profile. Not used on the shift rota.</p>
+                )}
+              </div>
+            ) : null}
             <div className="grid min-w-0 sm:grid-cols-2 gap-3">
               <div className="space-y-1 min-w-0">
                 <Label>Title</Label>
@@ -353,9 +388,21 @@ export function GuardFormWizard({
                 />
                 {errors.work_phone && <p className="text-xs text-destructive">{errors.work_phone.message}</p>}
               </div>
-              <div className="space-y-1 min-w-0">
+              <div className="space-y-1 min-w-0 sm:col-span-2">
                 <Label>Job title</Label>
-                <Input className="min-w-0" maxLength={200} {...register('job_title')} />
+                <SearchableSelect
+                  value={jobTitle}
+                  options={jobTitleOptions}
+                  placeholder="Select or add job title"
+                  searchPlaceholder="Search job titles…"
+                  allowCreate
+                  createLabel={(q) => `Add “${q}”`}
+                  onChange={(v) => {
+                    setValue('job_title', v, { shouldValidate: true });
+                    persistJobTitle(v);
+                    setJobTitles(loadJobTitles(existingJobTitles));
+                  }}
+                />
               </div>
               <div className="space-y-1">
                 <Label>Employment start date</Label>

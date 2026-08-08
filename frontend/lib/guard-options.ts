@@ -1,3 +1,46 @@
+export const DEFAULT_JOB_TITLES = [
+  'Guard',
+  'Door Supervisor',
+  'Cleaner',
+  'Room Attendant',
+  'Dog handler (K9)',
+  'Porter',
+] as const;
+
+const JOB_TITLE_STORAGE_KEY = 'controlops.customJobTitles';
+
+export function loadJobTitles(existingFromStaff: string[] = []): string[] {
+  let custom: string[] = [];
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(JOB_TITLE_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) custom = parsed.map(String).filter(Boolean);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const set = new Set<string>([...DEFAULT_JOB_TITLES, ...custom, ...existingFromStaff.filter(Boolean)]);
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+export function persistJobTitle(title: string): void {
+  const t = title.trim();
+  if (!t || typeof window === 'undefined') return;
+  if ((DEFAULT_JOB_TITLES as readonly string[]).includes(t)) return;
+  try {
+    const current = loadJobTitles();
+    if (current.includes(t)) return;
+    const custom = current.filter((x) => !(DEFAULT_JOB_TITLES as readonly string[]).includes(x));
+    custom.push(t);
+    localStorage.setItem(JOB_TITLE_STORAGE_KEY, JSON.stringify(custom));
+  } catch {
+    /* ignore */
+  }
+}
+
 export const TITLES = ['Mr', 'Mrs', 'Ms', 'Miss', 'Mx', 'Dr'] as const;
 
 export const WEEKDAYS = [

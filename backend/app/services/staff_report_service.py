@@ -82,24 +82,25 @@ def staff_monthly_report(
     details = list_rota_details(db, user_id, start_date, end_date)
     summary_rows = rota_summary(db, user_id, start_date, end_date)
     by_employee = _all_employee_rows(db, company.id, start_date, end_date, summary_rows)
-    site_map: dict[str, dict] = {}
-    client_map: dict[str, dict] = {}
-    for d in details:
-        if group_by == "site":
-            key = d.site_name or str(d.site_id)
-        elif group_by == "client":
-            key = d.client_name or "Unknown"
-        else:
-            continue
-        bucket_store = site_map if group_by == "site" else client_map
-        if key not in bucket_store:
-            bucket_store[key] = {"key": key, "total_shifts": 0, "total_hours": 0.0, "guards": set()}
-        bucket = bucket_store[key]
-        bucket["total_shifts"] += 1
-        bucket["total_hours"] = round(bucket["total_hours"] + d.hours, 2)
-        bucket["guards"].add(d.guard_name)
+    bucket_store: dict[str, dict] = {}
+    if group_by in ("site", "client", "site_client"):
+        for d in details:
+            if group_by == "site":
+                key = d.site_name or str(d.site_id)
+            elif group_by == "client":
+                key = d.client_name or "Unknown"
+            else:
+                client = d.client_name or "Unknown"
+                site = d.site_name or str(d.site_id)
+                key = f"{client} · {site}"
+            if key not in bucket_store:
+                bucket_store[key] = {"key": key, "total_shifts": 0, "total_hours": 0.0, "guards": set()}
+            bucket = bucket_store[key]
+            bucket["total_shifts"] += 1
+            bucket["total_hours"] = round(bucket["total_hours"] + d.hours, 2)
+            bucket["guards"].add(d.guard_name)
     grouped = []
-    for v in (site_map if group_by == "site" else client_map).values():
+    for v in bucket_store.values():
         grouped.append({**v, "guard_count": len(v["guards"]), "guards": sorted(v["guards"])})
     grouped.sort(key=lambda x: x["total_hours"], reverse=True)
     workforce_hours = round(sum(r["total_hours"] for r in by_employee), 2)
@@ -114,21 +115,26 @@ def staff_monthly_report(
     }
 
 
-def shift_hours_report(db: Session, user_id: int, start_date: date, end_date: date) -> dict:
+def shift_hours_report(
+    db: Session,
+    user_id: int,
+    start_date: date,
+    end_date: date,
+    guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+) -> dict:
     company = get_company_by_user_id(db, user_id)
-    details = list_rota_details(db, user_id, start_date, end_date)
-    summary_rows = rota_summary(db, user_id, start_date, end_date)
-    # Summary only for staff who actually have shifts in the period (accurate hours)
+    details = list_rota_details(db, user_id, start_date, end_date, guard_id=guard_id, site_id=site_id)
+    summary_rows = rota_summary(db, user_id, start_date, end_date, guard_id=guard_id, site_id=site_id)
     by_employee = [r.model_dump() for r in summary_rows]
-    # Also attach contracted committed hours for staff with no shifts? Skip — zeros mislead exports.
     guard_ids_with_shifts = {r["guard_id"] for r in by_employee}
-    # Ensure committed calc is present (already on summary rows)
-    _ = company  # company scoped via list_rota_details
+    _ = company
     shift_rows = [
         {
             "guard": d.guard_name,
             "guard_id": d.guard_id,
             "site": d.site_name or "",
+            "site_id": d.site_id,
             "date": d.date.isoformat(),
             "shift": f"{d.shift_start or ''}–{d.shift_end or ''}",
             "shift_start": d.shift_start or "",
@@ -143,6 +149,8 @@ def shift_hours_report(db: Session, user_id: int, start_date: date, end_date: da
     return {
         "period_start": start_date,
         "period_end": end_date,
+        "guard_id": guard_id,
+        "site_id": site_id,
         "by_employee": by_employee,
         "shifts": shift_rows,
         "total_shifts": len(shift_rows),

@@ -73,6 +73,20 @@ export function ReportResultView({ view }: { view: ReportView }) {
     );
   }
   if (view.kind === 'monthly') {
+    const grouped = view.data.group_by && view.data.group_by !== 'guard';
+    if (grouped && Array.isArray(view.data.grouped_summary) && view.data.grouped_summary.length > 0) {
+      return (
+        <DataTable
+          columns={[
+            { key: 'key', label: view.data.group_by === 'site_client' ? 'Client · Site' : 'Group' },
+            { key: 'total_shifts', label: 'Shifts' },
+            { key: 'total_hours', label: 'Hours' },
+            { key: 'guard_count', label: 'Staff' },
+          ]}
+          rows={view.data.grouped_summary as Record<string, unknown>[]}
+        />
+      );
+    }
     return (
       <DataTable
         columns={[

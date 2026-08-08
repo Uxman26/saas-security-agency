@@ -133,9 +133,26 @@ def list_notifications(
     return lead_service.list_notifications(db, current_user.id, unread_only)
 
 
+@router.get("/notifications/unread-count")
+def notifications_unread_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("leads", "view")),
+):
+    return {"count": lead_service.unread_notification_count(db, current_user.id)}
+
+
 @router.post("/notifications/{notification_id}/read", response_model=AppNotificationResponse)
 def read_notification(notification_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
     return lead_service.mark_notification_read(db, current_user.id, notification_id)
+
+
+@router.post("/notifications/read-all")
+def read_all_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("leads", "view")),
+):
+    updated = lead_service.mark_all_notifications_read(db, current_user.id)
+    return {"updated": updated}
 
 
 @router.get("", response_model=list[LeadResponse])

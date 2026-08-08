@@ -44,13 +44,22 @@ def reports_hub(start_date: date, end_date: date, db: Session = Depends(get_db),
 
 
 @router.get("/staff/shift-hours")
-def staff_shift_hours(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
-    return staff_report_service.shift_hours_report(db, current_user.id, start_date, end_date)
+def staff_shift_hours(
+    start_date: date,
+    end_date: date,
+    guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("reports", "view")),
+):
+    return staff_report_service.shift_hours_report(
+        db, current_user.id, start_date, end_date, guard_id=guard_id, site_id=site_id
+    )
 
 
 @router.get("/staff/monthly", response_model=StaffMonthlyReportResponse)
 def staff_monthly(start_date: date, end_date: date, group_by: str = "guard", db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
-    if group_by not in ("guard", "site", "client"):
+    if group_by not in ("guard", "site", "client", "site_client"):
         group_by = "guard"
     return StaffMonthlyReportResponse(**staff_report_service.staff_monthly_report(db, current_user.id, start_date, end_date, group_by))
 
@@ -120,6 +129,7 @@ def export_report(
     end_date: date,
     format: str = "csv",
     guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
     group_by: str = "guard",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("reports", "view")),
@@ -137,12 +147,20 @@ def export_report(
         rows = reports_hub_service.financial_invoice_rows(db, current_user.id, start_date, end_date)
         columns = [("invoice_id", "Invoice"), ("period_end", "Period end"), ("total", "Total"), ("amount_paid", "Paid"), ("balance", "Balance"), ("status", "Status"), ("due_date", "Due")]
     elif report_type == "staff-monthly":
+        if group_by not in ("guard", "site", "client", "site_client"):
+            group_by = "guard"
         data = staff_report_service.staff_monthly_report(db, current_user.id, start_date, end_date, group_by)
-        rows = data["by_employee"]
-        columns = [("guard_name", "Employee"), ("total_hours", "Hours"), ("late_arrivals", "Late"), ("overtime_hours", "Overtime"), ("committed_hours", "Committed")]
+        if group_by == "guard":
+            rows = data["by_employee"]
+            columns = [("guard_name", "Employee"), ("total_hours", "Hours"), ("late_arrivals", "Late"), ("overtime_hours", "Overtime"), ("committed_hours", "Committed")]
+        else:
+            rows = data["grouped_summary"]
+            columns = [("key", "Group"), ("total_shifts", "Shifts"), ("total_hours", "Hours"), ("guard_count", "Staff")]
         title = "Monthly staff summary"
     elif report_type == "shift-hours":
-        data = staff_report_service.shift_hours_report(db, current_user.id, start_date, end_date)
+        data = staff_report_service.shift_hours_report(
+            db, current_user.id, start_date, end_date, guard_id=guard_id, site_id=site_id
+        )
         # Per-shift detail so exported hours match each shift (not a padded staff list of zeros)
         rows = data["shifts"]
         columns = [

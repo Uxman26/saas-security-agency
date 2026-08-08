@@ -95,25 +95,25 @@ export function PlatformContent() {
       </MarketingSection>
 
       {/* 3D product capability showcase */}
-      <section className="relative overflow-hidden border-b border-border/50 bg-[#0B0F14] py-16 md:py-24">
+      <section className="relative overflow-hidden border-b border-border/50 bg-muted/40 py-16 md:py-24 dark:bg-[#0B0F14]">
         <div
-          className="pointer-events-none absolute inset-0 opacity-70"
+          className="pointer-events-none absolute inset-0 opacity-50 dark:opacity-70"
           aria-hidden
           style={{
             background:
-              'radial-gradient(ellipse 60% 50% at 15% 20%, color-mix(in oklab, #E04E00 28%, transparent), transparent 55%), radial-gradient(ellipse 50% 45% at 85% 75%, color-mix(in oklab, #FD8018 18%, transparent), transparent 50%)',
+              'radial-gradient(ellipse 60% 50% at 15% 20%, color-mix(in oklab, #E04E00 22%, transparent), transparent 55%), radial-gradient(ellipse 50% 45% at 85% 75%, color-mix(in oklab, #FD8018 14%, transparent), transparent 50%)',
           }}
         />
         <div className="container relative z-10 mx-auto px-4">
           <BlurFade delay={0.05}>
             <div className="mx-auto mb-10 max-w-2xl text-center md:mb-14">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#FD8018]">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#E04E00] dark:text-[#FD8018]">
                 Product showcase
               </p>
-              <h2 className="mt-3 text-2xl font-bold tracking-tight text-white md:text-4xl">
+              <h2 className="mt-3 text-2xl font-bold tracking-tight text-foreground md:text-4xl dark:text-white">
                 Capabilities that run every shift
               </h2>
-              <p className="mt-3 text-sm text-white/65 md:text-base">
+              <p className="mt-3 text-sm text-muted-foreground md:text-base dark:text-white/65">
                 Hover a card to unskew the panel — workforce, sites, rotas, records, rates, payroll and billing in one animated view.
               </p>
             </div>

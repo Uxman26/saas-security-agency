@@ -349,7 +349,7 @@
       "globeStatus": "All systems operational",
       "globeTitleLead": "Shift coverage",
       "globeTitleAccent": "everywhere",
-      "globeText": "Workforce, sites and rotas connected across every location you run — security, cleaning, facilities, events and more. Drag the globe to explore — ControlOps keeps every shift in view.",
+      "globeText": "Workforce, sites and rotas connected across every location you run — security, cleaning, facilities, events and more. Move over the live ops board — ControlOps keeps every shift in view.",
       "globeStats": [
         { "value": "24/7", "label": "Shift coverage" },
         { "value": "Multi-site", "label": "Locations ready" },

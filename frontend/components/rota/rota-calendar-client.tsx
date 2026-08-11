@@ -165,25 +165,25 @@ function EmployeePublishCell({
   const btn = 'w-full rounded px-1.5 py-1 text-[10px] font-semibold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
   return (
     <div className="flex flex-col items-stretch gap-1">
-      {/* Green + check reads as "done" at a glance; draft stays deliberately quiet. */}
+      {/* Brand orange + check reads as "done" at a glance; draft stays deliberately quiet. */}
       <span
         className={cn(
           'flex items-center justify-center gap-0.5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-bold leading-tight ring-1',
           busy
             ? 'bg-muted text-muted-foreground ring-transparent'
             : published
-              ? 'bg-emerald-600 text-white ring-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:ring-emerald-400'
+              ? 'bg-primary text-primary-foreground ring-primary'
               : 'bg-muted text-muted-foreground ring-border'
         )}
       >
         {busy ? null : published ? <Check className="size-2.5 shrink-0" aria-hidden /> : null}
         {busy ? 'Saving…' : published ? 'Published' : 'Draft'}
       </span>
-      {/* Buttons stay neutral: green is the column's only colour, reserved for the
-          published chip. Emphasis comes from fill vs outline, not from hue. */}
+      {/* Publish carries the brand orange like the header action; Unpublish stays
+          outline so emphasis reads from fill vs outline as well as hue. */}
       <button
         type="button"
-        className={cn(btn, 'bg-foreground text-background border-foreground hover:bg-foreground/85')}
+        className={cn(btn, 'bg-primary text-primary-foreground border-primary hover:bg-primary/90')}
         disabled={disabled || published}
         onClick={onPublish}
         title={published ? `${name} is already published` : `Publish ${name} only`}
@@ -539,7 +539,6 @@ export function RotaCalendarClient() {
   const [empMenuAnchor, setEmpMenuAnchor] = useState<{ x: number; y: number; w: number; maxH: number } | null>(null);
   const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(() => new Set());
   const [employeeSelectMode, setEmployeeSelectMode] = useState(false);
-  const [gridScrollHint, setGridScrollHint] = useState('Days · Staff');
   const menuRef = useRef<HTMLDivElement>(null);
   const shiftMenuPortalRef = useRef<HTMLDivElement>(null);
   const empMenuPortalRef = useRef<HTMLDivElement>(null);
@@ -753,47 +752,6 @@ export function RotaCalendarClient() {
     },
     [daysOpen, pendingDayCount, daysBaselineCount, daysEditEdge]
   );
-
-  const updateGridScrollHint = useCallback(() => {
-    const el = menuRef.current;
-    if (!el) return;
-    const dayCount = tableDays.length;
-    const rowCount = Math.max(rows.length, 1);
-    const dayBand = Math.max(el.clientWidth - ROTA_EMP_COL_W - stickyRightW, 1);
-    const firstDay = dayCount
-      ? Math.min(dayCount - 1, Math.max(0, Math.floor(el.scrollLeft / ROTA_DAY_COL_W)))
-      : 0;
-    const lastDay = dayCount
-      ? Math.min(dayCount - 1, Math.max(firstDay, Math.floor((el.scrollLeft + dayBand - 1) / ROTA_DAY_COL_W)))
-      : 0;
-    const maxScrollY = Math.max(el.scrollHeight - el.clientHeight, 1);
-    const yPct = Math.round((el.scrollTop / maxScrollY) * 100);
-    const maxScrollX = Math.max(el.scrollWidth - el.clientWidth, 1);
-    const xPct = Math.round((el.scrollLeft / maxScrollX) * 100);
-    const dayLabel =
-      dayCount === 0
-        ? 'No days'
-        : firstDay === lastDay
-          ? fmtShortDate(tableDays[firstDay])
-          : `${fmtShortDate(tableDays[firstDay])} – ${fmtShortDate(tableDays[lastDay])}`;
-    setGridScrollHint(
-      `X ${xPct}% · ${dayLabel} (${firstDay + 1}–${lastDay + 1} of ${dayCount || 0})  ·  Y ${yPct}% · ${rowCount} staff`
-    );
-  }, [tableDays, rows.length, stickyRightW]);
-
-  useEffect(() => {
-    const el = menuRef.current;
-    if (!el || state.rotaView !== 'table') return;
-    updateGridScrollHint();
-    const onScroll = () => updateGridScrollHint();
-    el.addEventListener('scroll', onScroll, { passive: true });
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => updateGridScrollHint()) : null;
-    ro?.observe(el);
-    return () => {
-      el.removeEventListener('scroll', onScroll);
-      ro?.disconnect();
-    };
-  }, [state.rotaView, tableDays, rows.length, updateGridScrollHint]);
 
   /** Keep the latest preview / target day visible beside sticky Total hours / Payable cols. */
   const scrollDayColumnIntoView = useCallback((dayIndex: number) => {
@@ -1994,7 +1952,7 @@ export function RotaCalendarClient() {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 py-12 text-center">
         <p className="text-muted-foreground">No rota loaded yet.</p>
-        <Button className="bg-pink-600 hover:bg-pink-700" asChild>
+        <Button asChild>
           <Link href="/rota/create">Create a rota</Link>
         </Button>
       </div>
@@ -2079,7 +2037,7 @@ export function RotaCalendarClient() {
 
       <div className="flex shrink-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" className="bg-pink-600 hover:bg-pink-700" type="button" onClick={() => setPickOpen(true)}>
+          <Button size="sm" type="button" onClick={() => setPickOpen(true)}>
             Add Staff
           </Button>
           <div className="flex rounded-md border p-0.5 bg-muted/40">
@@ -2214,7 +2172,6 @@ export function RotaCalendarClient() {
           </select>
           <Button
             size="sm"
-            className="bg-sky-600 hover:bg-sky-700 text-white"
             type="button"
             onClick={publish}
             disabled={publishing || unpublishing}
@@ -2681,13 +2638,6 @@ export function RotaCalendarClient() {
             </tfoot>
           </table>
           </div>
-          <div
-            className="shrink-0 border-t bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground tabular-nums"
-            aria-live="polite"
-            title="Current scroll position on the rota grid"
-          >
-            {gridScrollHint}
-          </div>
         </div>
       )}
 
@@ -2737,7 +2687,7 @@ export function RotaCalendarClient() {
                       />
                       {fmtShortDate(dk)}
                       {isToday ? (
-                        <span className="text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-pink-600 text-white">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-primary text-primary-foreground">
                           Today
                         </span>
                       ) : null}
@@ -2774,11 +2724,11 @@ export function RotaCalendarClient() {
                         ))}
                         {isToday ? (
                           <div
-                            className="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-pink-600"
+                            className="pointer-events-none absolute top-0 bottom-0 z-10 w-0.5 bg-primary"
                             style={{ left: nowLeftPx }}
                             title="Current time"
                           >
-                            <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 rounded bg-pink-600 px-1 text-[9px] font-semibold text-white whitespace-nowrap">
+                            <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 rounded bg-primary px-1 text-[9px] font-semibold text-primary-foreground whitespace-nowrap">
                               Now
                             </span>
                           </div>
@@ -2913,7 +2863,6 @@ export function RotaCalendarClient() {
             {descCtx ? (
               <Button
                 type="button"
-                className="bg-pink-600 hover:bg-pink-700"
                 onClick={() => {
                   const { empId, dk, idx } = descCtx;
                   setDescCtx(null);
@@ -3076,7 +3025,7 @@ export function RotaCalendarClient() {
             >
               Clear
             </Button>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={doCopy}>
+            <Button type="button" onClick={doCopy}>
               Copy shift
             </Button>
           </DialogFooter>
@@ -3192,7 +3141,7 @@ export function RotaCalendarClient() {
             <Button type="button" variant="outline" onClick={() => setReorderOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={saveReorder}>
+            <Button type="button" onClick={saveReorder}>
               Save order
             </Button>
           </DialogFooter>
@@ -3299,7 +3248,7 @@ export function RotaCalendarClient() {
             <Button type="button" variant="ghost" onClick={() => setDaysOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={applyPendingDays}>
+            <Button type="button" onClick={applyPendingDays}>
               Done
             </Button>
           </DialogFooter>
@@ -3362,7 +3311,6 @@ export function RotaCalendarClient() {
             )}
             <Button
               type="button"
-              className="bg-pink-600 hover:bg-pink-700"
               disabled={poolLoading || pickSel.size === 0}
               onClick={() => {
                 addEmployeesById([...pickSel]);
@@ -3768,7 +3716,7 @@ export function RotaCalendarClient() {
             </div>
           )}
           <DialogFooter>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" disabled={attSaving} onClick={() => void saveAtt()}>
+            <Button type="button" disabled={attSaving} onClick={() => void saveAtt()}>
               Save
             </Button>
           </DialogFooter>
@@ -3795,7 +3743,7 @@ export function RotaCalendarClient() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" disabled={adjSaving} onClick={() => void saveOvertime()}>
+            <Button type="button" disabled={adjSaving} onClick={() => void saveOvertime()}>
               Save
             </Button>
           </DialogFooter>
@@ -3822,7 +3770,7 @@ export function RotaCalendarClient() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" className="bg-pink-600 hover:bg-pink-700" disabled={adjSaving} onClick={() => void saveEarlyFinish()}>
+            <Button type="button" disabled={adjSaving} onClick={() => void saveEarlyFinish()}>
               Save
             </Button>
           </DialogFooter>

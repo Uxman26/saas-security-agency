@@ -16,6 +16,10 @@ from app.services.rota_service import calc_shift_hours, normalize_shift_type
 DEFAULT_INVOICE_VAT_RATE = 20.0
 
 def recalc_invoice_totals(db: Session, inv: Invoice) -> None:
+    # The session runs with autoflush=False, so lines added/removed earlier in this
+    # transaction are invisible to a plain query. Without this flush, generating an
+    # invoice totalled 0.00 even though its lines were correct.
+    db.flush()
     lines = db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv.id).all()
     subtotal = 0.0
     for l in lines:
@@ -23,7 +27,10 @@ def recalc_invoice_totals(db: Session, inv: Invoice) -> None:
             subtotal += float(l.amount or 0)
         except (TypeError, ValueError):
             continue
-    if not lines:
+    if not lines and not getattr(inv, "_had_lines", False):
+        # Manual invoice (never had lines): keep the hand-entered subtotal/total.
+        # If lines existed and were all removed, fall through so the total drops to 0
+        # instead of stranding the previous amount.
         try:
             subtotal = float(inv.subtotal or inv.total or 0)
         except (TypeError, ValueError):
@@ -259,6 +266,9 @@ def delete_invoice_line(db: Session, invoice_id: int, line_id: int, user_id: int
     if not line:
         raise HTTPException(status_code=404, detail="Line not found")
     db.delete(line)
+    # Tell recalc this invoice was line-based, so removing the last line zeroes the
+    # total rather than falling back to the stale stored value.
+    inv._had_lines = True
     recalc_invoice_totals(db, inv)
     db.commit()
     log_invoice_audit(db, company.id, user_id, invoice_id, "line_deleted", {"line_id": line_id})

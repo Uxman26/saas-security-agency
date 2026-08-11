@@ -52,7 +52,10 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { addDays } from 'date-fns';
 
-const SHIFT_MENU_H = 420;
+/* Rough rendered heights, used only to decide whether a menu opens down or up.
+   Keep these close to reality: overestimating makes menus flip away from the
+   cursor when there was actually room below. */
+const SHIFT_MENU_H = 300;
 const EMP_MENU_H = 348;
 const ROTA_PAY_COL_W = 62;
 const ROTA_HOURS_COL_W = 68;
@@ -228,27 +231,43 @@ function pointerRect(e: { clientX: number; clientY: number }, fallback: Element)
   return new DOMRect(e.clientX, e.clientY, 0, 0);
 }
 
+/**
+ * Places a menu next to `rect` (a zero-size rect at the cursor for click-opened
+ * menus). It opens down-and-right of the anchor like a native context menu, and
+ * only flips when that side genuinely lacks room — flipping eagerly used to throw
+ * the menu hundreds of pixels away from where the user clicked.
+ */
 function placeMenu(rect: DOMRect, w: number, menuH: number, _preferUp?: boolean) {
-  const width = Math.min(Math.max(w, 160), window.innerWidth - 16);
-  // Prefer opening beside the card (right), fall back to left, then below/above.
-  let x = rect.right + 6;
-  if (x + width > window.innerWidth - 8) {
-    x = rect.left - width - 6;
-  }
-  if (x < 8) {
-    x = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
-  }
+  const GAP = 4;
+  const M = 8; // viewport margin
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
 
-  // Never let the menu exceed the viewport: cap its height and clamp y so the
-  // last rows' menus stay fully clickable instead of overflowing off-screen.
-  const maxH = Math.max(160, window.innerHeight - 16);
-  const height = Math.min(menuH, maxH);
+  const width = Math.min(Math.max(w, 160), vw - M * 2);
+  // Right of the anchor; flip left only if it would overflow, then clamp.
+  let x = rect.right + GAP;
+  if (x + width > vw - M) x = rect.left - width - GAP;
+  x = Math.min(Math.max(M, x), Math.max(M, vw - width - M));
 
-  let y = rect.top;
-  if (y + height > window.innerHeight - 8) {
-    y = rect.bottom - height;
+  // Height is an estimate, so cap it to whichever side we open into and let the
+  // menu scroll internally rather than run off-screen. maxH must always describe
+  // the space actually available from the chosen y, or the menu overflows.
+  const below = vh - M - (rect.bottom + GAP);
+  const above = rect.top - GAP - M;
+  const wanted = Math.min(menuH, vh - M * 2);
+
+  let y: number;
+  let maxH: number;
+  if (wanted <= below || below >= above) {
+    // Open downward from the anchor — the common case, and it stays at the cursor.
+    y = rect.bottom + GAP;
+    maxH = Math.max(160, below);
+  } else {
+    // Not enough room below and more room above: bottom-align just above the anchor.
+    const h = Math.min(wanted, Math.max(160, above));
+    y = Math.max(M, rect.top - GAP - h);
+    maxH = rect.top - GAP - y;
   }
-  y = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - height - 8));
   return { x, y, w: width, maxH };
 }
 

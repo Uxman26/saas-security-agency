@@ -294,8 +294,7 @@ export function RotaCalendarClient() {
     deleteShift,
     updateShift,
     applyShiftChange,
-    copyShiftToDates,
-    copyShiftToEmployee,
+    copyShiftToTargets,
     addEmployeesById,
     refreshPool,
     removeEmployee,
@@ -465,7 +464,7 @@ export function RotaCalendarClient() {
   const [copyCtx, setCopyCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyTargets, setCopyTargets] = useState<Set<string>>(new Set());
-  const [copyToEmployeeId, setCopyToEmployeeId] = useState<string | null>(null);
+  const [copyToEmployeeIds, setCopyToEmployeeIds] = useState<Set<string>>(() => new Set());
   const [copyEmpSearch, setCopyEmpSearch] = useState('');
   const [xferOpen, setXferOpen] = useState(false);
   const [xferFrom, setXferFrom] = useState<string | null>(null);
@@ -1000,7 +999,7 @@ export function RotaCalendarClient() {
     closeShiftMenu();
     setCopyCtx({ empId, dk, idx });
     setCopyTargets(new Set());
-    setCopyToEmployeeId(null);
+    setCopyToEmployeeIds(new Set());
     setCopyEmpSearch('');
     setCopyOpen(true);
   };
@@ -1049,19 +1048,34 @@ export function RotaCalendarClient() {
     toast.snack('Shift moved');
   };
 
+  /** dates × staff, so one shift can be copied across both at once. */
+  const copyPlan = useMemo(() => {
+    const dates = [...copyTargets];
+    const emps = [...copyToEmployeeIds];
+    if (!copyCtx) return { dates, emps, count: 0 };
+    const dayCount = dates.length || 1;
+    const empCount = emps.length || 1;
+    // The source slot itself is skipped, so it never counts as a new copy.
+    const hitsSource = (!dates.length || dates.includes(copyCtx.dk)) && (!emps.length || emps.includes(copyCtx.empId));
+    return { dates, emps, count: dayCount * empCount - (hitsSource ? 1 : 0) };
+  }, [copyTargets, copyToEmployeeIds, copyCtx]);
+
+  const copySummary = copyPlan.count > 0
+    ? `Will create ${copyPlan.count} shift${copyPlan.count === 1 ? '' : 's'}.`
+    : 'Pick at least one date or staff member.';
+
   const doCopy = () => {
     if (!copyCtx) return;
-    const dates = [...copyTargets];
-    if (!dates.length && !copyToEmployeeId) {
-      toast.warning('Select dates and/or an employee to copy to');
+    if (copyPlan.count <= 0) {
+      toast.warning('Select dates and/or staff to copy to');
       return;
     }
-    if (dates.length) copyShiftToDates(copyCtx.empId, copyCtx.dk, copyCtx.idx, dates);
-    if (copyToEmployeeId) copyShiftToEmployee(copyCtx.empId, copyCtx.dk, copyCtx.idx, copyToEmployeeId);
+    copyShiftToTargets(copyCtx.empId, copyCtx.dk, copyCtx.idx, copyPlan.emps, copyPlan.dates);
     setCopyOpen(false);
     setCopyCtx(null);
-    setCopyToEmployeeId(null);
-    toast.snack('Shift copied');
+    setCopyToEmployeeIds(new Set());
+    setCopyTargets(new Set());
+    toast.snack(copyPlan.count === 1 ? 'Shift copied' : `${copyPlan.count} shifts created`);
   };
 
   const startAtt = (empId: string, dk: string, idx: number) => {
@@ -2900,7 +2914,8 @@ export function RotaCalendarClient() {
           setCopyOpen(v);
           if (!v) {
             setCopyCtx(null);
-            setCopyToEmployeeId(null);
+            setCopyToEmployeeIds(new Set());
+            setCopyTargets(new Set());
             setCopyEmpSearch('');
           }
         }}
@@ -2917,7 +2932,9 @@ export function RotaCalendarClient() {
                 : ''}
             </p>
           ) : null}
-          <p className="text-xs font-medium">Copy to dates (same employee)</p>
+          <p className="text-xs font-medium">
+            Copy to dates <span className="font-normal text-muted-foreground">(leave empty to keep the same day)</span>
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => setCopyTargets(weekdayTargets())}>
               Weekdays
@@ -2951,7 +2968,20 @@ export function RotaCalendarClient() {
               </label>
             ))}
           </div>
-          <p className="text-xs font-medium pt-1">Copy to employee (same day)</p>
+          <div className="flex items-baseline justify-between gap-2 pt-1">
+            <p className="text-xs font-medium">
+              Copy to staff <span className="font-normal text-muted-foreground">(leave empty to keep the same person)</span>
+            </p>
+            {copyToEmployeeIds.size > 0 ? (
+              <button
+                type="button"
+                className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                onClick={() => setCopyToEmployeeIds(new Set())}
+              >
+                Clear {copyToEmployeeIds.size}
+              </button>
+            ) : null}
+          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -2962,38 +2992,67 @@ export function RotaCalendarClient() {
               aria-label="Search staff"
             />
           </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setCopyToEmployeeIds(new Set(copyEmployeeTargets.map((e) => e.id)))}
+            >
+              Select all shown
+            </Button>
+          </div>
           <div className="grid gap-1 max-h-36 overflow-y-auto">
             {copyEmployeeTargets.length === 0 ? (
               <p className="px-1 py-2 text-xs text-muted-foreground">
                 {copyEmpSearch.trim() ? 'No staff match that search.' : 'No other staff on this rota.'}
               </p>
             ) : (
-              copyEmployeeTargets.map((e) => (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => setCopyToEmployeeId((id) => (id === e.id ? null : e.id))}
-                  className={cn(
-                    'flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
-                    copyToEmployeeId === e.id ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30' : 'hover:bg-muted'
-                  )}
-                >
-                  <EmployeeAvatar emp={e} className="size-7 text-[10px] shrink-0" />
-                  <span className="min-w-0 flex-1">
-                    <span className="truncate block">{e.name}</span>
-                    {e.role ? <span className="truncate block text-[10px] text-muted-foreground">{e.role}</span> : null}
-                  </span>
-                </button>
-              ))
+              copyEmployeeTargets.map((e) => {
+                const picked = copyToEmployeeIds.has(e.id);
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    aria-pressed={picked}
+                    onClick={() =>
+                      setCopyToEmployeeIds((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(e.id)) n.delete(e.id);
+                        else n.add(e.id);
+                        return n;
+                      })
+                    }
+                    className={cn(
+                      'flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+                      picked ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30' : 'hover:bg-muted'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={picked}
+                      readOnly
+                      tabIndex={-1}
+                      className="size-3.5 shrink-0 rounded border-input pointer-events-none"
+                    />
+                    <EmployeeAvatar emp={e} className="size-7 text-[10px] shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="truncate block">{e.name}</span>
+                      {e.role ? <span className="truncate block text-[10px] text-muted-foreground">{e.role}</span> : null}
+                    </span>
+                  </button>
+                );
+              })
             )}
           </div>
+          <p className="text-[11px] text-muted-foreground">{copySummary}</p>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => {
                 setCopyTargets(new Set());
-                setCopyToEmployeeId(null);
+                setCopyToEmployeeIds(new Set());
               }}
             >
               Clear

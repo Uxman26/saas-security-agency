@@ -13,7 +13,7 @@ import {
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
-import { buildDayRange, attKey, countedHoursForAttendance, dateKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
+import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
@@ -133,6 +133,7 @@ type Ctx = {
   deleteShift: (empId: string, dk: string, idx: number) => void;
   copyShiftToDates: (empId: string, dk: string, idx: number, targets: string[]) => void;
   copyShiftToEmployee: (fromId: string, dk: string, idx: number, toId: string) => void;
+  copyShiftToTargets: (fromId: string, dk: string, idx: number, empIds: string[], dates: string[]) => void;
   copyAllShiftsBetweenEmployees: (fromId: string, toId: string) => void;
   moveShiftToEmployee: (fromId: string, dk: string, idx: number, toId: string) => void;
   moveShiftToDay: (empId: string, fromDk: string, idx: number, toDk: string, toEmpId?: string) => void;
@@ -735,6 +736,36 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /**
+   * Copy one shift to any combination of employees and dates in a single update.
+   * Empty `empIds` means the source employee; empty `dates` means the source day,
+   * so this also covers the old dates-only / employee-only cases.
+   */
+  const copyShiftToTargets = useCallback(
+    (fromId: string, dk: string, idx: number, empIds: string[], dates: string[]) => {
+      setState((s) => {
+        const src = s.shifts[fromId]?.[dk]?.[idx];
+        if (!src) return s;
+        const targetEmps = empIds.length ? empIds : [fromId];
+        const targetDays = (dates.length ? dates : [dk]).filter((d) => s.days.includes(d));
+        if (!targetDays.length) return s;
+
+        const shifts = { ...s.shifts };
+        for (const empId of targetEmps) {
+          const byDay = { ...(shifts[empId] || {}) } as Record<string, ShiftRec[]>;
+          for (const day of targetDays) {
+            // Copying onto the exact source slot would duplicate it in place.
+            if (empId === fromId && day === dk) continue;
+            byDay[day] = [...(byDay[day] || []), { ...src }];
+          }
+          shifts[empId] = byDay;
+        }
+        return { ...s, shifts };
+      });
+    },
+    []
+  );
+
   const copyShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
     if (fromId === toId) return;
     setState((s) => {
@@ -926,7 +957,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         return result;
       }
       const sites = await api.sites.list();
-      const siteByName = new Map(sites.map((s) => [s.name.trim().toLowerCase(), s.id]));
+      const siteByName = new Map(sites.map((s) => [normalizeSiteKey(s.name), s.id]));
       let created = 0;
       let skipped = 0;
       const errors: string[] = [];
@@ -938,7 +969,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         const byD = state.shifts[empId] || {};
         for (const dk of Object.keys(byD)) {
           for (const sh of byD[dk] || []) {
-            const siteKey = (sh.site || '').trim().toLowerCase();
+            const siteKey = normalizeSiteKey(sh.site);
             const siteId = siteByName.get(siteKey);
             if (!siteId) {
               skipped++;

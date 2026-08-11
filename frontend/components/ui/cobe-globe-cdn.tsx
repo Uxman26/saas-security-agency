@@ -14,7 +14,7 @@ export type GlobeCdnArc = {
   id: string;
   from: [number, number];
   to: [number, number];
-  /** Shown as a floating badge on the arc midpoint (e.g. "448k req/s"). */
+  /** Floating site name badge on the arc midpoint. */
   badge: string;
 };
 
@@ -25,58 +25,64 @@ type Props = {
   arcs?: GlobeCdnArc[];
 };
 
-/** Vercel / 21st.dev Globe CDN edge regions. */
+/** Brand orange — ControlOps `#E04E00` / `#FD8018`. */
+const ORANGE: [number, number, number] = [224 / 255, 78 / 255, 0];
+const ORANGE_SOFT: [number, number, number] = [253 / 255, 128 / 255, 24 / 255];
+
+/**
+ * Globally spaced markers (keeps arcs long & readable).
+ * Labels mirror Sites examples used across ControlOps.
+ */
 const DEFAULT_MARKERS: GlobeCdnMarker[] = [
-  { id: 'dub1', location: [53.3498, -6.2603], label: 'dub1' },
-  { id: 'cdg1', location: [49.0097, 2.5479], label: 'cdg1' },
-  { id: 'bom1', location: [19.076, 72.8777], label: 'bom1' },
-  { id: 'sin1', location: [1.3521, 103.8198], label: 'sin1' },
-  { id: 'hnd1', location: [35.5494, 139.7798], label: 'hnd1' },
-  { id: 'syd1', location: [-33.8688, 151.2093], label: 'syd1' },
+  { id: 'london', location: [51.5074, -0.1278], label: 'london' },
+  { id: 'manchester', location: [53.4808, -2.2426], label: 'manchester' },
+  { id: 'dubai', location: [25.2048, 55.2708], label: 'dubai' },
+  { id: 'singapore', location: [1.3521, 103.8198], label: 'singapore' },
+  { id: 'tokyo', location: [35.6762, 139.6503], label: 'tokyo' },
+  { id: 'sydney', location: [-33.8688, 151.2093], label: 'sydney' },
 ];
 
 const DEFAULT_ARCS: GlobeCdnArc[] = [
   {
-    id: 'dub-cdg',
-    from: [53.3498, -6.2603],
-    to: [49.0097, 2.5479],
-    badge: '448k req/s',
+    id: 'lon-man',
+    from: [51.5074, -0.1278],
+    to: [53.4808, -2.2426],
+    badge: 'City Centre Office',
   },
   {
-    id: 'cdg-bom',
-    from: [49.0097, 2.5479],
-    to: [19.076, 72.8777],
-    badge: '306k req/s',
+    id: 'lon-dxb',
+    from: [51.5074, -0.1278],
+    to: [25.2048, 55.2708],
+    badge: 'Canary Wharf',
   },
   {
-    id: 'bom-sin',
-    from: [19.076, 72.8777],
+    id: 'man-sin',
+    from: [53.4808, -2.2426],
     to: [1.3521, 103.8198],
-    badge: '372k req/s',
+    badge: 'Retail Park',
   },
   {
-    id: 'sin-hnd',
+    id: 'dxb-sin',
+    from: [25.2048, 55.2708],
+    to: [1.3521, 103.8198],
+    badge: 'Warehouse Gate A',
+  },
+  {
+    id: 'sin-tyo',
     from: [1.3521, 103.8198],
-    to: [35.5494, 139.7798],
-    badge: '224k req/s',
+    to: [35.6762, 139.6503],
+    badge: 'Hospital Wing',
   },
   {
-    id: 'hnd-syd',
-    from: [35.5494, 139.7798],
+    id: 'tyo-syd',
+    from: [35.6762, 139.6503],
     to: [-33.8688, 151.2093],
-    badge: '221k req/s',
-  },
-  {
-    id: 'dub-sin',
-    from: [53.3498, -6.2603],
-    to: [1.3521, 103.8198],
-    badge: '198k req/s',
+    badge: 'Airport Terminal',
   },
 ];
 
 /**
- * Globe CDN — dotted WebGL globe with triangle edge markers, arc badges,
- * and CSS Anchor Positioning (cobe v2 / 21st.dev Globe CDN pattern).
+ * Globe CDN — orange site markers + long connection arcs with site badges.
  */
 export function GlobeCdn({
   className,
@@ -86,19 +92,16 @@ export function GlobeCdn({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const phiRef = useRef(2.6);
+  const phiRef = useRef(2.35);
   const pointerRef = useRef({
     dragging: false,
     lastX: 0,
     velocity: 0,
   });
 
-  const markerColor = useMemo(
-    (): [number, number, number] => (dark ? [0.92, 0.93, 0.95] : [0.08, 0.09, 0.11]),
-    [dark],
-  );
+  const markerColor = useMemo((): [number, number, number] => ORANGE, []);
   const arcColor = useMemo(
-    (): [number, number, number] => (dark ? [0.75, 0.78, 0.82] : [0.12, 0.13, 0.15]),
+    (): [number, number, number] => (dark ? ORANGE_SOFT : ORANGE),
     [dark],
   );
 
@@ -115,7 +118,7 @@ export function GlobeCdn({
       width: width * 2,
       height: width * 2,
       phi: phiRef.current,
-      theta: 0.22,
+      theta: 0.28,
       dark: dark ? 1 : 0,
       diffuse: dark ? 1.15 : 1.35,
       mapSamples: 18000,
@@ -127,7 +130,7 @@ export function GlobeCdn({
       scale: 1.05,
       markers: markers.map((m) => ({
         location: m.location,
-        size: 0.012,
+        size: 0.022,
         id: m.id,
         color: markerColor,
       })),
@@ -138,9 +141,10 @@ export function GlobeCdn({
         color: arcColor,
       })),
       arcColor,
-      arcWidth: 0.45,
-      arcHeight: 0.32,
-      markerElevation: 0.012,
+      // Thin, low arcs — reads as connection lines, not “arrows”
+      arcWidth: 0.35,
+      arcHeight: 0.22,
+      markerElevation: 0.01,
     });
 
     let raf = 0;
@@ -153,7 +157,7 @@ export function GlobeCdn({
       width = container.offsetWidth || width;
       globe.update({
         phi: phiRef.current,
-        theta: 0.22,
+        theta: 0.28,
         width: width * 2,
         height: width * 2,
       });
@@ -220,7 +224,7 @@ export function GlobeCdn({
         aria-label="Global operations globe"
       />
 
-      {/* Triangle markers + region labels (CSS Anchor Positioning via cobe ids) */}
+      {/* Compact upward pin — not elongated arrows */}
       {markers.map((m) => (
         <div
           key={m.id}
@@ -230,31 +234,23 @@ export function GlobeCdn({
               positionAnchor: `--cobe-${m.id}`,
               bottom: 'anchor(top)',
               left: 'anchor(center)',
-              translate: '-50% -8px',
+              translate: '-50% -6px',
               opacity: `var(--cobe-visible-${m.id}, 0)`,
               filter: `blur(calc((1 - var(--cobe-visible-${m.id}, 0)) * 6px))`,
             } as React.CSSProperties
           }
         >
           <span
-            className={cn(
-              'block size-0 border-x-[4px] border-b-[7px] border-x-transparent',
-              dark ? 'border-b-zinc-100' : 'border-b-zinc-900',
-            )}
+            className="block size-0 border-x-[3.5px] border-b-[6px] border-x-transparent border-b-[#E04E00]"
             aria-hidden
           />
-          <span
-            className={cn(
-              'font-mono text-[10px] font-medium lowercase tracking-tight',
-              dark ? 'text-zinc-200' : 'text-zinc-800',
-            )}
-          >
+          <span className="whitespace-nowrap font-mono text-[9px] font-medium lowercase tracking-tight text-[#E04E00]">
             {m.label}
           </span>
         </div>
       ))}
 
-      {/* Live traffic badges on arcs */}
+      {/* Site name badges */}
       {arcs.map((a) => (
         <div
           key={a.id}
@@ -272,10 +268,8 @@ export function GlobeCdn({
         >
           <span
             className={cn(
-              'inline-block rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-tight shadow-sm',
-              dark
-                ? 'bg-zinc-100 text-zinc-900'
-                : 'bg-zinc-900 text-white',
+              'inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium tracking-tight shadow-sm',
+              dark ? 'bg-[#E04E00] text-white' : 'bg-zinc-900 text-white',
             )}
           >
             {a.badge}

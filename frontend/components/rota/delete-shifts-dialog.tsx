@@ -4,7 +4,7 @@ import { Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { fmtRotaDeleteDate } from '@/lib/rota-shifts-utils';
+import { fmtRotaDeleteDate, shiftSiteLine } from '@/lib/rota-shifts-utils';
 import type { ShiftRec } from '@/lib/rota-shifts-types';
 import { cn } from '@/lib/utils';
 
@@ -23,16 +23,6 @@ type Props = {
   onDeleteRow: (dayKey: string, idx: number) => void;
   onDeleteAll: () => void;
 };
-
-function formatBreak(shift: ShiftRec) {
-  const totalMins = (shift.breakH || 0) * 60 + (shift.breakM || 0);
-  if (totalMins === 0) return '0 hrs';
-  const h = Math.floor(totalMins / 60);
-  const m = totalMins % 60;
-  if (m === 0) return h === 1 ? '1 hr' : `${h} hrs`;
-  if (h === 0) return `${m} min`;
-  return `${h}h ${m}m`;
-}
 
 export function DeleteShiftsDialog({
   open,
@@ -75,10 +65,9 @@ export function DeleteShiftsDialog({
                 <TableHeader>
                   <TableRow className="bg-muted/60 hover:bg-muted/60">
                     {showDateCol ? <TableHead className="text-xs font-semibold">Date</TableHead> : null}
+                    <TableHead className="text-xs font-semibold">Site</TableHead>
                     <TableHead className="text-xs font-semibold">Start</TableHead>
                     <TableHead className="text-xs font-semibold">Finish</TableHead>
-                    <TableHead className="text-xs font-semibold">Notes</TableHead>
-                    <TableHead className="text-xs font-semibold">Break</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
@@ -88,12 +77,11 @@ export function DeleteShiftsDialog({
                       {showDateCol ? (
                         <TableCell className="text-xs whitespace-nowrap">{fmtRotaDeleteDate(dk)}</TableCell>
                       ) : null}
+                      <TableCell className="text-xs font-medium max-w-[140px] break-words" title={shiftSiteLine(shift)}>
+                        {shiftSiteLine(shift)}
+                      </TableCell>
                       <TableCell className="text-xs tabular-nums">{shift.start}</TableCell>
                       <TableCell className="text-xs tabular-nums">{shift.end}</TableCell>
-                      <TableCell className="text-xs max-w-[120px] truncate" title={shift.notes || undefined}>
-                        {shift.notes?.trim() || '—'}
-                      </TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">{formatBreak(shift)}</TableCell>
                       <TableCell className="text-right">
                         <button
                           type="button"

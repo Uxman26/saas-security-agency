@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import type { EmployeeRec, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
-import { findConflictsForDraft } from '@/lib/rota-shifts-utils';
+import { buildSiteIndex, findConflictsForDraft, normalizeSiteKey } from '@/lib/rota-shifts-utils';
 import { useCreateSite, useSites } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
@@ -75,7 +75,7 @@ export function ShiftDialog({
   const { data: sites = [] } = useSites();
   const createSite = useCreateSite();
   const { data: contractors = [] } = useDirectoryContractorsList({ is_active: true });
-  const siteByName = useMemo(() => new Map(sites.map((s) => [s.name, s])), [sites]);
+  const siteByName = useMemo(() => buildSiteIndex(sites), [sites]);
   const siteNames = sites.map((s) => s.name);
   const [dk, setDk] = useState(defaultDk);
   const [shift, setShift] = useState<ShiftRec>(() => empty());
@@ -92,7 +92,7 @@ export function ShiftDialog({
   const [newSiteColor, setNewSiteColor] = useState<string>(DEFAULT_SITE_COLOR);
 
   const applySite = (siteName: string) => {
-    const rec = siteName ? siteByName.get(siteName) : undefined;
+    const rec = siteName ? siteByName.get(normalizeSiteKey(siteName)) : undefined;
     // Deliberately does not touch shiftRate: the rate box only ever shows the staff
     // member's own rate. Payable still falls back to site rates via resolveShiftRate.
     setShift((s) => ({
@@ -313,7 +313,7 @@ export function ShiftDialog({
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-[250]">
                   {siteOptions.map((name) => {
-                    const rec = siteByName.get(name);
+                    const rec = siteByName.get(normalizeSiteKey(name));
                     const c = rec?.color || DEFAULT_SITE_COLOR;
                     return (
                       <SelectItem key={name} value={name}>

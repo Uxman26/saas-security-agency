@@ -63,6 +63,17 @@ export function shiftSiteLine(sh: ShiftRec) {
   return (sh.site || sh.label || '').trim() || 'One-off';
 }
 
+/**
+ * Same-day shifts ordered by start time, each paired with its ORIGINAL array
+ * index. Attendance records and menu actions are keyed by that index, so the
+ * stored array must never be reordered — only the display order changes.
+ */
+export function shiftsInTimeOrder<T extends { start: string }>(list: readonly T[]): { shift: T; idx: number }[] {
+  return list
+    .map((shift, idx) => ({ shift, idx }))
+    .sort((a, b) => timeMins(a.shift.start) - timeMins(b.shift.start) || a.idx - b.idx);
+}
+
 /** Address + postcode for display / WhatsApp. Empty when neither is set. */
 export function formatSiteAddress(
   site: { address?: string | null; postcode?: string | null } | null | undefined
@@ -70,6 +81,25 @@ export function formatSiteAddress(
   if (!site) return '';
   const parts = [(site.address || '').trim(), (site.postcode || '').trim()].filter(Boolean);
   return parts.join(', ');
+}
+
+/**
+ * Shifts store their site as free text (`ShiftRec.site`), not a site id, so the
+ * only join back to a Site record is by name. Normalise case and collapse inner
+ * whitespace so drift like "The  Hive" / "the hive" still resolves an address.
+ */
+export function normalizeSiteKey(name: string | null | undefined): string {
+  return (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Build a name-keyed site index for address lookups. */
+export function buildSiteIndex<T extends { name: string }>(sites: readonly T[]): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const s of sites) {
+    const key = normalizeSiteKey(s.name);
+    if (key && !map.has(key)) map.set(key, s);
+  }
+  return map;
 }
 
 export function timeMins(t: string) {

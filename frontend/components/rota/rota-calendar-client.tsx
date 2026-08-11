@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
 import type { RotaPlanListItem } from '@/lib/types';
@@ -33,6 +33,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   CalendarPlus,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -52,11 +53,11 @@ import { toast } from '@/lib/toast';
 import { addDays } from 'date-fns';
 
 const SHIFT_MENU_H = 420;
-const EMP_MENU_H = 132;
+const EMP_MENU_H = 348;
 const ROTA_PAY_COL_W = 62;
 const ROTA_HOURS_COL_W = 68;
 const ROTA_PUBLISH_COL_W = 92;
-const ROTA_EMP_COL_W = 182;
+const ROTA_EMP_COL_W = 210;
 const ROTA_DAY_COL_W = 160;
 /** Timeline: px per hour — wide enough that the day is horizontally scrollable */
 const TIMELINE_PX_PER_HOUR = 72;
@@ -161,19 +162,25 @@ function EmployeePublishCell({
   const btn = 'w-full rounded px-1.5 py-1 text-[10px] font-semibold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
   return (
     <div className="flex flex-col items-stretch gap-1">
+      {/* Green + check reads as "done" at a glance; draft stays deliberately quiet. */}
       <span
         className={cn(
-          'rounded-full px-1.5 py-0.5 text-center text-[9px] font-semibold leading-tight',
-          published
-            ? 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-100'
-            : 'bg-muted text-muted-foreground'
+          'flex items-center justify-center gap-0.5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-bold leading-tight ring-1',
+          busy
+            ? 'bg-muted text-muted-foreground ring-transparent'
+            : published
+              ? 'bg-emerald-600 text-white ring-emerald-700 dark:bg-emerald-500 dark:text-emerald-950 dark:ring-emerald-400'
+              : 'bg-muted text-muted-foreground ring-border'
         )}
       >
+        {busy ? null : published ? <Check className="size-2.5 shrink-0" aria-hidden /> : null}
         {busy ? 'Saving…' : published ? 'Published' : 'Draft'}
       </span>
+      {/* Buttons stay neutral: green is the column's only colour, reserved for the
+          published chip. Emphasis comes from fill vs outline, not from hue. */}
       <button
         type="button"
-        className={cn(btn, 'bg-sky-600 text-white border-sky-700 hover:bg-sky-700')}
+        className={cn(btn, 'bg-foreground text-background border-foreground hover:bg-foreground/85')}
         disabled={disabled || published}
         onClick={onPublish}
         title={published ? `${name} is already published` : `Publish ${name} only`}
@@ -212,6 +219,15 @@ function placeDaysPanel(anchor: AnchorBox, panelW: number, panelH: number) {
   };
 }
 
+/**
+ * A zero-size rect at the mouse position, so menus open next to the cursor.
+ * Keyboard-activated clicks report clientX/Y of 0 — fall back to the element.
+ */
+function pointerRect(e: { clientX: number; clientY: number }, fallback: Element): DOMRect {
+  if (!e.clientX && !e.clientY) return fallback.getBoundingClientRect();
+  return new DOMRect(e.clientX, e.clientY, 0, 0);
+}
+
 function placeMenu(rect: DOMRect, w: number, menuH: number, _preferUp?: boolean) {
   const width = Math.min(Math.max(w, 160), window.innerWidth - 16);
   // Prefer opening beside the card (right), fall back to left, then below/above.
@@ -223,17 +239,17 @@ function placeMenu(rect: DOMRect, w: number, menuH: number, _preferUp?: boolean)
     x = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8);
   }
 
+  // Never let the menu exceed the viewport: cap its height and clamp y so the
+  // last rows' menus stay fully clickable instead of overflowing off-screen.
+  const maxH = Math.max(160, window.innerHeight - 16);
+  const height = Math.min(menuH, maxH);
+
   let y = rect.top;
-  if (y + menuH > window.innerHeight - 8) {
-    y = Math.max(8, rect.bottom - menuH);
+  if (y + height > window.innerHeight - 8) {
+    y = rect.bottom - height;
   }
-  if (y < 8) y = 8;
-  // Keep the menu visually anchored to the clicked card
-  const cardMid = rect.top + rect.height / 2;
-  if (Math.abs(y - cardMid) > window.innerHeight * 0.35) {
-    y = Math.min(Math.max(8, rect.top), Math.max(8, window.innerHeight - menuH - 8));
-  }
-  return { x, y, w: width };
+  y = Math.min(Math.max(8, y), Math.max(8, window.innerHeight - height - 8));
+  return { x, y, w: width, maxH };
 }
 
 export function RotaCalendarClient() {
@@ -500,9 +516,9 @@ export function RotaCalendarClient() {
   const [adjSaving, setAdjSaving] = useState(false);
   const [attSaving, setAttSaving] = useState(false);
   const [shiftMenu, setShiftMenu] = useState<{ empId: string; dk: string; idx: number } | null>(null);
-  const [shiftMenuAnchor, setShiftMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
+  const [shiftMenuAnchor, setShiftMenuAnchor] = useState<{ x: number; y: number; w: number; maxH: number } | null>(null);
   const [empMenu, setEmpMenu] = useState<string | null>(null);
-  const [empMenuAnchor, setEmpMenuAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
+  const [empMenuAnchor, setEmpMenuAnchor] = useState<{ x: number; y: number; w: number; maxH: number } | null>(null);
   const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(() => new Set());
   const [employeeSelectMode, setEmployeeSelectMode] = useState(false);
   const [gridScrollHint, setGridScrollHint] = useState('Days · Staff');
@@ -533,7 +549,10 @@ export function RotaCalendarClient() {
   }, []);
 
   useEffect(() => {
-    const fn = () => {
+    const fn = (e?: Event) => {
+      // Scrolling inside an open menu must not dismiss it.
+      const t = e?.target as Node | undefined;
+      if (t && (shiftMenuPortalRef.current?.contains(t) || empMenuPortalRef.current?.contains(t))) return;
       closeShiftMenu();
       closeEmpMenu();
     };
@@ -551,11 +570,23 @@ export function RotaCalendarClient() {
       if (e.key === 'Escape') {
         closeShiftMenu();
         closeEmpMenu();
+        return;
       }
+      // Delete/Backspace removes the selected shift. Ignored while typing so it
+      // never eats a character out of an input, textarea or contenteditable.
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      if (!shiftMenu) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t?.tagName || '')) return;
+      e.preventDefault();
+      const { empId, dk, idx } = shiftMenu;
+      closeShiftMenu();
+      deleteShift(empId, dk, idx);
+      toast.snack('1 shift deleted');
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [shiftMenu, empMenu]);
+  }, [shiftMenu, empMenu, deleteShift]);
 
   const empMatchesStatusFilter = useCallback(
     (empId: string) => {
@@ -1868,16 +1899,30 @@ export function RotaCalendarClient() {
     toast.snack('Shift moved');
   };
 
+  /**
+   * Opens the shift menu at the pointer. Anchoring to the tile put the menu far
+   * from the click on wide tiles, so we use the cursor position instead.
+   */
+  const openShiftMenuAt = (
+    e: React.MouseEvent<HTMLElement>,
+    empId: string,
+    dk: string,
+    idx: number,
+    shiftsBelow: number
+  ) => {
+    const rect = pointerRect(e, e.currentTarget);
+    closeEmpMenu();
+    setShiftMenu({ empId, dk, idx });
+    setShiftMenuAnchor(placeMenu(rect, 192, SHIFT_MENU_H, shiftsBelow > 0));
+  };
+
   const toggleShiftMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string, dk: string, idx: number, shiftsBelow: number) => {
     const open = shiftMenu?.empId === empId && shiftMenu?.dk === dk && shiftMenu?.idx === idx;
     if (open) {
       closeShiftMenu();
       return;
     }
-    const rect = e.currentTarget.getBoundingClientRect();
-    closeEmpMenu();
-    setShiftMenu({ empId, dk, idx });
-    setShiftMenuAnchor(placeMenu(rect, 192, SHIFT_MENU_H, shiftsBelow > 0));
+    openShiftMenuAt(e, empId, dk, idx, shiftsBelow);
   };
 
   const toggleEmpMenu = (e: React.MouseEvent<HTMLButtonElement>, empId: string) => {
@@ -2299,7 +2344,16 @@ export function RotaCalendarClient() {
                   style={{ ...ROTA_STICKY_PUBLISH_BG }}
                 >
                   <div className="font-semibold leading-tight">Status</div>
-                  <p className="mt-1 font-normal text-[9px] leading-tight text-muted-foreground">Per staff only</p>
+                  <p
+                    className={cn(
+                      'mt-1 font-semibold text-[9px] leading-tight tabular-nums',
+                      publishedRowCount > 0 && publishedRowCount === rows.length
+                        ? 'text-emerald-700 dark:text-emerald-400'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    {publishedRowCount}/{rows.length} published
+                  </p>
                 </th>
               </tr>
             </thead>
@@ -2320,7 +2374,11 @@ export function RotaCalendarClient() {
                   <td
                     className={cn(
                       'rota-sticky-emp sticky left-0 z-50 p-2 align-top border-r border-b shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18)] isolate',
-                      emp.rotaPending && 'border-amber-500'
+                      emp.rotaPending && 'border-amber-500',
+                      // Published marker lives on the sticky name cell so it stays
+                      // visible however far the grid is scrolled sideways.
+                      isEmployeePublished(emp.id) &&
+                        'border-l-[3px] border-l-emerald-500 dark:border-l-emerald-400'
                     )}
                     style={
                       {
@@ -2365,20 +2423,22 @@ export function RotaCalendarClient() {
                           )}
                           onClick={(e) => toggleEmpMenu(e, emp.id)}
                         >
-                          <EmployeeAvatar emp={emp} className="size-7 text-[9px] shrink-0" />
+                          <EmployeeAvatar emp={emp} className="size-9 text-[11px] shrink-0" />
                           <span className="min-w-0 flex-1">
-                            <span className="text-[11px] font-medium flex items-start gap-1 break-words whitespace-normal leading-snug">
-                              <span className="break-words">{emp.name}</span>
+                            {/* Block (not flex) so a long name wraps across lines and the
+                                warning icon flows inline after it rather than squashing it. */}
+                            <span className="text-[13px] font-semibold block break-words whitespace-normal leading-snug">
+                              {emp.name}
                               {empHasConflict(emp.id) || emp.rotaPending ? (
                                 <AlertTriangle
-                                  className="size-3 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400"
+                                  className="inline size-3.5 ml-1 -mt-0.5 align-middle text-amber-600 dark:text-amber-400"
                                   aria-label={emp.rotaPending ? 'Rota pending' : 'Has shift conflicts'}
                                 />
                               ) : null}
                             </span>
-                            <span className="text-[9px] text-muted-foreground block break-words leading-tight">{emp.role}</span>
+                            <span className="text-[11px] text-muted-foreground block break-words leading-tight">{emp.role}</span>
                             {emp.rotaPending ? (
-                              <span className="text-[8px] font-semibold text-amber-700 dark:text-amber-300">Pending</span>
+                              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Pending</span>
                             ) : null}
                           </span>
                           <MoreHorizontal className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
@@ -2432,7 +2492,7 @@ export function RotaCalendarClient() {
                         onDrop={mark ? undefined : (e) => onDropDay(e, dk, emp.id)}
                       >
                         <div className="flex flex-col gap-1 min-h-[72px] min-w-0">
-                          {list.map((sh, idx) => {
+                          {shiftsInTimeOrder(list).map(({ shift: sh, idx }) => {
                             const att = state.attendance[attKey(emp.id, dk, idx)];
                             const attStatus = att ? normalizeAttStatus(att.status) : null;
                             if (statusFilter !== 'all' && attStatus !== statusFilter) return null;
@@ -2463,6 +2523,14 @@ export function RotaCalendarClient() {
                                   conflicts.length > 0 && 'border-amber-500 bg-amber-50 dark:bg-amber-950'
                                 )}
                                 onClick={mark ? undefined : (e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
+                                onContextMenu={
+                                  mark
+                                    ? undefined
+                                    : (e) => {
+                                        e.preventDefault();
+                                        openShiftMenuAt(e, emp.id, dk, idx, list.length - idx - 1);
+                                      }
+                                }
                                 title={tip || 'Drag to another day to move this shift'}
                               >
                                 <div className="h-1 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
@@ -3696,7 +3764,7 @@ export function RotaCalendarClient() {
         <div
           ref={shiftMenuPortalRef}
           className="fixed z-[200] rounded-md border border-border bg-background text-foreground shadow-xl overflow-hidden isolate py-1 text-xs"
-          style={{ left: shiftMenuAnchor.x, top: shiftMenuAnchor.y, width: shiftMenuAnchor.w }}
+          style={{ left: shiftMenuAnchor.x, top: shiftMenuAnchor.y, width: shiftMenuAnchor.w, maxHeight: shiftMenuAnchor.maxH, overflowY: 'auto' }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button
@@ -3795,7 +3863,7 @@ export function RotaCalendarClient() {
         <div
           ref={empMenuPortalRef}
           className="fixed z-[200] rounded-md border border-border bg-background text-foreground shadow-xl overflow-hidden isolate py-1 text-sm"
-          style={{ left: empMenuAnchor.x, top: empMenuAnchor.y, width: empMenuAnchor.w }}
+          style={{ left: empMenuAnchor.x, top: empMenuAnchor.y, width: empMenuAnchor.w, maxHeight: empMenuAnchor.maxH, overflowY: 'auto' }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button

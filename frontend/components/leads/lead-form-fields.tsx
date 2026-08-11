@@ -93,7 +93,7 @@ export function LeadFormFields({ form, onChange, statuses, onBlurContact, dupes 
           <Input value={form.postcode} onChange={(e) => set({ postcode: e.target.value })} />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label>Source</Label>
           <Select value={form.source} onValueChange={(v) => set({ source: v })}>

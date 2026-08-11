@@ -229,7 +229,7 @@ export default function PatrolPage() {
                   <Label>Name</Label>
                   <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Night Patrol" />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <div className="space-y-1">
                     <Label>Frequency (mins)</Label>
                     <Input value={form.frequency_minutes} onChange={(e) => setForm((f) => ({ ...f, frequency_minutes: e.target.value }))} />

@@ -1,9 +1,17 @@
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from '@/lib/providers';
 import { NextIntlClientProvider } from 'next-intl';
 import { isRtl } from '@/i18n/config';
+
+/** Without this, mobile browsers assume a ~980px canvas and shrink every page to fit.
+ *  User scaling stays enabled deliberately — capping zoom locks out low-vision users. */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta');

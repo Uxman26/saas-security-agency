@@ -4,7 +4,9 @@ from typing import Any
 
 from app.config import settings
 
-_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+# Must live on the mounted data volume (/app/data, same place as the sqlite db),
+# NOT app/data inside the image — settings written there are lost on every rebuild.
+_DATA_DIR = os.environ.get("APP_DATA_DIR") or os.path.join(os.getcwd(), "data")
 _SMTP_FILE = os.path.join(_DATA_DIR, "platform_smtp.json")
 
 
@@ -26,17 +28,29 @@ def _write_raw(data: dict) -> None:
 
 
 def get_smtp_config() -> dict[str, Any]:
+    """
+    Admin-UI settings are the source of truth. Env vars are only a fallback for a
+    fresh install — once credentials are saved in the UI, env is ignored entirely
+    so a stale MAIL_* value can never silently override what the admin set.
+    """
     raw = _read_raw()
-    username = raw.get("mail_username") or settings.mail_username
-    password = raw.get("mail_password") or settings.mail_password
+    saved_creds = bool(raw.get("mail_username") and raw.get("mail_password"))
+
+    def pick(key: str, fallback: Any) -> Any:
+        if saved_creds:
+            return raw.get(key)
+        return raw.get(key) or fallback
+
+    port = pick("mail_port", settings.mail_port)
+    use_tls = raw.get("mail_use_tls")
     return {
-        "mail_server": raw.get("mail_server") or settings.mail_server,
-        "mail_port": int(raw.get("mail_port") or settings.mail_port),
-        "mail_use_tls": raw.get("mail_use_tls") if raw.get("mail_use_tls") is not None else settings.mail_use_tls,
-        "mail_username": username,
-        "mail_password": password,
-        "mail_from": raw.get("mail_from") or settings.mail_from,
-        "mail_from_name": raw.get("mail_from_name") or settings.mail_from_name,
+        "mail_server": pick("mail_server", settings.mail_server),
+        "mail_port": int(port or 587),
+        "mail_use_tls": use_tls if use_tls is not None else settings.mail_use_tls,
+        "mail_username": pick("mail_username", settings.mail_username),
+        "mail_password": pick("mail_password", settings.mail_password),
+        "mail_from": pick("mail_from", settings.mail_from),
+        "mail_from_name": pick("mail_from_name", settings.mail_from_name),
     }
 
 

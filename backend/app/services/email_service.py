@@ -72,7 +72,10 @@ def send_email_async(to_email: str, subject: str, body: str) -> None:
         try:
             send_email(to_email, subject, body)
         except Exception as e:
-            logger.warning("Background email to %s failed: %s", to_email, e)
+            # str(HTTPException) is empty, which previously logged a bare
+            # "failed:" with no cause. Log the detail and a traceback instead.
+            reason = getattr(e, "detail", None) or str(e) or type(e).__name__
+            logger.warning("Background email to %s failed: %s", to_email, reason, exc_info=True)
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -89,7 +92,10 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        # Keep the concrete cause (auth vs connection vs timeout) in the message —
+        # str() alone is empty for some smtplib errors.
+        logger.error("SMTP send to %s failed: %s: %s", to_email, type(e).__name__, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {type(e).__name__}: {e}")
 
 
 def send_company_email(company: Company, to_email: str, subject: str, body: str) -> bool:
@@ -102,7 +108,10 @@ def send_company_email(company: Company, to_email: str, subject: str, body: str)
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        # Keep the concrete cause (auth vs connection vs timeout) in the message —
+        # str() alone is empty for some smtplib errors.
+        logger.error("SMTP send to %s failed: %s: %s", to_email, type(e).__name__, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {type(e).__name__}: {e}")
 
 
 def send_and_log(

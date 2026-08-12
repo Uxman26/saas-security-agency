@@ -507,7 +507,18 @@ class GuardBase(BaseModel):
         return self
 
 class GuardCreate(GuardBase):
-    pass
+    # Opt-in portal login created alongside the staff record. When set, `email` becomes
+    # the login username, so it is required too (enforced in create_guard). Declared here
+    # rather than on GuardBase so they never appear on GuardResponse.
+    create_login: bool = False
+    login_password: Optional[str] = None
+
+    @field_validator("login_password")
+    @classmethod
+    def login_password_rules(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        return validate_password_strength(v)
 
 class GuardResponse(GuardBase):
     id: int
@@ -723,6 +734,17 @@ class ClientCreate(ClientBase):
     # 100 to match clientSchema in frontend/lib/validation.ts — a tighter cap here
     # would 422 input the UI accepted.
     name: CompanyNameStr
+    # Opt-in portal login created alongside the client record. When set, `email` becomes
+    # the login username, so it is required too (enforced in create_client).
+    create_login: bool = False
+    login_password: Optional[str] = None
+
+    @field_validator("login_password")
+    @classmethod
+    def login_password_rules(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        return validate_password_strength(v)
 
 class ClientResponse(ClientBase):
     id: int

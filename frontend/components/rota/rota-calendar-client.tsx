@@ -3347,6 +3347,7 @@ export function RotaCalendarClient() {
               submitLabel="Create staff"
               photoFile={addStaffPhoto}
               onPhotoFileChange={setAddStaffPhoto}
+              allowLogin
               onSubmit={async (data) => {
                 try {
                   const created = await createGuard.mutateAsync(formToGuardPayload(data));

@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { guardSubmitSchema, type GuardFormData } from '@/lib/validation';
+import { PasswordInput } from '@/components/ui/password-input';
+import { guardSubmitSchema, PASSWORD_REQUIREMENTS_MSG, type GuardFormData } from '@/lib/validation';
 import {
   TITLES,
   GENDERS,
@@ -50,7 +51,12 @@ const STEP1_KEYS: (keyof GuardFormData)[] = [
   'working_time_pattern',
 ];
 
+// The login fields live on the Summary step, so their errors must keep the user there
+// rather than bouncing to step 0 where the inputs are not rendered.
+const STEP2_KEYS: (keyof GuardFormData)[] = ['create_login', 'login_password'];
+
 function stepForField(key: string) {
+  if (STEP2_KEYS.includes(key as keyof GuardFormData)) return 2;
   if (STEP0_KEYS.includes(key as keyof GuardFormData)) return 0;
   if (STEP1_KEYS.includes(key as keyof GuardFormData)) return 1;
   return 0;
@@ -128,6 +134,7 @@ export function GuardFormWizard({
   photoFile,
   onPhotoFileChange,
   existingJobTitles,
+  allowLogin = false,
 }: {
   form: ReturnType<typeof useForm<GuardFormData>>;
   mains: { id: string; name: string }[];
@@ -138,10 +145,13 @@ export function GuardFormWizard({
   photoFile?: File | null;
   onPhotoFileChange?: (file: File | null) => void;
   existingJobTitles?: string[];
+  /** Only the create flows provision logins; editing a guard must not silently make one. */
+  allowLogin?: boolean;
 }) {
   const [step, setStep] = useState(0);
   const [jobTitles, setJobTitles] = useState<string[]>(() => loadJobTitles(existingJobTitles));
-  const { register, handleSubmit, setValue, watch, trigger, clearErrors, getValues, formState: { errors } } = form;
+  const { register, handleSubmit, setValue, watch, trigger, clearErrors, setError, getValues, formState: { errors } } = form;
+  const createLogin = watch('create_login');
   const cid = watch('contractor_id');
   const employeeType = watch('employee_type') ?? '';
   const entitlementUnit = watch('entitlement_unit') ?? '';
@@ -205,6 +215,12 @@ export function GuardFormWizard({
     const values = getValues();
     const parsed = guardSubmitSchema.safeParse(values);
     if (!parsed.success) {
+      // Surface the messages: without this a failure only jumps step, so an invalid
+      // login password would make Save look like it did nothing at all.
+      for (const issue of parsed.error.issues) {
+        const path = issue.path[0];
+        if (path) setError(String(path) as keyof GuardFormData, { message: issue.message });
+      }
       const first = parsed.error.issues[0];
       if (first?.path[0]) setStep(stepForField(String(first.path[0])));
       return;
@@ -683,6 +699,45 @@ export function GuardFormWizard({
             <p><span className="font-medium text-foreground">Entitlement:</span> {entitlementUnit || '—'}</p>
           </div>
         </div>
+
+        {allowLogin && (
+          <div className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                id="guard_create_login"
+                className="size-4 mt-0.5 accent-primary"
+                {...register('create_login')}
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="guard_create_login" className="font-normal cursor-pointer">
+                  Create a portal login for this staff member
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Signs in with the Email above and gets the Staff role. Manage what that role
+                  can see in Settings → Roles &amp; Permissions.
+                </p>
+              </div>
+            </div>
+
+            {createLogin && (
+              <div className="space-y-1">
+                <Label>
+                  Login password <span className="text-destructive">*</span>
+                </Label>
+                <PasswordInput autoComplete="new-password" {...register('login_password')} />
+                {errors.login_password ? (
+                  <p className="text-xs text-destructive">{errors.login_password.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MSG}</p>
+                )}
+                {errors.email && (
+                  <p className="text-xs text-destructive">{errors.email.message}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         </div>
       )}
 

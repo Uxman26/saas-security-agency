@@ -33,6 +33,13 @@ def get_guard(guard_id: int, db: Session = Depends(get_db), current_user: User =
 
 @router.put("/{guard_id}", response_model=GuardResponse)
 def update_guard(guard_id: int, guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("guards", "edit"))):
+    # Logins are created only on the POST path. Silently ignoring the flag here would let
+    # an edit look like it provisioned access when it did nothing.
+    if guard.create_login:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A portal login cannot be created from an edit. Use Roles & Permissions → Users.",
+        )
     return guard_service.update_guard(db, guard_id, guard, current_user.id)
 
 @router.post("/{guard_id}/photo", response_model=GuardResponse)

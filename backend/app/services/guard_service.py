@@ -10,12 +10,19 @@ from app.services import audit_service
 from app.services import contractor_scope
 
 
+# Carried on GuardCreate to drive portal-login creation; not columns on Guard, so they
+# must never reach the model constructor or the update setattr loop.
+_NON_COLUMN_FIELDS = ("create_login", "login_password")
+
+
 def _payload(guard: GuardCreate, *, only_set: bool = False) -> dict[str, Any]:
     data = (
         guard.model_dump(exclude_unset=only_set)
         if hasattr(guard, "model_dump")
         else guard.dict(exclude_unset=only_set)
     )
+    for f in _NON_COLUMN_FIELDS:
+        data.pop(f, None)
     if not data.get("full_name"):
         fn = (data.get("first_name") or "").strip()
         ln = (data.get("last_name") or "").strip()
@@ -70,9 +77,47 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
         entity_id=db_guard.id,
         meta={"full_name": data.get("full_name")},
     )
+    if getattr(guard, "create_login", False):
+        _create_staff_login(db, db_guard, company.id, guard)
     db.commit()
     db.refresh(db_guard)
     return db_guard
+
+
+def _create_staff_login(db: Session, db_guard: Guard, company_id: int, data: GuardCreate) -> None:
+    """Create the Staff-role portal user for a freshly inserted guard.
+
+    Every validation below (and inside create_company_user: quota, duplicate email, role
+    checks) raises before that function commits, so a rejected login leaves the flushed
+    guard row uncommitted and the request rolls back both together — no orphan guard.
+    """
+    from app.schemas import CompanyUserCreate
+    from app.services import role_service, user_service
+
+    email = (data.email or "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required to create a portal login")
+    if not data.login_password:
+        raise HTTPException(status_code=400, detail="Password is required to create a portal login")
+
+    role = role_service.get_role_by_slug(db, company_id, "staff")
+    if not role:
+        role_service.ensure_roles_for_company(db, company_id)
+        role = role_service.get_role_by_slug(db, company_id, "staff")
+    if not role:
+        raise HTTPException(status_code=500, detail="Staff role is not configured for this company")
+
+    user_service.create_company_user(
+        db,
+        company_id,
+        CompanyUserCreate(
+            email=email,
+            password=data.login_password,
+            full_name=(db_guard.full_name or "").strip() or email,
+            role_id=role.id,
+            guard_id=db_guard.id,
+        ),
+    )
 
 
 def get_guards(

@@ -20,7 +20,8 @@ import {
   useClientRenewals,
   useRenewClientContract,
 } from '@/hooks/use-clients';
-import { clientSchema, clientRenewSchema } from '@/lib/validation';
+import { PasswordInput } from '@/components/ui/password-input';
+import { clientSchema, clientRenewSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
 import type { Client } from '@/lib/types';
 import type { z } from 'zod';
 import { EmailDialog } from '@/components/email-dialog';
@@ -63,13 +64,17 @@ function ClientForm({
   onSubmit,
   isPending,
   submitLabel,
+  allowLogin = false,
 }: {
   form: ReturnType<typeof useForm<ClientFormData>>;
   onSubmit: (data: ClientFormData) => void;
   isPending: boolean;
   submitLabel: string;
+  /** Only the Add dialog provisions logins; editing a client must not silently make one. */
+  allowLogin?: boolean;
 }) {
-  const { register, handleSubmit, formState: { errors } } = form;
+  const { register, handleSubmit, watch, formState: { errors } } = form;
+  const createLogin = watch('create_login');
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -115,6 +120,43 @@ function ClientForm({
           </Label>
         </div>
       </div>
+
+      {allowLogin && (
+        <div className="rounded-md border p-3 space-y-3">
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="create_login"
+              className="size-4 mt-0.5 accent-primary"
+              {...register('create_login')}
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="create_login" className="font-normal cursor-pointer">
+                Create a portal login for this client
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Signs in with the Email above and gets the Client role. Manage what that role
+                can see in Settings → Roles &amp; Permissions.
+              </p>
+            </div>
+          </div>
+
+          {createLogin && (
+            <div className="space-y-1">
+              <Label>
+                Login password <span className="text-destructive">*</span>
+              </Label>
+              <PasswordInput autoComplete="new-password" {...register('login_password')} />
+              {errors.login_password ? (
+                <p className="text-xs text-destructive">{errors.login_password.message}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MSG}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? 'Saving...' : submitLabel}
       </Button>
@@ -178,6 +220,8 @@ export default function ClientsPage() {
     double_rate_special_days: false,
     contract_start_date: '',
     contract_end_date: '',
+    create_login: false,
+    login_password: '',
   };
   const addForm = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema) as Resolver<ClientFormData>,
@@ -214,6 +258,9 @@ export default function ClientsPage() {
       double_rate_special_days: client.double_rate_special_days ?? false,
       contract_start_date: client.contract_start_date ?? '',
       contract_end_date: client.contract_end_date ?? '',
+      // Edit never provisions a login; keep these clear so the PUT stays a plain update.
+      create_login: false,
+      login_password: '',
     });
     setEditOpen(true);
   };
@@ -340,7 +387,7 @@ export default function ClientsPage() {
                   <DialogHeader>
                     <DialogTitle>Add New Client</DialogTitle>
                   </DialogHeader>
-                  <ClientForm form={addForm} onSubmit={handleCreate} isPending={createClient.isPending} submitLabel="Create Client" />
+                  <ClientForm form={addForm} onSubmit={handleCreate} isPending={createClient.isPending} submitLabel="Create Client" allowLogin />
                 </DialogContent>
               </Dialog>
             </div>

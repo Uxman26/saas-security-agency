@@ -396,6 +396,9 @@ export interface Guard {
   pay_frequency?: string;
   photo_url?: string | null;
   created_at: string;
+  /** Write-only, POST /guards only: provisions a Staff-role portal login. Never returned. */
+  create_login?: boolean;
+  login_password?: string;
 }
 
 export interface Site {
@@ -572,6 +575,9 @@ export interface Client {
   contract_start_date?: string;
   contract_end_date?: string;
   created_at: string;
+  /** Write-only, POST /clients only: provisions a Client-role portal login. Never returned. */
+  create_login?: boolean;
+  login_password?: string;
 }
 
 export interface ClientContractRenewal {

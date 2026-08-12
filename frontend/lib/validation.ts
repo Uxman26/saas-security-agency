@@ -227,12 +227,36 @@ export const guardSchema = z.object({
   contractor_id: optUuid,
   main_contractor_id: optPosInt,
   sub_contractor_id: optPosInt,
+  create_login: z.boolean().default(false),
+  login_password: z.string().optional().or(z.literal('')),
 });
 
-export const guardSubmitSchema = guardSchema.partial().required({
-  first_name: true,
-  last_name: true,
-});
+// .partial() drops the base object's own refinements, so the login cross-field rules are
+// attached here — this is the schema the wizard actually validates on save.
+export const guardSubmitSchema = guardSchema
+  .partial()
+  .required({
+    first_name: true,
+    last_name: true,
+  })
+  .superRefine((v, ctx) => {
+    if (!v.create_login) return;
+    if (!v.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'Email is required to create a portal login',
+      });
+    }
+    const pw = passwordFieldSchema.safeParse(v.login_password ?? '');
+    if (!pw.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['login_password'],
+        message: pw.error.issues[0]?.message ?? PASSWORD_REQUIREMENTS_MSG,
+      });
+    }
+  });
 
 export type GuardFormData = z.infer<typeof guardSchema>;
 
@@ -297,17 +321,40 @@ export const assignmentSchema = z.object({
 });
 export type AssignmentFormData = z.infer<typeof assignmentSchema>;
 
-export const clientSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(TEXT_LIMITS.companyName),
-  email: emailFieldSchema.optional().or(z.literal('')),
-  phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
-  address: z.string().max(200).optional().or(z.literal('')),
-  postcode: z.string().max(20).optional().or(z.literal('')),
-  contact_person: z.string().max(100).optional().or(z.literal('')),
-  double_rate_special_days: z.boolean().default(false),
-  contract_start_date: z.string().optional().or(z.literal('')),
-  contract_end_date: z.string().optional().or(z.literal('')),
-});
+export const clientSchema = z
+  .object({
+    name: z.string().min(2, 'Name must be at least 2 characters').max(TEXT_LIMITS.companyName),
+    email: emailFieldSchema.optional().or(z.literal('')),
+    phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
+    address: z.string().max(200).optional().or(z.literal('')),
+    postcode: z.string().max(20).optional().or(z.literal('')),
+    contact_person: z.string().max(100).optional().or(z.literal('')),
+    double_rate_special_days: z.boolean().default(false),
+    contract_start_date: z.string().optional().or(z.literal('')),
+    contract_end_date: z.string().optional().or(z.literal('')),
+    create_login: z.boolean().default(false),
+    login_password: z.string().optional().or(z.literal('')),
+  })
+  // The password only has to satisfy the strength rules when a login is actually being
+  // created, so editing a client without touching these fields stays valid.
+  .superRefine((v, ctx) => {
+    if (!v.create_login) return;
+    if (!v.email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'Email is required to create a portal login',
+      });
+    }
+    const pw = passwordFieldSchema.safeParse(v.login_password ?? '');
+    if (!pw.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['login_password'],
+        message: pw.error.issues[0]?.message ?? PASSWORD_REQUIREMENTS_MSG,
+      });
+    }
+  });
 
 export const clientRenewSchema = z.object({
   new_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date'),

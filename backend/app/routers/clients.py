@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
@@ -22,6 +22,13 @@ def get_client(client_id: int, db: Session = Depends(get_db), current_user: User
 
 @router.put("/{client_id}", response_model=ClientResponse)
 def update_client(client_id: int, client: ClientCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("clients", "edit"))):
+    # Logins are created only on the POST path. Silently ignoring the flag here would let
+    # an edit look like it provisioned access when it did nothing.
+    if client.create_login:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A portal login cannot be created from an edit. Use Roles & Permissions → Users.",
+        )
     return client_service.update_client(db, client_id, client, current_user.id)
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)

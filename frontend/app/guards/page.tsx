@@ -254,6 +254,7 @@ export default function GuardsPage() {
                       photoFile={photoFile}
                       onPhotoFileChange={setPhotoFile}
                       existingJobTitles={guards.map((g) => g.job_title || '').filter(Boolean)}
+                      allowLogin
                     />
                   </div>
                 </DialogContent>

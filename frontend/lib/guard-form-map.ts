@@ -86,6 +86,10 @@ export const guardFormDefaults: GuardFormData = {
   contractor_id: undefined,
   main_contractor_id: undefined,
   sub_contractor_id: undefined,
+  // guardToForm spreads these defaults first, so an edit always posts create_login:false
+  // and can never provision a login by carrying stale state over from an add.
+  create_login: false,
+  login_password: '',
 };
 
 const s = (v?: string | null) => v ?? '';

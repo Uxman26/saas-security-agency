@@ -66,9 +66,19 @@ export function EmailDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant={compact ? 'ghost' : 'outline'} size="sm" title="Send email" className={cn(compact ? 'size-8 p-0' : undefined, 'transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary')}>
-          <Mail className={compact ? 'size-4' : 'h-4 w-4 mr-2'} />
-          {!compact && 'Send Email'}
+        <Button
+          variant={compact ? 'ghost' : 'outline'}
+          size="sm"
+          title="Send email"
+          aria-label="Send email"
+          className={cn(
+            // Non-compact collapses to the icon alone on phones; the label returns at `sm`.
+            compact ? 'size-8 p-0' : 'px-2.5 sm:px-3',
+            'transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary'
+          )}
+        >
+          <Mail className={compact ? 'size-4' : 'h-4 w-4 sm:mr-2'} />
+          {!compact && <span className="sr-only sm:not-sr-only">Send Email</span>}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

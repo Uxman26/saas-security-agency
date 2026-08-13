@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EmailDialog } from '@/components/email-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AppSidebar } from '@/components/app-sidebar';
-import { Menu } from 'lucide-react';
+import { LogOut, Menu } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { AlertsPanel } from '@/components/alerts-panel';
 import { usePathname } from 'next/navigation';
@@ -71,26 +71,37 @@ export function AppShell({ children }: { children: ReactNode }) {
       <AppSidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="z-40 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
-          <div className="flex min-w-0 items-center gap-2 md:hidden">
+          {/* min-w-0 + truncation keeps a long company name from pushing the menu
+              button off the start of the header on narrow screens. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden md:hidden">
             <Button
               type="button"
               variant="ghost"
               size="icon"
+              aria-label={tc('menu')}
               className="shrink-0 transition-colors hover:bg-primary/10 hover:text-primary"
               onClick={() => setDrawer(true)}
             >
               <Menu className="size-5" />
             </Button>
-            <CompanyBrand className="text-primary text-sm [&_span]:text-primary" />
+            <CompanyBrand className="min-w-0 truncate text-primary text-sm [&_span]:truncate [&_span]:text-primary" />
           </div>
           <div className="hidden flex-1 md:block" />
-          <div className="flex shrink-0 items-center gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
             <LanguageSwitcher />
             <ThemeToggle />
             <AlertsPanel />
             <EmailDialog />
-            <Button variant="outline" size="sm" onClick={() => void logout()}>
-              {tc('logout')}
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={tc('logout')}
+              title={tc('logout')}
+              className="px-2.5 sm:px-3"
+              onClick={() => void logout()}
+            >
+              <LogOut className="size-4 sm:hidden" />
+              <span className="sr-only sm:not-sr-only">{tc('logout')}</span>
             </Button>
           </div>
         </header>

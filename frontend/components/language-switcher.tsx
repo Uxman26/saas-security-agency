@@ -42,7 +42,10 @@ export function LanguageSwitcher({ className }: Props) {
         size="sm"
         aria-label="Language"
         className={cn(
-          'h-9 w-auto min-w-[8.25rem] shrink-0 gap-2 rounded-full border-border/80 bg-muted/70 px-3.5 text-sm font-medium shadow-sm',
+          // Flag-only pill on phones — the label is the widest thing in the header and
+          // the flag already identifies the language. Full label returns at `sm`.
+          'h-9 w-auto shrink-0 gap-1.5 rounded-full border-border/80 bg-muted/70 px-2.5 text-sm font-medium shadow-sm',
+          'sm:min-w-[8.25rem] sm:gap-2 sm:px-3.5',
           'hover:bg-muted dark:border-white/12 dark:bg-[#1a1f28] dark:hover:bg-[#222833]',
           'data-[size=sm]:h-9 [&_svg]:opacity-60',
           className
@@ -52,7 +55,7 @@ export function LanguageSwitcher({ className }: Props) {
           <span className="text-base leading-none" aria-hidden>
             {current.flag}
           </span>
-          <span className="truncate">{current.label}</span>
+          <span className="sr-only sm:not-sr-only sm:truncate">{current.label}</span>
         </span>
       </SelectTrigger>
 

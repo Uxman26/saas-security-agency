@@ -405,7 +405,10 @@
    required because the offsets are inline styles on the cells. */
 @media (max-width: 639px) {
   .rota-grid-table {
-    --rota-emp-w: 132px;
+    /* The name cell spends ~110px on chrome before the name gets a pixel: 16px
+       padding, the drag handle, the avatar and the row menu. Anything under ~200px
+       leaves so little room that names wrap one character per line. */
+    --rota-emp-w: 200px;
     --rota-day-w: 116px;
     --rota-hours-w: 56px;
     --rota-pay-w: 58px;

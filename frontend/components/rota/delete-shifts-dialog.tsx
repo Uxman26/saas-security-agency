@@ -6,7 +6,6 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { fmtRotaDeleteDate, shiftSiteLine } from '@/lib/rota-shifts-utils';
 import type { ShiftRec } from '@/lib/rota-shifts-types';
-import { cn } from '@/lib/utils';
 
 export type DeleteShiftRow = {
   dayKey: string;
@@ -108,13 +107,12 @@ export function DeleteShiftsDialog({
 
         <DialogFooter className="px-4 pb-4 sm:justify-between gap-2">
           <DialogClose asChild>
-            <Button type="button" variant="outline" className={cn('border-pink-600 text-pink-600 hover:bg-pink-50 hover:text-pink-700')}>
+            <Button type="button" variant="outline">
               Cancel
             </Button>
           </DialogClose>
           <Button
             type="button"
-            className="bg-pink-600 hover:bg-pink-700 text-white"
             disabled={rows.length === 0}
             onClick={onDeleteAll}
           >

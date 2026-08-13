@@ -48,7 +48,7 @@ export default function ClientPortalPage() {
                 <CardDescription>Submit a shift request with date, times, and site.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button className="bg-pink-600 hover:bg-pink-700" asChild>
+                <Button asChild>
                   <Link href="/client-portal/request-staff">Create request</Link>
                 </Button>
               </CardContent>

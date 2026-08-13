@@ -523,7 +523,7 @@ function RotaHubPage() {
                 <p className="text-muted-foreground text-sm mt-1">Manage current and past rotas. Publish drafts to save shifts as assignments.</p>
               </div>
               {canCreateRota ? (
-                <Button className="bg-pink-600 hover:bg-pink-700" asChild>
+                <Button asChild>
                   <Link href="/rota/create">
                     <Plus className="size-4 mr-1.5" />
                     Create rota

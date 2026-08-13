@@ -101,7 +101,7 @@ export default function IncidentsPage() {
                     Summary
                   </Link>
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setOpen(true)}>
+                <Button onClick={() => setOpen(true)}>
                   <Plus className="size-4 mr-1" />
                   Raise incident
                 </Button>
@@ -215,7 +215,7 @@ export default function IncidentsPage() {
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700" onClick={create}>
+                <Button onClick={create}>
                   Submit
                 </Button>
               </DialogFooter>
@@ -270,7 +270,7 @@ export default function IncidentsPage() {
                       </Button>
                     ) : null}
                     {detail.status !== 'closed' ? (
-                      <Button size="sm" className="bg-pink-600 hover:bg-pink-700" onClick={() => setStatus(detail.id, 'closed')}>
+                      <Button size="sm" onClick={() => setStatus(detail.id, 'closed')}>
                         Close
                       </Button>
                     ) : null}

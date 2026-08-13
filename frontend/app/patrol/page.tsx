@@ -96,7 +96,7 @@ export default function PatrolPage() {
                 <Button variant="outline" asChild>
                   <Link href="/patrol/reports">Reports</Link>
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setOpen(true)}>
+                <Button onClick={() => setOpen(true)}>
                   <Plus className="size-4 mr-1" />
                   New route
                 </Button>
@@ -248,7 +248,7 @@ export default function PatrolPage() {
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700" onClick={create}>
+                <Button onClick={create}>
                   Create
                 </Button>
               </DialogFooter>

@@ -438,7 +438,6 @@ export function ShiftDialog({
             </Button>
             <Button
               type="button"
-              className="bg-pink-600 hover:bg-pink-700"
               onClick={() => void submit()}
               disabled={!canSubmit || createSite.isPending}
               title={canSubmit ? undefined : 'Site name and shift rate are required'}
@@ -490,7 +489,6 @@ export function ShiftDialog({
           <DialogFooter>
             <Button
               type="button"
-              className="bg-pink-600 hover:bg-pink-700"
               disabled={newSiteName.trim().length < 2 || !newSiteContractor || createSite.isPending}
               onClick={() => void saveNewSite()}
             >

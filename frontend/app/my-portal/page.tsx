@@ -306,7 +306,7 @@ export default function MyPortalPage() {
                   Today&apos;s patrol
                 </CardTitle>
                 {patrolToday?.route_id && !patrolToday.session ? (
-                  <Button size="sm" className="bg-pink-600 hover:bg-pink-700" onClick={startPatrol}>
+                  <Button size="sm" onClick={startPatrol}>
                     Start session
                   </Button>
                 ) : null}
@@ -415,7 +415,7 @@ export default function MyPortalPage() {
                   Incidents
                 </CardTitle>
                 {canIncidentWrite ? (
-                  <Button size="sm" className="bg-pink-600 hover:bg-pink-700" onClick={() => setRaiseOpen(true)}>
+                  <Button size="sm" onClick={() => setRaiseOpen(true)}>
                     Raise incident
                   </Button>
                 ) : null}
@@ -492,7 +492,7 @@ export default function MyPortalPage() {
                 <Button variant="outline" onClick={() => setRaiseOpen(false)}>
                   Cancel
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700" onClick={raiseIncident}>
+                <Button onClick={raiseIncident}>
                   Submit
                 </Button>
               </DialogFooter>

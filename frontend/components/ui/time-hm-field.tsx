@@ -328,7 +328,6 @@ export function TimeHmField({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="border-pink-500 text-pink-600 hover:bg-pink-50 hover:text-pink-700"
                   onClick={(e) => {
                     e.stopPropagation();
                     setOpen(false);
@@ -343,7 +342,6 @@ export function TimeHmField({
                 <Button
                   type="button"
                   size="sm"
-                  className="bg-pink-600 text-white hover:bg-pink-700"
                   onClick={(e) => {
                     e.stopPropagation();
                     applyPicker();

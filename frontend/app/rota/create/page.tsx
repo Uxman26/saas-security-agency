@@ -392,7 +392,7 @@ function CreateRotaPage() {
             </div>
 
             <div className="flex justify-end">
-              <Button className="bg-pink-600 hover:bg-pink-700" disabled={!valid || saving} type="button" onClick={submit}>
+              <Button disabled={!valid || saving} type="button" onClick={submit}>
                 {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null}
                 {mode === 'copy' ? 'Copy rota' : 'Create your rota'}
               </Button>

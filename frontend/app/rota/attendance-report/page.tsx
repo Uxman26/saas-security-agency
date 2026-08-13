@@ -261,7 +261,7 @@ export default function RotaAttendanceReportPage() {
                 <Button type="button" variant="outline" onClick={exportCsv}>
                   Export CSV
                 </Button>
-                <Button type="button" className="bg-pink-600 hover:bg-pink-700" onClick={exportPdf}>
+                <Button type="button" onClick={exportPdf}>
                   Export in PDF
                 </Button>
               </CardContent>

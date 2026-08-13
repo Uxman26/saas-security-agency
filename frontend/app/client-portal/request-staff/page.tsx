@@ -467,7 +467,7 @@ function RequestStaffPage() {
                     onChange={(e) => setNotes(e.target.value)}
                   />
                 </div>
-                <Button className="bg-pink-600 hover:bg-pink-700 w-full" disabled={saving} onClick={() => void submit()}>
+                <Button className="w-full" disabled={saving} onClick={() => void submit()}>
                   {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null}
                   Submit request{entryMode === 'same' && dates.filter(Boolean).length > 1 ? 's' : ''}
                 </Button>

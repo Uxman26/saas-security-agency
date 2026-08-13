@@ -110,7 +110,7 @@ export default function PatrolRouteDetailPage() {
                     Back
                   </Link>
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700" onClick={() => setOpen(true)}>
+                <Button onClick={() => setOpen(true)}>
                   <Plus className="size-4 mr-1" />
                   Add checkpoint
                 </Button>
@@ -216,7 +216,7 @@ export default function PatrolRouteDetailPage() {
                 <Button variant="outline" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>
-                <Button className="bg-pink-600 hover:bg-pink-700" onClick={create}>
+                <Button onClick={create}>
                   Create
                 </Button>
               </DialogFooter>

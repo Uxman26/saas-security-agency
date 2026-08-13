@@ -1274,6 +1274,14 @@ class RoleUpdate(StrictModel):
     matrix: Optional[dict[str, Any]] = None
 
 
+class AppModuleActionOut(BaseModel):
+    """One tickable permission on a module row in Roles & Permissions."""
+
+    key: str
+    label: str
+    parent: Optional[str] = None
+
+
 class AppModuleOut(BaseModel):
     id: int
     key: str
@@ -1283,6 +1291,7 @@ class AppModuleOut(BaseModel):
     sidebar_order: int
     section_key: str
     is_active: bool
+    actions: List[AppModuleActionOut] = Field(default_factory=list)
 
 
 class AppModuleCreate(StrictModel):

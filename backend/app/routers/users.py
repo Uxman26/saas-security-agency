@@ -32,7 +32,7 @@ def _out(u: User) -> CompanyUserOut:
 @router.get("", response_model=list[CompanyUserOut])
 def list_company_users(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "view")),
+    current_user: User = Depends(require_module("roles", "users_view")),
 ):
     cid = _require_company(current_user)
     rows = db.query(User).filter(User.company_id == cid).order_by(User.email).all()
@@ -43,7 +43,7 @@ def list_company_users(
 def get_company_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "view")),
+    current_user: User = Depends(require_module("roles", "users_view")),
 ):
     cid = _require_company(current_user)
     return _out(user_service._get_user(db, cid, user_id))
@@ -53,7 +53,7 @@ def get_company_user(
 def create_company_user(
     body: CompanyUserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "edit")),
+    current_user: User = Depends(require_module("roles", "users_create")),
 ):
     cid = _require_company(current_user)
     u = user_service.create_company_user(db, cid, body)
@@ -65,7 +65,7 @@ def update_company_user(
     user_id: int,
     body: CompanyUserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "edit")),
+    current_user: User = Depends(require_module("roles", "users_edit")),
 ):
     cid = _require_company(current_user)
     u = user_service.update_company_user(db, cid, user_id, body)
@@ -77,7 +77,7 @@ def reset_company_user_password(
     user_id: int,
     body: CompanyUserResetPassword,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "edit")),
+    current_user: User = Depends(require_module("roles", "users_reset_password")),
 ):
     cid = _require_company(current_user)
     u = user_service.reset_company_user_password(db, cid, user_id, body.new_password)
@@ -88,7 +88,7 @@ def reset_company_user_password(
 def delete_company_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "delete")),
+    current_user: User = Depends(require_module("roles", "users_delete")),
 ):
     cid = _require_company(current_user)
     user_service.delete_company_user(db, cid, user_id, current_user.id)
@@ -99,7 +99,7 @@ def patch_user_role(
     user_id: int,
     body: UserRolePatch,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "edit")),
+    current_user: User = Depends(require_module("roles", "users_assign_role")),
 ):
     cid = _require_company(current_user)
     tu = db.query(User).filter(User.id == user_id, User.company_id == cid).first()

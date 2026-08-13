@@ -38,7 +38,7 @@ def create_special_day(
 def seed_uk_holidays(
     body: SeedUkYear,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("allowances", "edit")),
+    current_user: User = Depends(require_module("allowances", "seed_uk")),
 ):
     n = special_day_service.seed_uk_bank_holidays(db, current_user.id, body.year)
     return {"added": n, "year": body.year}

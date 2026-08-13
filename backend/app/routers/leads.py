@@ -38,12 +38,12 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 
 
 @router.get("/statuses")
-def list_statuses(db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
+def list_statuses(db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "statuses_view"))):
     return lead_service.list_statuses(db, current_user.id)
 
 
 @router.post("/statuses")
-def create_status(body: LeadCustomStatusCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def create_status(body: LeadCustomStatusCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "statuses_manage"))):
     row = lead_service.create_custom_status(db, current_user.id, body.name)
     return {"name": row.name, "custom": True, "id": row.id}
 
@@ -53,30 +53,30 @@ def dashboard(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("leads", "view")),
+    current_user: User = Depends(require_module("leads", "reports")),
 ):
     return lead_report_service.lead_dashboard(db, current_user.id, start_date, end_date)
 
 
 @router.post("/check-duplicate")
-def check_duplicate(body: LeadDuplicateCheck, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
+def check_duplicate(body: LeadDuplicateCheck, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "duplicate_check"))):
     return lead_service.check_duplicate(db, current_user.id, body.email, body.phone, body.exclude_id)
 
 
 @router.get("/filter-presets")
-def list_presets(db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
+def list_presets(db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "presets_manage"))):
     rows = lead_service.list_filter_presets(db, current_user.id)
     return [{"id": r.id, "name": r.name, "filters": __import__("json").loads(r.filters_json)} for r in rows]
 
 
 @router.post("/filter-presets")
-def save_preset(body: LeadFilterPresetCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
+def save_preset(body: LeadFilterPresetCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "presets_manage"))):
     row = lead_service.save_filter_preset(db, current_user.id, body.name, body.filters)
     return {"id": row.id, "name": row.name}
 
 
 @router.delete("/filter-presets/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_preset(preset_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
+def delete_preset(preset_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "presets_manage"))):
     lead_service.delete_filter_preset(db, current_user.id, preset_id)
     return None
 
@@ -108,7 +108,7 @@ def export_leads(
     converted: Optional[bool] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("leads", "view")),
+    current_user: User = Depends(require_module("leads", "export")),
 ):
     csv = lead_service.export_leads_csv(
         db,
@@ -199,7 +199,7 @@ def list_leads(
 
 
 @router.post("", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
-def create_lead(body: LeadCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def create_lead(body: LeadCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "create"))):
     return lead_service.create_lead(db, current_user.id, body.model_dump(), force_duplicate=bool(body.force_duplicate))
 
 
@@ -246,7 +246,7 @@ def lead_detail(lead_id: int, db: Session = Depends(get_db), current_user: User 
 
 
 @router.get("/{lead_id}/documents/{doc_id}/file")
-def download_document(lead_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
+def download_document(lead_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "document_download"))):
     company = lead_service.require_leads_module(db, current_user.id)
     doc = (
         db.query(LeadDocument)
@@ -282,17 +282,17 @@ def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User 
 
 
 @router.post("/{lead_id}/status", response_model=LeadResponse)
-def change_status(lead_id: int, body: LeadStatusChange, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def change_status(lead_id: int, body: LeadStatusChange, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "status_change"))):
     return lead_service.change_status(db, current_user.id, lead_id, body.status, body.note)
 
 
 @router.post("/{lead_id}/assign", response_model=LeadResponse)
-def assign_lead(lead_id: int, assigned_user_id: int = Query(...), db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def assign_lead(lead_id: int, assigned_user_id: int = Query(...), db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "assign"))):
     return lead_service.update_lead(db, current_user.id, lead_id, {"assigned_user_id": assigned_user_id})
 
 
 @router.get("/{lead_id}/audit")
-def lead_audit(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "view"))):
+def lead_audit(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "audit_view"))):
     rows = lead_service.lead_audit_logs(db, current_user.id, lead_id)
     return [
         {
@@ -307,35 +307,35 @@ def lead_audit(lead_id: int, db: Session = Depends(get_db), current_user: User =
 
 
 @router.post("/{lead_id}/notes", response_model=LeadNoteResponse)
-def add_note(lead_id: int, body: LeadNoteCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def add_note(lead_id: int, body: LeadNoteCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "notes_create"))):
     return lead_service.add_note(db, current_user.id, lead_id, body.body)
 
 
 @router.post("/{lead_id}/follow-ups", response_model=LeadFollowUpResponse)
-def add_follow_up(lead_id: int, body: LeadFollowUpCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def add_follow_up(lead_id: int, body: LeadFollowUpCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "followup_create"))):
     return lead_service.add_follow_up(db, current_user.id, lead_id, body.model_dump())
 
 
 @router.post("/follow-ups/{follow_up_id}/complete", response_model=LeadFollowUpResponse)
-def complete_follow_up(follow_up_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def complete_follow_up(follow_up_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "followup_complete"))):
     return lead_service.complete_follow_up(db, current_user.id, follow_up_id)
 
 
 @router.post("/{lead_id}/communications", response_model=LeadCommunicationResponse)
-def add_communication(lead_id: int, body: LeadCommunicationCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def add_communication(lead_id: int, body: LeadCommunicationCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "communications_log"))):
     return lead_service.add_communication(db, current_user.id, lead_id, body.model_dump())
 
 
 @router.post("/{lead_id}/convert", response_model=LeadConversionResponse)
-def convert_lead(lead_id: int, body: LeadConvertRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def convert_lead(lead_id: int, body: LeadConvertRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "convert"))):
     return lead_service.convert_lead(db, current_user.id, lead_id, body.target_type, body.note)
 
 
 @router.post("/{lead_id}/quotations", response_model=LeadQuotationResponse)
-def add_quotation(lead_id: int, body: LeadQuotationCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+def add_quotation(lead_id: int, body: LeadQuotationCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "quotation_create"))):
     return lead_service.add_quotation(db, current_user.id, lead_id, body.model_dump())
 
 
 @router.post("/{lead_id}/documents", response_model=LeadDocumentResponse)
-async def upload_document(lead_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "edit"))):
+async def upload_document(lead_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(require_module("leads", "document_upload"))):
     return await lead_service.upload_document(db, current_user.id, lead_id, file)

@@ -72,7 +72,7 @@ async def stripe_webhook(
 
 
 @router.post("/portal")
-def billing_portal(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "view"))):
+def billing_portal(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "stripe_portal"))):
     return stripe_svc.create_billing_portal(db, current_user)
 
 
@@ -82,22 +82,25 @@ def preview_change(body: PlanChangeRequest, db: Session = Depends(get_db), curre
 
 
 @router.post("/change-plan")
-def change_plan(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "edit"))):
+def change_plan(body: PlanChangeRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "change_plan"))):
     return stripe_svc.change_plan(db, current_user, body.tier, body.billing_cycle, body.proration_behavior)
 
 
 @router.post("/cancel")
-def cancel_sub(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "edit"))):
+def cancel_sub(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "cancel"))):
     return stripe_svc.cancel_subscription(db, current_user)
 
 
 @router.post("/reactivate")
-def reactivate_sub(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "edit"))):
+def reactivate_sub(db: Session = Depends(get_db), current_user: User = Depends(require_module("billing", "reactivate"))):
     return stripe_svc.reactivate_subscription(db, current_user)
 
 
 @router.post("/connect/account")
-def connect_account(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def connect_account(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("billing", "connect_account")),
+):
     if not current_user.company_id:
         raise HTTPException(status_code=400, detail="No company")
     company = db.query(Company).filter(Company.id == current_user.company_id).first()

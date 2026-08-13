@@ -47,7 +47,7 @@ def upload_guard_photo(
     guard_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("guards", "edit")),
+    current_user: User = Depends(require_module("guards", "photo_upload")),
 ):
     guard = guard_service.get_guard_by_id(db, guard_id, current_user.id)
     if not file.filename:
@@ -73,7 +73,7 @@ def upload_guard_photo(
 def get_guard_photo(
     guard_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("guards", "view")),
+    current_user: User = Depends(require_module("guards", "photo_view")),
 ):
     guard = guard_service.get_guard_by_id(db, guard_id, current_user.id)
     path = resolve_storage_path(guard.photo_path)

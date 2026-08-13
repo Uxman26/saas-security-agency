@@ -34,7 +34,7 @@ def create_request(
 def create_requests_bulk(
     body: StaffRequestBulkCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("client_portal", "create")),
+    current_user: User = Depends(require_module("client_portal", "bulk_create")),
 ):
     return staff_request_service.create_staff_requests_bulk(db, current_user, body)
 
@@ -53,7 +53,7 @@ def approve_request(
     request_id: int,
     body: StaffRequestReview,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("staff_requests", "edit")),
+    current_user: User = Depends(require_module("staff_requests", "approve")),
 ):
     return staff_request_service.approve_staff_request(db, current_user, request_id, body)
 
@@ -63,6 +63,6 @@ def reject_request(
     request_id: int,
     body: StaffRequestReview,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("staff_requests", "edit")),
+    current_user: User = Depends(require_module("staff_requests", "reject")),
 ):
     return staff_request_service.reject_staff_request(db, current_user, request_id, body)

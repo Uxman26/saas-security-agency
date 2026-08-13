@@ -29,12 +29,12 @@ def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(
 
 
 @router.get("/compliance", response_model=List[ComplianceAlert])
-def compliance_alerts(days: int = 30, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def compliance_alerts(days: int = 30, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "compliance_view"))):
     return report_service.get_compliance_alerts(db, current_user.id, days)
 
 
 @router.get("/contracts-expiring", response_model=List[ContractExpiryAlert])
-def contracts_expiring(days: int = 30, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def contracts_expiring(days: int = 30, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "contracts_expiring_view"))):
     return report_service.get_contract_expiry_alerts(db, current_user.id, days)
 
 
@@ -50,7 +50,7 @@ def staff_shift_hours(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("reports", "view")),
+    current_user: User = Depends(require_module("reports", "staff_reports")),
 ):
     return staff_report_service.shift_hours_report(
         db, current_user.id, start_date, end_date, guard_id=guard_id, site_id=site_id
@@ -58,14 +58,14 @@ def staff_shift_hours(
 
 
 @router.get("/staff/monthly", response_model=StaffMonthlyReportResponse)
-def staff_monthly(start_date: date, end_date: date, group_by: str = "guard", db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def staff_monthly(start_date: date, end_date: date, group_by: str = "guard", db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "staff_reports"))):
     if group_by not in ("guard", "site", "client", "site_client"):
         group_by = "guard"
     return StaffMonthlyReportResponse(**staff_report_service.staff_monthly_report(db, current_user.id, start_date, end_date, group_by))
 
 
 @router.get("/staff/{guard_id}", response_model=StaffIndividualReportResponse)
-def staff_individual(guard_id: int, start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def staff_individual(guard_id: int, start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "staff_reports"))):
     data = staff_report_service.staff_individual_report(db, current_user.id, guard_id, start_date, end_date)
     if not data:
         raise HTTPException(status_code=404, detail="Staff not found")
@@ -73,47 +73,47 @@ def staff_individual(guard_id: int, start_date: date, end_date: date, db: Sessio
 
 
 @router.get("/attendance")
-def attendance_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def attendance_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "attendance_reports"))):
     return staff_report_service.attendance_report_rows(db, current_user.id, start_date, end_date, guard_id)
 
 
 @router.get("/shift-overtime")
-def shift_overtime_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def shift_overtime_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "shift_variance_reports"))):
     return shift_adjustment_service.overtime_report_rows(db, current_user.id, start_date, end_date, guard_id)
 
 
 @router.get("/shift-early-finish")
-def shift_early_finish_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def shift_early_finish_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "shift_variance_reports"))):
     return shift_adjustment_service.early_finish_report_rows(db, current_user.id, start_date, end_date, guard_id)
 
 
 @router.get("/shift-lateness")
-def shift_lateness_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def shift_lateness_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "shift_variance_reports"))):
     return shift_adjustment_service.lateness_report_rows(db, current_user.id, start_date, end_date, guard_id)
 
 
 @router.get("/financial/invoices")
-def financial_invoices(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def financial_invoices(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "financial_reports"))):
     return reports_hub_service.financial_invoice_rows(db, current_user.id, start_date, end_date)
 
 
 @router.get("/subscription/summary", response_model=SubscriptionReportSummary)
-def subscription_summary(db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def subscription_summary(db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "subscription_reports"))):
     return SubscriptionReportSummary(**reports_extended_service.subscription_summary(db, current_user.id))
 
 
 @router.get("/subscription/invoices")
-def subscription_invoices(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def subscription_invoices(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "subscription_reports"))):
     return reports_extended_service.subscription_invoice_rows(db, current_user.id, start_date, end_date)
 
 
 @router.get("/usage/logins")
-def usage_logins(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def usage_logins(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "usage_reports"))):
     return reports_extended_service.login_report_rows(db, current_user.id, start_date, end_date)
 
 
 @router.get("/usage/summary", response_model=UsageSummaryResponse)
-def usage_summary(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "view"))):
+def usage_summary(start_date: date, end_date: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("reports", "usage_reports"))):
     return UsageSummaryResponse(**reports_extended_service.usage_summary(db, current_user.id, start_date, end_date))
 
 
@@ -132,7 +132,7 @@ def export_report(
     site_id: Optional[int] = None,
     group_by: str = "guard",
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("reports", "view")),
+    current_user: User = Depends(require_module("reports", "export")),
 ):
     fmt = format.lower()
     if fmt not in ("csv", "xlsx", "pdf"):

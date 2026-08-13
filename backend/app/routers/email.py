@@ -19,7 +19,7 @@ router = APIRouter(prefix="/email", tags=["email"])
 
 
 @router.get("/config", response_model=EmailConfigResponse)
-def get_config(db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def get_config(db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "view"))):
     return EmailConfigResponse(**email_config_service.get_email_config(db, current_user.id))
 
 
@@ -29,7 +29,7 @@ def patch_config(body: EmailConfigUpdate, db: Session = Depends(get_db), current
 
 
 @router.post("/send", status_code=status.HTTP_200_OK, response_model=EmailLogResponse)
-def send_email(email_data: EmailRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def send_email(email_data: EmailRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "send"))):
     log = email_config_service.send_tenant_email(
         db, current_user.id, email_data.to_email, email_data.subject, email_data.body
     )
@@ -37,7 +37,7 @@ def send_email(email_data: EmailRequest, db: Session = Depends(get_db), current_
 
 
 @router.post("/test", response_model=EmailLogResponse)
-def test_email(body: EmailTestRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def test_email(body: EmailTestRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "test"))):
     subject = body.subject or "Test email"
     content = body.body or "<p>This is a test email from ControlOps.</p>"
     log = email_config_service.send_tenant_email(db, current_user.id, body.to_email, subject, content, "alert")
@@ -45,5 +45,5 @@ def test_email(body: EmailTestRequest, db: Session = Depends(get_db), current_us
 
 
 @router.get("/logs", response_model=List[EmailLogResponse])
-def email_logs(db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def email_logs(db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "logs_view"))):
     return [EmailLogResponse.model_validate(r) for r in email_config_service.list_email_logs(db, current_user.id)]

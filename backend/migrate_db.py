@@ -1052,6 +1052,24 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    if not table_exists(cur, "role_module_actions"):
+        try:
+            cur.execute(
+                """CREATE TABLE role_module_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_id INTEGER NOT NULL REFERENCES roles(id),
+                module_id INTEGER NOT NULL REFERENCES app_modules(id),
+                action_key TEXT NOT NULL,
+                allowed INTEGER DEFAULT 0,
+                UNIQUE(role_id, module_id, action_key)
+            )"""
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_role_module_actions_role_id "
+                "ON role_module_actions(role_id)"
+            )
+        except sqlite3.OperationalError:
+            pass
     conn.commit()
     conn.close()
     try:

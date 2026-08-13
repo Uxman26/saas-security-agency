@@ -21,15 +21,15 @@ class PayrollBatchRequest(BaseModel):
     rota_plan_id: Optional[int] = None
 
 @router.post("", response_model=PayrollResponse, status_code=status.HTTP_201_CREATED)
-def create_payroll(data: PayrollCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "edit"))):
+def create_payroll(data: PayrollCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "create"))):
     return payroll_service.create_payroll(db, data, current_user.id)
 
 @router.post("/calculate", response_model=PayrollResponse)
-def calculate_payroll(guard_id: int, period_start: date, period_end: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "edit"))):
+def calculate_payroll(guard_id: int, period_start: date, period_end: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "calculate"))):
     return payroll_service.calculate_payroll(db, guard_id, period_start, period_end, current_user.id)
 
 @router.post("/calculate-batch", response_model=List[PayrollResponse])
-def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "edit"))):
+def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "calculate_batch"))):
     return payroll_service.calculate_payroll_batch(
         db,
         current_user.id,
@@ -54,6 +54,6 @@ def update_payroll(payroll_id: int, data: PayrollUpdate, db: Session = Depends(g
     return payroll_service.update_payroll(db, payroll_id, data, current_user.id)
 
 @router.delete("/{payroll_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "edit"))):
+def delete_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "delete"))):
     payroll_service.delete_payroll(db, payroll_id, current_user.id)
     return None

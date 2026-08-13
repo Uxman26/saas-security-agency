@@ -27,7 +27,7 @@ def list_documents(
 def create_document(
     doc: GuardDocumentCreateFlat,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "edit")),
+    current_user: User = Depends(require_module("documents", "create")),
 ):
     doc_data = GuardDocumentCreate(
         document_type=doc.document_type,
@@ -45,7 +45,7 @@ def upload_documents(
     expiry_date: Optional[date] = Form(None),
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "edit")),
+    current_user: User = Depends(require_module("documents", "upload")),
 ):
     return guard_document_service.upload_documents(db, current_user.id, guard_id, document_type, files, expiry_date)
 
@@ -54,7 +54,7 @@ def upload_documents(
 def download_document(
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "view")),
+    current_user: User = Depends(require_module("documents", "download")),
 ):
     path, mime, filename = guard_document_service.get_document_file_path(db, doc_id, current_user.id)
     return FileResponse(path, media_type=mime, filename=filename)
@@ -78,7 +78,7 @@ def create_document_legacy(
     guard_id: int,
     doc: GuardDocumentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "edit")),
+    current_user: User = Depends(require_module("documents", "create")),
 ):
     return guard_document_service.create_document(db, guard_id, doc, current_user.id)
 
@@ -90,7 +90,7 @@ def upload_documents_legacy(
     expiry_date: Optional[date] = Form(None),
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "edit")),
+    current_user: User = Depends(require_module("documents", "upload")),
 ):
     return guard_document_service.upload_documents(db, current_user.id, guard_id, document_type, files, expiry_date)
 

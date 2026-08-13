@@ -30,6 +30,9 @@ class Role(Base):
     module_permissions = relationship(
         "RoleModulePermission", back_populates="role", cascade="all, delete-orphan"
     )
+    module_actions = relationship(
+        "RoleModuleAction", back_populates="role", cascade="all, delete-orphan"
+    )
 
 
 class AppModule(Base):
@@ -45,6 +48,7 @@ class AppModule(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     role_permissions = relationship("RoleModulePermission", back_populates="module")
+    role_actions = relationship("RoleModuleAction", back_populates="module")
 
 
 class RoleModulePermission(Base):
@@ -59,6 +63,28 @@ class RoleModulePermission(Base):
     can_delete = Column(Boolean, default=False)
     role = relationship("Role", back_populates="module_permissions")
     module = relationship("AppModule", back_populates="role_permissions")
+
+
+class RoleModuleAction(Base):
+    """One granular action grant, e.g. role X may ``rota.publish``.
+
+    ``RoleModulePermission`` above stays as the coarse view/create/edit/delete record
+    that the legacy ``PERM_*`` expansion reads; this table carries the full action set
+    defined in :mod:`app.module_actions`, including the four CRUD keys.
+    """
+
+    __tablename__ = "role_module_actions"
+    __table_args__ = (
+        UniqueConstraint("role_id", "module_id", "action_key", name="uq_role_module_action"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False, index=True)
+    module_id = Column(Integer, ForeignKey("app_modules.id"), nullable=False, index=True)
+    action_key = Column(String, nullable=False, index=True)
+    allowed = Column(Boolean, default=False)
+    role = relationship("Role", back_populates="module_actions")
+    module = relationship("AppModule", back_populates="role_actions")
+
 
 class User(Base):
     __tablename__ = "users"

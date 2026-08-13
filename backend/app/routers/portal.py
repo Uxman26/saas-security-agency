@@ -32,7 +32,7 @@ def portal_sites(
 @router.get("/rota/current", response_model=list[RotaDetailResponse])
 def portal_rota_current(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(require_module("my_portal", "rota_current")),
 ):
     return portal_service.list_portal_rota(db, current_user, "current")
 
@@ -41,7 +41,7 @@ def portal_rota_current(
 def portal_rota_upcoming(
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "create")),
+    current_user: User = Depends(require_module("my_portal", "rota_upcoming")),
 ):
     return portal_service.list_portal_rota(db, current_user, "upcoming", end_date=end_date)
 
@@ -50,7 +50,7 @@ def portal_rota_upcoming(
 def portal_rota_previous(
     start_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "edit")),
+    current_user: User = Depends(require_module("my_portal", "rota_previous")),
 ):
     return portal_service.list_portal_rota(db, current_user, "previous", start_date=start_date)
 
@@ -61,7 +61,7 @@ def portal_hours(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(require_module("my_portal", "hours_view")),
 ):
     return portal_service.portal_hours(db, current_user, period, start_date, end_date)
 
@@ -69,7 +69,7 @@ def portal_hours(
 @router.get("/patrol/today", response_model=PatrolTodayResponse)
 def portal_patrol_today(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("my_portal", "patrol_today")),
 ):
     return patrol_service.today_for_guard(db, current_user)
 
@@ -80,7 +80,7 @@ def portal_patrol_compliance(
     end_date: date,
     site_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "view")),
+    current_user: User = Depends(require_module("my_portal", "patrol_compliance")),
 ):
     return patrol_service.compliance_report(db, current_user, start_date, end_date, site_id)
 
@@ -89,7 +89,7 @@ def portal_patrol_compliance(
 def portal_incidents(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("incidents", "view")),
+    current_user: User = Depends(require_module("my_portal", "incidents_view")),
 ):
     return incident_service.list_incidents(db, current_user, status=status)
 
@@ -98,6 +98,6 @@ def portal_incidents(
 def portal_create_incident(
     body: IncidentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("incidents", "create")),
+    current_user: User = Depends(require_module("my_portal", "incidents_create")),
 ):
     return incident_service.create_incident(db, current_user, body)

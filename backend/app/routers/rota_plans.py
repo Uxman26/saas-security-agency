@@ -17,7 +17,7 @@ router = APIRouter(prefix="/rotas", tags=["rotas"])
 @router.post("/export")
 def export_planner_rota(
     body: PlannerExportRequest,
-    current_user: User = Depends(require_module("rota", "view")),
+    current_user: User = Depends(require_module("rota", "export")),
 ):
     fmt = (body.format or "pdf").lower()
     if fmt != "pdf":
@@ -57,7 +57,7 @@ def copy_rota(
     plan_id: int,
     body: RotaPlanCopy,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "create")),
+    current_user: User = Depends(require_module("rota", "copy_plan")),
 ):
     return rota_plan_service.copy_rota_plan(db, current_user.id, plan_id, body)
 
@@ -95,7 +95,7 @@ def publish_rota(
     plan_id: int,
     guard_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "publish")),
 ):
     return rota_plan_service.publish_rota_plan(db, current_user.id, plan_id, guard_id)
 
@@ -104,7 +104,7 @@ def publish_rota(
 def unpublish_rota(
     plan_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "unpublish")),
 ):
     return rota_plan_service.unpublish_rota_plan(db, current_user.id, plan_id)
 
@@ -114,6 +114,6 @@ def unpublish_rota_guard(
     plan_id: int,
     guard_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "unpublish_guard")),
 ):
     return rota_plan_service.unpublish_rota_plan_guard(db, current_user.id, plan_id, guard_id)

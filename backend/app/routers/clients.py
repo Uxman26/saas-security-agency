@@ -42,7 +42,7 @@ def renew_client_contract(
     client_id: int,
     body: ClientRenewContract,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("clients", "create")),
+    current_user: User = Depends(require_module("clients", "renew")),
 ):
     return client_service.renew_client_contract(db, client_id, body, current_user.id)
 
@@ -51,6 +51,6 @@ def renew_client_contract(
 def list_client_renewals(
     client_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("clients", "view")),
+    current_user: User = Depends(require_module("clients", "renewals_view")),
 ):
     return client_service.list_client_renewals(db, client_id, current_user.id)

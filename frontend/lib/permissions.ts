@@ -18,7 +18,58 @@ export const PERMS = {
   incidentReports: 'incident.reports',
 } as const;
 
-export type ModuleAction = 'view' | 'create' | 'edit' | 'delete';
+/** Coarse actions every module has; granular keys (e.g. 'publish') are also accepted. */
+export type ModuleAction = 'view' | 'create' | 'edit' | 'delete' | (string & {});
+
+/**
+ * Fallback parents for granular actions, mirroring `parent` in the backend's
+ * app/module_actions.py catalogue.
+ *
+ * The server is the source of truth and ships each module's `actions` map on
+ * /auth/me, so this is only consulted when a granular key is absent from that map —
+ * a user whose session predates the action, or a module the catalogue has since
+ * extended. Keys are `module.action`.
+ */
+const ACTION_PARENTS: Record<string, string> = {
+  publish: 'edit',
+  unpublish: 'edit',
+  unpublish_guard: 'edit',
+  copy_plan: 'create',
+  approve: 'edit',
+  reject: 'edit',
+  export: 'view',
+  send: 'edit',
+  test: 'edit',
+  status_change: 'edit',
+  assign: 'edit',
+  unassign: 'edit',
+  convert: 'edit',
+  deactivate: 'delete',
+  duplicate: 'create',
+  generate: 'create',
+  calculate: 'edit',
+  calculate_batch: 'edit',
+  renew: 'edit',
+  scan: 'edit',
+  scan_photo: 'edit',
+  seed_uk: 'create',
+  bulk_create: 'create',
+  create_with_images: 'create',
+  logo_upload: 'edit',
+  profile_edit: 'edit',
+  upload: 'create',
+  download: 'view',
+  reports: 'view',
+};
+
+function fallbackAction(action: string): string | null {
+  if (ACTION_PARENTS[action]) return ACTION_PARENTS[action];
+  if (action.endsWith('_view') || action.endsWith('_reports')) return 'view';
+  if (action.endsWith('_create') || action.endsWith('_upload')) return 'create';
+  if (action.endsWith('_delete')) return 'delete';
+  if (action.endsWith('_edit') || action.endsWith('_manage')) return 'edit';
+  return null;
+}
 
 export function isAdminBypass(user: User | null | undefined): boolean {
   if (!user) return false;
@@ -40,17 +91,25 @@ export function canModule(
 ): boolean {
   if (!user) return false;
   if (isAdminBypass(user)) return true;
-  const code = `${moduleKey}.${action}`;
-  if (Array.isArray(user.permissions) && user.permissions.includes(code)) {
-    return true;
-  }
-  const mod = user.module_access?.find((m) => m.key === moduleKey);
-  if (!mod) return false;
-  if (action === 'view') return mod.can_view;
-  if (action === 'create') return mod.can_create;
-  if (action === 'edit') return mod.can_edit;
-  if (action === 'delete') return mod.can_delete;
-  return false;
+
+  const resolve = (act: string, depth = 0): boolean | null => {
+    if (depth > 8) return null;
+    if (Array.isArray(user.permissions) && user.permissions.includes(`${moduleKey}.${act}`)) {
+      return true;
+    }
+    const mod = user.module_access?.find((m) => m.key === moduleKey);
+    if (mod) {
+      if (mod.actions && act in mod.actions) return mod.actions[act];
+      if (act === 'view') return mod.can_view;
+      if (act === 'create') return mod.can_create;
+      if (act === 'edit') return mod.can_edit;
+      if (act === 'delete') return mod.can_delete;
+    }
+    const parent = fallbackAction(act);
+    return parent ? resolve(parent, depth + 1) : null;
+  };
+
+  return resolve(action) === true;
 }
 
 export function isTenantAdmin(user: User | null | undefined): boolean {

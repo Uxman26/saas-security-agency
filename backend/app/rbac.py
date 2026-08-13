@@ -264,23 +264,61 @@ def permissions_for_user(user: User) -> list[str]:
 
 # Module-scoped permission codes (database-driven matrix)
 
+_ADMIN_ROLE_STRINGS = frozenset({"admin", "company_admin", "super_admin"})
+
+
 def permission_bypass(db: Session, user: User) -> bool:
+    """Whether this user skips permission checks entirely.
+
+    A user bound to a Role row is governed by that row and nothing else — only the
+    built-in ``admin`` role bypasses. This must not go through
+    :func:`effective_role`, which maps any unrecognised role string to
+    ``company_admin``: because ``User.role`` is set to the role's slug when a custom
+    role is assigned, routing custom slugs through it would hand every custom-role
+    user a full bypass and silently disable the permission matrix.
+
+    The role-string check below is the fallback for legacy users that were never
+    given a ``role_id``, and matches admin strings exactly.
+    """
     if getattr(user, "role", None) == SUPER_ADMIN_ROLE:
-        return True
-    er = effective_role(user)
-    if er in ("super_admin", "company_admin"):
         return True
     if user.role_id:
         r = db.query(Role).filter(Role.id == user.role_id).first()
-        if r and r.slug == "admin":
-            return True
-    return False
+        return bool(r and r.slug == "admin")
+    return (user.role or "").lower().strip() in _ADMIN_ROLE_STRINGS
+
+
+def _codes_with_inheritance(code: str) -> list[str]:
+    """A permission code plus the coarse codes it may be satisfied by.
+
+    ``rota.publish`` is satisfied by an explicit ``rota.publish`` grant, and failing
+    that by ``rota.edit`` — the action that gated it before granular permissions
+    existed. This keeps role rows written by an older build authorising correctly, and
+    keeps the static legacy role sets in ``_ROLE_PERMISSIONS`` usable, without needing
+    every stored row to be rewritten first.
+    """
+    from app.module_actions import parent_chain
+
+    if "." not in code:
+        return [code]
+    module_key, _, action = code.rpartition(".")
+    return [code] + [f"{module_key}.{a}" for a in parent_chain(module_key, action)]
 
 
 def user_has_permission_db(db: Session, user: User, code: str) -> bool:
     if permission_bypass(db, user):
         return True
-    return code in permissions_for_user_db(db, user)
+    granted = set(permissions_for_user_db(db, user))
+    if code in granted:
+        return True
+    if user.role_id and "." in code:
+        from app.services.module_service import has_explicit_action
+
+        module_key, _, action = code.rpartition(".")
+        # A stored decision — including an explicit "no" — is final.
+        if has_explicit_action(db, user.role_id, module_key, action):
+            return False
+    return any(c in granted for c in _codes_with_inheritance(code))
 
 
 def permissions_for_user_db(db: Session, user: User) -> list[str]:
@@ -292,18 +330,23 @@ def permissions_for_user_db(db: Session, user: User) -> list[str]:
         return sorted(codes)
     from app.services.module_service import module_permission_codes_for_role
 
-    codes: set[str] = set()
     if user.role_id:
         r = db.query(Role).filter(Role.id == user.role_id).first()
         if r and r.company_id == user.company_id:
-            codes.update(module_permission_codes_for_role(db, r.id))
-    if not codes:
-        return permissions_for_user(user)
-    return sorted(codes)
+            # The role's grants are authoritative, empty set included. Falling back to
+            # the static legacy sets here would resolve an unrecognised slug to
+            # company_admin and hand a deliberately locked-down role every permission.
+            return sorted(module_permission_codes_for_role(db, r.id))
+        return []
+    return permissions_for_user(user)
 
 
 def require_module(module_key: str, action: str):
-    """Check permission for module action (e.g. rota + view -> rota.view)."""
+    """Check permission for module action (e.g. rota + publish -> rota.publish).
+
+    Special actions fall back to the coarse action they descend from, so a role that
+    predates the granular catalogue still passes.
+    """
 
     def checker(
         db: Session = Depends(get_db),

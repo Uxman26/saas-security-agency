@@ -3,13 +3,13 @@ from typing import List, Optional
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import require_module
+from app.rbac import require_module, user_has_permission_db
 from app.schemas import IncidentCreate, IncidentResponse, IncidentSummaryRow, IncidentUpdate
 from app.services import incident_service
 from app.services.image_avif_service import is_image_filename, save_upload_as_avif
@@ -54,7 +54,7 @@ async def create_incident_with_images(
     guard_id: Optional[int] = Form(None),
     images: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("incidents", "edit")),
+    current_user: User = Depends(require_module("incidents", "create_with_images")),
 ):
     from datetime import datetime
 
@@ -91,7 +91,7 @@ def summary(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("incidents", "view")),
+    current_user: User = Depends(require_module("incidents", "reports")),
 ):
     return incident_service.summary_report(db, current_user, start_date, end_date)
 
@@ -101,7 +101,7 @@ def download_attachment(
     incident_id: int,
     attachment_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("incidents", "view")),
+    current_user: User = Depends(require_module("incidents", "attachments_view")),
 ):
     """Serve an incident photo behind the same permission check as the incident itself."""
     path, mime = incident_service.attachment_file(db, current_user, incident_id, attachment_id)
@@ -124,4 +124,10 @@ def patch_incident(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("incidents", "edit")),
 ):
+    # Editing notes or the site is plain edit; moving the incident through its
+    # workflow needs the separate status permission.
+    if body.status is not None and not user_has_permission_db(
+        db, current_user, "incidents.status_change"
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
     return incident_service.update_incident(db, current_user, incident_id, body)

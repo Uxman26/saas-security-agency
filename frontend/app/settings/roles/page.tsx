@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -40,69 +40,212 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule, isAdminBypass } from '@/lib/permissions';
-import type { Role, CompanyUser, PermissionMatrix, AppModule } from '@/lib/types';
+import type {
+  Role,
+  CompanyUser,
+  PermissionMatrix,
+  AppModule,
+  AppModuleActionDef,
+} from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Shield, Trash2, UserPlus, Eye, Pencil, KeyRound } from 'lucide-react';
+import {
+  Shield,
+  Trash2,
+  UserPlus,
+  Eye,
+  Pencil,
+  KeyRound,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 
 type CompanyUserFormData = z.infer<typeof companyUserSchema>;
 type CompanyUserUpdateFormData = z.infer<typeof companyUserUpdateSchema>;
 import { toast } from '@/lib/toast';
 
-const ACTIONS = ['view', 'create', 'edit', 'delete'] as const;
+const CORE_ACTIONS = ['view', 'create', 'edit', 'delete'] as const;
+const CORE_LABELS: Record<string, string> = {
+  view: 'View',
+  create: 'Add',
+  edit: 'Edit',
+  delete: 'Delete',
+};
+
+const FALLBACK_ACTIONS: AppModuleActionDef[] = CORE_ACTIONS.map((k) => ({
+  key: k,
+  label: CORE_LABELS[k],
+  parent: null,
+}));
+
+/** A module's permission list, as served by the backend catalogue. */
+function actionsOf(mod: AppModule): AppModuleActionDef[] {
+  return mod.actions && mod.actions.length ? mod.actions : FALLBACK_ACTIONS;
+}
+
+function specialActionsOf(mod: AppModule): AppModuleActionDef[] {
+  return actionsOf(mod).filter((a) => !CORE_ACTIONS.includes(a.key as (typeof CORE_ACTIONS)[number]));
+}
 
 function emptyMatrix(modules: AppModule[]): PermissionMatrix {
-  const row = () => ({ view: false, create: false, edit: false, delete: false });
-  return Object.fromEntries(modules.map((m) => [m.key, row()]));
+  return Object.fromEntries(
+    modules.map((m) => [m.key, Object.fromEntries(actionsOf(m).map((a) => [a.key, false]))])
+  );
 }
 
 function cloneMatrix(m: PermissionMatrix): PermissionMatrix {
   return JSON.parse(JSON.stringify(m)) as PermissionMatrix;
 }
 
+function grantedCount(matrix: PermissionMatrix, mod: AppModule): number {
+  const cell = matrix[mod.key] ?? {};
+  return actionsOf(mod).filter((a) => cell[a.key]).length;
+}
+
 function MatrixTable({
   matrix,
   modules,
   onToggle,
+  onToggleModule,
   readOnly,
 }: {
   matrix: PermissionMatrix;
   modules: AppModule[];
   onToggle: (mod: string, act: string, v: boolean) => void;
+  onToggleModule: (mod: AppModule, v: boolean) => void;
   readOnly: boolean;
 }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const anyExpanded = Object.values(expanded).some(Boolean);
+
+  const toggleAllRows = () => {
+    if (anyExpanded) {
+      setExpanded({});
+      return;
+    }
+    setExpanded(Object.fromEntries(modules.map((m) => [m.key, true])));
+  };
+
   return (
-    <div className="overflow-x-auto rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-48">Module</TableHead>
-            {ACTIONS.map((a) => (
-              <TableHead key={a} className="text-center capitalize w-24">
-                {a === 'create' ? 'Add' : a}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {modules.map((mod) => (
-            <TableRow key={mod.key}>
-              <TableCell className="font-medium">{mod.name}</TableCell>
-              {ACTIONS.map((act) => (
-                <TableCell key={act} className="text-center">
-                  <input
-                    type="checkbox"
-                    className="size-4 accent-primary cursor-pointer disabled:opacity-50"
-                    checked={Boolean((matrix[mod.key] as Record<string, boolean> | undefined)?.[act])}
-                    disabled={readOnly}
-                    onChange={(e) => onToggle(mod.key, act, e.target.checked)}
-                  />
-                </TableCell>
+    <div className="space-y-2">
+      <div className="flex justify-end">
+        <Button type="button" variant="ghost" size="sm" onClick={toggleAllRows}>
+          {anyExpanded ? 'Collapse all' : 'Expand all actions'}
+        </Button>
+      </div>
+      <div className="overflow-x-auto rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-56">Module</TableHead>
+              {CORE_ACTIONS.map((a) => (
+                <TableHead key={a} className="text-center w-20">
+                  {CORE_LABELS[a]}
+                </TableHead>
               ))}
+              <TableHead className="w-44 text-right">Specific actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {modules.map((mod) => {
+              const cell = matrix[mod.key] ?? {};
+              const available = new Set(actionsOf(mod).map((a) => a.key));
+              const specials = specialActionsOf(mod);
+              const isOpen = Boolean(expanded[mod.key]);
+              const total = actionsOf(mod).length;
+              const granted = grantedCount(matrix, mod);
+              return (
+                <Fragment key={mod.key}>
+                  <TableRow>
+                    <TableCell className="font-medium">
+                      {mod.name}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {granted}/{total}
+                      </span>
+                    </TableCell>
+                    {CORE_ACTIONS.map((act) => (
+                      <TableCell key={act} className="text-center">
+                        {available.has(act) ? (
+                          <input
+                            type="checkbox"
+                            aria-label={`${mod.name} ${CORE_LABELS[act]}`}
+                            className="size-4 accent-primary cursor-pointer disabled:opacity-50"
+                            checked={Boolean(cell[act])}
+                            disabled={readOnly}
+                            onChange={(e) => onToggle(mod.key, act, e.target.checked)}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {!readOnly && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => onToggleModule(mod, granted < total)}
+                          >
+                            {granted < total ? 'All' : 'None'}
+                          </Button>
+                        )}
+                        {specials.length > 0 ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            aria-expanded={isOpen}
+                            onClick={() =>
+                              setExpanded((prev) => ({ ...prev, [mod.key]: !prev[mod.key] }))
+                            }
+                          >
+                            {isOpen ? (
+                              <ChevronDown className="mr-1 size-3" />
+                            ) : (
+                              <ChevronRight className="mr-1 size-3" />
+                            )}
+                            {specials.length}
+                          </Button>
+                        ) : (
+                          <span className="pr-2 text-xs text-muted-foreground">—</span>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {isOpen && specials.length > 0 && (
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableCell colSpan={CORE_ACTIONS.length + 2} className="py-3">
+                        <div className="grid grid-cols-1 gap-x-6 gap-y-2 pl-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {specials.map((a) => (
+                            <label
+                              key={a.key}
+                              className="flex items-center gap-2 text-sm"
+                              title={`${mod.key}.${a.key}`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="size-4 shrink-0 accent-primary cursor-pointer disabled:opacity-50"
+                                checked={Boolean(cell[a.key])}
+                                disabled={readOnly}
+                                onChange={(e) => onToggle(mod.key, a.key, e.target.checked)}
+                              />
+                              <span className="truncate">{a.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
@@ -205,10 +348,30 @@ export default function RolesSettingsPage() {
     act: string,
     v: boolean
   ) => {
-    const prev = matrix[mod] ?? { view: false, create: false, edit: false, delete: false };
+    const prev = matrix[mod] ?? {};
     setM({
       ...matrix,
       [mod]: { ...prev, [act]: v },
+    });
+  };
+
+  const toggleModuleAll = (
+    matrix: PermissionMatrix,
+    setM: (m: PermissionMatrix) => void,
+    mod: AppModule,
+    v: boolean
+  ) => {
+    const actions: AppModuleActionDef[] =
+      mod.actions && mod.actions.length
+        ? mod.actions
+        : (['view', 'create', 'edit', 'delete'] as const).map((k) => ({
+            key: k,
+            label: k,
+            parent: null,
+          }));
+    setM({
+      ...matrix,
+      [mod.key]: Object.fromEntries(actions.map((a) => [a.key, v])),
     });
   };
 
@@ -646,6 +809,7 @@ export default function RolesSettingsPage() {
                         modules={appModules}
                         readOnly={false}
                         onToggle={(mod, act, v) => toggleCell(editMatrix, setEditMatrix, mod, act, v)}
+                        onToggleModule={(mod, v) => toggleModuleAll(editMatrix, setEditMatrix, mod, v)}
                       />
                     </div>
                   )}
@@ -663,6 +827,7 @@ export default function RolesSettingsPage() {
                         modules={appModules}
                         readOnly={true}
                         onToggle={() => {}}
+                        onToggleModule={() => {}}
                       />
                     </div>
                   )}
@@ -1067,6 +1232,7 @@ export default function RolesSettingsPage() {
                   modules={appModules}
                   readOnly={false}
                   onToggle={(mod, act, v) => toggleCell(newMatrix, setNewMatrix, mod, act, v)}
+                  onToggleModule={(mod, v) => toggleModuleAll(newMatrix, setNewMatrix, mod, v)}
                 />
               </div>
               <DialogFooter>

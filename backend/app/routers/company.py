@@ -19,7 +19,7 @@ def get_profile(db: Session = Depends(get_db), current_user: User = Depends(requ
 def patch_profile(
     data: CompanyProfileUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("billing", "edit")),
+    current_user: User = Depends(require_module("billing", "profile_edit")),
 ):
     return company_profile_service.update_company_profile(db, current_user.id, data)
 
@@ -28,6 +28,6 @@ def patch_profile(
 def upload_logo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("billing", "edit")),
+    current_user: User = Depends(require_module("billing", "logo_upload")),
 ):
     return company_profile_service.save_company_logo(db, current_user.id, file)

@@ -44,7 +44,7 @@ def list_routes(
 def create_route(
     body: PatrolRouteCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "create")),
 ):
     return patrol_service.create_route(db, current_user, body)
 
@@ -72,7 +72,7 @@ def patch_route(
 def remove_route(
     route_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "delete")),
 ):
     patrol_service.delete_route(db, current_user, route_id)
     return None
@@ -82,7 +82,7 @@ def remove_route(
 def create_checkpoint(
     body: PatrolCheckpointCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "checkpoint_create")),
 ):
     return patrol_service.create_checkpoint(db, current_user, body)
 
@@ -92,7 +92,7 @@ def patch_checkpoint(
     checkpoint_id: int,
     body: PatrolCheckpointUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "checkpoint_edit")),
 ):
     return patrol_service.update_checkpoint(db, current_user, checkpoint_id, body)
 
@@ -101,7 +101,7 @@ def patch_checkpoint(
 def remove_checkpoint(
     checkpoint_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "checkpoint_delete")),
 ):
     patrol_service.delete_checkpoint(db, current_user, checkpoint_id)
     return None
@@ -111,7 +111,7 @@ def remove_checkpoint(
 def checkpoint_qr_png(
     checkpoint_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "view")),
+    current_user: User = Depends(require_module("patrol", "qr_generate")),
 ):
     cp = patrol_service.get_checkpoint(db, current_user, checkpoint_id)
     data = patrol_service.checkpoint_qr_png_bytes(cp)
@@ -122,7 +122,7 @@ def checkpoint_qr_png(
 def checkpoint_qr_pdf(
     checkpoint_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "view")),
+    current_user: User = Depends(require_module("patrol", "qr_generate")),
 ):
     cp = patrol_service.get_checkpoint(db, current_user, checkpoint_id)
     data = patrol_service.checkpoint_qr_pdf_bytes(cp)
@@ -137,7 +137,7 @@ def checkpoint_qr_pdf(
 def start_session(
     body: PatrolSessionStart,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "session_start")),
 ):
     return patrol_service.start_session(db, current_user, body)
 
@@ -146,7 +146,7 @@ def start_session(
 def checkpoint_scan(
     body: PatrolScanRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "scan")),
 ):
     return patrol_service.scan_checkpoint(db, current_user, body)
 
@@ -163,7 +163,7 @@ async def checkpoint_scan_with_photo(
     guard_id: Optional[int] = Form(None),
     photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "scan_photo")),
 ):
     photo_path = None
     if photo and photo.filename and is_image_filename(photo.filename):
@@ -192,7 +192,7 @@ def logs(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "view")),
+    current_user: User = Depends(require_module("patrol", "logs_view")),
 ):
     return patrol_service.list_logs(
         db, current_user, site_id=site_id, route_id=route_id, guard_id=guard_id, start_date=start_date, end_date=end_date
@@ -203,7 +203,7 @@ def logs(
 def log_photo(
     log_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "view")),
+    current_user: User = Depends(require_module("patrol", "photo_view")),
 ):
     """Serve a patrol scan photo behind the same permission check as the log itself."""
     path, mime = patrol_service.log_photo_file(db, current_user, log_id)
@@ -216,7 +216,7 @@ def compliance(
     end_date: date,
     site_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "view")),
+    current_user: User = Depends(require_module("patrol", "reports")),
 ):
     return patrol_service.compliance_report(db, current_user, start_date, end_date, site_id)
 
@@ -227,7 +227,7 @@ def detail(
     end_date: date,
     route_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "view")),
+    current_user: User = Depends(require_module("patrol", "reports")),
 ):
     return patrol_service.detail_report(db, current_user, start_date, end_date, route_id)
 
@@ -235,7 +235,7 @@ def detail(
 @router.get("/today", response_model=PatrolTodayResponse)
 def today(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("patrol", "edit")),
+    current_user: User = Depends(require_module("patrol", "today_view")),
 ):
     return patrol_service.today_for_guard(db, current_user)
 

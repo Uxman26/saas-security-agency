@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import status as http_status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from datetime import date
@@ -17,7 +18,7 @@ from app.schemas import (
     InvoiceAuditEntry,
     PaymentResponse,
 )
-from app.rbac import require_module
+from app.rbac import require_module, user_has_permission_db
 from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
 from app.services.invoice_payment_service import invoice_amount_paid
@@ -138,7 +139,7 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
 def create_invoice(
     data: InvoiceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_module("invoices", "create")),
 ):
     inv = invoice_service.create_invoice(db, data, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
@@ -152,7 +153,7 @@ def generate_invoice(
     client_id: Optional[int] = None,
     site_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_module("invoices", "generate")),
 ):
     inv = invoice_service.generate_from_rota(
         db, period_start, period_end, current_user.id, client_id=client_id, site_id=site_id
@@ -189,7 +190,7 @@ def list_invoices(
 def invoice_audit(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "view")),
+    current_user: User = Depends(require_module("invoices", "audit_view")),
 ):
     raw = invoice_service.get_invoice_audit_logs(db, invoice_id, current_user.id)
     return [InvoiceAuditEntry(**r) for r in raw]
@@ -199,7 +200,7 @@ def invoice_audit(
 def invoice_pdf(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "view")),
+    current_user: User = Depends(require_module("invoices", "pdf_download")),
 ):
     inv = invoice_service.get_invoice(db, invoice_id, current_user.id)
     lines = sorted(inv.lines, key=lambda x: x.id)
@@ -230,7 +231,7 @@ def update_line(
     line_id: int,
     data: InvoiceLineUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_module("invoices", "line_edit")),
 ):
     line = invoice_service.update_invoice_line(db, invoice_id, line_id, data, current_user.id)
     db.refresh(line)
@@ -256,7 +257,7 @@ def delete_line(
     invoice_id: int,
     line_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_module("invoices", "line_delete")),
 ):
     invoice_service.delete_invoice_line(db, invoice_id, line_id, current_user.id)
 
@@ -265,7 +266,7 @@ def delete_line(
 def duplicate_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_module("invoices", "duplicate")),
 ):
     inv = invoice_service.duplicate_invoice(db, invoice_id, current_user.id)
     return _serialize_invoice(inv, True, db)
@@ -286,8 +287,16 @@ def update_status(
     invoice_id: int,
     status: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_module("invoices", "status_change")),
 ):
+    # Moving an invoice to "sent" emails the client, so it needs the send permission on
+    # top of the general status change.
+    if (status or "").strip().lower() == "sent" and not user_has_permission_db(
+        db, current_user, "invoices.send"
+    ):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+        )
     inv = invoice_service.update_invoice_status(db, invoice_id, status, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)
@@ -298,7 +307,7 @@ def add_line(
     invoice_id: int,
     data: InvoiceLineBase,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_module("invoices", "line_create")),
 ):
     line = invoice_service.add_invoice_line(db, invoice_id, data, current_user.id)
     db.refresh(line)

@@ -9,13 +9,16 @@ export interface PlanSummary {
   features: Record<string, boolean>;
 }
 
+/** Module key -> action key -> granted. Action keys come from the module's
+ *  `actions` catalogue, not a fixed CRUD set. */
 export interface PermissionMatrix {
-  [module: string]: {
-    view: boolean;
-    create: boolean;
-    edit: boolean;
-    delete: boolean;
-  };
+  [module: string]: Record<string, boolean>;
+}
+
+export interface AppModuleActionDef {
+  key: string;
+  label: string;
+  parent: string | null;
 }
 
 export interface Role {
@@ -70,6 +73,8 @@ export interface ModuleAccess {
   can_create: boolean;
   can_edit: boolean;
   can_delete: boolean;
+  /** Every granular action on this module and whether the user holds it. */
+  actions?: Record<string, boolean>;
 }
 
 export interface AppModule {
@@ -81,6 +86,7 @@ export interface AppModule {
   sidebar_order: number;
   section_key: string;
   is_active: boolean;
+  actions?: AppModuleActionDef[];
 }
 
 export interface StaffRequest {

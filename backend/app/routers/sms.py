@@ -13,21 +13,21 @@ router = APIRouter(prefix="/sms", tags=["sms"])
 
 
 @router.get("/config", response_model=SmsConfigResponse)
-def get_config(db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def get_config(db: Session = Depends(get_db), current_user: User = Depends(require_module("sms", "view"))):
     return SmsConfigResponse(**sms_service.get_sms_config(db, current_user.id))
 
 
 @router.patch("/config", response_model=SmsConfigResponse)
-def patch_config(body: SmsConfigUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def patch_config(body: SmsConfigUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_module("sms", "edit"))):
     return SmsConfigResponse(**sms_service.update_sms_config(db, current_user.id, body.model_dump(exclude_unset=True)))
 
 
 @router.post("/send", response_model=SmsLogResponse)
-def send_sms(body: SmsSendRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def send_sms(body: SmsSendRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("sms", "send"))):
     log = sms_service.send_sms(db, current_user.id, body.recipient, body.body, body.template_key)
     return SmsLogResponse.model_validate(log)
 
 
 @router.get("/logs", response_model=List[SmsLogResponse])
-def sms_logs(db: Session = Depends(get_db), current_user: User = Depends(require_module("email_settings", "edit"))):
+def sms_logs(db: Session = Depends(get_db), current_user: User = Depends(require_module("sms", "logs_view"))):
     return [SmsLogResponse.model_validate(r) for r in sms_service.list_sms_logs(db, current_user.id)]

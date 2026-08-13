@@ -59,7 +59,7 @@ def get_rota_detail(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "view")),
+    current_user: User = Depends(require_module("rota", "detail_view")),
 ):
     return rota_service.list_rota_details(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
 
@@ -72,7 +72,7 @@ def get_rota_summary(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "view")),
+    current_user: User = Depends(require_module("rota", "summary_view")),
 ):
     return rota_service.rota_summary(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
 
@@ -86,7 +86,7 @@ def export_rota(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "view")),
+    current_user: User = Depends(require_module("rota", "export")),
 ):
     details = rota_service.list_rota_details(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
     summary = rota_service.rota_summary(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
@@ -123,7 +123,7 @@ def get_rota(
 def record_shift_overtime(
     body: ShiftAdjustmentByShiftRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "log_overtime")),
 ):
     if not body.new_end:
         raise HTTPException(status_code=400, detail="new_end is required")
@@ -136,7 +136,7 @@ def record_shift_overtime(
 def record_shift_early_finish(
     body: ShiftAdjustmentByShiftRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "log_early_finish")),
 ):
     if not body.actual_end:
         raise HTTPException(status_code=400, detail="actual_end is required")
@@ -149,7 +149,7 @@ def record_shift_early_finish(
 def record_shift_lateness(
     body: ShiftLatenessByShiftRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "log_lateness")),
 ):
     return shift_adjustment_service.record_lateness_by_shift(
         db,
@@ -184,7 +184,7 @@ def record_assignment_overtime(
     assignment_id: int,
     body: ShiftOvertimeRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "log_overtime")),
 ):
     return shift_adjustment_service.record_overtime(db, current_user.id, assignment_id, body.new_end, body.reason)
 
@@ -194,7 +194,7 @@ def record_assignment_early_finish(
     assignment_id: int,
     body: ShiftEarlyFinishRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "log_early_finish")),
 ):
     return shift_adjustment_service.record_early_finish(db, current_user.id, assignment_id, body.actual_end, body.reason)
 
@@ -204,7 +204,7 @@ def record_assignment_lateness(
     assignment_id: int,
     body: ShiftLatenessRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("rota", "edit")),
+    current_user: User = Depends(require_module("rota", "log_lateness")),
 ):
     return shift_adjustment_service.record_lateness_for_assignment(
         db, current_user.id, assignment_id, body.late_minutes, body.scheduled_start, body.note

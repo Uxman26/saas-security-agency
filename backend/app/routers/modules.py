@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import AppModule, User
+from app.module_actions import actions_for_module
 from app.rbac import permission_bypass, require_module
-from app.schemas import AppModuleCreate, AppModuleOut, AppModuleUpdate
+from app.schemas import AppModuleActionOut, AppModuleCreate, AppModuleOut, AppModuleUpdate
 from app.services.module_service import ensure_app_modules, list_all_modules, list_active_modules
 
 router = APIRouter(prefix="/modules", tags=["modules"])
@@ -22,6 +23,10 @@ def _out(m: AppModule) -> AppModuleOut:
         sidebar_order=m.sidebar_order,
         section_key=m.section_key,
         is_active=m.is_active,
+        actions=[
+            AppModuleActionOut(key=a.key, label=a.label, parent=a.parent)
+            for a in actions_for_module(m.key)
+        ],
     )
 
 
@@ -29,7 +34,7 @@ def _out(m: AppModule) -> AppModuleOut:
 def list_modules(
     all_modules: bool = False,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "view")),
+    current_user: User = Depends(require_module("roles", "modules_view")),
 ):
     ensure_app_modules(db)
     db.commit()
@@ -41,7 +46,7 @@ def list_modules(
 def create_module(
     body: AppModuleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "edit")),
+    current_user: User = Depends(require_module("roles", "modules_manage")),
 ):
     if not permission_bypass(db, current_user):
         raise HTTPException(status_code=403, detail="Only admins can create modules")
@@ -68,7 +73,7 @@ def update_module(
     module_id: int,
     body: AppModuleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("roles", "edit")),
+    current_user: User = Depends(require_module("roles", "modules_manage")),
 ):
     # AppModule is a platform-wide table with no company_id, so an edit here is
     # visible to every tenant. Mirror the admin-only gate on create_module.

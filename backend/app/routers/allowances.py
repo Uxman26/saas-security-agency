@@ -10,7 +10,7 @@ from app.services import allowance_service
 router = APIRouter(prefix="/allowances", tags=["allowances"])
 
 @router.post("", response_model=AllowanceResponse, status_code=status.HTTP_201_CREATED)
-def create_allowance(data: AllowanceCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("allowances", "edit"))):
+def create_allowance(data: AllowanceCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("allowances", "create"))):
     return allowance_service.create_allowance(db, data, current_user.id)
 
 @router.get("", response_model=List[AllowanceResponse])

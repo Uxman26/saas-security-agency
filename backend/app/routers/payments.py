@@ -10,7 +10,7 @@ from app.services import payment_service
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 @router.post("", response_model=PaymentResponse, status_code=status.HTTP_201_CREATED)
-def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("payments", "edit"))):
+def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("payments", "create"))):
     return payment_service.create_payment(db, data, current_user.id)
 
 @router.get("", response_model=List[PaymentResponse])

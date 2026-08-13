@@ -17,7 +17,13 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models import AppModule, Role, RoleModulePermission
+from app.models import AppModule, Role, RoleModuleAction, RoleModulePermission
+from app.module_actions import (
+    LEGACY_ACTIONS,
+    action_keys_for_module,
+    actions_for_module,
+    parent_chain,
+)
 from app.rbac_matrix import matrix_to_codes, wrap_matrix
 
 # Seed: key, name, icon (lucide), sidebar_path, order, section_key
@@ -57,7 +63,9 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     ("email_settings", "Email", "Mail", "/settings/email", 64, "sectionSettings"),
 )
 
-ACTIONS = ("view", "create", "edit", "delete")
+# The coarse actions mirrored onto role_module_permissions for the legacy PERM_* bridge.
+# The full per-module action set lives in app.module_actions.
+ACTIONS = LEGACY_ACTIONS
 
 # --- Subscription plan feature flags -------------------------------------------------
 # Stored per company in Company.enabled_modules_json. Unknown/absent keys default to
@@ -174,15 +182,74 @@ def list_all_modules(db: Session) -> list[AppModule]:
     return db.query(AppModule).order_by(AppModule.sidebar_order, AppModule.name).all()
 
 
+def expand_cell_to_actions(module_key: str, cell: dict[str, Any]) -> dict[str, bool]:
+    """Resolve a permission cell to the module's full action set.
+
+    A cell straight from the UI already carries every action key. A cell from legacy
+    storage carries only view/create/edit/delete, so each special action inherits the
+    nearest ancestor present in the cell — that is what stops a role from silently
+    losing ``rota.publish`` when it already held ``rota.edit``.
+    """
+    out: dict[str, bool] = {}
+    for key in action_keys_for_module(module_key):
+        if key in cell:
+            out[key] = bool(cell[key])
+            continue
+        value = False
+        for ancestor in parent_chain(module_key, key):
+            if ancestor in cell:
+                value = bool(cell[ancestor])
+                break
+        out[key] = value
+    return out
+
+
+def collapse_actions_to_legacy(module_key: str, actions: dict[str, bool]) -> dict[str, bool]:
+    """Fold a granular cell back onto view/create/edit/delete.
+
+    A coarse flag is set when *any* action rolling up to it is granted, not just the
+    literal CRUD key. Modules such as ``staff_requests`` have no ``edit`` action of
+    their own, yet approve/reject descend from it and must still yield the legacy
+    ``PERM_STAFF_REQ_REVIEW`` code that ``app.module_perms`` expands.
+    """
+    out = {a: False for a in LEGACY_ACTIONS}
+    for key, granted in actions.items():
+        if not granted:
+            continue
+        if key in out:
+            out[key] = True
+        for ancestor in parent_chain(module_key, key):
+            if ancestor in out:
+                out[ancestor] = True
+    return out
+
+
 def empty_matrix_for_modules(modules: list[AppModule]) -> dict[str, Any]:
-    row = {a: False for a in ACTIONS}
-    return {m.key: dict(row) for m in modules}
+    return {m.key: {a: False for a in action_keys_for_module(m.key)} for m in modules}
 
 
 def matrix_from_role_permissions(db: Session, role: Role) -> dict[str, Any]:
     modules = list_active_modules(db)
     matrix = empty_matrix_for_modules(modules)
     if not role.id:
+        return matrix
+    module_by_id = {m.id: m for m in modules}
+    granular = (
+        db.query(RoleModuleAction)
+        .filter(RoleModuleAction.role_id == role.id)
+        .all()
+    )
+    if granular:
+        stored: dict[str, dict[str, bool]] = {}
+        for row in granular:
+            mod = module_by_id.get(row.module_id)
+            if mod:
+                stored.setdefault(mod.key, {})[row.action_key] = bool(row.allowed)
+        for key, cell in stored.items():
+            if key in matrix:
+                # Expand rather than assign: a module gaining a new action after these
+                # rows were written still resolves it from its parent.
+                matrix[key] = expand_cell_to_actions(key, cell)
         return matrix
     rows = (
         db.query(RoleModulePermission)
@@ -196,22 +263,20 @@ def matrix_from_role_permissions(db: Session, role: Role) -> dict[str, Any]:
         legacy = matrix_from_permissions_json(role.permissions_json)
         for m in modules:
             if m.key in legacy:
-                matrix[m.key] = {
-                    "view": bool(legacy[m.key].get("view")),
-                    "create": bool(legacy[m.key].get("create")),
-                    "edit": bool(legacy[m.key].get("edit")),
-                    "delete": bool(legacy[m.key].get("delete")),
-                }
+                matrix[m.key] = expand_cell_to_actions(m.key, legacy[m.key])
         return matrix
     for rmp in rows:
         k = rmp.module.key
         if k in matrix:
-            matrix[k] = {
-                "view": bool(rmp.can_view),
-                "create": bool(rmp.can_create),
-                "edit": bool(rmp.can_edit),
-                "delete": bool(rmp.can_delete),
-            }
+            matrix[k] = expand_cell_to_actions(
+                k,
+                {
+                    "view": bool(rmp.can_view),
+                    "create": bool(rmp.can_create),
+                    "edit": bool(rmp.can_edit),
+                    "delete": bool(rmp.can_delete),
+                },
+            )
     return matrix
 
 
@@ -222,24 +287,56 @@ def sync_role_permissions_from_matrix(db: Session, role: Role, matrix: dict[str,
         rmp.module_id: rmp
         for rmp in db.query(RoleModulePermission).filter(RoleModulePermission.role_id == role.id).all()
     }
+    existing_actions = {
+        (row.module_id, row.action_key): row
+        for row in db.query(RoleModuleAction).filter(RoleModuleAction.role_id == role.id).all()
+    }
+    resolved: dict[str, dict[str, bool]] = {}
     for m in modules:
         cell = matrix.get(m.key) or {}
+        actions = expand_cell_to_actions(m.key, cell)
+        resolved[m.key] = actions
+        for action_key, granted in actions.items():
+            row = existing_actions.get((m.id, action_key))
+            if not row:
+                row = RoleModuleAction(role_id=role.id, module_id=m.id, action_key=action_key)
+                db.add(row)
+            row.allowed = granted
+        legacy = collapse_actions_to_legacy(m.key, actions)
         rmp = existing.get(m.id)
         if not rmp:
             rmp = RoleModulePermission(role_id=role.id, module_id=m.id)
             db.add(rmp)
-        rmp.can_view = bool(cell.get("view"))
-        rmp.can_create = bool(cell.get("create"))
-        rmp.can_edit = bool(cell.get("edit"))
-        rmp.can_delete = bool(cell.get("delete"))
-    # Keep JSON matrix for legacy code expansion
-    filtered = {k: matrix[k] for k in module_by_key if k in matrix}
+        rmp.can_view = legacy["view"]
+        rmp.can_create = legacy["create"]
+        rmp.can_edit = legacy["edit"]
+        rmp.can_delete = legacy["delete"]
+    # permissions_json stays deliberately coarse: every legacy reader
+    # (rbac_matrix.matrix_to_codes, role_service.matrix_from_permissions_json) assumes
+    # four keys per cell. RoleModuleAction is the source of truth for granular grants.
+    filtered = {
+        k: collapse_actions_to_legacy(k, resolved[k]) for k in module_by_key if k in resolved
+    }
     role.permissions_json = wrap_matrix(filtered)
     db.flush()
 
 
 def module_permission_codes_for_role(db: Session, role_id: int) -> frozenset[str]:
     codes: set[str] = set()
+    granular = (
+        db.query(RoleModuleAction)
+        .join(AppModule)
+        .filter(
+            RoleModuleAction.role_id == role_id,
+            RoleModuleAction.allowed.is_(True),
+            AppModule.is_active.is_(True),
+        )
+        .all()
+    )
+    if granular:
+        for row in granular:
+            codes.update(_expand_action_codes(row.module.key, row.action_key))
+        return frozenset(codes)
     rows = (
         db.query(RoleModulePermission)
         .join(AppModule)
@@ -251,24 +348,34 @@ def module_permission_codes_for_role(db: Session, role_id: int) -> frozenset[str
     return frozenset(codes)
 
 
-def _expand_app_permission_codes(app_key: str, rmp: RoleModulePermission) -> set[str]:
-    """Module action codes + legacy API permission codes."""
+def _expand_action_codes(app_key: str, action_key: str) -> set[str]:
+    """One granted action -> its own code plus the legacy codes it implies.
+
+    A special action also emits the codes of the coarse action it descends from, so a
+    role granted only ``invoices.send`` still satisfies any legacy ``inv.write`` check
+    that the send path runs through.
+    """
     from app.module_perms import legacy_codes_for_module_action
 
-    v, c, e, d = bool(rmp.can_view), bool(rmp.can_create), bool(rmp.can_edit), bool(rmp.can_delete)
+    codes: set[str] = {module_action_code(app_key, action_key)}
+    codes.update(legacy_codes_for_module_action(app_key, action_key))
+    for ancestor in parent_chain(app_key, action_key):
+        codes.update(legacy_codes_for_module_action(app_key, ancestor))
+    return codes
+
+
+def _expand_app_permission_codes(app_key: str, rmp: RoleModulePermission) -> set[str]:
+    """Module action codes + legacy API permission codes, from the coarse row."""
+    granted = {
+        "view": bool(rmp.can_view),
+        "create": bool(rmp.can_create),
+        "edit": bool(rmp.can_edit),
+        "delete": bool(rmp.can_delete),
+    }
     codes: set[str] = set()
-    if v:
-        codes.add(module_action_code(app_key, "view"))
-        codes.update(legacy_codes_for_module_action(app_key, "view"))
-    if c:
-        codes.add(module_action_code(app_key, "create"))
-        codes.update(legacy_codes_for_module_action(app_key, "create"))
-    if e:
-        codes.add(module_action_code(app_key, "edit"))
-        codes.update(legacy_codes_for_module_action(app_key, "edit"))
-    if d:
-        codes.add(module_action_code(app_key, "delete"))
-        codes.update(legacy_codes_for_module_action(app_key, "delete"))
+    for action_key, on in expand_cell_to_actions(app_key, granted).items():
+        if on:
+            codes.update(_expand_action_codes(app_key, action_key))
     return codes
 
 
@@ -276,54 +383,59 @@ def all_module_action_codes(db: Session) -> frozenset[str]:
     modules = list_active_modules(db)
     codes: set[str] = set()
     for m in modules:
-        for a in ACTIONS:
+        for a in action_keys_for_module(m.key):
             codes.add(module_action_code(m.key, a))
     return frozenset(codes)
 
 
 def module_access_for_role(db: Session, role_id: int | None, bypass: bool) -> list[dict[str, Any]]:
     modules = list_active_modules(db)
+
+    def entry(m: AppModule, actions: dict[str, bool]) -> dict[str, Any]:
+        legacy = collapse_actions_to_legacy(m.key, actions)
+        return {
+            "key": m.key,
+            "name": m.name,
+            "icon": m.icon,
+            "sidebar_path": m.sidebar_path,
+            "sidebar_order": m.sidebar_order,
+            "section_key": m.section_key,
+            "can_view": legacy["view"],
+            "can_create": legacy["create"],
+            "can_edit": legacy["edit"],
+            "can_delete": legacy["delete"],
+            "actions": actions,
+        }
+
     if bypass:
         return [
-            {
-                "key": m.key,
-                "name": m.name,
-                "icon": m.icon,
-                "sidebar_path": m.sidebar_path,
-                "sidebar_order": m.sidebar_order,
-                "section_key": m.section_key,
-                "can_view": True,
-                "can_create": True,
-                "can_edit": True,
-                "can_delete": True,
-            }
-            for m in modules
+            entry(m, {a: True for a in action_keys_for_module(m.key)}) for m in modules
         ]
-    perms_by_module: dict[int, RoleModulePermission] = {}
+    actions_by_module: dict[int, dict[str, bool]] = {}
+    coarse_by_module: dict[int, RoleModulePermission] = {}
     if role_id:
+        for row in (
+            db.query(RoleModuleAction).filter(RoleModuleAction.role_id == role_id).all()
+        ):
+            actions_by_module.setdefault(row.module_id, {})[row.action_key] = bool(row.allowed)
         for rmp in (
             db.query(RoleModulePermission)
             .filter(RoleModulePermission.role_id == role_id)
             .all()
         ):
-            perms_by_module[rmp.module_id] = rmp
+            coarse_by_module[rmp.module_id] = rmp
     out: list[dict[str, Any]] = []
     for m in modules:
-        rmp = perms_by_module.get(m.id)
-        out.append(
-            {
-                "key": m.key,
-                "name": m.name,
-                "icon": m.icon,
-                "sidebar_path": m.sidebar_path,
-                "sidebar_order": m.sidebar_order,
-                "section_key": m.section_key,
-                "can_view": bool(rmp and rmp.can_view),
-                "can_create": bool(rmp and rmp.can_create),
-                "can_edit": bool(rmp and rmp.can_edit),
-                "can_delete": bool(rmp and rmp.can_delete),
+        stored = actions_by_module.get(m.id)
+        if stored is None:
+            rmp = coarse_by_module.get(m.id)
+            stored = {
+                "view": bool(rmp and rmp.can_view),
+                "create": bool(rmp and rmp.can_create),
+                "edit": bool(rmp and rmp.can_edit),
+                "delete": bool(rmp and rmp.can_delete),
             }
-        )
+        out.append(entry(m, expand_cell_to_actions(m.key, stored)))
     return out
 
 
@@ -369,8 +481,7 @@ def expand_coarse_matrix_to_app_modules(coarse: dict[str, Any], modules: list[Ap
 
 
 def default_admin_app_matrix(modules: list[AppModule]) -> dict[str, Any]:
-    row = {a: True for a in ACTIONS}
-    return {m.key: dict(row) for m in modules}
+    return {m.key: {a: True for a in action_keys_for_module(m.key)} for m in modules}
 
 
 def coarse_unmappable_module_keys(modules: list[AppModule]) -> set[str]:
@@ -392,6 +503,15 @@ def stored_cells_for_keys(db: Session, role_id: int | None, keys: set[str]) -> d
     if not role_id or not keys:
         return {}
     out: dict[str, Any] = {}
+    granular = (
+        db.query(RoleModuleAction)
+        .join(AppModule)
+        .filter(RoleModuleAction.role_id == role_id)
+        .all()
+    )
+    for row in granular:
+        if row.module.key in keys:
+            out.setdefault(row.module.key, {})[row.action_key] = bool(row.allowed)
     rows = (
         db.query(RoleModulePermission)
         .join(AppModule)
@@ -399,7 +519,7 @@ def stored_cells_for_keys(db: Session, role_id: int | None, keys: set[str]) -> d
         .all()
     )
     for rmp in rows:
-        if rmp.module.key in keys:
+        if rmp.module.key in keys and rmp.module.key not in out:
             out[rmp.module.key] = {
                 "view": bool(rmp.can_view),
                 "create": bool(rmp.can_create),
@@ -409,12 +529,52 @@ def stored_cells_for_keys(db: Session, role_id: int | None, keys: set[str]) -> d
     return out
 
 
+def has_explicit_action(db: Session, role_id: int, module_key: str, action_key: str) -> bool:
+    """Whether the role has a stored decision for this exact action.
+
+    When it does, that decision is final — an admin who unticks ``rota.publish`` while
+    leaving ``rota.edit`` on must not have publish handed back by parent inheritance.
+    Inheritance only fills the gap for actions the role has no row for yet.
+    """
+    return (
+        db.query(RoleModuleAction.id)
+        .join(AppModule)
+        .filter(
+            RoleModuleAction.role_id == role_id,
+            RoleModuleAction.action_key == action_key,
+            AppModule.key == module_key,
+        )
+        .first()
+        is not None
+    )
+
+
+def stored_action_cells(db: Session, role_id: int | None) -> dict[str, dict[str, bool]]:
+    """Every granular action row already saved for a role, keyed by module."""
+    if not role_id:
+        return {}
+    out: dict[str, dict[str, bool]] = {}
+    for row in (
+        db.query(RoleModuleAction)
+        .join(AppModule)
+        .filter(RoleModuleAction.role_id == role_id)
+        .all()
+    ):
+        out.setdefault(row.module.key, {})[row.action_key] = bool(row.allowed)
+    return out
+
+
 def backfill_role_module_permissions(db: Session) -> None:
-    """Populate role_module_permissions from permissions_json for all roles.
+    """Populate role_module_permissions/role_module_actions for all roles.
 
     This runs on every startup, and the coarse matrix it rebuilds from cannot represent
     every app module. Grants for those modules are carried over from the rows already
     saved, otherwise anything an admin ticked there would be wiped on the next restart.
+
+    Granular rows outrank the rebuild entirely. Once a role has saved actions, this pass
+    only *adds* keys the catalogue has gained since — inheriting each from its parent —
+    and never overwrites an explicit choice. Without that, unticking ``rota.publish``
+    while leaving ``rota.edit`` on would be undone by the next restart.
     """
     ensure_app_modules(db)
     roles = db.query(Role).all()
@@ -429,5 +589,12 @@ def backfill_role_module_permissions(db: Session) -> None:
             coarse = matrix_from_permissions_json(role.permissions_json)
             full = expand_coarse_matrix_to_app_modules(coarse, modules)
             full.update(stored_cells_for_keys(db, role.id, preserve_keys))
+            saved = stored_action_cells(db, role.id)
+            for key, cell in saved.items():
+                if key in full:
+                    # Derived values first, explicit saved rows on top.
+                    merged = dict(full[key])
+                    merged.update(cell)
+                    full[key] = merged
         sync_role_permissions_from_matrix(db, role, full)
     db.commit()

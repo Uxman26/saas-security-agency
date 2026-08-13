@@ -321,6 +321,17 @@
   opacity: 0;
 }
 
+/* Rota grid column widths. The component reads these through var() for both the
+   <col> widths and the table's min-width, so changing them here rescales the whole
+   grid and the horizontal scroll extent together. */
+.rota-grid-table {
+  --rota-emp-w: 210px;
+  --rota-day-w: 160px;
+  --rota-hours-w: 68px;
+  --rota-pay-w: 62px;
+  --rota-publish-w: 92px;
+}
+
 /* Opaque sticky rota columns — solid fills, no shift bleed-through */
 .rota-sticky-emp {
   background-color: var(--rota-emp-cell-bg, var(--rota-emp-bg)) !important;
@@ -381,6 +392,76 @@
   background: color-mix(in oklab, var(--muted) 85%, transparent);
   border-left: 1px solid var(--border);
   border-top: 1px solid var(--border);
+}
+
+/* Mobile rota grid: unfreeze the columns and shrink the grid.
+   On a phone the frozen name column plus the three frozen right-hand columns take
+   well over half the viewport, so the day columns they exist to frame are squeezed
+   into a sliver. Below `sm` every column scrolls with the grid instead, and the
+   narrower widths mean a week is a couple of swipes rather than a dozen.
+
+   Only the horizontal pinning goes. The header keeps its top pin so day names stay
+   in view scrolling down, and the totals row keeps its bottom pin. `!important` is
+   required because the offsets are inline styles on the cells. */
+@media (max-width: 639px) {
+  .rota-grid-table {
+    --rota-emp-w: 132px;
+    --rota-day-w: 116px;
+    --rota-hours-w: 56px;
+    --rota-pay-w: 58px;
+    --rota-publish-w: 84px;
+  }
+
+  .rota-grid-table .rota-sticky-emp,
+  .rota-grid-table .rota-sticky-hours,
+  .rota-grid-table .rota-sticky-pay,
+  .rota-grid-table .rota-sticky-publish {
+    left: auto !important;
+    right: auto !important;
+    /* The edge shadows sold the "frozen" affordance; unpinned they read as grime. */
+    box-shadow: none !important;
+  }
+
+  /* Body cells have no axis left to pin to once the horizontal pin is gone. */
+  .rota-grid-table tbody .rota-sticky-emp,
+  .rota-grid-table tbody .rota-sticky-hours,
+  .rota-grid-table tbody .rota-sticky-pay,
+  .rota-grid-table tbody .rota-sticky-publish {
+    position: static !important;
+  }
+
+  /* Roomier tap targets: a 24px control is below the ~44px comfortable minimum. */
+  .rota-grid-table tbody td,
+  .rota-grid-table tfoot td {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  /* Touch scrolling: overlay scrollbars instead of the 14px desktop ones, which cost
+     real estate and are not draggable with a finger anyway. `contain` stays so a swipe
+     that reaches the end of the grid does not scroll the page behind it mid-gesture. */
+  .rota-grid-scroll {
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-gutter: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rota-grid-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .rota-grid-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    border: 0;
+  }
+  .rota-grid-scroll::-webkit-scrollbar-thumb {
+    border: 0;
+    border-radius: 999px;
+  }
+  .rota-grid-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+    border: 0;
+  }
 }
 
 /* Sidebar nav scrollbar — light orange */

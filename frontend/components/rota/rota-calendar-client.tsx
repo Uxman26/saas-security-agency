@@ -57,11 +57,23 @@ import { addDays } from 'date-fns';
    cursor when there was actually room below. */
 const SHIFT_MENU_H = 300;
 const EMP_MENU_H = 348;
+/* Desktop grid column widths. The same numbers are mirrored as CSS custom properties
+   on `.rota-grid-table` in globals.css, which narrows them below `sm` so a phone can
+   reach every column in fewer swipes. These constants stay the desktop values and are
+   only used for scroll maths, which is a no-op on mobile where nothing is frozen. */
 const ROTA_PAY_COL_W = 62;
 const ROTA_HOURS_COL_W = 68;
 const ROTA_PUBLISH_COL_W = 92;
 const ROTA_EMP_COL_W = 210;
 const ROTA_DAY_COL_W = 160;
+/** Column widths as CSS vars so the media query in globals.css can override them. */
+const COL_VAR = {
+  emp: 'var(--rota-emp-w)',
+  day: 'var(--rota-day-w)',
+  hours: 'var(--rota-hours-w)',
+  pay: 'var(--rota-pay-w)',
+  publish: 'var(--rota-publish-w)',
+} as const;
 /** Timeline: px per hour — wide enough that the day is horizontally scrollable */
 const TIMELINE_PX_PER_HOUR = 72;
 const TIMELINE_WIDTH_PX = TIMELINE_PX_PER_HOUR * 24;
@@ -281,7 +293,6 @@ export function RotaCalendarClient() {
   const showPayable = canModule(user, 'rota_payable', 'view');
   const payColW = showPayable ? ROTA_PAY_COL_W : 0;
   const stickyRightW = ROTA_HOURS_COL_W + payColW + ROTA_PUBLISH_COL_W;
-  const hoursColRight = payColW + ROTA_PUBLISH_COL_W;
   const createGuard = useCreateGuard();
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
   const mains = useMemo(
@@ -2222,18 +2233,22 @@ export function RotaCalendarClient() {
           <table
             className="rota-grid-table w-full table-fixed border-separate border-spacing-0 text-sm"
             style={{
-              minWidth: `${ROTA_EMP_COL_W + tableDays.length * ROTA_DAY_COL_W + stickyRightW}px`,
+              // Widths come from CSS vars so the mobile media query can shrink the
+              // whole grid in one place and keep min-width in step with the columns.
+              minWidth: `calc(${COL_VAR.emp} + ${tableDays.length} * ${COL_VAR.day} + ${COL_VAR.hours}${
+                showPayable ? ` + ${COL_VAR.pay}` : ''
+              } + ${COL_VAR.publish})`,
               width: '100%',
             }}
           >
             <colgroup>
-              <col style={{ width: ROTA_EMP_COL_W, minWidth: ROTA_EMP_COL_W }} />
+              <col style={{ width: COL_VAR.emp, minWidth: COL_VAR.emp }} />
               {tableDays.map((dk) => (
-                <col key={dk} style={{ width: ROTA_DAY_COL_W, minWidth: ROTA_DAY_COL_W }} />
+                <col key={dk} style={{ width: COL_VAR.day, minWidth: COL_VAR.day }} />
               ))}
-              <col style={{ width: ROTA_HOURS_COL_W, minWidth: ROTA_HOURS_COL_W }} />
-              {showPayable ? <col style={{ width: ROTA_PAY_COL_W, minWidth: ROTA_PAY_COL_W }} /> : null}
-              <col style={{ width: ROTA_PUBLISH_COL_W, minWidth: ROTA_PUBLISH_COL_W }} />
+              <col style={{ width: COL_VAR.hours, minWidth: COL_VAR.hours }} />
+              {showPayable ? <col style={{ width: COL_VAR.pay, minWidth: COL_VAR.pay }} /> : null}
+              <col style={{ width: COL_VAR.publish, minWidth: COL_VAR.publish }} />
             </colgroup>
             <thead>
               <tr>
@@ -2308,7 +2323,7 @@ export function RotaCalendarClient() {
                 })}
                 <th
                   className="rota-sticky-hours sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                  style={{ right: hoursColRight, ...ROTA_STICKY_HOURS_BG }}
+                  style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   <div className="font-semibold leading-tight">Total hours</div>
                   <label className="mt-1 flex items-start justify-center gap-1 font-normal text-[9px] leading-tight text-muted-foreground cursor-pointer">
@@ -2324,7 +2339,7 @@ export function RotaCalendarClient() {
                 {showPayable ? (
                   <th
                     className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                    style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                   >
                     <div className="font-semibold leading-tight">Payable</div>
                   </th>
@@ -2561,14 +2576,14 @@ export function RotaCalendarClient() {
                   })}
                   <td
                     className="rota-sticky-hours sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ right: hoursColRight, ...ROTA_STICKY_HOURS_BG }}
+                    style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                   >
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
                   {showPayable ? (
                     <td
                       className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                      style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                      style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                     >
                       {formatMoney(empTotalPayable(emp.id))}
                     </td>
@@ -2616,14 +2631,14 @@ export function RotaCalendarClient() {
                 })}
                 <td
                   className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                  style={{ right: hoursColRight, ...ROTA_STICKY_HOURS_BG }}
+                  style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   {formatHoursDecimal(totalRotaHours)}
                 </td>
                 {showPayable ? (
                   <td
                     className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                    style={{ right: ROTA_PUBLISH_COL_W, ...ROTA_STICKY_PAY_BG }}
+                    style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                   >
                     {formatMoney(totalRotaPayable)}
                   </td>

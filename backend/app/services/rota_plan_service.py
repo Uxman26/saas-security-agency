@@ -700,6 +700,13 @@ def publish_rota_plan(
     errors: list[str] = []
     shifts = data.get("shifts") or {}
 
+    # One query for the company's staff instead of one per employee in the plan. The
+    # membership test is the same — the id must belong to this company — it just reads
+    # from a dict rather than a round trip per row.
+    guard_ids_in_company = {
+        row[0] for row in db.query(Guard.id).filter(Guard.company_id == company.id).all()
+    }
+
     for emp_id, by_d in shifts.items():
         try:
             emp_guard_id = int(emp_id)
@@ -708,8 +715,7 @@ def publish_rota_plan(
             continue
         if guard_id is not None and emp_guard_id != guard_id:
             continue
-        guard = db.query(Guard).filter(Guard.id == emp_guard_id, Guard.company_id == company.id).first()
-        if not guard:
+        if emp_guard_id not in guard_ids_in_company:
             skipped += 1
             errors.append(f"Staff {emp_id} not found")
             continue

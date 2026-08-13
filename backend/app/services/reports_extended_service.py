@@ -1,5 +1,5 @@
 from calendar import monthrange
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import func
@@ -195,9 +195,17 @@ def usage_summary(db: Session, user_id: int, start_date: date, end_date: date) -
         )
         .scalar()
     )
+    # Half-open range on the raw column rather than date(logged_at), which wraps the
+    # column in a function and so cannot use an index — this counted by scanning every
+    # row in the table. `< end_date + 1 day` selects exactly the same rows as
+    # `date(logged_at) <= end_date`: the whole of the end day, boundary included.
     api = (
         db.query(func.count(ApiUsageLog.id))
-        .filter(ApiUsageLog.company_id == company.id, func.date(ApiUsageLog.logged_at) >= start_date, func.date(ApiUsageLog.logged_at) <= end_date)
+        .filter(
+            ApiUsageLog.company_id == company.id,
+            ApiUsageLog.logged_at >= start_date,
+            ApiUsageLog.logged_at < end_date + timedelta(days=1),
+        )
         .scalar()
     )
     from app.services.tenant_usage_service import company_usage

@@ -1070,6 +1070,57 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    # --- Indexes -------------------------------------------------------------------
+    # Only primary keys were indexed, so every lookup by company_id, guard_id, site_id
+    # or date was a full table scan. Harmless at today's row counts, quadratic as the
+    # tenant grows — api_usage_logs already has 133k rows and scanned in ~76ms.
+    # All are covering the filters the services actually issue; see the query in
+    # each referenced service for the column order.
+    for statement in (
+        # Written on every authenticated request, read by usage reports filtered on
+        # company + date range.
+        "CREATE INDEX IF NOT EXISTS ix_api_usage_company_logged ON api_usage_logs(company_id, logged_at)",
+        # Rota / assignment lookups: by plan on publish, by guard or site on the grid.
+        "CREATE INDEX IF NOT EXISTS ix_assignments_rota_plan ON assignments(rota_plan_id)",
+        "CREATE INDEX IF NOT EXISTS ix_assignments_guard_date ON assignments(guard_id, date)",
+        "CREATE INDEX IF NOT EXISTS ix_assignments_site_date ON assignments(site_id, date)",
+        "CREATE INDEX IF NOT EXISTS ix_assignments_date ON assignments(date)",
+        "CREATE INDEX IF NOT EXISTS ix_attendance_assignment ON attendance(assignment_id)",
+        "CREATE INDEX IF NOT EXISTS ix_attendance_guard ON attendance(guard_id)",
+        # Shift adjustment logs, joined per shift on the rota grid and in reports.
+        "CREATE INDEX IF NOT EXISTS ix_overtime_company_date ON shift_overtime_logs(company_id, shift_date)",
+        "CREATE INDEX IF NOT EXISTS ix_overtime_assignment ON shift_overtime_logs(assignment_id)",
+        "CREATE INDEX IF NOT EXISTS ix_early_finish_company_date ON shift_early_finish_logs(company_id, shift_date)",
+        "CREATE INDEX IF NOT EXISTS ix_early_finish_assignment ON shift_early_finish_logs(assignment_id)",
+        "CREATE INDEX IF NOT EXISTS ix_late_company_date ON shift_late_logs(company_id, shift_date)",
+        "CREATE INDEX IF NOT EXISTS ix_late_assignment ON shift_late_logs(assignment_id)",
+        # Tenant-scoped list endpoints.
+        "CREATE INDEX IF NOT EXISTS ix_guards_company ON guards(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_sites_company ON sites(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_rota_plans_company ON rota_plans(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_invoices_company ON invoices(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_invoice_lines_invoice ON invoice_lines(invoice_id)",
+        "CREATE INDEX IF NOT EXISTS ix_payments_company ON payments(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_payments_invoice ON payments(invoice_id)",
+        "CREATE INDEX IF NOT EXISTS ix_expenses_company ON expenses(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_leads_company ON leads(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_incidents_company_created ON incidents(company_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_patrol_logs_company_created ON patrol_logs(company_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_guard_documents_guard ON guard_documents(guard_id)",
+        "CREATE INDEX IF NOT EXISTS ix_login_logs_company ON login_logs(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_email_logs_company ON email_logs(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_sms_logs_company ON sms_logs(company_id)",
+        # Permission resolution runs on every guarded request.
+        "CREATE INDEX IF NOT EXISTS ix_role_module_perms_role ON role_module_permissions(role_id)",
+        "CREATE INDEX IF NOT EXISTS ix_users_company ON users(company_id)",
+        "CREATE INDEX IF NOT EXISTS ix_users_role ON users(role_id)",
+    ):
+        try:
+            cur.execute(statement)
+        except sqlite3.OperationalError:
+            # Table not present on this database yet — created later by create_all.
+            pass
+
     conn.commit()
     conn.close()
     try:

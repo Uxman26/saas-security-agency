@@ -75,10 +75,10 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("modules_manage", "Manage module registry", "edit"),
     ),
     # --- Operations -----------------------------------------------------------------
-    # create/edit carry no endpoint of their own here, but they are the inheritance
-    # anchors the portal actions descend from and the keys module_perms maps onto the
-    # legacy portal.rota.* codes, so the row keeps them.
-    "my_portal": (VIEW, CREATE, EDIT)
+    # No create/edit of its own: the portal screen only reads. rota_upcoming and
+    # rota_previous still descend from the legacy create/edit columns, which is what
+    # module_perms maps onto the portal.rota.* codes.
+    "my_portal": (VIEW,)
     + (
         ActionDef("rota_current", "Current rota", "view"),
         ActionDef("rota_upcoming", "Upcoming rota", "create"),

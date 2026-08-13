@@ -6,7 +6,12 @@ import pathlib
 import pytest
 
 from app.models import Company, Role, RoleModuleAction, User
-from app.module_actions import MODULE_ACTIONS, action_keys_for_module, parent_chain
+from app.module_actions import (
+    LEGACY_ACTIONS,
+    MODULE_ACTIONS,
+    action_keys_for_module,
+    parent_chain,
+)
 from app.rbac import permission_bypass, user_has_permission_db
 from app.rbac_matrix import wrap_matrix
 from app.services.module_service import (
@@ -40,12 +45,23 @@ def test_catalogue_matches_the_seeded_modules():
 
 
 def test_every_parent_chain_terminates():
+    """A parent must resolve to something the migration can actually read.
+
+    That is either one of the module's own actions, or one of the four legacy coarse
+    keys. The second case is deliberate: ``staff_requests`` exposes no ``edit`` action
+    of its own, yet approve/reject descend from ``edit`` because that is the column
+    the legacy matrix stores and the key ``module_perms`` maps to
+    ``PERM_STAFF_REQ_REVIEW``.
+    """
     for module_key, actions in MODULE_ACTIONS.items():
         for action in actions:
             chain = parent_chain(module_key, action.key)
             assert len(chain) < 8, f"{module_key}.{action.key} chain looks cyclic"
             for ancestor in chain:
-                assert ancestor in action_keys_for_module(module_key)
+                assert (
+                    ancestor in action_keys_for_module(module_key)
+                    or ancestor in LEGACY_ACTIONS
+                ), f"{module_key}.{action.key} has unresolvable parent {ancestor!r}"
 
 
 @pytest.fixture

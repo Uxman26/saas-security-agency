@@ -18,7 +18,8 @@ import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { TEXT_LIMITS } from '@/lib/text-limits';
-import { siteSchema, type SiteFormData } from '@/lib/validation';
+import { PASSWORD_REQUIREMENTS_MSG, siteSchema, type SiteFormData } from '@/lib/validation';
+import { PasswordInput } from '@/components/ui/password-input';
 import type { Client, Site } from '@/lib/types';
 import { api } from '@/lib/api';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -36,6 +37,7 @@ function SiteForm({
   onSubmit,
   isPending,
   submitLabel,
+  allowLogin = false,
 }: {
   form: ReturnType<typeof useForm<SiteFormData>>;
   clients: Client[];
@@ -44,10 +46,12 @@ function SiteForm({
   onSubmit: (data: SiteFormData) => void;
   isPending: boolean;
   submitLabel: string;
+  allowLogin?: boolean;
 }) {
   const { register, handleSubmit, setValue, watch, formState: { errors } } = form;
   const cid = watch('contractor_id');
   const color = watch('color') || DEFAULT_SITE_COLOR;
+  const createLogin = watch('create_login');
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -197,6 +201,62 @@ function SiteForm({
           {errors.contact_phone && <p className="text-xs text-destructive">{errors.contact_phone.message}</p>}
         </div>
       </div>
+
+      {allowLogin && (
+        <div className="rounded-md border p-3 space-y-3">
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              id="site_create_login"
+              className="size-4 mt-0.5 accent-primary"
+              {...register('create_login')}
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="site_create_login" className="font-normal cursor-pointer">
+                Create a portal login for this site
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Gets the Client role, restricted to this site only. Works with or without a
+                client selected above. Widen it to more sites later in Settings → Roles &amp;
+                Permissions.
+              </p>
+            </div>
+          </div>
+
+          {createLogin && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>
+                  Login email <span className="text-destructive">*</span>
+                </Label>
+                <Input type="email" autoComplete="off" {...register('login_email')} placeholder="manager@client.com" />
+                {errors.login_email ? (
+                  <p className="text-xs text-destructive">{errors.login_email.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Defaults to the contact email above.</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label>Login name</Label>
+                <Input {...register('login_full_name')} placeholder="Dave Smith" />
+                {errors.login_full_name && <p className="text-xs text-destructive">{errors.login_full_name.message}</p>}
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>
+                  Login password <span className="text-destructive">*</span>
+                </Label>
+                <PasswordInput autoComplete="new-password" {...register('login_password')} />
+                {errors.login_password ? (
+                  <p className="text-xs text-destructive">{errors.login_password.message}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MSG}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <Button type="submit" className="w-full" disabled={isPending}>
         {isPending ? 'Saving...' : submitLabel}
       </Button>
@@ -248,7 +308,18 @@ export default function SitesPage() {
 
   const addForm = useForm<SiteFormData>({
     resolver: zodResolver(siteSchema) as Resolver<SiteFormData>,
-    defaultValues: { client_id: null, site_type: 1, default_hourly_rate: undefined, staff_hourly_rate: undefined, contractor_id: undefined, color: DEFAULT_SITE_COLOR },
+    defaultValues: {
+      client_id: null,
+      site_type: 1,
+      default_hourly_rate: undefined,
+      staff_hourly_rate: undefined,
+      contractor_id: undefined,
+      color: DEFAULT_SITE_COLOR,
+      create_login: false,
+      login_email: '',
+      login_full_name: '',
+      login_password: '',
+    },
   });
 
   const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) as Resolver<SiteFormData> });
@@ -290,7 +361,15 @@ export default function SitesPage() {
 
   const handleCreate = async (data: SiteFormData) => {
     try {
-      await createSite.mutateAsync(sanitize(data));
+      const payload = sanitize(data);
+      // Login fields ride along on POST only; the API rejects them on PUT.
+      if (data.create_login) {
+        payload.create_login = true;
+        payload.login_email = data.login_email || data.contact_email || undefined;
+        payload.login_full_name = data.login_full_name || undefined;
+        payload.login_password = data.login_password;
+      }
+      await createSite.mutateAsync(payload);
       setAddOpen(false);
       addForm.reset();
     } catch (err) { console.error(err); }
@@ -316,6 +395,12 @@ export default function SitesPage() {
       main_contractor_id: site.main_contractor_id ?? undefined,
       sub_contractor_id: site.sub_contractor_id ?? undefined,
       contractor_id: site.contractor_id ?? undefined,
+      // Never carried into an edit: the API rejects create_login on PUT, and leaving a
+      // stale password in the form would make the edit look like it provisioned access.
+      create_login: false,
+      login_email: '',
+      login_full_name: '',
+      login_password: '',
     });
     setEditOpen(true);
   };
@@ -415,7 +500,7 @@ export default function SitesPage() {
                   <DialogHeader>
                     <DialogTitle>Add New Site</DialogTitle>
                   </DialogHeader>
-                  <SiteForm form={addForm} clients={clients} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createSite.isPending} submitLabel="Create Site" />
+                  <SiteForm form={addForm} clients={clients} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createSite.isPending} submitLabel="Create Site" allowLogin />
                 </DialogContent>
               </Dialog>
             </div>

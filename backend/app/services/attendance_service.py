@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import datetime, date, timezone
-from app.models import Attendance, Assignment, Guard, User
+from app.models import Attendance, Assignment, Guard, Site, User
 from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest
 from app.services.company_service import get_company_by_user_id
 from app.services.shift_adjustment_service import find_assignment
@@ -54,6 +54,20 @@ def _get_owned_attendance(db: Session, attendance_id: int, user_id: int) -> Atte
     return att
 
 
+def _scope_for_portal_user(db: Session, user_id: int, q):
+    """Attendance rows inherit the scope of the shift they belong to.
+
+    Attendance is joined through Assignment, so the same narrowing that limits a portal
+    login's rota limits which clock-ins it can read.
+    """
+    from app.services.portal_access import filter_assignments_for_user, is_portal_role
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and is_portal_role(user):
+        return filter_assignments_for_user(db, user, q)
+    return q
+
+
 def get_all_attendance(db: Session, user_id: int, guard_id: Optional[int] = None) -> List[Attendance]:
     company = get_company_by_user_id(db, user_id)
     q = (
@@ -61,8 +75,10 @@ def get_all_attendance(db: Session, user_id: int, guard_id: Optional[int] = None
         .options(joinedload(Attendance.updated_by))
         .join(Assignment)
         .join(Guard)
+        .join(Site, Assignment.site_id == Site.id)
         .filter(Guard.company_id == company.id)
     )
+    q = _scope_for_portal_user(db, user_id, q)
     if guard_id:
         q = q.filter(Attendance.guard_id == guard_id)
     rows = q.order_by(Attendance.updated_at.desc(), Attendance.created_at.desc()).all()
@@ -169,11 +185,13 @@ def get_late_summary(db: Session, user_id: int, start: Optional[date] = None, en
         .options(joinedload(Attendance.updated_by))
         .join(Assignment)
         .join(Guard)
+        .join(Site, Assignment.site_id == Site.id)
         .filter(
             Guard.company_id == company.id,
             Attendance.status == "late",
         )
     )
+    q = _scope_for_portal_user(db, user_id, q)
     if start:
         q = q.filter(Assignment.date >= start)
     if end:

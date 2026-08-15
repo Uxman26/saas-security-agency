@@ -18,7 +18,11 @@ from app.schemas import (
     IncidentUpdate,
 )
 from app.services.company_service import get_company_by_user_id
-from app.services.portal_access import is_client_portal_user, is_staff_portal_user
+from app.services.portal_access import (
+    is_client_portal_user,
+    is_staff_portal_user,
+    pinned_site_ids,
+)
 from app.storage_paths import resolve_storage_path
 
 
@@ -97,6 +101,10 @@ def create_incident(
             raise HTTPException(status_code=404, detail="Site not found")
         if is_client_portal_user(user) and user.client_id and site.client_id != user.client_id:
             raise HTTPException(status_code=403, detail="Site not assigned to your client")
+        if is_client_portal_user(user):
+            pinned = pinned_site_ids(db, user)
+            if pinned is not None and site.id not in pinned:
+                raise HTTPException(status_code=403, detail="Site not assigned to your login")
         if client_id is None:
             client_id = site.client_id
     guard_id = data.guard_id
@@ -162,6 +170,9 @@ def list_incidents(
         q = q.filter(Incident.site_id == site_id)
     if is_client_portal_user(user) and user.client_id:
         q = q.filter(Incident.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(Incident.site_id.in_(pinned))
     if is_staff_portal_user(user):
         if user.guard_id:
             q = q.filter(
@@ -194,6 +205,10 @@ def get_incident(db: Session, user: User, incident_id: int) -> IncidentResponse:
         raise HTTPException(status_code=404, detail="Incident not found")
     if is_client_portal_user(user) and user.client_id and inc.client_id != user.client_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    if is_client_portal_user(user):
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None and inc.site_id not in pinned:
+            raise HTTPException(status_code=403, detail="Access denied")
     if is_staff_portal_user(user) and inc.reported_by_user_id != user.id and inc.guard_id != user.guard_id:
         raise HTTPException(status_code=403, detail="Access denied")
     return _out(inc)
@@ -231,6 +246,9 @@ def summary_report(
     )
     if is_client_portal_user(user) and user.client_id:
         q = q.filter(Incident.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(Incident.site_id.in_(pinned))
     if start_date:
         q = q.filter(Incident.occurred_at >= datetime.combine(start_date, time.min))
     if end_date:

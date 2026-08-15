@@ -106,6 +106,28 @@ class User(Base):
     company = relationship("Company", back_populates="users", foreign_keys=[company_id])
     admin_company = relationship("Company", back_populates="admin", uselist=False, foreign_keys="Company.admin_id")
     role_row = relationship("Role", back_populates="users", foreign_keys=[role_id])
+    site_pins = relationship("UserSite", back_populates="user", cascade="all, delete-orphan")
+
+
+class UserSite(Base):
+    """Pins a portal login to specific sites.
+
+    No rows for a user means "not pinned", which portal_access reads as the pre-existing
+    behaviour: a client login sees every site of its client. Rows narrow that set; they can
+    never widen it, so every write path must check the site belongs to the user's client.
+    """
+
+    __tablename__ = "user_sites"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
+    # Denormalised so scope checks never have to join back through sites for the tenant.
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (UniqueConstraint("user_id", "site_id", name="uq_user_site"),)
+    user = relationship("User", back_populates="site_pins")
+    site = relationship("Site")
+
 
 class Company(Base):
     __tablename__ = "companies"

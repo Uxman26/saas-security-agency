@@ -38,6 +38,11 @@ export interface CompanyUser {
   role_id: number | null;
   role_slug: string | null;
   role_name: string | null;
+  client_id?: number | null;
+  guard_id?: number | null;
+  /** Sites this login is restricted to. Empty means unpinned: a Client-role user then
+   * sees every site of its client. */
+  site_ids?: number[];
 }
 
 export interface User {
@@ -432,6 +437,12 @@ export interface Site {
   latitude?: number | null;
   longitude?: number | null;
   created_at: string;
+  /** Write-only, POST /sites only: provisions a Client-role portal login pinned to this
+   * site. Rejected on PUT. Never returned. */
+  create_login?: boolean;
+  login_email?: string;
+  login_full_name?: string;
+  login_password?: string;
 }
 
 export interface Assignment {
@@ -534,6 +545,8 @@ export interface PortalHours {
   end_date: string;
   total_hours: number;
   shifts_count: number;
+  /** Staff logins only. Null for client logins, which never see guard wages. */
+  total_pay?: number | null;
 }
 
 export interface RotaDetail {

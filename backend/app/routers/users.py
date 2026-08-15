@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.models import User, Role
 from app.rbac import require_module
@@ -26,6 +26,9 @@ def _out(u: User) -> CompanyUserOut:
         role_id=u.role_id,
         role_slug=rr.slug if rr else None,
         role_name=rr.name if rr else None,
+        client_id=u.client_id,
+        guard_id=u.guard_id,
+        site_ids=sorted(p.site_id for p in u.site_pins),
     )
 
 
@@ -35,7 +38,15 @@ def list_company_users(
     current_user: User = Depends(require_module("roles", "users_view")),
 ):
     cid = _require_company(current_user)
-    rows = db.query(User).filter(User.company_id == cid).order_by(User.email).all()
+    # Eager-load the pins; _out reads them for every row, which would otherwise be a
+    # query per user on a page that lists the whole company.
+    rows = (
+        db.query(User)
+        .options(selectinload(User.site_pins))
+        .filter(User.company_id == cid)
+        .order_by(User.email)
+        .all()
+    )
     return [_out(u) for u in rows]
 
 

@@ -9,6 +9,18 @@ from app.services import audit_service
 from app.services import contractor_scope
 
 
+# Carried on SiteCreate to drive portal-login creation; not columns on Site, so they must
+# never reach the model constructor or the update setattr loop.
+_NON_COLUMN_FIELDS = ("create_login", "login_email", "login_full_name", "login_password")
+
+
+def _site_payload(site) -> dict:
+    data = site.model_dump() if hasattr(site, "model_dump") else site.dict()
+    for f in _NON_COLUMN_FIELDS:
+        data.pop(f, None)
+    return data
+
+
 def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
     company = get_company_by_user_id(db, user_id)
     user = db.query(User).filter(User.id == user_id).first()
@@ -19,7 +31,7 @@ def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
     enforce_site_quota(db, company)
     if site.client_id and not db.query(Client).filter(Client.id == site.client_id, Client.company_id == company.id).first():
         raise HTTPException(status_code=400, detail="Client not found")
-    data = {k: v for k, v in (site.model_dump() if hasattr(site, "model_dump") else site.dict()).items()}
+    data = _site_payload(site)
     cid = data.pop("contractor_id", None)
     main_id = data.pop("main_contractor_id", None)
     sub_id = data.pop("sub_contractor_id", None)
@@ -43,6 +55,8 @@ def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
     )
     db.add(db_site)
     db.flush()
+    if getattr(site, "create_login", False):
+        _create_site_login(db, db_site, company.id, site)
     audit_service.log_action(
         db,
         company_id=company.id,
@@ -55,6 +69,54 @@ def create_site(db: Session, site: SiteCreate, user_id: int) -> Site:
     db.commit()
     db.refresh(db_site)
     return db_site
+
+
+def _create_site_login(db: Session, db_site: Site, company_id: int, data: SiteCreate) -> None:
+    """Create a Client-role portal user pinned to this one site.
+
+    The site does not need a client. A site with no client produces a standalone login
+    scoped purely by its pin, which is what makes a site independent of any client; a
+    site that does have one keeps the client link as well, so the same login still
+    reads correctly if it is later widened to that client's other sites.
+
+    Same transactional shape as client_service._create_client_login: every validation
+    below (and inside create_company_user) raises before that function commits, so a
+    rejected login leaves the flushed site row uncommitted and the request rolls back
+    both together — no orphan site.
+    """
+    from app.schemas import CompanyUserCreate
+    from app.services import role_service, user_service
+
+    email = (data.login_email or data.contact_email or "").strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required to create a portal login")
+    if not data.login_password:
+        raise HTTPException(status_code=400, detail="Password is required to create a portal login")
+
+    role = role_service.get_role_by_slug(db, company_id, "client")
+    if not role:
+        role_service.ensure_roles_for_company(db, company_id)
+        role = role_service.get_role_by_slug(db, company_id, "client")
+    if not role:
+        raise HTTPException(status_code=500, detail="Client role is not configured for this company")
+
+    full_name = (
+        (data.login_full_name or "").strip()
+        or (data.contact_person or "").strip()
+        or db_site.name
+    )
+    user_service.create_company_user(
+        db,
+        company_id,
+        CompanyUserCreate(
+            email=email,
+            password=data.login_password,
+            full_name=full_name,
+            role_id=role.id,
+            client_id=db_site.client_id,
+            site_ids=[db_site.id],
+        ),
+    )
 
 
 def get_sites(db: Session, user_id: int) -> List[Site]:
@@ -93,7 +155,7 @@ def update_site(db: Session, site_id: int, site: SiteCreate, user_id: int) -> Si
     cid_attr = getattr(site, "client_id", None)
     if cid_attr and not db.query(Client).filter(Client.id == cid_attr, Client.company_id == company.id).first():
         raise HTTPException(status_code=400, detail="Client not found")
-    raw = site.model_dump() if hasattr(site, "model_dump") else site.dict()
+    raw = _site_payload(site)
     cid = raw.pop("contractor_id", None)
     main_id = raw.pop("main_contractor_id", None)
     sub_id = raw.pop("sub_contractor_id", None)

@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site
+from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site, User
 from app.schemas import RotaDetailResponse, RotaSummaryRow
 from app.services.company_service import get_company_by_user_id
 
@@ -83,6 +83,24 @@ def _assignment_base_query(db: Session, company_id: int):
     )
 
 
+def _scope_for_portal_user(db: Session, user_id: int, q):
+    """Narrow a rota query to what a portal login is allowed to see.
+
+    guard_id/site_id/client_id on the rota endpoints come straight from the query
+    string, so they select *within* a scope and can never establish one. Without this
+    a Client login granted the Rota module would read every shift in the company,
+    including other clients' sites.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return q
+    from app.services.portal_access import filter_assignments_for_user, is_portal_role
+
+    if is_portal_role(user):
+        return filter_assignments_for_user(db, user, q)
+    return q
+
+
 def _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date):
     if guard_id:
         q = q.filter(Assignment.guard_id == guard_id)
@@ -138,6 +156,7 @@ def list_rota_details(
 ) -> List[RotaDetailResponse]:
     company = get_company_by_user_id(db, user_id)
     q = _assignment_base_query(db, company.id)
+    q = _scope_for_portal_user(db, user_id, q)
     q = _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date)
     rows = q.order_by(Assignment.date, Guard.full_name).all()
     today = date.today()

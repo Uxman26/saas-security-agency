@@ -31,28 +31,35 @@ def portal_sites(
 
 @router.get("/rota/current", response_model=list[RotaDetailResponse])
 def portal_rota_current(
+    site_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("my_portal", "rota_current")),
 ):
-    return portal_service.list_portal_rota(db, current_user, "current")
+    return portal_service.list_portal_rota(db, current_user, "current", site_id=site_id)
 
 
 @router.get("/rota/upcoming", response_model=list[RotaDetailResponse])
 def portal_rota_upcoming(
     end_date: Optional[date] = None,
+    site_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("my_portal", "rota_upcoming")),
 ):
-    return portal_service.list_portal_rota(db, current_user, "upcoming", end_date=end_date)
+    return portal_service.list_portal_rota(
+        db, current_user, "upcoming", end_date=end_date, site_id=site_id
+    )
 
 
 @router.get("/rota/previous", response_model=list[RotaDetailResponse])
 def portal_rota_previous(
     start_date: Optional[date] = None,
+    site_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("my_portal", "rota_previous")),
 ):
-    return portal_service.list_portal_rota(db, current_user, "previous", start_date=start_date)
+    return portal_service.list_portal_rota(
+        db, current_user, "previous", start_date=start_date, site_id=site_id
+    )
 
 
 @router.get("/hours", response_model=PortalHoursResponse)
@@ -60,10 +67,11 @@ def portal_hours(
     period: str = "week",
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    site_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("my_portal", "hours_view")),
 ):
-    return portal_service.portal_hours(db, current_user, period, start_date, end_date)
+    return portal_service.portal_hours(db, current_user, period, start_date, end_date, site_id=site_id)
 
 
 @router.get("/patrol/today", response_model=PatrolTodayResponse)

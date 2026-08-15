@@ -33,6 +33,7 @@ import type {
 } from '@/lib/types';
 import { AlertTriangle, CalendarDays, Clock, MapPin, MapPinned, UserCircle } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { PortalSiteSwitcher, usePortalSiteScope } from '@/components/portal-site-switcher';
 
 type Tab = 'sites' | 'current' | 'upcoming' | 'previous' | 'hours' | 'patrol' | 'incidents';
 
@@ -76,6 +77,29 @@ export default function MyPortalPage() {
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
+  const { siteId, select: selectSite } = usePortalSiteScope(sites);
+
+  // The switcher itself always lists every site the login can reach; the tabs render the
+  // scoped subset. Incidents have no server-side site filter, so they narrow here.
+  const visibleSites = useMemo(
+    () => (siteId == null ? sites : sites.filter((s) => s.id === siteId)),
+    [sites, siteId]
+  );
+  const visibleIncidents = useMemo(
+    () => (siteId == null ? incidents : incidents.filter((i) => i.site_id === siteId)),
+    [incidents, siteId]
+  );
+
+  // The switcher lives in the page header, so the site list has to be present on every
+  // tab, not just the one that renders it.
+  useEffect(() => {
+    if (!user) return;
+    api.portal
+      .sites()
+      .then(setSites)
+      .catch(() => {});
+  }, [user]);
+
   const loadTab = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -83,36 +107,34 @@ export default function MyPortalPage() {
       if (tab === 'sites') {
         setSites(await api.portal.sites());
       } else if (tab === 'current') {
-        setRota(await api.portal.rotaCurrent());
+        setRota(await api.portal.rotaCurrent(siteId ?? undefined));
       } else if (tab === 'upcoming') {
-        setRota(await api.portal.rotaUpcoming());
+        setRota(await api.portal.rotaUpcoming(siteId ?? undefined));
       } else if (tab === 'previous') {
-        setRota(await api.portal.rotaPrevious());
+        setRota(await api.portal.rotaPrevious(siteId ?? undefined));
       } else if (tab === 'hours') {
         setHours(
           await api.portal.hours(
             period === 'custom'
-              ? { period: 'custom', start_date: customStart, end_date: customEnd }
-              : { period }
+              ? { period: 'custom', start_date: customStart, end_date: customEnd, site_id: siteId ?? undefined }
+              : { period, site_id: siteId ?? undefined }
           )
         );
       } else if (tab === 'patrol') {
         if (isStaff) {
           setPatrolToday(await api.portal.patrolToday());
         } else {
-          setCompliance(await api.portal.patrolCompliance(weekAgo, today));
+          setCompliance(await api.portal.patrolCompliance(weekAgo, today, siteId ?? undefined));
         }
-        if (sites.length === 0) setSites(await api.portal.sites());
       } else if (tab === 'incidents') {
         setIncidents(await api.portal.incidents());
-        if (sites.length === 0) setSites(await api.portal.sites());
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
-  }, [tab, user, period, customStart, customEnd, isStaff, weekAgo, today, sites.length]);
+  }, [tab, user, period, customStart, customEnd, isStaff, weekAgo, today, siteId]);
 
   useEffect(() => {
     loadTab();
@@ -165,6 +187,9 @@ export default function MyPortalPage() {
               </span>
             }
             description="View your sites, rotas, patrol status, and incidents."
+            actions={
+              <PortalSiteSwitcher sites={sites} siteId={siteId} onChange={selectSite} />
+            }
           />
 
           <ModuleTabs tabs={tabs} value={tab} onChange={setTab} />
@@ -180,7 +205,7 @@ export default function MyPortalPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {sites.length === 0 ? (
+                {visibleSites.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No sites assigned to your account.</p>
                 ) : (
                   <div className="overflow-x-auto rounded-md border">
@@ -193,7 +218,7 @@ export default function MyPortalPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sites.map((s) => (
+                        {visibleSites.map((s) => (
                           <TableRow key={s.id}>
                             <TableCell className="font-medium">{s.name}</TableCell>
                             <TableCell>{s.address || '—'}</TableCell>
@@ -288,10 +313,23 @@ export default function MyPortalPage() {
                 )}
                 {hours ? (
                   <div className="rounded-lg border bg-muted/30 p-4">
-                    <p className="text-2xl font-semibold tabular-nums">{hours.total_hours.toFixed(2)} hrs</p>
+                    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                      <p className="text-2xl font-semibold tabular-nums">{hours.total_hours.toFixed(2)} hrs</p>
+                      {/* Staff only — the API returns null for client logins. */}
+                      {hours.total_pay != null ? (
+                        <p className="text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                          £{hours.total_pay.toFixed(2)}
+                        </p>
+                      ) : null}
+                    </div>
                     <p className="text-sm text-muted-foreground mt-1">
                       {hours.shifts_count} shift{hours.shifts_count === 1 ? '' : 's'} · {hours.start_date} to {hours.end_date}
                     </p>
+                    {hours.total_pay != null ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Estimated pay before deductions. Your payslip is the final figure.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </CardContent>
@@ -431,7 +469,7 @@ export default function MyPortalPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {incidents.map((inc) => (
+                    {visibleIncidents.map((inc) => (
                       <TableRow key={inc.id}>
                         <TableCell className="text-xs whitespace-nowrap">{new Date(inc.occurred_at).toLocaleString()}</TableCell>
                         <TableCell>{inc.site_name || '—'}</TableCell>
@@ -439,7 +477,7 @@ export default function MyPortalPage() {
                         <TableCell className="capitalize text-xs">{inc.status}</TableCell>
                       </TableRow>
                     ))}
-                    {incidents.length === 0 ? (
+                    {visibleIncidents.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                           No incidents yet.
@@ -469,7 +507,7 @@ export default function MyPortalPage() {
                       <SelectValue placeholder="Select site" />
                     </SelectTrigger>
                     <SelectContent>
-                      {sites.map((s) => (
+                      {visibleSites.map((s) => (
                         <SelectItem key={s.id} value={String(s.id)}>
                           {s.name}
                         </SelectItem>

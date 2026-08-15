@@ -12,6 +12,23 @@ from app.services.company_service import get_company_by_user_id
 from app.services.rota_service import normalize_shift_type
 
 
+def _block_portal_roles(db: Session, user_id: int) -> None:
+    """Rota plans are the internal draft planner, not a client-facing view.
+
+    A plan's planner_data is one JSON tree covering every employee and every site in the
+    company, and its shift blocks name their site as a free-text string rather than a
+    site_id — so there is no reliable way to serve a client a per-site slice of it.
+    Portal logins read their shifts through /portal/rota/* and /assignments/rota/detail,
+    which are scoped per site; the planner itself stays internal.
+    """
+    from app.models import User
+    from app.services.portal_access import is_portal_role
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and is_portal_role(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
 def _end_date(start: date, day_count: int) -> date:
     return start + timedelta(days=max(1, day_count) - 1)
 
@@ -102,6 +119,7 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
 
 
 def list_rota_plans(db: Session, user_id: int) -> List[RotaPlanListItem]:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     rows = (
         db.query(RotaPlan)
@@ -190,6 +208,7 @@ def _published_guard_ids(db: Session, plan_id: int) -> List[int]:
 
 
 def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:

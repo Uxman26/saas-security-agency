@@ -350,6 +350,23 @@ def run():
             cur.execute("ALTER TABLE users ADD COLUMN guard_id INTEGER REFERENCES guards(id)")
         except sqlite3.OperationalError:
             pass
+    # Pins a portal login to specific sites. Deliberately left empty for every existing
+    # login, which portal_access reads as "all sites of my client" — the behaviour before
+    # this table existed, so no live login changes scope on deploy.
+    if table_exists(cur, "users") and not table_exists(cur, "user_sites"):
+        try:
+            cur.execute(
+                """CREATE TABLE user_sites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                site_id INTEGER NOT NULL REFERENCES sites(id),
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, site_id)
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
     if table_exists(cur, "users") and not column_exists(cur, "users", "email_verified"):
         try:
             cur.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
@@ -1114,6 +1131,10 @@ def run():
         "CREATE INDEX IF NOT EXISTS ix_role_module_perms_role ON role_module_permissions(role_id)",
         "CREATE INDEX IF NOT EXISTS ix_users_company ON users(company_id)",
         "CREATE INDEX IF NOT EXISTS ix_users_role ON users(role_id)",
+        # Portal site pins are resolved on every scoped portal query.
+        "CREATE INDEX IF NOT EXISTS ix_user_sites_user ON user_sites(user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_user_sites_site ON user_sites(site_id)",
+        "CREATE INDEX IF NOT EXISTS ix_user_sites_company ON user_sites(company_id)",
     ):
         try:
             cur.execute(statement)

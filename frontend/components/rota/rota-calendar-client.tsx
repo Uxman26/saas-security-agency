@@ -2281,7 +2281,7 @@ export function RotaCalendarClient() {
                   </div>
                   <button
                     type="button"
-                    className="text-xs text-pink-600 dark:text-pink-300 font-medium hover:underline"
+                    className="text-xs text-pink-600 dark:text-pink-300 font-bold hover:underline"
                     onClick={openReorder}
                   >
                     ⇅ Employee custom order
@@ -2296,7 +2296,7 @@ export function RotaCalendarClient() {
                     key={dk}
                     data-rota-day-idx={dayIdx}
                     className={cn(
-                      'sticky top-0 z-30 p-1.5 text-center text-[13px] font-medium border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
+                      'sticky top-0 z-30 p-1.5 text-center text-[13px] font-bold border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
                       mark === 'adding' && 'bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100',
                       mark === 'removing' && 'bg-red-100 text-red-900 line-through dark:bg-red-950 dark:text-red-100',
                       !mark && 'rota-day-header'
@@ -2432,7 +2432,7 @@ export function RotaCalendarClient() {
                           <span className="min-w-0 flex-1">
                             {/* Block (not flex) so a long name wraps across lines and the
                                 warning icon flows inline after it rather than squashing it. */}
-                            <span className="text-[13px] font-semibold block break-words whitespace-normal leading-snug">
+                            <span className="text-[13px] font-bold block break-words whitespace-normal leading-snug">
                               {emp.name}
                               {empHasConflict(emp.id) || emp.rotaPending ? (
                                 <AlertTriangle
@@ -2605,7 +2605,7 @@ export function RotaCalendarClient() {
               ))}
             </tbody>
             <tfoot>
-              <tr className="font-medium text-xs">
+              <tr className="font-bold text-xs">
                 <td
                   className="rota-sticky-emp sticky left-0 bottom-0 z-[55] p-2 border-r border-t text-center shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
                   style={{ ...ROTA_STICKY_EMP_BG }}

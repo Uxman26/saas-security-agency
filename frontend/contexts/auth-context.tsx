@@ -9,7 +9,7 @@ import { broadcastLogout, onRemoteLogout, TOKEN_KEY } from '@/lib/session-sync';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<User>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -62,6 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(TOKEN_KEY, token);
     const userData = await api.auth.me();
     setUser(userData);
+    // Returned so the caller can pick a landing page from the role without waiting for
+    // the context state to propagate.
+    return userData;
   };
 
   const logout = useCallback(async () => {

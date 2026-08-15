@@ -46,6 +46,9 @@ import type {
   PermissionMatrix,
   AppModule,
   AppModuleActionDef,
+  Client,
+  Site,
+  Guard,
 } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
@@ -63,6 +66,137 @@ import {
 type CompanyUserFormData = z.infer<typeof companyUserSchema>;
 type CompanyUserUpdateFormData = z.infer<typeof companyUserUpdateSchema>;
 import { toast } from '@/lib/toast';
+
+/** Client/Staff linkage plus site pins, shared by the add and edit user dialogs.
+ *
+ * Only rendered for the roles that need it: the API requires client_id for Client and
+ * guard_id for Staff, and site pins are meaningless on any other role.
+ */
+function UserScopeFields({
+  roleSlug,
+  clientId,
+  guardId,
+  siteIds,
+  clients,
+  sites,
+  guards,
+  onClientChange,
+  onGuardChange,
+  onSitesChange,
+}: {
+  roleSlug: string | null;
+  clientId: number | null | undefined;
+  guardId: number | null | undefined;
+  siteIds: number[];
+  clients: Client[];
+  sites: Site[];
+  guards: Guard[];
+  onClientChange: (v: number | null) => void;
+  onGuardChange: (v: number | null) => void;
+  onSitesChange: (v: number[]) => void;
+}) {
+  const clientSites = useMemo(
+    () => (clientId ? sites.filter((s) => s.client_id === clientId) : []),
+    [sites, clientId]
+  );
+
+  if (roleSlug === 'staff') {
+    return (
+      <div className="space-y-1">
+        <Label>
+          Staff profile <span className="text-destructive">*</span>
+        </Label>
+        <Select
+          value={guardId ? String(guardId) : undefined}
+          onValueChange={(v) => onGuardChange(v ? Number(v) : null)}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select staff member" />
+          </SelectTrigger>
+          <SelectContent>
+            {guards.map((g) => (
+              <SelectItem key={g.id} value={String(g.id)}>
+                {g.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-[11px] text-muted-foreground">The Staff role must be linked to a staff profile.</p>
+      </div>
+    );
+  }
+
+  if (roleSlug !== 'client') return null;
+
+  return (
+    <div className="space-y-3 rounded-md border p-3">
+      <div className="space-y-1">
+        <Label>
+          Client <span className="text-destructive">*</span>
+        </Label>
+        <Select
+          value={clientId ? String(clientId) : undefined}
+          onValueChange={(v) => {
+            const next = v ? Number(v) : null;
+            onClientChange(next);
+            // Pins belong to the old client's sites; keeping them would be invalid.
+            onSitesChange([]);
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select client" />
+          </SelectTrigger>
+          <SelectContent>
+            {clients.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {clientId ? (
+        <div className="space-y-1">
+          <Label>Site access</Label>
+          {clientSites.length === 0 ? (
+            <p className="text-xs text-muted-foreground">This client has no sites yet.</p>
+          ) : (
+            <>
+              <div className="max-h-48 overflow-y-auto rounded-md border divide-y">
+                {clientSites.map((s) => {
+                  const checked = siteIds.includes(s.id);
+                  return (
+                    <label key={s.id} className="flex items-center gap-2 p-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-primary"
+                        checked={checked}
+                        onChange={(e) =>
+                          onSitesChange(
+                            e.target.checked
+                              ? [...siteIds, s.id]
+                              : siteIds.filter((id) => id !== s.id)
+                          )
+                        }
+                      />
+                      <span>{s.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {siteIds.length === 0
+                  ? 'None selected — this login sees every site of the client.'
+                  : `Restricted to ${siteIds.length} of ${clientSites.length} sites.`}
+              </p>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const CORE_ACTIONS = ['view', 'create', 'edit', 'delete'] as const;
 const CORE_LABELS: Record<string, string> = {
@@ -288,18 +422,27 @@ export default function RolesSettingsPage() {
   const [newModuleName, setNewModuleName] = useState('');
   const [newModulePath, setNewModulePath] = useState('');
   const [tab, setTab] = useState<'roles' | 'users' | 'modules'>('roles');
+  // Needed to link Client/Staff logins and to pin a Client login to specific sites.
+  const [clients, setClients] = useState<Client[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [guards, setGuards] = useState<Guard[]>([]);
 
   const userForm = useForm<CompanyUserFormData>({
     resolver: zodResolver(companyUserSchema),
-    defaultValues: { email: '', password: '', full_name: '', role_id: 1 },
+    defaultValues: { email: '', password: '', full_name: '', role_id: 1, client_id: null, guard_id: null, site_ids: [] },
   });
 
   const editUserForm = useForm<CompanyUserUpdateFormData>({
     resolver: zodResolver(companyUserUpdateSchema),
-    defaultValues: { email: '', password: '', full_name: '', role_id: 1 },
+    defaultValues: { email: '', password: '', full_name: '', role_id: 1, client_id: null, guard_id: null, site_ids: [] },
   });
 
   const assignableRoles = useMemo(() => roles.filter((r) => r.slug !== 'admin'), [roles]);
+
+  const slugForRoleId = useCallback(
+    (id: number | null | undefined) => roles.find((r) => r.id === id)?.slug ?? null,
+    [roles]
+  );
 
   const openAddUser = () => {
     const def = assignableRoles[0];
@@ -328,6 +471,11 @@ export default function RolesSettingsPage() {
     setAppModules(mods);
     setAllModules(allMods);
     setNewMatrix(emptyMatrix(mods));
+    // Best-effort: these only feed the Client/Staff pickers, so a caller without
+    // permission on those modules still gets a working Users tab.
+    api.clients.list().then(setClients).catch(() => {});
+    api.sites.list().then(setSites).catch(() => {});
+    api.guards.list().then(setGuards).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -436,11 +584,30 @@ export default function RolesSettingsPage() {
   };
 
   const createUser = async (data: CompanyUserFormData) => {
+    const slug = slugForRoleId(data.role_id);
+    // The API returns a 400 for these, but catching them here keeps the dialog open with
+    // the half-filled form instead of surfacing a toast over a closed one.
+    if (slug === 'client' && !data.client_id) {
+      toast.error('Select a client for this login');
+      return;
+    }
+    if (slug === 'staff' && !data.guard_id) {
+      toast.error('Select a staff profile for this login');
+      return;
+    }
     setSaving(true);
     try {
-      await api.users.create(data);
+      await api.users.create({
+        email: data.email,
+        password: data.password,
+        full_name: data.full_name,
+        role_id: data.role_id,
+        client_id: slug === 'client' ? data.client_id : null,
+        guard_id: slug === 'staff' ? data.guard_id : null,
+        site_ids: slug === 'client' ? (data.site_ids ?? []) : [],
+      });
       setAddUserOpen(false);
-      userForm.reset({ email: '', password: '', full_name: '', role_id: 0 });
+      userForm.reset({ email: '', password: '', full_name: '', role_id: 0, client_id: null, guard_id: null, site_ids: [] });
       await load();
       toast.success('User created');
     } catch (e) {
@@ -515,6 +682,9 @@ export default function RolesSettingsPage() {
       full_name: u.full_name,
       password: '',
       role_id: u.role_slug === 'admin' ? (u.role_id ?? fallback) : (u.role_id ?? fallback),
+      client_id: u.client_id ?? null,
+      guard_id: u.guard_id ?? null,
+      site_ids: u.site_ids ?? [],
     });
   };
 
@@ -522,11 +692,17 @@ export default function RolesSettingsPage() {
     if (!editUser) return;
     setSaving(true);
     try {
+      const slug = slugForRoleId(data.role_id);
       await api.users.update(editUser.id, {
         email: data.email,
         full_name: data.full_name,
         role_id: data.role_id,
         ...(data.password ? { password: data.password } : {}),
+        ...(slug === 'client' ? { client_id: data.client_id ?? null } : {}),
+        ...(slug === 'staff' ? { guard_id: data.guard_id ?? null } : {}),
+        // Always sent for Client logins so clearing every box clears the pins; other
+        // roles have no pins to manage.
+        ...(slug === 'client' ? { site_ids: data.site_ids ?? [] } : {}),
       });
       setEditUser(null);
       await load();
@@ -1071,6 +1247,18 @@ export default function RolesSettingsPage() {
                         <p className="text-xs text-destructive">{userForm.formState.errors.role_id.message}</p>
                       )}
                     </div>
+                    <UserScopeFields
+                      roleSlug={slugForRoleId(userForm.watch('role_id'))}
+                      clientId={userForm.watch('client_id')}
+                      guardId={userForm.watch('guard_id')}
+                      siteIds={userForm.watch('site_ids') ?? []}
+                      clients={clients}
+                      sites={sites}
+                      guards={guards}
+                      onClientChange={(v) => userForm.setValue('client_id', v, { shouldValidate: true })}
+                      onGuardChange={(v) => userForm.setValue('guard_id', v, { shouldValidate: true })}
+                      onSitesChange={(v) => userForm.setValue('site_ids', v, { shouldValidate: true })}
+                    />
                     <DialogFooter>
                       <Button type="button" variant="outline" onClick={() => setAddUserOpen(false)}>
                         Cancel
@@ -1143,6 +1331,18 @@ export default function RolesSettingsPage() {
                         </Select>
                       )}
                     </div>
+                    <UserScopeFields
+                      roleSlug={slugForRoleId(editUserForm.watch('role_id'))}
+                      clientId={editUserForm.watch('client_id')}
+                      guardId={editUserForm.watch('guard_id')}
+                      siteIds={editUserForm.watch('site_ids') ?? []}
+                      clients={clients}
+                      sites={sites}
+                      guards={guards}
+                      onClientChange={(v) => editUserForm.setValue('client_id', v, { shouldValidate: true })}
+                      onGuardChange={(v) => editUserForm.setValue('guard_id', v, { shouldValidate: true })}
+                      onSitesChange={(v) => editUserForm.setValue('site_ids', v, { shouldValidate: true })}
+                    />
                     <DialogFooter>
                       <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
                       <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</Button>

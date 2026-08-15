@@ -49,8 +49,11 @@ export default function LoginPage() {
   const onSubmit = async (data: { email: string; password: string; remember_me?: boolean }) => {
     setLoading(true);
     try {
-      await login(data.email, data.password, data.remember_me ?? true);
-      router.push('/dashboard');
+      const signedIn = await login(data.email, data.password, data.remember_me ?? true);
+      // Portal roles can only view the portal modules, so /dashboard would render an
+      // empty shell before they navigated away themselves.
+      const role = (signedIn?.role || '').toLowerCase();
+      router.push(role === 'client' || role === 'staff' ? '/my-portal' : '/dashboard');
     } catch (err: unknown) {
       const pending = parsePaymentPending(err);
       if (pending?.receipt_ref) {

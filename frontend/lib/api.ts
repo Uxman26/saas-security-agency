@@ -357,14 +357,20 @@ export const api = {
   },
   portal: {
     sites: (): Promise<Site[]> => request<Site[]>('/portal/sites'),
-    rotaCurrent: (): Promise<RotaDetail[]> => request<RotaDetail[]>('/portal/rota/current'),
-    rotaUpcoming: (): Promise<RotaDetail[]> => request<RotaDetail[]>('/portal/rota/upcoming'),
-    rotaPrevious: (): Promise<RotaDetail[]> => request<RotaDetail[]>('/portal/rota/previous'),
-    hours: (params?: { period?: string; start_date?: string; end_date?: string }): Promise<import('./types').PortalHours> => {
+    // site_id narrows to one of the caller's own sites; the API 404s anything else, so
+    // passing it is a convenience filter, not the access control itself.
+    rotaCurrent: (site_id?: number): Promise<RotaDetail[]> =>
+      request<RotaDetail[]>(`/portal/rota/current${site_id ? `?site_id=${site_id}` : ''}`),
+    rotaUpcoming: (site_id?: number): Promise<RotaDetail[]> =>
+      request<RotaDetail[]>(`/portal/rota/upcoming${site_id ? `?site_id=${site_id}` : ''}`),
+    rotaPrevious: (site_id?: number): Promise<RotaDetail[]> =>
+      request<RotaDetail[]>(`/portal/rota/previous${site_id ? `?site_id=${site_id}` : ''}`),
+    hours: (params?: { period?: string; start_date?: string; end_date?: string; site_id?: number }): Promise<import('./types').PortalHours> => {
       const q = new URLSearchParams();
       if (params?.period) q.set('period', params.period);
       if (params?.start_date) q.set('start_date', params.start_date);
       if (params?.end_date) q.set('end_date', params.end_date);
+      if (params?.site_id) q.set('site_id', String(params.site_id));
       const qs = q.toString();
       return request<import('./types').PortalHours>(`/portal/hours${qs ? `?${qs}` : ''}`);
     },
@@ -1072,7 +1078,15 @@ export const api = {
   users: {
     list: (): Promise<CompanyUser[]> => request<CompanyUser[]>('/users'),
     get: (id: number): Promise<CompanyUser> => request<CompanyUser>(`/users/${id}`),
-    create: (data: { email: string; password: string; full_name: string; role_id: number }): Promise<CompanyUser> =>
+    create: (data: {
+      email: string;
+      password: string;
+      full_name: string;
+      role_id: number;
+      client_id?: number | null;
+      guard_id?: number | null;
+      site_ids?: number[];
+    }): Promise<CompanyUser> =>
       request<CompanyUser>('/users', {
         method: 'POST',
         body: JSON.stringify({
@@ -1080,11 +1094,24 @@ export const api = {
           password: data.password,
           full_name: sanitizeInput(data.full_name),
           role_id: data.role_id,
+          // The Client and Staff roles are rejected server-side without these, and site
+          // pins are how a Client login is narrowed to specific sites.
+          ...(data.client_id != null ? { client_id: data.client_id } : {}),
+          ...(data.guard_id != null ? { guard_id: data.guard_id } : {}),
+          ...(data.site_ids !== undefined ? { site_ids: data.site_ids } : {}),
         }),
       }),
     update: (
       id: number,
-      data: { email?: string; full_name?: string; password?: string; role_id?: number }
+      data: {
+        email?: string;
+        full_name?: string;
+        password?: string;
+        role_id?: number;
+        client_id?: number | null;
+        guard_id?: number | null;
+        site_ids?: number[];
+      }
     ): Promise<CompanyUser> =>
       request<CompanyUser>(`/users/${id}`, {
         method: 'PUT',
@@ -1093,6 +1120,10 @@ export const api = {
           ...(data.full_name !== undefined ? { full_name: sanitizeInput(data.full_name) } : {}),
           ...(data.password ? { password: data.password } : {}),
           ...(data.role_id !== undefined ? { role_id: data.role_id } : {}),
+          ...(data.client_id !== undefined ? { client_id: data.client_id } : {}),
+          ...(data.guard_id !== undefined ? { guard_id: data.guard_id } : {}),
+          // [] clears the pins back to client-wide; omitting leaves them untouched.
+          ...(data.site_ids !== undefined ? { site_ids: data.site_ids } : {}),
         }),
       }),
     resetPassword: (id: number, new_password: string): Promise<CompanyUser> =>

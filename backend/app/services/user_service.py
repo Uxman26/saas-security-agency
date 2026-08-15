@@ -1,9 +1,11 @@
+from typing import List, Optional
+
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
-from app.models import User, Role, Company, Guard, Client
+from app.models import User, Role, Company, Guard, Client, Site, UserSite
 from app.schemas import CompanyUserCreate, CompanyUserUpdate
 from app.services.plan_enforcement import enforce_user_quota
 
@@ -13,6 +15,42 @@ def _get_user(db: Session, company_id: int, user_id: int) -> User:
     if not u:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return u
+
+
+def _validate_site_ids(
+    db: Session, company_id: int, site_ids: List[int], client_id: Optional[int]
+) -> List[int]:
+    """Resolve requested pins to a validated, deduplicated list.
+
+    A pin may only ever narrow what a login can already reach, so every site has to
+    belong to the company and — for a Client-role login — to that user's own client.
+    Without the second check a pin would become a way to grant a client access to a
+    different client's site.
+    """
+    ids = list(dict.fromkeys(site_ids))
+    if not ids:
+        return []
+    q = db.query(Site.id).filter(Site.company_id == company_id, Site.id.in_(ids))
+    if client_id is not None:
+        q = q.filter(Site.client_id == client_id)
+    found = {r[0] for r in q.all()}
+    missing = [i for i in ids if i not in found]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Site(s) not found for this client: {', '.join(str(i) for i in missing)}",
+        )
+    return ids
+
+
+def _set_site_pins(
+    db: Session, user: User, company_id: int, site_ids: List[int], client_id: Optional[int]
+) -> None:
+    """Replace this user's pin rows. Caller commits."""
+    validated = _validate_site_ids(db, company_id, site_ids, client_id)
+    db.query(UserSite).filter(UserSite.user_id == user.id).delete(synchronize_session=False)
+    for sid in validated:
+        db.add(UserSite(user_id=user.id, site_id=sid, company_id=company_id))
 
 
 def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -> User:
@@ -36,11 +74,18 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
     client_id = data.client_id
     guard_id = data.guard_id
     if role.slug == "client":
-        if not client_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="client_id is required for Client role")
-        client = db.query(Client).filter(Client.id == client_id, Client.company_id == company_id).first()
-        if not client:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
+        # A Client login is scoped either by its client (all that client's sites) or by
+        # an explicit site list (a site-only login, independent of any client). One of
+        # the two is required: with neither, the login would be scoped to nothing.
+        if not client_id and not data.site_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="client_id or site_ids is required for Client role",
+            )
+        if client_id:
+            client = db.query(Client).filter(Client.id == client_id, Client.company_id == company_id).first()
+            if not client:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
         guard_id = None
     elif role.slug == "staff":
         if not guard_id:
@@ -67,6 +112,11 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
         email_verified=True,
     )
     db.add(user)
+    if data.site_ids:
+        # flush so user.id exists for the pin rows, but stay in the same transaction:
+        # a rejected pin must roll the new user back with it.
+        db.flush()
+        _set_site_pins(db, user, company_id, data.site_ids, client_id)
     db.commit()
     db.refresh(user)
     return user
@@ -114,6 +164,9 @@ def update_company_user(db: Session, company_id: int, user_id: int, data: Compan
             if not db.query(Guard).filter(Guard.id == data.guard_id, Guard.company_id == company_id).first():
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff profile not found")
         user.guard_id = data.guard_id
+    if data.site_ids is not None:
+        # [] clears the pins, restoring client-wide access; None leaves them untouched.
+        _set_site_pins(db, user, company_id, data.site_ids, user.client_id)
     db.commit()
     db.refresh(user)
     return user

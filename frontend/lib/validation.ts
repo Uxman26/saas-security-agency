@@ -63,11 +63,22 @@ export const resetPasswordSchema = z
     path: ['confirm'],
   });
 
+// The API requires client_id for the Client role and guard_id for Staff, and rejects the
+// request without them. They stay optional here because the requirement depends on which
+// role is selected; the page checks that before submitting.
+const userLinkFields = {
+  client_id: z.number().int().positive().optional().nullable(),
+  guard_id: z.number().int().positive().optional().nullable(),
+  /** Restricts a Client login to these sites. Empty means all sites of its client. */
+  site_ids: z.array(z.number().int().positive()).optional(),
+};
+
 export const companyUserSchema = z.object({
   email: emailFieldSchema,
   password: passwordFieldSchema,
   full_name: requiredText('Name', { min: 2, max: TEXT_LIMITS.companyName }),
   role_id: z.number().int().positive('Select a role'),
+  ...userLinkFields,
 });
 
 export const companyUserUpdateSchema = z.object({
@@ -75,6 +86,7 @@ export const companyUserUpdateSchema = z.object({
   full_name: requiredText('Name', { min: 2, max: TEXT_LIMITS.companyName }),
   password: z.union([z.literal(''), passwordFieldSchema]).optional(),
   role_id: z.number().int().positive('Select a role'),
+  ...userLinkFields,
 });
 
 export const signupSchema = z.object({
@@ -284,6 +296,31 @@ export const siteSchema = z
     contractor_id: optUuid,
     main_contractor_id: optPosInt,
     sub_contractor_id: optPosInt,
+    create_login: z.boolean().default(false),
+    login_email: emailFieldSchema.optional().or(z.literal('')),
+    login_full_name: z.string().max(100).optional().or(z.literal('')),
+    login_password: z.string().optional().or(z.literal('')),
+  })
+  // These only bind when a login is actually being created, so editing a site without
+  // touching them stays valid — same shape as clientSchema's login refinement.
+  .superRefine((v, ctx) => {
+    if (!v.create_login) return;
+    // No client requirement: a site with no client yields a standalone site login.
+    if (!v.login_email && !v.contact_email) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['login_email'],
+        message: 'Email is required to create a portal login',
+      });
+    }
+    const pw = passwordFieldSchema.safeParse(v.login_password ?? '');
+    if (!pw.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['login_password'],
+        message: pw.error.issues[0]?.message ?? PASSWORD_REQUIREMENTS_MSG,
+      });
+    }
   })
   .refine(
     (d) => {

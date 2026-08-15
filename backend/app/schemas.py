@@ -563,6 +563,21 @@ class SiteCreate(SiteBase):
     # Capped on the way in only. SiteResponse keeps SiteBase's plain str so sites
     # saved before this limit existed still serialise.
     name: SiteNameStr
+    # Opt-in portal login created alongside the site, pinned to just this site. Mirrors
+    # ClientCreate.create_login, but the login identity is given explicitly rather than
+    # reusing contact_email/contact_person: the site contact is often the guard supervisor
+    # or a landlord, not the person who should get portal access.
+    create_login: bool = False
+    login_email: Optional[EmailStr] = Field(default=None, max_length=EMAIL_MAX)
+    login_full_name: Optional[str] = Field(default=None, max_length=100)
+    login_password: Optional[str] = None
+
+    @field_validator("login_password")
+    @classmethod
+    def login_password_rules(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v == "":
+            return None
+        return validate_password_strength(v)
 
 class SiteResponse(SiteBase):
     id: int
@@ -1319,6 +1334,11 @@ class CompanyUserOut(BaseModel):
     role_id: Optional[int] = None
     role_slug: Optional[str] = None
     role_name: Optional[str] = None
+    client_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    # Empty means the login is not pinned: a Client-role user then sees every site of
+    # its client. Populated means it is restricted to exactly these sites.
+    site_ids: list[int] = []
 
 
 class UserRolePatch(StrictModel):
@@ -1332,6 +1352,9 @@ class CompanyUserCreate(StrictModel):
     role_id: int
     client_id: Optional[int] = None
     guard_id: Optional[int] = None
+    # Restricts the login to these sites. Omitted or empty leaves it unpinned, i.e. a
+    # Client-role user sees every site of its client — the behaviour before pins existed.
+    site_ids: Optional[list[int]] = None
 
     @field_validator("password")
     @classmethod
@@ -1346,6 +1369,8 @@ class CompanyUserUpdate(StrictModel):
     role_id: Optional[int] = None
     client_id: Optional[int] = None
     guard_id: Optional[int] = None
+    # None leaves existing pins alone; [] clears them back to client-wide access.
+    site_ids: Optional[list[int]] = None
 
     @field_validator("password")
     @classmethod
@@ -1404,6 +1429,9 @@ class PortalHoursResponse(BaseModel):
     end_date: date
     total_hours: float
     shifts_count: int
+    # Staff only: what the logged-in guard earned over the period. None for client
+    # logins, which must never see guard wages.
+    total_pay: Optional[float] = None
 
 
 class StaffRequestResponse(BaseModel):

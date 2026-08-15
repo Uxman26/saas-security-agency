@@ -41,7 +41,11 @@ from app.schemas import (
 )
 from app.services.company_service import get_company_by_user_id
 from app.services.geo_utils import haversine_m
-from app.services.portal_access import is_client_portal_user, is_staff_portal_user
+from app.services.portal_access import (
+    is_client_portal_user,
+    is_staff_portal_user,
+    pinned_site_ids,
+)
 from app.storage_paths import resolve_storage_path
 
 
@@ -166,6 +170,9 @@ def list_routes(db: Session, user: User, site_id: Optional[int] = None) -> list[
         q = q.filter(PatrolRoute.site_id == site_id)
     if is_client_portal_user(user) and user.client_id:
         q = q.join(Site).filter(Site.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(PatrolRoute.site_id.in_(pinned))
     rows = q.order_by(PatrolRoute.id.desc()).all()
     return [_route_out(r, include_cps=False) for r in rows]
 
@@ -182,6 +189,10 @@ def get_route(db: Session, user: User, route_id: int) -> PatrolRouteResponse:
         raise HTTPException(status_code=404, detail="Route not found")
     if is_client_portal_user(user) and user.client_id and route.site and route.site.client_id != user.client_id:
         raise HTTPException(status_code=403, detail="Access denied")
+    if is_client_portal_user(user):
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None and route.site_id not in pinned:
+            raise HTTPException(status_code=403, detail="Access denied")
     return _route_out(route, include_cps=True)
 
 
@@ -464,6 +475,9 @@ def list_logs(
         q = q.join(PatrolCheckpoint).filter(PatrolCheckpoint.site_id == site_id)
     if is_client_portal_user(user) and user.client_id:
         q = q.join(PatrolRoute).join(Site).filter(Site.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(PatrolRoute.site_id.in_(pinned))
     if is_staff_portal_user(user) and user.guard_id:
         q = q.filter(PatrolLog.guard_id == user.guard_id)
     if start_date:
@@ -485,6 +499,9 @@ def log_photo_file(db: Session, user: User, log_id: int) -> tuple[str, str]:
     q = db.query(PatrolLog).filter(PatrolLog.id == log_id, PatrolLog.company_id == company.id)
     if is_client_portal_user(user) and user.client_id:
         q = q.join(PatrolRoute).join(Site).filter(Site.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(PatrolRoute.site_id.in_(pinned))
     if is_staff_portal_user(user) and user.guard_id:
         q = q.filter(PatrolLog.guard_id == user.guard_id)
     log = q.first()
@@ -514,6 +531,9 @@ def compliance_report(
         q = q.filter(PatrolRoute.site_id == site_id)
     if is_client_portal_user(user) and user.client_id:
         q = q.join(Site).filter(Site.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(PatrolRoute.site_id.in_(pinned))
     routes = q.all()
     out: list[PatrolComplianceRow] = []
     day = start_date

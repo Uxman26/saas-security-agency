@@ -147,7 +147,22 @@ def get_site_by_id(db: Session, site_id: int, user_id: int) -> Site:
     return site
 
 
+def _block_portal_roles(db: Session, user_id: int) -> None:
+    """Site records are internal: they carry staff pay rates, billing rates and
+    contractor links. A portal login reads sites, it never writes them, so the write
+    paths refuse portal roles outright rather than trusting the module matrix — an
+    admin ticking Edit on the Client role must not hand a customer the ability to
+    rewrite their own rates.
+    """
+    from app.services.portal_access import is_portal_role
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and is_portal_role(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
 def update_site(db: Session, site_id: int, site: SiteCreate, user_id: int) -> Site:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     db_site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
     if not db_site:
@@ -190,6 +205,7 @@ def update_site(db: Session, site_id: int, site: SiteCreate, user_id: int) -> Si
 
 
 def delete_site(db: Session, site_id: int, user_id: int) -> None:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
     if not site:

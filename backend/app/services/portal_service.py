@@ -14,6 +14,7 @@ from app.services.portal_access import (
     filter_sites_for_user,
     get_linked_guard,
     pinned_site_ids,
+    redact_sites_for_portal,
     role_slug,
 )
 from app.services.rate_service import resolve_assignment_pay_rate
@@ -108,7 +109,7 @@ def list_portal_sites(db: Session, user: User) -> List[SiteResponse]:
     q = db.query(Site).filter(Site.company_id == company.id)
     q = filter_sites_for_user(db, user, q)
     rows = q.order_by(Site.name).all()
-    return [SiteResponse.model_validate(s) for s in rows]
+    return redact_sites_for_portal(user, rows)
 
 
 def list_portal_rota(

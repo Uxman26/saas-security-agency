@@ -6,6 +6,7 @@ from app.models import User
 from app.schemas import SiteCreate, SiteResponse
 from app.rbac import require_module
 from app.services import site_service
+from app.services.portal_access import redact_sites_for_portal
 
 router = APIRouter(prefix="/sites", tags=["sites"])
 
@@ -15,11 +16,13 @@ def create_site(site: SiteCreate, db: Session = Depends(get_db), current_user: U
 
 @router.get("", response_model=List[SiteResponse])
 def get_sites(db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "view"))):
-    return site_service.get_sites(db, current_user.id)
+    rows = site_service.get_sites(db, current_user.id)
+    return redact_sites_for_portal(current_user, rows)
 
 @router.get("/{site_id}", response_model=SiteResponse)
 def get_site(site_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "view"))):
-    return site_service.get_site_by_id(db, site_id, current_user.id)
+    site = site_service.get_site_by_id(db, site_id, current_user.id)
+    return redact_sites_for_portal(current_user, [site])[0]
 
 @router.put("/{site_id}", response_model=SiteResponse)
 def update_site(site_id: int, site: SiteCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "edit"))):

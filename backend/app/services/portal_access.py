@@ -145,6 +145,22 @@ def filter_assignments_for_user(db: Session, user: User, q):
     return q
 
 
+def redact_sites_for_portal(user: User, sites):
+    """Strip the staff pay rate from sites before a portal login sees them.
+
+    staff_hourly_rate is what the company pays its guards — its own cost base — while
+    default_hourly_rate is what the client is billed and is fine for them to see.
+    Returns SiteResponse copies so the ORM rows are never mutated (a mutated attribute
+    would be flushed back to the database on the next commit).
+    """
+    from app.schemas import SiteResponse
+
+    rows = [SiteResponse.model_validate(s) for s in sites]
+    if not is_portal_role(user):
+        return rows
+    return [r.model_copy(update={"staff_hourly_rate": None}) for r in rows]
+
+
 def assert_site_visible(db: Session, user: User, site_id: int) -> int:
     """Validate a caller-supplied site_id against what this login may actually see.
 

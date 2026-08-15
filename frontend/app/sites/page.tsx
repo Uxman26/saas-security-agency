@@ -28,6 +28,8 @@ import { MapPin, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule, isPortalRole } from '@/lib/permissions';
 
 function SiteForm({
   form,
@@ -290,6 +292,16 @@ export default function SitesPage() {
   const updateSite = useUpdateSite();
   const deleteSite = useDeleteSite();
 
+  // The API is the real boundary — these only stop the UI offering actions it knows
+  // will be refused, which is what a view-only role was seeing before.
+  const { user } = useAuth();
+  const canCreateSites = canModule(user, 'sites', 'create');
+  const canEditSites = canModule(user, 'sites', 'edit');
+  const canDeleteSites = canModule(user, 'sites', 'delete');
+  // Staff pay rate is the company's own cost base and is redacted for portal logins,
+  // so the column would only ever render "-" for them.
+  const showStaffRate = !isPortalRole(user);
+
   useEffect(() => { api.clients.list().then(setClients).catch(() => {}); }, []);
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
@@ -493,9 +505,11 @@ export default function SitesPage() {
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                <DialogTrigger asChild>
-                  <Button>Add Site</Button>
-                </DialogTrigger>
+                {canCreateSites ? (
+                  <DialogTrigger asChild>
+                    <Button>Add Site</Button>
+                  </DialogTrigger>
+                ) : null}
                 <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Site</DialogTitle>
@@ -542,7 +556,9 @@ export default function SitesPage() {
                         <TableHead>Colour</TableHead>
                         <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Client" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Staff Rate" colKey="staff_rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        {showStaffRate ? (
+                          <SortableHead label="Staff Rate" colKey="staff_rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        ) : null}
                         <SortableHead label="Site Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Address" colKey="address" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Postcode" colKey="postcode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -571,9 +587,11 @@ export default function SitesPage() {
                               </span>
                             ) : '-'}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap font-medium">
-                            {site.staff_hourly_rate != null ? `£${Number(site.staff_hourly_rate).toFixed(2)}/hr` : '-'}
-                          </TableCell>
+                          {showStaffRate ? (
+                            <TableCell className="whitespace-nowrap font-medium">
+                              {site.staff_hourly_rate != null ? `£${Number(site.staff_hourly_rate).toFixed(2)}/hr` : '-'}
+                            </TableCell>
+                          ) : null}
                           <TableCell className="whitespace-nowrap font-medium">
                             {site.default_hourly_rate != null ? `£${Number(site.default_hourly_rate).toFixed(2)}/hr` : '-'}
                           </TableCell>
@@ -584,19 +602,26 @@ export default function SitesPage() {
                           <TableCell>{site.contact_phone || '-'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => openEdit(site)} title="Edit site">
-                                <Pencil className="size-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDelete(site.id)}
-                                disabled={deleteSite.isPending}
-                                title="Delete site"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
+                              {canEditSites ? (
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(site)} title="Edit site">
+                                  <Pencil className="size-4" />
+                                </Button>
+                              ) : null}
+                              {canDeleteSites ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDelete(site.id)}
+                                  disabled={deleteSite.isPending}
+                                  title="Delete site"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              ) : null}
+                              {!canEditSites && !canDeleteSites ? (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              ) : null}
                             </div>
                           </TableCell>
                         </TableRow>

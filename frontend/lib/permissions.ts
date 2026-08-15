@@ -117,3 +117,10 @@ export function isTenantAdmin(user: User | null | undefined): boolean {
   const r = (user.role || '').toLowerCase().trim();
   return r === 'admin' || r === 'company_admin';
 }
+
+/** Mirrors portal_access.is_portal_role on the API: the two outward-facing roles. */
+export function isPortalRole(user: User | null | undefined): boolean {
+  if (!user) return false;
+  const r = (user.role || '').toLowerCase().trim();
+  return r === 'client' || r === 'staff';
+}

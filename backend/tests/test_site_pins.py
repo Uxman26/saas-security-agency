@@ -326,3 +326,40 @@ def test_clearing_site_ids_restores_client_wide_access(session, client):
 
     ph = _login(client, "portal@test.com")
     assert _portal_site_names(client, ph) == {"Watford", "Enfield"}
+
+
+def test_portal_roles_cannot_edit_or_delete_a_site(session, client):
+    """Site records carry rates and contractor links, so portal logins never write them."""
+    _, co = _seed_company(session)
+    cl, sites = _seed_client_with_sites(session, co.id, ["Watford"])
+    _make_portal_user(session, co.id, cl.id, "portal@test.com", pins=[sites[0].id])
+
+    h = _login(client, "portal@test.com")
+    payload = {"name": "Renamed", "client_id": cl.id, "site_type": 1}
+    assert client.put(f"/sites/{sites[0].id}", json=payload, headers=h).status_code == 403
+    assert client.delete(f"/sites/{sites[0].id}", headers=h).status_code == 403
+
+
+def test_portal_logins_are_not_shown_the_staff_pay_rate(session, client):
+    """staff_hourly_rate is the company's cost base, not the client's business."""
+    _, co = _seed_company(session)
+    cl = Client(company_id=co.id, name="Acme")
+    session.add(cl)
+    session.flush()
+    site = Site(
+        company_id=co.id,
+        client_id=cl.id,
+        name="Watford",
+        site_type=1,
+        staff_hourly_rate=12.71,
+        default_hourly_rate=14.85,
+    )
+    session.add(site)
+    session.commit()
+    _make_portal_user(session, co.id, cl.id, "portal@test.com", pins=[site.id])
+
+    h = _login(client, "portal@test.com")
+    row = client.get("/portal/sites", headers=h).json()[0]
+    assert row["staff_hourly_rate"] is None
+    # What the client is billed is fine for them to see.
+    assert row["default_hourly_rate"] == 14.85

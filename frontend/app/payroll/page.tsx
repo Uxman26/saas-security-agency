@@ -19,6 +19,8 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-t
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
 import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, Search } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
   '100_bank': '100% Bank',
@@ -38,6 +40,12 @@ function payableAmount(p: Payroll) {
 }
 
 export default function PayrollPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'payroll', 'create');
+  const canEditMod = canModule(permUser, 'payroll', 'edit');
+  const canDeleteMod = canModule(permUser, 'payroll', 'delete');
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -400,12 +408,14 @@ export default function PayrollPage() {
                   </DialogContent>
                 </Dialog>
                 <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <FileInput className="size-4 mr-2" />
-                      Import from Rota
-                    </Button>
-                  </DialogTrigger>
+                  {canCreateMod ? (
+                    <DialogTrigger asChild>
+                      <Button>
+                        <FileInput className="size-4 mr-2" />
+                        Import from Rota
+                      </Button>
+                    </DialogTrigger>
+                  ) : null}
                   <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Import from Rota</DialogTitle>
@@ -645,15 +655,17 @@ export default function PayrollPage() {
                                 <Pencil className="size-4" />
                                 <span className="sr-only">Edit</span>
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDelete(p.id)}
-                                title="Delete record"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
+                              {canDeleteMod ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDelete(p.id)}
+                                  title="Delete record"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              ) : null}
                             </div>
                           </TableCell>
                         </TableRow>

@@ -18,7 +18,7 @@ from app.schemas import (
     InvoiceAuditEntry,
     PaymentResponse,
 )
-from app.rbac import require_module, user_has_permission_db
+from app.rbac import require_module, require_internal_module, user_has_permission_db
 from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
 from app.services.invoice_payment_service import invoice_amount_paid
@@ -139,7 +139,7 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
 def create_invoice(
     data: InvoiceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "create")),
+    current_user: User = Depends(require_internal_module("invoices", "create")),
 ):
     inv = invoice_service.create_invoice(db, data, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
@@ -153,7 +153,7 @@ def generate_invoice(
     client_id: Optional[int] = None,
     site_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "generate")),
+    current_user: User = Depends(require_internal_module("invoices", "generate")),
 ):
     inv = invoice_service.generate_from_rota(
         db, period_start, period_end, current_user.id, client_id=client_id, site_id=site_id
@@ -190,7 +190,7 @@ def list_invoices(
 def invoice_audit(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "audit_view")),
+    current_user: User = Depends(require_internal_module("invoices", "audit_view")),
 ):
     raw = invoice_service.get_invoice_audit_logs(db, invoice_id, current_user.id)
     return [InvoiceAuditEntry(**r) for r in raw]
@@ -218,7 +218,7 @@ def patch_invoice(
     invoice_id: int,
     data: InvoiceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "edit")),
+    current_user: User = Depends(require_internal_module("invoices", "edit")),
 ):
     inv = invoice_service.update_invoice(db, invoice_id, data, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
@@ -231,7 +231,7 @@ def update_line(
     line_id: int,
     data: InvoiceLineUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "line_edit")),
+    current_user: User = Depends(require_internal_module("invoices", "line_edit")),
 ):
     line = invoice_service.update_invoice_line(db, invoice_id, line_id, data, current_user.id)
     db.refresh(line)
@@ -257,7 +257,7 @@ def delete_line(
     invoice_id: int,
     line_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "line_delete")),
+    current_user: User = Depends(require_internal_module("invoices", "line_delete")),
 ):
     invoice_service.delete_invoice_line(db, invoice_id, line_id, current_user.id)
 
@@ -266,7 +266,7 @@ def delete_line(
 def duplicate_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "duplicate")),
+    current_user: User = Depends(require_internal_module("invoices", "duplicate")),
 ):
     inv = invoice_service.duplicate_invoice(db, invoice_id, current_user.id)
     return _serialize_invoice(inv, True, db)
@@ -287,7 +287,7 @@ def update_status(
     invoice_id: int,
     status: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "status_change")),
+    current_user: User = Depends(require_internal_module("invoices", "status_change")),
 ):
     # Moving an invoice to "sent" emails the client, so it needs the send permission on
     # top of the general status change.
@@ -307,7 +307,7 @@ def add_line(
     invoice_id: int,
     data: InvoiceLineBase,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "line_create")),
+    current_user: User = Depends(require_internal_module("invoices", "line_create")),
 ):
     line = invoice_service.add_invoice_line(db, invoice_id, data, current_user.id)
     db.refresh(line)
@@ -332,7 +332,7 @@ def add_line(
 def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("invoices", "delete")),
+    current_user: User = Depends(require_internal_module("invoices", "delete")),
 ):
     invoice_service.delete_invoice(db, invoice_id, current_user.id)
     return None

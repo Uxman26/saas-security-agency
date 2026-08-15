@@ -15,6 +15,7 @@ import type { RotaViewMode } from '@/lib/rota-shifts-types';
 import { Calendar, Check, Copy, LayoutGrid, Loader2, Timer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
+import { ModuleGuard } from '@/components/module-guard';
 
 function fmtPeriod(r: RotaPlanListItem) {
   const a = new Date(`${r.start_date}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -406,8 +407,12 @@ function CreateRotaPage() {
 
 export default function CreateRotaPageWrapper() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>}>
-      <CreateRotaPage />
-    </Suspense>
+    // The whole page exists to create a rota, so it is gated on rota.create rather than
+    // on individual buttons — a role without it is sent back to the dashboard.
+    <ModuleGuard moduleKey="rota" action="create">
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading…</div>}>
+        <CreateRotaPage />
+      </Suspense>
+    </ModuleGuard>
   );
 }

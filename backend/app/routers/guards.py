@@ -6,7 +6,7 @@ import os
 from app.database import get_db
 from app.models import User
 from app.schemas import GuardCreate, GuardResponse
-from app.rbac import require_module
+from app.rbac import require_internal_module
 from app.services import guard_service
 from app.storage_paths import GUARD_PHOTOS_DIR, ensure_upload_dirs, resolve_storage_path
 from app.services.image_avif_service import AVIF_EXT, is_image_filename, save_upload_as_avif
@@ -14,7 +14,7 @@ from app.services.image_avif_service import AVIF_EXT, is_image_filename, save_up
 router = APIRouter(prefix="/guards", tags=["guards"])
 
 @router.post("", response_model=GuardResponse, status_code=status.HTTP_201_CREATED)
-def create_guard(guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("guards", "create"))):
+def create_guard(guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "create"))):
     return guard_service.create_guard(db, guard, current_user.id)
 
 @router.get("", response_model=List[GuardResponse])
@@ -23,16 +23,16 @@ def get_guards(
     postcode: Optional[str] = Query(None),
     nearby: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("guards", "view")),
+    current_user: User = Depends(require_internal_module("guards", "view")),
 ):
     return guard_service.get_guards(db, current_user.id, area=area, postcode=postcode, nearby=nearby)
 
 @router.get("/{guard_id}", response_model=GuardResponse)
-def get_guard(guard_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("guards", "view"))):
+def get_guard(guard_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "view"))):
     return guard_service.get_guard_by_id(db, guard_id, current_user.id)
 
 @router.put("/{guard_id}", response_model=GuardResponse)
-def update_guard(guard_id: int, guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("guards", "edit"))):
+def update_guard(guard_id: int, guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "edit"))):
     # Logins are created only on the POST path. Silently ignoring the flag here would let
     # an edit look like it provisioned access when it did nothing.
     if guard.create_login:
@@ -47,7 +47,7 @@ def upload_guard_photo(
     guard_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("guards", "photo_upload")),
+    current_user: User = Depends(require_internal_module("guards", "photo_upload")),
 ):
     guard = guard_service.get_guard_by_id(db, guard_id, current_user.id)
     if not file.filename:
@@ -73,7 +73,7 @@ def upload_guard_photo(
 def get_guard_photo(
     guard_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("guards", "photo_view")),
+    current_user: User = Depends(require_internal_module("guards", "photo_view")),
 ):
     guard = guard_service.get_guard_by_id(db, guard_id, current_user.id)
     path = resolve_storage_path(guard.photo_path)
@@ -82,6 +82,6 @@ def get_guard_photo(
     return FileResponse(path)
 
 @router.delete("/{guard_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_guard(guard_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("guards", "delete"))):
+def delete_guard(guard_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "delete"))):
     guard_service.delete_guard(db, guard_id, current_user.id)
     return None

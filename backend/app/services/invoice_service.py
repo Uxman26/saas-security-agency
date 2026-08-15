@@ -100,6 +100,25 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     return inv
 
 
+def _scope_for_portal_user(db: Session, user_id: int, q):
+    """Limit invoices to the caller's own client.
+
+    The client portal links straight to /invoices, so this is a read a client is meant
+    to have — but client_id on the endpoint is a caller-supplied filter, not a scope.
+    Without this a client with invoices.view reads every invoice in the tenant.
+    """
+    from app.services.portal_access import is_portal_role, role_slug
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not is_portal_role(user):
+        return q
+    if role_slug(user) == "client" and user.client_id:
+        return q.filter(Invoice.client_id == user.client_id)
+    # Staff, or a site-only client login with no client record: invoices are billing
+    # documents for a client, so there is nothing here for them. Fail closed.
+    return q.filter(Invoice.id < 0)
+
+
 def get_invoices(
     db: Session,
     user_id: int,
@@ -118,6 +137,7 @@ def get_invoices(
         .options(noload(Invoice.lines), joinedload(Invoice.client), joinedload(Invoice.company))
         .filter(Invoice.company_id == company.id)
     )
+    q = _scope_for_portal_user(db, user_id, q)
     if client_id:
         q = q.filter(Invoice.client_id == client_id)
     if status_group == "unpaid":
@@ -155,7 +175,7 @@ def get_invoices(
 
 def get_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
     company = get_company_by_user_id(db, user_id)
-    inv = (
+    q = (
         db.query(Invoice)
         .options(
             joinedload(Invoice.lines).joinedload(InvoiceLine.site),
@@ -164,8 +184,9 @@ def get_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
             joinedload(Invoice.company),
         )
         .filter(Invoice.id == invoice_id, Invoice.company_id == company.id)
-        .first()
     )
+    # 404 rather than 403 so another client's invoice ids cannot be probed.
+    inv = _scope_for_portal_user(db, user_id, q).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     if maybe_mark_overdue(db, inv):

@@ -360,6 +360,32 @@ def require_module(module_key: str, action: str):
     return checker
 
 
+def require_internal_module(module_key: str, action: str):
+    """require_module, plus a hard refusal for the outward-facing portal roles.
+
+    Most modules are staff-only back office: the guard directory, payroll, expenses,
+    leads, other clients' records. Their services filter by company but not by client,
+    so if one of these modules were ever ticked on for the Client or Staff role — by
+    mistake or by someone assuming it would scope itself — that login would read the
+    whole tenant. Blocking at the router keeps that decision out of the matrix instead
+    of relying on every service to defend itself.
+
+    Client- and staff-facing modules (my_portal, client_portal, staff_requests,
+    incidents, patrol, sites, invoices) deliberately keep plain require_module and
+    scope their own queries instead.
+    """
+    base = require_module(module_key, action)
+
+    def checker(user: User = Depends(base), db: Session = Depends(get_db)) -> User:
+        from app.services.portal_access import is_portal_role
+
+        if is_portal_role(user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        return user
+
+    return checker
+
+
 def require_perm(code: str):
     def checker(
         db: Session = Depends(get_db),

@@ -17,6 +17,8 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { CreditCard, Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'card', 'direct_debit', 'other'];
 const METHOD_LABELS: Record<string, string> = {
@@ -29,6 +31,12 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 export default function PaymentsPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'payments', 'create');
+  const canEditMod = canModule(permUser, 'payments', 'edit');
+  const canDeleteMod = canModule(permUser, 'payments', 'delete');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -227,12 +235,14 @@ export default function PaymentsPage() {
                 {loading ? 'Loading...' : 'Refresh'}
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="size-4 mr-2" />
-                    Record Payment
-                  </Button>
-                </DialogTrigger>
+                {canCreateMod ? (
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="size-4 mr-2" />
+                      Record Payment
+                    </Button>
+                  </DialogTrigger>
+                ) : null}
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Record Payment</DialogTitle>
@@ -403,18 +413,22 @@ export default function PaymentsPage() {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payment">
-                                  <Pencil className="size-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(p.id)}
-                                  title="Delete payment"
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
+                                {canEditMod ? (
+                                  <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payment">
+                                    <Pencil className="size-4" />
+                                  </Button>
+                                ) : null}
+                                {canDeleteMod ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => handleDelete(p.id)}
+                                    title="Delete payment"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                ) : null}
                               </div>
                             </TableCell>
                           </TableRow>

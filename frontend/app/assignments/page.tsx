@@ -23,6 +23,8 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-t
 import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { TimeHmField } from '@/components/ui/time-hm-field';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   day: 'Day',
@@ -130,6 +132,12 @@ function AssignmentForm({
 }
 
 export default function AssignmentsPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'assignments', 'create');
+  const canEditMod = canModule(permUser, 'assignments', 'edit');
+  const canDeleteMod = canModule(permUser, 'assignments', 'delete');
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -288,9 +296,11 @@ export default function AssignmentsPage() {
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                <DialogTrigger asChild>
-                  <Button disabled={!canAssign} title={!canAssign ? 'Link contractors to guards and sites first' : undefined}>Add Assignment</Button>
-                </DialogTrigger>
+                {canCreateMod ? (
+                  <DialogTrigger asChild>
+                    <Button disabled={!canAssign} title={!canAssign ? 'Link contractors to guards and sites first' : undefined}>Add Assignment</Button>
+                  </DialogTrigger>
+                ) : null}
                 <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Assignment</DialogTitle>
@@ -384,19 +394,23 @@ export default function AssignmentsPage() {
                           <TableCell>{a.break_minutes != null ? `${a.break_minutes} min` : '-'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit assignment">
-                                <Pencil className="size-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDelete(a.id)}
-                                disabled={deleteAssignment.isPending}
-                                title="Delete assignment"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
+                              {canEditMod ? (
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit assignment">
+                                  <Pencil className="size-4" />
+                                </Button>
+                              ) : null}
+                              {canDeleteMod ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDelete(a.id)}
+                                  disabled={deleteAssignment.isPending}
+                                  title="Delete assignment"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              ) : null}
                             </div>
                           </TableCell>
                         </TableRow>

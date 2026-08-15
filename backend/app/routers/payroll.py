@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models import User
 from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
-from app.rbac import require_module
+from app.rbac import require_internal_module
 from app.services import payroll_service
 
 router = APIRouter(prefix="/payroll", tags=["payroll"])
@@ -21,15 +21,15 @@ class PayrollBatchRequest(BaseModel):
     rota_plan_id: Optional[int] = None
 
 @router.post("", response_model=PayrollResponse, status_code=status.HTTP_201_CREATED)
-def create_payroll(data: PayrollCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "create"))):
+def create_payroll(data: PayrollCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "create"))):
     return payroll_service.create_payroll(db, data, current_user.id)
 
 @router.post("/calculate", response_model=PayrollResponse)
-def calculate_payroll(guard_id: int, period_start: date, period_end: date, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "calculate"))):
+def calculate_payroll(guard_id: int, period_start: date, period_end: date, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "calculate"))):
     return payroll_service.calculate_payroll(db, guard_id, period_start, period_end, current_user.id)
 
 @router.post("/calculate-batch", response_model=List[PayrollResponse])
-def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "calculate_batch"))):
+def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "calculate_batch"))):
     return payroll_service.calculate_payroll_batch(
         db,
         current_user.id,
@@ -42,18 +42,18 @@ def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get
     )
 
 @router.get("", response_model=List[PayrollResponse])
-def list_payrolls(guard_id: Optional[int] = None, period_start: Optional[date] = None, period_end: Optional[date] = None, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "view"))):
+def list_payrolls(guard_id: Optional[int] = None, period_start: Optional[date] = None, period_end: Optional[date] = None, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "view"))):
     return payroll_service.get_payrolls(db, current_user.id, guard_id, period_start, period_end)
 
 @router.get("/{payroll_id}", response_model=PayrollResponse)
-def get_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "view"))):
+def get_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "view"))):
     return payroll_service.get_payroll(db, payroll_id, current_user.id)
 
 @router.put("/{payroll_id}", response_model=PayrollResponse)
-def update_payroll(payroll_id: int, data: PayrollUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "edit"))):
+def update_payroll(payroll_id: int, data: PayrollUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "edit"))):
     return payroll_service.update_payroll(db, payroll_id, data, current_user.id)
 
 @router.delete("/{payroll_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("payroll", "delete"))):
+def delete_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "delete"))):
     payroll_service.delete_payroll(db, payroll_id, current_user.id)
     return None

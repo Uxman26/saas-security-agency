@@ -19,6 +19,8 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Wallet, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 const allowanceSchema = z.object({
   name: z.string().min(2).max(100),
@@ -87,6 +89,12 @@ function AllowanceForm({
 }
 
 export default function AllowancesPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'allowances', 'create');
+  const canEditMod = canModule(permUser, 'allowances', 'edit');
+  const canDeleteMod = canModule(permUser, 'allowances', 'delete');
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingAllowance, setEditingAllowance] = useState<Allowance | null>(null);
@@ -226,9 +234,11 @@ export default function AllowancesPage() {
               <p className="text-muted-foreground mt-1">Configure payroll and invoice allowances</p>
             </div>
             <Dialog open={addOpen} onOpenChange={setAddOpen}>
-              <DialogTrigger asChild>
-                <Button>Add Allowance</Button>
-              </DialogTrigger>
+              {canCreateMod ? (
+                <DialogTrigger asChild>
+                  <Button>Add Allowance</Button>
+                </DialogTrigger>
+              ) : null}
               <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Allowance</DialogTitle>
@@ -303,18 +313,22 @@ export default function AllowancesPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit allowance">
-                                <Pencil className="size-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDelete(a.id)}
-                                title="Delete allowance"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
+                              {canEditMod ? (
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit allowance">
+                                  <Pencil className="size-4" />
+                                </Button>
+                              ) : null}
+                              {canDeleteMod ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDelete(a.id)}
+                                  title="Delete allowance"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              ) : null}
                             </div>
                           </TableCell>
                         </TableRow>

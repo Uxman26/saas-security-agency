@@ -17,6 +17,8 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { FolderOpen, Plus, Trash2, AlertTriangle, Upload, Download, X, FileText } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 const DOCUMENT_TYPES = [
   'SIA Licence',
@@ -71,6 +73,12 @@ async function downloadDoc(doc: GuardDocument) {
 }
 
 export default function DocumentsPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'documents', 'create');
+  const canEditMod = canModule(permUser, 'documents', 'edit');
+  const canDeleteMod = canModule(permUser, 'documents', 'delete');
   const [documents, setDocuments] = useState<GuardDocument[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -241,12 +249,14 @@ export default function DocumentsPage() {
                 {loading ? 'Loading...' : 'Refresh'}
               </Button>
               <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="size-4 mr-2" />
-                    Add Documents
-                  </Button>
-                </DialogTrigger>
+                {canCreateMod ? (
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="size-4 mr-2" />
+                      Add Documents
+                    </Button>
+                  </DialogTrigger>
+                ) : null}
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add guard documents</DialogTitle>
@@ -451,15 +461,17 @@ export default function DocumentsPage() {
                                     <Download className="size-4" />
                                   </Button>
                                 )}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="size-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(doc.id)}
-                                  title="Delete document"
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
+                                {canDeleteMod ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="size-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => handleDelete(doc.id)}
+                                    title="Delete document"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                ) : null}
                               </div>
                             </TableCell>
                           </TableRow>

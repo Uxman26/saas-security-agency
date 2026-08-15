@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.schemas import GuardDocumentCreate, GuardDocumentCreateFlat, GuardDocumentResponse
-from app.rbac import require_module
+from app.rbac import require_internal_module
 from app.services import guard_document_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 def list_documents(
     guard_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "view")),
+    current_user: User = Depends(require_internal_module("documents", "view")),
 ):
     return guard_document_service.get_all_documents(db, current_user.id, guard_id)
 
@@ -27,7 +27,7 @@ def list_documents(
 def create_document(
     doc: GuardDocumentCreateFlat,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "create")),
+    current_user: User = Depends(require_internal_module("documents", "create")),
 ):
     doc_data = GuardDocumentCreate(
         document_type=doc.document_type,
@@ -45,7 +45,7 @@ def upload_documents(
     expiry_date: Optional[date] = Form(None),
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "upload")),
+    current_user: User = Depends(require_internal_module("documents", "upload")),
 ):
     return guard_document_service.upload_documents(db, current_user.id, guard_id, document_type, files, expiry_date)
 
@@ -54,7 +54,7 @@ def upload_documents(
 def download_document(
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "download")),
+    current_user: User = Depends(require_internal_module("documents", "download")),
 ):
     path, mime, filename = guard_document_service.get_document_file_path(db, doc_id, current_user.id)
     return FileResponse(path, media_type=mime, filename=filename)
@@ -64,7 +64,7 @@ def download_document(
 def delete_document(
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "delete")),
+    current_user: User = Depends(require_internal_module("documents", "delete")),
 ):
     guard_document_service.delete_document(db, doc_id, current_user.id)
     return None
@@ -78,7 +78,7 @@ def create_document_legacy(
     guard_id: int,
     doc: GuardDocumentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "create")),
+    current_user: User = Depends(require_internal_module("documents", "create")),
 ):
     return guard_document_service.create_document(db, guard_id, doc, current_user.id)
 
@@ -90,7 +90,7 @@ def upload_documents_legacy(
     expiry_date: Optional[date] = Form(None),
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "upload")),
+    current_user: User = Depends(require_internal_module("documents", "upload")),
 ):
     return guard_document_service.upload_documents(db, current_user.id, guard_id, document_type, files, expiry_date)
 
@@ -99,7 +99,7 @@ def upload_documents_legacy(
 def list_documents_legacy(
     guard_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "view")),
+    current_user: User = Depends(require_internal_module("documents", "view")),
 ):
     return guard_document_service.get_documents(db, guard_id, current_user.id)
 
@@ -109,7 +109,7 @@ def delete_document_legacy(
     guard_id: int,
     doc_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("documents", "delete")),
+    current_user: User = Depends(require_internal_module("documents", "delete")),
 ):
     guard_document_service.delete_document(db, doc_id, current_user.id)
     return None

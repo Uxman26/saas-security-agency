@@ -24,6 +24,8 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-t
 import { Calendar, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { TimeHmField } from '@/components/ui/time-hm-field';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 function fmt(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -72,6 +74,11 @@ function shiftCellClass(d: RotaDetail) {
 }
 
 export default function RotaPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'rota', 'create');
+  const canDeleteMod = canModule(permUser, 'rota', 'delete');
   const [view, setView] = useState<'week' | 'month'>('week');
   const [anchor, setAnchor] = useState(() => new Date());
   const [clients, setClients] = useState<Client[]>([]);
@@ -294,11 +301,13 @@ export default function RotaPage() {
                 {isRefetching ? 'Refreshing…' : 'Refresh'}
               </Button>
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={() => openCreate()}>
-                    <Plus className="size-4 mr-1" /> Add shift
-                  </Button>
-                </DialogTrigger>
+                {canCreateMod ? (
+                  <DialogTrigger asChild>
+                    <Button onClick={() => openCreate()}>
+                      <Plus className="size-4 mr-1" /> Add shift
+                    </Button>
+                  </DialogTrigger>
+                ) : null}
                 <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>{editingId ? 'Edit shift' : 'New shift'}</DialogTitle>
@@ -518,6 +527,7 @@ export default function RotaPage() {
                                       </div>
                                       <div className="opacity-75 text-[9px]">{row.attendance_status}</div>
                                     </button>
+                                    {canDeleteMod ? (
                                     <button
                                       type="button"
                                       className="absolute top-0 right-0 p-0.5 opacity-0 group-hover:opacity-100 text-destructive"
@@ -526,6 +536,7 @@ export default function RotaPage() {
                                     >
                                       <Trash2 className="size-3" />
                                     </button>
+                                    ) : null}
                                   </div>
                                 ))}
                                 <Button

@@ -30,6 +30,8 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-t
 import { Building2, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 type ClientFormData = z.output<typeof clientSchema>;
 type RenewFormData = z.output<typeof clientRenewSchema>;
 
@@ -193,6 +195,12 @@ function RenewalHistoryDialog({ clientId, clientName }: { clientId: number; clie
 }
 
 export default function ClientsPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'clients', 'create');
+  const canEditMod = canModule(permUser, 'clients', 'edit');
+  const canDeleteMod = canModule(permUser, 'clients', 'delete');
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -380,9 +388,11 @@ export default function ClientsPage() {
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                <DialogTrigger asChild>
-                  <Button>Add Client</Button>
-                </DialogTrigger>
+                {canCreateMod ? (
+                  <DialogTrigger asChild>
+                    <Button>Add Client</Button>
+                  </DialogTrigger>
+                ) : null}
                 <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Add New Client</DialogTitle>
@@ -462,9 +472,11 @@ export default function ClientsPage() {
                             <TableCell className="max-w-[160px] truncate">{client.address || '-'}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5 flex-wrap">
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(client)} title="Edit client">
-                                  <Pencil className="size-4" />
-                                </Button>
+                                {canEditMod ? (
+                                  <Button variant="ghost" size="sm" onClick={() => openEdit(client)} title="Edit client">
+                                    <Pencil className="size-4" />
+                                  </Button>
+                                ) : null}
                                 <Button variant="ghost" size="sm" onClick={() => openRenew(client)} title="Renew contract">
                                   <CalendarClock className="size-4" />
                                 </Button>
@@ -477,16 +489,18 @@ export default function ClientsPage() {
                                   <History className="size-4" />
                                 </Button>
                                 {client.email && <EmailDialog defaultEmail={client.email} defaultName={client.name} />}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(client.id)}
-                                  disabled={deleteClient.isPending}
-                                  title="Delete client"
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
+                                {canDeleteMod ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => handleDelete(client.id)}
+                                    disabled={deleteClient.isPending}
+                                    title="Delete client"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                ) : null}
                               </div>
                             </TableCell>
                           </TableRow>

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import require_module
+from app.rbac import require_internal_module
 from app.schemas import (
     ExpenseCreate,
     ExpenseDashboardResponse,
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/expenses", tags=["expenses"])
 
 
 @router.get("/meta")
-def expense_meta(_: User = Depends(require_module("expenses", "view"))):
+def expense_meta(_: User = Depends(require_internal_module("expenses", "view"))):
     return {
         "categories": expense_service.EXPENSE_CATEGORIES,
         "payment_methods": expense_service.PAYMENT_METHODS,
@@ -37,7 +37,7 @@ def dashboard(
     start_date: date,
     end_date: date,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "dashboard_view")),
+    current_user: User = Depends(require_internal_module("expenses", "dashboard_view")),
 ):
     return expense_service.dashboard_summary(db, current_user.id, start_date, end_date)
 
@@ -48,7 +48,7 @@ def expense_report(
     end_date: date,
     group_by: str = "category",
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "reports")),
+    current_user: User = Depends(require_internal_module("expenses", "reports")),
 ):
     if group_by not in ("category", "vendor", "month"):
         group_by = "category"
@@ -60,7 +60,7 @@ def vat_report(
     start_date: date,
     end_date: date,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "vat_report")),
+    current_user: User = Depends(require_internal_module("expenses", "vat_report")),
 ):
     return expense_service.vat_report(db, current_user.id, start_date, end_date)
 
@@ -72,7 +72,7 @@ def list_expenses(
     category: Optional[str] = None,
     payment_status: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "view")),
+    current_user: User = Depends(require_internal_module("expenses", "view")),
 ):
     return expense_service.list_expenses(db, current_user.id, start_date, end_date, category, payment_status)
 
@@ -81,7 +81,7 @@ def list_expenses(
 def create_expense(
     data: ExpenseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "create")),
+    current_user: User = Depends(require_internal_module("expenses", "create")),
 ):
     return expense_service.create_expense(db, data, current_user.id)
 
@@ -90,7 +90,7 @@ def create_expense(
 def get_expense(
     expense_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "view")),
+    current_user: User = Depends(require_internal_module("expenses", "view")),
 ):
     return expense_service.get_expense(db, expense_id, current_user.id)
 
@@ -100,7 +100,7 @@ def update_expense(
     expense_id: int,
     data: ExpenseUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "edit")),
+    current_user: User = Depends(require_internal_module("expenses", "edit")),
 ):
     return expense_service.update_expense(db, expense_id, data, current_user.id)
 
@@ -109,7 +109,7 @@ def update_expense(
 def delete_expense(
     expense_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "delete")),
+    current_user: User = Depends(require_internal_module("expenses", "delete")),
 ):
     expense_service.delete_expense(db, expense_id, current_user.id)
     return None
@@ -120,7 +120,7 @@ def upload_document(
     expense_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "document_upload")),
+    current_user: User = Depends(require_internal_module("expenses", "document_upload")),
 ):
     return expense_service.save_expense_document(db, expense_id, file, current_user.id)
 
@@ -129,7 +129,7 @@ def upload_document(
 def download_document(
     expense_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "document_download")),
+    current_user: User = Depends(require_internal_module("expenses", "document_download")),
 ):
     path, mime = expense_service.get_expense_document_path(db, expense_id, current_user.id)
     return FileResponse(path, media_type=mime)
@@ -139,6 +139,6 @@ def download_document(
 def remove_document(
     expense_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("expenses", "document_delete")),
+    current_user: User = Depends(require_internal_module("expenses", "document_delete")),
 ):
     return expense_service.delete_expense_document(db, expense_id, current_user.id)

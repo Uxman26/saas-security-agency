@@ -16,8 +16,16 @@ import { api } from '@/lib/api';
 import type { PatrolComplianceRow, PatrolLog, PatrolRoute, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { MapPinned, Plus } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 export default function PatrolPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'patrol', 'create');
+  const canEditMod = canModule(permUser, 'patrol', 'edit');
+  const canDeleteMod = canModule(permUser, 'patrol', 'delete');
   const [routes, setRoutes] = useState<PatrolRoute[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [logs, setLogs] = useState<PatrolLog[]>([]);
@@ -96,10 +104,12 @@ export default function PatrolPage() {
                 <Button variant="outline" asChild>
                   <Link href="/patrol/reports">Reports</Link>
                 </Button>
-                <Button onClick={() => setOpen(true)}>
-                  <Plus className="size-4 mr-1" />
-                  New route
-                </Button>
+                {canCreateMod ? (
+                  <Button onClick={() => setOpen(true)}>
+                    <Plus className="size-4 mr-1" />
+                    New route
+                  </Button>
+                ) : null}
               </div>
             }
           />

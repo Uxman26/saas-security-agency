@@ -18,6 +18,8 @@ import type { Incident, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { openAuthFile } from '@/lib/use-auth-blob-url';
 import { AlertTriangle, BarChart3, Plus } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 /** Attachments are served from an authenticated endpoint, so a plain link cannot load them. */
 async function openAttachment(url: string) {
@@ -25,6 +27,12 @@ async function openAttachment(url: string) {
 }
 
 export default function IncidentsPage() {
+  // The API is the real boundary; these stop the UI offering actions it
+  // already knows the role will be refused.
+  const { user: permUser } = useAuth();
+  const canCreateMod = canModule(permUser, 'incidents', 'create');
+  const canEditMod = canModule(permUser, 'incidents', 'edit');
+  const canDeleteMod = canModule(permUser, 'incidents', 'delete');
   const [items, setItems] = useState<Incident[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -101,10 +109,12 @@ export default function IncidentsPage() {
                     Summary
                   </Link>
                 </Button>
-                <Button onClick={() => setOpen(true)}>
-                  <Plus className="size-4 mr-1" />
-                  Raise incident
-                </Button>
+                {canCreateMod ? (
+                  <Button onClick={() => setOpen(true)}>
+                    <Plus className="size-4 mr-1" />
+                    Raise incident
+                  </Button>
+                ) : null}
               </div>
             }
           />

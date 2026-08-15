@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import require_module
+from app.rbac import require_internal_module
 from app.contractor_schemas import (
     AssignmentCreate,
     AssignmentRead,
@@ -29,7 +29,7 @@ def list_assignments(
     sub_contractor_id: Optional[UUID] = None,
     site_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "assignments_view")),
+    current_user: User = Depends(require_internal_module("contractors", "assignments_view")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     return contractor_service.list_assignments(db, company.id, main_contractor_id, sub_contractor_id, site_id)
@@ -39,7 +39,7 @@ def list_assignments(
 def create_assignment_route(
     body: AssignmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "assign")),
+    current_user: User = Depends(require_internal_module("contractors", "assign")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     return contractor_service.create_assignment(db, company.id, body, current_user)
@@ -49,7 +49,7 @@ def create_assignment_route(
 def delete_assignment_route(
     assignment_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "unassign")),
+    current_user: User = Depends(require_internal_module("contractors", "unassign")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     contractor_service.delete_assignment(db, company.id, assignment_id, current_user)
@@ -61,7 +61,7 @@ def list_contractors_route(
     contractor_type: Optional[str] = Query(None, alias="type"),
     is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "view")),
+    current_user: User = Depends(require_internal_module("contractors", "view")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     tf = contractor_type if contractor_type in ("main", "sub") else None
@@ -72,7 +72,7 @@ def list_contractors_route(
 def create_contractor_route(
     body: ContractorCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "create")),
+    current_user: User = Depends(require_internal_module("contractors", "create")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     return contractor_service.create_contractor(db, company.id, body, current_user)
@@ -82,7 +82,7 @@ def create_contractor_route(
 def get_contractor_route(
     contractor_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "view")),
+    current_user: User = Depends(require_internal_module("contractors", "view")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     return contractor_service.get_contractor(db, company.id, contractor_id)
@@ -93,7 +93,7 @@ def update_contractor_route(
     contractor_id: UUID,
     body: ContractorUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "edit")),
+    current_user: User = Depends(require_internal_module("contractors", "edit")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     return contractor_service.update_contractor(db, company.id, contractor_id, body, current_user)
@@ -103,7 +103,7 @@ def update_contractor_route(
 def deactivate_contractor_route(
     contractor_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("contractors", "deactivate")),
+    current_user: User = Depends(require_internal_module("contractors", "deactivate")),
 ):
     company = get_company_by_user_id(db, current_user.id)
     return contractor_service.deactivate_contractor(db, company.id, contractor_id, current_user)

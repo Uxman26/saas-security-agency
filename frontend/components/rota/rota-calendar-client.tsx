@@ -20,7 +20,7 @@ import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
 import { RatePreviewDialog } from '@/components/rota/rate-preview-dialog';
-import { ShiftRotaSections } from '@/components/rota/shift-rota-sections';
+import { ShiftRotaSections, ShiftTypeBadge } from '@/components/rota/shift-rota-sections';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { useCreateGuard } from '@/hooks/use-guards';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
@@ -2773,7 +2773,10 @@ export function RotaCalendarClient() {
                                   onClick={() => openEditShift(emp.id, dk, idx)}
                                   title={`${emp.name}${emp.role ? ` · ${emp.role}` : ''} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
                                 >
-                                  <span className="font-medium block truncate leading-tight">{emp.name}</span>
+                                  <span className="flex min-w-0 items-center justify-between gap-1">
+                                    <span className="font-medium truncate leading-tight">{emp.name}</span>
+                                    <ShiftTypeBadge shiftType={sh.shiftType} compact />
+                                  </span>
                                   {emp.role ? (
                                     <span className="text-muted-foreground block truncate leading-tight">{emp.role}</span>
                                   ) : null}
@@ -3424,6 +3427,7 @@ export function RotaCalendarClient() {
                       {conflicts.length > 0 ? (
                         <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" />
                       ) : null}
+                      <ShiftTypeBadge shiftType={sh.shiftType} compact />
                     </div>
                     <div className="text-xs text-muted-foreground tabular-nums truncate">
                       {sh.start} – {sh.end}

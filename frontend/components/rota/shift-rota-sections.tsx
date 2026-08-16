@@ -1,6 +1,7 @@
 'use client';
 
 import type { AttendanceRec, ShiftRec } from '@/lib/rota-shifts-types';
+import { shiftTypeOption } from '@/lib/rota-shifts-types';
 import {
   attStatusBarColor,
   attStatusLabel,
@@ -19,6 +20,33 @@ type Props = {
   compact?: boolean;
   className?: string;
 };
+
+/** Coloured MORNING / AFTERNOON / EVENING / NIGHT badge for a shift. */
+export function ShiftTypeBadge({
+  shiftType,
+  compact,
+  className,
+}: {
+  shiftType: ShiftRec['shiftType'];
+  compact?: boolean;
+  className?: string;
+}) {
+  const opt = shiftTypeOption(shiftType);
+  if (!opt) return null;
+  return (
+    <span
+      className={cn(
+        'shrink-0 rounded font-bold uppercase leading-none border border-black/10',
+        compact ? 'px-1 py-0.5 text-[8px]' : 'px-1.5 py-1 text-[10px] tracking-wide',
+        className
+      )}
+      style={{ backgroundColor: opt.bg, color: opt.text }}
+      title={`Shift type: ${opt.label}`}
+    >
+      {opt.label}
+    </span>
+  );
+}
 
 export function ShiftRotaSections({ shift, attendance, compact, className }: Props) {
   const attStatus = attendance ? normalizeAttStatus(attendance.status) : null;
@@ -49,8 +77,11 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
 
   return (
     <div className={cn('min-w-0', compact ? 'space-y-0.5' : 'space-y-1', className)}>
-      <div className={cn(timeCls, 'truncate')}>
-        {compact ? `${shift.start}–${shift.end}` : `Time: ${shift.start} – ${shift.end}`}
+      <div className="flex min-w-0 items-center justify-between gap-1">
+        <span className={cn(timeCls, 'truncate')}>
+          {compact ? `${shift.start}–${shift.end}` : `Time: ${shift.start} – ${shift.end}`}
+        </span>
+        <ShiftTypeBadge shiftType={shift.shiftType} compact={compact} />
       </div>
       <div
         className={cn(

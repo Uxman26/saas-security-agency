@@ -8,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
-import type { EmployeeRec, ShiftRec } from '@/lib/rota-shifts-types';
-import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
+import type { EmployeeRec, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
+import { SHIFT_COLOR_OPTS, SHIFT_TYPE_OPTS, normalizeShiftType } from '@/lib/rota-shifts-types';
 import { buildSiteIndex, findConflictsForDraft, normalizeSiteKey } from '@/lib/rota-shifts-utils';
 import { useCreateSite, useSites } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
@@ -40,8 +40,12 @@ const empty = (): ShiftRec => ({
   breakM: 0,
   color: SHIFT_COLOR_OPTS[0],
   label: '',
+  shiftType: null,
   shiftRate: null,
 });
+
+/** Radix Select cannot hold an empty string value, so "no type" gets a sentinel. */
+const NO_SHIFT_TYPE = '__none__';
 
 /** Keep HH:MM so <input type="time"> does not clear the value on open. */
 function normalizeTimeValue(t: string | undefined | null): string {
@@ -59,6 +63,7 @@ function normalizeShiftForm(sh: ShiftRec): ShiftRec {
     end: normalizeTimeValue(sh.end),
     breakH: Number.isFinite(Number(sh.breakH)) ? Number(sh.breakH) : 0,
     breakM: Number.isFinite(Number(sh.breakM)) ? Number(sh.breakM) : 0,
+    shiftType: normalizeShiftType(sh.shiftType),
   };
 }
 
@@ -354,6 +359,39 @@ export function ShiftDialog({
                       shift.site,
                       TEXT_LIMITS.siteName
                     )} of ${TEXT_LIMITS.siteName} characters left.`}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label>Shift type</Label>
+              <Select
+                value={shift.shiftType || NO_SHIFT_TYPE}
+                onValueChange={(v) =>
+                  setShift((s) => ({ ...s, shiftType: v === NO_SHIFT_TYPE ? null : (v as ShiftType) }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select shift type" />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-[250]">
+                  <SelectItem value={NO_SHIFT_TYPE}>
+                    <span className="text-muted-foreground">No shift type</span>
+                  </SelectItem>
+                  {SHIFT_TYPE_OPTS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none border border-border/50"
+                          style={{ backgroundColor: o.bg, color: o.text }}
+                        >
+                          {o.label}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Optional — shown as a coloured badge on the rota shift.
               </p>
             </div>
             <div className="space-y-1">

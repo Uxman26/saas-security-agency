@@ -221,6 +221,14 @@ def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
     )
 
 
+_SHIFT_TYPES = {"morning", "afternoon", "evening", "night"}
+
+
+def _parse_shift_type(value) -> Optional[str]:
+    v = str(value or "").strip().lower()
+    return v if v in _SHIFT_TYPES else None
+
+
 def _normalize_shift(block: dict, idx: int = 0) -> dict:
     b = dict(block or {})
     color = (b.get("color") or "").strip()
@@ -235,6 +243,7 @@ def _normalize_shift(block: dict, idx: int = 0) -> dict:
         "breakM": int(b.get("breakM") or 0),
         "color": color,
         "label": b.get("label") or "",
+        "shiftType": _parse_shift_type(b.get("shiftType")),
         "shiftRate": _parse_shift_rate(b.get("shiftRate")),
         "scheduledEnd": b.get("scheduledEnd") or "",
         "adjustments": b.get("adjustments") or [],

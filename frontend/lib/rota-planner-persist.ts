@@ -1,6 +1,6 @@
 import { buildDayRange, calcHours, normalizeAttStatus } from './rota-shifts-utils';
 import type { AttendanceRec, RotaJsState, ShiftRec } from './rota-shifts-types';
-import { SHIFT_COLOR_OPTS, AVATAR_PALETTE } from './rota-shifts-types';
+import { SHIFT_COLOR_OPTS, AVATAR_PALETTE, normalizeShiftType } from './rota-shifts-types';
 
 export type PlannerPayload = {
   rotaView: RotaJsState['rotaView'];
@@ -41,6 +41,7 @@ function normalizeShift(sh: Partial<ShiftRec>, idx: number): ShiftRec {
     breakM: sh.breakM ?? 0,
     color: sh.color?.trim() || SHIFT_COLOR_OPTS[idx % SHIFT_COLOR_OPTS.length],
     label: sh.label ?? '',
+    shiftType: normalizeShiftType(sh.shiftType),
     shiftRate,
     scheduledEnd: sh.scheduledEnd || undefined,
     scheduledStart: sh.scheduledStart || undefined,

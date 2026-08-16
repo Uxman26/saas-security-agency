@@ -9,6 +9,8 @@ export type ShiftAdjustment = {
   synced?: boolean;
 };
 
+export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'night';
+
 export type ShiftRec = {
   start: string;
   end: string;
@@ -18,6 +20,8 @@ export type ShiftRec = {
   breakM: number;
   color: string;
   label: string;
+  /** Optional time-of-day band shown as a badge on the rota shift tile */
+  shiftType?: ShiftType | null;
   shiftRate?: number | null;
   scheduledEnd?: string;
   scheduledStart?: string;
@@ -87,6 +91,30 @@ export const SHIFT_COLOR_OPTS = [
   '#64748b',
   '#78716f',
 ] as const;
+
+/** Shift-type badge colours, matching the rota planning sheet. */
+export const SHIFT_TYPE_OPTS: ReadonlyArray<{
+  value: ShiftType;
+  label: string;
+  bg: string;
+  text: string;
+}> = [
+  { value: 'morning', label: 'MORNING', bg: '#4DE1F5', text: '#000000' },
+  { value: 'afternoon', label: 'AFTERNOON', bg: '#FFFF00', text: '#000000' },
+  { value: 'evening', label: 'EVENING', bg: '#C0C0C0', text: '#000000' },
+  { value: 'night', label: 'NIGHT', bg: '#000000', text: '#FFFFFF' },
+];
+
+export function shiftTypeOption(value: ShiftType | null | undefined) {
+  if (!value) return null;
+  return SHIFT_TYPE_OPTS.find((o) => o.value === value) ?? null;
+}
+
+/** Accepts anything stored on old shifts and returns a valid type or null. */
+export function normalizeShiftType(value: unknown): ShiftType | null {
+  const v = String(value ?? '').trim().toLowerCase();
+  return SHIFT_TYPE_OPTS.some((o) => o.value === v) ? (v as ShiftType) : null;
+}
 
 export const AVATAR_PALETTE = [
   '#3b82f6',

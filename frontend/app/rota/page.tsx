@@ -607,9 +607,11 @@ function RotaHubPage() {
                   tabRotas.length === 0 ? (
                     <div className="py-12 text-center text-sm text-muted-foreground">
                       No active rotas.{' '}
-                      <Link href="/rota/create" className="text-primary underline hover:no-underline">
-                        Create a rota
-                      </Link>
+                      {canCreateRota ? (
+                        <Link href="/rota/create" className="text-primary underline hover:no-underline">
+                          Create a rota
+                        </Link>
+                      ) : null}
                     </div>
                   ) : (
                     <>

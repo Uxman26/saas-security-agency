@@ -164,6 +164,7 @@ function EmployeePublishCell({
   busy,
   disabled,
   name,
+  readOnly,
   onPublish,
   onUnpublish,
 }: {
@@ -171,6 +172,8 @@ function EmployeePublishCell({
   busy: boolean;
   disabled: boolean;
   name: string;
+  /** Status only, no actions — for logins that cannot publish. */
+  readOnly?: boolean;
   onPublish: () => void;
   onUnpublish: () => void;
 }) {
@@ -191,6 +194,8 @@ function EmployeePublishCell({
         {busy ? null : published ? <Check className="size-2.5 shrink-0" aria-hidden /> : null}
         {busy ? 'Saving…' : published ? 'Published' : 'Draft'}
       </span>
+      {readOnly ? null : (
+        <>
       {/* Publish carries the brand orange like the header action; Unpublish stays
           outline so emphasis reads from fill vs outline as well as hue. */}
       <button
@@ -213,6 +218,8 @@ function EmployeePublishCell({
       >
         Unpublish
       </button>
+        </>
+      )}
     </div>
   );
 }
@@ -289,6 +296,12 @@ export function RotaCalendarClient() {
   const planIdParam = searchParams.get('id');
   const { user } = useAuth();
   const canCreateStaff = canModule(user, 'guards', 'create');
+  /**
+   * Portal logins reach this screen read-only: the API serves them a copy of the rota
+   * rebuilt from their own sites' assignments and refuses every write. Hiding the
+   * editing controls keeps the screen honest rather than offering buttons that 403.
+   */
+  const canEditRota = canModule(user, 'rota', 'edit');
   /** Payable money is a separate permission — the column collapses entirely without it. */
   const showPayable = canModule(user, 'rota_payable', 'view');
   const payColW = showPayable ? ROTA_PAY_COL_W : 0;
@@ -2040,7 +2053,7 @@ export function RotaCalendarClient() {
         </div>
       </div>
 
-      {shiftCount === 0 && state.employees.length > 0 && (
+      {canEditRota && shiftCount === 0 && state.employees.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
           This rota has staff but no shifts yet. Click <strong>+</strong> in a day cell to add a shift, then click <strong>Publish</strong> to save to Assignments.
         </div>
@@ -2048,9 +2061,11 @@ export function RotaCalendarClient() {
 
       <div className="flex shrink-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" type="button" onClick={() => setPickOpen(true)}>
-            Add Staff
-          </Button>
+          {canEditRota && (
+            <Button size="sm" type="button" onClick={() => setPickOpen(true)}>
+              Add Staff
+            </Button>
+          )}
           <div className="flex rounded-md border p-0.5 bg-muted/40">
             {(['table', 'timeline'] as const).map((v) => (
               <Button
@@ -2065,14 +2080,18 @@ export function RotaCalendarClient() {
               </Button>
             ))}
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={openReorder}>
-            <ArrowUpDown className="size-3.5 mr-1" />
-            Reorder employees
-          </Button>
-          <Button variant="outline" size="sm" type="button" onClick={openDaysEditor}>
-            <CalendarPlus className="size-3.5 mr-1" />
-            Add days
-          </Button>
+          {canEditRota && (
+            <>
+              <Button variant="outline" size="sm" type="button" onClick={openReorder}>
+                <ArrowUpDown className="size-3.5 mr-1" />
+                Reorder employees
+              </Button>
+              <Button variant="outline" size="sm" type="button" onClick={openDaysEditor}>
+                <CalendarPlus className="size-3.5 mr-1" />
+                Add days
+              </Button>
+            </>
+          )}
           <div className="relative" ref={exportMenuRef}>
             <Button
               variant="outline"
@@ -2518,25 +2537,31 @@ export function RotaCalendarClient() {
                             <div key={idx} className="min-w-0">
                               <button
                                 type="button"
-                                draggable={!mark}
-                                onDragStart={mark ? undefined : (e) => onShiftDragStart(e, emp.id, dk, idx)}
-                                onDragEnd={mark ? undefined : onDragEnd}
+                                draggable={!mark && canEditRota}
+                                onDragStart={mark || !canEditRota ? undefined : (e) => onShiftDragStart(e, emp.id, dk, idx)}
+                                onDragEnd={mark || !canEditRota ? undefined : onDragEnd}
                                 className={cn(
                                   'w-full max-w-full min-w-0 overflow-hidden rounded border border-border bg-card px-1 py-1 text-left text-[10px] leading-tight shadow-sm relative',
-                                  mark ? 'pointer-events-none' : 'hover:bg-muted cursor-grab active:cursor-grabbing',
+                                  mark ? 'pointer-events-none' : 'hover:bg-muted',
+                                  !mark && canEditRota && 'cursor-grab active:cursor-grabbing',
+                                  !mark && !canEditRota && 'cursor-default',
                                   menuOpen && 'ring-2 ring-pink-500/60',
                                   conflicts.length > 0 && 'border-amber-500 bg-amber-50 dark:bg-amber-950'
                                 )}
-                                onClick={mark ? undefined : (e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)}
+                                onClick={
+                                  mark || !canEditRota
+                                    ? undefined
+                                    : (e) => toggleShiftMenu(e, emp.id, dk, idx, list.length - idx - 1)
+                                }
                                 onContextMenu={
-                                  mark
+                                  mark || !canEditRota
                                     ? undefined
                                     : (e) => {
                                         e.preventDefault();
                                         openShiftMenuAt(e, emp.id, dk, idx, list.length - idx - 1);
                                       }
                                 }
-                                title={tip || 'Drag to another day to move this shift'}
+                                title={tip || (canEditRota ? 'Drag to another day to move this shift' : undefined)}
                               >
                                 <div className="h-1 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
                                 {conflicts.length > 0 ? (
@@ -2558,7 +2583,7 @@ export function RotaCalendarClient() {
                             <span className="text-[9px] text-center text-red-700 dark:text-red-300 py-2">Removing</span>
                           ) : mark === 'adding' ? (
                             <span className="text-[9px] text-center text-emerald-700 dark:text-emerald-300 py-2">New day</span>
-                          ) : (
+                          ) : canEditRota ? (
                           <Button
                             type="button"
                             variant="ghost"
@@ -2569,7 +2594,7 @@ export function RotaCalendarClient() {
                           >
                             <Plus className="size-3 stroke-[1.5]" />
                           </Button>
-                          )}
+                          ) : null}
                         </div>
                       </td>
                     );
@@ -2597,6 +2622,7 @@ export function RotaCalendarClient() {
                       busy={publishingEmpId === emp.id}
                       disabled={publishingEmpId === emp.id || publishing || unpublishing}
                       name={emp.name}
+                      readOnly={!canEditRota}
                       onPublish={() => toggleEmployeePublished(emp, true)}
                       onUnpublish={() => toggleEmployeePublished(emp, false)}
                     />
@@ -2802,13 +2828,15 @@ export function RotaCalendarClient() {
                 </div>
               );
             })}
-            <button
-              type="button"
-              className="w-full py-3 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40"
-              onClick={() => setPickOpen(true)}
-            >
-              + Add Staff
-            </button>
+            {canEditRota ? (
+              <button
+                type="button"
+                className="w-full py-3 rounded-lg border border-dashed text-sm text-muted-foreground hover:bg-muted/40"
+                onClick={() => setPickOpen(true)}
+              >
+                + Add Staff
+              </button>
+            ) : null}
           </div>
         </div>
       )}

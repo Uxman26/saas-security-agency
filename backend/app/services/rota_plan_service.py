@@ -14,13 +14,12 @@ from app.services.rota_service import normalize_shift_type
 
 
 def _block_portal_roles(db: Session, user_id: int) -> None:
-    """Rota plans are the internal draft planner, not a client-facing view.
+    """Refuse a portal login outright. Used on every path that writes a plan.
 
-    A plan's planner_data is one JSON tree covering every employee and every site in the
-    company, and its shift blocks name their site as a free-text string rather than a
-    site_id — so there is no reliable way to serve a client a per-site slice of it.
-    Portal logins read their shifts through /portal/rota/* and /assignments/rota/detail,
-    which are scoped per site; the planner itself stays internal.
+    Editing is all-or-nothing: planner_data is one JSON tree covering every employee and
+    every site in the company, so a client saving it would be writing other clients'
+    shifts. Reads are different — see _portal_user, which serves portal logins a copy
+    rebuilt from their own sites' assignments instead of the stored tree.
     """
     from app.models import User
     from app.services.portal_access import is_portal_role
@@ -28,6 +27,25 @@ def _block_portal_roles(db: Session, user_id: int) -> None:
     user = db.query(User).filter(User.id == user_id).first()
     if user and is_portal_role(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+def _portal_user(db: Session, user_id: int):
+    """The caller if they are a portal login, else None."""
+    from app.models import User
+    from app.services.portal_access import is_portal_role
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and is_portal_role(user):
+        return user
+    return None
+
+
+def _visible_site_ids(db: Session, user) -> set[int]:
+    """Site ids this portal login may see, via the same filter the Sites list uses."""
+    from app.services.portal_access import filter_sites_for_user
+
+    q = filter_sites_for_user(db, user, db.query(Site.id).filter(Site.company_id == user.company_id))
+    return {row[0] for row in q.all()}
 
 
 def _end_date(start: date, day_count: int) -> date:
@@ -120,7 +138,6 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
 
 
 def list_rota_plans(db: Session, user_id: int) -> List[RotaPlanListItem]:
-    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     rows = (
         db.query(RotaPlan)
@@ -128,7 +145,36 @@ def list_rota_plans(db: Session, user_id: int) -> List[RotaPlanListItem]:
         .order_by(RotaPlan.created_at.desc())
         .all()
     )
-    return [_to_list_item(db, p) for p in rows]
+    portal = _portal_user(db, user_id)
+    if not portal:
+        return [_to_list_item(db, p) for p in rows]
+
+    # A portal login sees a rota only if it holds shifts at one of their own sites, and
+    # the counts describe just those shifts — never the whole company's. Drafts are
+    # invisible: nothing is committed to a site until the rota is published, and the
+    # draft tree names sites as free text with no site_id to filter on.
+    site_ids = _visible_site_ids(db, portal)
+    out: List[RotaPlanListItem] = []
+    if not site_ids:
+        return out
+    for plan in rows:
+        if plan.status != "published":
+            continue
+        visible = db.query(Assignment).filter(
+            Assignment.rota_plan_id == plan.id, Assignment.site_id.in_(site_ids)
+        )
+        shift_count = visible.count()
+        if not shift_count:
+            continue
+        staff_count = (
+            db.query(func.count(func.distinct(Assignment.guard_id)))
+            .filter(Assignment.rota_plan_id == plan.id, Assignment.site_id.in_(site_ids))
+            .scalar()
+            or 0
+        )
+        item = _to_list_item(db, plan)
+        out.append(item.model_copy(update={"shift_count": shift_count, "staff_count": int(staff_count)}))
+    return out
 
 
 _AVATAR_PALETTE = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#06b6d4", "#f97316"]
@@ -214,16 +260,43 @@ def _published_guard_ids(db: Session, plan_id: int) -> List[int]:
 
 
 def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
-    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Rota not found")
+    portal = _portal_user(db, user_id)
+    if portal:
+        return _portal_rota_detail(db, portal, plan)
     base = _to_list_item(db, plan)
     return RotaPlanDetail(
         **base.model_dump(),
         planner_data=plan.planner_data,
         published_guard_ids=_published_guard_ids(db, plan.id),
+    )
+
+
+def _portal_rota_detail(db: Session, user, plan: RotaPlan) -> RotaPlanDetail:
+    """A rota as a portal login may see it: only their own sites' shifts.
+
+    The stored planner_data is never handed over. The payload is rebuilt from the
+    Assignment rows for this plan that sit on a site the login can see, so a client
+    cannot read another client's shifts even though both live in the same plan.
+    """
+    site_ids = _visible_site_ids(db, user)
+    if plan.status != "published" or not site_ids:
+        raise HTTPException(status_code=404, detail="Rota not found")
+    payload = _payload_from_assignments(db, plan, _parse_planner(plan.planner_data), site_ids=site_ids)
+    if not payload["shifts"]:
+        raise HTTPException(status_code=404, detail="Rota not found")
+    shift_count = sum(len(v) for by_day in payload["shifts"].values() for v in by_day.values())
+    base = _to_list_item(db, plan).model_copy(
+        update={"shift_count": shift_count, "staff_count": len(payload["employees"])}
+    )
+    return RotaPlanDetail(
+        **base.model_dump(),
+        planner_data=json.dumps(payload),
+        # Publish state is an internal concern and drives buttons this login cannot use.
+        published_guard_ids=[],
     )
 
 
@@ -390,18 +463,31 @@ def _day_keys(start: date, day_count: int) -> list[str]:
     return [(start + timedelta(days=i)).isoformat() for i in range(n)]
 
 
-def _payload_from_assignments(db: Session, plan: RotaPlan, planner: Optional[dict] = None) -> dict:
+def _payload_from_assignments(
+    db: Session,
+    plan: RotaPlan,
+    planner: Optional[dict] = None,
+    site_ids: Optional[set[int]] = None,
+) -> dict:
+    """Rebuild a planner payload from this plan's assignment rows.
+
+    ``site_ids`` narrows it to those sites, which is what makes the result safe to hand
+    a portal login: assignments carry a real site_id, unlike the draft tree's free-text
+    site names.
+    """
     lookup = _planner_shift_lookup(planner)
-    rows = (
+    q = (
         db.query(Assignment)
         .options(joinedload(Assignment.guard), joinedload(Assignment.site))
         .filter(Assignment.rota_plan_id == plan.id)
-        .order_by(Assignment.date, Assignment.id)
-        .all()
     )
+    if site_ids is not None:
+        q = q.filter(Assignment.site_id.in_(site_ids or {0}))
+    rows = q.order_by(Assignment.date, Assignment.id).all()
     days = _day_keys(plan.start_date, plan.day_count)
     employees: dict[str, dict] = {}
     shifts: dict[str, dict[str, list]] = {}
+    slot_by_assignment: dict[int, str] = {}
     shift_idx = 0
     for a in rows:
         if not a.guard:
@@ -442,17 +528,55 @@ def _payload_from_assignments(db: Session, plan: RotaPlan, planner: Optional[dic
         matched = lookup.get((eid, dk, base["start"], base["end"]))
         if matched:
             base = {**base, **matched}
-        shifts.setdefault(eid, {}).setdefault(dk, []).append(_normalize_shift(base, shift_idx))
+        slot = len(shifts.setdefault(eid, {}).setdefault(dk, []))
+        shifts[eid][dk].append(_normalize_shift(base, shift_idx))
+        slot_by_assignment[a.id] = f"{eid}:{dk}:{slot}"
         shift_idx += 1
+
+    if site_ids is None:
+        attendance = dict((planner or {}).get("attendance") or {})
+    else:
+        # The stored attendance map is keyed by the full planner's slot indices and
+        # covers every site, so it cannot be reused for a filtered payload. Rebuild it
+        # from the attendance rows of the shifts actually included.
+        attendance = _attendance_for_assignments(db, slot_by_assignment)
+
     return {
         "rotaView": (planner or {}).get("rotaView") or plan.view_mode or "table",
         "days": list((planner or {}).get("days") or days),
         "employees": list(employees.values()),
         "shifts": shifts,
-        "attendance": dict((planner or {}).get("attendance") or {}),
+        "attendance": attendance,
         "budget": float((planner or {}).get("budget") if (planner or {}).get("budget") is not None else plan.budget or 0),
         "inclBreaks": bool((planner or {}).get("inclBreaks", False)),
     }
+
+
+def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str]) -> dict:
+    """Attendance map keyed by the rebuilt slot indices, for the given assignments only."""
+    if not slot_by_assignment:
+        return {}
+    out: dict[str, dict] = {}
+    rows = (
+        db.query(Attendance)
+        .filter(Attendance.assignment_id.in_(list(slot_by_assignment)))
+        .all()
+    )
+    for att in rows:
+        key = slot_by_assignment.get(att.assignment_id)
+        if not key or key in out:
+            continue
+        emp_id, dk, si = key.split(":")
+        out[key] = {
+            # Stored already normalised at write time (on_time / late / absent / …).
+            "status": (att.status or "").strip(),
+            "hours": "",
+            "note": (att.note or ""),
+            "empId": emp_id,
+            "dk": dk,
+            "si": int(si),
+        }
+    return out
 
 
 def _extract_payload(db: Session, plan: RotaPlan) -> dict:
@@ -547,6 +671,7 @@ def _strip_attendance_and_notes(payload: dict) -> dict:
 
 
 def copy_rota_plan(db: Session, user_id: int, source_id: int, data: RotaPlanCopy) -> RotaPlanDetail:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     source = db.query(RotaPlan).filter(RotaPlan.id == source_id, RotaPlan.company_id == company.id).first()
     if not source:
@@ -604,6 +729,7 @@ def _log_rota_change(db: Session, company_id: int, user_id: int, plan: RotaPlan,
 
 
 def create_rota_plan(db: Session, user_id: int, data: RotaPlanCreate) -> RotaPlanDetail:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     day_count = max(1, min(90, data.day_count))
     plan = RotaPlan(
@@ -633,6 +759,7 @@ def create_rota_plan(db: Session, user_id: int, data: RotaPlanCreate) -> RotaPla
 
 
 def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpdate) -> RotaPlanDetail:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
@@ -710,6 +837,7 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
 
 
 def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
@@ -735,6 +863,7 @@ def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
 def publish_rota_plan(
     db: Session, user_id: int, plan_id: int, guard_id: Optional[int] = None
 ) -> RotaPlanPublishResult:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
@@ -905,6 +1034,7 @@ def publish_rota_plan(
 def unpublish_rota_plan_guard(
     db: Session, user_id: int, plan_id: int, guard_id: int
 ) -> RotaPlanPublishResult:
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
@@ -938,6 +1068,7 @@ def unpublish_rota_plan_guard(
 
 def unpublish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPublishResult:
     """Unpublish the entire rota (remove all published assignments)."""
+    _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:

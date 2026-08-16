@@ -229,6 +229,11 @@ def test_planner_edits_are_recorded_with_the_user_who_made_them(session, client)
     assert edit["action_time"]
     assert "09:00" in edit["previous_values"] and "10:00" in edit["new_values"]
     assert {c["field"] for c in edit["changes"]} == {"start", "end"}
+    # The report renders the raw before/after pairs, so the keys must stay "from"/"to".
+    start_change = next(c for c in edit["changes"] if c["field"] == "start")
+    assert (start_change["from"], start_change["to"]) == ("09:00", "10:00")
+    # A shift naming a site that exists links to it, so a site filter can find it.
+    assert edit["site_id"] == site.id
 
 
 def test_a_deleted_shift_stays_in_the_history(session, client):

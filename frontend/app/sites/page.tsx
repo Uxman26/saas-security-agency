@@ -20,6 +20,7 @@ import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { TEXT_LIMITS } from '@/lib/text-limits';
 import { PASSWORD_REQUIREMENTS_MSG, siteSchema, type SiteFormData } from '@/lib/validation';
 import { PasswordInput } from '@/components/ui/password-input';
+import { PortalLoginPanel } from '@/components/portal-login-panel';
 import type { Client, Site } from '@/lib/types';
 import { api } from '@/lib/api';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -654,6 +655,16 @@ export default function SitesPage() {
               <DialogTitle>Edit Site — {editingSite?.name}</DialogTitle>
             </DialogHeader>
             <SiteForm form={editForm} clients={clients} mains={mains} subs={subs} onSubmit={handleUpdate} isPending={updateSite.isPending} submitLabel="Save Changes" />
+            {editingSite ? (
+              // Its own control, saved separately from the site fields: a password change
+              // takes effect immediately and must not ride along with an unsaved edit.
+              <PortalLoginPanel
+                kind="site"
+                recordId={editingSite.id}
+                load={api.sites.portalLogins}
+                save={api.sites.setPortalLoginPassword}
+              />
+            ) : null}
           </DialogContent>
         </Dialog>
       </div>

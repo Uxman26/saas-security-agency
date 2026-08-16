@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport } from './types';
+import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -204,6 +204,12 @@ export const api = {
       return request<Site>(`/sites/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
     },
     delete: (id: number): Promise<void> => request<void>(`/sites/${id}`, { method: 'DELETE' }),
+    portalLogins: (id: number): Promise<PortalLogin[]> => request<PortalLogin[]>(`/sites/${id}/portal-logins`),
+    setPortalLoginPassword: (id: number, loginUserId: number, new_password: string): Promise<PortalLogin> =>
+      request<PortalLogin>(`/sites/${id}/portal-logins/${loginUserId}/password`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password }),
+      }),
   },
   assignments: {
     list: (params?: { guard_id?: number; site_id?: number; client_id?: number; start_date?: string; end_date?: string }): Promise<Assignment[]> => {
@@ -466,6 +472,12 @@ export const api = {
     renew: (id: number, data: { new_end_date: string; note?: string }): Promise<ClientContractRenewal> =>
       request<ClientContractRenewal>(`/clients/${id}/renew`, { method: 'POST', body: JSON.stringify(data) }),
     renewals: (id: number): Promise<ClientContractRenewal[]> => request<ClientContractRenewal[]>(`/clients/${id}/renewals`),
+    portalLogins: (id: number): Promise<PortalLogin[]> => request<PortalLogin[]>(`/clients/${id}/portal-logins`),
+    setPortalLoginPassword: (id: number, loginUserId: number, new_password: string): Promise<PortalLogin> =>
+      request<PortalLogin>(`/clients/${id}/portal-logins/${loginUserId}/password`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password }),
+      }),
   },
   leads: {
     list: (params?: Record<string, string | number | boolean | undefined>) => {

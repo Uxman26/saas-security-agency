@@ -52,11 +52,29 @@ def _resolve_hours_range(period: str, start: Optional[date], end: Optional[date]
 
 
 def _rota_scope_ids(user: User, db: Session) -> tuple[Optional[int], Optional[int]]:
+    """The guard/client ids this login's rota is filtered by, or nothing to add.
+
+    Returning ``(None, None)`` does not mean "unscoped". Every query these ids feed goes
+    through rota_service._scope_for_portal_user first, which narrows a portal login to
+    its client or its pins and fails closed when it has neither, and the callers apply
+    the pin set again on the way out. These ids only select *within* that scope.
+    """
     slug = role_slug(user)
     if slug == "client":
-        if not user.client_id:
-            raise HTTPException(status_code=403, detail="Client account is not linked to a client record")
-        return None, user.client_id
+        if user.client_id:
+            return None, user.client_id
+        # A login created from Sites → "create a portal login" on a site with no client
+        # is deliberately client-less: its entire scope is its site pins (see
+        # site_service._create_site_login). Requiring a client here locked those logins
+        # out of the portal altogether.
+        if pinned_site_ids(db, user):
+            return None, None
+        # No client and no pins means nothing has been granted. Refuse rather than
+        # return a pair that adds no filter of its own.
+        raise HTTPException(
+            status_code=403,
+            detail="Client account is not linked to a client record or any site",
+        )
     if slug == "staff":
         guard = get_linked_guard(db, user)
         if not guard:

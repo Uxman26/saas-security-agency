@@ -10,6 +10,8 @@ import { ReportsHubCharts } from '@/components/reports/hub-charts';
 import { ReportCard } from '@/components/reports/report-card';
 import { ReportGenerateDialog } from '@/components/reports/report-generate-dialog';
 import { api, ApiError } from '@/lib/api';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 import type {
   Guard,
   ReportsHub,
@@ -44,24 +46,38 @@ type ReportDef = {
   icon: typeof Clock;
   exportType: string;
   noExport?: boolean;
+  /**
+   * The `reports.*` action this report's endpoint is guarded by. Cards the user cannot
+   * generate are not offered — without this the library shows every report to anyone
+   * holding reports.view and only fails at Generate with a 403.
+   */
+  perm: string;
 };
 
+const CATEGORIES = [
+  { id: 'staff', label: 'Staff reports' },
+  { id: 'audit', label: 'Audit & history' },
+  { id: 'financial', label: 'Financial' },
+  { id: 'subscription', label: 'Subscription' },
+  { id: 'usage', label: 'Resource usage' },
+] as const;
+
 const REPORTS: ReportDef[] = [
-  { id: 'attendance', title: 'Attendance', desc: 'Shift attendance with on-time, late, and absent status per employee.', category: 'staff', icon: Clock, exportType: 'attendance' },
-  { id: 'shifts', title: 'Shift hours', desc: 'Shift and hours breakdown by employee, site, and date range.', category: 'staff', icon: Calendar, exportType: 'shift-hours' },
-  { id: 'shift-overtime', title: 'Overtime report', desc: 'Shift extensions with reasons recorded from the rota.', category: 'staff', icon: BarChart3, exportType: 'shift-overtime' },
-  { id: 'shift-early-finish', title: 'Finished early report', desc: 'Shifts ended before schedule with recorded reasons.', category: 'staff', icon: Clock, exportType: 'shift-early-finish' },
-  { id: 'shift-lateness', title: 'Lateness report', desc: 'Late arrivals with scheduled vs actual start times per employee.', category: 'staff', icon: Clock, exportType: 'shift-lateness' },
-  { id: 'overtime', title: 'Contract overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
-  { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly' },
-  { id: 'shift-history', title: 'Shift History', desc: 'Audit trail of every shift created, assigned, reassigned, re-timed, or deleted — with the user who did it and when.', category: 'audit', icon: History, exportType: 'shift-history' },
-  { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices' },
-  { id: 'expenses', title: 'Expense & VAT', desc: 'Business expenses and VAT breakdown by category or period.', category: 'financial', icon: Receipt, exportType: 'expenses', noExport: true },
-  { id: 'subscription', title: 'Subscription billing', desc: 'Your platform subscription status, invoices, and outstanding balance.', category: 'subscription', icon: CreditCard, exportType: 'subscription' },
-  { id: 'subscription-active', title: 'Active subscription', desc: 'Current plan, billing cycle, and renewal date.', category: 'subscription', icon: CreditCard, exportType: 'subscription', noExport: true },
-  { id: 'login-logs', title: 'Login activity', desc: 'User login attempts with IP address and status.', category: 'usage', icon: LogIn, exportType: 'login-logs' },
-  { id: 'usage-summary', title: 'Resource usage', desc: 'SMS, email, API requests, logins, and storage for the period.', category: 'usage', icon: Activity, exportType: 'usage', noExport: true },
-  { id: 'sms-logs', title: 'SMS logs', desc: 'Outbound SMS delivery records and status.', category: 'usage', icon: MessageSquare, exportType: 'sms' },
+  { id: 'attendance', title: 'Attendance', desc: 'Shift attendance with on-time, late, and absent status per employee.', category: 'staff', icon: Clock, exportType: 'attendance', perm: 'attendance_reports' },
+  { id: 'shifts', title: 'Shift hours', desc: 'Shift and hours breakdown by employee, site, and date range.', category: 'staff', icon: Calendar, exportType: 'shift-hours', perm: 'staff_reports' },
+  { id: 'shift-overtime', title: 'Overtime report', desc: 'Shift extensions with reasons recorded from the rota.', category: 'staff', icon: BarChart3, exportType: 'shift-overtime', perm: 'shift_variance_reports' },
+  { id: 'shift-early-finish', title: 'Finished early report', desc: 'Shifts ended before schedule with recorded reasons.', category: 'staff', icon: Clock, exportType: 'shift-early-finish', perm: 'shift_variance_reports' },
+  { id: 'shift-lateness', title: 'Lateness report', desc: 'Late arrivals with scheduled vs actual start times per employee.', category: 'staff', icon: Clock, exportType: 'shift-lateness', perm: 'shift_variance_reports' },
+  { id: 'overtime', title: 'Contract overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly', perm: 'staff_reports' },
+  { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly', perm: 'staff_reports' },
+  { id: 'shift-history', title: 'Shift History', desc: 'Audit trail of every shift created, assigned, reassigned, re-timed, or deleted — with the user who did it and when.', category: 'audit', icon: History, exportType: 'shift-history', perm: 'shift_history_reports' },
+  { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices', perm: 'financial_reports' },
+  { id: 'expenses', title: 'Expense & VAT', desc: 'Business expenses and VAT breakdown by category or period.', category: 'financial', icon: Receipt, exportType: 'expenses', noExport: true, perm: 'view' },
+  { id: 'subscription', title: 'Subscription billing', desc: 'Your platform subscription status, invoices, and outstanding balance.', category: 'subscription', icon: CreditCard, exportType: 'subscription', perm: 'subscription_reports' },
+  { id: 'subscription-active', title: 'Active subscription', desc: 'Current plan, billing cycle, and renewal date.', category: 'subscription', icon: CreditCard, exportType: 'subscription', noExport: true, perm: 'subscription_reports' },
+  { id: 'login-logs', title: 'Login activity', desc: 'User login attempts with IP address and status.', category: 'usage', icon: LogIn, exportType: 'login-logs', perm: 'usage_reports' },
+  { id: 'usage-summary', title: 'Resource usage', desc: 'SMS, email, API requests, logins, and storage for the period.', category: 'usage', icon: Activity, exportType: 'usage', noExport: true, perm: 'usage_reports' },
+  { id: 'sms-logs', title: 'SMS logs', desc: 'Outbound SMS delivery records and status.', category: 'usage', icon: MessageSquare, exportType: 'sms', perm: 'usage_reports' },
 ];
 
 type ReportView =
@@ -79,6 +95,7 @@ function monthRange() {
 }
 
 export default function ReportsPage() {
+  const { user } = useAuth();
   const { start, end } = monthRange();
   const [startDate, setStartDate] = useState(start);
   const [endDate, setEndDate] = useState(end);
@@ -106,10 +123,18 @@ export default function ReportsPage() {
     api.sites.list().then(setSites).catch(() => {});
   }, [loadHub]);
 
+  const allowed = useMemo(() => REPORTS.filter((r) => canModule(user, 'reports', r.perm)), [user]);
+
   const filtered = useMemo(() => {
-    if (category === 'all') return REPORTS;
-    return REPORTS.filter((r) => r.category === category);
-  }, [category]);
+    if (category === 'all') return allowed;
+    return allowed.filter((r) => r.category === category);
+  }, [allowed, category]);
+
+  // Only offer a category filter for categories the user actually has a report in.
+  const categories = useMemo(() => {
+    const present = new Set(allowed.map((r) => r.category));
+    return CATEGORIES.filter((c) => present.has(c.id));
+  }, [allowed]);
 
   const openReport = (r: ReportDef) => {
     setSelected(r);
@@ -368,18 +393,27 @@ export default function ReportsPage() {
                 <SelectTrigger className="w-48"><SelectValue placeholder="All reports" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All reports</SelectItem>
-                  <SelectItem value="staff">Staff reports</SelectItem>
-                  <SelectItem value="audit">Audit &amp; history</SelectItem>
-                  <SelectItem value="financial">Financial</SelectItem>
-                  <SelectItem value="subscription">Subscription</SelectItem>
-                  <SelectItem value="usage">Resource usage</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {filtered.map((r) => (
-                  <ReportCard key={r.id} title={r.title} desc={r.desc} icon={r.icon} onGenerate={() => openReport(r)} />
-                ))}
-              </div>
+              {filtered.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6 text-sm text-muted-foreground">
+                    No reports are available to your role. Ask an administrator to grant the reports
+                    you need under Settings → Roles &amp; Permissions.
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {filtered.map((r) => (
+                    <ReportCard key={r.id} title={r.title} desc={r.desc} icon={r.icon} onGenerate={() => openReport(r)} />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -402,6 +436,7 @@ export default function ReportsPage() {
           groupBy={groupBy}
           action={action}
           actionOptions={actionOptions}
+          exportAllowed={canModule(user, 'reports', 'export')}
           guards={guards}
           sites={sites}
           loading={loading}

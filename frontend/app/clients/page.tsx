@@ -21,6 +21,8 @@ import {
   useRenewClientContract,
 } from '@/hooks/use-clients';
 import { PasswordInput } from '@/components/ui/password-input';
+import { PortalLoginPanel } from '@/components/portal-login-panel';
+import { api } from '@/lib/api';
 import { clientSchema, clientRenewSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
 import type { Client } from '@/lib/types';
 import type { z } from 'zod';
@@ -533,6 +535,16 @@ export default function ClientsPage() {
               <DialogTitle>Edit Client — {editingClient?.name}</DialogTitle>
             </DialogHeader>
             <ClientForm form={editForm} onSubmit={handleUpdate} isPending={updateClient.isPending} submitLabel="Save Changes" />
+            {editingClient ? (
+              // Its own control, saved separately from the client fields: a password change
+              // takes effect immediately and must not ride along with an unsaved edit.
+              <PortalLoginPanel
+                kind="client"
+                recordId={editingClient.id}
+                load={api.clients.portalLogins}
+                save={api.clients.setPortalLoginPassword}
+              />
+            ) : null}
           </DialogContent>
         </Dialog>
 

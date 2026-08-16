@@ -1389,6 +1389,20 @@ class CompanyUserResetPassword(StrictModel):
         return validate_password_strength(v)
 
 
+class PortalLoginOut(BaseModel):
+    """A portal login attached to a client or a site, as shown on their edit screens."""
+
+    id: int
+    email: str
+    full_name: str = ""
+    role_name: str = ""
+    is_active: bool = True
+    # Sites this login is pinned to; empty means it is not pinned to any.
+    site_ids: List[int] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class StaffRequestCreate(BaseModel):
     client_id: Optional[int] = None
     site_id: int

@@ -67,6 +67,35 @@ def _create_client_login(db: Session, db_client: Client, company_id: int, data: 
         ),
     )
 
+def list_client_portal_logins(db: Session, client_id: int, user_id: int) -> List["User"]:
+    """The portal logins attached to this client, for the Portal login panel on its edit screen."""
+    from app.models import User
+
+    client = get_client_by_id(db, client_id, user_id)
+    return (
+        db.query(User)
+        .filter(User.company_id == client.company_id, User.client_id == client.id)
+        .order_by(User.email)
+        .all()
+    )
+
+
+def set_client_login_password(db: Session, client_id: int, login_user_id: int, new_password: str, user_id: int) -> "User":
+    """Set a new password on one of this client's portal logins.
+
+    The login must already belong to this client. Checking that here — rather than
+    trusting the id the screen sends — keeps the client editor from being able to reach
+    any other account in the company, whatever it posts.
+    """
+    from app.services import user_service
+
+    logins = {u.id for u in list_client_portal_logins(db, client_id, user_id)}
+    if login_user_id not in logins:
+        raise HTTPException(status_code=404, detail="Portal login not found for this client")
+    company = get_company_by_user_id(db, user_id)
+    return user_service.reset_company_user_password(db, company.id, login_user_id, new_password)
+
+
 def get_clients(db: Session, user_id: int) -> List[Client]:
     company = get_company_by_user_id(db, user_id)
     return db.query(Client).filter(Client.company_id == company.id).all()

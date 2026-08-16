@@ -43,6 +43,8 @@ type Props = {
   /** Shift History only: the audit action to filter on ('' = every action). */
   action?: string;
   actionOptions?: { value: string; label: string }[];
+  /** False when the role lacks reports.export — the buttons would only 403. */
+  exportAllowed?: boolean;
   guards: Guard[];
   sites: Site[];
   loading: boolean;
@@ -68,6 +70,7 @@ export function ReportGenerateDialog({
   groupBy,
   action = '',
   actionOptions = [],
+  exportAllowed = true,
   guards,
   sites,
   loading,
@@ -87,7 +90,8 @@ export function ReportGenerateDialog({
   const showGroupBy = report ? GROUP_BY_REPORTS.has(report.id) : false;
   const showAction = report ? ACTION_FILTER_REPORTS.has(report.id) && !!onAction : false;
   const wide = report ? WIDE_REPORTS.has(report.id) : false;
-  const canExport = report && !report.noExport && report.exportType !== 'expenses' && report.exportType !== 'usage';
+  const canExport =
+    exportAllowed && report && !report.noExport && report.exportType !== 'expenses' && report.exportType !== 'usage';
 
   const staffOptions = guards.map((g) => ({ value: String(g.id), label: g.full_name }));
   const siteOptions = sites.map((s) => ({ value: String(s.id), label: s.name }));

@@ -161,6 +161,41 @@ def _block_portal_roles(db: Session, user_id: int) -> None:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
 
+def list_site_portal_logins(db: Session, site_id: int, user_id: int) -> List[User]:
+    """The portal logins pinned to this site, for the Portal login panel on its edit screen.
+
+    Only pinned logins count. A client login with no pins can see this site through its
+    client, but it is not this site's login and must not be managed from here.
+    """
+    from app.models import UserSite
+
+    site = get_site_by_id(db, site_id, user_id)
+    _block_portal_roles(db, user_id)
+    return (
+        db.query(User)
+        .join(UserSite, UserSite.user_id == User.id)
+        .filter(User.company_id == site.company_id, UserSite.site_id == site.id)
+        .order_by(User.email)
+        .all()
+    )
+
+
+def set_site_login_password(db: Session, site_id: int, login_user_id: int, new_password: str, user_id: int) -> User:
+    """Set a new password on one of this site's pinned portal logins.
+
+    The login must already be pinned to this site. Checking that here — rather than
+    trusting the id the screen sends — keeps the site editor from being able to reach any
+    other account in the company, whatever it posts.
+    """
+    from app.services import user_service
+
+    logins = {u.id for u in list_site_portal_logins(db, site_id, user_id)}
+    if login_user_id not in logins:
+        raise HTTPException(status_code=404, detail="Portal login not found for this site")
+    company = get_company_by_user_id(db, user_id)
+    return user_service.reset_company_user_password(db, company.id, login_user_id, new_password)
+
+
 def update_site(db: Session, site_id: int, site: SiteCreate, user_id: int) -> Site:
     _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)

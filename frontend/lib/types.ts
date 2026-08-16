@@ -850,6 +850,16 @@ export interface UsageSummary {
   storage_mb: number;
 }
 
+/** A portal login attached to a client or pinned to a site. */
+export interface PortalLogin {
+  id: number;
+  email: string;
+  full_name: string;
+  role_name: string;
+  is_active: boolean;
+  site_ids: number[];
+}
+
 /** One immutable entry in the Shift History audit trail. */
 export interface ShiftHistoryRow {
   id: number;

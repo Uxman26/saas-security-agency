@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, modules
 from app.middleware.api_usage import ApiUsageMiddleware
+from app.middleware.client_source import ClientSourceMiddleware
 from app.database import engine, Base
 from app.config import settings
 from app.openapi import configure_openapi
@@ -49,6 +50,9 @@ app = FastAPI(
 )
 configure_openapi(app)
 app.add_middleware(ApiUsageMiddleware)
+# Added last so it wraps the others and is the outermost layer: the shift history needs
+# to know whether a change came from the web or the mobile app before any handler runs.
+app.add_middleware(ClientSourceMiddleware)
 
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(

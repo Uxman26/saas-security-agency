@@ -1125,6 +1125,11 @@ def run():
         "CREATE INDEX IF NOT EXISTS ix_patrol_logs_company_created ON patrol_logs(company_id, created_at)",
         "CREATE INDEX IF NOT EXISTS ix_guard_documents_guard ON guard_documents(guard_id)",
         "CREATE INDEX IF NOT EXISTS ix_login_logs_company ON login_logs(company_id)",
+        # Shift history is always read as "this company, this date window", then narrowed.
+        "CREATE INDEX IF NOT EXISTS ix_shift_audit_company_created ON shift_audit_logs(company_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_shift_audit_guard ON shift_audit_logs(guard_id)",
+        "CREATE INDEX IF NOT EXISTS ix_shift_audit_site ON shift_audit_logs(site_id)",
+        "CREATE INDEX IF NOT EXISTS ix_shift_audit_plan ON shift_audit_logs(rota_plan_id)",
         "CREATE INDEX IF NOT EXISTS ix_email_logs_company ON email_logs(company_id)",
         "CREATE INDEX IF NOT EXISTS ix_sms_logs_company ON sms_logs(company_id)",
         # Permission resolution runs on every guarded request.

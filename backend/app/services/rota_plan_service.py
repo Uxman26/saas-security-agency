@@ -6,8 +6,9 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Attendance, Guard, RotaPlan, Site
+from app.models import Assignment, Attendance, Guard, RotaPlan, ShiftAuditLog, Site
 from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
+from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
 from app.services.rota_service import normalize_shift_type
 
@@ -190,6 +191,11 @@ def _delete_plan_assignments(db: Session, plan_id: int, guard_id: Optional[int] 
     if assignment_ids:
         db.query(Attendance).filter(Attendance.assignment_id.in_(assignment_ids)).delete(
             synchronize_session=False
+        )
+        # Republishing recreates assignment rows, so history rows keep their snapshot and
+        # drop the pointer rather than being deleted along with the assignment.
+        db.query(ShiftAuditLog).filter(ShiftAuditLog.assignment_id.in_(assignment_ids)).update(
+            {ShiftAuditLog.assignment_id: None}, synchronize_session=False
         )
     del_q = db.query(Assignment).filter(Assignment.rota_plan_id == plan_id)
     if guard_id is not None:
@@ -570,6 +576,33 @@ def copy_rota_plan(db: Session, user_id: int, source_id: int, data: RotaPlanCopy
     )
 
 
+def _log_rota_change(db: Session, company_id: int, user_id: int, plan: RotaPlan, prev: dict) -> None:
+    """Record a rota-level change (rename or re-dated period) against its shift history."""
+    changes = []
+    if prev.get("name") != plan.name:
+        changes.append({"field": "rota_name", "label": "Rota name", "from": prev.get("name"), "to": plan.name})
+    if prev.get("start") != plan.start_date or prev.get("end") != plan.end_date:
+        changes.append(
+            {
+                "field": "rota_period",
+                "label": "Rota period",
+                "from": f"{prev.get('start')} – {prev.get('end')}",
+                "to": f"{plan.start_date} – {plan.end_date}",
+            }
+        )
+    if not changes:
+        return
+    row = shift_audit_service.record(
+        db,
+        company_id=company_id,
+        user_id=user_id,
+        action="shift_rota_changed",
+        rota_plan=plan,
+        summary=f"Rota changed · {shift_audit_service.format_changes(changes)}",
+    )
+    row.changes = json.dumps(changes)
+
+
 def create_rota_plan(db: Session, user_id: int, data: RotaPlanCreate) -> RotaPlanDetail:
     company = get_company_by_user_id(db, user_id)
     day_count = max(1, min(90, data.day_count))
@@ -585,6 +618,15 @@ def create_rota_plan(db: Session, user_id: int, data: RotaPlanCreate) -> RotaPla
         planner_data=data.planner_data,
     )
     db.add(plan)
+    db.flush()
+    shift_audit_service.log_plan_shifts(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        plan=plan,
+        planner_json=plan.planner_data,
+        action="shift_created",
+    )
     db.commit()
     db.refresh(plan)
     return get_rota_plan(db, user_id, plan.id)
@@ -597,6 +639,10 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
         raise HTTPException(status_code=404, detail="Rota not found")
     payload = data.model_dump(exclude_unset=True)
     was_published = plan.status == "published"
+    # Snapshot what the rota looked like before this edit — the planner PATCHes the whole
+    # tree, so the diff against the stored copy is the only record of what the user did.
+    prev_planner = plan.planner_data
+    prev_rota = {"name": plan.name, "start": plan.start_date, "end": plan.end_date}
     if "name" in payload and payload["name"]:
         plan.name = payload["name"].strip()
     if "view_mode" in payload and payload["view_mode"]:
@@ -619,6 +665,16 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
         _apply_plan_span(plan, plan.start_date, payload["day_count"])
     if "status" in payload and payload["status"]:
         plan.status = payload["status"]
+    if "planner_data" in payload:
+        shift_audit_service.log_planner_change(
+            db,
+            company_id=company.id,
+            user_id=user_id,
+            plan=plan,
+            old_planner_json=prev_planner,
+            new_planner_json=plan.planner_data,
+        )
+    _log_rota_change(db, company.id, user_id, plan, prev_rota)
     db.commit()
     if "planner_data" in payload:
         if was_published:
@@ -658,6 +714,19 @@ def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Rota not found")
+    # Log before the rows go: the history keeps its own copy of the rota name and shift
+    # detail, so it still reads correctly once the plan itself is gone.
+    shift_audit_service.log_plan_shifts(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        plan=plan,
+        planner_json=plan.planner_data,
+        action="shift_deleted",
+    )
+    for row in db.query(ShiftAuditLog).filter(ShiftAuditLog.rota_plan_id == plan.id).all():
+        row.rota_plan_id = None
+    db.flush()
     _delete_plan_assignments(db, plan.id)
     db.delete(plan)
     db.commit()
@@ -822,6 +891,10 @@ def publish_rota_plan(
     after_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, guard_id)
     changes = rota_notify_service.diff_shift_fingerprints(before_fp, after_fp)
     if changes:
+        shift_audit_service.log_publish_changes(
+            db, company_id=company.id, user_id=user_id, plan=plan, changes=changes, published=True
+        )
+        db.commit()
         rota_notify_service.notify_shift_changes(db, user_id, plan, changes)
 
     return RotaPlanPublishResult(
@@ -853,6 +926,10 @@ def unpublish_rota_plan_guard(
     db.commit()
     changes = rota_notify_service.diff_shift_fingerprints(before_fp, set())
     if changes:
+        shift_audit_service.log_publish_changes(
+            db, company_id=company.id, user_id=user_id, plan=plan, changes=changes, published=False
+        )
+        db.commit()
         rota_notify_service.notify_shift_changes(db, user_id, plan, changes)
     return RotaPlanPublishResult(
         created=0, skipped=0, errors=[], published_guard_ids=published_ids
@@ -874,5 +951,9 @@ def unpublish_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanPubl
     db.commit()
     changes = rota_notify_service.diff_shift_fingerprints(before_fp, set())
     if changes:
+        shift_audit_service.log_publish_changes(
+            db, company_id=company.id, user_id=user_id, plan=plan, changes=changes, published=False
+        )
+        db.commit()
         rota_notify_service.notify_shift_changes(db, user_id, plan, changes)
     return RotaPlanPublishResult(created=0, skipped=0, errors=[], published_guard_ids=[])

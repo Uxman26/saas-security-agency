@@ -850,6 +850,34 @@ export interface UsageSummary {
   storage_mb: number;
 }
 
+/** One immutable entry in the Shift History audit trail. */
+export interface ShiftHistoryRow {
+  id: number;
+  shift_ref: string;
+  assignment_id: number | null;
+  rota_plan_id: number | null;
+  rota_name: string;
+  site_id: number | null;
+  site: string;
+  guard_id: number | null;
+  guard: string;
+  shift_date: string;
+  action: string;
+  action_label: string;
+  summary: string;
+  changes: { field: string; label: string; from: unknown; to: unknown }[];
+  previous_values: string;
+  new_values: string;
+  source: string;
+  user_id: number | null;
+  user: string;
+  user_email: string;
+  user_role: string;
+  action_date: string;
+  action_time: string;
+  created_at: string;
+}
+
 export interface StaffIndividualReport {
   guard_id: number;
   guard_name: string;

@@ -11,7 +11,19 @@ type ReportView =
   | { kind: 'usage'; data: UsageSummary }
   | { kind: 'rows'; title?: string; columns: Col[]; rows: Record<string, unknown>[] };
 
-const WRAP_KEYS = new Set(['reason', 'site', 'guard', 'body', 'recorded_by']);
+const WRAP_KEYS = new Set([
+  'reason',
+  'site',
+  'guard',
+  'body',
+  'recorded_by',
+  // Shift history: before/after values and the action label need room to wrap.
+  'previous_values',
+  'new_values',
+  'action_label',
+  'rota_name',
+  'user',
+]);
 
 function DataTable({ columns, rows }: { columns: Col[]; rows: Record<string, unknown>[] }) {
   if (!rows.length) return <p className="text-sm text-muted-foreground py-2">No records for this period.</p>;

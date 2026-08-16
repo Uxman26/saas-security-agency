@@ -200,6 +200,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("staff_reports", "Staff reports", "view"),
         ActionDef("attendance_reports", "Attendance reports", "view"),
         ActionDef("shift_variance_reports", "Overtime & lateness reports", "view"),
+        ActionDef("shift_history_reports", "Shift history audit log", "view"),
         ActionDef("financial_reports", "Financial reports", "view"),
         ActionDef("subscription_reports", "Subscription reports", "view"),
         ActionDef("usage_reports", "Usage reports", "view"),

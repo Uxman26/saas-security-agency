@@ -345,6 +345,7 @@ def approve_staff_request(db: Session, user: User, req_id: int, body: StaffReque
     if req.status != "pending":
         raise HTTPException(status_code=400, detail="Request already reviewed")
     plan = _find_or_create_plan(db, company.id, req.shift_date)
+    prev_planner = plan.planner_data
     site_name = req.site.name if req.site else ""
     label = f"{req.client.name[:12]}" if req.client else "Client req"
     notes = req.client_notes or ""
@@ -361,6 +362,17 @@ def approve_staff_request(db: Session, user: User, req_id: int, body: StaffReque
             notes,
             label,
         )
+    from app.services import shift_audit_service
+
+    shift_audit_service.log_planner_change(
+        db,
+        company_id=company.id,
+        user_id=user.id,
+        plan=plan,
+        old_planner_json=prev_planner,
+        new_planner_json=plan.planner_data,
+        created_action="shift_added_to_rota",
+    )
     req.status = "approved"
     req.reviewer_user_id = user.id
     req.reviewer_comment = (body.comment or "").strip() or None

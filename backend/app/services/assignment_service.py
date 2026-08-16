@@ -2,11 +2,23 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import Assignment, Guard, Site, User
+from app.models import Assignment, Guard, ShiftAuditLog, Site, User
 from app.schemas import AssignmentCreate, RotaResponse
+from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
 from app.services.contractor_scope import guard_has_contractor, site_has_contractor
 from app.services.rota_service import normalize_shift_type
+
+
+def _update_action(before: dict, after: dict) -> str:
+    """Name the edit after the most significant thing that moved."""
+    if before.get("guard_id") != after.get("guard_id"):
+        return "shift_reassigned"
+    if before.get("date") != after.get("date"):
+        return "shift_date_changed"
+    if before.get("start") != after.get("start") or before.get("end") != after.get("end"):
+        return "shift_time_changed"
+    return "shift_updated"
 
 def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -> Assignment:
     company = get_company_by_user_id(db, user_id)
@@ -33,6 +45,14 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
     data["shift_type"] = normalize_shift_type(data.get("shift_type"))
     db_assignment = Assignment(**data)
     db.add(db_assignment)
+    db.flush()
+    shift_audit_service.log_assignment_event(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        action="shift_assigned",
+        assignment=db_assignment,
+    )
     db.commit()
     db.refresh(db_assignment)
     from app.services import sms_trigger_service, email_trigger_service
@@ -155,9 +175,22 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
 
     data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
     data["shift_type"] = normalize_shift_type(data.get("shift_type"))
+    before = shift_audit_service.snapshot_from_assignment(db_assignment)
     for key, value in data.items():
         setattr(db_assignment, key, value)
-    
+
+    db.flush()
+    after = shift_audit_service.snapshot_from_assignment(db_assignment)
+    if before != after:
+        shift_audit_service.log_assignment_event(
+            db,
+            company_id=company.id,
+            user_id=user_id,
+            action=_update_action(before, after),
+            assignment=db_assignment,
+            before=before,
+            after=after,
+        )
     db.commit()
     db.refresh(db_assignment)
     return db_assignment
@@ -170,6 +203,17 @@ def delete_assignment(db: Session, assignment_id: int, user_id: int) -> None:
     ).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
-    
+
+    shift_audit_service.log_assignment_event(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        action="shift_deleted",
+        assignment=assignment,
+        before=shift_audit_service.snapshot_from_assignment(assignment),
+    )
+    db.query(ShiftAuditLog).filter(ShiftAuditLog.assignment_id == assignment.id).update(
+        {ShiftAuditLog.assignment_id: None}, synchronize_session=False
+    )
     db.delete(assignment)
     db.commit()

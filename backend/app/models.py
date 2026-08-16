@@ -1208,6 +1208,46 @@ class AuditLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class ShiftAuditLog(Base):
+    """Append-only history of every shift change, whatever made it.
+
+    Names are snapshotted alongside the foreign keys on purpose. A rota can be deleted,
+    a guard archived, a site renamed — the history still has to read back as it did when
+    the action happened, so the row keeps its own copy rather than joining for a label
+    that may since have moved. Nothing in the API updates or deletes these rows.
+    """
+
+    __tablename__ = "shift_audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    action = Column(String, nullable=False, index=True)
+    # Stable per-shift reference (rota/guard/date/slot) so repeat edits to the same shift
+    # line up in the report even though publishing rewrites the assignment rows.
+    shift_ref = Column(String, index=True)
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    rota_plan_id = Column(Integer, ForeignKey("rota_plans.id"), index=True)
+    rota_name = Column(String)
+    guard_id = Column(Integer, ForeignKey("guards.id"), index=True)
+    guard_name = Column(String)
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    site_name = Column(String)
+    shift_date = Column(Date, index=True)
+    summary = Column(Text)
+    # JSON: [{"field": ..., "label": ..., "from": ..., "to": ...}], plus full snapshots
+    changes = Column(Text)
+    before_json = Column(Text)
+    after_json = Column(Text)
+    source = Column(String, default="web")
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_name = Column(String)
+    user_email = Column(String)
+    user_role = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    user = relationship("User", foreign_keys=[user_id])
+    guard = relationship("Guard", foreign_keys=[guard_id])
+    site = relationship("Site", foreign_keys=[site_id])
+
+
 class PatrolRoute(Base):
     __tablename__ = "patrol_routes"
     id = Column(Integer, primary_key=True, index=True)

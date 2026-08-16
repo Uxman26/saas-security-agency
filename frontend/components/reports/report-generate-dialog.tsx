@@ -11,10 +11,11 @@ import type { Guard, Site } from '@/lib/types';
 import { FileSpreadsheet, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const WIDE_REPORTS = new Set(['shift-overtime', 'shift-early-finish', 'login-logs', 'attendance', 'sms-logs', 'shifts']);
-const STAFF_FILTER_REPORTS = new Set(['shifts', 'attendance', 'shift-overtime', 'shift-early-finish']);
-const SITE_FILTER_REPORTS = new Set(['shifts']);
+const WIDE_REPORTS = new Set(['shift-overtime', 'shift-early-finish', 'login-logs', 'attendance', 'sms-logs', 'shifts', 'shift-history']);
+const STAFF_FILTER_REPORTS = new Set(['shifts', 'attendance', 'shift-overtime', 'shift-early-finish', 'shift-history']);
+const SITE_FILTER_REPORTS = new Set(['shifts', 'shift-history']);
 const GROUP_BY_REPORTS = new Set(['staff-monthly', 'overtime']);
+const ACTION_FILTER_REPORTS = new Set(['shift-history']);
 
 type ReportView =
   | { kind: 'individual'; data: import('@/lib/types').StaffIndividualReport }
@@ -39,6 +40,9 @@ type Props = {
   guardId: string;
   siteId: string;
   groupBy: string;
+  /** Shift History only: the audit action to filter on ('' = every action). */
+  action?: string;
+  actionOptions?: { value: string; label: string }[];
   guards: Guard[];
   sites: Site[];
   loading: boolean;
@@ -49,6 +53,7 @@ type Props = {
   onGuardId: (v: string) => void;
   onSiteId: (v: string) => void;
   onGroupBy: (v: string) => void;
+  onAction?: (v: string) => void;
   onGenerate: () => void;
   onExport: (format: string) => void;
 };
@@ -61,6 +66,8 @@ export function ReportGenerateDialog({
   guardId,
   siteId,
   groupBy,
+  action = '',
+  actionOptions = [],
   guards,
   sites,
   loading,
@@ -71,12 +78,14 @@ export function ReportGenerateDialog({
   onGuardId,
   onSiteId,
   onGroupBy,
+  onAction,
   onGenerate,
   onExport,
 }: Props) {
   const showStaff = report ? STAFF_FILTER_REPORTS.has(report.id) : false;
   const showSite = report ? SITE_FILTER_REPORTS.has(report.id) : false;
   const showGroupBy = report ? GROUP_BY_REPORTS.has(report.id) : false;
+  const showAction = report ? ACTION_FILTER_REPORTS.has(report.id) && !!onAction : false;
   const wide = report ? WIDE_REPORTS.has(report.id) : false;
   const canExport = report && !report.noExport && report.exportType !== 'expenses' && report.exportType !== 'usage';
 
@@ -136,6 +145,20 @@ export function ReportGenerateDialog({
                     placeholder="All sites"
                     searchPlaceholder="Search sites…"
                     onChange={(v) => onSiteId(v === 'all' ? '' : v)}
+                  />
+                </div>
+              )}
+
+              {showAction && (
+                <div className="space-y-1.5">
+                  <Label>Action (optional)</Label>
+                  <SearchableSelect
+                    value={action || 'all'}
+                    options={actionOptions.map((o) => ({ value: o.value, label: o.label }))}
+                    noneOption={{ value: 'all', label: 'All actions' }}
+                    placeholder="All actions"
+                    searchPlaceholder="Search actions…"
+                    onChange={(v) => onAction?.(v === 'all' ? '' : v)}
                   />
                 </div>
               )}

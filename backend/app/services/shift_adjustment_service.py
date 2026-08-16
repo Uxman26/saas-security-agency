@@ -11,6 +11,45 @@ from app.models import Assignment, Attendance, Guard, ShiftEarlyFinishLog, Shift
 from app.services.company_service import get_company_by_user_id
 
 
+def _audit_timing_change(
+    db: Session,
+    company_id: int,
+    user_id: int,
+    assignment: Assignment,
+    *,
+    shift_start: Optional[str] = None,
+    shift_end: Optional[str] = None,
+    reason: str = "",
+) -> None:
+    """Mirror an overtime / early-finish / lateness edit into the shift history.
+
+    Called before the assignment is mutated, so `before` is still the scheduled shift.
+    Only the direct API path comes through here; the planner's own sync writes its
+    adjustments via apply_planner_* and is already covered by the planner diff.
+    """
+    from app.services import shift_audit_service
+
+    before = shift_audit_service.snapshot_from_assignment(assignment)
+    after = dict(before)
+    if shift_start is not None:
+        after["start"] = shift_start
+    if shift_end is not None:
+        after["end"] = shift_end
+    if before == after:
+        return
+    row = shift_audit_service.log_assignment_event(
+        db,
+        company_id=company_id,
+        user_id=user_id,
+        action="shift_time_changed",
+        assignment=assignment,
+        before=before,
+        after=after,
+    )
+    if reason:
+        row.summary = f"{row.summary} · {reason}"
+
+
 def _parse_mins(t: Optional[str]) -> int:
     if not t:
         return 0
@@ -156,6 +195,7 @@ def record_overtime(
         reason=reason,
         recorded_by=user_id,
     )
+    _audit_timing_change(db, company.id, user_id, a, shift_end=new_end, reason=f"Overtime: {reason}")
     a.shift_end = new_end
     db.add(log)
     db.commit()
@@ -210,6 +250,7 @@ def record_early_finish(
         reason=reason,
         recorded_by=user_id,
     )
+    _audit_timing_change(db, company.id, user_id, a, shift_end=actual_end, reason=f"Early finish: {reason}")
     a.shift_end = actual_end
     db.add(log)
     db.commit()
@@ -273,6 +314,14 @@ def record_lateness(
             recorded_by=user_id,
         )
         db.add(log)
+    _audit_timing_change(
+        db,
+        company.id,
+        user_id,
+        a,
+        shift_start=actual_start,
+        reason=f"Late arrival: {late_minutes} min" + (f" · {(note or '').strip()}" if (note or "").strip() else ""),
+    )
     a.shift_start = actual_start
     att = db.query(Attendance).filter(Attendance.assignment_id == a.id).first()
     if att:

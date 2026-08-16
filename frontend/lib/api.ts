@@ -17,6 +17,8 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      // Tags the caller in the shift history audit trail; the mobile app sends 'mobile'.
+      'X-Client-App': 'web',
       ...(token && { Authorization: `Bearer ${token}` }),
       ...options?.headers,
     },
@@ -715,6 +717,21 @@ export const api = {
       if (guard_id) q.append('guard_id', String(guard_id));
       return request<Record<string, unknown>[]>(`/reports/shift-lateness?${q}`);
     },
+    shiftHistory: (
+      start_date: string,
+      end_date: string,
+      opts: { guard_id?: number; site_id?: number; action?: string; user_id?: number; source?: string } = {}
+    ) => {
+      const q = new URLSearchParams({ start_date, end_date });
+      if (opts.guard_id) q.append('guard_id', String(opts.guard_id));
+      if (opts.site_id) q.append('site_id', String(opts.site_id));
+      if (opts.action) q.append('action', opts.action);
+      if (opts.user_id) q.append('user_id', String(opts.user_id));
+      if (opts.source) q.append('source', opts.source);
+      return request<import('./types').ShiftHistoryRow[]>(`/reports/shift-history?${q}`);
+    },
+    shiftHistoryActions: () =>
+      request<{ value: string; label: string }[]>('/reports/shift-history/actions'),
     financialInvoices: (start_date: string, end_date: string) =>
       request<Record<string, unknown>[]>(`/reports/financial/invoices?start_date=${start_date}&end_date=${end_date}`),
     subscriptionSummary: () => request<import('./types').SubscriptionReportSummary>('/reports/subscription/summary'),

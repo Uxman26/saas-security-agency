@@ -30,6 +30,7 @@ import {
   Activity,
   LogIn,
   FileText,
+  History,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
@@ -53,6 +54,7 @@ const REPORTS: ReportDef[] = [
   { id: 'shift-lateness', title: 'Lateness report', desc: 'Late arrivals with scheduled vs actual start times per employee.', category: 'staff', icon: Clock, exportType: 'shift-lateness' },
   { id: 'overtime', title: 'Contract overtime', desc: 'Overtime hours calculated against contracted weekly hours.', category: 'staff', icon: BarChart3, exportType: 'staff-monthly' },
   { id: 'staff-monthly', title: 'Monthly summary', desc: 'Total shifts and hours by employee, site, or client.', category: 'staff', icon: Users, exportType: 'staff-monthly' },
+  { id: 'shift-history', title: 'Shift History', desc: 'Audit trail of every shift created, assigned, reassigned, re-timed, or deleted — with the user who did it and when.', category: 'audit', icon: History, exportType: 'shift-history' },
   { id: 'invoices', title: 'Invoice report', desc: 'All invoices with paid amounts, balances, and status.', category: 'financial', icon: FileText, exportType: 'invoices' },
   { id: 'expenses', title: 'Expense & VAT', desc: 'Business expenses and VAT breakdown by category or period.', category: 'financial', icon: Receipt, exportType: 'expenses', noExport: true },
   { id: 'subscription', title: 'Subscription billing', desc: 'Your platform subscription status, invoices, and outstanding balance.', category: 'subscription', icon: CreditCard, exportType: 'subscription' },
@@ -87,6 +89,8 @@ export default function ReportsPage() {
   const [guardId, setGuardId] = useState('');
   const [siteId, setSiteId] = useState('');
   const [groupBy, setGroupBy] = useState('guard');
+  const [action, setAction] = useState('');
+  const [actionOptions, setActionOptions] = useState<{ value: string; label: string }[]>([]);
   const [result, setResult] = useState<ReportView | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<'library' | 'custom'>('library');
@@ -113,8 +117,13 @@ export default function ReportsPage() {
     setGuardId('');
     setSiteId('');
     setGroupBy('guard');
+    setAction('');
     setStartDate(start);
     setEndDate(end);
+    // Action labels come from the server so the filter cannot drift from what is logged.
+    if (r.id === 'shift-history' && actionOptions.length === 0) {
+      api.reports.shiftHistoryActions().then(setActionOptions).catch(() => {});
+    }
   };
 
   const generate = async () => {
@@ -258,6 +267,32 @@ export default function ReportsPage() {
           ],
           rows: data,
         };
+      } else if (selected.id === 'shift-history') {
+        const data = await api.reports.shiftHistory(startDate, endDate, {
+          guard_id: guardId ? parseInt(guardId, 10) : undefined,
+          site_id: siteId ? parseInt(siteId, 10) : undefined,
+          action: action || undefined,
+        });
+        view = {
+          kind: 'rows',
+          columns: [
+            { key: 'action_date', label: 'Date' },
+            { key: 'action_time', label: 'Time' },
+            { key: 'action_label', label: 'Action' },
+            { key: 'shift_ref', label: 'Shift ref' },
+            { key: 'rota_name', label: 'Rota' },
+            { key: 'site', label: 'Site' },
+            { key: 'guard', label: 'Staff' },
+            { key: 'shift_date', label: 'Shift date' },
+            { key: 'previous_values', label: 'Previous values' },
+            { key: 'new_values', label: 'New values' },
+            { key: 'user', label: 'Changed by' },
+            { key: 'user_email', label: 'User email' },
+            { key: 'user_role', label: 'Role' },
+            { key: 'source', label: 'Source' },
+          ],
+          rows: data as unknown as Record<string, unknown>[],
+        };
       } else if (selected.id === 'overtime' || selected.id === 'staff-monthly') {
         const data = await api.reports.staffMonthly(startDate, endDate, groupBy);
         view = { kind: 'monthly', data };
@@ -334,6 +369,7 @@ export default function ReportsPage() {
                 <SelectContent>
                   <SelectItem value="all">All reports</SelectItem>
                   <SelectItem value="staff">Staff reports</SelectItem>
+                  <SelectItem value="audit">Audit &amp; history</SelectItem>
                   <SelectItem value="financial">Financial</SelectItem>
                   <SelectItem value="subscription">Subscription</SelectItem>
                   <SelectItem value="usage">Resource usage</SelectItem>
@@ -364,6 +400,8 @@ export default function ReportsPage() {
           guardId={guardId}
           siteId={siteId}
           groupBy={groupBy}
+          action={action}
+          actionOptions={actionOptions}
           guards={guards}
           sites={sites}
           loading={loading}
@@ -374,6 +412,7 @@ export default function ReportsPage() {
           onGuardId={setGuardId}
           onSiteId={setSiteId}
           onGroupBy={setGroupBy}
+          onAction={setAction}
           onGenerate={generate}
           onExport={exportFmt}
         />

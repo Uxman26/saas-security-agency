@@ -1567,6 +1567,44 @@ class ReportsHubResponse(BaseModel):
     subscription_trend: List[dict] = Field(default_factory=list)
 
 
+class ShiftHistoryChange(BaseModel):
+    field: str
+    label: str
+    from_value: Optional[Any] = Field(default=None, alias="from")
+    to_value: Optional[Any] = Field(default=None, alias="to")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ShiftHistoryRow(BaseModel):
+    """One immutable audit entry from the Shift History report."""
+
+    id: int
+    shift_ref: str = ""
+    assignment_id: Optional[int] = None
+    rota_plan_id: Optional[int] = None
+    rota_name: str = ""
+    site_id: Optional[int] = None
+    site: str = ""
+    guard_id: Optional[int] = None
+    guard: str = ""
+    shift_date: str = ""
+    action: str
+    action_label: str = ""
+    summary: str = ""
+    changes: List[ShiftHistoryChange] = Field(default_factory=list)
+    previous_values: str = ""
+    new_values: str = ""
+    source: str = ""
+    user_id: Optional[int] = None
+    user: str = ""
+    user_email: str = ""
+    user_role: str = ""
+    action_date: str = ""
+    action_time: str = ""
+    created_at: str = ""
+
+
 class SubscriptionReportSummary(BaseModel):
     subscription_tier: Optional[str] = None
     subscription_status: Optional[str] = None

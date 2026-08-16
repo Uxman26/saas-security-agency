@@ -7,18 +7,19 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import require_internal_module
+from app.rbac import require_internal_module, user_has_permission_db
 from app.schemas import (
     DashboardOverview,
     ComplianceAlert,
     ContractExpiryAlert,
     ReportsHubResponse,
+    ShiftHistoryRow,
     StaffIndividualReportResponse,
     StaffMonthlyReportResponse,
     SubscriptionReportSummary,
     UsageSummaryResponse,
 )
-from app.services import report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service, shift_adjustment_service
+from app.services import report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service, shift_adjustment_service, shift_audit_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -90,6 +91,49 @@ def shift_early_finish_report(start_date: date, end_date: date, guard_id: Option
 @router.get("/shift-lateness")
 def shift_lateness_report(start_date: date, end_date: date, guard_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("reports", "shift_variance_reports"))):
     return shift_adjustment_service.lateness_report_rows(db, current_user.id, start_date, end_date, guard_id)
+
+
+@router.get("/shift-history", response_model=List[ShiftHistoryRow])
+def shift_history_report(
+    start_date: date,
+    end_date: date,
+    guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    rota_plan_id: Optional[int] = None,
+    action: Optional[str] = None,
+    user_id: Optional[int] = None,
+    source: Optional[str] = None,
+    limit: int = 1000,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("reports", "shift_history_reports")),
+):
+    """Audit trail of every shift change in the period, newest first.
+
+    Read-only by design: there is no endpoint that edits or removes these rows, so a
+    normal user cannot alter the history from either the web or the mobile app. Filter
+    a single day by passing the same date as start_date and end_date.
+    """
+    return shift_audit_service.shift_history_rows(
+        db,
+        current_user.id,
+        start_date,
+        end_date,
+        guard_id=guard_id,
+        site_id=site_id,
+        rota_plan_id=rota_plan_id,
+        action=action,
+        actor_user_id=user_id,
+        source=source,
+        limit=limit,
+    )
+
+
+@router.get("/shift-history/actions")
+def shift_history_actions(
+    current_user: User = Depends(require_internal_module("reports", "shift_history_reports")),
+):
+    """The action codes the history can contain, with their display labels."""
+    return [{"value": k, "label": v} for k, v in shift_audit_service.ACTION_LABELS.items()]
 
 
 @router.get("/financial/invoices")
@@ -218,6 +262,31 @@ def export_report(
             ("recorded_at", "Recorded at"),
         ]
         title = "Lateness report"
+    elif report_type == "shift-history":
+        # Exporting the audit trail is still reading it, so it needs the same permission
+        # as the report itself rather than the generic export right.
+        if not user_has_permission_db(db, current_user, "reports.shift_history_reports"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        rows = shift_audit_service.shift_history_rows(
+            db, current_user.id, start_date, end_date, guard_id=guard_id, site_id=site_id, limit=5000
+        )
+        columns = [
+            ("action_date", "Date"),
+            ("action_time", "Time"),
+            ("action_label", "Action"),
+            ("shift_ref", "Shift ref"),
+            ("rota_name", "Rota"),
+            ("site", "Site"),
+            ("guard", "Staff"),
+            ("shift_date", "Shift date"),
+            ("previous_values", "Previous values"),
+            ("new_values", "New values"),
+            ("user", "Changed by"),
+            ("user_email", "User email"),
+            ("user_role", "User role"),
+            ("source", "Source"),
+        ]
+        title = "Shift history"
     elif report_type == "login-logs":
         rows = reports_extended_service.login_report_rows(db, current_user.id, start_date, end_date)
         columns = [("login_at", "Login at"), ("email", "Email"), ("full_name", "Name"), ("status", "Status"), ("ip_address", "IP")]

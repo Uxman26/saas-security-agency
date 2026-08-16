@@ -20,6 +20,10 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - backend_data:/app/data
+      # Uploaded files (logos, receipts, documents, guard/patrol/incident photos) live
+      # here. Without this volume they sit in the container's writable layer and are
+      # destroyed by every rebuild — which is what kept wiping the company logo.
+      - backend_uploads:/app/uploads
     depends_on:
       - redis
     restart: always
@@ -37,6 +41,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - backend_data:/app/data
+      - backend_uploads:/app/uploads
     depends_on:
       - redis
     restart: always
@@ -47,6 +52,7 @@ services:
       - ./backend/.env
     volumes:
       - backend_data:/app/data
+      - backend_uploads:/app/uploads
     command: python scripts/create_super_admin.py
     profiles:
       - admin
@@ -76,3 +82,4 @@ services:
 
 volumes:
   backend_data:
+  backend_uploads:

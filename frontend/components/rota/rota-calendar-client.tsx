@@ -2272,7 +2272,7 @@ export function RotaCalendarClient() {
             <thead>
               <tr>
                 <th
-                  className="rota-sticky-emp sticky top-0 left-0 z-[70] p-2 text-left align-top border-b border-r shadow-[2px_2px_8px_-2px_rgba(0,0,0,0.2)] overflow-hidden isolate"
+                  className="rota-sticky-emp rota-corner-header sticky top-0 left-0 z-[70] p-2 text-left align-top border-b border-r shadow-[2px_2px_8px_-2px_rgba(0,0,0,0.2)] overflow-hidden isolate"
                   style={{ ...ROTA_STICKY_EMP_BG }}
                 >
                   <div className="flex items-start justify-start gap-1.5 mb-2 min-w-0 w-full">
@@ -2315,7 +2315,7 @@ export function RotaCalendarClient() {
                     key={dk}
                     data-rota-day-idx={dayIdx}
                     className={cn(
-                      'sticky top-0 z-30 p-1.5 text-center text-[13px] font-bold border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
+                      'sticky top-0 z-30 p-1.5 text-center text-[13px] font-extrabold border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
                       mark === 'adding' && 'bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100',
                       mark === 'removing' && 'bg-red-100 text-red-900 line-through dark:bg-red-950 dark:text-red-100',
                       !mark && 'rota-day-header'
@@ -2631,9 +2631,9 @@ export function RotaCalendarClient() {
               ))}
             </tbody>
             <tfoot>
-              <tr className="font-bold text-xs">
+              <tr className="font-extrabold text-xs">
                 <td
-                  className="rota-sticky-emp sticky left-0 bottom-0 z-[55] p-2 border-r border-t text-center shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                  className="rota-sticky-emp rota-corner-total sticky left-0 bottom-0 z-[55] p-2 border-r border-t text-center shadow-[2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
                   style={{ ...ROTA_STICKY_EMP_BG }}
                 >
                   Daily total

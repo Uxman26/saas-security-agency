@@ -127,7 +127,7 @@ export function AppSidebar() {
         </div>
         <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
           <div>
-            <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/45">
+            <p className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-sidebar-foreground/70">
               {ts('sectionAdmin')}
             </p>
             <div className="mt-1 space-y-0.5">
@@ -166,7 +166,7 @@ export function AppSidebar() {
       <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
         {grouped.map((section) => (
           <div key={section.titleKey}>
-            <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-sidebar-foreground/45">
+            <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-sidebar-foreground/70">
               {section.titleKey === 'sectionSettings' ? <Settings className="size-3" /> : null}
               {ts(section.titleKey)}
             </p>

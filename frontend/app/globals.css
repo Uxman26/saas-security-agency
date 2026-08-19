@@ -352,6 +352,17 @@
   background-color: var(--rota-day-total-bg) !important;
 }
 
+/* The frozen first column paints itself with !important, which used to cut the header
+   and totals bands in half — an amber day-header row starting at column two, with a grey
+   corner cell to its left. These win because they come later, so each band runs
+   unbroken across the whole grid. */
+.rota-corner-header {
+  background-color: var(--rota-day-header-bg) !important;
+}
+.rota-corner-total {
+  background-color: var(--rota-day-total-bg) !important;
+}
+
 /* Row dividers span the whole grid, so a staff member's row can be traced from
    their name across to their cells. Deliberately stronger than --border. */
 .rota-grid-table td,

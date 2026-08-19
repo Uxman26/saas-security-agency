@@ -122,6 +122,21 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("reports", "Patrol reports", "view"),
         ActionDef("today_view", "Today's patrols", "view"),
     ),
+    # Lone worker splits into three audiences: the worker on the mobile app
+    # (session_start / check_in / sos), the controller watching the board (monitor /
+    # respond / resolve) and the admin who writes the rules (policy_*).
+    "lone_worker": CRUD
+    + (
+        ActionDef("policy_view", "View check call rules", "view"),
+        ActionDef("policy_manage", "Manage check call rules", "edit"),
+        ActionDef("session_start", "Start / end lone working", "create"),
+        ActionDef("check_in", "Confirm safe (check call)", "create"),
+        ActionDef("sos", "Raise SOS / assistance", "create"),
+        ActionDef("monitor", "Monitor lone workers", "view"),
+        ActionDef("respond", "Acknowledge and escalate", "edit"),
+        ActionDef("resolve", "Resolve lone worker incidents", "edit"),
+        ActionDef("audit_view", "Lone worker audit log", "view"),
+    ),
     "incidents": CRUD
     + (
         ActionDef("create_with_images", "Report with images", "create"),

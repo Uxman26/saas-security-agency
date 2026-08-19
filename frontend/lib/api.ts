@@ -433,6 +433,58 @@ export const api = {
     },
     today: (): Promise<import('./types').PatrolToday> => request('/patrol/today'),
   },
+  loneWorker: {
+    listPolicies: (site_id?: number) =>
+      request<import('./types').LoneWorkerPolicy[]>(`/lone-worker/policies${site_id ? `?site_id=${site_id}` : ''}`),
+    createPolicy: (data: Record<string, unknown>) =>
+      request<import('./types').LoneWorkerPolicy>('/lone-worker/policies', { method: 'POST', body: JSON.stringify(data) }),
+    updatePolicy: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').LoneWorkerPolicy>(`/lone-worker/policies/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deletePolicy: (id: number) => request<void>(`/lone-worker/policies/${id}`, { method: 'DELETE' }),
+
+    // Worker-facing — the same endpoints the mobile app calls.
+    currentSession: () =>
+      request<import('./types').LoneWorkerSession | null>('/lone-worker/session/current'),
+    startSession: (data: Record<string, unknown>) =>
+      request<import('./types').LoneWorkerSession>('/lone-worker/session/start', { method: 'POST', body: JSON.stringify(data) }),
+    checkIn: (data: Record<string, unknown> = {}) =>
+      request<import('./types').LoneWorkerSession>('/lone-worker/session/check-in', { method: 'POST', body: JSON.stringify(data) }),
+    alarm: (data: Record<string, unknown>) =>
+      request<import('./types').LoneWorkerIncident>('/lone-worker/session/alarm', { method: 'POST', body: JSON.stringify(data) }),
+    endSession: (data: Record<string, unknown> = {}) =>
+      request<import('./types').LoneWorkerSession>('/lone-worker/session/end', { method: 'POST', body: JSON.stringify(data) }),
+
+    // Monitoring.
+    sessions: (params?: Record<string, string | number | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+      const qs = q.toString();
+      return request<import('./types').LoneWorkerSession[]>(`/lone-worker/sessions${qs ? `?${qs}` : ''}`);
+    },
+    incidents: (params?: Record<string, string | number | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+      const qs = q.toString();
+      return request<import('./types').LoneWorkerIncident[]>(`/lone-worker/incidents${qs ? `?${qs}` : ''}`);
+    },
+    acknowledge: (id: number, notes?: string) =>
+      request<import('./types').LoneWorkerIncident>(`/lone-worker/incidents/${id}/acknowledge`, { method: 'POST', body: JSON.stringify({ notes }) }),
+    escalate: (id: number, notes?: string) =>
+      request<import('./types').LoneWorkerIncident>(`/lone-worker/incidents/${id}/escalate`, { method: 'POST', body: JSON.stringify({ notes }) }),
+    contactAttempt: (id: number, method: string, outcome?: string) =>
+      request<import('./types').LoneWorkerIncident>(`/lone-worker/incidents/${id}/contact-attempt`, { method: 'POST', body: JSON.stringify({ method, outcome }) }),
+    resolve: (id: number, resolution: string, notes?: string) =>
+      request<import('./types').LoneWorkerIncident>(`/lone-worker/incidents/${id}/resolve`, { method: 'POST', body: JSON.stringify({ resolution, notes }) }),
+
+    // Audit trail.
+    events: (params?: Record<string, string | number | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+      const qs = q.toString();
+      return request<import('./types').LoneWorkerEvent[]>(`/lone-worker/events${qs ? `?${qs}` : ''}`);
+    },
+    eventTypes: () => request<{ value: string; label: string }[]>('/lone-worker/event-types'),
+  },
   incidents: {
     list: (params?: Record<string, string | undefined>) => {
       const q = new URLSearchParams();

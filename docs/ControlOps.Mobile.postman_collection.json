@@ -1578,6 +1578,208 @@
               "response": []
             }
           ]
+        },
+        {
+          "name": "1.8 Lone Worker / Check Calls *(live)*",
+          "description": "Lone working on the mobile app: start a session, answer the scheduled check call, raise assistance or SOS, and end the shift. Send `X-Client-App: mobile` so the audit trail records where each action came from. Poll `session/current` to drive the countdown.",
+          "item": [
+            {
+              "name": "Current session (poll for the timer)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "session",
+                    "current"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/session/current",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.session_start`. Returns null when off duty. `display_status` is one of SESSION ACTIVE / SAFE / CHECK DUE / GRACE PERIOD / MISSED CHECK / ESCALATING / EMERGENCY / RESPONDER INVESTIGATING; `seconds_to_next_check` drives the countdown."
+              },
+              "response": []
+            },
+            {
+              "name": "Start lone working",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "session",
+                    "start"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/session/start",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.session_start`. 409 if a session is already active. Check call rules are copied from the site policy onto the session.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"site_id\": \"{{site_id}}\",\n  \"location_note\": \"Roof plant room\",\n  \"expected_end_at\": \"2026-08-19T06:00:00Z\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy\": 8.0,\n  \"device_id\": \"{{device_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "I'M SAFE (answer the check call)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "session",
+                    "check-in"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/session/check-in",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.check_in`. Answers the open check and starts the next period. A confirmation after the grace period is recorded as a late check-in and leaves the incident open for a responder to close.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy\": 8.0,\n  \"note\": \"\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "I NEED ASSISTANCE",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "session",
+                    "alarm"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/session/alarm",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.sos`. Opens an incident and escalates immediately.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"assistance\",\n  \"notes\": \"Need a second officer\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "SOS (emergency)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "session",
+                    "alarm"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/session/alarm",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.sos`. Bypasses the check call window and grace period entirely — the incident opens at escalation level 1 straight away.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"kind\": \"sos\",\n  \"notes\": \"Intruder on site\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy\": 6.0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "END LONE WORKING",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "session",
+                    "end"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/session/end",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.session_start`. 409 while an incident is still open — a responder must resolve it first.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"confirm_safe\": true,\n  \"note\": \"Finished safely\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ],
       "description": "Staff mobile app endpoints."
@@ -3048,6 +3250,255 @@
                   ]
                 },
                 "description": "Client scoped compliance."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Lone Worker Monitoring *(live)*",
+          "description": "Controller / supervisor side. Internal roles only — portal logins are refused.",
+          "item": [
+            {
+              "name": "Live board (active sessions)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "sessions"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/sessions?status_filter=active",
+                  "query": [
+                    {
+                      "key": "status_filter",
+                      "value": "active"
+                    }
+                  ]
+                },
+                "description": "Permission: `lone_worker.monitor`. `status_filter=all` includes completed sessions."
+              },
+              "response": []
+            },
+            {
+              "name": "Open incidents",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "incidents"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/incidents?status_filter=open",
+                  "query": [
+                    {
+                      "key": "status_filter",
+                      "value": "open"
+                    }
+                  ]
+                },
+                "description": "Permission: `lone_worker.monitor`."
+              },
+              "response": []
+            },
+            {
+              "name": "Acknowledge incident",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "incidents",
+                    "{{incident_id}}",
+                    "acknowledge"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/incidents/{{incident_id}}/acknowledge",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.respond`. Stops the escalation ladder but does NOT close the incident.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"Acknowledged, calling the worker\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Log a contact attempt",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "incidents",
+                    "{{incident_id}}",
+                    "contact-attempt"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/incidents/{{incident_id}}/contact-attempt",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.respond`.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"method\": \"call\",\n  \"outcome\": \"no answer\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Escalate manually",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "incidents",
+                    "{{incident_id}}",
+                    "escalate"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/incidents/{{incident_id}}/escalate",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.respond`. Moves one rung up and notifies that rung.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notes\": \"No contact after two attempts\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Resolve incident",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "incidents",
+                    "{{incident_id}}",
+                    "resolve"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/incidents/{{incident_id}}/resolve",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.resolve`. `resolution` is safe | incident | emergency.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"resolution\": \"safe\",\n  \"notes\": \"Worker was in a lift\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Check call rules",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "policies"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/policies",
+                  "query": []
+                },
+                "description": "Permission: `lone_worker.policy_view`."
+              },
+              "response": []
+            },
+            {
+              "name": "Audit log",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "lone-worker",
+                    "events"
+                  ],
+                  "raw": "{{baseUrl}}/lone-worker/events?start_date=2026-08-01&end_date=2026-08-31",
+                  "query": [
+                    {
+                      "key": "start_date",
+                      "value": "2026-08-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-08-31"
+                    }
+                  ]
+                },
+                "description": "Permission: `lone_worker.audit_view`. Permanent record of session start/end, check-ins, misses, reminders, escalation notifications, acknowledgements, contact attempts and resolution. Pass the same date twice for a single day."
               },
               "response": []
             }

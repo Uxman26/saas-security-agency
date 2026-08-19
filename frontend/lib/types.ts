@@ -1265,3 +1265,104 @@ export interface IncidentSummaryRow {
   site_id?: number | null;
   site_name?: string | null;
 }
+
+// --- Lone worker / check calls ---
+
+export interface LoneWorkerContact {
+  id?: number;
+  policy_id?: number;
+  level: number;
+  user_id?: number | null;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}
+
+export interface LoneWorkerPolicy {
+  id: number;
+  company_id: number;
+  site_id?: number | null;
+  site_name?: string | null;
+  name: string;
+  check_in_minutes: number;
+  reminder_minutes: number;
+  grace_minutes: number;
+  escalation_interval_minutes: number;
+  require_location: boolean;
+  status: string;
+  contacts: LoneWorkerContact[];
+}
+
+/** A live (or finished) spell of lone working. `display_status` is the label to show. */
+export interface LoneWorkerSession {
+  id: number;
+  company_id: number;
+  guard_id: number;
+  guard_name?: string | null;
+  site_id?: number | null;
+  site_name?: string | null;
+  policy_id?: number | null;
+  location_note?: string | null;
+  check_in_minutes: number;
+  reminder_minutes: number;
+  grace_minutes: number;
+  started_at?: string | null;
+  expected_end_at?: string | null;
+  ended_at?: string | null;
+  last_check_in_at?: string | null;
+  status: string;
+  source?: string | null;
+  display_status: string;
+  next_check_due_at?: string | null;
+  seconds_to_next_check?: number | null;
+  open_incident_id?: number | null;
+  open_incident_kind?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface LoneWorkerIncident {
+  id: number;
+  company_id: number;
+  session_id?: number | null;
+  check_id?: number | null;
+  guard_id?: number | null;
+  guard_name?: string | null;
+  site_id?: number | null;
+  site_name?: string | null;
+  guard_phone?: string | null;
+  kind: string;
+  status: string;
+  escalation_level: number;
+  opened_at?: string | null;
+  acknowledged_at?: string | null;
+  acknowledged_by?: string | null;
+  resolved_at?: string | null;
+  resolved_by?: string | null;
+  resolution?: string | null;
+  notes?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  display_status: string;
+}
+
+/** One immutable entry in the lone worker audit trail. */
+export interface LoneWorkerEvent {
+  id: number;
+  session_id?: number | null;
+  incident_id?: number | null;
+  guard_id?: number | null;
+  guard: string;
+  site: string;
+  event_type: string;
+  event_label: string;
+  message: string;
+  escalation_level?: number | null;
+  channel?: string | null;
+  recipient?: string | null;
+  user: string;
+  source: string;
+  event_date: string;
+  event_time: string;
+  created_at: string;
+}

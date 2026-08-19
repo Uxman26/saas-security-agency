@@ -49,3 +49,21 @@ def _check_missed_patrols_sync() -> dict[str, Any]:
 
 async def check_missed_patrols(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_check_missed_patrols_sync)
+
+
+def _sweep_lone_worker_sync() -> dict[str, Any]:
+    db: Session = SessionLocal()
+    try:
+        from app.services import lone_worker_service
+
+        result = lone_worker_service.sweep(db)
+        # Quiet minutes are the normal case, so only log when something actually moved.
+        if any(result.values()):
+            logger.info("lone worker sweep: %s", result)
+        return result
+    finally:
+        db.close()
+
+
+async def sweep_lone_worker(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_sweep_lone_worker_sync)

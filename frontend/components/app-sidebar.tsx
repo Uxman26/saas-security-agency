@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/auth-context';
 import type { ModuleAccess } from '@/lib/types';
 import {
   AlertTriangle,
+  ShieldAlert,
   Building2,
   Calendar,
   ClipboardList,
@@ -49,6 +50,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Calendar,
   MapPinned,
   AlertTriangle,
+  ShieldAlert,
   Building2,
   Target,
   PoundSterling,

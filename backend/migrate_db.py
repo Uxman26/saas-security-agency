@@ -1130,6 +1130,17 @@ def run():
         "CREATE INDEX IF NOT EXISTS ix_shift_audit_guard ON shift_audit_logs(guard_id)",
         "CREATE INDEX IF NOT EXISTS ix_shift_audit_site ON shift_audit_logs(site_id)",
         "CREATE INDEX IF NOT EXISTS ix_shift_audit_plan ON shift_audit_logs(rota_plan_id)",
+        # Lone worker: the sweep scans active sessions and open incidents every minute,
+        # and the audit report reads "this company, this date window".
+        "CREATE INDEX IF NOT EXISTS ix_lw_sessions_status ON lone_worker_sessions(status)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_sessions_company_started ON lone_worker_sessions(company_id, started_at)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_checks_session_status ON lone_worker_checks(session_id, status)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_checks_due ON lone_worker_checks(due_at)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_incidents_status ON lone_worker_incidents(status)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_incidents_company_opened ON lone_worker_incidents(company_id, opened_at)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_events_company_created ON lone_worker_events(company_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_events_session ON lone_worker_events(session_id)",
+        "CREATE INDEX IF NOT EXISTS ix_lw_events_incident ON lone_worker_events(incident_id)",
         "CREATE INDEX IF NOT EXISTS ix_email_logs_company ON email_logs(company_id)",
         "CREATE INDEX IF NOT EXISTS ix_sms_logs_company ON sms_logs(company_id)",
         # Permission resolution runs on every guarded request.
@@ -1174,6 +1185,7 @@ def run():
                     m["staff_requests"] = {"view": True, "create": False, "edit": True, "delete": False}
                     m["patrol"] = {"view": True, "create": True, "edit": True, "delete": False}
                     m["incidents"] = {"view": True, "create": True, "edit": True, "delete": False}
+                    m["lone_worker"] = {"view": True, "create": True, "edit": True, "delete": False}
                     role.permissions_json = wrap_matrix(m)
             db.commit()
             backfill_role_module_permissions(db)

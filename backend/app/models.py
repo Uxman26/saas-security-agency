@@ -1386,3 +1386,187 @@ class IncidentAttachment(Base):
     mime_type = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     incident = relationship("Incident", back_populates="attachments")
+
+
+# --- Lone worker / check calls -------------------------------------------------------
+# A lone worker starts a session on the mobile app, the app asks them to confirm they are
+# safe every `check_in_minutes`, and a missed confirmation escalates through a ladder of
+# contacts until a responder acknowledges and closes it off. Every step is written to
+# LoneWorkerEvent, which is the permanent audit record for the whole flow.
+
+
+class LoneWorkerPolicy(Base):
+    """Check-call rules. One per site, or a company-wide default when site_id is NULL."""
+
+    __tablename__ = "lone_worker_policies"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    name = Column(String, nullable=False)
+    check_in_minutes = Column(Integer, nullable=False, default=60)
+    reminder_minutes = Column(Integer, nullable=False, default=5)
+    grace_minutes = Column(Integer, nullable=False, default=5)
+    # Minutes to wait for an acknowledgement before moving to the next escalation level.
+    escalation_interval_minutes = Column(Integer, nullable=False, default=5)
+    require_location = Column(Boolean, default=False)
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    site = relationship("Site")
+    contacts = relationship(
+        "LoneWorkerEscalationContact",
+        back_populates="policy",
+        cascade="all, delete-orphan",
+        order_by="LoneWorkerEscalationContact.level",
+    )
+
+
+class LoneWorkerEscalationContact(Base):
+    """One rung of the escalation ladder — level 1 supervisor, 2 manager, 3 ARC."""
+
+    __tablename__ = "lone_worker_escalation_contacts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    policy_id = Column(Integer, ForeignKey("lone_worker_policies.id"), nullable=False, index=True)
+    level = Column(Integer, nullable=False, default=1)
+    # A linked user gets the in-app notification as well; name/email/phone cover external
+    # contacts such as a monitoring centre that has no ControlOps login.
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String)
+    email = Column(String)
+    phone = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    policy = relationship("LoneWorkerPolicy", back_populates="contacts")
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class LoneWorkerSession(Base):
+    """One spell of lone working, from START to END LONE WORKING."""
+
+    __tablename__ = "lone_worker_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    policy_id = Column(Integer, ForeignKey("lone_worker_policies.id"))
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    location_note = Column(String)
+    # The rules are copied onto the session at start, so editing a policy mid-shift never
+    # retroactively changes when a worker was considered overdue.
+    check_in_minutes = Column(Integer, nullable=False, default=60)
+    reminder_minutes = Column(Integer, nullable=False, default=5)
+    grace_minutes = Column(Integer, nullable=False, default=5)
+    escalation_interval_minutes = Column(Integer, nullable=False, default=5)
+    started_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    expected_end_at = Column(DateTime(timezone=True))
+    ended_at = Column(DateTime(timezone=True))
+    # OFF_DUTY is the absence of a row; a live session is one of these.
+    status = Column(String, default="active", index=True)
+    last_check_in_at = Column(DateTime(timezone=True))
+    latitude = Column(Float)
+    longitude = Column(Float)
+    accuracy = Column(Float)
+    device_id = Column(String)
+    source = Column(String, default="mobile")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    guard = relationship("Guard")
+    site = relationship("Site")
+    policy = relationship("LoneWorkerPolicy")
+    user = relationship("User", foreign_keys=[user_id])
+    checks = relationship("LoneWorkerCheck", back_populates="session", cascade="all, delete-orphan")
+
+
+class LoneWorkerCheck(Base):
+    """One scheduled safety check. Exactly one row is `pending` per active session."""
+
+    __tablename__ = "lone_worker_checks"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("lone_worker_sessions.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), index=True)
+    sequence = Column(Integer, default=1)
+    due_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    reminder_sent_at = Column(DateTime(timezone=True))
+    responded_at = Column(DateTime(timezone=True))
+    # pending | safe | safe_late | missed | cancelled
+    status = Column(String, default="pending", index=True)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    accuracy = Column(Float)
+    source = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    session = relationship("LoneWorkerSession", back_populates="checks")
+    guard = relationship("Guard")
+
+
+class LoneWorkerIncident(Base):
+    """A missed check call, an assistance request or an SOS, plus how it was closed."""
+
+    __tablename__ = "lone_worker_incidents"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("lone_worker_sessions.id"), index=True)
+    check_id = Column(Integer, ForeignKey("lone_worker_checks.id"))
+    guard_id = Column(Integer, ForeignKey("guards.id"), index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    # missed_check | assistance | sos
+    kind = Column(String, nullable=False, default="missed_check", index=True)
+    # escalating | acknowledged | resolved
+    status = Column(String, nullable=False, default="escalating", index=True)
+    escalation_level = Column(Integer, default=0)
+    last_escalated_at = Column(DateTime(timezone=True))
+    opened_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    acknowledged_at = Column(DateTime(timezone=True))
+    acknowledged_by_user_id = Column(Integer, ForeignKey("users.id"))
+    resolved_at = Column(DateTime(timezone=True))
+    resolved_by_user_id = Column(Integer, ForeignKey("users.id"))
+    # safe | incident | emergency — how it actually ended, kept separate from `status`.
+    resolution = Column(String)
+    notes = Column(Text)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    accuracy = Column(Float)
+    # Set when a matching record was also raised in the main Incidents module.
+    incident_id = Column(Integer, ForeignKey("incidents.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    session = relationship("LoneWorkerSession")
+    check = relationship("LoneWorkerCheck")
+    guard = relationship("Guard")
+    site = relationship("Site")
+    acknowledged_by = relationship("User", foreign_keys=[acknowledged_by_user_id])
+    resolved_by = relationship("User", foreign_keys=[resolved_by_user_id])
+
+
+class LoneWorkerEvent(Base):
+    """Append-only audit trail: session start/end, check-ins, misses, reminders,
+    escalation notifications, acknowledgements, call attempts and final resolution.
+
+    Nothing in the API updates or deletes these rows.
+    """
+
+    __tablename__ = "lone_worker_events"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("lone_worker_sessions.id"), index=True)
+    incident_id = Column(Integer, ForeignKey("lone_worker_incidents.id"), index=True)
+    check_id = Column(Integer, ForeignKey("lone_worker_checks.id"))
+    guard_id = Column(Integer, ForeignKey("guards.id"), index=True)
+    guard_name = Column(String)
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    site_name = Column(String)
+    event_type = Column(String, nullable=False, index=True)
+    message = Column(Text)
+    escalation_level = Column(Integer)
+    # For notification events: how it was sent and to whom.
+    channel = Column(String)
+    recipient = Column(String)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    actor_name = Column(String)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    accuracy = Column(Float)
+    source = Column(String, default="system")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    actor = relationship("User", foreign_keys=[actor_user_id])

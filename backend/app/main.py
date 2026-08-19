@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
-from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, modules
+from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, lone_worker, modules
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.middleware.client_source import ClientSourceMiddleware
 from app.database import engine, Base
@@ -100,6 +100,7 @@ app.include_router(billing.router)
 app.include_router(portal.router)
 app.include_router(patrol.router)
 app.include_router(incidents.router)
+app.include_router(lone_worker.router)
 
 # The uploads directory is deliberately NOT mounted as static files. It holds guard
 # documents, incident photos and patrol scans, so serving it publicly would let anyone

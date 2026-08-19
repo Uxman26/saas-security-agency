@@ -90,6 +90,7 @@ MODULE_KEYS = (
     "portal",
     "patrol",
     "incidents",
+    "lone_worker",
 )
 
 
@@ -280,6 +281,9 @@ def default_matrix_guard() -> Dict[str, Any]:
         "portal": {"view": False, "create": False, "edit": False, "delete": False},
         "patrol": {"view": True, "create": False, "edit": True, "delete": False},
         "incidents": {"view": True, "create": True, "edit": False, "delete": False},
+        # Supervisors are escalation level 1: they watch the board and respond, but the
+        # check call rules themselves stay with an admin (delete = policy management).
+        "lone_worker": {"view": True, "create": True, "edit": True, "delete": False},
     }
 
 
@@ -297,6 +301,7 @@ def default_matrix_staff_portal() -> Dict[str, Any]:
     base["portal"] = {"view": True, "create": True, "edit": True, "delete": False}
     base["patrol"] = {"view": True, "create": False, "edit": True, "delete": False}
     base["incidents"] = {"view": True, "create": True, "edit": False, "delete": False}
+    base["lone_worker"] = {"view": False, "create": True, "edit": False, "delete": False}
     return base
 
 

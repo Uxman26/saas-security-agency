@@ -2237,3 +2237,215 @@ class IncidentSummaryRow(BaseModel):
     count: int
     site_id: Optional[int] = None
     site_name: Optional[str] = None
+
+
+# --- Lone worker / check calls -------------------------------------------------------
+
+
+class LoneWorkerContactIn(BaseModel):
+    level: int = Field(ge=1, le=9)
+    user_id: Optional[int] = None
+    name: Optional[str] = Field(default=None, max_length=120)
+    email: Optional[str] = Field(default=None, max_length=EMAIL_MAX)
+    phone: Optional[str] = Field(default=None, max_length=40)
+
+
+class LoneWorkerContactResponse(LoneWorkerContactIn):
+    id: int
+    policy_id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoneWorkerPolicyCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    site_id: Optional[int] = None
+    check_in_minutes: int = Field(default=60, ge=1, le=24 * 60)
+    reminder_minutes: int = Field(default=5, ge=0, le=120)
+    grace_minutes: int = Field(default=5, ge=0, le=120)
+    escalation_interval_minutes: int = Field(default=5, ge=1, le=120)
+    require_location: bool = False
+    status: str = "active"
+    contacts: List[LoneWorkerContactIn] = Field(default_factory=list)
+
+
+class LoneWorkerPolicyUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    site_id: Optional[int] = None
+    check_in_minutes: Optional[int] = Field(default=None, ge=1, le=24 * 60)
+    reminder_minutes: Optional[int] = Field(default=None, ge=0, le=120)
+    grace_minutes: Optional[int] = Field(default=None, ge=0, le=120)
+    escalation_interval_minutes: Optional[int] = Field(default=None, ge=1, le=120)
+    require_location: Optional[bool] = None
+    status: Optional[str] = None
+    # When supplied the ladder is replaced wholesale; omit it to leave contacts alone.
+    contacts: Optional[List[LoneWorkerContactIn]] = None
+
+
+class LoneWorkerPolicyResponse(BaseModel):
+    id: int
+    company_id: int
+    site_id: Optional[int] = None
+    site_name: Optional[str] = None
+    name: str
+    check_in_minutes: int
+    reminder_minutes: int
+    grace_minutes: int
+    escalation_interval_minutes: int
+    require_location: bool = False
+    status: str
+    contacts: List[LoneWorkerContactResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoneWorkerSessionStart(BaseModel):
+    site_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    policy_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    location_note: Optional[str] = Field(default=None, max_length=200)
+    expected_end_at: Optional[datetime] = None
+    # Overrides the policy for this session only; the monitoring rules are then frozen.
+    check_in_minutes: Optional[int] = Field(default=None, ge=1, le=24 * 60)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    device_id: Optional[str] = Field(default=None, max_length=120)
+
+
+class LoneWorkerCheckIn(BaseModel):
+    """I'M SAFE. `check_id` is optional — the open check is used when it is omitted."""
+
+    session_id: Optional[int] = None
+    check_id: Optional[int] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class LoneWorkerAlarmRequest(BaseModel):
+    """I NEED ASSISTANCE / SOS."""
+
+    session_id: Optional[int] = None
+    kind: str = "sos"
+    notes: Optional[str] = Field(default=None, max_length=500)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+
+
+class LoneWorkerSessionEnd(BaseModel):
+    session_id: Optional[int] = None
+    confirm_safe: bool = True
+    note: Optional[str] = Field(default=None, max_length=500)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy: Optional[float] = None
+
+
+class LoneWorkerCheckResponse(BaseModel):
+    id: int
+    session_id: int
+    sequence: int
+    due_at: datetime
+    reminder_sent_at: Optional[datetime] = None
+    responded_at: Optional[datetime] = None
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoneWorkerSessionResponse(BaseModel):
+    id: int
+    company_id: int
+    guard_id: int
+    guard_name: Optional[str] = None
+    site_id: Optional[int] = None
+    site_name: Optional[str] = None
+    policy_id: Optional[int] = None
+    location_note: Optional[str] = None
+    check_in_minutes: int
+    reminder_minutes: int
+    grace_minutes: int
+    started_at: Optional[datetime] = None
+    expected_end_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    last_check_in_at: Optional[datetime] = None
+    status: str
+    source: Optional[str] = None
+    # Derived live state, the thing the mobile timer and the monitor board render.
+    display_status: str = "SESSION ACTIVE"
+    next_check_due_at: Optional[datetime] = None
+    seconds_to_next_check: Optional[int] = None
+    open_incident_id: Optional[int] = None
+    open_incident_kind: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoneWorkerIncidentResponse(BaseModel):
+    id: int
+    company_id: int
+    session_id: Optional[int] = None
+    check_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    guard_name: Optional[str] = None
+    site_id: Optional[int] = None
+    site_name: Optional[str] = None
+    guard_phone: Optional[str] = None
+    kind: str
+    status: str
+    escalation_level: int = 0
+    opened_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
+    acknowledged_by: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+    resolution: Optional[str] = None
+    notes: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    display_status: str = "ESCALATING"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoneWorkerIncidentAction(BaseModel):
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class LoneWorkerResolveRequest(BaseModel):
+    # safe | incident | emergency
+    resolution: str = "safe"
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class LoneWorkerContactAttempt(BaseModel):
+    """Supervisor logging that they tried to reach the worker."""
+
+    method: str = "call"
+    outcome: Optional[str] = Field(default=None, max_length=200)
+
+
+class LoneWorkerEventResponse(BaseModel):
+    id: int
+    session_id: Optional[int] = None
+    incident_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    guard: str = ""
+    site: str = ""
+    event_type: str
+    event_label: str = ""
+    message: str = ""
+    escalation_level: Optional[int] = None
+    channel: Optional[str] = None
+    recipient: Optional[str] = None
+    user: str = ""
+    source: str = ""
+    event_date: str = ""
+    event_time: str = ""
+    created_at: str = ""

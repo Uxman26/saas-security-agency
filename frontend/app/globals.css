@@ -124,16 +124,17 @@
   --sidebar-accent-foreground: oklch(0.22 0.02 55);
   --sidebar-border: oklch(0.9 0.01 75);
   --sidebar-ring: #E04E00;
-  /* Summary columns (hours / payable / status) share one neutral tone so the
-     right-hand side reads as a single block instead of three clashing hues. */
-  --rota-hours-bg: #eef1f6;
-  --rota-pay-bg: #eef1f6;
-  --rota-publish-bg: #eef1f6;
-  --rota-emp-bg: #e8eef7;
-  --rota-emp-conflict-bg: #fffbeb;
-  --rota-day-header-bg: #fef3c7;
-  --rota-day-total-bg: #ede9fe;
-  --rota-row-line: #aab8ca;
+  /* Same light-orange wash as the active sidebar nav item (18% of the brand
+     orange), mixed over --background instead of transparent because the sticky
+     columns must paint opaque or shifts bleed through them. */
+  --rota-hours-bg: color-mix(in oklab, var(--sidebar-primary) 7%, var(--background));
+  --rota-pay-bg: color-mix(in oklab, var(--sidebar-primary) 7%, var(--background));
+  --rota-publish-bg: color-mix(in oklab, var(--sidebar-primary) 7%, var(--background));
+  --rota-emp-bg: color-mix(in oklab, var(--sidebar-primary) 11%, var(--background));
+  --rota-day-header-bg: color-mix(in oklab, var(--sidebar-primary) 18%, var(--background));
+  --rota-day-total-bg: color-mix(in oklab, var(--sidebar-primary) 18%, var(--background));
+  --rota-row-line: color-mix(in oklab, var(--sidebar-primary) 35%, var(--background));
+  --rota-emp-conflict-bg: #fff4e6;
 }
 
 /* Dark — 21st.dev Amber Mono (brand bg #0B0F14) */
@@ -170,16 +171,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.374 0.01 67.558);
   --sidebar-ring: oklch(0.473 0.137 46.201);
-  /* Matches light mode: one shared neutral across the summary columns. */
-  --rota-hours-bg: #1c222c;
-  --rota-pay-bg: #1c222c;
-  --rota-publish-bg: #1c222c;
-  /* Neutral charcoal band — avoid blue/navy in dark mode. */
-  --rota-emp-bg: #151A22;
+  /* Bands are theme-agnostic (see :root) — they mix the brand orange over
+     whichever --background is active. Only the conflict tint differs. */
   --rota-emp-conflict-bg: #451a03;
-  --rota-day-header-bg: #422006;
-  --rota-day-total-bg: #2a1a10;
-  --rota-row-line: #4b5563;
 }
 
 @layer base {

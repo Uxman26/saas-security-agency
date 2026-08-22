@@ -2300,7 +2300,7 @@ export function RotaCalendarClient() {
                   </div>
                   <button
                     type="button"
-                    className="text-xs text-pink-600 dark:text-pink-300 font-bold hover:underline"
+                    className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-bold text-primary-foreground shadow-xs transition-colors hover:bg-primary/90"
                     onClick={openReorder}
                   >
                     ⇅ Employee custom order
@@ -2390,7 +2390,7 @@ export function RotaCalendarClient() {
                     employeeSelectMode && selectedEmpIds.has(emp.id) && 'bg-muted',
                     (empHasConflict(emp.id) || emp.rotaPending) && 'bg-amber-50 dark:bg-amber-950',
                     rowDragId === emp.id && 'opacity-50',
-                    rowDropId === emp.id && rowDragId && rowDragId !== emp.id && 'ring-2 ring-inset ring-pink-500/70'
+                    rowDropId === emp.id && rowDragId && rowDragId !== emp.id && 'ring-2 ring-inset ring-primary/70'
                   )}
                   onDragOver={(e) => onRowReorderDragOver(e, emp.id)}
                   onDrop={(e) => onRowReorderDrop(e, emp.id)}
@@ -2503,7 +2503,7 @@ export function RotaCalendarClient() {
                             draggingShift &&
                             dropDayKey === dk &&
                             dropEmpId === emp.id &&
-                            'bg-pink-100 dark:bg-pink-950 ring-2 ring-inset ring-pink-500/70'
+                            'bg-primary/15 ring-2 ring-inset ring-primary/70'
                         )}
                         onDragOver={mark ? undefined : (e) => onDayDragOver(e, dk, emp.id)}
                         onDragLeave={
@@ -2545,7 +2545,7 @@ export function RotaCalendarClient() {
                                   mark ? 'pointer-events-none' : 'hover:bg-muted',
                                   !mark && canEditRota && 'cursor-grab active:cursor-grabbing',
                                   !mark && !canEditRota && 'cursor-default',
-                                  menuOpen && 'ring-2 ring-pink-500/60',
+                                  menuOpen && 'ring-2 ring-primary/60',
                                   conflicts.length > 0 && 'border-amber-500 bg-amber-50 dark:bg-amber-950'
                                 )}
                                 onClick={
@@ -2711,7 +2711,7 @@ export function RotaCalendarClient() {
                   className={cn(
                     'rounded-lg border transition-colors',
                     tone.shell,
-                    (draggingShift || dragEmpId) && dropDayKey === dk && 'ring-2 ring-pink-500/70'
+                    (draggingShift || dragEmpId) && dropDayKey === dk && 'ring-2 ring-primary/70'
                   )}
                   onDragOver={(e) => onDayDragOver(e, dk)}
                   onDragLeave={(e) => {
@@ -2737,7 +2737,7 @@ export function RotaCalendarClient() {
                       type="button"
                       variant="link"
                       size="sm"
-                      className="h-8 text-pink-600"
+                      className="h-8 text-primary"
                       onClick={() => rows[0] && openAddShift(dk, rows[0].id)}
                     >
                       Add shift
@@ -2813,7 +2813,7 @@ export function RotaCalendarClient() {
                                 </button>
                                 {isToday ? (
                                   <div
-                                    className="pointer-events-none absolute inset-y-0 z-[5] w-0.5 bg-pink-500/70"
+                                    className="pointer-events-none absolute inset-y-0 z-[5] w-0.5 bg-primary/70"
                                     style={{ left: nowLeftPx }}
                                     aria-hidden
                                   />
@@ -3039,7 +3039,7 @@ export function RotaCalendarClient() {
                     }
                     className={cn(
                       'flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
-                      picked ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30' : 'hover:bg-muted'
+                      picked ? 'border-primary bg-primary/10' : 'hover:bg-muted'
                     )}
                   >
                     <input
@@ -3130,7 +3130,7 @@ export function RotaCalendarClient() {
                   className={cn(
                     'flex items-center gap-2 rounded-md border px-2 py-2 text-sm bg-card cursor-grab active:cursor-grabbing',
                     rowDragId === id && 'opacity-50',
-                    rowDropId === id && rowDragId && rowDragId !== id && 'ring-2 ring-pink-500/60'
+                    rowDropId === id && rowDragId && rowDragId !== id && 'ring-2 ring-primary/60'
                   )}
                 >
                   <GripVertical className="size-4 shrink-0 text-muted-foreground" />
@@ -3663,7 +3663,7 @@ export function RotaCalendarClient() {
                     className={cn(
                       'flex items-center gap-2 rounded-md border px-2 py-2 text-left text-xs transition-colors',
                       moveToEmployeeId === e.id
-                        ? 'border-pink-500 bg-pink-50 dark:bg-pink-950/30'
+                        ? 'border-primary bg-primary/10'
                         : 'hover:bg-muted'
                     )}
                   >

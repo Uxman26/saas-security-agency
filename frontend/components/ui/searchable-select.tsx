@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Popover } from 'radix-ui';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,20 +60,47 @@ export function SearchableSelect({
     q.trim().length > 0 &&
     !options.some((o) => o.label.toLowerCase() === q.trim().toLowerCase());
 
+  const close = () => {
+    setOpen(false);
+    setQ('');
+  };
+
   return (
-    <div className={cn('relative', className)}>
-      <Button
-        type="button"
-        variant="outline"
-        disabled={disabled}
-        className="w-full justify-between font-normal"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="truncate">{selectedLabel}</span>
-        <ChevronsUpDown className="size-4 opacity-50 shrink-0" />
-      </Button>
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-md">
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQ('');
+      }}
+    >
+      <div className={cn('relative', className)}>
+        <Popover.Trigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            className="w-full justify-between font-normal"
+          >
+            <span className="truncate">{selectedLabel}</span>
+            <ChevronsUpDown className="size-4 opacity-50 shrink-0" />
+          </Button>
+        </Popover.Trigger>
+      </div>
+      {/*
+        Portalled and positioned by Radix. The panel used to be an absolutely positioned
+        child of the field, so any scrollable or overflow-hidden ancestor — the staff edit
+        dialog, for one — clipped it and the sections below appeared on top of it.
+      */}
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={4}
+          collisionPadding={8}
+          className="z-[110] w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+          // The trigger keeps focus so the field is not scrolled out of view on open;
+          // focus is moved into the search box by its own autoFocus instead.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <div className="p-2 border-b">
             <Input
               autoFocus
@@ -82,7 +110,10 @@ export function SearchableSelect({
               className="h-8"
             />
           </div>
-          <ul className="max-h-56 overflow-y-auto py-1">
+          <ul
+            className="overflow-y-auto py-1"
+            style={{ maxHeight: 'min(14rem, var(--radix-popover-content-available-height, 14rem))' }}
+          >
             {filtered.map((o) => (
               <li key={o.value}>
                 <button
@@ -93,8 +124,7 @@ export function SearchableSelect({
                   )}
                   onClick={() => {
                     onChange(o.value);
-                    setOpen(false);
-                    setQ('');
+                    close();
                   }}
                 >
                   <Check className={cn('size-3.5 shrink-0', value === o.value ? 'opacity-100' : 'opacity-0')} />
@@ -108,10 +138,8 @@ export function SearchableSelect({
                   type="button"
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-muted text-primary"
                   onClick={() => {
-                    const next = q.trim();
-                    onChange(next);
-                    setOpen(false);
-                    setQ('');
+                    onChange(q.trim());
+                    close();
                   }}
                 >
                   <Plus className="size-3.5 shrink-0" />
@@ -123,19 +151,8 @@ export function SearchableSelect({
               <li className="px-3 py-2 text-sm text-muted-foreground">{emptyText}</li>
             )}
           </ul>
-        </div>
-      )}
-      {open && (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 cursor-default"
-          aria-label="Close"
-          onClick={() => {
-            setOpen(false);
-            setQ('');
-          }}
-        />
-      )}
-    </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

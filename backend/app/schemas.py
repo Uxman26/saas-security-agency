@@ -1389,6 +1389,19 @@ class CompanyUserResetPassword(StrictModel):
         return validate_password_strength(v)
 
 
+class PortalLoginCreate(StrictModel):
+    """Provision a portal login for a record that does not have one yet."""
+
+    # Optional: falls back to the record's own email when omitted.
+    email: Optional[EmailStr] = Field(default=None, max_length=EMAIL_MAX)
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+
 class PortalLoginOut(BaseModel):
     """A portal login attached to a client or a site, as shown on their edit screens."""
 

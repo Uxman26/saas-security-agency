@@ -120,6 +120,77 @@ def _create_staff_login(db: Session, db_guard: Guard, company_id: int, data: Gua
     )
 
 
+def list_guard_portal_logins(db: Session, guard_id: int, user_id: int) -> List["User"]:
+    """The portal logins attached to this guard, for the Portal login panel on its edit screen."""
+    from app.models import User
+
+    guard = get_guard_by_id(db, guard_id, user_id)
+    return (
+        db.query(User)
+        .filter(User.company_id == guard.company_id, User.guard_id == guard.id)
+        .order_by(User.email)
+        .all()
+    )
+
+
+def create_guard_portal_login(
+    db: Session, guard_id: int, email: Optional[str], password: str, user_id: int
+) -> "User":
+    """Provision the Staff-role login for an existing guard, from its edit screen.
+
+    Staff who were added without a login previously had no route to one at all; this is
+    the same provisioning the create flow runs, just against a guard that already exists.
+    """
+    from app.schemas import CompanyUserCreate
+    from app.services import role_service, user_service
+
+    company = get_company_by_user_id(db, user_id)
+    guard = get_guard_by_id(db, guard_id, user_id)
+    if list_guard_portal_logins(db, guard_id, user_id):
+        raise HTTPException(status_code=400, detail="This staff member already has a portal login")
+
+    login_email = (email or guard.email or "").strip()
+    if not login_email:
+        raise HTTPException(status_code=400, detail="Email is required to create a portal login")
+
+    role = role_service.get_role_by_slug(db, company.id, "staff")
+    if not role:
+        role_service.ensure_roles_for_company(db, company.id)
+        role = role_service.get_role_by_slug(db, company.id, "staff")
+    if not role:
+        raise HTTPException(status_code=500, detail="Staff role is not configured for this company")
+
+    return user_service.create_company_user(
+        db,
+        company.id,
+        CompanyUserCreate(
+            email=login_email,
+            password=password,
+            full_name=(guard.full_name or "").strip() or login_email,
+            role_id=role.id,
+            guard_id=guard.id,
+        ),
+    )
+
+
+def set_guard_login_password(
+    db: Session, guard_id: int, login_user_id: int, new_password: str, user_id: int
+) -> "User":
+    """Set a new password on one of this guard's portal logins.
+
+    The login must already belong to this guard. Checking that here — rather than trusting
+    the id the screen sends — keeps the staff editor from being able to reach any other
+    account in the company, whatever it posts.
+    """
+    from app.services import user_service
+
+    logins = {u.id for u in list_guard_portal_logins(db, guard_id, user_id)}
+    if login_user_id not in logins:
+        raise HTTPException(status_code=404, detail="Portal login not found for this staff member")
+    company = get_company_by_user_id(db, user_id)
+    return user_service.reset_company_user_password(db, company.id, login_user_id, new_password)
+
+
 def get_guards(
     db: Session,
     user_id: int,

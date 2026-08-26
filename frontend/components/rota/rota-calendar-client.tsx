@@ -518,6 +518,9 @@ export function RotaCalendarClient() {
   const [moveToEmployeeId, setMoveToEmployeeId] = useState<string | null>(null);
   const [viewShiftsOpen, setViewShiftsOpen] = useState(false);
   const [viewShiftsEmpId, setViewShiftsEmpId] = useState<string | null>(null);
+  // Set when the shift dialog was opened from the employee's shift list, so closing it
+  // drops the user back on that list to edit the next shift instead of the bare rota.
+  const [shiftReturnEmpId, setShiftReturnEmpId] = useState<string | null>(null);
   const [deleteShiftsOpen, setDeleteShiftsOpen] = useState(false);
   const [deleteShiftsEmpId, setDeleteShiftsEmpId] = useState<string | null>(null);
   const [deleteShiftsDayKey, setDeleteShiftsDayKey] = useState<string | null>(null);
@@ -971,17 +974,22 @@ export function RotaCalendarClient() {
     }
   }, [state]);
 
-  const openAddShift = (dk: string, empId: string) => {
+  /** `returnToList` sends the user back to that employee's shift list once the dialog closes. */
+  const openAddShift = (dk: string, empId: string, returnToList = false) => {
     setShiftEdit(null);
     setShiftPref({ dk, empId });
+    setShiftReturnEmpId(returnToList ? empId : null);
     setShiftOpen(true);
   };
 
-  const openEditShift = (empId: string, dk: string, idx: number) => {
+  const openEditShift = (empId: string, dk: string, idx: number, returnToList = false) => {
     const sh = state.shifts[empId]?.[dk]?.[idx];
+    // Set the return marker only once the shift is known to exist, so a bailed-out open
+    // cannot leave a stale one behind for the next dialog.
     if (!sh) return;
     setShiftEdit({ empId, dk, idx, shift: { ...sh } });
     setShiftPref({ dk, empId });
+    setShiftReturnEmpId(returnToList ? empId : null);
     setShiftOpen(true);
   };
 
@@ -2845,7 +2853,15 @@ export function RotaCalendarClient() {
         open={shiftOpen}
         onOpenChange={(v) => {
           setShiftOpen(v);
-          if (!v) setShiftEdit(null);
+          if (!v) {
+            setShiftEdit(null);
+            if (shiftReturnEmpId) {
+              const empId = shiftReturnEmpId;
+              setShiftReturnEmpId(null);
+              setViewShiftsEmpId(empId);
+              setViewShiftsOpen(true);
+            }
+          }
         }}
         employees={state.employees.map((e) => {
           const fromPool = pool.find((p) => p.id === e.id);
@@ -3494,7 +3510,7 @@ export function RotaCalendarClient() {
                       className="h-8 text-sky-600 border-sky-200"
                       onClick={() => {
                         setViewShiftsOpen(false);
-                        openEditShift(viewShiftsEmpId!, dk, idx);
+                        openEditShift(viewShiftsEmpId!, dk, idx, true);
                       }}
                     >
                       Edit
@@ -3522,7 +3538,7 @@ export function RotaCalendarClient() {
               className="w-full"
               onClick={() => {
                 setViewShiftsOpen(false);
-                openAddShift(state.days[0], viewShiftsEmpId);
+                openAddShift(state.days[0], viewShiftsEmpId, true);
               }}
             >
               <Plus className="size-3.5 mr-1" />

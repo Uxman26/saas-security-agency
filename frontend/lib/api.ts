@@ -170,6 +170,17 @@ export const api = {
       return request<Guard>(`/guards/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
     },
     delete: (id: number): Promise<void> => request<void>(`/guards/${id}`, { method: 'DELETE' }),
+    portalLogins: (id: number): Promise<PortalLogin[]> => request<PortalLogin[]>(`/guards/${id}/portal-logins`),
+    createPortalLogin: (id: number, data: { email?: string; password: string }): Promise<PortalLogin> =>
+      request<PortalLogin>(`/guards/${id}/portal-logins`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    setPortalLoginPassword: (id: number, loginUserId: number, new_password: string): Promise<PortalLogin> =>
+      request<PortalLogin>(`/guards/${id}/portal-logins/${loginUserId}/password`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password }),
+      }),
     uploadPhoto: async (id: number, file: File): Promise<Guard> => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
       const form = new FormData();

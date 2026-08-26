@@ -5,9 +5,16 @@ from typing import List, Optional
 import os
 from app.database import get_db
 from app.models import User
-from app.schemas import GuardCreate, GuardResponse
+from app.schemas import (
+    CompanyUserResetPassword,
+    GuardCreate,
+    GuardResponse,
+    PortalLoginCreate,
+    PortalLoginOut,
+)
 from app.rbac import require_internal_module
 from app.services import guard_service
+from app.services.portal_login_view import portal_login_out
 from app.storage_paths import GUARD_PHOTOS_DIR, ensure_upload_dirs, resolve_storage_path
 from app.services.image_avif_service import AVIF_EXT, is_image_filename, save_upload_as_avif
 
@@ -41,6 +48,50 @@ def update_guard(guard_id: int, guard: GuardCreate, db: Session = Depends(get_db
             detail="A portal login cannot be created from an edit. Use Roles & Permissions → Users.",
         )
     return guard_service.update_guard(db, guard_id, guard, current_user.id)
+
+
+@router.get("/{guard_id}/portal-logins", response_model=List[PortalLoginOut])
+def list_guard_portal_logins(
+    guard_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("roles", "users_view")),
+):
+    """Portal logins attached to this staff member, shown on their edit screen.
+
+    Guarded by the user-administration right rather than guards.edit: these are company
+    login accounts, so seeing them is the same permission as seeing the Users list.
+    """
+    return [portal_login_out(db, u) for u in guard_service.list_guard_portal_logins(db, guard_id, current_user.id)]
+
+
+@router.post("/{guard_id}/portal-logins", response_model=PortalLoginOut, status_code=status.HTTP_201_CREATED)
+def create_guard_portal_login(
+    guard_id: int,
+    body: PortalLoginCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("roles", "users_create")),
+):
+    """Give an existing staff member a portal login."""
+    user = guard_service.create_guard_portal_login(
+        db, guard_id, body.email, body.password, current_user.id
+    )
+    return portal_login_out(db, user)
+
+
+@router.post("/{guard_id}/portal-logins/{login_user_id}/password", response_model=PortalLoginOut)
+def set_guard_portal_login_password(
+    guard_id: int,
+    login_user_id: int,
+    body: CompanyUserResetPassword,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("roles", "users_reset_password")),
+):
+    """Change the password on one of this staff member's portal logins."""
+    user = guard_service.set_guard_login_password(
+        db, guard_id, login_user_id, body.new_password, current_user.id
+    )
+    return portal_login_out(db, user)
+
 
 @router.post("/{guard_id}/photo", response_model=GuardResponse)
 def upload_guard_photo(

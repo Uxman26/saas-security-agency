@@ -751,6 +751,14 @@ export default function RolesSettingsPage() {
 
   const canWrite = user && canModule(user, 'roles', 'edit');
   const canDelete = user && canModule(user, 'roles', 'delete');
+  // The Users tab is gated on the fine-grained users_* rights the API itself enforces.
+  // Gating it on roles.edit hid Edit and Reset password from roles that were granted
+  // exactly those rights, leaving no way to set a user's password from this screen.
+  const canCreateUsers = user && canModule(user, 'roles', 'users_create');
+  const canEditUsers = user && canModule(user, 'roles', 'users_edit');
+  const canResetUserPassword = user && canModule(user, 'roles', 'users_reset_password');
+  const canDeleteUsers = user && canModule(user, 'roles', 'users_delete');
+  const canAssignRole = user && canModule(user, 'roles', 'users_assign_role');
   const canManageModules = user && isAdminBypass(user);
   const editing = editId != null ? roles.find((r) => r.id === editId) : null;
 
@@ -1072,7 +1080,7 @@ export default function RolesSettingsPage() {
                     <CardTitle>Users</CardTitle>
                     <CardDescription>Create users and assign roles for app login access.</CardDescription>
                   </div>
-                  {canWrite && (
+                  {canCreateUsers && (
                     <Button size="sm" onClick={openAddUser}>
                       <UserPlus className="size-4 mr-1" />
                       Add user
@@ -1128,7 +1136,7 @@ export default function RolesSettingsPage() {
                               <span className="text-sm font-medium" title="Only one Admin is allowed">
                                 {u.role_name ?? 'Admin'}
                               </span>
-                            ) : canWrite ? (
+                            ) : canAssignRole ? (
                               <Select
                                 value={u.role_id != null ? String(u.role_id) : undefined}
                                 onValueChange={(v) => patchUserRole(u.id, v)}
@@ -1155,19 +1163,19 @@ export default function RolesSettingsPage() {
                                 <Eye className="size-3.5 mr-1" />
                                 View
                               </Button>
-                              {canWrite && (
-                                <>
-                                  <Button variant="ghost" size="sm" onClick={() => openEditUser(u)}>
-                                    <Pencil className="size-3.5 mr-1" />
-                                    Edit
-                                  </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => { setResetUser(u); setResetPassword(''); }}>
-                                    <KeyRound className="size-3.5 mr-1" />
-                                    Reset password
-                                  </Button>
-                                </>
+                              {canEditUsers && (
+                                <Button variant="ghost" size="sm" onClick={() => openEditUser(u)}>
+                                  <Pencil className="size-3.5 mr-1" />
+                                  Edit
+                                </Button>
                               )}
-                              {canDelete && (
+                              {canResetUserPassword && (
+                                <Button variant="ghost" size="sm" onClick={() => { setResetUser(u); setResetPassword(''); }}>
+                                  <KeyRound className="size-3.5 mr-1" />
+                                  Reset password
+                                </Button>
+                              )}
+                              {canDeleteUsers && (
                                 <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteUser(u.id)} disabled={saving}>
                                   <Trash2 className="size-3.5 mr-1" />
                                   Delete

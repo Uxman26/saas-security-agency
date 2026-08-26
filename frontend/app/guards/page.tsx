@@ -21,6 +21,7 @@ import { guardFormDefaults, guardToForm, formToGuardPayload } from '@/lib/guard-
 import type { Guard } from '@/lib/types';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { EmailDialog } from '@/components/email-dialog';
+import { PortalLoginPanel } from '@/components/portal-login-panel';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { formatDateUK } from '@/lib/date-format';
@@ -414,7 +415,17 @@ export default function GuardsPage() {
               <DialogTitle className="break-words">Edit staff — {editingGuard?.full_name}</DialogTitle>
               <DialogDescription className="sr-only">Update this staff member&apos;s profile.</DialogDescription>
             </DialogHeader>
-            <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6">
+            <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-6 space-y-4">
+              {editingGuard && (
+                <PortalLoginPanel
+                  kind="staff"
+                  recordId={editingGuard.id}
+                  load={api.guards.portalLogins}
+                  save={api.guards.setPortalLoginPassword}
+                  create={api.guards.createPortalLogin}
+                  defaultEmail={editingGuard.email ?? ''}
+                />
+              )}
               <GuardFormWizard
                 form={editForm}
                 mains={mains}

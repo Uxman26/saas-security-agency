@@ -48,6 +48,30 @@ def _visible_site_ids(db: Session, user) -> set[int]:
     return {row[0] for row in q.all()}
 
 
+def _portal_guard_id(db: Session, user) -> Optional[int]:
+    """The guard a Staff login is limited to, or None for a Client login.
+
+    Site scope alone is too wide for Staff. staff_site_ids resolves to every site the
+    guard has ever been rota'd onto, so filtering a rota by site would show them every
+    colleague's shifts, rates and hours at those sites — which is what the Assignments
+    and attendance modules already refuse via filter_assignments_for_user. Clients are
+    different: a rota for their own site is theirs to read in full.
+
+    Returns _NO_GUARD when a Staff login has no guard record, so callers fail closed
+    instead of falling back to the client-style site-wide scope.
+    """
+    from app.services.portal_access import get_linked_guard, is_staff_portal_user
+
+    if not is_staff_portal_user(user):
+        return None
+    guard = get_linked_guard(db, user)
+    return guard.id if guard else _NO_GUARD
+
+
+# No guard row can have this id, so it matches nothing.
+_NO_GUARD = -1
+
+
 def _end_date(start: date, day_count: int) -> date:
     return start + timedelta(days=max(1, day_count) - 1)
 
@@ -149,26 +173,29 @@ def list_rota_plans(db: Session, user_id: int) -> List[RotaPlanListItem]:
     if not portal:
         return [_to_list_item(db, p) for p in rows]
 
-    # A portal login sees a rota only if it holds shifts at one of their own sites, and
-    # the counts describe just those shifts — never the whole company's. Drafts are
-    # invisible: nothing is committed to a site until the rota is published, and the
-    # draft tree names sites as free text with no site_id to filter on.
+    # A portal login sees a rota only if it holds shifts it is allowed to read — their
+    # own sites for a Client, their own shifts for a member of Staff — and the counts
+    # describe just those shifts, never the whole company's. Drafts are invisible:
+    # nothing is committed to a site until the rota is published, and the draft tree
+    # names sites as free text with no site_id to filter on.
     site_ids = _visible_site_ids(db, portal)
+    guard_id = _portal_guard_id(db, portal)
     out: List[RotaPlanListItem] = []
     if not site_ids:
         return out
+    scope = [Assignment.site_id.in_(site_ids)]
+    if guard_id is not None:
+        scope.append(Assignment.guard_id == guard_id)
     for plan in rows:
         if plan.status != "published":
             continue
-        visible = db.query(Assignment).filter(
-            Assignment.rota_plan_id == plan.id, Assignment.site_id.in_(site_ids)
-        )
+        visible = db.query(Assignment).filter(Assignment.rota_plan_id == plan.id, *scope)
         shift_count = visible.count()
         if not shift_count:
             continue
         staff_count = (
             db.query(func.count(func.distinct(Assignment.guard_id)))
-            .filter(Assignment.rota_plan_id == plan.id, Assignment.site_id.in_(site_ids))
+            .filter(Assignment.rota_plan_id == plan.id, *scope)
             .scalar()
             or 0
         )
@@ -276,16 +303,21 @@ def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
 
 
 def _portal_rota_detail(db: Session, user, plan: RotaPlan) -> RotaPlanDetail:
-    """A rota as a portal login may see it: only their own sites' shifts.
+    """A rota as a portal login may see it: their own sites for a Client, their own
+    shifts for a member of Staff.
 
     The stored planner_data is never handed over. The payload is rebuilt from the
-    Assignment rows for this plan that sit on a site the login can see, so a client
-    cannot read another client's shifts even though both live in the same plan.
+    Assignment rows for this plan that the login is allowed to read, so a client cannot
+    read another client's shifts, and a guard cannot read a colleague's, even though
+    all of them live in the same plan.
     """
     site_ids = _visible_site_ids(db, user)
+    guard_id = _portal_guard_id(db, user)
     if plan.status != "published" or not site_ids:
         raise HTTPException(status_code=404, detail="Rota not found")
-    payload = _payload_from_assignments(db, plan, _parse_planner(plan.planner_data), site_ids=site_ids)
+    payload = _payload_from_assignments(
+        db, plan, _parse_planner(plan.planner_data), site_ids=site_ids, guard_id=guard_id
+    )
     if not payload["shifts"]:
         raise HTTPException(status_code=404, detail="Rota not found")
     shift_count = sum(len(v) for by_day in payload["shifts"].values() for v in by_day.values())
@@ -468,12 +500,14 @@ def _payload_from_assignments(
     plan: RotaPlan,
     planner: Optional[dict] = None,
     site_ids: Optional[set[int]] = None,
+    guard_id: Optional[int] = None,
 ) -> dict:
     """Rebuild a planner payload from this plan's assignment rows.
 
     ``site_ids`` narrows it to those sites, which is what makes the result safe to hand
     a portal login: assignments carry a real site_id, unlike the draft tree's free-text
-    site names.
+    site names. ``guard_id`` narrows it further to one guard's own shifts, which is the
+    scope a Staff login gets.
     """
     lookup = _planner_shift_lookup(planner)
     q = (
@@ -483,6 +517,8 @@ def _payload_from_assignments(
     )
     if site_ids is not None:
         q = q.filter(Assignment.site_id.in_(site_ids or {0}))
+    if guard_id is not None:
+        q = q.filter(Assignment.guard_id == guard_id)
     rows = q.order_by(Assignment.date, Assignment.id).all()
     days = _day_keys(plan.start_date, plan.day_count)
     employees: dict[str, dict] = {}

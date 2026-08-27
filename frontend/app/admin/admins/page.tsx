@@ -2,7 +2,6 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -40,7 +39,6 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default function AdminAdminsPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const [admins, setAdmins] = useState<AdminUserDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<AdminUserDetail | null>(null);
@@ -65,12 +63,8 @@ export default function AdminAdminsPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     load();
-  }, [user, router, load]);
+  }, [user, load]);
 
   const filtered = useMemo(() => {
     let rows = admins;

@@ -2,7 +2,6 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
@@ -34,7 +33,6 @@ const fmt = (n: number) => `£${n.toFixed(2)}`;
 
 export default function AdminInvoicesPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const [invoices, setInvoices] = useState<SubscriptionInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -54,12 +52,8 @@ export default function AdminInvoicesPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     load();
-  }, [user, router, load]);
+  }, [user, load]);
 
   const handleStatusChange = async (id: number, newStatus: string) => {
     try {

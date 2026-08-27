@@ -189,6 +189,7 @@
     "adminPayments": "المدفوعات",
     "adminReceipts": "الإيصالات",
     "adminPackages": "الباقات",
+    "adminAudit": "سجل التدقيق",
     "adminSmtp": "بريد SMTP",
     "adminLogs": "سجل النشاط"
   },

@@ -215,6 +215,7 @@
     "adminPayments": "Payments",
     "adminReceipts": "Receipts",
     "adminPackages": "Packages",
+    "adminAudit": "Audit trail",
     "adminSmtp": "SMTP email",
     "adminLogs": "Activity logs"
   },

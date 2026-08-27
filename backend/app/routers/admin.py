@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -24,6 +24,7 @@ from app.schemas import (
     SubscriptionInvoiceStatusPatch,
     SubscriptionInvoicePaymentPatch,
     LoginLogResponse,
+    PlatformAuditLogResponse,
     AdminDashboardResponse,
     SmtpConfigResponse,
     SmtpConfigUpdate,
@@ -36,6 +37,7 @@ from app.services import admin_platform_service as ap
 from app.services import platform_plans_service
 from app.services import subscription_invoice_service as sub_inv
 from app.services import login_log_service
+from app.services import platform_audit_service
 from app.services import tenant_usage_service
 from app.services.receipt_service import mark_receipt_paid
 
@@ -84,15 +86,42 @@ def get_company(company_id: int, db: Session = Depends(get_db), _: User = Depend
     return CompanyAdminResponse(**ap.company_admin_out(db, co))
 
 
+"""Fields worth a before/after snapshot when a company is edited."""
+_COMPANY_AUDIT_FIELDS = (
+    "name",
+    "subscription_tier",
+    "subscription_status",
+    "subscription_end",
+    "billing_cycle",
+    "max_users",
+    "enabled_modules_json",
+)
+
+
 @router.patch("/companies/{company_id}", response_model=CompanyAdminResponse)
 def patch_company(
     company_id: int,
     body: AdminCompanyUpdate,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    current_user: User = Depends(get_current_super_admin),
 ):
     payload = body.model_dump(exclude_unset=True)
+    existing = db.query(Company).filter(Company.id == company_id).first()
+    before = platform_audit_service.snapshot(existing, _COMPANY_AUDIT_FIELDS) if existing else None
     co = ap.update_company(db, company_id, payload)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="company.updated",
+        target_type="company",
+        target_id=co.id,
+        target_label=co.name,
+        company=co,
+        before=before,
+        after=platform_audit_service.snapshot(co, _COMPANY_AUDIT_FIELDS),
+        request=request,
+    )
     return CompanyAdminResponse(**ap.company_admin_out(db, co))
 
 
@@ -100,10 +129,25 @@ def patch_company(
 def patch_company_modules(
     company_id: int,
     body: AdminModulesPatch,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    current_user: User = Depends(get_current_super_admin),
 ):
+    existing = db.query(Company).filter(Company.id == company_id).first()
+    before = existing.enabled_modules_json if existing else None
     co = ap.update_company(db, company_id, {"enabled_modules": body.enabled_modules})
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="company.modules_updated",
+        target_type="company",
+        target_id=co.id,
+        target_label=co.name,
+        company=co,
+        before={"enabled_modules_json": before},
+        after={"enabled_modules_json": co.enabled_modules_json},
+        request=request,
+    )
     return CompanyAdminResponse(**ap.company_admin_out(db, co))
 
 
@@ -116,11 +160,23 @@ def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_supe
 def patch_user_active(
     user_id: int,
     body: AdminUserActivePatch,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    current_user: User = Depends(get_current_super_admin),
 ):
     u = ap.set_user_active(db, user_id, body.is_active)
     co = db.query(Company).filter(Company.id == u.company_id).first() if u.company_id else None
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="user.activated" if body.is_active else "user.deactivated",
+        target_type="user",
+        target_id=u.id,
+        target_label=u.email,
+        company=co,
+        after={"is_active": u.is_active},
+        request=request,
+    )
     return AdminUserListItem(
         id=u.id,
         email=u.email,
@@ -227,9 +283,28 @@ def list_packages(_: User = Depends(get_current_super_admin)):
 
 
 @router.patch("/packages/{tier}", response_model=PlanTierOut)
-def patch_package(tier: str, body: PlanTierUpdate, _: User = Depends(get_current_super_admin)):
+def patch_package(
+    tier: str,
+    body: PlanTierUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_super_admin),
+):
     payload = body.model_dump(exclude_unset=True)
-    return PlanTierOut(**platform_plans_service.update_tier(tier, payload))
+    before = platform_plans_service.get_limits(tier) | {"price_gbp": platform_plans_service.get_price(tier)}
+    out = platform_plans_service.update_tier(tier, payload)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="plan.updated",
+        target_type="plan",
+        target_id=None,
+        target_label=tier,
+        before=before,
+        after=out,
+        request=request,
+    )
+    return PlanTierOut(**out)
 
 
 @router.get("/smtp", response_model=SmtpConfigResponse)
@@ -290,8 +365,24 @@ def list_receipts(db: Session = Depends(get_db), _: User = Depends(get_current_s
 
 
 @router.post("/receipts/{receipt_id}/mark-paid", response_model=SubscriptionReceiptResponse)
-def mark_paid(receipt_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def mark_paid(
+    receipt_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_super_admin),
+):
     r = mark_receipt_paid(db, receipt_id)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="receipt.marked_paid",
+        target_type="receipt",
+        target_id=r.id,
+        target_label=r.ref_id,
+        company_id=r.company_id,
+        after={"status": r.status, "amount": r.amount, "tier": r.subscription_tier},
+        request=request,
+    )
     return _receipt_row(r, db)
 
 
@@ -303,6 +394,30 @@ def login_logs(
     _: User = Depends(get_current_super_admin),
 ):
     return [LoginLogResponse.model_validate(r) for r in login_log_service.list_login_logs(db, limit, company_id)]
+
+
+@router.get("/audit-logs", response_model=List[PlatformAuditLogResponse])
+def platform_audit_logs(
+    company_id: Optional[int] = None,
+    actor_user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    target_type: Optional[str] = None,
+    limit: int = 200,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_super_admin),
+):
+    """Super-admin actions against the platform, newest first."""
+    rows = platform_audit_service.list_logs(
+        db,
+        company_id=company_id,
+        actor_user_id=actor_user_id,
+        action=action,
+        target_type=target_type,
+        limit=limit,
+        offset=offset,
+    )
+    return [PlatformAuditLogResponse.model_validate(r) for r in rows]
 
 
 @router.get("/admins", response_model=List[AdminUserDetail])
@@ -348,11 +463,23 @@ def patch_sidebar(
 def reset_password(
     user_id: int,
     body: AdminResetPassword,
+    request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    current_user: User = Depends(get_current_super_admin),
 ):
     u = ap.reset_admin_password(db, user_id, body.new_password)
     co = db.query(Company).filter(Company.id == u.company_id).first()
+    # Never record the password itself — only that it was changed, by whom.
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="user.password_reset",
+        target_type="user",
+        target_id=u.id,
+        target_label=u.email,
+        company=co,
+        request=request,
+    )
     receipts = (
         db.query(SubscriptionReceipt)
         .filter(SubscriptionReceipt.company_id == u.company_id)

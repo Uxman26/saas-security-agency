@@ -2,7 +2,6 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -34,7 +33,6 @@ const CYCLES = ['monthly', 'quarterly', 'yearly'];
 
 export default function AdminCompaniesPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [packages, setPackages] = useState<PlanTier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,12 +63,8 @@ export default function AdminCompaniesPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     load();
-  }, [user, router, load]);
+  }, [user, load]);
 
   const getSearchText = useCallback(
     (c: Company) =>

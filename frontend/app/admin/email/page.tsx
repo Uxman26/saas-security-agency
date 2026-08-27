@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +16,6 @@ import { cn } from '@/lib/utils';
 
 export default function AdminEmailPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const [config, setConfig] = useState<SmtpConfig | null>(null);
   const [server, setServer] = useState('');
   const [port, setPort] = useState('587');
@@ -39,12 +37,8 @@ export default function AdminEmailPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     load();
-  }, [user, router, load]);
+  }, [user, load]);
 
   const save = async () => {
     setSaving(true);

@@ -31,10 +31,10 @@ import {
   UserCircle,
   UserCog,
   Users,
-  Wallet,
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
+import { ADMIN_NAV, isAdminNavActive } from '@/lib/admin-nav';
 import { moduleNavAllowed } from '@/lib/nav-modules';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -131,21 +131,11 @@ export function AppSidebar() {
               {ts('sectionAdmin')}
             </p>
             <div className="mt-1 space-y-0.5">
-              {[
-                { href: '/admin/companies', labelKey: 'adminCompanies', icon: Building2 },
-                { href: '/admin/users', labelKey: 'adminUsers', icon: Users },
-                { href: '/admin/admins', labelKey: 'adminAdmins', icon: UserCog },
-                { href: '/admin/invoices', labelKey: 'adminInvoices', icon: FileText },
-                { href: '/admin/payments', labelKey: 'adminPayments', icon: CreditCard },
-                { href: '/admin/receipts', labelKey: 'adminReceipts', icon: Wallet },
-                { href: '/admin/packages', labelKey: 'adminPackages', icon: Gift },
-                { href: '/admin/email', labelKey: 'adminSmtp', icon: Mail },
-                { href: '/admin/logs', labelKey: 'adminLogs', icon: Clock },
-              ].map(({ href, labelKey, icon: Icon }) => (
+              {ADMIN_NAV.map(({ href, labelKey, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}
-                  className={navLinkClass(pathname === href || pathname.startsWith(`${href}/`))}
+                  className={navLinkClass(isAdminNavActive(pathname, href))}
                 >
                   <Icon className="size-4 shrink-0" />
                   <span className="truncate">{ts(labelKey)}</span>

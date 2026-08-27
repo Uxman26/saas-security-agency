@@ -1116,6 +1116,24 @@ export const api = {
       const q = company_id ? `?company_id=${company_id}` : '';
       return request<import('./types').LoginLog[]>(`/admin/login-logs${q}`);
     },
+    auditLogs: (params?: {
+      company_id?: number;
+      actor_user_id?: number;
+      action?: string;
+      target_type?: string;
+      limit?: number;
+      offset?: number;
+    }): Promise<import('./types').PlatformAuditLog[]> => {
+      const q = new URLSearchParams();
+      if (params?.company_id) q.append('company_id', String(params.company_id));
+      if (params?.actor_user_id) q.append('actor_user_id', String(params.actor_user_id));
+      if (params?.action) q.append('action', params.action);
+      if (params?.target_type) q.append('target_type', params.target_type);
+      if (params?.limit) q.append('limit', String(params.limit));
+      if (params?.offset) q.append('offset', String(params.offset));
+      const qs = q.toString();
+      return request<import('./types').PlatformAuditLog[]>(`/admin/audit-logs${qs ? `?${qs}` : ''}`);
+    },
     payments: (company_id?: number): Promise<AdminPayment[]> => {
       const q = company_id ? `?company_id=${company_id}` : '';
       return request<AdminPayment[]>(`/admin/payments${q}`);

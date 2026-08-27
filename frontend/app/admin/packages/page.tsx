@@ -2,7 +2,6 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -18,7 +17,6 @@ import { toast } from '@/lib/toast';
 
 export default function AdminPackagesPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const [tiers, setTiers] = useState<PlanTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PlanTier | null>(null);
@@ -37,12 +35,8 @@ export default function AdminPackagesPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     load();
-  }, [user, router, load]);
+  }, [user, load]);
 
   const openEdit = (t: PlanTier) => {
     setSelected(t);

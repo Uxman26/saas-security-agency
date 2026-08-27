@@ -6,7 +6,10 @@ from fastapi import HTTPException
 
 from app.plan_config import LIMITS, PLAN_PRICES_GBP, VALID_TIERS, normalize_tier
 
-_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+# Must resolve to the persistent volume (/app/data), the same place
+# platform_smtp_service writes. Deriving it from __file__ pointed at /app/app/data —
+# inside the image's writable layer — so every saved plan edit was lost on rebuild.
+_DATA_DIR = os.environ.get("APP_DATA_DIR") or os.path.join(os.getcwd(), "data")
 _PLANS_FILE = os.path.join(_DATA_DIR, "platform_plans.json")
 
 

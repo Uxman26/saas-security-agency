@@ -306,6 +306,28 @@ class LoginLogResponse(BaseModel):
     status: str
 
 
+class PlatformAuditLogResponse(BaseModel):
+    """One super-admin action, for the platform audit trail screen."""
+
+    id: int
+    actor_user_id: Optional[int] = None
+    actor_email: Optional[str] = None
+    action: str
+    target_type: str
+    target_id: Optional[int] = None
+    target_label: Optional[str] = None
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
+    before_json: Optional[str] = None
+    after_json: Optional[str] = None
+    note: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class AdminDashboardResponse(BaseModel):
     total_companies: int
     active_subscriptions: int

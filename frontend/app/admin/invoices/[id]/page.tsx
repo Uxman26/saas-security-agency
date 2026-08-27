@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
@@ -27,7 +27,6 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default function AdminSubscriptionInvoicePage() {
   const { user } = useAuth();
-  const router = useRouter();
   const params = useParams();
   const id = Number(params.id);
   const [inv, setInv] = useState<SubscriptionInvoice | null>(null);
@@ -35,16 +34,12 @@ export default function AdminSubscriptionInvoicePage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     api.admin
       .invoice(id)
       .then(setInv)
       .catch(() => toast.error('Invoice not found'))
       .finally(() => setLoading(false));
-  }, [user, router, id]);
+  }, [user, id]);
 
   const markPaid = async () => {
     try {

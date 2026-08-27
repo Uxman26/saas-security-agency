@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EmailDialog } from '@/components/email-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AppSidebar } from '@/components/app-sidebar';
+import { ADMIN_NAV, isAdminNavActive } from '@/lib/admin-nav';
 import { LogOut, Menu } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { AlertsPanel } from '@/components/alerts-panel';
@@ -119,23 +120,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
               <nav className="sidebar-nav-scroll flex-1 space-y-0.5 overflow-y-auto p-2">
                 {isSuperAdmin ? (
-                  [
-                    { href: '/admin/companies', labelKey: 'adminCompanies' },
-                    { href: '/admin/users', labelKey: 'adminUsers' },
-                    { href: '/admin/admins', labelKey: 'adminAdmins' },
-                    { href: '/admin/invoices', labelKey: 'adminInvoices' },
-                    { href: '/admin/payments', labelKey: 'adminPayments' },
-                    { href: '/admin/receipts', labelKey: 'adminReceipts' },
-                    { href: '/admin/packages', labelKey: 'adminPackages' },
-                    { href: '/admin/email', labelKey: 'adminSmtp' },
-                    { href: '/admin/logs', labelKey: 'adminLogs' },
-                  ].map(({ href, labelKey }) => (
+                  ADMIN_NAV.map(({ href, labelKey }) => (
                     <Link
                       key={href}
                       href={href}
                       className={cn(
                         'block rounded-lg px-3 py-2 text-sm transition-colors',
-                        pathname === href
+                        isAdminNavActive(pathname, href)
                           ? 'bg-[color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)] font-medium text-sidebar-primary'
                           : 'text-sidebar-foreground/70 hover:bg-[color-mix(in_oklab,var(--sidebar-primary)_12%,transparent)] hover:text-sidebar-primary'
                       )}

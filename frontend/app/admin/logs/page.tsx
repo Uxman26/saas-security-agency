@@ -2,7 +2,6 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -17,7 +16,6 @@ import { cn } from '@/lib/utils';
 
 export default function AdminLogsPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const [logs, setLogs] = useState<LoginLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -32,12 +30,8 @@ export default function AdminLogsPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     load();
-  }, [user, router, load]);
+  }, [user, load]);
 
   const getSearchText = useCallback(
     (l: LoginLog) => [l.full_name, l.email, l.ip_address, l.user_agent, l.status].filter(Boolean).join(' '),

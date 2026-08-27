@@ -102,6 +102,21 @@ def run():
         ("invoices", "subtotal", "REAL DEFAULT 0"),
         ("invoices", "tax_rate", "REAL DEFAULT 0"),
         ("invoices", "tax_amount", "REAL DEFAULT 0"),
+        # Tenant lifecycle: archived companies keep their data but cannot sign in.
+        ("companies", "archived_at", "TEXT"),
+        ("companies", "archived_by_user_id", "INTEGER"),
+        # Impersonation. A session carrying impersonator_user_id IS an impersonated
+        # session; parent_jti points at the super admin's own still-live session, which is
+        # what "exit" returns to and what is re-checked on every request.
+        ("user_sessions", "impersonator_user_id", "INTEGER REFERENCES users(id)"),
+        ("user_sessions", "parent_jti", "TEXT"),
+        ("user_sessions", "impersonation_mode", "TEXT"),
+        ("user_sessions", "impersonation_reason", "TEXT"),
+        # Audit rows record the real actor as well as the acting user, so an action taken
+        # while impersonating is never attributed to the customer.
+        ("audit_logs", "actor_user_id", "INTEGER"),
+        ("audit_logs", "impersonated", "INTEGER NOT NULL DEFAULT 0"),
+        ("audit_logs", "ip_address", "TEXT"),
     ]
     for table, col, spec in alters:
         if table_exists(cur, table) and not column_exists(cur, table, col):

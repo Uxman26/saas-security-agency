@@ -234,6 +234,26 @@ export interface LoginLog {
   status: string;
 }
 
+/** One super-admin action, from the platform audit trail. */
+export interface PlatformAuditLog {
+  id: number;
+  actor_user_id?: number | null;
+  actor_email?: string | null;
+  action: string;
+  target_type: string;
+  target_id?: number | null;
+  target_label?: string | null;
+  company_id?: number | null;
+  company_name?: string | null;
+  /** JSON strings; parsed lazily for the detail view. */
+  before_json?: string | null;
+  after_json?: string | null;
+  note?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  created_at: string;
+}
+
 export interface AdminDashboard {
   total_companies: number;
   active_subscriptions: number;

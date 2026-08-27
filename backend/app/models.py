@@ -385,7 +385,17 @@ class UserSession(Base):
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     ip_address = Column(String)
     user_agent = Column(String)
-    user = relationship("User")
+    # Impersonation. When set, this session belongs to a super admin acting AS
+    # ``user_id``. ``expires_at`` above is a hard ceiling that ``touch()`` never extends,
+    # so the short impersonation window cannot be stretched by activity.
+    impersonator_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # The super admin's own session, which stays live throughout and is what exiting
+    # returns to. Re-checked on every request: if they log out, this session dies with it.
+    parent_jti = Column(String(64), nullable=True, index=True)
+    impersonation_mode = Column(String, nullable=True)
+    impersonation_reason = Column(Text, nullable=True)
+    user = relationship("User", foreign_keys=[user_id])
+    impersonator = relationship("User", foreign_keys=[impersonator_user_id])
 
 
 class Contractor(Base):
@@ -1205,7 +1215,43 @@ class AuditLog(Base):
     entity_type = Column(String, nullable=False)
     entity_id = Column(Integer)
     meta = Column(Text)
+    # The human really behind the action. Equal to user_id normally; during an
+    # impersonated session it is the super admin, so the trail never credits the
+    # customer with something support did.
+    actor_user_id = Column(Integer, ForeignKey("users.id"))
+    impersonated = Column(Boolean, nullable=False, default=False)
+    ip_address = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PlatformAuditLog(Base):
+    """Append-only record of every super-admin action against the platform.
+
+    Deliberately separate from ``audit_logs``: those rows are tenant-scoped and are
+    destroyed along with the tenant, whereas the record of *who deleted that tenant* has
+    to outlive it. Nothing here carries a delete cascade for the same reason, and the
+    company is named as text as well as by id so the row still reads back after the
+    company row is gone.
+    """
+
+    __tablename__ = "platform_audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    # The real human behind the action, even when it was taken while impersonating.
+    actor_user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    actor_email = Column(String)
+    action = Column(String, nullable=False, index=True)
+    target_type = Column(String, nullable=False)
+    target_id = Column(Integer)
+    target_label = Column(String)
+    company_id = Column(Integer, index=True)
+    company_name = Column(String)
+    # JSON snapshots of the changed fields, before and after.
+    before_json = Column(Text)
+    after_json = Column(Text)
+    note = Column(Text)
+    ip_address = Column(String)
+    user_agent = Column(String(500))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 class ShiftAuditLog(Base):

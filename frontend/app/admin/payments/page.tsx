@@ -2,7 +2,6 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -18,7 +17,6 @@ import { toast } from '@/lib/toast';
 
 export default function AdminPaymentsPage() {
   const { user } = useAuth();
-  const router = useRouter();
   const [rows, setRows] = useState<AdminPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -32,13 +30,9 @@ export default function AdminPaymentsPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'super_admin') {
-      router.replace('/dashboard');
-      return;
-    }
     load();
     setLoading(false);
-  }, [user, router, load]);
+  }, [user, load]);
 
   const getSearchText = useCallback(
     (p: AdminPayment) =>

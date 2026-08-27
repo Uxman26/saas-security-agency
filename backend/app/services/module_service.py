@@ -530,6 +530,25 @@ def stored_cells_for_keys(db: Session, role_id: int | None, keys: set[str]) -> d
     return out
 
 
+def role_action_allowed(db: Session, user, module_key: str, action_key: str) -> bool:
+    """Whether this user's role grants one catalogue action.
+
+    The authoritative answer for anything in app.module_actions. It reuses
+    matrix_from_role_permissions, so the same cascade the Roles & Permissions screen
+    renders is the one the API enforces: stored action rows first, then the coarse
+    role_module_permissions row, then legacy permissions_json — each expanded through
+    the parent chain so a role written before an action existed still resolves it.
+    """
+    role = db.query(Role).filter(Role.id == user.role_id).first()
+    if not role or role.company_id != user.company_id:
+        # Mirrors permissions_for_user_db: a role from another tenant grants nothing.
+        return False
+    cell = matrix_from_role_permissions(db, role).get(module_key)
+    if not cell:
+        return False
+    return bool(cell.get(action_key, False))
+
+
 def has_explicit_action(db: Session, role_id: int, module_key: str, action_key: str) -> bool:
     """Whether the role has a stored decision for this exact action.
 

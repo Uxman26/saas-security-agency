@@ -94,12 +94,19 @@ export function canModule(
 
   const resolve = (act: string, depth = 0): boolean | null => {
     if (depth > 8) return null;
+    const mod = user.module_access?.find((m) => m.key === moduleKey);
+    // module_access.actions is the exact per-action answer and must be consulted
+    // before the flat permissions list. That list mixes granular module.action codes
+    // with the API's legacy PERM_* strings, and fourteen of those were named in the
+    // same namespace — 'rota.edit', 'patrol.scan', 'leads.export', 'guards.delete'…
+    // A legacy code is emitted whenever a *descendant* action is granted, so checking
+    // the list first let rota.publish light up every Edit control on the rota for a
+    // role whose Edit tickbox was off.
+    if (mod?.actions && act in mod.actions) return mod.actions[act];
     if (Array.isArray(user.permissions) && user.permissions.includes(`${moduleKey}.${act}`)) {
       return true;
     }
-    const mod = user.module_access?.find((m) => m.key === moduleKey);
     if (mod) {
-      if (mod.actions && act in mod.actions) return mod.actions[act];
       if (act === 'view') return mod.can_view;
       if (act === 'create') return mod.can_create;
       if (act === 'edit') return mod.can_edit;

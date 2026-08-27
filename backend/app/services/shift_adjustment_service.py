@@ -65,14 +65,28 @@ def _mins_to_time(m: int) -> str:
     return f"{m // 60:02d}:{m % 60:02d}"
 
 
-def _assignment_for_company(db: Session, company_id: int, assignment_id: int) -> Assignment:
-    a = (
+def _assignment_for_company(db: Session, company_id: int, assignment_id: int, user_id: int) -> Assignment:
+    """The assignment, if this caller may adjust it.
+
+    Company scope alone is not enough. Overtime, early finish and lateness are the four
+    write paths a portal login can hold without holding rota.edit, and every one of them
+    resolves the shift through here — so without the portal filter a guard granted
+    rota.log_overtime could rewrite the end time of any colleague's shift in the tenant.
+    404 rather than 403, matching authz.owned_or_404.
+    """
+    from app.services.portal_access import filter_assignments_for_user, is_portal_role
+
+    q = (
         db.query(Assignment)
         .join(Guard)
+        .outerjoin(Site)
         .options(joinedload(Assignment.guard), joinedload(Assignment.site))
         .filter(Assignment.id == assignment_id, Guard.company_id == company_id)
-        .first()
     )
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and is_portal_role(user):
+        q = filter_assignments_for_user(db, user, q)
+    a = q.first()
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found")
     return a
@@ -179,7 +193,7 @@ def record_overtime(
     new_end = (new_end or "").strip()
     if not new_end:
         raise HTTPException(status_code=400, detail="New end time is required")
-    a = _assignment_for_company(db, company.id, assignment_id)
+    a = _assignment_for_company(db, company.id, assignment_id, user_id)
     scheduled = a.shift_end or ""
     if _parse_mins(new_end) <= _parse_mins(scheduled):
         raise HTTPException(status_code=400, detail="New end time must be after scheduled end")
@@ -234,7 +248,7 @@ def record_early_finish(
     actual_end = (actual_end or "").strip()
     if not actual_end:
         raise HTTPException(status_code=400, detail="Actual end time is required")
-    a = _assignment_for_company(db, company.id, assignment_id)
+    a = _assignment_for_company(db, company.id, assignment_id, user_id)
     scheduled = a.shift_end or ""
     if _parse_mins(actual_end) >= _parse_mins(scheduled):
         raise HTTPException(status_code=400, detail="Actual end time must be before scheduled end")
@@ -290,7 +304,7 @@ def record_lateness(
     late_minutes = int(late_minutes)
     if late_minutes <= 0:
         raise HTTPException(status_code=400, detail="Late minutes must be greater than zero")
-    a = _assignment_for_company(db, company.id, assignment_id)
+    a = _assignment_for_company(db, company.id, assignment_id, user_id)
     actual_start = _mins_to_time(_parse_mins(scheduled_start) + late_minutes)
     existing = db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id == a.id).first()
     if existing:
@@ -357,7 +371,7 @@ def record_lateness_for_assignment(
     note: Optional[str] = None,
 ) -> ShiftLateLog:
     company = get_company_by_user_id(db, user_id)
-    a = _assignment_for_company(db, company.id, assignment_id)
+    a = _assignment_for_company(db, company.id, assignment_id, user_id)
     if not scheduled_start:
         existing = db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id == a.id).first()
         scheduled_start = existing.scheduled_start if existing else (a.shift_start or "")

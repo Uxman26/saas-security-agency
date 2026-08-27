@@ -164,7 +164,8 @@ function EmployeePublishCell({
   busy,
   disabled,
   name,
-  readOnly,
+  canPublish,
+  canUnpublish,
   onPublish,
   onUnpublish,
 }: {
@@ -172,8 +173,10 @@ function EmployeePublishCell({
   busy: boolean;
   disabled: boolean;
   name: string;
-  /** Status only, no actions — for logins that cannot publish. */
-  readOnly?: boolean;
+  /** Publishing and unpublishing one guard are separate grants, so gate them apart.
+   *  With neither, the cell degrades to the status badge alone. */
+  canPublish?: boolean;
+  canUnpublish?: boolean;
   onPublish: () => void;
   onUnpublish: () => void;
 }) {
@@ -194,32 +197,32 @@ function EmployeePublishCell({
         {busy ? null : published ? <Check className="size-2.5 shrink-0" aria-hidden /> : null}
         {busy ? 'Saving…' : published ? 'Published' : 'Draft'}
       </span>
-      {readOnly ? null : (
-        <>
       {/* Publish carries the brand orange like the header action; Unpublish stays
           outline so emphasis reads from fill vs outline as well as hue. */}
-      <button
-        type="button"
-        className={cn(btn, 'bg-primary text-primary-foreground border-primary hover:bg-primary/90')}
-        disabled={disabled || published}
-        onClick={onPublish}
-        title={published ? `${name} is already published` : `Publish ${name} only`}
-        aria-label={`Publish ${name}`}
-      >
-        Publish
-      </button>
-      <button
-        type="button"
-        className={cn(btn, 'bg-background text-foreground border-input hover:bg-muted')}
-        disabled={disabled || !published}
-        onClick={onUnpublish}
-        title={published ? `Unpublish ${name} only` : `${name} is not published`}
-        aria-label={`Unpublish ${name}`}
-      >
-        Unpublish
-      </button>
-        </>
-      )}
+      {canPublish ? (
+        <button
+          type="button"
+          className={cn(btn, 'bg-primary text-primary-foreground border-primary hover:bg-primary/90')}
+          disabled={disabled || published}
+          onClick={onPublish}
+          title={published ? `${name} is already published` : `Publish ${name} only`}
+          aria-label={`Publish ${name}`}
+        >
+          Publish
+        </button>
+      ) : null}
+      {canUnpublish ? (
+        <button
+          type="button"
+          className={cn(btn, 'bg-background text-foreground border-input hover:bg-muted')}
+          disabled={disabled || !published}
+          onClick={onUnpublish}
+          title={published ? `Unpublish ${name} only` : `${name} is not published`}
+          aria-label={`Unpublish ${name}`}
+        >
+          Unpublish
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -296,12 +299,27 @@ export function RotaCalendarClient() {
   const planIdParam = searchParams.get('id');
   const { user } = useAuth();
   const canCreateStaff = canModule(user, 'guards', 'create');
+  const canViewStaff = canModule(user, 'guards', 'view');
   /**
    * Portal logins reach this screen read-only: the API serves them a copy of the rota
    * rebuilt from their own sites' assignments and refuses every write. Hiding the
    * editing controls keeps the screen honest rather than offering buttons that 403.
    */
   const canEditRota = canModule(user, 'rota', 'edit');
+  /**
+   * The rest of the rota's catalogue actions, each gating the control that calls the
+   * endpoint it guards. They are genuinely independent of `edit` — a role can hold
+   * Publish without Edit, or Edit without Delete — so a single canEditRota flag would
+   * either hide controls a role is entitled to or offer ones the API will refuse.
+   */
+  const canCreateShift = canModule(user, 'rota', 'create');
+  const canDeleteShift = canModule(user, 'rota', 'delete');
+  const canPublishRota = canModule(user, 'rota', 'publish');
+  const canUnpublishRota = canModule(user, 'rota', 'unpublish');
+  const canUnpublishGuard = canModule(user, 'rota', 'unpublish_guard');
+  const canExportRota = canModule(user, 'rota', 'export');
+  const canLogOvertime = canEditRota && canModule(user, 'rota', 'log_overtime');
+  const canLogEarlyFinish = canEditRota && canModule(user, 'rota', 'log_early_finish');
   /** Payable money is a separate permission — the column collapses entirely without it. */
   const showPayable = canModule(user, 'rota_payable', 'view');
   const payColW = showPayable ? ROTA_PAY_COL_W : 0;
@@ -2020,7 +2038,7 @@ export function RotaCalendarClient() {
                 aria-label="Edit rota name"
                 className="text-xl font-bold h-10 border-primary bg-background shadow-sm px-2"
               />
-            ) : (
+            ) : canEditRota ? (
               <button
                 type="button"
                 className="text-xl font-bold h-10 px-0 text-left truncate hover:underline decoration-muted-foreground/40 underline-offset-4 max-w-full"
@@ -2033,19 +2051,25 @@ export function RotaCalendarClient() {
               >
                 {state.rotaName || 'Untitled rota'}
               </button>
+            ) : (
+              <h1 className="text-xl font-bold h-10 px-0 text-left truncate max-w-full leading-10">
+                {state.rotaName || 'Untitled rota'}
+              </h1>
             )}
-            <button
-              type="button"
-              className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted"
-              onClick={() => {
-                setNameDraft(state.rotaName || '');
-                setNameEditing(true);
-              }}
-              title="Rename rota"
-              aria-label="Rename rota"
-            >
-              <Pencil className="size-4" />
-            </button>
+            {canEditRota ? (
+              <button
+                type="button"
+                className="shrink-0 rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted"
+                onClick={() => {
+                  setNameDraft(state.rotaName || '');
+                  setNameEditing(true);
+                }}
+                title="Rename rota"
+                aria-label="Rename rota"
+              >
+                <Pencil className="size-4" />
+              </button>
+            ) : null}
           </div>
           {nameEditing ? (
             <p className="text-xs text-muted-foreground">
@@ -2100,7 +2124,7 @@ export function RotaCalendarClient() {
               </Button>
             </>
           )}
-          <div className="relative" ref={exportMenuRef}>
+          <div className={cn('relative', !canExportRota && 'hidden')} ref={exportMenuRef}>
             <Button
               variant="outline"
               size="sm"
@@ -2164,7 +2188,7 @@ export function RotaCalendarClient() {
               <ChevronRight className="size-3.5 ml-1" />
             )}
           </Button>
-          {employeeSelectMode ? (
+          {!canEditRota ? null : employeeSelectMode ? (
             <>
               <Button variant="outline" size="sm" type="button" onClick={exitEmployeeSelectMode}>
                 Cancel selection
@@ -2208,23 +2232,27 @@ export function RotaCalendarClient() {
               </option>
             ))}
           </select>
-          <Button
-            size="sm"
-            type="button"
-            onClick={publish}
-            disabled={publishing || unpublishing}
-          >
-            {publishing ? 'Publishing…' : 'Publish'}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            type="button"
-            onClick={unpublishAll}
-            disabled={unpublishing || publishing || publishedGuardIds.size === 0}
-          >
-            {unpublishing ? 'Unpublishing…' : 'Unpublish'}
-          </Button>
+          {canPublishRota ? (
+            <Button
+              size="sm"
+              type="button"
+              onClick={publish}
+              disabled={publishing || unpublishing}
+            >
+              {publishing ? 'Publishing…' : 'Publish'}
+            </Button>
+          ) : null}
+          {canUnpublishRota ? (
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={unpublishAll}
+              disabled={unpublishing || publishing || publishedGuardIds.size === 0}
+            >
+              {unpublishing ? 'Unpublishing…' : 'Unpublish'}
+            </Button>
+          ) : null}
           <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
             Total {formatHoursDecimal(totalRotaHours)}
             <span className="text-muted-foreground font-normal ml-1">
@@ -2591,7 +2619,7 @@ export function RotaCalendarClient() {
                             <span className="text-[9px] text-center text-red-700 dark:text-red-300 py-2">Removing</span>
                           ) : mark === 'adding' ? (
                             <span className="text-[9px] text-center text-emerald-700 dark:text-emerald-300 py-2">New day</span>
-                          ) : canEditRota ? (
+                          ) : canCreateShift ? (
                           <Button
                             type="button"
                             variant="ghost"
@@ -2630,7 +2658,8 @@ export function RotaCalendarClient() {
                       busy={publishingEmpId === emp.id}
                       disabled={publishingEmpId === emp.id || publishing || unpublishing}
                       name={emp.name}
-                      readOnly={!canEditRota}
+                      canPublish={canPublishRota}
+                      canUnpublish={canUnpublishGuard}
                       onPublish={() => toggleEmployeePublished(emp, true)}
                       onUnpublish={() => toggleEmployeePublished(emp, false)}
                     />
@@ -3867,36 +3896,46 @@ export function RotaCalendarClient() {
           >
             Description
           </button>
-          <button
-            type="button"
-            className="w-full text-left px-3 py-1.5 hover:bg-muted"
-            onClick={() => {
-              closeShiftMenu();
-              openEditShift(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx);
-            }}
-          >
-            Edit
-          </button>
-          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startCopy(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
-            Copy shift…
-          </button>
-          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startMove(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
-            Move shift
-          </button>
-          <button
-            type="button"
-            className="w-full text-left px-3 py-1.5 hover:bg-muted"
-            onClick={() => {
-              closeShiftMenu();
-              openAddShift(shiftMenu.dk, shiftMenu.empId);
-            }}
-          >
-            Add another shift
-          </button>
-          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startAtt(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
-            {hasAttendance ? 'Edit attendance' : 'Mark attendance'}
-          </button>
-          {hasAttendance ? (
+          {canEditRota ? (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 hover:bg-muted"
+              onClick={() => {
+                closeShiftMenu();
+                openEditShift(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx);
+              }}
+            >
+              Edit
+            </button>
+          ) : null}
+          {canCreateShift ? (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startCopy(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+              Copy shift…
+            </button>
+          ) : null}
+          {canEditRota ? (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startMove(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+              Move shift
+            </button>
+          ) : null}
+          {canCreateShift ? (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 hover:bg-muted"
+              onClick={() => {
+                closeShiftMenu();
+                openAddShift(shiftMenu.dk, shiftMenu.empId);
+              }}
+            >
+              Add another shift
+            </button>
+          ) : null}
+          {canEditRota ? (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startAtt(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+              {hasAttendance ? 'Edit attendance' : 'Mark attendance'}
+            </button>
+          ) : null}
+          {hasAttendance && canEditRota ? (
             <button
               type="button"
               className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
@@ -3905,10 +3944,12 @@ export function RotaCalendarClient() {
               Undo attendance
             </button>
           ) : null}
-          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startOvertime(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
-            {hasOvertime ? 'Edit overtime' : 'Overtime'}
-          </button>
-          {hasOvertime ? (
+          {canLogOvertime ? (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startOvertime(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+              {hasOvertime ? 'Edit overtime' : 'Overtime'}
+            </button>
+          ) : null}
+          {hasOvertime && canLogOvertime ? (
             <button
               type="button"
               className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
@@ -3917,10 +3958,12 @@ export function RotaCalendarClient() {
               Undo overtime
             </button>
           ) : null}
-          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startEarlyFinish(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
-            {hasEarlyFinish ? 'Edit finished early' : 'Finished early'}
-          </button>
-          {hasEarlyFinish ? (
+          {canLogEarlyFinish ? (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-muted" onClick={() => startEarlyFinish(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}>
+              {hasEarlyFinish ? 'Edit finished early' : 'Finished early'}
+            </button>
+          ) : null}
+          {hasEarlyFinish && canLogEarlyFinish ? (
             <button
               type="button"
               className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
@@ -3929,16 +3972,18 @@ export function RotaCalendarClient() {
               Undo finished early
             </button>
           ) : null}
-          <button
-            type="button"
-            className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
-            onClick={() => {
-              const { empId, dk } = shiftMenu;
-              openDeleteShifts(empId, dk);
-            }}
-          >
-            Delete
-          </button>
+          {canDeleteShift ? (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 hover:bg-muted text-destructive"
+              onClick={() => {
+                const { empId, dk } = shiftMenu;
+                openDeleteShifts(empId, dk);
+              }}
+            >
+              Delete
+            </button>
+          ) : null}
         </div>
           );
         })(),
@@ -3956,52 +4001,60 @@ export function RotaCalendarClient() {
           style={{ left: empMenuAnchor.x, top: empMenuAnchor.y, width: empMenuAnchor.w, maxHeight: empMenuAnchor.maxH, overflowY: 'auto' }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
-            onClick={() => {
-              setXferFrom(empMenu);
-              setXferOpen(true);
-              closeEmpMenu();
-            }}
-          >
-            Copy shifts to another employee
-          </button>
+          {canCreateShift ? (
+            <button
+              type="button"
+              className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+              onClick={() => {
+                setXferFrom(empMenu);
+                setXferOpen(true);
+                closeEmpMenu();
+              }}
+            >
+              Copy shifts to another employee
+            </button>
+          ) : null}
           <button type="button" className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium" onClick={() => openViewShifts(empMenu)}>
             Edit/view employee shifts
           </button>
-          <button
-            type="button"
-            className="w-full text-left px-4 py-2.5 text-amber-700 dark:text-amber-400 hover:bg-muted font-medium"
-            onClick={() => {
-              setEmployeeRotaPending(empMenu, !isPending);
-              closeEmpMenu();
-              toast.snack(isPending ? 'Pending highlight cleared' : 'Marked as pending');
-            }}
-          >
-            {isPending ? 'Clear pending highlight' : 'Mark rota as pending'}
-          </button>
-          <button
-            type="button"
-            className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
-            onClick={() => {
-              const id = parseInt(empMenu, 10);
-              closeEmpMenu();
-              if (id) router.push(`/guards/${id}`);
-            }}
-          >
-            Staff profile / add photo
-          </button>
-          <button
-            type="button"
-            className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
-            onClick={() => {
-              setRatePreviewEmpId(empMenu);
-              closeEmpMenu();
-            }}
-          >
-            Rate preview
-          </button>
+          {canEditRota ? (
+            <button
+              type="button"
+              className="w-full text-left px-4 py-2.5 text-amber-700 dark:text-amber-400 hover:bg-muted font-medium"
+              onClick={() => {
+                setEmployeeRotaPending(empMenu, !isPending);
+                closeEmpMenu();
+                toast.snack(isPending ? 'Pending highlight cleared' : 'Marked as pending');
+              }}
+            >
+              {isPending ? 'Clear pending highlight' : 'Mark rota as pending'}
+            </button>
+          ) : null}
+          {canViewStaff ? (
+            <button
+              type="button"
+              className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+              onClick={() => {
+                const id = parseInt(empMenu, 10);
+                closeEmpMenu();
+                if (id) router.push(`/guards/${id}`);
+              }}
+            >
+              Staff profile / add photo
+            </button>
+          ) : null}
+          {showPayable ? (
+            <button
+              type="button"
+              className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
+              onClick={() => {
+                setRatePreviewEmpId(empMenu);
+                closeEmpMenu();
+              }}
+            >
+              Rate preview
+            </button>
+          ) : null}
           <button
             type="button"
             className="w-full text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium"
@@ -4012,12 +4065,16 @@ export function RotaCalendarClient() {
           >
             Shift preview
           </button>
-          <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => deleteAllEmpShifts(empMenu)}>
-            Delete employee shifts
-          </button>
-          <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => removeEmpFromRota(empMenu)}>
-            Remove from rota
-          </button>
+          {canDeleteShift ? (
+            <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => deleteAllEmpShifts(empMenu)}>
+              Delete employee shifts
+            </button>
+          ) : null}
+          {canEditRota ? (
+            <button type="button" className="w-full text-left px-4 py-2.5 text-destructive hover:bg-muted font-medium" onClick={() => removeEmpFromRota(empMenu)}>
+              Remove from rota
+            </button>
+          ) : null}
         </div>
           );
         })(),

@@ -55,6 +55,8 @@ def ensure_roles_for_company(db: Session, company_id: int) -> None:
         sync_role_permissions_from_matrix,
     )
 
+    from app.models import RoleModuleAction
+
     ensure_app_modules(db)
     modules = list_active_modules(db)
     for name, slug, is_sys, pj in _seed_rows():
@@ -73,9 +75,18 @@ def ensure_roles_for_company(db: Session, company_id: int) -> None:
     for role in db.query(Role).filter(Role.company_id == company_id).all():
         if role.slug == "admin":
             sync_role_permissions_from_matrix(db, role, default_admin_app_matrix(modules))
-        else:
-            coarse = matrix_from_permissions_json(role.permissions_json)
-            sync_role_permissions_from_matrix(db, role, expand_coarse_matrix_to_app_modules(coarse, modules))
+            continue
+        # Only seed a role that has no granular rows yet — a brand new one, or one
+        # migrating off the legacy coarse storage. Re-running the seed over a role an
+        # admin has since edited would round-trip its grants through the four-column
+        # permissions_json and *widen* them: rota.publish collapses to edit=true, and
+        # expanding that back out re-grants the rota.edit the admin had switched off.
+        # This function runs whenever a site, client or staff login is created, so that
+        # would quietly undo permission changes days after they were made.
+        if db.query(RoleModuleAction.id).filter(RoleModuleAction.role_id == role.id).first():
+            continue
+        coarse = matrix_from_permissions_json(role.permissions_json)
+        sync_role_permissions_from_matrix(db, role, expand_coarse_matrix_to_app_modules(coarse, modules))
     db.flush()
 
 

@@ -305,19 +305,33 @@ def _codes_with_inheritance(code: str) -> list[str]:
     return [code] + [f"{module_key}.{a}" for a in parent_chain(module_key, action)]
 
 
+def _is_catalogue_action(code: str) -> bool:
+    from app.module_actions import MODULE_ACTIONS, module_has_action
+
+    module_key, _, action = code.rpartition(".")
+    return module_key in MODULE_ACTIONS and module_has_action(module_key, action)
+
+
 def user_has_permission_db(db: Session, user: User, code: str) -> bool:
     if permission_bypass(db, user):
         return True
+    if user.role_id and _is_catalogue_action(code):
+        # Resolve a catalogue action from the role's own grants and nothing else.
+        #
+        # permissions_for_user_db returns one flat bag mixing granular module.action
+        # codes with the legacy PERM_* strings, and fourteen of the legacy strings were
+        # named in the same namespace — "rota.edit", "rota.view", "patrol.scan",
+        # "leads.export", "guards.delete"… Those are emitted whenever a *descendant*
+        # action is granted, so reading this decision out of the bag let a role holding
+        # only rota.publish satisfy the rota.edit its admin had explicitly switched off.
+        # The role's stored action rows carry no such ambiguity.
+        from app.services.module_service import role_action_allowed
+
+        module_key, _, action = code.rpartition(".")
+        return role_action_allowed(db, user, module_key, action)
     granted = set(permissions_for_user_db(db, user))
     if code in granted:
         return True
-    if user.role_id and "." in code:
-        from app.services.module_service import has_explicit_action
-
-        module_key, _, action = code.rpartition(".")
-        # A stored decision — including an explicit "no" — is final.
-        if has_explicit_action(db, user.role_id, module_key, action):
-            return False
     return any(c in granted for c in _codes_with_inheritance(code))
 
 

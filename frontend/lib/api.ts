@@ -520,6 +520,32 @@ export const api = {
       const qs = q.toString();
       return request<import('./types').IncidentSummaryRow[]>(`/incidents/reports/summary${qs ? `?${qs}` : ''}`);
     },
+    catalogue: () => request<import('./types').IncidentCatalogue>('/incidents/catalogue'),
+    matrix: (start_date?: string, end_date?: string, site_id?: number) => {
+      const q = new URLSearchParams();
+      if (start_date) q.set('start_date', start_date);
+      if (end_date) q.set('end_date', end_date);
+      if (site_id) q.set('site_id', String(site_id));
+      const qs = q.toString();
+      return request<import('./types').IncidentMatrixReport>(`/incidents/reports/matrix${qs ? `?${qs}` : ''}`);
+    },
+  },
+  accidentReports: {
+    list: (params?: Record<string, string | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+      const qs = q.toString();
+      return request<import('./types').AccidentReport[]>(`/accident-reports${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: number) => request<import('./types').AccidentReport>(`/accident-reports/${id}`),
+    create: (data: Record<string, unknown>) =>
+      request<import('./types').AccidentReport>('/accident-reports', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').AccidentReport>(`/accident-reports/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: number) => request<void>(`/accident-reports/${id}`, { method: 'DELETE' }),
+    // requestBlob carries the auth header — a bare <a href> would 401.
+    pdf: (id: number): Promise<Blob> => requestBlob(`/accident-reports/${id}/pdf`),
+    blankPdf: (): Promise<Blob> => requestBlob('/accident-reports/blank.pdf'),
   },
   clients: {
     list: (): Promise<Client[]> => request<Client[]>('/clients'),

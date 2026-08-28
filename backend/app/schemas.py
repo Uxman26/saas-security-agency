@@ -2287,6 +2287,10 @@ class PatrolTodayResponse(BaseModel):
 
 class IncidentCreate(BaseModel):
     notes: str = Field(min_length=1, max_length=5000)
+    category: Optional[str] = None
+    police_called: bool = False
+    ambulance_called: bool = False
+    fire_brigade_called: bool = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     accuracy: Optional[float] = None
@@ -2301,6 +2305,10 @@ class IncidentUpdate(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     site_id: Optional[int] = None
+    category: Optional[str] = None
+    police_called: Optional[bool] = None
+    ambulance_called: Optional[bool] = None
+    fire_brigade_called: Optional[bool] = None
 
 
 class IncidentAttachmentResponse(BaseModel):
@@ -2326,6 +2334,11 @@ class IncidentResponse(BaseModel):
     guard_id: Optional[int] = None
     assignment_id: Optional[int] = None
     notes: str
+    category: str = "other"
+    category_label: Optional[str] = None
+    police_called: bool = False
+    ambulance_called: bool = False
+    fire_brigade_called: bool = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     accuracy: Optional[float] = None
@@ -2343,6 +2356,100 @@ class IncidentSummaryRow(BaseModel):
     count: int
     site_id: Optional[int] = None
     site_name: Optional[str] = None
+
+
+class IncidentMatrixRow(BaseModel):
+    """One site's row of the Incident Reports Summary."""
+
+    site_id: Optional[int] = None
+    site_name: str = ""
+    supplier: str = ""
+    # category key -> count, and service key -> count. Keyed maps rather than fixed
+    # fields so the catalogue can gain a category without a schema change.
+    categories: dict[str, int] = {}
+    services: dict[str, int] = {}
+    total_incidents: int = 0
+
+
+class IncidentMatrixReport(BaseModel):
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    company_name: str = ""
+    category_columns: list[dict[str, str]] = []
+    service_columns: list[dict[str, str]] = []
+    rows: list[IncidentMatrixRow] = []
+    totals: IncidentMatrixRow = IncidentMatrixRow()
+
+
+class AccidentReportBase(BaseModel):
+    report_date: date
+    supervisor_name: NameStr
+    site_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    sia_number: Optional[str] = Field(default=None, max_length=40)
+    accident_type: Optional[str] = Field(default=None, max_length=200)
+    accident_time: Optional[str] = Field(default=None, max_length=10)
+    accident_location: Optional[str] = Field(default=None, max_length=300)
+    persons_involved: Optional[str] = Field(default=None, max_length=5000)
+    police_informed: bool = False
+    police_time_informed: Optional[str] = Field(default=None, max_length=10)
+    police_time_attended: Optional[str] = Field(default=None, max_length=10)
+    police_time_left: Optional[str] = Field(default=None, max_length=10)
+    fire_informed: bool = False
+    fire_time_informed: Optional[str] = Field(default=None, max_length=10)
+    fire_time_attended: Optional[str] = Field(default=None, max_length=10)
+    fire_time_left: Optional[str] = Field(default=None, max_length=10)
+    ambulance_informed: bool = False
+    ambulance_time_informed: Optional[str] = Field(default=None, max_length=10)
+    ambulance_time_attended: Optional[str] = Field(default=None, max_length=10)
+    ambulance_time_left: Optional[str] = Field(default=None, max_length=10)
+    comments: Optional[str] = Field(default=None, max_length=5000)
+
+
+class AccidentReportCreate(AccidentReportBase):
+    pass
+
+
+class AccidentReportUpdate(BaseModel):
+    report_date: Optional[date] = None
+    supervisor_name: Optional[str] = Field(default=None, max_length=100)
+    site_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    sia_number: Optional[str] = None
+    accident_type: Optional[str] = None
+    accident_time: Optional[str] = None
+    accident_location: Optional[str] = None
+    persons_involved: Optional[str] = None
+    police_informed: Optional[bool] = None
+    police_time_informed: Optional[str] = None
+    police_time_attended: Optional[str] = None
+    police_time_left: Optional[str] = None
+    fire_informed: Optional[bool] = None
+    fire_time_informed: Optional[str] = None
+    fire_time_attended: Optional[str] = None
+    fire_time_left: Optional[str] = None
+    ambulance_informed: Optional[bool] = None
+    ambulance_time_informed: Optional[str] = None
+    ambulance_time_attended: Optional[str] = None
+    ambulance_time_left: Optional[str] = None
+    comments: Optional[str] = None
+    status: Optional[str] = None
+
+
+class AccidentReportResponse(AccidentReportBase):
+    id: int
+    company_id: int
+    client_id: Optional[int] = None
+    created_by_user_id: int
+    created_by_name: Optional[str] = None
+    site_name: Optional[str] = None
+    guard_name: Optional[str] = None
+    reference: Optional[str] = None
+    status: str = "open"
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # --- Lone worker / check calls -------------------------------------------------------

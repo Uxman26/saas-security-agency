@@ -46,6 +46,7 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     ("rota_payable", "Rota — Payable amounts", "PoundSterling", "", 231, "sectionOperations"),
     ("patrol", "Patrol", "MapPinned", "/patrol", 24, "sectionOperations"),
     ("incidents", "Incidents", "AlertTriangle", "/incidents", 25, "sectionOperations"),
+    ("accident_reports", "Accident reports", "ClipboardCheck", "/accident-reports", 251, "sectionOperations"),
     ("client_portal", "Client portal", "Building2", "/client-portal", 26, "sectionOperations"),
     ("staff_requests", "Staff requests", "ClipboardList", "/requests", 27, "sectionOperations"),
     ("lone_worker", "Lone worker", "ShieldAlert", "/lone-worker", 28, "sectionOperations"),

@@ -143,6 +143,15 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("status_change", "Change status", "edit"),
         ActionDef("attachments_view", "View attachments", "view"),
         ActionDef("reports", "Incident reports", "view"),
+        ActionDef("summary_report", "Incident reports summary", "view"),
+    ),
+    # The accident log is HSE paperwork, not an operational incident — separate module so
+    # a role can report incidents without seeing injury records, and vice versa.
+    "accident_reports": CRUD
+    + (
+        ActionDef("status_change", "Change status", "edit"),
+        ActionDef("pdf_download", "Download PDF", "view"),
+        ActionDef("blank_form", "Print blank form", "view"),
     ),
     # Raising a staff request is a client-portal capability — that is the module the
     # POST endpoints are guarded by — while approving one belongs to staff_requests.

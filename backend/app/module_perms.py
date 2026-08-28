@@ -153,6 +153,12 @@ MODULE_LEGACY_EXPANSION: dict[str, dict[str, frozenset[str]]] = {
         "edit": frozenset({PERM_INCIDENT_WRITE}),
         "delete": frozenset({PERM_INCIDENT_WRITE}),
     },
+    "accident_reports": {
+        "view": frozenset({PERM_INCIDENT_READ}),
+        "create": frozenset({PERM_INCIDENT_WRITE}),
+        "edit": frozenset({PERM_INCIDENT_WRITE}),
+        "delete": frozenset({PERM_INCIDENT_WRITE}),
+    },
     "client_portal": {
         "view": frozenset({PERM_STAFF_REQ_READ}),
         "create": frozenset({PERM_STAFF_REQ_WRITE}),

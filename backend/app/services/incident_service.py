@@ -18,6 +18,13 @@ from app.schemas import (
     IncidentUpdate,
 )
 from app.services.company_service import get_company_by_user_id
+from app.incident_catalog import (
+    CATEGORY_KEYS,
+    INCIDENT_CATEGORIES,
+    SERVICE_FLAGS,
+    category_label,
+    normalize_category,
+)
 from app.services.portal_access import (
     is_client_portal_user,
     is_staff_portal_user,
@@ -75,6 +82,11 @@ def _out(inc: Incident) -> IncidentResponse:
         guard_id=inc.guard_id,
         assignment_id=inc.assignment_id,
         notes=inc.notes,
+        category=normalize_category(inc.category),
+        category_label=category_label(inc.category),
+        police_called=bool(inc.police_called),
+        ambulance_called=bool(inc.ambulance_called),
+        fire_brigade_called=bool(inc.fire_brigade_called),
         latitude=inc.latitude,
         longitude=inc.longitude,
         accuracy=inc.accuracy,
@@ -130,6 +142,10 @@ def create_incident(
         guard_id=guard_id,
         assignment_id=data.assignment_id,
         notes=data.notes.strip(),
+        category=normalize_category(data.category),
+        police_called=bool(data.police_called),
+        ambulance_called=bool(data.ambulance_called),
+        fire_brigade_called=bool(data.fire_brigade_called),
         latitude=data.latitude,
         longitude=data.longitude,
         accuracy=data.accuracy,
@@ -226,10 +242,111 @@ def update_incident(db: Session, user: User, incident_id: int, data: IncidentUpd
         if data.status and data.status not in ("open",):
             raise HTTPException(status_code=403, detail="Insufficient permissions to change status")
     payload = data.model_dump(exclude_unset=True)
+    if "category" in payload:
+        payload["category"] = normalize_category(payload["category"])
     for k, v in payload.items():
         setattr(inc, k, v.strip() if isinstance(v, str) else v)
     db.commit()
     return get_incident(db, user, incident_id)
+
+
+def matrix_report(
+    db: Session,
+    user: User,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    site_id: Optional[int] = None,
+) -> "IncidentMatrixReport":
+    """Incident Reports Summary: one row per site, one column per category.
+
+    Mirrors the sheet the client already receives on paper — supplier, site, a count for
+    every category, then the three services-called columns and a row total. Sites with no
+    incidents in the window are left out; a row of zeros carries no information.
+    """
+    from app.schemas import IncidentMatrixReport, IncidentMatrixRow
+
+    company = get_company_by_user_id(db, user.id)
+    q = (
+        db.query(Incident)
+        .options(joinedload(Incident.site))
+        .filter(Incident.company_id == company.id)
+    )
+    if site_id:
+        q = q.filter(Incident.site_id == site_id)
+    # Same portal narrowing the list uses, so a client's copy only shows their sites.
+    if is_client_portal_user(user) and user.client_id:
+        q = q.filter(Incident.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(Incident.site_id.in_(pinned))
+    if is_staff_portal_user(user):
+        if user.guard_id:
+            q = q.filter(
+                (Incident.reported_by_user_id == user.id) | (Incident.guard_id == user.guard_id)
+            )
+        else:
+            q = q.filter(Incident.reported_by_user_id == user.id)
+    if start_date:
+        q = q.filter(Incident.occurred_at >= datetime.combine(start_date, time.min))
+    if end_date:
+        q = q.filter(Incident.occurred_at <= datetime.combine(end_date, time.max))
+
+    def blank(site_id_: Optional[int], name: str, supplier: str) -> "IncidentMatrixRow":
+        return IncidentMatrixRow(
+            site_id=site_id_,
+            site_name=name,
+            supplier=supplier,
+            categories={k: 0 for k in CATEGORY_KEYS},
+            services={s.key: 0 for s in SERVICE_FLAGS},
+            total_incidents=0,
+        )
+
+    rows: dict[Optional[int], IncidentMatrixRow] = {}
+    totals = blank(None, "Total", "")
+
+    for inc in q.all():
+        site = inc.site
+        name = (site.name if site else "") or "Unassigned"
+        supplier = _supplier_name(site, company)
+        row = rows.get(inc.site_id)
+        if row is None:
+            row = blank(inc.site_id, name, supplier)
+            rows[inc.site_id] = row
+        cat = normalize_category(inc.category)
+        for bucket in (row, totals):
+            bucket.categories[cat] = bucket.categories.get(cat, 0) + 1
+            bucket.total_incidents += 1
+            if inc.police_called:
+                bucket.services["police_called"] += 1
+            if inc.ambulance_called:
+                bucket.services["ambulance_called"] += 1
+            if inc.fire_brigade_called:
+                bucket.services["fire_brigade_called"] += 1
+
+    ordered = sorted(rows.values(), key=lambda r: (r.supplier.lower(), r.site_name.lower()))
+    return IncidentMatrixReport(
+        period_start=start_date,
+        period_end=end_date,
+        company_name=company.name or "",
+        category_columns=[{"key": c.key, "label": c.label} for c in INCIDENT_CATEGORIES],
+        service_columns=[{"key": s.key, "label": s.label} for s in SERVICE_FLAGS],
+        rows=ordered,
+        totals=totals,
+    )
+
+
+def _supplier_name(site, company) -> str:
+    """The "Supplier" column: whoever provides the guarding at that site.
+
+    Falls back through sub-contractor, main contractor, contractor, then the tenant's own
+    name — a directly staffed site is supplied by the company itself.
+    """
+    for attr in ("sub_contractor", "main_contractor", "contractor"):
+        linked = getattr(site, attr, None) if site else None
+        name = (getattr(linked, "name", "") or "").strip()
+        if name:
+            return name
+    return (company.name or "").strip()
 
 
 def summary_report(

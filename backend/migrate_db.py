@@ -1173,6 +1173,67 @@ def run():
             # Table not present on this database yet — created later by create_all.
             pass
 
+    # --- Incident categories + emergency services called ------------------------------
+    # Added with the Incident Reports Summary. Existing rows default to "other" so the
+    # matrix still totals correctly against the raw incident count.
+    if table_exists(cur, "incidents"):
+        for col, ddl in (
+            ("category", "TEXT DEFAULT 'other'"),
+            ("police_called", "BOOLEAN DEFAULT 0"),
+            ("ambulance_called", "BOOLEAN DEFAULT 0"),
+            ("fire_brigade_called", "BOOLEAN DEFAULT 0"),
+        ):
+            if not column_exists(cur, "incidents", col):
+                cur.execute(f"ALTER TABLE incidents ADD COLUMN {col} {ddl}")
+        cur.execute("UPDATE incidents SET category = 'other' WHERE category IS NULL OR category = ''")
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_incidents_category ON incidents(category)")
+        except sqlite3.OperationalError:
+            pass
+
+    # --- Accident report log (digital X-FORM-077) -------------------------------------
+    if not table_exists(cur, "accident_reports"):
+        cur.execute(
+            """CREATE TABLE accident_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            site_id INTEGER REFERENCES sites(id),
+            client_id INTEGER REFERENCES clients(id),
+            guard_id INTEGER REFERENCES guards(id),
+            created_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            reference TEXT,
+            report_date DATE NOT NULL,
+            supervisor_name TEXT NOT NULL,
+            sia_number TEXT,
+            accident_type TEXT,
+            accident_time TEXT,
+            accident_location TEXT,
+            persons_involved TEXT,
+            police_informed BOOLEAN DEFAULT 0,
+            police_time_informed TEXT,
+            police_time_attended TEXT,
+            police_time_left TEXT,
+            fire_informed BOOLEAN DEFAULT 0,
+            fire_time_informed TEXT,
+            fire_time_attended TEXT,
+            fire_time_left TEXT,
+            ambulance_informed BOOLEAN DEFAULT 0,
+            ambulance_time_informed TEXT,
+            ambulance_time_attended TEXT,
+            ambulance_time_left TEXT,
+            comments TEXT,
+            status TEXT DEFAULT 'open',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )"""
+        )
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS ix_accident_reports_company ON accident_reports(company_id)",
+            "CREATE INDEX IF NOT EXISTS ix_accident_reports_site ON accident_reports(site_id)",
+            "CREATE INDEX IF NOT EXISTS ix_accident_reports_ref ON accident_reports(reference)",
+        ):
+            cur.execute(statement)
+
     conn.commit()
     conn.close()
     try:

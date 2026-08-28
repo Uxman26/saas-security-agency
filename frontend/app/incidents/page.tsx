@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import type { Incident, Site } from '@/lib/types';
+import type { IncidentCatalogue, Incident, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { openAuthFile } from '@/lib/use-auth-blob-url';
 import { AlertTriangle, BarChart3, Plus } from 'lucide-react';
@@ -38,7 +38,16 @@ export default function IncidentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Incident | null>(null);
-  const [form, setForm] = useState({ notes: '', site_id: '', latitude: '', longitude: '' });
+  const [form, setForm] = useState({
+    notes: '', site_id: '', latitude: '', longitude: '',
+    category: 'other', police_called: false, ambulance_called: false, fire_brigade_called: false,
+  });
+  // Category list comes from the API so the incident form and the summary report can
+  // never drift apart; a static copy here would be a second source of truth.
+  const [catalogue, setCatalogue] = useState<IncidentCatalogue | null>(null);
+  useEffect(() => {
+    api.incidents.catalogue().then(setCatalogue).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -65,13 +74,20 @@ export default function IncidentsPage() {
     try {
       await api.incidents.create({
         notes: form.notes.trim(),
+        category: form.category,
+        police_called: form.police_called,
+        ambulance_called: form.ambulance_called,
+        fire_brigade_called: form.fire_brigade_called,
         site_id: form.site_id ? Number(form.site_id) : undefined,
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
       });
       toast.success('Incident raised');
       setOpen(false);
-      setForm({ notes: '', site_id: '', latitude: '', longitude: '' });
+      setForm({
+        notes: '', site_id: '', latitude: '', longitude: '',
+        category: 'other', police_called: false, ambulance_called: false, fire_brigade_called: false,
+      });
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Create failed');
@@ -140,8 +156,10 @@ export default function IncidentsPage() {
                   <TableRow>
                     <TableHead>When</TableHead>
                     <TableHead>Site</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Reporter</TableHead>
                     <TableHead>Notes</TableHead>
+                    <TableHead>Called</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead />
                   </TableRow>
@@ -153,8 +171,13 @@ export default function IncidentsPage() {
                         {new Date(inc.occurred_at).toLocaleString()}
                       </TableCell>
                       <TableCell>{inc.site_name || '—'}</TableCell>
+                      <TableCell className="text-xs">{inc.category_label || '—'}</TableCell>
                       <TableCell>{inc.reported_by_name || inc.reported_by_user_id}</TableCell>
                       <TableCell className="max-w-xs truncate">{inc.notes}</TableCell>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {[inc.police_called && 'Police', inc.ambulance_called && 'Ambulance', inc.fire_brigade_called && 'Fire']
+                          .filter(Boolean).join(', ') || <span className="text-muted-foreground">—</span>}
+                      </TableCell>
                       <TableCell className="capitalize text-xs">{inc.status}</TableCell>
                       <TableCell>
                         <Button
@@ -191,6 +214,36 @@ export default function IncidentsPage() {
                 <DialogTitle>Raise incident</DialogTitle>
               </DialogHeader>
               <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label>Category</Label>
+                  <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(catalogue?.categories ?? []).map((c) => (
+                        <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Drives the monthly Incident Reports Summary.</p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Emergency services called</Label>
+                  <div className="flex flex-wrap gap-4 rounded-md border p-3">
+                    {(catalogue?.services ?? []).map((svc) => (
+                      <label key={svc.key} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          className="rounded border"
+                          checked={Boolean(form[svc.key as 'police_called'])}
+                          onChange={(e) => setForm((f) => ({ ...f, [svc.key]: e.target.checked }))}
+                        />
+                        {svc.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 <div className="space-y-1">
                   <Label>Notes</Label>
                   <Textarea rows={4} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />

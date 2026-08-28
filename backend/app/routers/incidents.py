@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.rbac import require_module, user_has_permission_db
-from app.schemas import IncidentCreate, IncidentResponse, IncidentSummaryRow, IncidentUpdate
+from app.schemas import IncidentCreate, IncidentResponse, IncidentMatrixReport, IncidentSummaryRow, IncidentUpdate
 from app.services import incident_service
 from app.services.image_avif_service import is_image_filename, save_upload_as_avif
 from app.storage_paths import INCIDENT_PHOTOS_DIR, ensure_upload_dirs
@@ -94,6 +94,28 @@ def summary(
     current_user: User = Depends(require_module("incidents", "reports")),
 ):
     return incident_service.summary_report(db, current_user, start_date, end_date)
+
+
+@router.get("/catalogue")
+def incident_catalogue(
+    current_user: User = Depends(require_module("incidents", "view")),
+):
+    """Category and services-called options for the incident form and report header."""
+    from app.incident_catalog import catalogue
+
+    return catalogue()
+
+
+@router.get("/reports/matrix", response_model=IncidentMatrixReport)
+def incident_matrix(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    site_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("incidents", "summary_report")),
+):
+    """Incident Reports Summary — sites down, categories across."""
+    return incident_service.matrix_report(db, current_user, start_date, end_date, site_id)
 
 
 @router.get("/{incident_id}/attachments/{attachment_id}/file")

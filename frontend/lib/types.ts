@@ -1316,6 +1316,63 @@ export interface IncidentAttachment {
   created_at: string;
 }
 
+export interface CatalogueOption { key: string; label: string }
+export interface IncidentCatalogue { categories: CatalogueOption[]; services: CatalogueOption[] }
+
+export interface IncidentMatrixRow {
+  site_id: number | null;
+  site_name: string;
+  supplier: string;
+  categories: Record<string, number>;
+  services: Record<string, number>;
+  total_incidents: number;
+}
+
+export interface IncidentMatrixReport {
+  period_start: string | null;
+  period_end: string | null;
+  company_name: string;
+  category_columns: CatalogueOption[];
+  service_columns: CatalogueOption[];
+  rows: IncidentMatrixRow[];
+  totals: IncidentMatrixRow;
+}
+
+export interface AccidentReport {
+  id: number;
+  company_id: number;
+  client_id?: number | null;
+  site_id?: number | null;
+  site_name?: string | null;
+  guard_id?: number | null;
+  guard_name?: string | null;
+  created_by_user_id: number;
+  created_by_name?: string | null;
+  reference?: string | null;
+  report_date: string;
+  supervisor_name: string;
+  sia_number?: string | null;
+  accident_type?: string | null;
+  accident_time?: string | null;
+  accident_location?: string | null;
+  persons_involved?: string | null;
+  police_informed: boolean;
+  police_time_informed?: string | null;
+  police_time_attended?: string | null;
+  police_time_left?: string | null;
+  fire_informed: boolean;
+  fire_time_informed?: string | null;
+  fire_time_attended?: string | null;
+  fire_time_left?: string | null;
+  ambulance_informed: boolean;
+  ambulance_time_informed?: string | null;
+  ambulance_time_attended?: string | null;
+  ambulance_time_left?: string | null;
+  comments?: string | null;
+  status: string;
+  created_at: string;
+}
+
 export interface Incident {
   id: number;
   company_id: number;
@@ -1327,6 +1384,11 @@ export interface Incident {
   reported_by_name?: string | null;
   guard_id?: number | null;
   notes: string;
+  category?: string;
+  category_label?: string | null;
+  police_called?: boolean;
+  ambulance_called?: boolean;
+  fire_brigade_called?: boolean;
   latitude?: number | null;
   longitude?: number | null;
   accuracy?: number | null;

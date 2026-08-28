@@ -1409,6 +1409,12 @@ class Incident(Base):
     guard_id = Column(Integer, ForeignKey("guards.id"))
     assignment_id = Column(Integer, ForeignKey("assignments.id"))
     notes = Column(Text, nullable=False)
+    # One category per incident, from app.incident_catalog. Drives the summary matrix.
+    category = Column(String, default="other", index=True)
+    # Independent of category: one incident can call out all three services.
+    police_called = Column(Boolean, default=False)
+    ambulance_called = Column(Boolean, default=False)
+    fire_brigade_called = Column(Boolean, default=False)
     latitude = Column(Float)
     longitude = Column(Float)
     accuracy = Column(Float)
@@ -1422,6 +1428,58 @@ class Incident(Base):
     reported_by = relationship("User", foreign_keys=[reported_by_user_id])
     guard = relationship("Guard")
     attachments = relationship("IncidentAttachment", back_populates="incident", cascade="all, delete-orphan")
+
+
+class AccidentReport(Base):
+    """Digital X-FORM-077. One row per accident, mirroring the paper log field for field.
+
+    Times are stored as free "HH:MM" strings rather than datetimes because the form is
+    filled in from memory on a shift and half the fields are routinely left blank — a
+    typed column would force a value the supervisor does not have.
+    """
+
+    __tablename__ = "accident_reports"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    guard_id = Column(Integer, ForeignKey("guards.id"))
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reference = Column(String, index=True)
+
+    report_date = Column(Date, nullable=False)
+    supervisor_name = Column(String, nullable=False)
+    sia_number = Column(String)
+    accident_type = Column(String)
+    accident_time = Column(String)
+    accident_location = Column(String)
+    persons_involved = Column(Text)
+
+    police_informed = Column(Boolean, default=False)
+    police_time_informed = Column(String)
+    police_time_attended = Column(String)
+    police_time_left = Column(String)
+
+    fire_informed = Column(Boolean, default=False)
+    fire_time_informed = Column(String)
+    fire_time_attended = Column(String)
+    fire_time_left = Column(String)
+
+    ambulance_informed = Column(Boolean, default=False)
+    ambulance_time_informed = Column(String)
+    ambulance_time_attended = Column(String)
+    ambulance_time_left = Column(String)
+
+    comments = Column(Text)
+    status = Column(String, default="open")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    company = relationship("Company")
+    site = relationship("Site")
+    client = relationship("Client")
+    guard = relationship("Guard")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
 
 
 class IncidentAttachment(Base):

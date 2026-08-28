@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_password_hash, SUPER_ADMIN_ROLE
 from app.models import Company, Invoice, InvoiceLine, Payment, SubscriptionReceipt, User
-from app.services.receipt_service import SIDEBAR_DEFAULT_PATHS, dump_sidebar_modules, parse_sidebar_modules
+from app.services.receipt_service import dump_sidebar_modules, parse_sidebar_modules, sidebar_default_paths
 from app.services.module_service import dump_modules, parse_modules, apply_plan_module_flags
 from app.schemas import InvoiceUpdate
 
@@ -205,7 +205,7 @@ def reset_admin_password(db: Session, user_id: int, new_password: str) -> User:
 
 def set_sidebar_modules(db: Session, user_id: int, paths: list[str]) -> User:
     u, _, _ = get_admin_detail(db, user_id)
-    valid = set(SIDEBAR_DEFAULT_PATHS)
+    valid = set(sidebar_default_paths())
     cleaned = [p for p in paths if p in valid]
     if "/dashboard" not in cleaned:
         cleaned.insert(0, "/dashboard")
@@ -251,7 +251,7 @@ def admin_out(db: Session, u: User, co: Company | None, receipts: list[Subscript
         "user_count": int(user_count or 0),
         "enabled_modules": parse_modules(co.enabled_modules_json) if co else {},
         "usage": usage,
-        "sidebar_modules": parse_sidebar_modules(u.sidebar_modules_json) or SIDEBAR_DEFAULT_PATHS,
+        "sidebar_modules": parse_sidebar_modules(u.sidebar_modules_json) or sidebar_default_paths(),
         "receipts": [
             {
                 "id": r.id,

@@ -9,6 +9,7 @@ from app.models import User, Company
 from app.schemas import (
     ForgotPasswordRequest,
     MessageResponse,
+    ProfileUpdate,
     ResendVerificationRequest,
     ResetPasswordRequest,
     SignupResponse,
@@ -133,8 +134,7 @@ def resend_verification(body: ResendVerificationRequest, db: Session = Depends(g
     return {"message": "If an account exists and needs verification, a new link has been sent."}
 
 
-@router.get("/me", response_model=UserMeResponse)
-def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def _me_response(db: Session, current_user: User) -> UserMeResponse:
     perms = permissions_for_user_db(db, current_user)
     plan = None
     company_name = None
@@ -178,6 +178,30 @@ def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_curre
         sidebar_modules=sidebar_modules,
         enabled_modules=enabled_modules,
     )
+
+
+@router.get("/me", response_model=UserMeResponse)
+def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return _me_response(db, current_user)
+
+
+@router.patch("/me/profile", response_model=UserMeResponse)
+def patch_my_profile(
+    body: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Rename yourself.
+
+    Deliberately ungated beyond being signed in: a display name is the caller's own,
+    not a tenant record, so requiring roles.users_edit would leave every Staff and
+    Client login unable to correct their own name. It writes nothing else — role,
+    email and company are not settable here.
+    """
+    current_user.full_name = body.full_name
+    db.commit()
+    db.refresh(current_user)
+    return _me_response(db, current_user)
 
 
 @router.get("/company-logo")

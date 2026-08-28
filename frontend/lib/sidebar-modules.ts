@@ -1,6 +1,13 @@
+/**
+ * Options offered by the super-admin sidebar picker. Must stay in step with the API's
+ * receipt_service.sidebar_default_paths(), which is derived from MODULE_SEED and
+ * rejects anything not in it — a path listed here but missing there saves a 200 and is
+ * silently dropped. Add the module's sidebar_path to both when you add a module.
+ */
 export const ALL_SIDEBAR_PATHS = [
   '/dashboard',
   '/guards',
+  '/my-portal',
   '/sites',
   '/clients',
   '/leads',

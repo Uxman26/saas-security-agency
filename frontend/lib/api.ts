@@ -122,6 +122,11 @@ export const api = {
       return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
     },
     me: (): Promise<User> => request<User>('/auth/me'),
+    updateProfile: (full_name: string): Promise<User> =>
+      request<User>('/auth/me/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ full_name: sanitizeInput(full_name) }),
+      }),
     logout: (): Promise<{ message: string }> =>
       request<{ message: string }>('/auth/logout', { method: 'POST' }),
     logoutAll: (): Promise<{ message: string }> =>

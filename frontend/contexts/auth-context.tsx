@@ -11,6 +11,9 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<User>;
   logout: () => Promise<void>;
+  /** Re-read /auth/me. Call after anything that changes the signed-in user's own row,
+   *  so the greeting and sidebar pick the change up without a reload. */
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -67,6 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return userData;
   };
 
+  const refreshUser = useCallback(async () => {
+    setUser(await api.auth.me());
+  }, []);
+
   const logout = useCallback(async () => {
     // Revoke server-side first: that is what stops the token working in other tabs and
     // on other devices. A failure here must not trap the user in the app, so the local
@@ -81,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSession]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

@@ -159,6 +159,22 @@ def _resolve_guard(db: Session, user: User, company_id: int, guard_id: Optional[
     raise HTTPException(status_code=400, detail="guard_id is required")
 
 
+def _portal_route_site_ids(db: Session, user: User) -> Optional[set[int]]:
+    """Sites a portal login may see patrol config for, or None when unrestricted.
+
+    Client scoping was already inline in each query; Staff had none, so a guard could
+    list every patrol route and compliance row in the tenant, including sites they have
+    never worked. filter_sites_for_user resolves both roles the same way the Sites list
+    does — client's own sites, or the staff member's rota'd sites, narrowed by pins.
+    """
+    from app.services.portal_access import filter_sites_for_user, is_portal_role
+
+    if not is_portal_role(user):
+        return None
+    q = filter_sites_for_user(db, user, db.query(Site.id).filter(Site.company_id == user.company_id))
+    return {row[0] for row in q.all()}
+
+
 def list_routes(db: Session, user: User, site_id: Optional[int] = None) -> list[PatrolRouteResponse]:
     company = get_company_by_user_id(db, user.id)
     q = (
@@ -168,11 +184,9 @@ def list_routes(db: Session, user: User, site_id: Optional[int] = None) -> list[
     )
     if site_id:
         q = q.filter(PatrolRoute.site_id == site_id)
-    if is_client_portal_user(user) and user.client_id:
-        q = q.join(Site).filter(Site.client_id == user.client_id)
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None:
-            q = q.filter(PatrolRoute.site_id.in_(pinned))
+    allowed = _portal_route_site_ids(db, user)
+    if allowed is not None:
+        q = q.filter(PatrolRoute.site_id.in_(allowed or {0}))
     rows = q.order_by(PatrolRoute.id.desc()).all()
     return [_route_out(r, include_cps=False) for r in rows]
 
@@ -187,13 +201,24 @@ def get_route(db: Session, user: User, route_id: int) -> PatrolRouteResponse:
     )
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
-    if is_client_portal_user(user) and user.client_id and route.site and route.site.client_id != user.client_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if is_client_portal_user(user):
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None and route.site_id not in pinned:
-            raise HTTPException(status_code=403, detail="Access denied")
+    allowed = _portal_route_site_ids(db, user)
+    if allowed is not None and route.site_id not in allowed:
+        raise HTTPException(status_code=404, detail="Route not found")
     return _route_out(route, include_cps=True)
+
+
+def _assert_site_in_portal_scope(db: Session, user: User, site_id: Optional[int]) -> None:
+    """Refuse a portal login touching patrol config outside its own sites.
+
+    patrol deliberately uses plain require_module and scopes its own queries (see
+    rbac.require_internal_module), but the route and checkpoint write paths only scoped
+    by company — so a Staff login holding patrol.edit or patrol.checkpoint_edit could
+    rewrite the patrol configuration of every site in the tenant. 404 rather than 403,
+    matching the read paths.
+    """
+    allowed = _portal_route_site_ids(db, user)
+    if allowed is not None and site_id not in allowed:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 def create_route(db: Session, user: User, data: PatrolRouteCreate) -> PatrolRouteResponse:
@@ -201,6 +226,7 @@ def create_route(db: Session, user: User, data: PatrolRouteCreate) -> PatrolRout
     site = db.query(Site).filter(Site.id == data.site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    _assert_site_in_portal_scope(db, user, site.id)
     route = PatrolRoute(
         company_id=company.id,
         site_id=data.site_id,
@@ -221,6 +247,7 @@ def update_route(db: Session, user: User, route_id: int, data: PatrolRouteUpdate
     route = db.query(PatrolRoute).filter(PatrolRoute.id == route_id, PatrolRoute.company_id == company.id).first()
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
+    _assert_site_in_portal_scope(db, user, route.site_id)
     payload = data.model_dump(exclude_unset=True)
     for k, v in payload.items():
         setattr(route, k, v.strip() if isinstance(v, str) else v)
@@ -233,6 +260,7 @@ def delete_route(db: Session, user: User, route_id: int) -> None:
     route = db.query(PatrolRoute).filter(PatrolRoute.id == route_id, PatrolRoute.company_id == company.id).first()
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
+    _assert_site_in_portal_scope(db, user, route.site_id)
     db.delete(route)
     db.commit()
 
@@ -242,6 +270,7 @@ def create_checkpoint(db: Session, user: User, data: PatrolCheckpointCreate) -> 
     route = db.query(PatrolRoute).filter(PatrolRoute.id == data.route_id, PatrolRoute.company_id == company.id).first()
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
+    _assert_site_in_portal_scope(db, user, route.site_id)
     cp = PatrolCheckpoint(
         company_id=company.id,
         site_id=route.site_id,
@@ -268,6 +297,7 @@ def update_checkpoint(db: Session, user: User, checkpoint_id: int, data: PatrolC
     cp = db.query(PatrolCheckpoint).filter(PatrolCheckpoint.id == checkpoint_id, PatrolCheckpoint.company_id == company.id).first()
     if not cp:
         raise HTTPException(status_code=404, detail="Checkpoint not found")
+    _assert_site_in_portal_scope(db, user, cp.site_id)
     for k, v in data.model_dump(exclude_unset=True).items():
         setattr(cp, k, v.strip() if isinstance(v, str) else v)
     db.commit()
@@ -280,6 +310,7 @@ def delete_checkpoint(db: Session, user: User, checkpoint_id: int) -> None:
     cp = db.query(PatrolCheckpoint).filter(PatrolCheckpoint.id == checkpoint_id, PatrolCheckpoint.company_id == company.id).first()
     if not cp:
         raise HTTPException(status_code=404, detail="Checkpoint not found")
+    _assert_site_in_portal_scope(db, user, cp.site_id)
     db.delete(cp)
     db.commit()
 
@@ -529,11 +560,9 @@ def compliance_report(
     )
     if site_id:
         q = q.filter(PatrolRoute.site_id == site_id)
-    if is_client_portal_user(user) and user.client_id:
-        q = q.join(Site).filter(Site.client_id == user.client_id)
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None:
-            q = q.filter(PatrolRoute.site_id.in_(pinned))
+    allowed = _portal_route_site_ids(db, user)
+    if allowed is not None:
+        q = q.filter(PatrolRoute.site_id.in_(allowed or {0}))
     routes = q.all()
     out: list[PatrolComplianceRow] = []
     day = start_date

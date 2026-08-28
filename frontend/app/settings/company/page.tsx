@@ -11,12 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import type { CompanyProfile } from '@/lib/types';
-import { Building2, Upload, Wallet } from 'lucide-react';
+import { Building2, Upload, User as UserIcon, Wallet } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { useAuth } from '@/contexts/auth-context';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-type Tab = 'logo' | 'contact' | 'banking';
+type Tab = 'logo' | 'contact' | 'banking' | 'profile';
 
 function useLogoUrl(url?: string | null) {
   const [src, setSrc] = useState<string | null>(null);
@@ -48,6 +49,30 @@ function useLogoUrl(url?: string | null) {
 
 export default function CompanySettingsPage() {
   const [tab, setTab] = useState<Tab>('logo');
+  // Your own display name, not a company field — saved through /auth/me/profile,
+  // which every signed-in role may call, so it has its own Save button.
+  const { user, refreshUser } = useAuth();
+  // Derived, not synced through an effect: the field shows the live name until the
+  // user types, so a refresh elsewhere can never leave a stale draft on screen.
+  const [profileDraft, setProfileDraft] = useState<string | null>(null);
+  const profileName = profileDraft ?? user?.full_name ?? '';
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const saveProfile = async () => {
+    const next = profileName.trim();
+    if (!next) return;
+    setSavingProfile(true);
+    try {
+      await api.auth.updateProfile(next);
+      await refreshUser();
+      setProfileDraft(null);
+      toast.success('Name updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update your name');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -144,7 +169,7 @@ export default function CompanySettingsPage() {
             title={<span className="flex items-center gap-2"><Building2 className="size-7" /> Company profile</span>}
             description="Logo, contact details, and registration numbers appear on invoices. Bank details appear at the bottom for payment."
             actions={
-              tab !== 'logo' ? (
+              tab !== 'logo' && tab !== 'profile' ? (
                 <div className="flex gap-2">
                   <Button onClick={() => void save()} disabled={saving || !name.trim()}>
                     {saving ? 'Saving…' : 'Save'}
@@ -162,10 +187,55 @@ export default function CompanySettingsPage() {
               { id: 'logo', label: 'Logo' },
               { id: 'contact', label: 'Contact' },
               { id: 'banking', label: 'Banking' },
+              { id: 'profile', label: 'Your profile' },
             ]}
             value={tab}
             onChange={setTab}
           />
+
+          {tab === 'profile' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <UserIcon className="size-4" /> Your profile
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1 max-w-md">
+                  <Label htmlFor="profile_name">Your name</Label>
+                  <Input
+                    id="profile_name"
+                    value={profileName}
+                    onChange={(e) => setProfileDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void saveProfile();
+                      }
+                    }}
+                    placeholder="Your full name"
+                    maxLength={100}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Shown in the dashboard greeting and wherever your account is listed.
+                  </p>
+                </div>
+                <div className="space-y-1 max-w-md">
+                  <Label>Sign-in email</Label>
+                  <Input value={user?.email ?? ''} disabled readOnly />
+                  <p className="text-xs text-muted-foreground">
+                    Your email is how you sign in and cannot be changed here.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => void saveProfile()}
+                  disabled={savingProfile || !profileName.trim() || profileName.trim() === (user?.full_name ?? '')}
+                >
+                  {savingProfile ? 'Saving…' : 'Save name'}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {tab === 'logo' && (
             <Card>

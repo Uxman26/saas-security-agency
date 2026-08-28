@@ -72,12 +72,17 @@ ACTIONS = LEGACY_ACTIONS
 # Stored per company in Company.enabled_modules_json. Unknown/absent keys default to
 # enabled so an older row never silently loses a feature.
 
-TENANT_MODULES = ("expenses", "whatsapp", "email", "mobile_apps")
+# Every key the super-admin "Tenant modules" panel offers. A key missing here is
+# dropped by parse_modules/dump_modules, so its checkbox saves a 200 and reads back
+# unticked forever — which is what "leads" did while the frontend was already gating
+# the Leads nav entry, the notifications provider and the list view on it.
+TENANT_MODULES = ("expenses", "whatsapp", "email", "mobile_apps", "leads")
 
 DEFAULT_MODULES = {m: True for m in TENANT_MODULES}
 
 PATH_MODULE_MAP = {
     "/expenses": "expenses",
+    "/leads": "leads",
 }
 
 

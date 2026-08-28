@@ -101,6 +101,12 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
+class ProfileUpdate(BaseModel):
+    """Self-service profile edit. Name only — see auth.patch_my_profile."""
+
+    full_name: NameStr
+
+
 class UserMeResponse(UserResponse):
     permissions: List[str] = Field(default_factory=list)
     module_access: List[dict[str, Any]] = Field(default_factory=list)

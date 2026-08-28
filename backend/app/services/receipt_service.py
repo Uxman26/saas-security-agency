@@ -9,31 +9,33 @@ from app.models import Company, SubscriptionReceipt, User
 from app.plan_config import SUBSCRIPTION_PERIOD_DAYS, normalize_tier, price_for_tier
 from app.services.module_service import apply_plan_module_flags
 
-SIDEBAR_DEFAULT_PATHS = [
-    "/dashboard",
-    "/guards",
-    "/sites",
-    "/clients",
-    "/assignments",
-    "/rota",
-    "/attendance",
-    "/documents",
-    "/contractors",
-    "/payroll",
-    "/invoices",
-    "/expenses",
-    "/reports",
-    "/payments",
-    "/allowances",
-    "/settings/special-days",
-    "/settings/roles",
-    "/settings/company",
-    "/settings/sms",
-    "/settings/email",
-    "/client-portal",
-    "/client-portal/request-staff",
-    "/requests",
-]
+# Sidebar entries that are a sub-page of a module rather than a module of their own,
+# so they have no MODULE_SEED row to be derived from.
+_EXTRA_SIDEBAR_PATHS = ("/client-portal/request-staff",)
+
+
+def sidebar_default_paths() -> list[str]:
+    """Every sidebar path the super-admin picker may grant, in sidebar order.
+
+    Derived from MODULE_SEED rather than hand-listed. This was a static list, and it
+    fell behind the module registry: Patrol, Incidents, Lone worker, Leads,
+    Sub-contractors, Billing and My portal all shipped after it was written. Because
+    set_sidebar_modules filters incoming paths against it, ticking any of those saved a
+    200 and then silently dropped them — the boxes came back unticked and the tenant
+    lost the sidebar entry, since a stored list acts as an allow-list. Deriving it means
+    a new module row can never fall out of the picker again.
+    """
+    from app.services.module_service import MODULE_SEED
+
+    paths: list[str] = []
+    for _key, _name, _icon, path, _order, _section in sorted(MODULE_SEED, key=lambda m: m[4]):
+        # A module with an empty sidebar_path is permission-only and is never a link.
+        if path and path not in paths:
+            paths.append(path)
+    for p in _EXTRA_SIDEBAR_PATHS:
+        if p not in paths:
+            paths.append(p)
+    return paths
 
 
 def _utcnow():

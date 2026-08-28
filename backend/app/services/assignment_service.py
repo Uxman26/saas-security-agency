@@ -115,6 +115,18 @@ def get_rota(
         Assignment.break_minutes,
         Assignment.shift_type
     ).join(Guard).join(Site).filter(Guard.company_id == company.id)
+
+    # Same portal narrowing get_assignments applies. Without it this endpoint handed a
+    # guard the whole company's rota — every colleague's name, site and shift — because
+    # guard_id/site_id/client_id below come from the query string and select *within* a
+    # scope rather than establishing one.
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        from app.services.portal_access import filter_assignments_for_user, is_portal_role
+
+        if is_portal_role(user):
+            query = filter_assignments_for_user(db, user, query)
+
     if guard_id:
         query = query.filter(Assignment.guard_id == guard_id)
     if site_id:
@@ -141,24 +153,38 @@ def get_rota(
         for r in results
     ]
 
+def _assignment_for_user(db: Session, company_id: int, assignment_id: int, user_id: int) -> Assignment:
+    """The assignment, if this caller may see it.
+
+    Company scope alone is too wide for a portal login: the /assignments list is
+    narrowed by filter_assignments_for_user, but reading, editing or deleting one by id
+    went straight to the company, so a guard could pull or rewrite any colleague's shift
+    by walking the ids. 404 rather than 403, matching authz.owned_or_404.
+    """
+    from app.services.portal_access import filter_assignments_for_user, is_portal_role
+
+    q = (
+        db.query(Assignment)
+        .join(Guard)
+        .outerjoin(Site)
+        .filter(Assignment.id == assignment_id, Guard.company_id == company_id)
+    )
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and is_portal_role(user):
+        q = filter_assignments_for_user(db, user, q)
+    a = q.first()
+    if not a:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    return a
+
+
 def get_assignment_by_id(db: Session, assignment_id: int, user_id: int) -> Assignment:
     company = get_company_by_user_id(db, user_id)
-    assignment = db.query(Assignment).join(Guard).filter(
-        Assignment.id == assignment_id,
-        Guard.company_id == company.id
-    ).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
-    return assignment
+    return _assignment_for_user(db, company.id, assignment_id, user_id)
 
 def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCreate, user_id: int) -> Assignment:
     company = get_company_by_user_id(db, user_id)
-    db_assignment = db.query(Assignment).join(Guard).filter(
-        Assignment.id == assignment_id,
-        Guard.company_id == company.id
-    ).first()
-    if not db_assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    db_assignment = _assignment_for_user(db, company.id, assignment_id, user_id)
     
     guard = db.query(Guard).filter(Guard.id == assignment.guard_id, Guard.company_id == company.id).first()
     if not guard:
@@ -197,12 +223,7 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
 
 def delete_assignment(db: Session, assignment_id: int, user_id: int) -> None:
     company = get_company_by_user_id(db, user_id)
-    assignment = db.query(Assignment).join(Guard).filter(
-        Assignment.id == assignment_id,
-        Guard.company_id == company.id
-    ).first()
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    assignment = _assignment_for_user(db, company.id, assignment_id, user_id)
 
     shift_audit_service.log_assignment_event(
         db,

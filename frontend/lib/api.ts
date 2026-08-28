@@ -530,6 +530,38 @@ export const api = {
       return request<import('./types').IncidentMatrixReport>(`/incidents/reports/matrix${qs ? `?${qs}` : ''}`);
     },
   },
+  tasks: {
+    list: (params?: Record<string, string | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+      const qs = q.toString();
+      return request<import('./types').Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
+    },
+    counts: () => request<import('./types').TaskCounts>('/tasks/counts'),
+    create: (data: Record<string, unknown>) =>
+      request<import('./types').Task>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    complete: (id: number, done = true) =>
+      request<import('./types').Task>(`/tasks/${id}/complete?done=${done}`, { method: 'POST' }),
+    remove: (id: number) => request<void>(`/tasks/${id}`, { method: 'DELETE' }),
+  },
+  occurrenceSheets: {
+    list: (params?: Record<string, string | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v) q.set(k, v); });
+      const qs = q.toString();
+      return request<import('./types').OccurrenceSheet[]>(`/occurrence-sheets${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: number) => request<import('./types').OccurrenceSheet>(`/occurrence-sheets/${id}`),
+    create: (data: Record<string, unknown>) =>
+      request<import('./types').OccurrenceSheet>('/occurrence-sheets', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Record<string, unknown>) =>
+      request<import('./types').OccurrenceSheet>(`/occurrence-sheets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    remove: (id: number) => request<void>(`/occurrence-sheets/${id}`, { method: 'DELETE' }),
+    pdf: (id: number): Promise<Blob> => requestBlob(`/occurrence-sheets/${id}/pdf`),
+    blankPdf: (): Promise<Blob> => requestBlob('/occurrence-sheets/blank.pdf'),
+  },
   accidentReports: {
     list: (params?: Record<string, string | undefined>) => {
       const q = new URLSearchParams();

@@ -1234,6 +1234,75 @@ def run():
         ):
             cur.execute(statement)
 
+    # --- Tasks (staff to-do list) -----------------------------------------------------
+    if not table_exists(cur, "tasks"):
+        cur.execute(
+            """CREATE TABLE tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            guard_id INTEGER REFERENCES guards(id),
+            site_id INTEGER REFERENCES sites(id),
+            created_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            completed_by_user_id INTEGER REFERENCES users(id),
+            title TEXT NOT NULL,
+            description TEXT,
+            priority TEXT DEFAULT 'normal',
+            status TEXT DEFAULT 'todo',
+            due_date DATE,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )"""
+        )
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS ix_tasks_company ON tasks(company_id)",
+            "CREATE INDEX IF NOT EXISTS ix_tasks_guard ON tasks(guard_id)",
+            "CREATE INDEX IF NOT EXISTS ix_tasks_status ON tasks(status)",
+            "CREATE INDEX IF NOT EXISTS ix_tasks_due ON tasks(due_date)",
+        ):
+            cur.execute(statement)
+
+    # --- Daily occurrences sheet ------------------------------------------------------
+    if not table_exists(cur, "occurrence_sheets"):
+        cur.execute(
+            """CREATE TABLE occurrence_sheets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            site_id INTEGER REFERENCES sites(id),
+            client_id INTEGER REFERENCES clients(id),
+            guard_id INTEGER REFERENCES guards(id),
+            created_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            reference TEXT,
+            sheet_date DATE NOT NULL,
+            officer_names TEXT,
+            shift_start TEXT,
+            shift_end TEXT,
+            signature_name TEXT,
+            status TEXT DEFAULT 'open',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )"""
+        )
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS ix_occ_sheets_company ON occurrence_sheets(company_id)",
+            "CREATE INDEX IF NOT EXISTS ix_occ_sheets_site ON occurrence_sheets(site_id)",
+            "CREATE INDEX IF NOT EXISTS ix_occ_sheets_date ON occurrence_sheets(sheet_date)",
+        ):
+            cur.execute(statement)
+    if not table_exists(cur, "occurrence_entries"):
+        cur.execute(
+            """CREATE TABLE occurrence_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sheet_id INTEGER NOT NULL REFERENCES occurrence_sheets(id),
+            serial_no INTEGER NOT NULL DEFAULT 1,
+            start_time TEXT,
+            finish_time TEXT,
+            occurrence TEXT,
+            action_taken TEXT
+        )"""
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS ix_occ_entries_sheet ON occurrence_entries(sheet_id)")
+
     conn.commit()
     conn.close()
     try:

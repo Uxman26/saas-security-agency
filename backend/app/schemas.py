@@ -2358,6 +2358,117 @@ class IncidentSummaryRow(BaseModel):
     site_name: Optional[str] = None
 
 
+class TaskBase(BaseModel):
+    title: NameStr
+    description: Optional[str] = Field(default=None, max_length=5000)
+    guard_id: Optional[int] = None
+    site_id: Optional[int] = None
+    due_date: Optional[date] = None
+    priority: str = "normal"
+
+
+class TaskCreate(TaskBase):
+    pass
+
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=100)
+    description: Optional[str] = None
+    guard_id: Optional[int] = None
+    site_id: Optional[int] = None
+    due_date: Optional[date] = None
+    priority: Optional[str] = None
+    status: Optional[str] = None
+
+
+class TaskResponse(TaskBase):
+    id: int
+    company_id: int
+    status: str = "todo"
+    guard_name: Optional[str] = None
+    site_name: Optional[str] = None
+    created_by_user_id: int
+    created_by_name: Optional[str] = None
+    completed_by_name: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    # Derived, not stored: a task is overdue only while it is still outstanding.
+    is_overdue: bool = False
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TaskCounts(BaseModel):
+    todo: int = 0
+    in_progress: int = 0
+    done: int = 0
+    cancelled: int = 0
+    overdue: int = 0
+    total: int = 0
+
+
+class OccurrenceEntryIn(BaseModel):
+    serial_no: Optional[int] = None
+    start_time: Optional[str] = Field(default=None, max_length=10)
+    finish_time: Optional[str] = Field(default=None, max_length=10)
+    occurrence: Optional[str] = Field(default=None, max_length=2000)
+    action_taken: Optional[str] = Field(default=None, max_length=2000)
+
+
+class OccurrenceEntryResponse(OccurrenceEntryIn):
+    id: int
+    serial_no: int
+
+    class Config:
+        from_attributes = True
+
+
+class OccurrenceSheetBase(BaseModel):
+    sheet_date: date
+    site_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    officer_names: Optional[str] = Field(default=None, max_length=300)
+    shift_start: Optional[str] = Field(default=None, max_length=10)
+    shift_end: Optional[str] = Field(default=None, max_length=10)
+    signature_name: Optional[str] = Field(default=None, max_length=100)
+
+
+class OccurrenceSheetCreate(OccurrenceSheetBase):
+    entries: List[OccurrenceEntryIn] = []
+
+
+class OccurrenceSheetUpdate(BaseModel):
+    sheet_date: Optional[date] = None
+    site_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    officer_names: Optional[str] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    signature_name: Optional[str] = None
+    status: Optional[str] = None
+    # When present, replaces the whole line set — the sheet is edited as one document.
+    entries: Optional[List[OccurrenceEntryIn]] = None
+
+
+class OccurrenceSheetResponse(OccurrenceSheetBase):
+    id: int
+    company_id: int
+    client_id: Optional[int] = None
+    reference: Optional[str] = None
+    status: str = "open"
+    site_name: Optional[str] = None
+    guard_name: Optional[str] = None
+    created_by_user_id: int
+    created_by_name: Optional[str] = None
+    entry_count: int = 0
+    entries: List[OccurrenceEntryResponse] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class IncidentMatrixRow(BaseModel):
     """One site's row of the Incident Reports Summary."""
 

@@ -1316,6 +1316,66 @@ export interface IncidentAttachment {
   created_at: string;
 }
 
+export interface Task {
+  id: number;
+  company_id: number;
+  title: string;
+  description?: string | null;
+  guard_id?: number | null;
+  guard_name?: string | null;
+  site_id?: number | null;
+  site_name?: string | null;
+  due_date?: string | null;
+  priority: string;
+  status: string;
+  created_by_user_id: number;
+  created_by_name?: string | null;
+  completed_by_name?: string | null;
+  completed_at?: string | null;
+  is_overdue: boolean;
+  created_at: string;
+}
+
+export interface TaskCounts {
+  todo: number;
+  in_progress: number;
+  done: number;
+  cancelled: number;
+  overdue: number;
+  total: number;
+}
+
+export interface OccurrenceEntry {
+  id?: number;
+  serial_no?: number | null;
+  start_time?: string | null;
+  finish_time?: string | null;
+  occurrence?: string | null;
+  action_taken?: string | null;
+}
+
+export interface OccurrenceSheet {
+  id: number;
+  company_id: number;
+  client_id?: number | null;
+  reference?: string | null;
+  sheet_date: string;
+  site_id?: number | null;
+  site_name?: string | null;
+  guard_id?: number | null;
+  guard_name?: string | null;
+  officer_names?: string | null;
+  shift_start?: string | null;
+  shift_end?: string | null;
+  signature_name?: string | null;
+  status: string;
+  created_by_user_id: number;
+  created_by_name?: string | null;
+  entry_count: number;
+  entries: OccurrenceEntry[];
+  created_at: string;
+}
+
 export interface CatalogueOption { key: string; label: string }
 export interface IncidentCatalogue { categories: CatalogueOption[]; services: CatalogueOption[] }
 

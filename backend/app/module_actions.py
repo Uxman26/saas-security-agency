@@ -153,6 +153,19 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("pdf_download", "Download PDF", "view"),
         ActionDef("blank_form", "Print blank form", "view"),
     ),
+    "occurrence_sheets": CRUD
+    + (
+        ActionDef("status_change", "Change status", "edit"),
+        ActionDef("pdf_download", "Download PDF", "view"),
+        ActionDef("blank_form", "Print blank form", "view"),
+    ),
+    # `complete` is separate from `edit` on purpose: the assignee ticks their own work
+    # off without holding the right to rewrite or reassign what they were given.
+    "tasks": CRUD
+    + (
+        ActionDef("assign", "Assign to employee", "edit"),
+        ActionDef("complete", "Mark complete", "view"),
+    ),
     # Raising a staff request is a client-portal capability — that is the module the
     # POST endpoints are guarded by — while approving one belongs to staff_requests.
     "client_portal": CRUD + (ActionDef("bulk_create", "Bulk staff request", "create"),),

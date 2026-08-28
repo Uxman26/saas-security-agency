@@ -1492,6 +1492,84 @@ class IncidentAttachment(Base):
     incident = relationship("Incident", back_populates="attachments")
 
 
+class Task(Base):
+    """A job assigned to one employee, with a due date and optional site.
+
+    Assigned to a Guard rather than a User: the workforce lives in the guard directory
+    and not every employee has a portal login, so assigning to a login would make half
+    the staff unassignable.
+    """
+
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    completed_by_user_id = Column(Integer, ForeignKey("users.id"))
+
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    priority = Column(String, default="normal", index=True)
+    status = Column(String, default="todo", index=True)
+    due_date = Column(Date, index=True)
+    completed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    guard = relationship("Guard", foreign_keys=[guard_id])
+    site = relationship("Site")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+    completed_by = relationship("User", foreign_keys=[completed_by_user_id])
+
+
+class OccurrenceSheet(Base):
+    """Daily Occurrences Sheet header — one per site per shift."""
+
+    __tablename__ = "occurrence_sheets"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"))
+    guard_id = Column(Integer, ForeignKey("guards.id"))
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reference = Column(String, index=True)
+
+    sheet_date = Column(Date, nullable=False, index=True)
+    officer_names = Column(String)
+    shift_start = Column(String)
+    shift_end = Column(String)
+    signature_name = Column(String)
+    status = Column(String, default="open")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    site = relationship("Site")
+    client = relationship("Client")
+    guard = relationship("Guard")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+    entries = relationship(
+        "OccurrenceEntry",
+        back_populates="sheet",
+        cascade="all, delete-orphan",
+        order_by="OccurrenceEntry.serial_no",
+    )
+
+
+class OccurrenceEntry(Base):
+    """One numbered line of the occurrences sheet."""
+
+    __tablename__ = "occurrence_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    sheet_id = Column(Integer, ForeignKey("occurrence_sheets.id"), nullable=False, index=True)
+    serial_no = Column(Integer, nullable=False, default=1)
+    start_time = Column(String)
+    finish_time = Column(String)
+    occurrence = Column(Text)
+    action_taken = Column(Text)
+    sheet = relationship("OccurrenceSheet", back_populates="entries")
+
+
 # --- Lone worker / check calls -------------------------------------------------------
 # A lone worker starts a session on the mobile app, the app asks them to confirm they are
 # safe every `check_in_minutes`, and a missed confirmation escalates through a ladder of

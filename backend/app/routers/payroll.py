@@ -5,7 +5,7 @@ from datetime import date
 from pydantic import BaseModel
 from app.database import get_db
 from app.models import User
-from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
+from app.schemas import PayrollPreviewResponse, PayrollCreate, PayrollUpdate, PayrollResponse
 from app.rbac import require_internal_module
 from app.services import payroll_service
 
@@ -44,6 +44,24 @@ def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get
 @router.get("", response_model=List[PayrollResponse])
 def list_payrolls(guard_id: Optional[int] = None, period_start: Optional[date] = None, period_end: Optional[date] = None, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "view"))):
     return payroll_service.get_payrolls(db, current_user.id, guard_id, period_start, period_end)
+
+@router.get("/preview", response_model=PayrollPreviewResponse)
+def preview_pay(
+    period_start: date,
+    period_end: date,
+    guard_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("payroll", "view")),
+):
+    """Hours and pay over a date range. Saves nothing.
+
+    Omit guard_id for every employee, which is what the screen loads with.
+
+    Declared above /{payroll_id} deliberately: FastAPI matches in order, so the dynamic
+    route would otherwise swallow "preview" and fail on the int conversion.
+    """
+    return payroll_service.preview_pay(db, current_user.id, guard_id, period_start, period_end)
+
 
 @router.get("/{payroll_id}", response_model=PayrollResponse)
 def get_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "view"))):

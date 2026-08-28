@@ -200,6 +200,7 @@ def list_rota_details(
                 hours=round(hrs, 2),
                 attendance_status=status,
                 late_minutes=late_m,
+                shift_rate=a.shift_rate,
             )
         )
         seen.add(_shift_fingerprint(a.guard_id, a.date, a.shift_start, a.shift_end, a.site_id))

@@ -274,6 +274,123 @@ def calculate_payroll_batch(
         db.refresh(pr)
     return created
 
+# Attendance marks that mean the shift was actually worked. Anything else — absent,
+# pending, or a future shift nobody has marked yet — is rota'd but not payable.
+PAYABLE_STATUSES = frozenset({"on_time", "late"})
+
+
+def preview_pay(
+    db: Session,
+    user_id: int,
+    guard_id: Optional[int],
+    period_start: date,
+    period_end: date,
+) -> "PayrollPreviewResponse":
+    """What is owed for a period, without saving anything.
+
+    ``guard_id`` of None covers every employee, which is the default the screen opens
+    on; pass one to drill into a single person.
+
+    Pay follows attendance: only shifts marked On time or Late are payable. The rota'd
+    totals are returned alongside so the gap is visible rather than silent — a site with
+    30 hours rota'd and 20 attended reports both, and pays the 20. Hours come from the
+    assignment's own times, so a logged late start or overtime is already reflected.
+    """
+    from app.schemas import (
+        PayrollPreviewEmployee,
+        PayrollPreviewResponse,
+        PayrollPreviewShift,
+        PayrollPreviewSite,
+    )
+    from app.services.rota_service import list_rota_details
+
+    company = get_company_by_user_id(db, user_id)
+    if period_start > period_end:
+        raise HTTPException(status_code=400, detail="Period start cannot be after period end")
+    guard = None
+    if guard_id is not None:
+        guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
+        if not guard:
+            raise HTTPException(status_code=404, detail="Employee not found")
+
+    details = list_rota_details(db, user_id, period_start, period_end, guard_id=guard_id)
+
+    shifts: list[PayrollPreviewShift] = []
+    sites: dict[Optional[int], PayrollPreviewSite] = {}
+    people: dict[int, PayrollPreviewEmployee] = {}
+    missing_rate = 0
+
+    for d in details:
+        hours = round(float(d.hours or 0), 2)
+        rate = _number(d.shift_rate)
+        payable = d.attendance_status in PAYABLE_STATUSES
+        amount = round(hours * rate, 2) if payable else 0.0
+        if payable and rate <= 0:
+            missing_rate += 1
+
+        shifts.append(
+            PayrollPreviewShift(
+                assignment_id=d.id,
+                guard_id=d.guard_id,
+                guard_name=d.guard_name or "",
+                date=d.date,
+                site_id=d.site_id,
+                site_name=d.site_name or "",
+                shift_start=d.shift_start,
+                shift_end=d.shift_end,
+                break_minutes=d.break_minutes or 0,
+                hours=hours,
+                attendance_status=d.attendance_status,
+                late_minutes=d.late_minutes,
+                shift_rate=d.shift_rate,
+                payable=payable,
+                amount=amount,
+            )
+        )
+
+        row = sites.get(d.site_id)
+        if row is None:
+            row = PayrollPreviewSite(site_id=d.site_id, site_name=d.site_name or "")
+            sites[d.site_id] = row
+        person = people.get(d.guard_id)
+        if person is None:
+            person = PayrollPreviewEmployee(guard_id=d.guard_id, guard_name=d.guard_name or "")
+            people[d.guard_id] = person
+        for bucket in (row, person):
+            bucket.shifts += 1
+            bucket.rota_hours = round(bucket.rota_hours + hours, 2)
+            if payable:
+                bucket.attended_hours = round(bucket.attended_hours + hours, 2)
+                bucket.amount = round(bucket.amount + amount, 2)
+            else:
+                bucket.unattended_hours = round(bucket.unattended_hours + hours, 2)
+
+    by_site = sorted(sites.values(), key=lambda r: r.site_name.lower())
+    # Biggest payment first: on the all-employees view that is the order you check.
+    by_employee = sorted(people.values(), key=lambda r: (-r.amount, r.guard_name.lower()))
+    rota_hours = round(sum(x.hours for x in shifts), 2)
+    attended_hours = round(sum(x.hours for x in shifts if x.payable), 2)
+
+    return PayrollPreviewResponse(
+        guard_id=guard.id if guard else None,
+        guard_name=guard.full_name if guard else "All employees",
+        period_start=period_start,
+        period_end=period_end,
+        total_shifts=len(shifts),
+        attended_shifts=sum(1 for x in shifts if x.payable),
+        rota_hours=rota_hours,
+        attended_hours=attended_hours,
+        unattended_hours=round(rota_hours - attended_hours, 2),
+        amount=round(sum(x.amount for x in shifts), 2),
+        rota_amount=round(sum(x.hours * _number(x.shift_rate) for x in shifts), 2),
+        shifts_missing_rate=missing_rate,
+        employee_count=len(by_employee),
+        by_employee=by_employee,
+        by_site=by_site,
+        shifts=shifts,
+    )
+
+
 def delete_payroll(db: Session, payroll_id: int, user_id: int) -> None:
     company = get_company_by_user_id(db, user_id)
     pr = db.query(Payroll).filter(Payroll.id == payroll_id, Payroll.company_id == company.id).first()

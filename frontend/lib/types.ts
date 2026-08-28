@@ -778,6 +778,63 @@ export interface Payroll {
   created_at: string;
 }
 
+export interface PayrollPreviewShift {
+  assignment_id: number;
+  guard_id: number;
+  guard_name: string;
+  date: string;
+  site_id: number | null;
+  site_name: string;
+  shift_start: string | null;
+  shift_end: string | null;
+  break_minutes: number;
+  hours: number;
+  attendance_status: string;
+  late_minutes: number | null;
+  shift_rate: number | null;
+  payable: boolean;
+  amount: number;
+}
+
+export interface PayrollPreviewSite {
+  site_id: number | null;
+  site_name: string;
+  shifts: number;
+  rota_hours: number;
+  attended_hours: number;
+  unattended_hours: number;
+  amount: number;
+}
+
+export interface PayrollPreviewEmployee {
+  guard_id: number;
+  guard_name: string;
+  shifts: number;
+  rota_hours: number;
+  attended_hours: number;
+  unattended_hours: number;
+  amount: number;
+}
+
+export interface PayrollPreview {
+  guard_id: number | null;
+  guard_name: string;
+  period_start: string;
+  period_end: string;
+  total_shifts: number;
+  attended_shifts: number;
+  rota_hours: number;
+  attended_hours: number;
+  unattended_hours: number;
+  amount: number;
+  rota_amount: number;
+  shifts_missing_rate: number;
+  employee_count: number;
+  by_employee: PayrollPreviewEmployee[];
+  by_site: PayrollPreviewSite[];
+  shifts: PayrollPreviewShift[];
+}
+
 export interface Invoice {
   id: number;
   company_id: number;

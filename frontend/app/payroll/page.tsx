@@ -12,15 +12,23 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { Payroll, Guard } from '@/lib/types';
+import type { Payroll, Guard, PayrollPreview } from '@/lib/types';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, Search } from 'lucide-react';
+import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, Search, Calculator, AlertTriangle } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+
+const ATT_LABELS: Record<string, string> = {
+  on_time: 'On time',
+  late: 'Late',
+  absent: 'Absent',
+  pending: 'Not marked',
+  scheduled: 'Upcoming',
+};
 
 const PAYMENT_MODE_LABELS: Record<string, string> = {
   '100_bank': '100% Bank',
@@ -58,6 +66,46 @@ export default function PayrollPage() {
   const [calcEnd, setCalcEnd] = useState('');
   const [calcPaymentMode, setCalcPaymentMode] = useState('100_bank');
   const [calcLoading, setCalcLoading] = useState(false);
+  // Live "what is this person owed" lookup. Saves nothing — it reads the rota every
+  // time, so correcting a rate or an attendance mark shows up on the next search.
+  const [pvGuardId, setPvGuardId] = useState('all');
+  const [pvStart, setPvStart] = useState('');
+  const [pvEnd, setPvEnd] = useState('');
+  const [pvLoading, setPvLoading] = useState(false);
+  const [preview, setPreview] = useState<PayrollPreview | null>(null);
+
+  const runPreview = async (guardOverride?: string) => {
+    const who = guardOverride ?? pvGuardId;
+    if (!who || !pvStart || !pvEnd) return;
+    setPvLoading(true);
+    try {
+      setPreview(await api.payroll.preview(pvStart, pvEnd, who === 'all' ? undefined : parseInt(who, 10)));
+    } catch (e) {
+      setPreview(null);
+      toast.error(e instanceof Error ? e.message : 'Could not calculate pay for that period');
+    } finally {
+      setPvLoading(false);
+    }
+  };
+
+  const exportPreviewCsv = () => {
+    if (!preview) return;
+    const head = ['Employee', 'Date', 'Site', 'Start', 'End', 'Break mins', 'Hours', 'Attendance', 'Rate', 'Paid'];
+    const body = preview.shifts.map((s) => [
+      s.guard_name, s.date, s.site_name, s.shift_start ?? '', s.shift_end ?? '', s.break_minutes,
+      s.hours, ATT_LABELS[s.attendance_status] ?? s.attendance_status,
+      s.shift_rate ?? '', s.amount,
+    ]);
+    const csv = [head, ...body, [], ['Rota hours', preview.rota_hours], ['Attended hours', preview.attended_hours],
+      ['Total paid', preview.amount]]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pay-${preview.guard_name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${preview.period_start}-to-${preview.period_end}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
   const [search, setSearch] = useState('');
@@ -565,6 +613,232 @@ export default function PayrollPage() {
             </div>
           )}
 
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calculator className="size-4" /> Employee hours &amp; pay
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Pick a date range to see what everyone is owed, or narrow it to one person. Pay follows
+                attendance &mdash; only shifts marked On time or Late are paid, and the rota&rsquo;d total is shown
+                beside it so you can see anything that was missed. Nothing is saved.
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-5">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-1 min-w-56">
+                  <Label>Employee</Label>
+                  <Select value={pvGuardId} onValueChange={setPvGuardId}>
+                    <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All employees</SelectItem>
+                      {guards.map((g) => (
+                        <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>From</Label>
+                  <Input type="date" value={pvStart} onChange={(e) => setPvStart(e.target.value)} className="w-auto" />
+                </div>
+                <div className="space-y-1">
+                  <Label>To</Label>
+                  <Input type="date" value={pvEnd} onChange={(e) => setPvEnd(e.target.value)} className="w-auto" />
+                </div>
+                <Button type="button" onClick={() => void runPreview()} disabled={pvLoading || !pvGuardId || !pvStart || !pvEnd}>
+                  <Search className="size-4 mr-1.5" />
+                  {pvLoading ? 'Calculating\u2026' : 'Calculate'}
+                </Button>
+                {preview && (
+                  <>
+                    <Button type="button" variant="outline" onClick={exportPreviewCsv}>
+                      <Download className="size-4 mr-1.5" />
+                      Export CSV
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setPreview(null)}>Clear</Button>
+                  </>
+                )}
+              </div>
+
+              {preview && (
+                <div className="flex flex-col gap-5">
+                  <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Rota&rsquo;d hours</p>
+                      <p className="text-2xl font-bold tabular-nums">{preview.rota_hours.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {preview.total_shifts} shifts
+                        {preview.guard_id === null ? ` \u00b7 ${preview.employee_count} people` : ''}
+                      </p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Attended hours</p>
+                      <p className="text-2xl font-bold tabular-nums">{preview.attended_hours.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{preview.attended_shifts} shifts</p>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Not attended</p>
+                      <p className="text-2xl font-bold tabular-nums">{preview.unattended_hours.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Not paid</p>
+                    </div>
+                    <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
+                      <p className="text-xs text-muted-foreground">Total pay</p>
+                      <p className="text-2xl font-bold tabular-nums">{formatMoney(preview.amount)}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Attended hours only</p>
+                    </div>
+                  </div>
+
+                  {preview.unattended_hours > 0 && (
+                    <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+                      <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                      <span>
+                        {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} rota&rsquo;d hours are not
+                        being paid because they have no On time or Late mark. That is {formatMoney(preview.rota_amount - preview.amount)} held
+                        back. If those shifts were worked, mark attendance on the rota and calculate again.
+                      </span>
+                    </p>
+                  )}
+
+                  {preview.shifts_missing_rate > 0 && (
+                    <p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                      {preview.shifts_missing_rate} attended shift{preview.shifts_missing_rate === 1 ? ' has' : 's have'} no
+                      rate set, so {preview.shifts_missing_rate === 1 ? 'it is' : 'they are'} counting as &pound;0. Set the rate on the rota.
+                    </p>
+                  )}
+
+                  {preview.guard_id === null && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2">By employee</h4>
+                      <div className="overflow-x-auto rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Employee</TableHead>
+                              <TableHead className="text-right">Shifts</TableHead>
+                              <TableHead className="text-right">Rota&rsquo;d hrs</TableHead>
+                              <TableHead className="text-right">Attended hrs</TableHead>
+                              <TableHead className="text-right">Pay</TableHead>
+                              <TableHead />
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {preview.by_employee.map((e) => (
+                              <TableRow key={e.guard_id}>
+                                <TableCell className="font-medium">{e.guard_name}</TableCell>
+                                <TableCell className="text-right tabular-nums">{e.shifts}</TableCell>
+                                <TableCell className="text-right tabular-nums">{e.rota_hours.toFixed(2)}</TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                  {e.attended_hours.toFixed(2)}
+                                  {e.unattended_hours > 0 && (
+                                    <span className="text-amber-700 dark:text-amber-400"> ({e.unattended_hours.toFixed(2)} missed)</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums font-semibold">{formatMoney(e.amount)}</TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setPvGuardId(e.guard_id.toString());
+                                      void runPreview(e.guard_id.toString());
+                                    }}
+                                    title={`See every shift for ${e.guard_name}`}
+                                  >
+                                    Breakdown
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">By site</h4>
+                    <div className="overflow-x-auto rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Site</TableHead>
+                            <TableHead className="text-right">Shifts</TableHead>
+                            <TableHead className="text-right">Rota&rsquo;d hrs</TableHead>
+                            <TableHead className="text-right">Attended hrs</TableHead>
+                            <TableHead className="text-right">Pay</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {preview.by_site.map((r) => (
+                            <TableRow key={r.site_id ?? r.site_name}>
+                              <TableCell className="font-medium">{r.site_name || '\u2014'}</TableCell>
+                              <TableCell className="text-right tabular-nums">{r.shifts}</TableCell>
+                              <TableCell className="text-right tabular-nums">{r.rota_hours.toFixed(2)}</TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {r.attended_hours.toFixed(2)}
+                                {r.unattended_hours > 0 && (
+                                  <span className="text-muted-foreground"> ({r.unattended_hours.toFixed(2)} missed)</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums font-semibold">{formatMoney(r.amount)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+
+                  {preview.guard_id !== null && (
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">Every shift</h4>
+                    <div className="overflow-x-auto rounded-md border max-h-96 overflow-y-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Site</TableHead>
+                            <TableHead>Shift</TableHead>
+                            <TableHead className="text-right">Hours</TableHead>
+                            <TableHead>Attendance</TableHead>
+                            <TableHead className="text-right">Rate</TableHead>
+                            <TableHead className="text-right">Pay</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {preview.shifts.map((sh) => (
+                            <TableRow key={sh.assignment_id} className={sh.payable ? undefined : 'opacity-60'}>
+                              <TableCell className="whitespace-nowrap">{sh.date}</TableCell>
+                              <TableCell>{sh.site_name || '\u2014'}</TableCell>
+                              <TableCell className="whitespace-nowrap tabular-nums">{sh.shift_start}&ndash;{sh.shift_end}</TableCell>
+                              <TableCell className="text-right tabular-nums">{sh.hours.toFixed(2)}</TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                <span className={sh.payable ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}>
+                                  {ATT_LABELS[sh.attendance_status] ?? sh.attendance_status}
+                                </span>
+                                {sh.late_minutes ? <span className="text-muted-foreground"> +{sh.late_minutes}m</span> : null}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">{sh.shift_rate ? formatMoney(sh.shift_rate) : '\u2014'}</TableCell>
+                              <TableCell className="text-right tabular-nums font-medium">{formatMoney(sh.amount)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                  )}
+
+                  {preview.guard_id === null && (
+                    <p className="text-xs text-muted-foreground">
+                      Showing totals for {preview.employee_count} employees. Use <strong>Breakdown</strong> on a row for
+                      that person&rsquo;s shift-by-shift detail, or <strong>Export CSV</strong> for every shift in one file.
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
             <Input
               placeholder="Search by guard name or period..."
@@ -651,10 +925,12 @@ export default function PayrollPage() {
                               <Button variant="ghost" size="sm" onClick={() => setViewRec(p)} title="View record">
                                 <Eye className="size-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payroll">
-                                <Pencil className="size-4" />
-                                <span className="sr-only">Edit</span>
-                              </Button>
+                              {canEditMod ? (
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payroll">
+                                  <Pencil className="size-4" />
+                                  <span className="sr-only">Edit</span>
+                                </Button>
+                              ) : null}
                               {canDeleteMod ? (
                                 <Button
                                   variant="ghost"

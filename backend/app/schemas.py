@@ -724,9 +724,74 @@ class RotaDetailResponse(BaseModel):
     hours: float = 0
     attendance_status: str
     late_minutes: Optional[int] = None
+    # The rate stored on the shift itself. Optional so older callers are unaffected.
+    shift_rate: Optional[float] = None
 
     class Config:
         from_attributes = True
+
+
+class PayrollPreviewShift(BaseModel):
+    """One rota'd shift, with whether it is payable and why."""
+
+    assignment_id: int
+    guard_id: int
+    guard_name: str = ""
+    date: date
+    site_id: Optional[int] = None
+    site_name: str = ""
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    break_minutes: int = 0
+    hours: float = 0
+    attendance_status: str
+    late_minutes: Optional[int] = None
+    shift_rate: Optional[float] = None
+    payable: bool = False
+    amount: float = 0
+
+
+class PayrollPreviewSite(BaseModel):
+    site_id: Optional[int] = None
+    site_name: str = ""
+    shifts: int = 0
+    rota_hours: float = 0
+    attended_hours: float = 0
+    unattended_hours: float = 0
+    amount: float = 0
+
+
+class PayrollPreviewEmployee(BaseModel):
+    guard_id: int
+    guard_name: str
+    shifts: int = 0
+    rota_hours: float = 0
+    attended_hours: float = 0
+    unattended_hours: float = 0
+    amount: float = 0
+
+
+class PayrollPreviewResponse(BaseModel):
+    # None means every employee; the by_employee rows carry the split in that case.
+    guard_id: Optional[int] = None
+    guard_name: str = "All employees"
+    period_start: date
+    period_end: date
+    total_shifts: int = 0
+    attended_shifts: int = 0
+    # Everything rota'd in the period, against what attendance says was actually worked.
+    rota_hours: float = 0
+    attended_hours: float = 0
+    unattended_hours: float = 0
+    # Pay follows attendance; rota_amount is the same sum over every rota'd shift, so the
+    # difference between the two is exactly what the unattended shifts would have cost.
+    amount: float = 0
+    rota_amount: float = 0
+    shifts_missing_rate: int = 0
+    employee_count: int = 0
+    by_employee: List[PayrollPreviewEmployee] = []
+    by_site: List[PayrollPreviewSite] = []
+    shifts: List[PayrollPreviewShift] = []
 
 
 class RotaSummaryRow(BaseModel):

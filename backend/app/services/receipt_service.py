@@ -38,6 +38,57 @@ def sidebar_default_paths() -> list[str]:
     return paths
 
 
+# Marker holding the sidebar paths that existed the last time this ran. Anything in
+# MODULE_SEED but not in the marker is a module added since, which is what makes the
+# "new module" case distinguishable from "the admin unticked it".
+SIDEBAR_KNOWN_PATHS_KEY = "sidebar_known_paths"
+
+# Modules shipped by the release that introduced the marker. The baseline is seeded
+# without them so the very first run detects them as new and appends them to stored
+# lists — clearing the backlog this mechanism exists to prevent.
+_INTRODUCED_WITH_MARKER = ("/accident-reports", "/occurrence-sheets", "/tasks")
+
+
+def grant_new_sidebar_paths(db) -> list[str]:
+    """Add newly-shipped modules to every stored sidebar list, once.
+
+    A stored sidebar_modules_json is an allow-list, so a module added after it was
+    written is invisible to that login even when its role grants it — which is how
+    Patrol, Incidents and Lone worker went missing before. Appending blindly would be
+    wrong too: it would resurrect a module the admin had deliberately unticked. So only
+    paths absent from the marker — genuinely new since last run — are appended, matching
+    the same "nobody loses access on the deploy that introduces it" rule the action
+    catalogue's ``parent`` migration follows.
+    """
+    import json as _json
+
+    from app.models import PlatformSetting, User
+
+    current = sidebar_default_paths()
+    row = db.query(PlatformSetting).filter(PlatformSetting.key == SIDEBAR_KNOWN_PATHS_KEY).first()
+    if row is None:
+        baseline = [p for p in current if p not in _INTRODUCED_WITH_MARKER]
+        row = PlatformSetting(key=SIDEBAR_KNOWN_PATHS_KEY, value=_json.dumps(baseline))
+        db.add(row)
+        db.flush()
+    try:
+        known = set(_json.loads(row.value or "[]"))
+    except (ValueError, TypeError):
+        known = set(current)
+    added = [p for p in current if p not in known]
+    if added:
+        for user in db.query(User).filter(User.sidebar_modules_json.isnot(None)).all():
+            stored = parse_sidebar_modules(user.sidebar_modules_json)
+            if not stored:
+                continue
+            missing = [p for p in added if p not in stored]
+            if missing:
+                user.sidebar_modules_json = dump_sidebar_modules(stored + missing)
+    row.value = _json.dumps(current)
+    db.flush()
+    return added
+
+
 def _utcnow():
     return datetime.now(timezone.utc)
 

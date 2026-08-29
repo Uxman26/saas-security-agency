@@ -1318,6 +1318,15 @@ def run():
             db.commit()
             backfill_user_roles(db)
             backfill_role_module_permissions(db)
+            # Newly shipped sidebar modules must reach logins whose stored allow-list
+            # predates them, or the module is invisible however the role is set.
+            from app.services.receipt_service import grant_new_sidebar_paths
+
+            added = grant_new_sidebar_paths(db)
+            if added:
+                import logging
+
+                logging.getLogger(__name__).info("Granted new sidebar modules: %s", ", ".join(added))
             for role in db.query(Role).all():
                 if role.slug == "client":
                     role.permissions_json = wrap_matrix(default_matrix_client_portal())

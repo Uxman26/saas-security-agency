@@ -14,8 +14,8 @@ import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
-import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
-import { SHIFT_URGENT_COLOR, shiftTypeOption } from '@/lib/rota-shifts-types';
+import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
+import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, normalizeShiftType, shiftTypeOption } from '@/lib/rota-shifts-types';
 import type { RotaPlanListItem } from '@/lib/types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
@@ -519,6 +519,9 @@ export function RotaCalendarClient() {
 
   const [empFilter, setEmpFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | AttStatus>('all');
+  const [jobTitleFilter, setJobTitleFilter] = useState('all');
+  const [siteFilter, setSiteFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | ShiftType>('all');
   const [shiftOpen, setShiftOpen] = useState(false);
   const [shiftPref, setShiftPref] = useState<{ dk: string; empId: string }>({ dk: '', empId: '' });
   const [shiftEdit, setShiftEdit] = useState<{ empId: string; dk: string; idx: number; shift: ShiftRec } | null>(null);
@@ -651,31 +654,103 @@ export function RotaCalendarClient() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [shiftMenu, empMenu, deleteShift]);
 
-  const empMatchesStatusFilter = useCallback(
+  // Filter options are read from the rota itself, so a dropdown never offers a job title,
+  // site or period that would empty the grid.
+  const jobTitleOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const e of state.employees) {
+      const role = (e.role || '').trim();
+      if (role && !seen.has(role.toLowerCase())) seen.set(role.toLowerCase(), role);
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }, [state.employees]);
+
+  const siteOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const byDay of Object.values(state.shifts)) {
+      for (const list of Object.values(byDay || {})) {
+        for (const sh of list || []) {
+          const site = (sh.site || '').trim();
+          if (site && !seen.has(site.toLowerCase())) seen.set(site.toLowerCase(), site);
+        }
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  }, [state.shifts]);
+
+  const typeOptions = useMemo(() => {
+    const present = new Set<string>();
+    for (const byDay of Object.values(state.shifts)) {
+      for (const list of Object.values(byDay || {})) {
+        for (const sh of list || []) {
+          const t = normalizeShiftType(sh.shiftType);
+          if (t) present.add(t);
+        }
+      }
+    }
+    return SHIFT_TYPE_OPTS.filter((o) => present.has(o.value));
+  }, [state.shifts]);
+
+  /** Filters that narrow which *shifts* show, as opposed to which employees. */
+  const shiftFiltersActive = statusFilter !== 'all' || siteFilter !== 'all' || typeFilter !== 'all';
+
+  const shiftMatchesFilters = useCallback(
+    (empId: string, dk: string, idx: number, sh: ShiftRec) => {
+      if (statusFilter !== 'all') {
+        const a = state.attendance[attKey(empId, dk, idx)];
+        if (!a || normalizeAttStatus(a.status) !== statusFilter) return false;
+      }
+      if (siteFilter !== 'all' && (sh.site || '').trim().toLowerCase() !== siteFilter.toLowerCase()) {
+        return false;
+      }
+      if (typeFilter !== 'all' && normalizeShiftType(sh.shiftType) !== typeFilter) return false;
+      return true;
+    },
+    [state.attendance, statusFilter, siteFilter, typeFilter]
+  );
+
+  /** An employee stays on the grid while at least one of their shifts survives the filters. */
+  const empMatchesShiftFilters = useCallback(
     (empId: string) => {
-      if (statusFilter === 'all') return true;
-      let hasMatch = false;
+      if (!shiftFiltersActive) return true;
       for (const dk of state.days) {
         const list = state.shifts[empId]?.[dk] || [];
         for (let idx = 0; idx < list.length; idx++) {
-          const a = state.attendance[attKey(empId, dk, idx)];
-          if (a && normalizeAttStatus(a.status) === statusFilter) hasMatch = true;
+          if (shiftMatchesFilters(empId, dk, idx, list[idx])) return true;
         }
       }
-      return hasMatch;
+      return false;
     },
-    [state.days, state.shifts, state.attendance, statusFilter]
+    [state.days, state.shifts, shiftFiltersActive, shiftMatchesFilters]
   );
 
   const rows = useMemo(() => {
     const q = empFilter.trim().toLowerCase();
-    let list = state.employees.filter((e) => empMatchesStatusFilter(e.id));
+    let list = state.employees.filter((e) => empMatchesShiftFilters(e.id));
+    if (jobTitleFilter !== 'all') {
+      list = list.filter((e) => (e.role || '').trim().toLowerCase() === jobTitleFilter.toLowerCase());
+    }
     if (q) list = list.filter((e) => e.name.toLowerCase().includes(q) || e.role.toLowerCase().includes(q));
     return list.map((e) => {
       const fromPool = pool.find((p) => p.id === e.id);
       return fromPool?.photoUrl ? { ...e, photoUrl: fromPool.photoUrl } : e;
     });
-  }, [state.employees, empFilter, empMatchesStatusFilter, pool]);
+  }, [state.employees, empFilter, jobTitleFilter, empMatchesShiftFilters, pool]);
+
+  const activeFilterCount =
+    (statusFilter !== 'all' ? 1 : 0) +
+    (jobTitleFilter !== 'all' ? 1 : 0) +
+    (siteFilter !== 'all' ? 1 : 0) +
+    (typeFilter !== 'all' ? 1 : 0) +
+    (empFilter.trim() ? 1 : 0);
+
+  const clearFilters = useCallback(() => {
+    setStatusFilter('all');
+    setJobTitleFilter('all');
+    setSiteFilter('all');
+    setTypeFilter('all');
+    setEmpFilter('');
+  }, []);
 
   /** Published count for the rows actually on screen — filters change the denominator. */
   const publishedRowCount = useMemo(
@@ -2233,6 +2308,63 @@ export function RotaCalendarClient() {
               </option>
             ))}
           </select>
+          {jobTitleOptions.length > 0 ? (
+            <select
+              className="h-8 max-w-[150px] rounded-md border border-input bg-background px-2 text-xs"
+              value={jobTitleFilter}
+              onChange={(e) => setJobTitleFilter(e.target.value)}
+              aria-label="Job title"
+            >
+              <option value="all">Job title: All</option>
+              {jobTitleOptions.map((t) => (
+                <option key={t} value={t}>
+                  Job title: {t}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {siteOptions.length > 0 ? (
+            <select
+              className="h-8 max-w-[150px] rounded-md border border-input bg-background px-2 text-xs"
+              value={siteFilter}
+              onChange={(e) => setSiteFilter(e.target.value)}
+              aria-label="Site"
+            >
+              <option value="all">Site: All</option>
+              {siteOptions.map((t) => (
+                <option key={t} value={t}>
+                  Site: {t}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {typeOptions.length > 0 ? (
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as 'all' | ShiftType)}
+              aria-label="Shift period"
+            >
+              <option value="all">Shift: All</option>
+              {typeOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  Shift: {o.label.charAt(0) + o.label.slice(1).toLowerCase()}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {activeFilterCount > 0 ? (
+            <>
+              {/* Totals are a property of the rota, not of the filter, so they keep
+                  counting every shift — say so rather than let the numbers look wrong. */}
+              <span className="text-[11px] text-muted-foreground">
+                {rows.length} of {state.employees.length} staff · totals cover the whole rota
+              </span>
+              <Button size="sm" variant="ghost" type="button" onClick={clearFilters} className="h-8 text-xs">
+                Clear filters ({activeFilterCount})
+              </Button>
+            </>
+          ) : null}
           {canPublishRota ? (
             <Button
               size="sm"
@@ -2510,11 +2642,9 @@ export function RotaCalendarClient() {
                   {tableDays.map((dk, dayIdx) => {
                     const mark = dayEditMark(dayIdx);
                     const list = mark === 'adding' ? [] : state.shifts[emp.id]?.[dk] || [];
-                    const showCell = statusFilter === 'all' || list.some((_, idx) => {
-                      const a = state.attendance[attKey(emp.id, dk, idx)];
-                      return a && normalizeAttStatus(a.status) === statusFilter;
-                    });
-                    if (statusFilter !== 'all' && list.length > 0 && !showCell) {
+                    const showCell =
+                      !shiftFiltersActive || list.some((sh, idx) => shiftMatchesFilters(emp.id, dk, idx, sh));
+                    if (shiftFiltersActive && list.length > 0 && !showCell) {
                       return (
                         <td
                           key={dk}
@@ -2556,7 +2686,7 @@ export function RotaCalendarClient() {
                           {shiftsInTimeOrder(list).map(({ shift: sh, idx }) => {
                             const att = state.attendance[attKey(emp.id, dk, idx)];
                             const attStatus = att ? normalizeAttStatus(att.status) : null;
-                            if (statusFilter !== 'all' && attStatus !== statusFilter) return null;
+                            if (!shiftMatchesFilters(emp.id, dk, idx, sh)) return null;
                             const menuOpen = shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx;
                             const conflicts = shiftConflicts.get(shiftConflictKey(emp.id, dk, idx)) || [];
                             const tip = [
@@ -2741,16 +2871,20 @@ export function RotaCalendarClient() {
             {state.days.map((dk, dayIdx) => {
               const tone = TIMELINE_DAY_TONES[dayIdx % TIMELINE_DAY_TONES.length];
               const isToday = dk === todayKey;
-              const dayShifts = state.employees
+              // `rows`, not state.employees: the toolbar filters have to mean the same
+              // thing in this view as they do in the table.
+              const dayShifts = rows
                 .flatMap((emp) =>
-                  (state.shifts[emp.id]?.[dk] || []).map((sh, idx) => {
-                    const [shH, shM] = (sh.start || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
-                    const [eh, em] = (sh.end || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
-                    const startMin = shH * 60 + shM;
-                    let endMin = eh * 60 + em;
-                    if (endMin <= startMin) endMin += 24 * 60;
-                    return { emp, sh, idx, startMin, endMin };
-                  })
+                  (state.shifts[emp.id]?.[dk] || [])
+                    .map((sh, idx) => {
+                      const [shH, shM] = (sh.start || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
+                      const [eh, em] = (sh.end || '00:00').split(':').map((n) => parseInt(n, 10) || 0);
+                      const startMin = shH * 60 + shM;
+                      let endMin = eh * 60 + em;
+                      if (endMin <= startMin) endMin += 24 * 60;
+                      return { emp, sh, idx, startMin, endMin };
+                    })
+                    .filter(({ sh, idx }) => shiftMatchesFilters(emp.id, dk, idx, sh))
                 )
                 .sort((a, b) => a.startMin - b.startMin || a.emp.name.localeCompare(b.emp.name));
               const axisHours = Array.from({ length: 25 }, (_, h) => h);

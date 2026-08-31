@@ -908,11 +908,18 @@ export const api = {
     logs: (): Promise<import('./types').SmsLog[]> => request<import('./types').SmsLog[]>('/sms/logs'),
   },
   payroll: {
-    list: (params?: { guard_id?: number; period_start?: string; period_end?: string }): Promise<Payroll[]> => {
+    list: (params?: {
+      guard_id?: number;
+      period_start?: string;
+      period_end?: string;
+      /** Matches guard name or either period date, server-side. */
+      search?: string;
+    }): Promise<Payroll[]> => {
       const q = new URLSearchParams();
       if (params?.guard_id) q.append('guard_id', params.guard_id.toString());
       if (params?.period_start) q.append('period_start', params.period_start);
       if (params?.period_end) q.append('period_end', params.period_end);
+      if (params?.search) q.append('search', params.search);
       return request<Payroll[]>(`/payroll?${q.toString()}`);
     },
     get: (id: number): Promise<Payroll> => request<Payroll>(`/payroll/${id}`),
@@ -1462,6 +1469,8 @@ export const api = {
     },
     deactivateContractor: (id: string): Promise<DirectoryContractor> =>
       request<DirectoryContractor>(`/contractors/${id}/deactivate`, { method: 'DELETE' }),
+    deleteContractor: (id: string): Promise<void> =>
+      request<void>(`/contractors/${id}`, { method: 'DELETE' }),
     getContractor: (id: string): Promise<DirectoryContractor> => request<DirectoryContractor>(`/contractors/${id}`),
     getAssignments: (params?: {
       main_contractor_id?: string;

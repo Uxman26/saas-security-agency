@@ -19,11 +19,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
-import { can, PERMS } from '@/lib/permissions';
+import { can, canModule, PERMS } from '@/lib/permissions';
+import { toast, toastMutationError } from '@/lib/toast';
 import type { DirectoryContractorList } from '@/lib/types';
 import { ContractorForm } from './contractor-form';
 import { AssignmentModal } from './assignment-modal';
-import { Link2, Plus } from 'lucide-react';
+import { Eye, Link2, Plus, Trash2 } from 'lucide-react';
 
 export default function ContractorsDirectoryPage() {
   const { user } = useAuth();
@@ -63,6 +64,43 @@ export default function ContractorsDirectoryPage() {
 
   const canManage = can(user, PERMS.contractorManage);
   const canAssign = can(user, PERMS.contractorAssign);
+
+  // Sub-contractor rows carry their own module on top of the directory's: the API gates
+  // this screen on `contractors`, so that right is the floor, and `sub_contractors` lets
+  // a role be trusted with main contractors but not the subs beneath them.
+  const canViewRow = useCallback(
+    (row: DirectoryContractorList) =>
+      canModule(user, 'contractors', 'view') &&
+      (row.type !== 'sub' || canModule(user, 'sub_contractors', 'view')),
+    [user]
+  );
+  const canDeleteRow = useCallback(
+    (row: DirectoryContractorList) =>
+      canModule(user, 'contractors', 'delete') &&
+      (row.type !== 'sub' || canModule(user, 'sub_contractors', 'delete')),
+    [user]
+  );
+
+  const handleDelete = useCallback(
+    (row: DirectoryContractorList) => {
+      toast.confirm(
+        `Permanently delete “${row.name}”? This cannot be undone.`,
+        async () => {
+          try {
+            await api.directoryContractors.deleteContractor(row.id);
+            await load();
+            toast.success('Contractor deleted');
+          } catch (err) {
+            // A contractor still linked to staff or sites comes back as a 409 naming
+            // what blocks it — that message is the whole point of the confirmation.
+            toastMutationError(err, 'Could not delete contractor');
+          }
+        },
+        { label: 'Delete' }
+      );
+    },
+    [load]
+  );
 
   return (
     <ProtectedRoute>
@@ -171,16 +209,22 @@ export default function ContractorsDirectoryPage() {
                         <TableHead>Type</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead />
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filtered.map((r) => (
                         <TableRow key={r.id}>
                           <TableCell className="font-medium max-w-[220px]">
-                            <Link href={`/contractors/${r.id}`} className="hover:underline block truncate" title={r.name}>
-                              {r.name}
-                            </Link>
+                            {canViewRow(r) ? (
+                              <Link href={`/contractors/${r.id}`} className="hover:underline block truncate" title={r.name}>
+                                {r.name}
+                              </Link>
+                            ) : (
+                              <span className="block truncate" title={r.name}>
+                                {r.name}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">{r.type}</TableCell>
                           <TableCell className="whitespace-nowrap">{r.is_active ? 'active' : 'inactive'}</TableCell>
@@ -188,9 +232,27 @@ export default function ContractorsDirectoryPage() {
                             {r.contact_email || '—'}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" asChild>
-                              <Link href={`/contractors/${r.id}`}>View</Link>
-                            </Button>
+                            <div className="flex items-center justify-end gap-0.5">
+                              {canViewRow(r) && (
+                                <Button variant="ghost" size="sm" asChild title="View contractor">
+                                  <Link href={`/contractors/${r.id}`}>
+                                    <Eye className="size-4 mr-1" />
+                                    View
+                                  </Link>
+                                </Button>
+                              )}
+                              {canDeleteRow(r) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDelete(r)}
+                                  title="Delete contractor"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

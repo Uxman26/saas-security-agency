@@ -29,7 +29,7 @@ import type { z } from 'zod';
 import { EmailDialog } from '@/components/email-dialog';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Building2, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
+import { Building2, Eye, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
@@ -196,6 +196,40 @@ function RenewalHistoryDialog({ clientId, clientName }: { clientId: number; clie
   );
 }
 
+/** Read-only client details, for roles that hold clients.view without clients.edit. */
+function ClientDetailsDialog({ client }: { client: Client }) {
+  const { label, tone } = contractTone(client.contract_end_date);
+  const rows: Array<[string, string]> = [
+    ['Name', client.name],
+    ['Contact person', client.contact_person || '—'],
+    ['Email', client.email || '—'],
+    ['Phone', client.phone || '—'],
+    ['Address', client.address || '—'],
+    ['Postcode', client.postcode || '—'],
+    ['Contract start', client.contract_start_date || '—'],
+    ['Contract end', client.contract_end_date || '—'],
+    ['Double rate on special days', client.double_rate_special_days ? 'Yes' : 'No'],
+    ['Added', new Date(client.created_at).toLocaleString()],
+  ];
+  return (
+    <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>Client — {client.name}</DialogTitle>
+      </DialogHeader>
+      <dl className="grid grid-cols-1 sm:grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-2 text-sm">
+        {rows.map(([k, v]) => (
+          <div key={k} className="contents">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="break-words font-medium">{v}</dd>
+          </div>
+        ))}
+        <dt className="text-muted-foreground">Contract status</dt>
+        <dd className={statusClass(tone)}>{label}</dd>
+      </dl>
+    </DialogContent>
+  );
+}
+
 export default function ClientsPage() {
   // The API is the real boundary; these stop the UI offering actions it
   // already knows the role will be refused.
@@ -203,6 +237,8 @@ export default function ClientsPage() {
   const canCreateMod = canModule(permUser, 'clients', 'create');
   const canEditMod = canModule(permUser, 'clients', 'edit');
   const canDeleteMod = canModule(permUser, 'clients', 'delete');
+  const canViewMod = canModule(permUser, 'clients', 'view');
+  const [viewClient, setViewClient] = useState<Client | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -474,6 +510,16 @@ export default function ClientsPage() {
                             <TableCell className="max-w-[160px] truncate">{client.address || '-'}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5 flex-wrap">
+                                {canViewMod ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setViewClient(client)}
+                                    title="View client"
+                                  >
+                                    <Eye className="size-4" />
+                                  </Button>
+                                ) : null}
                                 {canEditMod ? (
                                   <Button variant="ghost" size="sm" onClick={() => openEdit(client)} title="Edit client">
                                     <Pencil className="size-4" />
@@ -546,6 +592,10 @@ export default function ClientsPage() {
               />
             ) : null}
           </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!viewClient} onOpenChange={(o) => !o && setViewClient(null)}>
+          {viewClient && <ClientDetailsDialog client={viewClient} />}
         </Dialog>
 
         <Dialog open={!!historyClient} onOpenChange={(o) => !o && setHistoryClient(null)}>

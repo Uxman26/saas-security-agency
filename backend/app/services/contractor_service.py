@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models import Contractor, ContractorAssignment, ContractorKind, Site, User
+from app.models import Contractor, ContractorAssignment, ContractorKind, Guard, Site, User
 from app.contractor_schemas import AssignmentCreate, AssignmentRead, ContractorCreate, ContractorListRead, ContractorRead, ContractorUpdate
 from app.services import audit_service
 from app.services.contractor_scope import assert_unified_main_sub_same_company
@@ -123,6 +123,48 @@ def deactivate_contractor(db: Session, company_id: int, contractor_id: UUID, cur
     db.commit()
     db.refresh(row)
     return ContractorRead.model_validate(row)
+
+
+def delete_contractor(db: Session, company_id: int, contractor_id: UUID, current_user: User) -> None:
+    """Permanently remove a contractor.
+
+    Refused while staff or sites still point at the row — those columns carry no cascade,
+    so deleting would orphan them; the caller is told to reassign or deactivate instead.
+    Its assignments carry no history of their own and go with it.
+    """
+    row = db.query(Contractor).filter(Contractor.id == contractor_id, Contractor.company_id == company_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Contractor not found")
+
+    guards = db.query(Guard).filter(Guard.contractor_id == contractor_id).count()
+    sites = db.query(Site).filter(Site.contractor_id == contractor_id).count()
+    if guards or sites:
+        parts = []
+        if guards:
+            parts.append(f"{guards} staff member{'s' if guards != 1 else ''}")
+        if sites:
+            parts.append(f"{sites} site{'s' if sites != 1 else ''}")
+        raise HTTPException(
+            status_code=409,
+            detail=f"This contractor is still linked to {' and '.join(parts)}. Reassign them or deactivate the contractor instead.",
+        )
+
+    db.query(ContractorAssignment).filter(
+        ContractorAssignment.company_id == company_id,
+        (ContractorAssignment.main_contractor_id == contractor_id)
+        | (ContractorAssignment.sub_contractor_id == contractor_id),
+    ).delete(synchronize_session=False)
+
+    audit_service.log_action(
+        db,
+        company_id=company_id,
+        user_id=current_user.id,
+        action="contractor_deleted",
+        entity_type="contractor",
+        meta={"contractor_id": str(contractor_id), "name": row.name, "type": row.type.value},
+    )
+    db.delete(row)
+    db.commit()
 
 
 def _assignment_duplicate(

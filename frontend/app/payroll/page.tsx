@@ -36,11 +36,21 @@ const PAYMENT_MODE_LABELS: Record<string, string> = {
   split: 'Bank + Cash Split',
 };
 
-function periodOverlaps(p: Payroll, from: string, to: string) {
-  if (!from && !to) return true;
-  const start = from || '0000-01-01';
-  const end = to || '9999-12-31';
-  return p.period_start <= end && p.period_end >= start;
+/** The filters the currently displayed records were fetched with. */
+type PayrollQuery = { search: string; from: string; to: string };
+
+const EMPTY_QUERY: PayrollQuery = { search: '', from: '', to: '' };
+
+/** useTableList always takes a search accessor; the server has already filtered. */
+const NO_CLIENT_SEARCH = () => '';
+
+function describeQuery(q: PayrollQuery) {
+  const parts: string[] = [];
+  if (q.search) parts.push(`“${q.search}”`);
+  if (q.from && q.to) parts.push(`${q.from} to ${q.to}`);
+  else if (q.from) parts.push(`from ${q.from}`);
+  else if (q.to) parts.push(`up to ${q.to}`);
+  return parts.join(' · ');
 }
 
 function payableAmount(p: Payroll) {
@@ -56,7 +66,12 @@ export default function PayrollPage() {
   const canDeleteMod = canModule(permUser, 'payroll', 'delete');
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  // Nothing is fetched until Search is pressed: the records only mean something next to
+  // the period you asked for, and a company-wide dump is both slow and misleading as a
+  // starting point. Everything on screen — totals, table, exports — is that one result set.
+  const [hasSearched, setHasSearched] = useState(false);
+  const [appliedQuery, setAppliedQuery] = useState<PayrollQuery>(EMPTY_QUERY);
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcMode, setCalcMode] = useState<'employee' | 'site' | 'rota'>('employee');
   const [calcGuardId, setCalcGuardId] = useState('');
@@ -108,14 +123,9 @@ export default function PayrollPage() {
   };
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
-  const [search, setSearch] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
   const [dateFromDraft, setDateFromDraft] = useState('');
   const [dateToDraft, setDateToDraft] = useState('');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
-  const [exportFrom, setExportFrom] = useState('');
-  const [exportTo, setExportTo] = useState('');
-  const [exportSiteId, setExportSiteId] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
@@ -134,13 +144,32 @@ export default function PayrollPage() {
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
 
-  const loadPayrolls = () => {
+  const fetchPayrolls = useCallback(async (q: PayrollQuery) => {
     setLoading(true);
-    api.payroll.list().then(setPayrolls).catch(() => {}).finally(() => setLoading(false));
-  };
+    try {
+      setPayrolls(
+        await api.payroll.list({
+          ...(q.search ? { search: q.search } : {}),
+          ...(q.from ? { period_start: q.from } : {}),
+          ...(q.to ? { period_end: q.to } : {}),
+        })
+      );
+      setAppliedQuery(q);
+      setHasSearched(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not load payroll records');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /** Re-runs whatever is on screen. No-op before the first search — nothing to refresh. */
+  const reloadCurrent = useCallback(() => {
+    if (!hasSearched) return;
+    void fetchPayrolls(appliedQuery);
+  }, [hasSearched, appliedQuery, fetchPayrolls]);
 
   useEffect(() => {
-    loadPayrolls();
     api.guards.list().then(setGuards).catch(() => {});
     api.sites.list().then(setSites).catch(() => {});
     api.rotaPlans.list().then(setRotas).catch(() => {});
@@ -210,7 +239,7 @@ export default function PayrollPage() {
       setCalcStart('');
       setCalcEnd('');
       setCalcPaymentMode('100_bank');
-      loadPayrolls();
+      reloadCurrent();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Import from rota failed');
     } finally {
@@ -222,7 +251,7 @@ export default function PayrollPage() {
     toast.confirm('Delete this payroll record?', async () => {
       try {
         await api.payroll.delete(id);
-        loadPayrolls();
+        reloadCurrent();
         toast.success('Payroll record deleted');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Delete failed');
@@ -270,7 +299,7 @@ export default function PayrollPage() {
         payment_mode: editMode,
       });
       setEditRec(null);
-      loadPayrolls();
+      reloadCurrent();
       toast.success('Payroll updated');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Update failed');
@@ -279,39 +308,25 @@ export default function PayrollPage() {
     }
   };
 
-  const filteredPayrolls = useMemo(() => {
-    let list = payrolls;
-    if (filterFrom || filterTo) {
-      list = list.filter((p) => periodOverlaps(p, filterFrom, filterTo));
-    }
-    return list;
-  }, [payrolls, filterFrom, filterTo]);
-
-  const applyDateFilter = () => {
+  const runSearch = () => {
     if (dateFromDraft && dateToDraft && dateFromDraft > dateToDraft) {
       toast.error('From date cannot be after to date');
       return;
     }
-    setFilterFrom(dateFromDraft);
-    setFilterTo(dateToDraft);
     setPage(1);
+    void fetchPayrolls({ search: searchDraft.trim(), from: dateFromDraft, to: dateToDraft });
   };
 
-  const clearDateFilter = () => {
+  const clearSearch = () => {
+    setSearchDraft('');
     setDateFromDraft('');
     setDateToDraft('');
-    setFilterFrom('');
-    setFilterTo('');
+    setAppliedQuery(EMPTY_QUERY);
+    setPayrolls([]);
+    setHasSearched(false);
     setPage(1);
   };
 
-  const getSearchText = useCallback(
-    (p: Payroll) =>
-      [guardMap.get(p.guard_id), p.period_start, p.period_end, String(p.total_hours), String(p.hourly_rate), String(p.bank_amount), String(p.cash_amount), p.payment_mode]
-        .filter(Boolean)
-        .join(' '),
-    [guardMap]
-  );
   const getSortValue = useCallback(
     (p: Payroll, key: string) => {
       switch (key) {
@@ -340,34 +355,39 @@ export default function PayrollPage() {
     [guardMap]
   );
 
+  // Filtering is the API's job now, so the list goes in unfiltered — sorting and paging
+  // only. An empty search term keeps useTableList from re-filtering what the server sent.
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
-    filteredPayrolls,
-    search,
+    payrolls,
+    '',
     sortKey,
     sortDir,
     page,
     pageSize,
-    getSearchText,
+    NO_CLIENT_SEARCH,
     getSortValue
   );
 
   useEffect(() => {
-    setPage(1);
-  }, [search, filterFrom, filterTo]);
-  useEffect(() => {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
 
-  const summaryRows = filteredPayrolls;
+  const summaryRows = payrolls;
   const totalBank = summaryRows.reduce((sum, p) => sum + p.bank_amount, 0);
   const totalCash = summaryRows.reduce((sum, p) => sum + p.cash_amount, 0);
   const totalAllowances = summaryRows.reduce((sum, p) => sum + p.allowance_total, 0);
   const totalPayable = totalBank + totalCash;
 
+  // Exports exactly the rows the table is showing — the current search result, every page
+  // of it — so the file can never disagree with the screen it was taken from.
   const exportCsv = () => {
+    if (!payrolls.length) {
+      toast.error('Nothing to export — search for records first');
+      return;
+    }
     const headers = ['Guard', 'Period Start', 'Period End', 'Hours', 'Rate', 'Bank', 'Cash', 'Allowances', 'Payable', 'Payment Mode'];
     const lines = [headers.join(',')];
-    for (const p of filteredPayrolls) {
+    for (const p of payrolls) {
       lines.push(
         [
           guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`,
@@ -389,11 +409,11 @@ export default function PayrollPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `payroll-export${exportFrom ? `-${exportFrom}` : ''}${exportTo ? `-to-${exportTo}` : ''}.csv`;
+    a.download = `payroll-export${appliedQuery.from ? `-${appliedQuery.from}` : ''}${appliedQuery.to ? `-to-${appliedQuery.to}` : ''}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     setExportOpen(false);
-    toast.success('CSV exported');
+    toast.success(`Exported ${payrolls.length} record${payrolls.length === 1 ? '' : 's'}`);
   };
 
   return (
@@ -402,19 +422,23 @@ export default function PayrollPage() {
         <ModulePage>
           <ModuleHeader
             title={<span className="flex items-center gap-2"><PoundSterling className="size-7" /> Payroll</span>}
-            description={`${payrolls.length} payroll record${payrolls.length !== 1 ? 's' : ''}`}
+            description={
+              hasSearched
+                ? `${payrolls.length} payroll record${payrolls.length !== 1 ? 's' : ''} for this search`
+                : 'Search below to load payroll records'
+            }
             actions={
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={loadPayrolls} disabled={loading}>
+                <Button variant="outline" onClick={reloadCurrent} disabled={loading || !hasSearched}>
                   {loading ? 'Loading...' : 'Refresh'}
                 </Button>
-                <Button variant="outline" onClick={exportCsv}>
+                <Button variant="outline" onClick={exportCsv} disabled={!payrolls.length}>
                   <Download className="size-4 mr-2" />
                   Export
                 </Button>
                 <Dialog open={exportOpen} onOpenChange={setExportOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline">
+                    <Button variant="outline" disabled={!payrolls.length}>
                       <Download className="size-4 mr-2" />
                       Export CSV
                     </Button>
@@ -424,33 +448,27 @@ export default function PayrollPage() {
                       <DialogTitle>Export payroll CSV</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <Label>Date from</Label>
-                          <Input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+                      <p className="text-sm text-muted-foreground">
+                        The file contains exactly the records your current search returned — every page of
+                        them, not just the one on screen. To export something else, change the filters and
+                        search again.
+                      </p>
+                      <dl className="rounded-md border p-3 text-sm space-y-1">
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-muted-foreground">Filters</dt>
+                          <dd className="text-right font-medium">{describeQuery(appliedQuery) || 'None — all records'}</dd>
                         </div>
-                        <div className="space-y-1">
-                          <Label>Date to</Label>
-                          <Input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-muted-foreground">Records</dt>
+                          <dd className="text-right font-medium">{payrolls.length}</dd>
                         </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Site (optional)</Label>
-                        <Select value={exportSiteId || '__all'} onValueChange={(v) => setExportSiteId(v === '__all' ? '' : v)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="All sites" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__all">All sites</SelectItem>
-                            {sites.map((s) => (
-                              <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">Date range filters by pay period overlap. Site filter is optional context for your export.</p>
-                      </div>
-                      <Button className="w-full" onClick={exportCsv}>
-                        Download CSV ({filteredPayrolls.length} records)
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-muted-foreground">Total payable</dt>
+                          <dd className="text-right font-medium">{formatMoney(totalPayable)}</dd>
+                        </div>
+                      </dl>
+                      <Button className="w-full" onClick={exportCsv} disabled={!payrolls.length}>
+                        Download CSV ({payrolls.length} records)
                       </Button>
                     </div>
                   </DialogContent>
@@ -607,7 +625,7 @@ export default function PayrollPage() {
                 </CardHeader>
                 <CardContent>
                   <span className="text-2xl font-bold">{formatMoney(totalPayable)}</span>
-                  <p className="text-xs text-muted-foreground mt-1">Bank + cash</p>
+                  <p className="text-xs text-muted-foreground mt-1">Bank + cash, this search</p>
                 </CardContent>
               </Card>
             </div>
@@ -842,8 +860,11 @@ export default function PayrollPage() {
           <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
             <Input
               placeholder="Search by guard name or period..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') runSearch();
+              }}
               className="max-w-md"
             />
             <div className="flex flex-wrap gap-2 items-center">
@@ -862,13 +883,13 @@ export default function PayrollPage() {
                 className="w-auto"
                 aria-label="Filter to"
               />
-              <Button type="button" variant="secondary" onClick={applyDateFilter}>
+              <Button type="button" variant="secondary" onClick={runSearch} disabled={loading}>
                 <Search className="size-4 mr-1.5" />
-                Search
+                {loading ? 'Searching…' : 'Search'}
               </Button>
-              {(filterFrom || filterTo) && (
-                <Button type="button" variant="ghost" size="sm" onClick={clearDateFilter}>
-                  Clear dates
+              {hasSearched && (
+                <Button type="button" variant="ghost" size="sm" onClick={clearSearch}>
+                  Clear
                 </Button>
               )}
             </div>
@@ -877,13 +898,23 @@ export default function PayrollPage() {
           <Card>
             <CardHeader>
               <CardTitle>Payroll Records</CardTitle>
+              {hasSearched && describeQuery(appliedQuery) ? (
+                <p className="text-sm text-muted-foreground">Showing results for {describeQuery(appliedQuery)}</p>
+              ) : null}
             </CardHeader>
             <CardContent>
               {loading ? (
                 <InlineKpiTableSkeleton />
+              ) : !hasSearched ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  Enter a guard name or period above and press <strong>Search</strong> to load payroll records.
+                  Leave the boxes empty and press Search to list them all.
+                </div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search || filterFrom || filterTo ? 'No records match your filters.' : 'No payroll records yet. Use “Import from Rota” to pull payable totals, then Edit if anything needs correcting.'}
+                  {describeQuery(appliedQuery)
+                    ? 'No records match your search.'
+                    : 'No payroll records yet. Use “Import from Rota” to pull payable totals, then Edit if anything needs correcting.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">

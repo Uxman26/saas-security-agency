@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
@@ -18,14 +18,15 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
-import { can, PERMS } from '@/lib/permissions';
+import { can, canModule, PERMS } from '@/lib/permissions';
 import type { DirectoryContractor, DirectoryContractorAssignment } from '@/lib/types';
 import { ContractorForm } from '../contractor-form';
 import { ArrowLeft, Trash2 } from 'lucide-react';
-import { toast } from '@/lib/toast';
+import { toast, toastMutationError } from '@/lib/toast';
 
 export default function ContractorDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = typeof params?.id === 'string' ? params.id : '';
   const { user } = useAuth();
   const [row, setRow] = useState<DirectoryContractor | null>(null);
@@ -37,6 +38,10 @@ export default function ContractorDetailPage() {
   const allowSub = true; // user?.plan?.features?.sub_contractors === true;
   const canManage = can(user, PERMS.contractorManage);
   const canAssign = can(user, PERMS.contractorAssign);
+  // Mirrors the directory list: a sub-contractor needs the sub_contractors right too.
+  const canDelete =
+    canModule(user, 'contractors', 'delete') &&
+    (row?.type !== 'sub' || canModule(user, 'sub_contractors', 'delete'));
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -132,6 +137,29 @@ export default function ContractorDetailPage() {
                   Deactivate
                 </Button>
               </>
+            )}
+            {row && canDelete && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  toast.confirm(
+                    `Permanently delete “${row.name}”? This cannot be undone.`,
+                    async () => {
+                      try {
+                        await api.directoryContractors.deleteContractor(id);
+                        toast.success('Contractor deleted');
+                        router.push('/contractors');
+                      } catch (err) {
+                        toastMutationError(err, 'Could not delete contractor');
+                      }
+                    },
+                    { label: 'Delete' }
+                  );
+                }}
+              >
+                <Trash2 className="size-4 mr-2" />
+                Delete
+              </Button>
             )}
           </div>
 

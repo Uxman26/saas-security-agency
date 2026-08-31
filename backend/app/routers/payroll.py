@@ -42,8 +42,20 @@ def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get
     )
 
 @router.get("", response_model=List[PayrollResponse])
-def list_payrolls(guard_id: Optional[int] = None, period_start: Optional[date] = None, period_end: Optional[date] = None, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "view"))):
-    return payroll_service.get_payrolls(db, current_user.id, guard_id, period_start, period_end)
+def list_payrolls(
+    guard_id: Optional[int] = None,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("payroll", "view")),
+):
+    """Payroll records matching the screen's filters.
+
+    `search` matches a guard's name or either period date, so the Payroll screen's one
+    search box is answered here rather than by filtering a full download in the browser.
+    """
+    return payroll_service.get_payrolls(db, current_user.id, guard_id, period_start, period_end, search)
 
 @router.get("/preview", response_model=PayrollPreviewResponse)
 def preview_pay(

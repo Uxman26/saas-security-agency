@@ -107,3 +107,14 @@ def deactivate_contractor_route(
 ):
     company = get_company_by_user_id(db, current_user.id)
     return contractor_service.deactivate_contractor(db, company.id, contractor_id, current_user)
+
+
+@router.delete("/{contractor_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_contractor_route(
+    contractor_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("contractors", "delete")),
+):
+    company = get_company_by_user_id(db, current_user.id)
+    contractor_service.delete_contractor(db, company.id, contractor_id, current_user)
+    return None

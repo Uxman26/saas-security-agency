@@ -1,4 +1,5 @@
 import json
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
@@ -154,7 +155,14 @@ def create_payroll(db: Session, data: PayrollCreate, user_id: int) -> Payroll:
     db.refresh(pr)
     return pr
 
-def get_payrolls(db: Session, user_id: int, guard_id: Optional[int] = None, period_start: Optional[date] = None, period_end: Optional[date] = None) -> List[Payroll]:
+def get_payrolls(
+    db: Session,
+    user_id: int,
+    guard_id: Optional[int] = None,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+    search: Optional[str] = None,
+) -> List[Payroll]:
     company = get_company_by_user_id(db, user_id)
     q = db.query(Payroll).filter(Payroll.company_id == company.id)
     if guard_id:
@@ -163,6 +171,18 @@ def get_payrolls(db: Session, user_id: int, guard_id: Optional[int] = None, peri
         q = q.filter(Payroll.period_end >= period_start)
     if period_end:
         q = q.filter(Payroll.period_start <= period_end)
+    term = (search or "").strip()
+    if term:
+        # What the box on the screen offers: a guard's name, or any part of either period
+        # date typed as it is displayed (2026-07, 2026-08-03…).
+        like = f"%{term.lower()}%"
+        q = q.join(Guard, Payroll.guard_id == Guard.id).filter(
+            or_(
+                func.lower(Guard.full_name).like(like),
+                cast(Payroll.period_start, String).like(like),
+                cast(Payroll.period_end, String).like(like),
+            )
+        )
     return q.order_by(Payroll.period_end.desc()).all()
 
 def get_payroll(db: Session, payroll_id: int, user_id: int) -> Payroll:

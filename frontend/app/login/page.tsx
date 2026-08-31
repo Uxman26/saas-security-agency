@@ -138,7 +138,7 @@ export default function LoginPage() {
           <label className="flex cursor-pointer items-center gap-2 text-white/60">
             <input
               type="checkbox"
-              className="size-4 rounded border-white/20 bg-white/5 accent-[#E04E00]"
+              className="size-4 rounded border-white/20 bg-white/5 accent-[#F45100]"
               {...register('remember_me')}
             />
             <span>{t('rememberMe')}</span>

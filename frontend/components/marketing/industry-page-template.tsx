@@ -126,8 +126,8 @@ export function IndustryPageTemplate({
               <BlurFade key={i} delay={0.08 + i * 0.04} inView>
                 <MagicCard
                   className="rounded-2xl"
-                  gradientFrom="#E04E00"
-                  gradientTo="#FD8018"
+                  gradientFrom="#F45100"
+                  gradientTo="#FF6A1F"
                   gradientColor="rgba(224,78,0,0.08)"
                   gradientOpacity={0.45}
                 >
@@ -158,7 +158,7 @@ export function IndustryPageTemplate({
 
         <BlurFade delay={0.1} inView>
           <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/60 px-6 py-12 text-center backdrop-blur-md dark:border-white/10 dark:bg-[#11161D]/60">
-            <BorderBeam size={120} duration={11} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1.5} />
+            <BorderBeam size={120} duration={11} colorFrom="#F45100" colorTo="#FF6A1F" borderWidth={1.5} />
             <div className="relative mx-auto max-w-2xl space-y-6">
               <SectionHeading
                 title={ts('finalTitle')}

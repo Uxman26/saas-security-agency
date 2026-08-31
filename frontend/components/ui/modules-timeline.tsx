@@ -123,7 +123,7 @@ function TimelineCard({
             ) : null}
             <span
               className="absolute end-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
-              style={{ backgroundColor: '#E04E00' }}
+              style={{ backgroundColor: '#F45100' }}
             >
               {event.category}
             </span>
@@ -138,7 +138,7 @@ function TimelineCard({
           >
             <div
               className="flex size-16 items-center justify-center rounded-2xl text-white shadow-lg"
-              style={{ backgroundColor: '#E04E00' }}
+              style={{ backgroundColor: '#F45100' }}
             >
               <Icon className="size-8" />
             </div>
@@ -153,7 +153,7 @@ function TimelineCard({
 
         <div className="p-5 md:p-6">
           <div className="mb-2 flex items-center gap-2">
-            <span className="size-2 rounded-full" style={{ backgroundColor: '#E04E00' }} />
+            <span className="size-2 rounded-full" style={{ backgroundColor: '#F45100' }} />
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {event.category}
             </p>
@@ -170,7 +170,7 @@ function TimelineCard({
           <Link
             href={event.href}
             className="mt-4 inline-flex text-sm font-semibold transition-colors hover:opacity-80"
-            style={{ color: '#E04E00' }}
+            style={{ color: '#F45100' }}
           >
             {learnMore} →
           </Link>
@@ -187,7 +187,7 @@ function TimelineNode({ active, children }: { active: boolean; children: ReactNo
         'relative z-10 flex size-11 items-center justify-center rounded-full border-2 bg-background shadow-md transition-all duration-300',
         active ? 'scale-110 border-transparent text-white' : 'border-border text-muted-foreground'
       )}
-      style={active ? { backgroundColor: '#E04E00', boxShadow: '0 0 0 6px rgba(224,78,0,0.18)' } : undefined}
+      style={active ? { backgroundColor: '#F45100', boxShadow: '0 0 0 6px rgba(224,78,0,0.18)' } : undefined}
     >
       {children}
     </div>
@@ -288,7 +288,7 @@ export function ModulesTimeline({ events, learnMore, className }: Props) {
                     'absolute top-[2.65rem] h-px w-8',
                     side === 'left' ? 'end-full' : 'start-full'
                   )}
-                  style={{ backgroundColor: active ? '#E04E00' : 'var(--border)' }}
+                  style={{ backgroundColor: active ? '#F45100' : 'var(--border)' }}
                 />
               </div>
 

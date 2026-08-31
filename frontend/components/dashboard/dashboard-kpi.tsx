@@ -67,8 +67,8 @@ export function DashboardKpi({
         warn && '[&]:border-amber-500/40'
       )}
       gradientSize={220}
-      gradientFrom={warn ? '#F59E0B' : '#E04E00'}
-      gradientTo={warn ? '#FBBF24' : '#FD8018'}
+      gradientFrom={warn ? '#F59E0B' : '#F45100'}
+      gradientTo={warn ? '#FBBF24' : '#FF6A1F'}
       gradientColor="rgba(224,78,0,0.08)"
       gradientOpacity={0.55}
     >

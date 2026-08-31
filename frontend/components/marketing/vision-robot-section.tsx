@@ -32,7 +32,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
             <BlurFade delay={0.05} inView>
               <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
                 <AnimatedGradientText
-                  colorFrom="#E04E00"
+                  colorFrom="#F45100"
                   colorTo="#F97316"
                   speed={1.2}
                   className="font-semibold uppercase tracking-[0.2em]"
@@ -44,7 +44,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
             <blockquote className="w-full max-w-[22rem] sm:max-w-sm md:max-w-[20rem] lg:max-w-md xl:max-w-lg">
               <BlurFade delay={0.12} inView>
                 <p className="text-pretty text-3xl font-bold leading-snug tracking-tight text-foreground md:text-[1.85rem] lg:text-[2.15rem] xl:text-[2.35rem]">
-                  <span className="me-1" style={{ color: '#E04E00' }}>
+                  <span className="me-1" style={{ color: '#F45100' }}>
                     &ldquo;
                   </span>
                   <TextAnimate
@@ -58,7 +58,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
                   >
                     {quote}
                   </TextAnimate>
-                  <span className="ms-1" style={{ color: '#E04E00' }}>
+                  <span className="ms-1" style={{ color: '#F45100' }}>
                     &rdquo;
                   </span>
                 </p>

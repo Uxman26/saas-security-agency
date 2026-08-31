@@ -112,7 +112,7 @@ export function PageTransitionLoader() {
           : 'opacity-0'
       )}
     >
-      <div className="absolute inset-0 bg-background/75 backdrop-blur-sm dark:bg-[#0B0F14]/80" />
+      <div className="absolute inset-0 bg-background/75 backdrop-blur-sm dark:bg-[#0F172A]/80" />
       <div className="relative">
         {visible ? (
           <CubeLoader

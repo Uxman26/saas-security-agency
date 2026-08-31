@@ -48,8 +48,8 @@ function ChartShell({
       <MagicCard
         className="h-full rounded-2xl"
         gradientSize={280}
-        gradientFrom="#E04E00"
-        gradientTo="#FD8018"
+        gradientFrom="#F45100"
+        gradientTo="#FF6A1F"
         gradientColor="rgba(224,78,0,0.08)"
         gradientOpacity={0.5}
       >

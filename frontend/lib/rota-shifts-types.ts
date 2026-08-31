@@ -92,18 +92,28 @@ export const SHIFT_COLOR_OPTS = [
   '#78716f',
 ] as const;
 
-/** Shift-type badge colours, matching the rota planning sheet. */
+/**
+ * Shift-period colours.
+ *
+ * `bar` is the strong hue drawn along the top of a shift card; `bg`/`text` are the
+ * quieter pairing the badge uses so a cell full of shifts stays readable. The hues match
+ * the --shift-* tokens in globals.css.
+ */
 export const SHIFT_TYPE_OPTS: ReadonlyArray<{
   value: ShiftType;
   label: string;
+  bar: string;
   bg: string;
   text: string;
 }> = [
-  { value: 'morning', label: 'MORNING', bg: '#4DE1F5', text: '#000000' },
-  { value: 'afternoon', label: 'AFTERNOON', bg: '#FFFF00', text: '#000000' },
-  { value: 'evening', label: 'EVENING', bg: '#C0C0C0', text: '#000000' },
-  { value: 'night', label: 'NIGHT', bg: '#000000', text: '#FFFFFF' },
+  { value: 'morning', label: 'MORNING', bar: '#06B6D4', bg: '#CFFAFE', text: '#0E7490' },
+  { value: 'afternoon', label: 'AFTERNOON', bar: '#6366F1', bg: '#E0E7FF', text: '#3730A3' },
+  { value: 'evening', label: 'EVENING', bar: '#F59E0B', bg: '#FEF3C7', text: '#B45309' },
+  { value: 'night', label: 'NIGHT', bar: '#64748B', bg: '#E2E8F0', text: '#334155' },
 ];
+
+/** A shift that needs attention (a clash, an unresolved conflict) — palette red. */
+export const SHIFT_URGENT_COLOR = '#EF4444';
 
 export function shiftTypeOption(value: ShiftType | null | undefined) {
   if (!value) return null;

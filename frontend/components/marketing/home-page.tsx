@@ -105,7 +105,7 @@ export function HomePage() {
           squareSize={3}
           gridGap={5}
           flickerChance={0.28}
-          color="#E04E00"
+          color="#F45100"
           maxOpacity={0.35}
         />
         <div className="container relative z-10 mx-auto px-4">
@@ -135,7 +135,7 @@ export function HomePage() {
                       size={40}
                       duration={6}
                       delay={i * 1.5}
-                      colorFrom="#E04E00"
+                      colorFrom="#F45100"
                       colorTo="#FDBA74"
                       borderWidth={1.5}
                     />
@@ -223,7 +223,7 @@ export function HomePage() {
               <Button asChild variant="outline" size="lg" className="border-border hover:bg-muted">
                 <Link href="/pricing">{tc('viewPricing')}</Link>
               </Button>
-              <BorderBeam size={80} duration={7} colorFrom="#E04E00" colorTo="#FDBA74" />
+              <BorderBeam size={80} duration={7} colorFrom="#F45100" colorTo="#FDBA74" />
             </div>
           </BlurFade>
         </div>

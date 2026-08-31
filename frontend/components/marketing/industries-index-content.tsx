@@ -50,8 +50,8 @@ export function IndustriesIndexContent() {
                   <MagicCard
                     className="h-full rounded-2xl"
                     gradientSize={240}
-                    gradientFrom="#E04E00"
-                    gradientTo="#FD8018"
+                    gradientFrom="#F45100"
+                    gradientTo="#FF6A1F"
                     gradientColor="rgba(224,78,0,0.1)"
                     gradientOpacity={0.55}
                   >
@@ -82,7 +82,7 @@ export function IndustriesIndexContent() {
 
         <BlurFade delay={0.2} inView>
           <div className="relative overflow-hidden rounded-3xl border border-dashed border-primary/30 bg-primary/5 p-6 md:p-8 dark:bg-primary/10">
-            <BorderBeam size={100} duration={10} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1} />
+            <BorderBeam size={100} duration={10} colorFrom="#F45100" colorTo="#FF6A1F" borderWidth={1} />
             <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="max-w-xl">
                 <div className="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/25">

@@ -29,7 +29,7 @@ export function ModulesTimelineSection({ eyebrow, title, intro, learnMore, modul
           <BlurFade delay={0.05} inView>
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
               <AnimatedGradientText
-                colorFrom="#E04E00"
+                colorFrom="#F45100"
                 colorTo="#F97316"
                 speed={1.2}
                 className="font-semibold uppercase tracking-[0.2em]"

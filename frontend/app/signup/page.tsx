@@ -106,7 +106,7 @@ function SignupForm() {
   if (!subscription_tier) {
     return (
       <div className="dark flex min-h-svh flex-col items-center justify-center gap-4 bg-[#05070a] px-4 text-white">
-        <Loader2 className="size-8 animate-spin text-[#FD8018]" />
+        <Loader2 className="size-8 animate-spin text-[#FF6A1F]" />
         <p className="text-white/70">{t('signupLoadingPlan')}</p>
         <p className="text-sm text-white/45">
           <Link href="/pricing" className={authDarkLinkClass}>
@@ -286,7 +286,7 @@ function SignupFallback() {
   const tc = useTranslations('common');
   return (
     <div className="dark flex min-h-svh flex-col items-center justify-center gap-4 bg-[#05070a] px-4 text-white">
-      <Loader2 className="size-8 animate-spin text-[#FD8018]" />
+      <Loader2 className="size-8 animate-spin text-[#FF6A1F]" />
       <p className="text-white/70">{t('signupPreparing')}</p>
       <p className="text-sm text-white/45">
         <Link href="/pricing" className={authDarkLinkClass}>

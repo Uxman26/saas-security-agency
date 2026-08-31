@@ -87,7 +87,7 @@ function RobotFallback({ className }: { className?: string }) {
         <div
           className="absolute inset-x-[22%] top-[12%] h-[38%] rounded-2xl border border-white/10 shadow-lg"
           style={{
-            background: 'linear-gradient(160deg, #FB923C 0%, #E04E00 55%, #C2410C 100%)',
+            background: 'linear-gradient(160deg, #FB923C 0%, #F45100 55%, #C2410C 100%)',
           }}
         >
           <div className="absolute inset-0 flex items-center justify-center gap-5">
@@ -150,11 +150,11 @@ export function InteractiveRobotSpline({ scene, className }: Props) {
       {/* Opaque mask over Built-with-Spline badge — matches page black / light bg */}
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-0 end-0 z-30 h-[72px] w-[180px] bg-background dark:bg-[#0B0F14]"
+        className="pointer-events-none absolute bottom-0 end-0 z-30 h-[72px] w-[180px] bg-background dark:bg-[#0F172A]"
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-0 end-0 z-30 h-20 w-48 bg-gradient-to-tl from-background from-50% via-background/90 to-transparent dark:from-[#0B0F14] dark:via-[#0B0F14]/95"
+        className="pointer-events-none absolute bottom-0 end-0 z-30 h-20 w-48 bg-gradient-to-tl from-background from-50% via-background/90 to-transparent dark:from-[#0F172A] dark:via-[#0F172A]/95"
       />
 
       <SplineErrorBoundary fallback={<RobotFallback className="h-full w-full" />}>

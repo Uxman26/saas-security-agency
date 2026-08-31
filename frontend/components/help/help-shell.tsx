@@ -82,7 +82,7 @@ export function HelpShell({ children, activeSlug }: Props) {
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background: isDark
-            ? 'radial-gradient(ellipse 70% 45% at 50% -5%, rgba(224,78,0,0.16), transparent 55%), radial-gradient(ellipse 40% 30% at 90% 40%, rgba(253,128,24,0.06), transparent 50%), #0B0F14'
+            ? 'radial-gradient(ellipse 70% 45% at 50% -5%, rgba(224,78,0,0.16), transparent 55%), radial-gradient(ellipse 40% 30% at 90% 40%, rgba(253,128,24,0.06), transparent 50%), #0F172A'
             : 'radial-gradient(ellipse 70% 45% at 50% -5%, rgba(224,78,0,0.08), transparent 55%), radial-gradient(ellipse 40% 30% at 90% 40%, rgba(253,128,24,0.04), transparent 50%)',
         }}
       />
@@ -111,7 +111,7 @@ export function HelpShell({ children, activeSlug }: Props) {
                   'radial-gradient(ellipse 60% 80% at 0% 0%, rgba(224,78,0,0.14), transparent 55%), radial-gradient(ellipse 40% 50% at 100% 100%, oklch(0.55 0.12 66 / 0.08), transparent 50%)',
               }}
             />
-            <BorderBeam size={140} duration={12} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1.5} />
+            <BorderBeam size={140} duration={12} colorFrom="#F45100" colorTo="#FF6A1F" borderWidth={1.5} />
 
             <div className="relative max-w-2xl">
               <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary">
@@ -137,8 +137,8 @@ export function HelpShell({ children, activeSlug }: Props) {
                 <MagicCard
                   className="rounded-2xl"
                   gradientSize={240}
-                  gradientFrom="#E04E00"
-                  gradientTo="#FD8018"
+                  gradientFrom="#F45100"
+                  gradientTo="#FF6A1F"
                   gradientColor="rgba(224,78,0,0.1)"
                   gradientOpacity={0.55}
                 >
@@ -245,7 +245,7 @@ function HelpSidebar({ activeSlug }: { activeSlug?: string }) {
 
       <BlurFade delay={0.12} inView>
         <div className="relative overflow-hidden rounded-2xl border border-primary/25 bg-primary/5 p-5 dark:bg-primary/10">
-          <BorderBeam size={80} duration={8} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1} />
+          <BorderBeam size={80} duration={8} colorFrom="#F45100" colorTo="#FF6A1F" borderWidth={1} />
           <p className="relative font-semibold text-foreground">Need a walkthrough?</p>
           <p className="relative mt-1.5 text-xs leading-relaxed text-muted-foreground">
             Book a demo and we will contact you using the work email you provide.
@@ -283,8 +283,8 @@ export function HelpHubGrid() {
       <BlurFade delay={0.1} inView>
         <MagicCard
           className="rounded-2xl"
-          gradientFrom="#E04E00"
-          gradientTo="#FD8018"
+          gradientFrom="#F45100"
+          gradientTo="#FF6A1F"
           gradientColor="rgba(224,78,0,0.08)"
         >
           <div className="p-10 text-center">
@@ -344,8 +344,8 @@ function HelpArticleCard({ article, delay = 0 }: { article: HelpArticle; delay?:
         <MagicCard
           className="h-full rounded-2xl"
           gradientSize={220}
-          gradientFrom="#E04E00"
-          gradientTo="#FD8018"
+          gradientFrom="#F45100"
+          gradientTo="#FF6A1F"
           gradientColor="rgba(224,78,0,0.1)"
           gradientOpacity={0.55}
         >

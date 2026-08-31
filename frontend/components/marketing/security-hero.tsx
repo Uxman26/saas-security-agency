@@ -87,8 +87,8 @@ export function SecurityHero({
                 <br />
                 <AnimatedGradientText
                   speed={1.2}
-                  colorFrom="#E04E00"
-                  colorTo="#FD8018"
+                  colorFrom="#F45100"
+                  colorTo="#FF6A1F"
                   className="text-4xl font-bold sm:text-5xl lg:text-6xl"
                 >
                   {titleAccent}

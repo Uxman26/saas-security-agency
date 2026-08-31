@@ -31,36 +31,36 @@ const TONES: Record<FeatureItem['tone'], { spot: string; shader: string; icon: s
   ember: {
     spot: 'rgba(224, 78, 0, 0.14)',
     shader:
-      'from-orange-50/80 via-muted/40 to-muted/30 dark:from-[#12151a] dark:via-[#0B0F14] dark:to-[#0B0F14]',
+      'from-orange-50/80 via-muted/40 to-muted/30 dark:from-[#12151a] dark:via-[#0F172A] dark:to-[#0F172A]',
     icon: 'text-primary',
   },
   slate: {
     spot: 'rgba(120, 113, 108, 0.12)',
     shader:
-      'from-stone-50/80 via-muted/40 to-muted/30 dark:from-[#12151a] dark:via-[#0B0F14] dark:to-[#0B0F14]',
+      'from-stone-50/80 via-muted/40 to-muted/30 dark:from-[#12151a] dark:via-[#0F172A] dark:to-[#0F172A]',
     icon: 'text-stone-600 dark:text-stone-300',
   },
   teal: {
     spot: 'rgba(16, 185, 129, 0.12)',
     shader:
-      'from-emerald-50/80 via-muted/40 to-muted/30 dark:from-[#101612] dark:via-[#0B0F14] dark:to-[#0B0F14]',
+      'from-emerald-50/80 via-muted/40 to-muted/30 dark:from-[#101612] dark:via-[#0F172A] dark:to-[#0F172A]',
     icon: 'text-emerald-700 dark:text-emerald-300',
   },
   forest: {
     spot: 'rgba(34, 197, 94, 0.12)',
     shader:
-      'from-emerald-50/80 via-muted/40 to-muted/30 dark:from-[#101612] dark:via-[#0B0F14] dark:to-[#0B0F14]',
+      'from-emerald-50/80 via-muted/40 to-muted/30 dark:from-[#101612] dark:via-[#0F172A] dark:to-[#0F172A]',
     icon: 'text-emerald-700 dark:text-emerald-300',
   },
   amber: {
     spot: 'rgba(245, 158, 11, 0.14)',
     shader:
-      'from-amber-50/80 via-muted/40 to-muted/30 dark:from-[#14110c] dark:via-[#0B0F14] dark:to-[#0B0F14]',
+      'from-amber-50/80 via-muted/40 to-muted/30 dark:from-[#14110c] dark:via-[#0F172A] dark:to-[#0F172A]',
     icon: 'text-amber-700 dark:text-amber-300',
   },
   steel: {
     spot: 'rgba(120, 113, 108, 0.1)',
-    shader: 'from-muted/60 via-muted/40 to-muted/30 dark:from-[#12151a] dark:via-[#0B0F14] dark:to-[#0B0F14]',
+    shader: 'from-muted/60 via-muted/40 to-muted/30 dark:from-[#12151a] dark:via-[#0F172A] dark:to-[#0F172A]',
     icon: 'text-foreground',
   },
 };
@@ -75,7 +75,7 @@ type Props = {
 
 export function SecurityFeatureGrid({ eyebrow, title, intro, features, learnMore }: Props) {
   return (
-    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24 dark:bg-[#0B0F14]">
+    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24 dark:bg-[#0F172A]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -89,7 +89,7 @@ export function SecurityFeatureGrid({ eyebrow, title, intro, features, learnMore
           <BlurFade delay={0.05} inView>
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
               <AnimatedGradientText
-                colorFrom="#E04E00"
+                colorFrom="#F45100"
                 colorTo="#F97316"
                 speed={1.2}
                 className="font-semibold uppercase tracking-[0.2em]"
@@ -126,7 +126,7 @@ export function SecurityFeatureGrid({ eyebrow, title, intro, features, learnMore
                     <ShineBorder
                       borderWidth={1}
                       duration={12}
-                      shineColor={['#E04E00', '#FDBA74', '#E04E00']}
+                      shineColor={['#F45100', '#FDBA74', '#F45100']}
                     />
                   )}
                   <div className={cn('flex h-full flex-col bg-gradient-to-br p-6 md:p-7', tone.shader)}>

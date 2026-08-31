@@ -30,7 +30,7 @@ export function RotaShowcase({
   caption,
 }: Props) {
   return (
-    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24 dark:bg-[#0B0F14]">
+    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24 dark:bg-[#0F172A]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -46,7 +46,7 @@ export function RotaShowcase({
             <BlurFade delay={0.05} inView>
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 <AnimatedGradientText
-                  colorFrom="#E04E00"
+                  colorFrom="#F45100"
                   colorTo="#F97316"
                   speed={1.2}
                   className="font-semibold uppercase tracking-[0.18em]"
@@ -107,10 +107,10 @@ export function RotaShowcase({
               >
                 <div
                   aria-hidden
-                  className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-foreground/10 via-transparent to-[#E04E00]/15 blur-2xl"
+                  className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-foreground/10 via-transparent to-[#F45100]/15 blur-2xl"
                 />
 
-                <div className="relative overflow-hidden rounded-2xl border border-border bg-[#0B0F14] shadow-2xl shadow-foreground/10 ring-1 ring-foreground/5 dark:border-white/10">
+                <div className="relative overflow-hidden rounded-2xl border border-border bg-[#0F172A] shadow-2xl shadow-foreground/10 ring-1 ring-foreground/5 dark:border-white/10">
                   <div className="flex items-center gap-2 border-b border-white/10 bg-[#11161D] px-4 py-2.5">
                     <span className="size-2.5 rounded-full bg-red-400/80" />
                     <span className="size-2.5 rounded-full bg-amber-400/80" />
@@ -130,7 +130,7 @@ export function RotaShowcase({
                     size={120}
                     duration={8}
                     borderWidth={1.5}
-                    colorFrom="#E04E00"
+                    colorFrom="#F45100"
                     colorTo="#FDBA74"
                   />
                   <BorderBeam
@@ -140,7 +140,7 @@ export function RotaShowcase({
                     borderWidth={1.5}
                     reverse
                     colorFrom="#FB923C"
-                    colorTo="#E04E00"
+                    colorTo="#F45100"
                   />
                 </div>
               </motion.figure>

@@ -52,8 +52,8 @@ export function DashboardHero({ title, subtitle, description, pills }: Props) {
         <BorderBeam
           size={120}
           duration={10}
-          colorFrom="#E04E00"
-          colorTo="#FD8018"
+          colorFrom="#F45100"
+          colorTo="#FF6A1F"
           borderWidth={1.5}
         />
 

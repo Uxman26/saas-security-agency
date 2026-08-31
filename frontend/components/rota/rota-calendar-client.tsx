@@ -15,6 +15,7 @@ import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec } from '@/lib/rota-shifts-types';
+import { SHIFT_URGENT_COLOR, shiftTypeOption } from '@/lib/rota-shifts-types';
 import type { RotaPlanListItem } from '@/lib/types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
@@ -2599,7 +2600,19 @@ export function RotaCalendarClient() {
                                 }
                                 title={tip || (canEditRota ? 'Drag to another day to move this shift' : undefined)}
                               >
-                                <div className="h-1 rounded-full mb-1" style={{ backgroundColor: sh.color }} />
+                                {/* Red wins over the shift's own colour: a clash is the
+                                    one thing that has to be spotted from across the grid.
+                                    Otherwise the site colour stands, falling back to the
+                                    period hue when the shift has none. */}
+                                <div
+                                  className="h-1 rounded-full mb-1"
+                                  style={{
+                                    backgroundColor:
+                                      conflicts.length > 0
+                                        ? SHIFT_URGENT_COLOR
+                                        : sh.color || shiftTypeOption(sh.shiftType)?.bar || 'var(--shift-night)',
+                                  }}
+                                />
                                 {conflicts.length > 0 ? (
                                   <AlertTriangle className="absolute top-1 right-1 size-3 text-amber-600 dark:text-amber-400" />
                                 ) : null}

@@ -106,8 +106,8 @@ function QuickTile({
         <MagicCard
           className="h-full rounded-2xl"
           gradientSize={200}
-          gradientFrom="#E04E00"
-          gradientTo="#FD8018"
+          gradientFrom="#F45100"
+          gradientTo="#FF6A1F"
           gradientColor="rgba(224,78,0,0.07)"
           gradientOpacity={0.5}
         >
@@ -200,7 +200,7 @@ export default function DashboardPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_55%),linear-gradient(to_bottom,var(--background),color-mix(in_oklab,var(--muted)_70%,var(--background)))] dark:bg-[radial-gradient(ellipse_at_top,oklch(0.556_0.163_48.998/0.14),transparent_52%),linear-gradient(to_bottom,#0B0F14,#0B0F14)]">
+        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_55%),linear-gradient(to_bottom,var(--background),color-mix(in_oklab,var(--muted)_70%,var(--background)))] dark:bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--primary)_14%,transparent),transparent_52%),linear-gradient(to_bottom,#0F172A,#0F172A)]">
           <div className="container mx-auto space-y-6 px-4 py-8">
             <DashboardHero
               title={
@@ -439,8 +439,8 @@ export default function DashboardPage() {
                   <MagicCard
                     className="h-full rounded-2xl"
                     gradientSize={220}
-                    gradientFrom="#E04E00"
-                    gradientTo="#FD8018"
+                    gradientFrom="#F45100"
+                    gradientTo="#FF6A1F"
                     gradientColor="rgba(224,78,0,0.08)"
                     gradientOpacity={0.5}
                   >

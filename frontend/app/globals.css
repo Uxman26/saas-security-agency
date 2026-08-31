@@ -38,6 +38,16 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-header-dark: var(--header-dark);
+  --color-header-dark-foreground: var(--header-dark-foreground);
+  --color-surface-dark: var(--surface-dark);
+  --color-surface-dark-foreground: var(--surface-dark-foreground);
+  --color-shift-morning: var(--shift-morning);
+  --color-shift-afternoon: var(--shift-afternoon);
+  --color-shift-evening: var(--shift-evening);
+  --color-shift-night: var(--shift-night);
+  --color-shift-urgent: var(--shift-urgent);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -89,90 +99,125 @@
   }
 }
 
-/* Light — ControlOps brand orange + Amber Mono warmth */
+/* Light — ControlOps brand orange on a slate neutral scale.
+   The palette is fixed by brand: orange #F45100 (hover #D84300) over slate
+   #F8FAFC/#F1F5F9/#E2E8F0, text #172033/#64748B, navy surfaces #0F172A/#1E293B. */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.995 0.002 85);
-  --foreground: oklch(0.22 0.02 55);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 55);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 55);
-  --primary: #E04E00;
+  --background: #F8FAFC;
+  --foreground: #172033;
+  --card: #FFFFFF;
+  --card-foreground: #172033;
+  --popover: #FFFFFF;
+  --popover-foreground: #172033;
+  --primary: #F45100;
   --primary-foreground: #FFFFFF;
-  --secondary: oklch(0.965 0.008 75);
-  --secondary-foreground: oklch(0.28 0.02 55);
-  --muted: oklch(0.975 0.006 85);
-  --muted-foreground: oklch(0.48 0.02 55);
-  --accent: oklch(0.97 0.03 85);
-  --accent-foreground: oklch(0.42 0.12 46);
-  --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.91 0.01 75);
-  --input: oklch(0.91 0.01 75);
-  --ring: #E04E00;
-  /* Amber Mono chart scale (light) */
-  --chart-1: oklch(0.65 0.18 48);
-  --chart-2: oklch(0.72 0.16 70);
-  --chart-3: oklch(0.58 0.14 38);
-  --chart-4: oklch(0.55 0.12 66);
-  --chart-5: oklch(0.5 0.18 27);
-  --sidebar: oklch(0.985 0.004 85);
-  --sidebar-foreground: oklch(0.28 0.02 55);
-  --sidebar-primary: #E04E00;
+  /* Brand hover, used by the button variants instead of a blanket opacity drop. */
+  --primary-hover: #D84300;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #172033;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #FFF3E0;
+  --accent-foreground: #D84300;
+  --destructive: #EF4444;
+  --border: #E2E8F0;
+  --input: #E2E8F0;
+  --ring: #F45100;
+  /* Charts draw from the same five hues the rota uses, so a shift bar and a chart
+     series never disagree about what "evening" or "urgent" looks like. */
+  --chart-1: #F45100;
+  --chart-2: #06B6D4;
+  --chart-3: #F59E0B;
+  --chart-4: #64748B;
+  --chart-5: #EF4444;
+  --sidebar: #F1F5F9;
+  --sidebar-foreground: #172033;
+  --sidebar-primary: #F45100;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: oklch(0.955 0.015 70);
-  --sidebar-accent-foreground: oklch(0.22 0.02 55);
-  --sidebar-border: oklch(0.9 0.01 75);
-  --sidebar-ring: #E04E00;
-  /* Same light-orange wash as the active sidebar nav item (18% of the brand
-     orange), mixed over --background instead of transparent because the sticky
-     columns must paint opaque or shifts bleed through them. */
-  --rota-hours-bg: color-mix(in oklab, var(--sidebar-primary) 7%, var(--background));
-  --rota-pay-bg: color-mix(in oklab, var(--sidebar-primary) 7%, var(--background));
-  --rota-publish-bg: color-mix(in oklab, var(--sidebar-primary) 7%, var(--background));
-  --rota-emp-bg: color-mix(in oklab, var(--sidebar-primary) 11%, var(--background));
-  --rota-day-header-bg: color-mix(in oklab, var(--sidebar-primary) 18%, var(--background));
-  --rota-day-total-bg: color-mix(in oklab, var(--sidebar-primary) 18%, var(--background));
-  --rota-row-line: color-mix(in oklab, var(--sidebar-primary) 35%, var(--background));
-  --rota-emp-conflict-bg: #fff4e6;
+  --sidebar-accent: #FFF3E0;
+  --sidebar-accent-foreground: #D84300;
+  --sidebar-border: #E2E8F0;
+  --sidebar-ring: #F45100;
+  /* Navy surfaces: header bands (--header-*) and the dark secondary button
+     (--surface-dark-*). Both keep their colour in either theme — they are the dark
+     end of the palette rather than a themed neutral. */
+  --header-dark: #0F172A;
+  --header-dark-foreground: #F8FAFC;
+  --surface-dark: #1E293B;
+  --surface-dark-foreground: #F8FAFC;
+  /* Shift periods, shared by the rota grid and the shift dialog. */
+  --shift-morning: #06B6D4;
+  --shift-afternoon: #6366F1;
+  --shift-evening: #F59E0B;
+  --shift-night: #64748B;
+  --shift-urgent: #EF4444;
+  /* Rota bands. Opaque on purpose: the sticky columns paint over scrolling shift
+     cards, so a translucent tint would let them bleed through. */
+  --rota-hours-bg: #F8FAFC;
+  --rota-pay-bg: #F8FAFC;
+  --rota-publish-bg: #F8FAFC;
+  --rota-emp-bg: #F1F5F9;
+  --rota-day-header-bg: #F1F5F9;
+  --rota-day-total-bg: #E0E7FF;
+  --rota-row-line: #E2E8F0;
+  --rota-emp-conflict-bg: #FFF3E0;
 }
 
-/* Dark — 21st.dev Amber Mono (brand bg #0B0F14) */
+/* Dark — the same palette read from its dark end: #0F172A ground, #1E293B surfaces,
+   #334155 lines. The brand orange lifts to #FF6A1F so it keeps its contrast against a
+   navy ground, and carries dark text the way the light theme carries white. */
 .dark {
-  --background: #0B0F14;
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.185 0.008 55);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.185 0.008 55);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: #FD8018;
-  --primary-foreground: #0B0F14;
-  --secondary: oklch(0.22 0.008 50);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.2 0.008 50);
-  --muted-foreground: oklch(0.72 0.01 60);
-  --accent: oklch(0.28 0.04 50);
-  --accent-foreground: oklch(0.95 0.05 85);
-  --destructive: oklch(0.64 0.21 25);
-  --border: oklch(0.374 0.01 67.558);
-  --input: oklch(0.268 0.007 34.295);
-  --ring: oklch(0.473 0.137 46.201);
-  /* Amber Mono chart palette from 21st.dev theme editor */
-  --chart-1: oklch(0.556 0.163 48.998);
-  --chart-2: oklch(0.563 0.195 38.402);
-  --chart-3: oklch(0.554 0.115 66.442);
-  --chart-4: oklch(0.506 0.213 27.518);
-  --chart-5: oklch(0.525 0.223 3.958);
-  --sidebar: #0B0F14;
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #FD8018;
-  --sidebar-primary-foreground: #0B0F14;
-  --sidebar-accent: oklch(0.185 0.008 55);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.374 0.01 67.558);
-  --sidebar-ring: oklch(0.473 0.137 46.201);
-  /* Bands are theme-agnostic (see :root) — they mix the brand orange over
-     whichever --background is active. Only the conflict tint differs. */
+  --background: #0F172A;
+  --foreground: #F1F5F9;
+  --card: #1E293B;
+  --card-foreground: #F1F5F9;
+  --popover: #1E293B;
+  --popover-foreground: #F1F5F9;
+  --primary: #FF6A1F;
+  --primary-foreground: #0F172A;
+  --primary-hover: #F45100;
+  --secondary: #1E293B;
+  --secondary-foreground: #F1F5F9;
+  --muted: #1E293B;
+  --muted-foreground: #94A3B8;
+  --accent: #3B1D0A;
+  --accent-foreground: #FDBA74;
+  --destructive: #F87171;
+  --border: #334155;
+  --input: #334155;
+  --ring: #FF6A1F;
+  --chart-1: #FF6A1F;
+  --chart-2: #22D3EE;
+  --chart-3: #FBBF24;
+  --chart-4: #94A3B8;
+  --chart-5: #F87171;
+  --sidebar: #0F172A;
+  --sidebar-foreground: #F1F5F9;
+  --sidebar-primary: #FF6A1F;
+  --sidebar-primary-foreground: #0F172A;
+  --sidebar-accent: #1E293B;
+  --sidebar-accent-foreground: #FDBA74;
+  --sidebar-border: #334155;
+  --sidebar-ring: #FF6A1F;
+  /* Navy surfaces stay put; on a navy ground they read as a raised band. */
+  --header-dark: #0F172A;
+  --header-dark-foreground: #F8FAFC;
+  --surface-dark: #1E293B;
+  --surface-dark-foreground: #F8FAFC;
+  /* Shift hues lifted for contrast on the dark ground; same families. */
+  --shift-morning: #22D3EE;
+  --shift-afternoon: #818CF8;
+  --shift-evening: #FBBF24;
+  --shift-night: #94A3B8;
+  --shift-urgent: #F87171;
+  --rota-hours-bg: #16223C;
+  --rota-pay-bg: #16223C;
+  --rota-publish-bg: #16223C;
+  --rota-emp-bg: #1E293B;
+  --rota-day-header-bg: #1E293B;
+  --rota-day-total-bg: #283563;
+  --rota-row-line: #334155;
   --rota-emp-conflict-bg: #451a03;
 }
 
@@ -202,7 +247,7 @@
 
 @keyframes shield-pulse {
   0%, 100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 0 rgb(22 30 44 / 0.25)); }
-  50% { opacity: 0.95; transform: scale(1.03); filter: drop-shadow(0 0 20px rgb(224 78 0 / 0.18)); }
+  50% { opacity: 0.95; transform: scale(1.03); filter: drop-shadow(0 0 20px rgb(244 81 0 / 0.18)); }
 }
 
 @keyframes radar-ring {
@@ -286,7 +331,7 @@
 .marketing-hero-bg {
   background:
     radial-gradient(ellipse 80% 60% at 8% -8%, rgb(22 30 44 / 0.05), transparent 55%),
-    radial-gradient(ellipse 50% 40% at 92% 12%, rgb(224 78 0 / 0.04), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 92% 12%, rgb(244 81 0 / 0.04), transparent 50%),
     var(--background);
 }
 
@@ -299,7 +344,7 @@
 .marketing-cta-bg {
   background:
     linear-gradient(135deg, rgb(22 30 44 / 0.04) 0%, transparent 50%),
-    linear-gradient(225deg, rgb(224 78 0 / 0.03) 0%, transparent 50%),
+    linear-gradient(225deg, rgb(244 81 0 / 0.03) 0%, transparent 50%),
     var(--background);
 }
 

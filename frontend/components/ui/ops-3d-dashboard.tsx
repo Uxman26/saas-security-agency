@@ -70,7 +70,7 @@ export function Ops3dDashboard({ className }: { className?: string }) {
         className="pointer-events-none absolute -inset-8 rounded-[2rem] opacity-70 blur-3xl"
         style={{
           background:
-            'radial-gradient(ellipse 70% 60% at 50% 40%, color-mix(in oklab, #E04E00 22%, transparent), transparent 70%)',
+            'radial-gradient(ellipse 70% 60% at 50% 40%, color-mix(in oklab, #F45100 22%, transparent), transparent 70%)',
         }}
       />
 
@@ -80,7 +80,7 @@ export function Ops3dDashboard({ className }: { className?: string }) {
         animate={{ y: [0, -6, 0] }}
         transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
       >
-        <MapPin className="size-3.5 text-[#E04E00]" />
+        <MapPin className="size-3.5 text-[#F45100]" />
         <span>36 sites live</span>
       </motion.div>
       <motion.div
@@ -88,7 +88,7 @@ export function Ops3dDashboard({ className }: { className?: string }) {
         animate={{ y: [0, 8, 0] }}
         transition={{ duration: 5.2, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
       >
-        <Shield className="size-3.5 text-[#FD8018]" />
+        <Shield className="size-3.5 text-[#FF6A1F]" />
         <span>Coverage OK</span>
       </motion.div>
 
@@ -101,13 +101,13 @@ export function Ops3dDashboard({ className }: { className?: string }) {
         className={cn(
           'relative overflow-hidden rounded-2xl border border-border/80 bg-card shadow-2xl shadow-black/10',
           'dark:border-white/10 dark:bg-[#0F1318] dark:shadow-black/50',
-          hovered && 'ring-1 ring-[#E04E00]/35'
+          hovered && 'ring-1 ring-[#F45100]/35'
         )}
       >
-        <BorderBeam size={140} duration={10} colorFrom="#E04E00" colorTo="#FDBA74" borderWidth={1.25} />
+        <BorderBeam size={140} duration={10} colorFrom="#F45100" colorTo="#FDBA74" borderWidth={1.25} />
 
         {/* Window chrome */}
-        <div className="flex items-center justify-between border-b border-border/60 bg-[#0B0F14] px-4 py-3 dark:border-white/10">
+        <div className="flex items-center justify-between border-b border-border/60 bg-[#0F172A] px-4 py-3 dark:border-white/10">
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full bg-red-400/90" />
             <span className="size-2.5 rounded-full bg-amber-400/90" />
@@ -134,7 +134,7 @@ export function Ops3dDashboard({ className }: { className?: string }) {
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Shift volume · 14 days
               </p>
-              <p className="text-[10px] font-medium text-[#E04E00]">+12%</p>
+              <p className="text-[10px] font-medium text-[#F45100]">+12%</p>
             </div>
             <MiniBars />
           </div>
@@ -206,7 +206,7 @@ function MiniBars() {
           key={i}
           className={cn(
             'flex-1 rounded-t-sm',
-            i === bars.length - 1 ? 'bg-[#E04E00]' : 'bg-foreground/25 dark:bg-white/25'
+            i === bars.length - 1 ? 'bg-[#F45100]' : 'bg-foreground/25 dark:bg-white/25'
           )}
           initial={{ height: 0 }}
           animate={{ height: `${h}%` }}

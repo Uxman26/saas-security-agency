@@ -19,7 +19,7 @@ const ICONS = [QrCode, ScanLine, MapPinned, ClipboardCheck];
 
 export function PatrolShowcase({ eyebrow, title, text, items, cta }: Props) {
   return (
-    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24 dark:bg-[#0B0F14]">
+    <section className="relative overflow-hidden border-b border-border/50 bg-background py-16 md:py-24 dark:bg-[#0F172A]">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-60"
@@ -35,7 +35,7 @@ export function PatrolShowcase({ eyebrow, title, text, items, cta }: Props) {
           <BlurFade delay={0.05} inView>
             <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em]">
               <AnimatedGradientText
-                colorFrom="#E04E00"
+                colorFrom="#F45100"
                 colorTo="#F59E0B"
                 speed={1.2}
                 className="font-semibold uppercase tracking-[0.2em]"
@@ -68,7 +68,7 @@ export function PatrolShowcase({ eyebrow, title, text, items, cta }: Props) {
               <BlurFade key={item.title} delay={0.12 + i * 0.08} inView>
                 <MagicCard
                   className="h-full rounded-2xl"
-                  gradientFrom="#E04E00"
+                  gradientFrom="#F45100"
                   gradientTo="#F59E0B"
                   gradientColor="rgba(224,78,0,0.1)"
                   gradientOpacity={0.55}

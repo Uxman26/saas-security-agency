@@ -34,13 +34,13 @@ const SECTION_ICONS: LucideIcon[] = [
 
 /** ControlOps orange-family gradients for the 3D skew showcase. */
 const GRADIENTS: Array<{ from: string; to: string }> = [
-  { from: '#E04E00', to: '#FD8018' },
-  { from: '#FD8018', to: '#ffbc00' },
-  { from: '#E04E00', to: '#c2410c' },
-  { from: '#f97316', to: '#E04E00' },
-  { from: '#ffbc00', to: '#E04E00' },
-  { from: '#ea580c', to: '#FD8018' },
-  { from: '#E04E00', to: '#fb923c' },
+  { from: '#F45100', to: '#FF6A1F' },
+  { from: '#FF6A1F', to: '#ffbc00' },
+  { from: '#F45100', to: '#c2410c' },
+  { from: '#f97316', to: '#F45100' },
+  { from: '#ffbc00', to: '#F45100' },
+  { from: '#ea580c', to: '#FF6A1F' },
+  { from: '#F45100', to: '#fb923c' },
   { from: '#c2410c', to: '#ffbc00' },
 ];
 
@@ -95,19 +95,19 @@ export function PlatformContent() {
       </MarketingSection>
 
       {/* 3D product capability showcase */}
-      <section className="relative overflow-hidden border-b border-border/50 bg-muted/40 py-16 md:py-24 dark:bg-[#0B0F14]">
+      <section className="relative overflow-hidden border-b border-border/50 bg-muted/40 py-16 md:py-24 dark:bg-[#0F172A]">
         <div
           className="pointer-events-none absolute inset-0 opacity-50 dark:opacity-70"
           aria-hidden
           style={{
             background:
-              'radial-gradient(ellipse 60% 50% at 15% 20%, color-mix(in oklab, #E04E00 22%, transparent), transparent 55%), radial-gradient(ellipse 50% 45% at 85% 75%, color-mix(in oklab, #FD8018 14%, transparent), transparent 50%)',
+              'radial-gradient(ellipse 60% 50% at 15% 20%, color-mix(in oklab, #F45100 22%, transparent), transparent 55%), radial-gradient(ellipse 50% 45% at 85% 75%, color-mix(in oklab, #FF6A1F 14%, transparent), transparent 50%)',
           }}
         />
         <div className="container relative z-10 mx-auto px-4">
           <BlurFade delay={0.05}>
             <div className="mx-auto mb-10 max-w-2xl text-center md:mb-14">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#E04E00] dark:text-[#FD8018]">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#F45100] dark:text-[#FF6A1F]">
                 Product showcase
               </p>
               <h2 className="mt-3 text-2xl font-bold tracking-tight text-foreground md:text-4xl dark:text-white">

@@ -112,7 +112,7 @@ export function Auth3DShell({
           direction="right"
           offset={24}
           inView
-          className="relative hidden min-h-[420px] flex-1 overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#0b0f14] lg:block lg:min-h-0"
+          className="relative hidden min-h-[420px] flex-1 overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#0f172a] lg:block lg:min-h-0"
         >
           <FlickeringGrid
             className="absolute inset-0 z-0 opacity-40"
@@ -144,7 +144,7 @@ export function Auth3DShell({
               <div className="mb-3 flex items-center gap-3">
                 <div
                   className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                  style={{ background: 'linear-gradient(145deg, #FD8018, #E04E00)' }}
+                  style={{ background: 'linear-gradient(145deg, #FF6A1F, #F45100)' }}
                 >
                   CO
                 </div>

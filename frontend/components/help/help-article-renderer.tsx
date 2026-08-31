@@ -17,13 +17,13 @@ export function HelpArticleRenderer({ article }: { article: HelpArticle }) {
         <MagicCard
           className="overflow-hidden rounded-3xl"
           gradientSize={320}
-          gradientFrom="#E04E00"
-          gradientTo="#FD8018"
+          gradientFrom="#F45100"
+          gradientTo="#FF6A1F"
           gradientColor="rgba(224,78,0,0.07)"
           gradientOpacity={0.5}
         >
           <div className="relative overflow-hidden border-b border-border/60 bg-gradient-to-br from-primary/10 via-transparent to-transparent px-6 py-7 md:px-9 md:py-9">
-            <BorderBeam size={100} duration={10} colorFrom="#E04E00" colorTo="#FD8018" borderWidth={1} />
+            <BorderBeam size={100} duration={10} colorFrom="#F45100" colorTo="#FF6A1F" borderWidth={1} />
             {category ? (
               <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-primary">
                 <Sparkles className="size-3.5" />

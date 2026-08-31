@@ -88,8 +88,8 @@ export default function SkewCards({ cards, className }: Props) {
                   href={href}
                   className={cn(
                     'inline-flex items-center gap-1.5 self-start rounded-md px-3 py-2 text-sm font-bold transition-colors hover:shadow-md',
-                    'bg-[#E04E00] text-white hover:bg-[#FD8018]',
-                    'dark:bg-white dark:text-[#0B0F14] dark:hover:bg-[#FD8018] dark:hover:text-white'
+                    'bg-[#F45100] text-white hover:bg-[#FF6A1F]',
+                    'dark:bg-white dark:text-[#0F172A] dark:hover:bg-[#FF6A1F] dark:hover:text-white'
                   )}
                 >
                   {cta || 'Explore'}

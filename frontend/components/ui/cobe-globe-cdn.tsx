@@ -25,7 +25,7 @@ type Props = {
   arcs?: GlobeCdnArc[];
 };
 
-/** Brand orange — ControlOps `#E04E00` / `#FD8018`. */
+/** Brand orange — ControlOps `#F45100` / `#FF6A1F`. */
 const ORANGE: [number, number, number] = [224 / 255, 78 / 255, 0];
 const ORANGE_SOFT: [number, number, number] = [253 / 255, 128 / 255, 24 / 255];
 
@@ -241,10 +241,10 @@ export function GlobeCdn({
           }
         >
           <span
-            className="block size-0 border-x-[3.5px] border-b-[6px] border-x-transparent border-b-[#E04E00]"
+            className="block size-0 border-x-[3.5px] border-b-[6px] border-x-transparent border-b-[#F45100]"
             aria-hidden
           />
-          <span className="whitespace-nowrap font-mono text-[9px] font-medium lowercase tracking-tight text-[#E04E00]">
+          <span className="whitespace-nowrap font-mono text-[9px] font-medium lowercase tracking-tight text-[#F45100]">
             {m.label}
           </span>
         </div>
@@ -269,7 +269,7 @@ export function GlobeCdn({
           <span
             className={cn(
               'inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium tracking-tight shadow-sm',
-              dark ? 'bg-[#E04E00] text-white' : 'bg-zinc-900 text-white',
+              dark ? 'bg-[#F45100] text-white' : 'bg-zinc-900 text-white',
             )}
           >
             {a.badge}

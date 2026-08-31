@@ -9,7 +9,7 @@ import { BorderBeam } from '@/components/ui/border-beam';
 import { cn } from '@/lib/utils';
 
 const ACCENT = '#E8590C';
-const ACCENT_SOLID = '#E04E00';
+const ACCENT_SOLID = '#F45100';
 
 const aboutLinks = [
   { href: '/about', key: 'about' as const },
@@ -72,7 +72,7 @@ export function MarketingFooter() {
       className={cn(
         'relative overflow-hidden border-t border-border/60',
         'bg-[#F7F6F4] text-foreground',
-        'dark:border-transparent dark:bg-[#0B0F14] dark:text-white'
+        'dark:border-transparent dark:bg-[#0F172A] dark:text-white'
       )}
     >
       <div
@@ -195,7 +195,7 @@ export function MarketingFooter() {
           inView
           className="relative mt-14 overflow-hidden border-t border-border/70 pt-10 md:mt-16 md:pt-12 dark:border-white/10"
         >
-          <BorderBeam size={160} duration={12} colorFrom="#E04E00" colorTo="#FDBA74" borderWidth={1} />
+          <BorderBeam size={160} duration={12} colorFrom="#F45100" colorTo="#FDBA74" borderWidth={1} />
           <div
             aria-hidden
             className={cn(

@@ -131,7 +131,8 @@
   --chart-3: #F59E0B;
   --chart-4: #64748B;
   --chart-5: #EF4444;
-  --sidebar: #F1F5F9;
+  /* White, not the slate ground: the sidebar reads as a surface the page sits beside. */
+  --sidebar: #FFFFFF;
   --sidebar-foreground: #172033;
   --sidebar-primary: #F45100;
   --sidebar-primary-foreground: #FFFFFF;

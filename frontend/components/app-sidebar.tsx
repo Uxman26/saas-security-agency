@@ -65,11 +65,16 @@ const ICON_MAP: Record<string, LucideIcon> = {
 const SECTION_ORDER = [
   'sectionOverview',
   'sectionHr',
-  'sectionOperations',
+  'sectionScheduling',
+  'sectionField',
+  'sectionSafety',
   'sectionSales',
   'sectionFinance',
   'sectionReports',
   'sectionSettings',
+  // Kept last so a module still carrying the old catch-all section — or one added
+  // through the module registry, which defaults to it — never disappears from the nav.
+  'sectionOperations',
 ];
 
 function moduleIcon(name: string): LucideIcon {
@@ -90,10 +95,12 @@ const asideClass =
 
 function navLinkClass(isActive: boolean) {
   return cn(
-    'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors',
+    // border-s on every state, transparent when idle: colouring it only when active
+    // would shift the label 3px sideways as you navigate.
+    'flex items-center gap-2 rounded-e-lg border-s-[3px] border-transparent px-2 py-1.5 text-sm transition-colors',
     isActive
-      ? 'bg-[color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)] font-medium text-sidebar-primary shadow-sm ring-1 ring-[color-mix(in_oklab,var(--sidebar-primary)_35%,transparent)]'
-      : 'text-sidebar-foreground/70 hover:bg-[color-mix(in_oklab,var(--sidebar-primary)_12%,transparent)] hover:text-sidebar-primary'
+      ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
+      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
   );
 }
 
@@ -127,7 +134,7 @@ export function AppSidebar() {
         </div>
         <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
           <div>
-            <p className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-sidebar-foreground/70">
+            <p className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
               {ts('sectionAdmin')}
             </p>
             <div className="mt-1 space-y-0.5">
@@ -156,7 +163,7 @@ export function AppSidebar() {
       <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
         {grouped.map((section) => (
           <div key={section.titleKey}>
-            <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-sidebar-foreground/70">
+            <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
               {section.titleKey === 'sectionSettings' ? <Settings className="size-3" /> : null}
               {ts(section.titleKey)}
             </p>

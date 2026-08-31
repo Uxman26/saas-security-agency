@@ -125,10 +125,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={href}
                       href={href}
                       className={cn(
-                        'block rounded-lg px-3 py-2 text-sm transition-colors',
+                        // Matches the desktop sidebar: soft orange fill, orange label and
+                        // a solid rule down the leading edge.
+                        'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
                         isAdminNavActive(pathname, href)
-                          ? 'bg-[color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)] font-medium text-sidebar-primary'
-                          : 'text-sidebar-foreground/70 hover:bg-[color-mix(in_oklab,var(--sidebar-primary)_12%,transparent)] hover:text-sidebar-primary'
+                          ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
+                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
                       )}
                       onClick={() => setDrawer(false)}
                     >
@@ -141,10 +143,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                       key={m.key}
                       href={m.sidebar_path}
                       className={cn(
-                        'block rounded-lg px-3 py-2 text-sm transition-colors',
+                        // Matches the desktop sidebar: soft orange fill, orange label and
+                        // a solid rule down the leading edge.
+                        'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
                         mActive(pathname, m.sidebar_path)
-                          ? 'bg-[color-mix(in_oklab,var(--sidebar-primary)_18%,transparent)] font-medium text-sidebar-primary'
-                          : 'text-sidebar-foreground/70 hover:bg-[color-mix(in_oklab,var(--sidebar-primary)_12%,transparent)] hover:text-sidebar-primary'
+                          ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
+                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
                       )}
                       onClick={() => setDrawer(false)}
                     >

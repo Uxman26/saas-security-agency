@@ -39,10 +39,16 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     # --- Overview -------------------------------------------------------------------
     "dashboard": (VIEW,),
     # --- HR -------------------------------------------------------------------------
+    # The job title list is Staff's own pick-list, managed from a tab on that screen, so
+    # it hangs off this module rather than becoming a module (and sidebar entry) of its own.
     "guards": CRUD
     + (
         ActionDef("photo_upload", "Upload photo", "edit"),
         ActionDef("photo_view", "View photo", "view"),
+        ActionDef("job_titles_view", "View job titles", "view"),
+        ActionDef("job_titles_create", "Add job titles", "create"),
+        ActionDef("job_titles_edit", "Edit job titles", "edit"),
+        ActionDef("job_titles_delete", "Delete job titles", "delete"),
     ),
     "documents": (VIEW, CREATE, DELETE)
     + (

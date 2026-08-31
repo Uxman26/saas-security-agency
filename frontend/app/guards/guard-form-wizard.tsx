@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -22,8 +22,7 @@ import {
   LEAVE_MONTHS,
   WEEKDAYS,
   PAY_FREQUENCIES,
-  loadJobTitles,
-  persistJobTitle,
+  mergeJobTitles,
 } from '@/lib/guard-options';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { cn } from '@/lib/utils';
@@ -134,6 +133,8 @@ export function GuardFormWizard({
   photoFile,
   onPhotoFileChange,
   existingJobTitles,
+  jobTitles: companyJobTitles,
+  onCreateJobTitle,
   allowLogin = false,
 }: {
   form: ReturnType<typeof useForm<GuardFormData>>;
@@ -145,11 +146,15 @@ export function GuardFormWizard({
   photoFile?: File | null;
   onPhotoFileChange?: (file: File | null) => void;
   existingJobTitles?: string[];
+  /** The company's job title list, from /job-titles. */
+  jobTitles?: string[];
+  /** Saves a title typed into the picker so it joins the company list for everyone. */
+  onCreateJobTitle?: (name: string) => void | Promise<void>;
   /** Only the create flows provision logins; editing a guard must not silently make one. */
   allowLogin?: boolean;
 }) {
   const [step, setStep] = useState(0);
-  const [jobTitles, setJobTitles] = useState<string[]>(() => loadJobTitles(existingJobTitles));
+
   const { register, handleSubmit, setValue, watch, trigger, clearErrors, setError, getValues, formState: { errors } } = form;
   const createLogin = watch('create_login');
   const cid = watch('contractor_id');
@@ -159,13 +164,11 @@ export function GuardFormWizard({
   const last = watch('last_name');
   const jobTitle = watch('job_title') || '';
 
-  useEffect(() => {
-    setJobTitles(loadJobTitles(existingJobTitles));
-  }, [existingJobTitles]);
-
+  // Titles a staff record already carries are offered alongside the company list, so an
+  // older or since-deleted title still shows on the person who holds it.
   const jobTitleOptions = useMemo(
-    () => jobTitles.map((t) => ({ value: t, label: t })),
-    [jobTitles]
+    () => mergeJobTitles(companyJobTitles ?? [], existingJobTitles ?? []).map((t) => ({ value: t, label: t })),
+    [companyJobTitles, existingJobTitles]
   );
 
   const displayName = [first, last].filter(Boolean).join(' ') || 'New employee';
@@ -415,8 +418,7 @@ export function GuardFormWizard({
                   createLabel={(q) => `Add “${q}”`}
                   onChange={(v) => {
                     setValue('job_title', v, { shouldValidate: true });
-                    persistJobTitle(v);
-                    setJobTitles(loadJobTitles(existingJobTitles));
+                    void onCreateJobTitle?.(v);
                   }}
                 />
               </div>

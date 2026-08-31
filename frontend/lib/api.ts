@@ -1,4 +1,4 @@
-import type { User, Guard, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -151,6 +151,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ email: sanitizeInput(email) }),
       }),
+  },
+  /** The company's job title pick-list, managed on Staff → Job titles. */
+  jobTitles: {
+    list: (): Promise<JobTitle[]> => request<JobTitle[]>('/job-titles'),
+    create: (name: string): Promise<JobTitle> =>
+      request<JobTitle>('/job-titles', { method: 'POST', body: JSON.stringify({ name: sanitizeInput(name) }) }),
+    update: (id: number, name: string): Promise<JobTitle> =>
+      request<JobTitle>(`/job-titles/${id}`, { method: 'PUT', body: JSON.stringify({ name: sanitizeInput(name) }) }),
+    delete: (id: number): Promise<void> => request<void>(`/job-titles/${id}`, { method: 'DELETE' }),
   },
   guards: {
     list: (params?: { area?: string; postcode?: string; nearby?: string }): Promise<Guard[]> => {

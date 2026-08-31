@@ -23,14 +23,16 @@ import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { EmailDialog } from '@/components/email-dialog';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
 import { useAuth } from '@/contexts/auth-context';
-import { can } from '@/lib/permissions';
+import { can, canModule } from '@/lib/permissions';
+import { ModuleTabs } from '@/components/module-layout';
+import { JobTitlesPanel } from '@/app/guards/job-titles-panel';
 import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Pencil, Trash2, Users, Eye } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { api } from '@/lib/api';
-import { persistJobTitle } from '@/lib/guard-options';
+import type { JobTitle } from '@/lib/types';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
   const daysLeft = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
@@ -40,8 +42,15 @@ function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' 
   return 'ok';
 }
 
+const TABS = [
+  { id: 'staff', label: 'All staff' },
+  { id: 'job-titles', label: 'Job titles' },
+] as const;
+type StaffTab = (typeof TABS)[number]['id'];
+
 export default function GuardsPage() {
   const { user } = useAuth();
+  const [tab, setTab] = useState<StaffTab>('staff');
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingGuard, setEditingGuard] = useState<Guard | null>(null);
@@ -77,6 +86,46 @@ export default function GuardsPage() {
   const updateGuard = useUpdateGuard();
   const deleteGuard = useDeleteGuard();
 
+  // Job titles are a company record served by /job-titles. The Staff page owns the list so
+  // the tab and both staff forms always show the same one.
+  const canJobTitlesView = canModule(user, 'guards', 'job_titles_view');
+  const [jobTitles, setJobTitles] = useState<JobTitle[]>([]);
+  const [jobTitlesLoading, setJobTitlesLoading] = useState(false);
+
+  const loadJobTitles = useCallback(async () => {
+    if (!canJobTitlesView) return;
+    setJobTitlesLoading(true);
+    try {
+      setJobTitles(await api.jobTitles.list());
+    } catch {
+      /* the form falls back to the titles already on staff records */
+    } finally {
+      setJobTitlesLoading(false);
+    }
+  }, [canJobTitlesView]);
+
+  useEffect(() => {
+    void loadJobTitles();
+  }, [loadJobTitles]);
+
+  const jobTitleNames = useMemo(() => jobTitles.map((t) => t.name), [jobTitles]);
+
+  /** A title typed straight into the staff form joins the company list. */
+  const handleCreateJobTitle = useCallback(
+    async (name: string) => {
+      const t = name.trim();
+      if (!t || !canModule(user, 'guards', 'job_titles_create')) return;
+      if (jobTitles.some((x) => x.name.toLowerCase() === t.toLowerCase())) return;
+      try {
+        await api.jobTitles.create(t);
+        await loadJobTitles();
+      } catch {
+        /* a duplicate or a missing permission simply leaves the list as it is */
+      }
+    },
+    [user, jobTitles, loadJobTitles]
+  );
+
   useEffect(() => {
     if (guardsError) toast.error((guardsError as Error).message || 'Failed to load staff');
   }, [guardsError]);
@@ -90,7 +139,6 @@ export default function GuardsPage() {
 
   const handleCreate = async (data: GuardFormData) => {
     try {
-      if (data.job_title) persistJobTitle(data.job_title);
       const created = await createGuard.mutateAsync(formToGuardPayload(data));
       if (photoFile && created?.id) {
         try {
@@ -230,8 +278,12 @@ export default function GuardsPage() {
               <p className="text-muted-foreground mt-1">{guards.length} staff member{guards.length !== 1 ? 's' : ''} registered</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
-                {isRefetching ? 'Refreshing...' : 'Refresh'}
+              <Button
+                variant="outline"
+                onClick={() => (tab === 'staff' ? refetch() : loadJobTitles())}
+                disabled={tab === 'staff' ? isRefetching : jobTitlesLoading}
+              >
+                {(tab === 'staff' ? isRefetching : jobTitlesLoading) ? 'Refreshing...' : 'Refresh'}
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
@@ -255,6 +307,8 @@ export default function GuardsPage() {
                       photoFile={photoFile}
                       onPhotoFileChange={setPhotoFile}
                       existingJobTitles={guards.map((g) => g.job_title || '').filter(Boolean)}
+                      jobTitles={jobTitleNames}
+                      onCreateJobTitle={handleCreateJobTitle}
                       allowLogin
                     />
                   </div>
@@ -263,6 +317,23 @@ export default function GuardsPage() {
             </div>
           </div>
 
+          {canJobTitlesView && (
+            <div className="mb-4">
+              <ModuleTabs tabs={TABS} value={tab} onChange={setTab} />
+            </div>
+          )}
+
+          {tab === 'job-titles' && canJobTitlesView ? (
+            <JobTitlesPanel
+              titles={jobTitles}
+              loading={jobTitlesLoading}
+              onChanged={loadJobTitles}
+              canCreate={canModule(user, 'guards', 'job_titles_create')}
+              canEdit={canModule(user, 'guards', 'job_titles_edit')}
+              canDelete={canModule(user, 'guards', 'job_titles_delete')}
+            />
+          ) : (
+          <>
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Input
               placeholder="Search staff (name, phone, area, postcode…)"
@@ -406,6 +477,8 @@ export default function GuardsPage() {
               )}
             </CardContent>
           </Card>
+          </>
+          )}
         </div>
 
         {/* Edit Dialog */}
@@ -434,6 +507,8 @@ export default function GuardsPage() {
                 isPending={updateGuard.isPending}
                 submitLabel="Save changes"
                 existingJobTitles={guards.map((g) => g.job_title || '').filter(Boolean)}
+                jobTitles={jobTitleNames}
+                onCreateJobTitle={handleCreateJobTitle}
               />
             </div>
           </DialogContent>

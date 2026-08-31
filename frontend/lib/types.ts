@@ -601,6 +601,15 @@ export interface LoginResponse {
   token_type: string;
 }
 
+export interface JobTitle {
+  id: number;
+  company_id: number;
+  name: string;
+  /** Staff currently carrying this title. */
+  staff_count: number;
+  created_at?: string;
+}
+
 export interface Client {
   id: number;
   company_id: number;

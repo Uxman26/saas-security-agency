@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
-from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules
+from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.middleware.client_source import ClientSourceMiddleware
 from app.database import engine, Base
@@ -65,6 +65,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(guards.router)
+app.include_router(job_titles.router)
 app.include_router(sites.router)
 app.include_router(assignments.router)
 app.include_router(rota_plans.router)

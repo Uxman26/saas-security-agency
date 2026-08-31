@@ -1,3 +1,8 @@
+/**
+ * Job titles are a company record now, served by /job-titles and managed on
+ * Staff → Job titles. This list only matches what the API seeds a new company with, and
+ * is the fallback the staff form shows if that request fails.
+ */
 export const DEFAULT_JOB_TITLES = [
   'Guard',
   'Door Supervisor',
@@ -7,38 +12,19 @@ export const DEFAULT_JOB_TITLES = [
   'Porter',
 ] as const;
 
-const JOB_TITLE_STORAGE_KEY = 'controlops.customJobTitles';
-
-export function loadJobTitles(existingFromStaff: string[] = []): string[] {
-  let custom: string[] = [];
-  if (typeof window !== 'undefined') {
-    try {
-      const raw = localStorage.getItem(JOB_TITLE_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) custom = parsed.map(String).filter(Boolean);
-      }
-    } catch {
-      /* ignore */
-    }
+/** Merges the company's titles with anything already on a staff record, sorted for display. */
+export function mergeJobTitles(fromApi: string[], existingFromStaff: string[] = []): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of [...fromApi, ...existingFromStaff]) {
+    const name = (t || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
   }
-  const set = new Set<string>([...DEFAULT_JOB_TITLES, ...custom, ...existingFromStaff.filter(Boolean)]);
-  return [...set].sort((a, b) => a.localeCompare(b));
-}
-
-export function persistJobTitle(title: string): void {
-  const t = title.trim();
-  if (!t || typeof window === 'undefined') return;
-  if ((DEFAULT_JOB_TITLES as readonly string[]).includes(t)) return;
-  try {
-    const current = loadJobTitles();
-    if (current.includes(t)) return;
-    const custom = current.filter((x) => !(DEFAULT_JOB_TITLES as readonly string[]).includes(x));
-    custom.push(t);
-    localStorage.setItem(JOB_TITLE_STORAGE_KEY, JSON.stringify(custom));
-  } catch {
-    /* ignore */
-  }
+  return out.sort((a, b) => a.localeCompare(b));
 }
 
 export const TITLES = ['Mr', 'Mrs', 'Ms', 'Miss', 'Mx', 'Dr'] as const;

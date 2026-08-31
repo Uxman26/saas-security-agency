@@ -186,6 +186,7 @@ class Company(Base):
     payments = relationship("Payment", back_populates="company", cascade="all, delete-orphan")
     special_days = relationship("SpecialDay", back_populates="company", cascade="all, delete-orphan")
     directory_contractors = relationship("Contractor", back_populates="company", cascade="all, delete-orphan")
+    job_titles = relationship("JobTitle", back_populates="company", cascade="all, delete-orphan")
     rota_plans = relationship("RotaPlan", back_populates="company", cascade="all, delete-orphan")
     subscription_receipts = relationship("SubscriptionReceipt", back_populates="company", cascade="all, delete-orphan")
     subscription_invoices = relationship("SubscriptionInvoice", back_populates="company", cascade="all, delete-orphan")
@@ -396,6 +397,23 @@ class UserSession(Base):
     impersonation_reason = Column(Text, nullable=True)
     user = relationship("User", foreign_keys=[user_id])
     impersonator = relationship("User", foreign_keys=[impersonator_user_id])
+
+
+class JobTitle(Base):
+    """A company's own list of staff job titles, managed from Staff → Job titles.
+
+    Guard.job_title stays a plain string: this table is the pick-list the forms offer,
+    not a foreign key, so an old title on a staff record never blocks editing the list.
+    """
+
+    __tablename__ = "job_titles"
+    __table_args__ = (UniqueConstraint("company_id", "name", name="uq_job_title_company_name"),)
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="job_titles")
 
 
 class Contractor(Base):

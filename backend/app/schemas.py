@@ -2773,3 +2773,22 @@ class LoneWorkerEventResponse(BaseModel):
     event_date: str = ""
     event_time: str = ""
     created_at: str = ""
+
+
+class JobTitleCreate(StrictModel):
+    name: RequiredShortTextStr
+
+
+class JobTitleUpdate(StrictModel):
+    name: RequiredShortTextStr
+
+
+class JobTitleResponse(BaseModel):
+    id: int
+    company_id: int
+    name: str
+    #: Staff currently carrying this title, so the screen can warn before a rename or delete.
+    staff_count: int = 0
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)

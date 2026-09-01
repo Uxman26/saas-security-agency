@@ -17,7 +17,14 @@ def _number(value, default: float = 0.0) -> float:
         return default
 
 
-def _hours_from_shift(shift: dict, include_breaks: bool) -> float:
+def _hours_from_shift(shift: dict) -> float:
+    """Net paid hours: the shift's span less its unpaid break.
+
+    Breaks always subtract. The planner used to carry an "inclBreaks" flag that could
+    stop the deduction, which let a rota total more hours than payroll would ever pay;
+    plans saved with it set are read here as if it were off.
+    """
+
     def mins(raw: str) -> int:
         try:
             hour, minute = str(raw or "00:00").split(":")[:2]
@@ -28,8 +35,7 @@ def _hours_from_shift(shift: dict, include_breaks: bool) -> float:
     duration = mins(shift.get("end")) - mins(shift.get("start"))
     if duration < 0:
         duration += 24 * 60
-    if not include_breaks:
-        duration -= int(shift.get("breakH") or 0) * 60 + int(shift.get("breakM") or 0)
+    duration -= int(shift.get("breakH") or 0) * 60 + int(shift.get("breakM") or 0)
     return max(0.0, duration / 60)
 
 
@@ -39,11 +45,10 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
     except (json.JSONDecodeError, TypeError):
         return []
 
-    # Always derive from live shifts + attendance status so hours respect inclBreaks
-    # and are not frozen by stale attendance.hours / payrollLines snapshots.
+    # Always derive from live shifts + attendance status rather than the frozen
+    # attendance.hours / payrollLines snapshots.
     lines: list[dict] = []
     attendance = payload.get("attendance") or {}
-    include_breaks = bool(payload.get("inclBreaks", False))
     for guard_id, by_date in (payload.get("shifts") or {}).items():
         for day, shifts in (by_date or {}).items():
             for index, shift in enumerate(shifts or []):
@@ -55,7 +60,7 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
                     status = "on_time"
                 if status not in {"on_time", "late"}:
                     continue
-                hours = _hours_from_shift(shift, include_breaks)
+                hours = _hours_from_shift(shift)
                 if hours <= 0:
                     continue
                 rate = _number(shift.get("shiftRate"))

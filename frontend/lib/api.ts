@@ -932,6 +932,27 @@ export const api = {
       return request<Payroll[]>(`/payroll?${q.toString()}`);
     },
     get: (id: number): Promise<Payroll> => request<Payroll>(`/payroll/${id}`),
+    /** The records table as a PDF, filtered exactly as the screen filtered it. */
+    exportPdf: (params?: {
+      guard_id?: number;
+      period_start?: string;
+      period_end?: string;
+      search?: string;
+    }): Promise<Blob> => {
+      const q = new URLSearchParams();
+      if (params?.guard_id) q.append('guard_id', params.guard_id.toString());
+      if (params?.period_start) q.append('period_start', params.period_start);
+      if (params?.period_end) q.append('period_end', params.period_end);
+      if (params?.search) q.append('search', params.search);
+      const qs = q.toString();
+      return requestBlob(`/payroll/export/pdf${qs ? `?${qs}` : ''}`);
+    },
+    /** Employee hours & pay as a PDF; with guard_id it is that breakdown alone. */
+    previewPdf: (period_start: string, period_end: string, guard_id?: number): Promise<Blob> => {
+      const q = new URLSearchParams({ period_start, period_end });
+      if (guard_id) q.append('guard_id', guard_id.toString());
+      return requestBlob(`/payroll/preview/pdf?${q.toString()}`);
+    },
     /** Omit guard_id for every employee. */
     preview: (period_start: string, period_end: string, guard_id?: number): Promise<PayrollPreview> => {
       const q = new URLSearchParams({ period_start, period_end });

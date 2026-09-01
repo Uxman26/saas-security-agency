@@ -157,7 +157,10 @@ function normalizePayload(p: PlannerPayload): PlannerPayload {
     shifts: normalizeShifts(p.shifts),
     attendance: normalizeAttendance(p.attendance),
     budget: p.budget ?? 0,
-    inclBreaks: p.inclBreaks ?? false,
+    // Breaks are unpaid, always: a break takes 30 minutes off a shift, it never adds
+    // them. Plans saved while the old "Incl. breaks?" toggle existed are read as false so
+    // their hours stop disagreeing with payroll.
+    inclBreaks: false,
   };
 }
 

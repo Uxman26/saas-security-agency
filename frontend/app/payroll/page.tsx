@@ -17,7 +17,7 @@ import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, Search, Calculator, AlertTriangle } from 'lucide-react';
+import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Search, Calculator, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -51,6 +51,16 @@ function describeQuery(q: PayrollQuery) {
   else if (q.from) parts.push(`from ${q.from}`);
   else if (q.to) parts.push(`up to ${q.to}`);
   return parts.join(' · ');
+}
+
+/** Hands a fetched file to the browser. Blob, not a bare link: the API needs the auth header. */
+function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function payableAmount(p: Payroll) {
@@ -88,13 +98,20 @@ export default function PayrollPage() {
   const [pvEnd, setPvEnd] = useState('');
   const [pvLoading, setPvLoading] = useState(false);
   const [preview, setPreview] = useState<PayrollPreview | null>(null);
+  // The all-employees result is kept while a single person's breakdown is open, so Back
+  // puts the search straight back on screen instead of making the user calculate again.
+  const [allPreview, setAllPreview] = useState<PayrollPreview | null>(null);
+  const inBreakdown = preview != null && preview.guard_id !== null;
 
   const runPreview = async (guardOverride?: string) => {
     const who = guardOverride ?? pvGuardId;
     if (!who || !pvStart || !pvEnd) return;
     setPvLoading(true);
     try {
-      setPreview(await api.payroll.preview(pvStart, pvEnd, who === 'all' ? undefined : parseInt(who, 10)));
+      const result = await api.payroll.preview(pvStart, pvEnd, who === 'all' ? undefined : parseInt(who, 10));
+      setPreview(result);
+      // Only a fresh all-employees calculation replaces the result Back returns to.
+      if (result.guard_id === null) setAllPreview(result);
     } catch (e) {
       setPreview(null);
       toast.error(e instanceof Error ? e.message : 'Could not calculate pay for that period');
@@ -103,8 +120,37 @@ export default function PayrollPage() {
     }
   };
 
+  const openBreakdown = (guardId: number) => {
+    setPvGuardId(String(guardId));
+    // A history entry so the browser's own Back button comes back here rather than
+    // leaving the page and losing the search.
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ payrollBreakdown: true }, '');
+    }
+    void runPreview(String(guardId));
+  };
+
+  const backToAllEmployees = useCallback(() => {
+    if (!allPreview) return;
+    setPreview(allPreview);
+    setPvGuardId('all');
+  }, [allPreview]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPop = () => {
+      // Browser Back while a breakdown is open returns to the all-employees search.
+      setPreview((cur) => (cur && cur.guard_id !== null && allPreview ? allPreview : cur));
+      setPvGuardId((cur) => (cur !== 'all' && allPreview ? 'all' : cur));
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [allPreview]);
+
+  /** Exports whatever the panel is showing: the breakdown when one is open, else the lot. */
   const exportPreviewCsv = () => {
     if (!preview) return;
+    const single = preview.guard_id !== null;
     const head = ['Employee', 'Date', 'Site', 'Start', 'End', 'Break mins', 'Hours', 'Attendance', 'Rate', 'Paid'];
     const body = preview.shifts.map((s) => [
       s.guard_name, s.date, s.site_name, s.shift_start ?? '', s.shift_end ?? '', s.break_minutes,
@@ -117,9 +163,29 @@ export default function PayrollPage() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `pay-${preview.guard_name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${preview.period_start}-to-${preview.period_end}.csv`;
+    a.download = `pay-${(single ? preview.guard_name : 'all-employees').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${preview.period_start}-to-${preview.period_end}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success(single ? 'Breakdown exported' : 'CSV exported');
+  };
+
+  const exportPreviewPdf = async () => {
+    if (!preview) return;
+    const single = preview.guard_id !== null;
+    try {
+      const blob = await api.payroll.previewPdf(
+        preview.period_start,
+        preview.period_end,
+        single ? preview.guard_id ?? undefined : undefined
+      );
+      saveBlob(
+        blob,
+        `pay-${(single ? preview.guard_name : 'all-employees').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${preview.period_start}-to-${preview.period_end}.pdf`
+      );
+      toast.success(single ? 'Breakdown PDF exported' : 'PDF exported');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'PDF export failed');
+    }
   };
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
@@ -416,6 +482,29 @@ export default function PayrollPage() {
     toast.success(`Exported ${payrolls.length} record${payrolls.length === 1 ? '' : 's'}`);
   };
 
+  const exportRecordsPdf = async () => {
+    if (!payrolls.length) {
+      toast.error('Nothing to export — search for records first');
+      return;
+    }
+    try {
+      // Rebuilt server-side from the same filters, so the file matches the screen.
+      const blob = await api.payroll.exportPdf({
+        ...(appliedQuery.search ? { search: appliedQuery.search } : {}),
+        ...(appliedQuery.from ? { period_start: appliedQuery.from } : {}),
+        ...(appliedQuery.to ? { period_end: appliedQuery.to } : {}),
+      });
+      saveBlob(
+        blob,
+        `payroll-export${appliedQuery.from ? `-${appliedQuery.from}` : ''}${appliedQuery.to ? `-to-${appliedQuery.to}` : ''}.pdf`
+      );
+      setExportOpen(false);
+      toast.success(`Exported ${payrolls.length} record${payrolls.length === 1 ? '' : 's'} as PDF`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'PDF export failed');
+    }
+  };
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -429,18 +518,31 @@ export default function PayrollPage() {
             }
             actions={
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={reloadCurrent} disabled={loading || !hasSearched}>
-                  {loading ? 'Loading...' : 'Refresh'}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Refresh re-runs everything on screen — the records search and, if one
+                    // is open, the hours & pay result at its current scope.
+                    reloadCurrent();
+                    if (preview) void runPreview(preview.guard_id === null ? 'all' : String(preview.guard_id));
+                  }}
+                  disabled={(loading || !hasSearched) && !preview}
+                >
+                  {loading || pvLoading ? 'Loading...' : 'Refresh'}
                 </Button>
                 <Button variant="outline" onClick={exportCsv} disabled={!payrolls.length}>
                   <Download className="size-4 mr-2" />
-                  Export
+                  Export CSV
+                </Button>
+                <Button variant="outline" onClick={() => void exportRecordsPdf()} disabled={!payrolls.length}>
+                  <FileText className="size-4 mr-2" />
+                  Export PDF
                 </Button>
                 <Dialog open={exportOpen} onOpenChange={setExportOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" disabled={!payrolls.length}>
                       <Download className="size-4 mr-2" />
-                      Export CSV
+                      Export…
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-md">
@@ -467,9 +569,16 @@ export default function PayrollPage() {
                           <dd className="text-right font-medium">{formatMoney(totalPayable)}</dd>
                         </div>
                       </dl>
-                      <Button className="w-full" onClick={exportCsv} disabled={!payrolls.length}>
-                        Download CSV ({payrolls.length} records)
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button onClick={exportCsv} disabled={!payrolls.length}>
+                          <Download className="size-4 mr-2" />
+                          CSV ({payrolls.length})
+                        </Button>
+                        <Button variant="outline" onClick={() => void exportRecordsPdf()} disabled={!payrolls.length}>
+                          <FileText className="size-4 mr-2" />
+                          PDF ({payrolls.length})
+                        </Button>
+                      </div>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -668,13 +777,33 @@ export default function PayrollPage() {
                   <Search className="size-4 mr-1.5" />
                   {pvLoading ? 'Calculating\u2026' : 'Calculate'}
                 </Button>
+                {inBreakdown && allPreview && (
+                  <Button type="button" variant="outline" onClick={backToAllEmployees}>
+                    <ArrowLeft className="size-4 mr-1.5" />
+                    Back to search
+                  </Button>
+                )}
                 {preview && (
                   <>
                     <Button type="button" variant="outline" onClick={exportPreviewCsv}>
                       <Download className="size-4 mr-1.5" />
-                      Export CSV
+                      {inBreakdown ? 'Export breakdown CSV' : 'Export CSV'}
                     </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setPreview(null)}>Clear</Button>
+                    <Button type="button" variant="outline" onClick={() => void exportPreviewPdf()}>
+                      <FileText className="size-4 mr-1.5" />
+                      {inBreakdown ? 'Export breakdown PDF' : 'Export PDF'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPreview(null);
+                        setAllPreview(null);
+                      }}
+                    >
+                      Clear
+                    </Button>
                   </>
                 )}
               </div>
@@ -757,10 +886,7 @@ export default function PayrollPage() {
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    onClick={() => {
-                                      setPvGuardId(e.guard_id.toString());
-                                      void runPreview(e.guard_id.toString());
-                                    }}
+                                    onClick={() => openBreakdown(e.guard_id)}
                                     title={`See every shift for ${e.guard_name}`}
                                   >
                                     Breakdown

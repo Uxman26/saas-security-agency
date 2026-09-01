@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
@@ -7,7 +7,8 @@ from app.database import get_db
 from app.models import User
 from app.schemas import PayrollPreviewResponse, PayrollCreate, PayrollUpdate, PayrollResponse
 from app.rbac import require_internal_module
-from app.services import payroll_service
+from app.services import payroll_pdf, payroll_service
+from app.services.company_service import get_company_by_user_id
 
 router = APIRouter(prefix="/payroll", tags=["payroll"])
 
@@ -56,6 +57,66 @@ def list_payrolls(
     search box is answered here rather than by filtering a full download in the browser.
     """
     return payroll_service.get_payrolls(db, current_user.id, guard_id, period_start, period_end, search)
+
+@router.get("/export/pdf")
+def export_payrolls_pdf(
+    guard_id: Optional[int] = None,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("payroll", "view")),
+):
+    """Payroll Records as a PDF, filtered exactly as the screen filtered them.
+
+    Declared above /{payroll_id} so the dynamic route does not swallow "export".
+    """
+    company = get_company_by_user_id(db, current_user.id)
+    pdf = payroll_pdf.render_payroll_records_pdf(
+        db,
+        current_user.id,
+        company,
+        guard_id=guard_id,
+        period_start=period_start,
+        period_end=period_end,
+        search=search,
+    )
+    stamp = f"-{period_start}" if period_start else ""
+    stamp += f"-to-{period_end}" if period_end else ""
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="payroll{stamp}.pdf"'},
+    )
+
+
+@router.get("/preview/pdf")
+def preview_pay_pdf(
+    period_start: date,
+    period_end: date,
+    guard_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("payroll", "view")),
+):
+    """Employee hours & pay as a PDF. With guard_id it is that person's breakdown only."""
+    company = get_company_by_user_id(db, current_user.id)
+    pdf = payroll_pdf.render_payroll_preview_pdf(
+        db,
+        current_user.id,
+        company,
+        period_start=period_start,
+        period_end=period_end,
+        guard_id=guard_id,
+    )
+    who = "breakdown" if guard_id is not None else "all-employees"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="pay-{who}-{period_start}-to-{period_end}.pdf"'
+        },
+    )
+
 
 @router.get("/preview", response_model=PayrollPreviewResponse)
 def preview_pay(

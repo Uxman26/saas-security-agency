@@ -137,7 +137,7 @@ export function RatePreviewDialog({
             {employee.hourlyRate != null && employee.hourlyRate > 0
               ? ` · Staff rate ${formatMoney(employee.hourlyRate)}/hr`
               : ''}
-            {state.inclBreaks ? ' · Hours include breaks' : ' · Hours exclude breaks'}
+            {' · Hours exclude breaks'}
           </p>
           {dayRows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">No shifts scheduled for this employee.</p>

@@ -370,7 +370,6 @@ export function RotaCalendarClient() {
     setDayCount,
     setAttendance,
     clearAttendance,
-    setInclBreaks,
     publishRota,
     unpublishGuard,
     unpublishRota,
@@ -1093,9 +1092,53 @@ export function RotaCalendarClient() {
     setDescCtx({ empId, dk, idx });
   };
 
+  const rateOf = (sh: { shiftRate?: number | null } | null | undefined) =>
+    sh?.shiftRate == null ? null : Number(sh.shiftRate);
+
+  /**
+   * A published shift has already been sent to the staff member and copied into the
+   * assignment the payroll preview reads, both carrying the old rate. Editing the rate
+   * here would leave those disagreeing with the grid, so the affected people are
+   * unpublished and the rota has to be published again at the new rate.
+   */
+  const unpublishForRateChange = async (empIds: string[]) => {
+    const affected = [...new Set(empIds)].filter((id) => isEmployeePublished(id));
+    if (!affected.length) return;
+    if (!canUnpublishGuard) {
+      toast.warning(
+        'Shift rate changed, but this rota is published and you cannot unpublish. Ask an admin to unpublish and publish it again so the new rate applies.'
+      );
+      return;
+    }
+    let done = 0;
+    for (const id of affected) {
+      const guardId = parseInt(id, 10);
+      if (!Number.isFinite(guardId)) continue;
+      try {
+        const result = await unpublishGuard(guardId);
+        if (result.published_guard_ids) setPublishedGuardIds(result.published_guard_ids);
+        done += 1;
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Rate changed but unpublish failed');
+        return;
+      }
+    }
+    if (done) {
+      toast.warning(
+        done === 1
+          ? 'Shift rate changed — unpublished for that employee. Publish again to send the new rate.'
+          : `Shift rate changed — unpublished for ${done} employees. Publish again to send the new rate.`
+      );
+    }
+  };
+
   const onApplyShift = (assignees: string[], dk: string, sh: ShiftRec) => {
+    const prev = shiftEdit ? state.shifts[shiftEdit.empId]?.[shiftEdit.dk]?.[shiftEdit.idx] : null;
+    const rateChanged = !!prev && rateOf(prev) !== rateOf(sh);
+    const touched = [...assignees, ...(shiftEdit ? [shiftEdit.empId] : [])].filter(Boolean);
     applyShiftChange(shiftEdit, assignees, dk, sh);
     setShiftEdit(null);
+    if (rateChanged) void unpublishForRateChange(touched);
   };
 
   const startCopy = (empId: string, dk: string, idx: number) => {
@@ -2389,7 +2432,7 @@ export function RotaCalendarClient() {
           <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
             Total {formatHoursDecimal(totalRotaHours)}
             <span className="text-muted-foreground font-normal ml-1">
-              ({state.inclBreaks ? 'incl. breaks' : 'excl. breaks'})
+              (excl. breaks)
             </span>
           </span>
           {showPayable ? (
@@ -2514,15 +2557,10 @@ export function RotaCalendarClient() {
                   style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   <div className="font-semibold leading-tight">Total hours</div>
-                  <label className="mt-1 flex items-start justify-center gap-1 font-normal text-[9px] leading-tight text-muted-foreground cursor-pointer">
-                    <input
-                      type="checkbox"
-                      className="size-3 shrink-0 rounded border-input"
-                      checked={state.inclBreaks}
-                      onChange={(e) => setInclBreaks(e.target.checked)}
-                    />
-                    Incl. breaks?
-                  </label>
+                  {/* No toggle: an unpaid break comes off the shift, it never adds to it. */}
+                  <div className="mt-1 font-normal text-[9px] leading-tight text-muted-foreground">
+                    Breaks deducted
+                  </div>
                 </th>
                 {showPayable ? (
                   <th
@@ -2650,7 +2688,7 @@ export function RotaCalendarClient() {
                           key={dk}
                           className={cn(
                             'relative z-0 align-top p-1 border-l border-b border-border overflow-hidden',
-                            mark === 'removing' ? 'bg-red-50 dark:bg-red-950/40 opacity-60' : 'bg-muted'
+                            mark === 'removing' ? 'bg-red-50 dark:bg-red-950/40 opacity-60' : 'bg-card'
                           )}
                         />
                       );
@@ -2662,7 +2700,9 @@ export function RotaCalendarClient() {
                           'relative z-0 align-top p-1 border-l border-b border-border overflow-hidden transition-colors',
                           mark === 'adding' && 'bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-inset ring-emerald-400/50',
                           mark === 'removing' && 'bg-red-50 dark:bg-red-950/40 opacity-55',
-                          !mark && 'bg-muted',
+                          // The grid's centre is white: shift cards, their colour bars and
+                          // the sticky bands around them all need to read against it.
+                          !mark && 'bg-card',
                           !mark &&
                             list.some((_, idx) => (shiftConflicts.get(shiftConflictKey(emp.id, dk, idx)) || []).length > 0) &&
                             'bg-amber-50 dark:bg-amber-950',

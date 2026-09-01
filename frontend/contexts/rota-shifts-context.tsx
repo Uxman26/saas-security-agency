@@ -741,6 +741,14 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
    * Empty `empIds` means the source employee; empty `dates` means the source day,
    * so this also covers the old dates-only / employee-only cases.
    */
+  /**
+   * A copy is a new shift, not the same one twice: it must not inherit the source's
+   * rate. Rates are set per shift (or resolved from the site/staff rate) and silently
+   * carrying one across to another person or day pays the wrong amount. The recipient
+   * shift starts with no rate so it resolves normally, or asks to be set.
+   */
+  const copyOfShift = useCallback((src: ShiftRec): ShiftRec => ({ ...src, shiftRate: null }), []);
+
   const copyShiftToTargets = useCallback(
     (fromId: string, dk: string, idx: number, empIds: string[], dates: string[]) => {
       setState((s) => {
@@ -756,14 +764,14 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           for (const day of targetDays) {
             // Copying onto the exact source slot would duplicate it in place.
             if (empId === fromId && day === dk) continue;
-            byDay[day] = [...(byDay[day] || []), { ...src }];
+            byDay[day] = [...(byDay[day] || []), copyOfShift(src)];
           }
           shifts[empId] = byDay;
         }
         return { ...s, shifts };
       });
     },
-    []
+    [copyOfShift]
   );
 
   const copyShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
@@ -772,10 +780,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const src = s.shifts[fromId]?.[dk]?.[idx];
       if (!src) return s;
       const toEmp = { ...(s.shifts[toId] || {}) } as Record<string, ShiftRec[]>;
-      toEmp[dk] = [...(toEmp[dk] || []), { ...src }];
+      toEmp[dk] = [...(toEmp[dk] || []), copyOfShift(src)];
       return { ...s, shifts: { ...s.shifts, [toId]: toEmp } };
     });
-  }, []);
+  }, [copyOfShift]);
 
   const copyAllShiftsBetweenEmployees = useCallback((fromId: string, toId: string) => {
     if (fromId === toId) return;
@@ -785,11 +793,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const toEmp = { ...(s.shifts[toId] || {}) } as Record<string, ShiftRec[]>;
       for (const dk of Object.keys(from)) {
         const blocks = from[dk] || [];
-        toEmp[dk] = [...(toEmp[dk] || []), ...blocks.map((b) => ({ ...b }))];
+        toEmp[dk] = [...(toEmp[dk] || []), ...blocks.map(copyOfShift)];
       }
       return { ...s, shifts: { ...s.shifts, [toId]: toEmp } };
     });
-  }, []);
+  }, [copyOfShift]);
 
   const moveShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
     if (fromId === toId) return;
@@ -936,8 +944,13 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, selectedColor }));
   }, []);
 
-  const setInclBreaks = useCallback((inclBreaks: boolean) => {
-    setState((s) => ({ ...s, inclBreaks }));
+  /**
+   * Kept as a no-op: hours are always net of breaks. An unpaid break subtracts from a
+   * shift and can never add to it, so there is nothing left to toggle — the field
+   * survives only so plans saved by older builds still load.
+   */
+  const setInclBreaks = useCallback((_inclBreaks: boolean) => {
+    setState((s) => (s.inclBreaks ? { ...s, inclBreaks: false } : s));
   }, []);
 
   const publishRota = useCallback(

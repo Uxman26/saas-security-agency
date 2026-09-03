@@ -37,7 +37,6 @@ export const ALL_SIDEBAR_PATHS = [
   '/client-portal/request-staff',
   '/requests',
   '/settings/billing',
-  '/sub-contractors',
 ] as const;
 
 export const SIDEBAR_LABELS: Record<string, string> = {
@@ -73,7 +72,6 @@ export const SIDEBAR_LABELS: Record<string, string> = {
   '/requests': 'Staff requests',
   '/my-portal': 'My portal',
   '/settings/billing': 'Billing',
-  '/sub-contractors': 'Sub-contractors',
 };
 
 export function sidebarPathAllowed(modules: string[] | null | undefined, href: string): boolean {

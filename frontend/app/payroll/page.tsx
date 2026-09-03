@@ -53,6 +53,42 @@ function describeQuery(q: PayrollQuery) {
   return parts.join(' · ');
 }
 
+/**
+ * The payroll search survives leaving the page and coming back — a search is work, and
+ * losing it on every navigation made the screen unusable for anyone cross-checking a
+ * period against another tab. sessionStorage, not localStorage: it belongs to this
+ * browser tab's session, not forever. Refresh is what clears it.
+ */
+const SEARCH_STORE_KEY = 'controlops.payroll.search';
+
+type StoredSearch = { query: PayrollQuery; drafts: PayrollQuery };
+
+function loadStoredSearch(): StoredSearch | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(SEARCH_STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredSearch>;
+    if (!parsed?.query) return null;
+    return {
+      query: { ...EMPTY_QUERY, ...parsed.query },
+      drafts: { ...EMPTY_QUERY, ...(parsed.drafts || parsed.query) },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeSearch(value: StoredSearch | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (value) sessionStorage.setItem(SEARCH_STORE_KEY, JSON.stringify(value));
+    else sessionStorage.removeItem(SEARCH_STORE_KEY);
+  } catch {
+    /* private mode or blocked storage: the search simply does not persist */
+  }
+}
+
 /** Hands a fetched file to the browser. Blob, not a bare link: the API needs the auth header. */
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -189,9 +225,9 @@ export default function PayrollPage() {
   };
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
-  const [searchDraft, setSearchDraft] = useState('');
-  const [dateFromDraft, setDateFromDraft] = useState('');
-  const [dateToDraft, setDateToDraft] = useState('');
+  const [searchDraft, setSearchDraft] = useState(() => loadStoredSearch()?.drafts.search ?? '');
+  const [dateFromDraft, setDateFromDraft] = useState(() => loadStoredSearch()?.drafts.from ?? '');
+  const [dateToDraft, setDateToDraft] = useState(() => loadStoredSearch()?.drafts.to ?? '');
   const [exportOpen, setExportOpen] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
@@ -222,6 +258,7 @@ export default function PayrollPage() {
       );
       setAppliedQuery(q);
       setHasSearched(true);
+      storeSearch({ query: q, drafts: q });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not load payroll records');
     } finally {
@@ -234,6 +271,18 @@ export default function PayrollPage() {
     if (!hasSearched) return;
     void fetchPayrolls(appliedQuery);
   }, [hasSearched, appliedQuery, fetchPayrolls]);
+
+  // A search left behind earlier in this session is re-run on arrival, so coming back to
+  // Payroll shows the same rows rather than an empty screen.
+  useEffect(() => {
+    const stored = loadStoredSearch();
+    if (stored && (stored.query.search || stored.query.from || stored.query.to)) {
+      void fetchPayrolls(stored.query);
+    }
+    // Mount only: fetchPayrolls is stable and re-running this on every change would
+    // fight whatever the user has since typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     api.guards.list().then(setGuards).catch(() => {});
@@ -383,15 +432,19 @@ export default function PayrollPage() {
     void fetchPayrolls({ search: searchDraft.trim(), from: dateFromDraft, to: dateToDraft });
   };
 
-  const clearSearch = () => {
+  /** What Refresh does: forget the search entirely, here and in session storage. */
+  const clearSearch = useCallback(() => {
     setSearchDraft('');
     setDateFromDraft('');
     setDateToDraft('');
     setAppliedQuery(EMPTY_QUERY);
     setPayrolls([]);
     setHasSearched(false);
+    setPreview(null);
+    setAllPreview(null);
     setPage(1);
-  };
+    storeSearch(null);
+  }, []);
 
   const getSortValue = useCallback(
     (p: Payroll, key: string) => {
@@ -520,13 +573,9 @@ export default function PayrollPage() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    // Refresh re-runs everything on screen — the records search and, if one
-                    // is open, the hours & pay result at its current scope.
-                    reloadCurrent();
-                    if (preview) void runPreview(preview.guard_id === null ? 'all' : String(preview.guard_id));
-                  }}
-                  disabled={(loading || !hasSearched) && !preview}
+                  onClick={clearSearch}
+                  disabled={loading || pvLoading}
+                  title="Clear the payroll search and start again"
                 >
                   {loading || pvLoading ? 'Loading...' : 'Refresh'}
                 </Button>
@@ -773,16 +822,21 @@ export default function PayrollPage() {
                   <Label>To</Label>
                   <Input type="date" value={pvEnd} onChange={(e) => setPvEnd(e.target.value)} className="w-auto" />
                 </div>
-                <Button type="button" onClick={() => void runPreview()} disabled={pvLoading || !pvGuardId || !pvStart || !pvEnd}>
-                  <Search className="size-4 mr-1.5" />
-                  {pvLoading ? 'Calculating\u2026' : 'Calculate'}
-                </Button>
                 {inBreakdown && allPreview && (
-                  <Button type="button" variant="outline" onClick={backToAllEmployees}>
+                  <Button type="button" onClick={backToAllEmployees}>
                     <ArrowLeft className="size-4 mr-1.5" />
                     Back to search
                   </Button>
                 )}
+                <Button
+                  type="button"
+                  variant={inBreakdown ? 'outline' : 'default'}
+                  onClick={() => void runPreview()}
+                  disabled={pvLoading || !pvGuardId || !pvStart || !pvEnd}
+                >
+                  <Search className="size-4 mr-1.5" />
+                  {pvLoading ? 'Calculating\u2026' : 'Calculate'}
+                </Button>
                 {preview && (
                   <>
                     <Button type="button" variant="outline" onClick={exportPreviewCsv}>

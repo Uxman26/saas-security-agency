@@ -36,7 +36,11 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     # People — who works for the company and the paperwork that follows them.
     ("guards", "Staff", "Users", "/guards", 10, "sectionHr"),
     ("contractors", "Contractors", "UserCog", "/contractors", 11, "sectionHr"),
-    ("sub_contractors", "Sub-contractors", "UserCog", "/sub-contractors", 12, "sectionHr"),
+    # Permission-only (empty sidebar_path): the Contractors directory covers main and sub
+    # in one screen, so a second nav entry pointing at the same data only confused people.
+    # The row stays so its view/create/edit/delete rights keep gating the legacy
+    # /sub-contractors endpoints and the sub-contractor rows inside the directory.
+    ("sub_contractors", "Sub-contractors", "UserCog", "", 12, "sectionHr"),
     ("attendance", "Attendance", "Clock", "/attendance", 13, "sectionHr"),
     ("staff_requests", "Staff requests", "ClipboardList", "/requests", 14, "sectionHr"),
     ("documents", "Documents", "FolderOpen", "/documents", 15, "sectionHr"),

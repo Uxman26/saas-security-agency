@@ -56,6 +56,8 @@ export default function GuardsPage() {
   const [editingGuard, setEditingGuard] = useState<Guard | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [search, setSearch] = useState('');
+  const [filterContractor, setFilterContractor] = useState('all');
+  const [filterSubContractor, setFilterSubContractor] = useState('all');
   const [filterArea, setFilterArea] = useState('');
   const [filterPostcode, setFilterPostcode] = useState('');
   const [filterNearby, setFilterNearby] = useState('');
@@ -248,8 +250,36 @@ export default function GuardsPage() {
     []
   );
 
+  /**
+   * A staff member is linked to a contractor either by the directory's `contractor_id`
+   * or, on older records, by the legacy main_/sub_contractor_id columns. Both are
+   * checked so a filter does not quietly hide people whose link predates the directory.
+   */
+  const matchesContractor = useCallback(
+    (g: Guard, selectedId: string, kind: 'main' | 'sub') => {
+      if (selectedId === 'all') return true;
+      if ((g.contractor_id || '') === selectedId) return true;
+      const picked = dirRows.find((c) => c.id === selectedId);
+      if (!picked) return false;
+      const name = picked.name.trim().toLowerCase();
+      const legacy = kind === 'main' ? legMains : legSubs;
+      const legacyId = kind === 'main' ? g.main_contractor_id : g.sub_contractor_id;
+      if (legacyId == null) return false;
+      return legacy.some((c) => c.id === legacyId && (c.name || '').trim().toLowerCase() === name);
+    },
+    [dirRows, legMains, legSubs]
+  );
+
+  const contractorFiltered = useMemo(
+    () =>
+      guards
+        .filter((g) => matchesContractor(g, filterContractor, 'main'))
+        .filter((g) => matchesContractor(g, filterSubContractor, 'sub')),
+    [guards, filterContractor, filterSubContractor, matchesContractor]
+  );
+
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
-    guards,
+    contractorFiltered,
     search,
     sortKey,
     sortDir,
@@ -261,7 +291,7 @@ export default function GuardsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, filterContractor, filterSubContractor]);
 
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount));
@@ -334,12 +364,38 @@ export default function GuardsPage() {
             />
           ) : (
           <>
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Input
               placeholder="Search staff (name, phone, area, postcode…)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              value={filterContractor}
+              onChange={(e) => setFilterContractor(e.target.value)}
+              aria-label="Filter by contractor"
+            >
+              <option value="all">Contractor: All</option>
+              {mains.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              value={filterSubContractor}
+              onChange={(e) => setFilterSubContractor(e.target.value)}
+              aria-label="Filter by sub-contractor"
+            >
+              <option value="all">Sub-contractor: All</option>
+              {subs.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
             <Input placeholder="Filter by area" value={filterArea} onChange={(e) => setFilterArea(e.target.value)} />
             <Input placeholder="Filter by postcode" value={filterPostcode} onChange={(e) => setFilterPostcode(e.target.value)} />
             <Input placeholder="Filter nearby areas" value={filterNearby} onChange={(e) => setFilterNearby(e.target.value)} />
@@ -360,7 +416,9 @@ export default function GuardsPage() {
                 <InlineTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {search || areaQ || postcodeQ || nearbyQ ? 'No staff match your filters.' : 'No staff yet. Click "Add staff" to get started.'}
+                  {search || areaQ || postcodeQ || nearbyQ || filterContractor !== 'all' || filterSubContractor !== 'all'
+                    ? 'No staff match your filters.'
+                    : 'No staff yet. Click "Add staff" to get started.'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">

@@ -239,12 +239,63 @@ def update_site(db: Session, site_id: int, site: SiteCreate, user_id: int) -> Si
     return db_site
 
 
+def _site_blockers(db: Session, company_id: int, site: Site) -> list[str]:
+    """What still points at this site, phrased for the person pressing Delete.
+
+    Rota plans are matched on the site *name*: a plan stores the name on each shift and
+    re-creates the site on publish, which is how a deleted site used to reappear minutes
+    later with its shifts still attached.
+    """
+    from app.models import Assignment, PatrolCheckpoint, PatrolRoute, RotaPlan
+
+    blockers: list[str] = []
+
+    shifts = db.query(Assignment).filter(Assignment.site_id == site.id).count()
+    if shifts:
+        blockers.append(f"{shifts} scheduled shift{'s' if shifts != 1 else ''}")
+
+    routes = db.query(PatrolRoute).filter(PatrolRoute.site_id == site.id).count()
+    checkpoints = db.query(PatrolCheckpoint).filter(PatrolCheckpoint.site_id == site.id).count()
+    if routes or checkpoints:
+        blockers.append(f"{routes + checkpoints} patrol route/checkpoint record(s)")
+
+    needle = " ".join((site.name or "").split()).lower()
+    if needle:
+        plans = 0
+        for plan in db.query(RotaPlan).filter(RotaPlan.company_id == company_id).all():
+            raw = plan.planner_data or ""
+            if needle in raw.lower():
+                plans += 1
+        if plans:
+            blockers.append(f"{plans} rota plan{'s' if plans != 1 else ''}")
+
+    return blockers
+
+
 def delete_site(db: Session, site_id: int, user_id: int) -> None:
+    """Permanently remove a site.
+
+    Refused while anything still references it. Deleting regardless used to leave its
+    shifts orphaned and, the next time a rota naming it was published, the site was
+    silently re-created — so it looked as though the delete had never happened.
+    """
     _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+
+    blockers = _site_blockers(db, company.id, site)
+    if blockers:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"“{site.name}” is still used by {', '.join(blockers)}. "
+                "Remove or move those first — deleting now would leave them without a site, "
+                "and publishing a rota that names this site would create it again."
+            ),
+        )
+
     audit_service.log_action(
         db,
         company_id=company.id,

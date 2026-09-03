@@ -2,7 +2,8 @@ import { useMemo, useState, useCallback, useEffect } from 'react';
 
 export type SortDir = 'asc' | 'desc';
 
-export const DEFAULT_TABLE_PAGE_SIZE = 10;
+/** Every paginated table starts here. 10 made even a small staff list span 7 pages. */
+export const DEFAULT_TABLE_PAGE_SIZE = 25;
 
 export const TABLE_PAGE_SIZES = [10, 25, 50, 100] as const;
 

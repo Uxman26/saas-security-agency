@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import Payroll, Guard, Site, RotaPlan
+from app.models import Client, Payroll, Guard, Site, RotaPlan
 from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
 from app.services.company_service import get_company_by_user_id
+from app.services.work_filters import guard_ids_for_scope, resolve_work_scope
 
 VALID_PAYMENT_MODES = {"100_bank", "100_cash", "split"}
 
@@ -167,11 +168,37 @@ def get_payrolls(
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
     search: Optional[str] = None,
+    *,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> List[Payroll]:
+    """Payroll records matching any combination of the screen's filters.
+
+    A payroll record carries a person and a period but no site, so the site-side filters
+    — client, site, contractor, sub-contractor — are answered through the rota: the
+    people actually rota'd onto those sites within the period being asked about. A
+    client resolves to every site assigned to it, so picking the client covers all ten
+    of its sites without listing them.
+    """
     company = get_company_by_user_id(db, user_id)
     q = db.query(Payroll).filter(Payroll.company_id == company.id)
-    if guard_id:
-        q = q.filter(Payroll.guard_id == guard_id)
+    scope = resolve_work_scope(
+        db,
+        company.id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
+    if scope.active:
+        allowed = guard_ids_for_scope(db, company.id, scope, period_start, period_end)
+        if allowed is not None:
+            q = q.filter(Payroll.guard_id.in_(tuple(allowed)))
     if period_start:
         q = q.filter(Payroll.period_end >= period_start)
     if period_end:
@@ -218,7 +245,18 @@ def calculate_payroll_batch(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     rota_plan_id: Optional[int] = None,
+    *,
+    client_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> List[Payroll]:
+    """Import published rota hours into payroll records.
+
+    ``mode`` says what the run is anchored on — one employee, one site, one rota, or a
+    client (every site that client owns). Any of the filters may also be supplied
+    alongside the mode and narrow the run further, in any combination.
+    """
     company = get_company_by_user_id(db, user_id)
     mode = (mode or "employee").lower().strip()
     if period_start > period_end:
@@ -244,6 +282,12 @@ def calculate_payroll_batch(
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
         selected_site_name = (site.name or "").strip().lower()
+    elif mode == "client":
+        if not client_id:
+            raise HTTPException(status_code=400, detail="client_id required for client payroll")
+        client = db.query(Client).filter(Client.id == client_id, Client.company_id == company.id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
     elif mode == "rota":
         if not rota_plan_id:
             raise HTTPException(status_code=400, detail="rota_plan_id required for rota payroll")
@@ -253,8 +297,33 @@ def calculate_payroll_batch(
         if plan.status != "published":
             raise HTTPException(status_code=400, detail="Publish the rota before creating payroll")
         plans_query = plans_query.filter(RotaPlan.id == rota_plan_id)
+    elif mode == "filter":
+        # Nothing anchors the run but the filters themselves; at least one is required
+        # so a mis-sent request cannot silently re-import the whole company.
+        if not any((client_id, site_id, guard_id, contractor_id, sub_contractor_id, job_title)):
+            raise HTTPException(status_code=400, detail="Select at least one filter for a filtered payroll run")
     else:
-        raise HTTPException(status_code=400, detail="mode must be employee, site, or rota")
+        raise HTTPException(status_code=400, detail="mode must be employee, site, client, rota, or filter")
+
+    scope = resolve_work_scope(
+        db,
+        company.id,
+        client_id=client_id,
+        # The site anchor is matched by name below, exactly as before; feeding it to the
+        # scope as well would double-apply it for no gain.
+        site_id=site_id if mode != "site" else None,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id if mode != "employee" else None,
+        job_title=job_title,
+    )
+    # Planner shifts name their site as free text, so resolving the scope needs a
+    # name → id map for the company's sites.
+    site_id_by_name = {
+        (name or "").strip().lower(): sid
+        for sid, name in db.query(Site.id, Site.name).filter(Site.company_id == company.id).all()
+        if name
+    }
 
     by_guard: dict[int, list[dict]] = {}
     for plan in plans_query.all():
@@ -268,7 +337,10 @@ def calculate_payroll_batch(
                 continue
             if mode == "employee" and line_guard_id != guard_id:
                 continue
-            if mode == "site" and (str(line.get("site") or "").strip().lower() != selected_site_name):
+            line_site_name = str(line.get("site") or "").strip().lower()
+            if mode == "site" and line_site_name != selected_site_name:
+                continue
+            if scope.active and not scope.matches(site_id_by_name.get(line_site_name), line_guard_id):
                 continue
             by_guard.setdefault(line_guard_id, []).append(line)
 
@@ -310,6 +382,12 @@ def preview_pay(
     guard_id: Optional[int],
     period_start: date,
     period_end: date,
+    *,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> "PayrollPreviewResponse":
     """What is owed for a period, without saving anything.
 
@@ -338,7 +416,18 @@ def preview_pay(
         if not guard:
             raise HTTPException(status_code=404, detail="Employee not found")
 
-    details = list_rota_details(db, user_id, period_start, period_end, guard_id=guard_id)
+    details = list_rota_details(
+        db,
+        user_id,
+        period_start,
+        period_end,
+        guard_id=guard_id,
+        site_id=site_id,
+        client_id=client_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
 
     shifts: list[PayrollPreviewShift] = []
     sites: dict[Optional[int], PayrollPreviewSite] = {}

@@ -14,12 +14,22 @@ router = APIRouter(prefix="/payroll", tags=["payroll"])
 
 
 class PayrollBatchRequest(BaseModel):
-    mode: str  # employee | site | rota
+    """A payroll run. `mode` says what it is anchored on; the filters narrow it further.
+
+    "client" runs every site assigned to the client, so a client with ten sites needs
+    one request rather than ten. "filter" anchors on nothing but the filters themselves.
+    """
+
+    mode: str  # employee | site | client | rota | filter
     period_start: date
     period_end: date
     guard_id: Optional[int] = None
     site_id: Optional[int] = None
     rota_plan_id: Optional[int] = None
+    client_id: Optional[int] = None
+    contractor_id: Optional[str] = None
+    sub_contractor_id: Optional[str] = None
+    job_title: Optional[str] = None
 
 @router.post("", response_model=PayrollResponse, status_code=status.HTTP_201_CREATED)
 def create_payroll(data: PayrollCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "create"))):
@@ -40,6 +50,10 @@ def calculate_payroll_batch(body: PayrollBatchRequest, db: Session = Depends(get
         guard_id=body.guard_id,
         site_id=body.site_id,
         rota_plan_id=body.rota_plan_id,
+        client_id=body.client_id,
+        contractor_id=body.contractor_id,
+        sub_contractor_id=body.sub_contractor_id,
+        job_title=body.job_title,
     )
 
 @router.get("", response_model=List[PayrollResponse])
@@ -48,15 +62,33 @@ def list_payrolls(
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
     search: Optional[str] = None,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("payroll", "view")),
 ):
-    """Payroll records matching the screen's filters.
+    """Payroll records matching the screen's filters, in any combination.
 
     `search` matches a guard's name or either period date, so the Payroll screen's one
     search box is answered here rather than by filtering a full download in the browser.
+    `client_id` covers every site assigned to that client.
     """
-    return payroll_service.get_payrolls(db, current_user.id, guard_id, period_start, period_end, search)
+    return payroll_service.get_payrolls(
+        db,
+        current_user.id,
+        guard_id,
+        period_start,
+        period_end,
+        search,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
 
 @router.get("/export/pdf")
 def export_payrolls_pdf(
@@ -64,6 +96,11 @@ def export_payrolls_pdf(
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
     search: Optional[str] = None,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("payroll", "view")),
 ):
@@ -80,6 +117,11 @@ def export_payrolls_pdf(
         period_start=period_start,
         period_end=period_end,
         search=search,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
     )
     stamp = f"-{period_start}" if period_start else ""
     stamp += f"-to-{period_end}" if period_end else ""
@@ -95,6 +137,11 @@ def preview_pay_pdf(
     period_start: date,
     period_end: date,
     guard_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("payroll", "view")),
 ):
@@ -107,6 +154,11 @@ def preview_pay_pdf(
         period_start=period_start,
         period_end=period_end,
         guard_id=guard_id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
     )
     who = "breakdown" if guard_id is not None else "all-employees"
     return Response(
@@ -123,6 +175,11 @@ def preview_pay(
     period_start: date,
     period_end: date,
     guard_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("payroll", "view")),
 ):
@@ -133,7 +190,18 @@ def preview_pay(
     Declared above /{payroll_id} deliberately: FastAPI matches in order, so the dynamic
     route would otherwise swallow "preview" and fail on the int conversion.
     """
-    return payroll_service.preview_pay(db, current_user.id, guard_id, period_start, period_end)
+    return payroll_service.preview_pay(
+        db,
+        current_user.id,
+        guard_id,
+        period_start,
+        period_end,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
 
 
 @router.get("/{payroll_id}", response_model=PayrollResponse)

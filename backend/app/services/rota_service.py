@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site, User
 from app.schemas import RotaDetailResponse, RotaSummaryRow
 from app.services.company_service import get_company_by_user_id
+from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
 def normalize_shift_type(st: Optional[str]) -> str:
     if not st:
@@ -101,13 +102,22 @@ def _scope_for_portal_user(db: Session, user_id: int, q):
     return q
 
 
-def _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date):
-    if guard_id:
-        q = q.filter(Assignment.guard_id == guard_id)
-    if site_id:
-        q = q.filter(Assignment.site_id == site_id)
-    if client_id:
-        q = q.filter(Site.client_id == client_id)
+def _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, scope: WorkScope = EMPTY_SCOPE):
+    """Date window plus the shared Client/Site/Contractor/Staff/Job-title scope.
+
+    guard_id/site_id/client_id are already folded into ``scope`` by the callers below;
+    they stay in the signature so the older positional call sites keep working, and are
+    applied here only when no scope was resolved for them.
+    """
+    if not scope.active:
+        if guard_id:
+            q = q.filter(Assignment.guard_id == guard_id)
+        if site_id:
+            q = q.filter(Assignment.site_id == site_id)
+        if client_id:
+            q = q.filter(Site.client_id == client_id)
+    else:
+        q = scope.apply(q, Assignment.site_id, Assignment.guard_id)
     if start_date:
         q = q.filter(Assignment.date >= start_date)
     if end_date:
@@ -153,11 +163,31 @@ def list_rota_details(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    *,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> List[RotaDetailResponse]:
+    """Every rota'd shift in the window, filtered by any combination of client, site,
+    contractor, sub-contractor, staff member and job title.
+
+    Picking a client covers all of that client's sites — the scope resolves the client
+    to its site ids before anything queries.
+    """
     company = get_company_by_user_id(db, user_id)
+    scope = resolve_work_scope(
+        db,
+        company.id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
     q = _assignment_base_query(db, company.id)
     q = _scope_for_portal_user(db, user_id, q)
-    q = _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date)
+    q = _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, scope)
     rows = q.order_by(Assignment.date, Guard.full_name).all()
     today = date.today()
     att_map = {}
@@ -215,9 +245,7 @@ def list_rota_details(
                 end_date,
                 seen,
                 today,
-                guard_id=guard_id,
-                site_id=site_id,
-                client_id=client_id,
+                scope=scope,
             )
         )
     out.sort(key=lambda d: (d.date, (d.guard_name or "").lower(), d.shift_start or ""))
@@ -253,9 +281,7 @@ def _planner_shift_details(
     end_date: date,
     seen: set,
     today: date,
-    guard_id: Optional[int] = None,
-    site_id: Optional[int] = None,
-    client_id: Optional[int] = None,
+    scope: WorkScope = EMPTY_SCOPE,
 ) -> List[RotaDetailResponse]:
     """Load shifts from unpublished rota plans overlapping the report period."""
     plans = (
@@ -285,8 +311,6 @@ def _planner_shift_details(
                 gid = int(emp_id)
             except (TypeError, ValueError):
                 continue
-            if guard_id and gid != guard_id:
-                continue
             guard = guards.get(gid)
             if not guard:
                 continue
@@ -303,9 +327,10 @@ def _planner_shift_details(
                     site_name = (sh.get("site") or "").strip()
                     site = site_by_name.get(site_name.lower()) if site_name else None
                     sid = site.id if site else None
-                    if site_id and sid != site_id:
-                        continue
-                    if client_id and (not site or site.client_id != client_id):
+                    # A draft shift names its site as free text. When it does not
+                    # resolve to a site record there is nothing to test a site-side
+                    # filter against, so it is left out rather than let through.
+                    if not scope.matches(sid, gid):
                         continue
                     fp = _shift_fingerprint(gid, d, start_t, end_t, sid)
                     if fp in seen:
@@ -351,8 +376,23 @@ def rota_summary(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    *,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> List[RotaSummaryRow]:
-    details = list_rota_details(db, user_id, start_date, end_date, guard_id, site_id, client_id)
+    details = list_rota_details(
+        db,
+        user_id,
+        start_date,
+        end_date,
+        guard_id,
+        site_id,
+        client_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
     by_guard: dict[int, list] = {}
     for d in details:
         by_guard.setdefault(d.guard_id, []).append(d)

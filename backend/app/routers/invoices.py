@@ -152,11 +152,26 @@ def generate_invoice(
     period_end: date,
     client_id: Optional[int] = None,
     site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    guard_id: Optional[int] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("invoices", "generate")),
 ):
+    """Generate from published rota shifts. By client this covers all of the client's
+    sites; the contractor, sub-contractor, staff and job title filters narrow it."""
     inv = invoice_service.generate_from_rota(
-        db, period_start, period_end, current_user.id, client_id=client_id, site_id=site_id
+        db,
+        period_start,
+        period_end,
+        current_user.id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)
@@ -170,9 +185,16 @@ def list_invoices(
     due_from: Optional[date] = None,
     due_to: Optional[date] = None,
     search: Optional[str] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    guard_id: Optional[int] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("invoices", "view")),
 ):
+    """Invoices matching any combination of the screen's filters. Picking a client
+    already covers every site assigned to it."""
     rows = invoice_service.get_invoices(
         db,
         current_user.id,
@@ -182,6 +204,11 @@ def list_invoices(
         due_from=due_from,
         due_to=due_to,
         search=search,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
     )
     return [_serialize_invoice(inv, False, db) for inv in rows]
 

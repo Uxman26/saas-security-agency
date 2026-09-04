@@ -8,6 +8,7 @@ from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
 from app.services.contractor_scope import guard_has_contractor, site_has_contractor
 from app.services.rota_service import normalize_shift_type
+from app.services.work_filters import resolve_work_scope
 
 
 def _update_action(before: dict, after: dict) -> str:
@@ -67,10 +68,14 @@ def get_assignments(
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    *,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> List[Assignment]:
     company = get_company_by_user_id(db, user_id)
-    
+
     query = db.query(Assignment).join(Guard).join(Site).filter(Guard.company_id == company.id)
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -79,18 +84,23 @@ def get_assignments(
 
         if is_portal_role(user):
             query = filter_assignments_for_user(db, user, query)
-    
-    if guard_id:
-        query = query.filter(Assignment.guard_id == guard_id)
-    if site_id:
-        query = query.filter(Assignment.site_id == site_id)
-    if client_id:
-        query = query.filter(Site.client_id == client_id)
+
+    scope = resolve_work_scope(
+        db,
+        company.id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
+    query = scope.apply(query, Assignment.site_id, Assignment.guard_id)
     if start_date:
         query = query.filter(Assignment.date >= start_date)
     if end_date:
         query = query.filter(Assignment.date <= end_date)
-    
+
     return query.all()
 
 def get_rota(
@@ -101,6 +111,10 @@ def get_rota(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    *,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> List[RotaResponse]:
     company = get_company_by_user_id(db, user_id)
     
@@ -127,12 +141,17 @@ def get_rota(
         if is_portal_role(user):
             query = filter_assignments_for_user(db, user, query)
 
-    if guard_id:
-        query = query.filter(Assignment.guard_id == guard_id)
-    if site_id:
-        query = query.filter(Assignment.site_id == site_id)
-    if client_id:
-        query = query.filter(Site.client_id == client_id)
+    scope = resolve_work_scope(
+        db,
+        company.id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
+    query = scope.apply(query, Assignment.site_id, Assignment.guard_id)
     if start_date:
         query = query.filter(Assignment.date >= start_date)
     if end_date:

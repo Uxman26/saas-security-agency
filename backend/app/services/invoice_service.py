@@ -11,6 +11,7 @@ from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_billing_rate
 from app.services.special_day_service import special_date_set
 from app.services.rota_service import calc_shift_hours, normalize_shift_type
+from app.services.work_filters import resolve_work_scope
 
 
 DEFAULT_INVOICE_VAT_RATE = 20.0
@@ -128,7 +129,20 @@ def get_invoices(
     due_from: Optional[date] = None,
     due_to: Optional[date] = None,
     search: Optional[str] = None,
+    *,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    guard_id: Optional[int] = None,
+    job_title: Optional[str] = None,
 ) -> List[Invoice]:
+    """Invoices matching any combination of the screen's filters.
+
+    An invoice belongs to a client outright, so the client filter is answered on the
+    invoice itself. The rest — site, contractor, sub-contractor, staff, job title —
+    describe the *work* that was billed, so they are answered against the invoice's
+    lines: an invoice is kept when at least one of its lines matches.
+    """
     from sqlalchemy import or_, cast, String
 
     company = get_company_by_user_id(db, user_id)
@@ -140,6 +154,19 @@ def get_invoices(
     q = _scope_for_portal_user(db, user_id, q)
     if client_id:
         q = q.filter(Invoice.client_id == client_id)
+    line_scope = resolve_work_scope(
+        db,
+        company.id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
+    if line_scope.active:
+        line_q = db.query(InvoiceLine.id).filter(InvoiceLine.invoice_id == Invoice.id)
+        line_q = line_scope.apply(line_q, InvoiceLine.site_id, InvoiceLine.guard_id)
+        q = q.filter(line_q.exists())
     if status_group == "unpaid":
         q = q.filter(Invoice.status.in_(("sent", "unpaid", "overdue", "partial")))
     elif status_group == "draft":
@@ -315,8 +342,14 @@ def _rota_invoice_shift_lines(
     period_end: date,
     client_id: int,
     site_id: Optional[int] = None,
+    scope=None,
 ) -> list[dict]:
-    """Billable shift rows from published rota planner data (not Assignment rows)."""
+    """Billable shift rows from published rota planner data (not Assignment rows).
+
+    Every site the client owns is in play unless ``site_id`` narrows it to one, so
+    invoicing a client bills all of its sites in a single document. ``scope`` carries
+    any further contractor / staff / job-title narrowing.
+    """
     sites_q = db.query(Site).filter(Site.company_id == company_id, Site.client_id == client_id)
     if site_id:
         sites_q = sites_q.filter(Site.id == site_id)
@@ -360,6 +393,8 @@ def _rota_invoice_shift_lines(
                     site = site_by_name.get(site_name.lower()) if site_name else None
                     if not site or site.id not in allowed_ids:
                         continue
+                    if scope is not None and scope.active and not scope.matches(site.id, guard_id):
+                        continue
                     break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
                     hours = calc_shift_hours(sh.get("start"), sh.get("end"), break_m)
                     if hours <= 0:
@@ -383,8 +418,18 @@ def generate_from_rota(
     user_id: int,
     client_id: Optional[int] = None,
     site_id: Optional[int] = None,
+    *,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    guard_id: Optional[int] = None,
+    job_title: Optional[str] = None,
 ) -> Invoice:
-    """Create a draft invoice from published rota planner shifts for a client/site period."""
+    """Create a draft invoice from published rota planner shifts for a client/site period.
+
+    Generating by client covers every site assigned to that client. The optional
+    contractor, sub-contractor, staff and job-title filters narrow which of those shifts
+    are billed, in any combination.
+    """
     if period_start > period_end:
         raise HTTPException(status_code=400, detail="Period start cannot be after period end")
     company = get_company_by_user_id(db, user_id)
@@ -410,14 +455,25 @@ def generate_from_rota(
     if not sites:
         raise HTTPException(status_code=400, detail="No sites linked to this client")
 
+    scope = resolve_work_scope(
+        db,
+        company.id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
     details = _rota_invoice_shift_lines(
-        db, company.id, period_start, period_end, client_id=client_id, site_id=site_id
+        db, company.id, period_start, period_end, client_id=client_id, site_id=site_id, scope=scope
     )
     allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
     if not details and not allowance_inv:
         raise HTTPException(
             status_code=400,
-            detail="No published rota shifts found for this client in the selected period. Publish the rota first.",
+            detail=(
+                "No published rota shifts found for this client in the selected period"
+                + (" with the filters applied." if scope.active else ". Publish the rota first.")
+            ),
         )
     due = period_end + timedelta(days=30)
     inv = Invoice(
@@ -485,7 +541,24 @@ def generate_from_rota(
         user_id,
         inv.id,
         "invoice_generated",
-        {"client_id": client_id, "period_start": str(period_start), "period_end": str(period_end), "source": "rota"},
+        {
+            "client_id": client_id,
+            "site_id": site_id,
+            "period_start": str(period_start),
+            "period_end": str(period_end),
+            "source": "rota",
+            "filters": {
+                k: str(v)
+                for k, v in (
+                    ("contractor_id", contractor_id),
+                    ("sub_contractor_id", sub_contractor_id),
+                    ("guard_id", guard_id),
+                    ("job_title", job_title),
+                )
+                if v
+            }
+            or None,
+        },
     )
     db.commit()
     return inv

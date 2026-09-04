@@ -93,6 +93,59 @@ def _header(story, styles, company: Optional[Company], title: str, subtitle: str
     story.append(Paragraph(" · ".join([x for x in (name, subtitle) if x]), styles["sub"]))
 
 
+
+def _named_filters(
+    db: Session,
+    user_id: int,
+    client_id: Optional[int],
+    site_id: Optional[int],
+    contractor_id: Optional[str],
+    sub_contractor_id: Optional[str],
+    job_title: Optional[str],
+) -> list:
+    """Human-readable labels for the filters, so the PDF says what it was an export of."""
+    from uuid import UUID
+
+    from app.models import Client, Contractor, MainContractor, Site, SubContractor
+    from app.services.company_service import get_company_by_user_id
+
+    out: list = []
+    if not any((client_id, site_id, contractor_id, sub_contractor_id, job_title)):
+        return out
+    company = get_company_by_user_id(db, user_id)
+
+    def _name(model, ident, label):
+        row = db.query(model).filter(model.id == ident, model.company_id == company.id).first()
+        return f"{label} {row.name}" if row is not None else None
+
+    def _contractor_name(ident, label, legacy_model):
+        # The pickers send a directory UUID; older saved filters may still carry a
+        # legacy integer id. Each id shape is only ever looked up in the table it fits.
+        try:
+            return _name(Contractor, UUID(str(ident)), label)
+        except (TypeError, ValueError):
+            pass
+        try:
+            return _name(legacy_model, int(str(ident).strip()), label)
+        except (TypeError, ValueError):
+            return None
+
+    if client_id:
+        out.append(_name(Client, client_id, "client") or f"client #{client_id}")
+    if site_id:
+        out.append(_name(Site, site_id, "site") or f"site #{site_id}")
+    for ident, label, legacy_model in (
+        (contractor_id, "contractor", MainContractor),
+        (sub_contractor_id, "sub-contractor", SubContractor),
+    ):
+        if not ident:
+            continue
+        out.append(_contractor_name(ident, label, legacy_model) or f"{label} {ident}")
+    if job_title:
+        out.append(f'job title "{job_title}"')
+    return out
+
+
 def render_payroll_records_pdf(
     db: Session,
     user_id: int,
@@ -102,11 +155,28 @@ def render_payroll_records_pdf(
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
     search: Optional[str] = None,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> bytes:
     """The Payroll Records table, filtered exactly as the screen filtered it."""
     from reportlab.platypus import Paragraph, Spacer
 
-    rows = payroll_service.get_payrolls(db, user_id, guard_id, period_start, period_end, search)
+    rows = payroll_service.get_payrolls(
+        db,
+        user_id,
+        guard_id,
+        period_start,
+        period_end,
+        search,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
     names = {
         g.id: g.full_name
         for g in db.query(Guard).filter(Guard.id.in_([r.guard_id for r in rows] or [0])).all()
@@ -120,6 +190,7 @@ def render_payroll_records_pdf(
     filters = []
     if search:
         filters.append(f'search "{search}"')
+    filters.extend(_named_filters(db, user_id, client_id, site_id, contractor_id, sub_contractor_id, job_title))
     if period_start and period_end:
         filters.append(f"{period_start} to {period_end}")
     elif period_start:
@@ -186,6 +257,11 @@ def render_payroll_preview_pdf(
     period_start: date,
     period_end: date,
     guard_id: Optional[int] = None,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
 ) -> bytes:
     """Employee hours & pay.
 
@@ -194,7 +270,18 @@ def render_payroll_preview_pdf(
     """
     from reportlab.platypus import Paragraph, Spacer
 
-    pv = payroll_service.preview_pay(db, user_id, guard_id, period_start, period_end)
+    pv = payroll_service.preview_pay(
+        db,
+        user_id,
+        guard_id,
+        period_start,
+        period_end,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
 
     buf = BytesIO()
     doc = _doc(buf, "Employee hours & pay")
@@ -207,7 +294,10 @@ def render_payroll_preview_pdf(
         styles,
         company,
         "Employee hours & pay" if guard_id is None else f"Breakdown — {scope}",
-        f"{pv.period_start} to {pv.period_end}",
+        " · ".join(
+            [f"{pv.period_start} to {pv.period_end}"]
+            + _named_filters(db, user_id, client_id, site_id, contractor_id, sub_contractor_id, job_title)
+        ),
     )
 
     summary = [

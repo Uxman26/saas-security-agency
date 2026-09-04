@@ -39,8 +39,30 @@ def export_planner_rota(
 
 
 @router.get("", response_model=list[RotaPlanListItem])
-def list_rotas(db: Session = Depends(get_db), current_user: User = Depends(require_module("rota", "view"))):
-    return rota_plan_service.list_rota_plans(db, current_user.id)
+def list_rotas(
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    guard_id: Optional[int] = None,
+    job_title: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("rota", "view")),
+):
+    """Rotas, optionally only those holding shifts that match the filters.
+
+    Picking a client keeps every rota touching any of that client's sites.
+    """
+    return rota_plan_service.list_rota_plans(
+        db,
+        current_user.id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
 
 
 @router.post("", response_model=RotaPlanDetail, status_code=status.HTTP_201_CREATED)

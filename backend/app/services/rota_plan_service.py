@@ -11,6 +11,7 @@ from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanLi
 from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
 from app.services.rota_service import normalize_shift_type
+from app.services.work_filters import WorkScope, resolve_work_scope
 
 
 def _block_portal_roles(db: Session, user_id: int) -> None:
@@ -161,7 +162,56 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
     )
 
 
-def list_rota_plans(db: Session, user_id: int) -> List[RotaPlanListItem]:
+def _plan_matches_scope(db: Session, plan: RotaPlan, scope: WorkScope, site_ids_by_name: dict) -> bool:
+    """Whether a rota holds at least one shift the filters allow.
+
+    A published rota is checked against its assignments; a draft only exists as planner
+    JSON, whose shifts name their site as free text, so those names are matched back to
+    site records before the scope is applied.
+    """
+    if plan.status == "published":
+        q = db.query(Assignment.id).filter(Assignment.rota_plan_id == plan.id)
+        q = scope.apply(q, Assignment.site_id, Assignment.guard_id)
+        return db.query(q.exists()).scalar() is True
+
+    try:
+        data = json.loads(plan.planner_data or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    for emp_id, by_day in (data.get("shifts") or {}).items():
+        try:
+            gid = int(emp_id)
+        except (TypeError, ValueError):
+            continue
+        for day_shifts in (by_day or {}).values():
+            for sh in day_shifts or []:
+                if not isinstance(sh, dict):
+                    continue
+                name = str(sh.get("site") or "").strip().lower()
+                if scope.matches(site_ids_by_name.get(name), gid):
+                    return True
+    return False
+
+
+def list_rota_plans(
+    db: Session,
+    user_id: int,
+    *,
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    guard_id: Optional[int] = None,
+    job_title: Optional[str] = None,
+) -> List[RotaPlanListItem]:
+    """The rota list, optionally narrowed to rotas that contain matching shifts.
+
+    Picking a client keeps every rota touching any of that client's sites — the scope
+    resolves the client to its site ids first, so all ten of its sites are covered by
+    the one pick.
+    """
     company = get_company_by_user_id(db, user_id)
     rows = (
         db.query(RotaPlan)
@@ -169,6 +219,23 @@ def list_rota_plans(db: Session, user_id: int) -> List[RotaPlanListItem]:
         .order_by(RotaPlan.created_at.desc())
         .all()
     )
+    scope = resolve_work_scope(
+        db,
+        company.id,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        guard_id=guard_id,
+        job_title=job_title,
+    )
+    if scope.active:
+        site_ids_by_name = {
+            (name or "").strip().lower(): sid
+            for sid, name in db.query(Site.id, Site.name).filter(Site.company_id == company.id).all()
+            if name
+        }
+        rows = [p for p in rows if _plan_matches_scope(db, p, scope, site_ids_by_name)]
     portal = _portal_user(db, user_id)
     if not portal:
         return [_to_list_item(db, p) for p in rows]

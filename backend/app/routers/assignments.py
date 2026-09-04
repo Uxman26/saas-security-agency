@@ -41,13 +41,26 @@ def get_assignments(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("rota", "view")),
 ):
+    """Shifts matching any combination of the filters. A client covers all of its sites."""
     return assignment_service.get_assignments(
-        db, current_user.id, guard_id, site_id, client_id, start_date, end_date
+        db,
+        current_user.id,
+        guard_id,
+        site_id,
+        client_id,
+        start_date,
+        end_date,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
     )
 
 
@@ -58,10 +71,24 @@ def get_rota_detail(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("rota", "detail_view")),
 ):
-    return rota_service.list_rota_details(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
+    return rota_service.list_rota_details(
+        db,
+        current_user.id,
+        start_date,
+        end_date,
+        guard_id,
+        site_id,
+        client_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
 
 
 @router.get("/rota/summary", response_model=list[RotaSummaryRow])
@@ -71,10 +98,24 @@ def get_rota_summary(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("rota", "summary_view")),
 ):
-    return rota_service.rota_summary(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
+    return rota_service.rota_summary(
+        db,
+        current_user.id,
+        start_date,
+        end_date,
+        guard_id,
+        site_id,
+        client_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
 
 
 @router.get("/rota/export")
@@ -85,11 +126,23 @@ def export_rota(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("rota", "export")),
 ):
-    details = rota_service.list_rota_details(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
-    summary = rota_service.rota_summary(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
+    extra = {
+        "contractor_id": contractor_id,
+        "sub_contractor_id": sub_contractor_id,
+        "job_title": job_title,
+    }
+    details = rota_service.list_rota_details(
+        db, current_user.id, start_date, end_date, guard_id, site_id, client_id, **extra
+    )
+    summary = rota_service.rota_summary(
+        db, current_user.id, start_date, end_date, guard_id, site_id, client_id, **extra
+    )
     fmt = (format or "xlsx").lower()
     if fmt == "pdf":
         body = rota_export.export_rota_pdf(details, summary)
@@ -113,10 +166,24 @@ def get_rota(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     client_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("rota", "view")),
 ):
-    return assignment_service.get_rota(db, current_user.id, start_date, end_date, guard_id, site_id, client_id)
+    return assignment_service.get_rota(
+        db,
+        current_user.id,
+        start_date,
+        end_date,
+        guard_id,
+        site_id,
+        client_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
 
 
 @router.post("/by-shift/overtime", response_model=ShiftOvertimeLogResponse)

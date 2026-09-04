@@ -1574,3 +1574,19 @@ export interface LoneWorkerEvent {
   event_time: string;
   created_at: string;
 }
+
+/**
+ * The filter set Invoices, Payroll and Rota share.
+ *
+ * `client_id` covers every site assigned to that client, so a client with ten sites is
+ * one pick rather than ten. Contractor ids are the directory's UUIDs. All six combine
+ * with AND; leave a field out to mean "all".
+ */
+export interface WorkFilterParams {
+  client_id?: number;
+  site_id?: number;
+  contractor_id?: string;
+  sub_contractor_id?: string;
+  guard_id?: number;
+  job_title?: string;
+}

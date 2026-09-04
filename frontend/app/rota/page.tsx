@@ -20,6 +20,14 @@ import { toast } from '@/lib/toast';
 import type { RotaPlanListItem } from '@/lib/types';
 import { Calendar, CalendarDays, ChevronDown, ChevronUp, Copy, Grid3x3, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  EMPTY_WORK_FILTERS,
+  WorkFilterBar,
+  hasWorkFilters,
+  toWorkFilterParams,
+  useWorkFilterOptions,
+  type WorkFilterValues,
+} from '@/components/work-filter-bar';
 
 type Tab = 'active' | 'old';
 
@@ -297,6 +305,11 @@ function RotaHubPage() {
   const [nameFilter, setNameFilter] = useState('');
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
+  // Client / Site / Contractor / Sub-contractor / Staff / Job title. Answered on the
+  // server, which keeps a rota when any of its shifts match — and a client match covers
+  // every site assigned to that client.
+  const [workFilters, setWorkFilters] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
+  const filterOptions = useWorkFilterOptions();
   const [sortKey, setSortKey] = useState<string>('start_date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [page, setPage] = useState(1);
@@ -307,11 +320,11 @@ function RotaHubPage() {
   const load = useCallback(() => {
     setLoading(true);
     api.rotaPlans
-      .list()
+      .list(toWorkFilterParams(workFilters))
       .then(setRotas)
       .catch(() => setRotas([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [workFilters]);
 
   useEffect(() => {
     load();
@@ -320,7 +333,7 @@ function RotaHubPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [tab, nameFilter, rangeFrom, rangeTo, sortKey, sortDir]);
+  }, [tab, nameFilter, rangeFrom, rangeTo, workFilters, sortKey, sortDir]);
 
   const tabRotas = useMemo(() => {
     const active = tab === 'active';
@@ -396,6 +409,7 @@ function RotaHubPage() {
     setNameFilter('');
     setRangeFrom('');
     setRangeTo('');
+    setWorkFilters(EMPTY_WORK_FILTERS);
   };
 
   const onDelete = (id: number, name: string) => {
@@ -594,11 +608,24 @@ function RotaHubPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  {(nameFilter || rangeFrom || rangeTo) && (
+                  {(nameFilter || rangeFrom || rangeTo || hasWorkFilters(workFilters)) && (
                     <Button type="button" variant="link" className="text-xs h-9 px-0" onClick={clearFilters}>
                       Clear all filters
                     </Button>
                   )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">
+                    Client, site, contractor, staff &amp; job title
+                  </label>
+                  <WorkFilterBar
+                    value={workFilters}
+                    onChange={setWorkFilters}
+                    options={filterOptions}
+                    disabled={loading}
+                    className="flex flex-wrap items-center gap-2"
+                  />
                 </div>
 
                 {loading ? (

@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast, toastMutationError } from '@/lib/toast';
-import type { Assignment, Rota } from '@/lib/types';
+import type { Assignment, Rota, WorkFilterParams } from '@/lib/types';
 
-export function useAssignments(params?: { guard_id?: number; site_id?: number; client_id?: number; start_date?: string; end_date?: string }) {
+export function useAssignments(params?: { start_date?: string; end_date?: string } & WorkFilterParams) {
   return useQuery({
     queryKey: ['assignments', params],
     queryFn: () => api.assignments.list(params),
@@ -11,7 +11,7 @@ export function useAssignments(params?: { guard_id?: number; site_id?: number; c
   });
 }
 
-export function useRota(params?: { start_date?: string; end_date?: string; guard_id?: number; site_id?: number; client_id?: number }) {
+export function useRota(params?: { start_date?: string; end_date?: string } & WorkFilterParams) {
   return useQuery({
     queryKey: ['rota', params],
     queryFn: () => api.assignments.rota(params),
@@ -19,13 +19,11 @@ export function useRota(params?: { start_date?: string; end_date?: string; guard
   });
 }
 
+/** A date window plus the six shared work filters (client, site, contractor, …). */
 export type RotaFilterParams = {
   start_date: string;
   end_date: string;
-  guard_id?: number;
-  site_id?: number;
-  client_id?: number;
-};
+} & WorkFilterParams;
 
 export function useRotaDetail(params: RotaFilterParams) {
   return useQuery({

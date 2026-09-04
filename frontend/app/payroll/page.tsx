@@ -21,6 +21,15 @@ import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Sear
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import {
+  EMPTY_WORK_FILTERS,
+  WorkFilterBar,
+  describeWorkFilters,
+  hasWorkFilters,
+  toWorkFilterParams,
+  useWorkFilterOptions,
+  type WorkFilterValues,
+} from '@/components/work-filter-bar';
 
 const ATT_LABELS: Record<string, string> = {
   on_time: 'On time',
@@ -37,19 +46,29 @@ const PAYMENT_MODE_LABELS: Record<string, string> = {
 };
 
 /** The filters the currently displayed records were fetched with. */
-type PayrollQuery = { search: string; from: string; to: string };
+type PayrollQuery = { search: string; from: string; to: string; filters: WorkFilterValues };
 
-const EMPTY_QUERY: PayrollQuery = { search: '', from: '', to: '' };
+const EMPTY_QUERY: PayrollQuery = {
+  search: '',
+  from: '',
+  to: '',
+  filters: EMPTY_WORK_FILTERS,
+};
+
+function queryIsEmpty(q: PayrollQuery) {
+  return !q.search && !q.from && !q.to && !hasWorkFilters(q.filters);
+}
 
 /** useTableList always takes a search accessor; the server has already filtered. */
 const NO_CLIENT_SEARCH = () => '';
 
-function describeQuery(q: PayrollQuery) {
+function describeQuery(q: PayrollQuery, options: Parameters<typeof describeWorkFilters>[1]) {
   const parts: string[] = [];
   if (q.search) parts.push(`“${q.search}”`);
   if (q.from && q.to) parts.push(`${q.from} to ${q.to}`);
   else if (q.from) parts.push(`from ${q.from}`);
   else if (q.to) parts.push(`up to ${q.to}`);
+  parts.push(...describeWorkFilters(q.filters, options));
   return parts.join(' · ');
 }
 
@@ -70,10 +89,12 @@ function loadStoredSearch(): StoredSearch | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredSearch>;
     if (!parsed?.query) return null;
-    return {
-      query: { ...EMPTY_QUERY, ...parsed.query },
-      drafts: { ...EMPTY_QUERY, ...(parsed.drafts || parsed.query) },
-    };
+    const merge = (q?: Partial<PayrollQuery>): PayrollQuery => ({
+      ...EMPTY_QUERY,
+      ...q,
+      filters: { ...EMPTY_WORK_FILTERS, ...(q?.filters ?? {}) },
+    });
+    return { query: merge(parsed.query), drafts: merge(parsed.drafts || parsed.query) };
   } catch {
     return null;
   }
@@ -119,10 +140,13 @@ export default function PayrollPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [appliedQuery, setAppliedQuery] = useState<PayrollQuery>(EMPTY_QUERY);
   const [calcOpen, setCalcOpen] = useState(false);
-  const [calcMode, setCalcMode] = useState<'employee' | 'site' | 'rota'>('employee');
+  const [calcMode, setCalcMode] = useState<'employee' | 'site' | 'client' | 'rota'>('employee');
   const [calcGuardId, setCalcGuardId] = useState('');
   const [calcSiteId, setCalcSiteId] = useState('');
   const [calcRotaId, setCalcRotaId] = useState('');
+  const [calcClientId, setCalcClientId] = useState('');
+  // Optional narrowing on top of the chosen anchor, e.g. only the cleaners on a client.
+  const [calcNarrow, setCalcNarrow] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
   const [calcStart, setCalcStart] = useState('');
   const [calcEnd, setCalcEnd] = useState('');
   const [calcPaymentMode, setCalcPaymentMode] = useState('100_bank');
@@ -133,6 +157,10 @@ export default function PayrollPage() {
   const [pvStart, setPvStart] = useState('');
   const [pvEnd, setPvEnd] = useState('');
   const [pvLoading, setPvLoading] = useState(false);
+  // The preview keeps its own copy of the shared filters: it is a live read of the rota,
+  // not of the saved records the table below shows, and the two are searched separately.
+  const [pvFilters, setPvFilters] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
+  const [pvAppliedFilters, setPvAppliedFilters] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
   const [preview, setPreview] = useState<PayrollPreview | null>(null);
   // The all-employees result is kept while a single person's breakdown is open, so Back
   // puts the search straight back on screen instead of making the user calculate again.
@@ -144,7 +172,13 @@ export default function PayrollPage() {
     if (!who || !pvStart || !pvEnd) return;
     setPvLoading(true);
     try {
-      const result = await api.payroll.preview(pvStart, pvEnd, who === 'all' ? undefined : parseInt(who, 10));
+      const result = await api.payroll.preview(
+        pvStart,
+        pvEnd,
+        who === 'all' ? undefined : parseInt(who, 10),
+        toWorkFilterParams(pvFilters)
+      );
+      setPvAppliedFilters(pvFilters);
       setPreview(result);
       // Only a fresh all-employees calculation replaces the result Back returns to.
       if (result.guard_id === null) setAllPreview(result);
@@ -212,7 +246,8 @@ export default function PayrollPage() {
       const blob = await api.payroll.previewPdf(
         preview.period_start,
         preview.period_end,
-        single ? preview.guard_id ?? undefined : undefined
+        single ? preview.guard_id ?? undefined : undefined,
+        toWorkFilterParams(pvAppliedFilters)
       );
       saveBlob(
         blob,
@@ -228,6 +263,12 @@ export default function PayrollPage() {
   const [searchDraft, setSearchDraft] = useState(() => loadStoredSearch()?.drafts.search ?? '');
   const [dateFromDraft, setDateFromDraft] = useState(() => loadStoredSearch()?.drafts.from ?? '');
   const [dateToDraft, setDateToDraft] = useState(() => loadStoredSearch()?.drafts.to ?? '');
+  // Client / Site / Contractor / Sub-contractor / Staff / Job title, in any combination.
+  // A client covers every site assigned to it, so ten sites is one pick.
+  const [filterDraft, setFilterDraft] = useState<WorkFilterValues>(
+    () => loadStoredSearch()?.drafts.filters ?? EMPTY_WORK_FILTERS
+  );
+  const filterOptions = useWorkFilterOptions();
   const [exportOpen, setExportOpen] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
@@ -251,6 +292,7 @@ export default function PayrollPage() {
     try {
       setPayrolls(
         await api.payroll.list({
+          ...toWorkFilterParams(q.filters),
           ...(q.search ? { search: q.search } : {}),
           ...(q.from ? { period_start: q.from } : {}),
           ...(q.to ? { period_end: q.to } : {}),
@@ -276,7 +318,7 @@ export default function PayrollPage() {
   // Payroll shows the same rows rather than an empty screen.
   useEffect(() => {
     const stored = loadStoredSearch();
-    if (stored && (stored.query.search || stored.query.from || stored.query.to)) {
+    if (stored && !queryIsEmpty(stored.query)) {
       void fetchPayrolls(stored.query);
     }
     // Mount only: fetchPayrolls is stable and re-running this on every change would
@@ -310,11 +352,13 @@ export default function PayrollPage() {
     if (!calcStart || !calcEnd) return;
     if (calcMode === 'employee' && !calcGuardId) return;
     if (calcMode === 'site' && !calcSiteId) return;
+    if (calcMode === 'client' && !calcClientId) return;
     if (calcMode === 'rota' && !calcRotaId) return;
     setCalcLoading(true);
     try {
       let imported: Payroll[] = [];
-      if (calcMode === 'employee') {
+      const narrow = toWorkFilterParams(calcNarrow);
+      if (calcMode === 'employee' && !hasWorkFilters(calcNarrow)) {
         const rec = await api.payroll.calculate(parseInt(calcGuardId, 10), calcStart, calcEnd);
         imported = [rec];
       } else {
@@ -322,7 +366,10 @@ export default function PayrollPage() {
           mode: calcMode,
           period_start: calcStart,
           period_end: calcEnd,
+          ...narrow,
+          ...(calcMode === 'employee' ? { guard_id: parseInt(calcGuardId, 10) } : {}),
           ...(calcMode === 'site' ? { site_id: parseInt(calcSiteId, 10) } : {}),
+          ...(calcMode === 'client' ? { client_id: parseInt(calcClientId, 10) } : {}),
           ...(calcMode === 'rota' ? { rota_plan_id: parseInt(calcRotaId, 10) } : {}),
         });
       }
@@ -351,6 +398,8 @@ export default function PayrollPage() {
       setCalcGuardId('');
       setCalcSiteId('');
       setCalcRotaId('');
+      setCalcClientId('');
+      setCalcNarrow(EMPTY_WORK_FILTERS);
       setCalcStart('');
       setCalcEnd('');
       setCalcPaymentMode('100_bank');
@@ -429,7 +478,12 @@ export default function PayrollPage() {
       return;
     }
     setPage(1);
-    void fetchPayrolls({ search: searchDraft.trim(), from: dateFromDraft, to: dateToDraft });
+    void fetchPayrolls({
+      search: searchDraft.trim(),
+      from: dateFromDraft,
+      to: dateToDraft,
+      filters: filterDraft,
+    });
   };
 
   /** What Refresh does: forget the search entirely, here and in session storage. */
@@ -437,6 +491,7 @@ export default function PayrollPage() {
     setSearchDraft('');
     setDateFromDraft('');
     setDateToDraft('');
+    setFilterDraft(EMPTY_WORK_FILTERS);
     setAppliedQuery(EMPTY_QUERY);
     setPayrolls([]);
     setHasSearched(false);
@@ -543,6 +598,7 @@ export default function PayrollPage() {
     try {
       // Rebuilt server-side from the same filters, so the file matches the screen.
       const blob = await api.payroll.exportPdf({
+        ...toWorkFilterParams(appliedQuery.filters),
         ...(appliedQuery.search ? { search: appliedQuery.search } : {}),
         ...(appliedQuery.from ? { period_start: appliedQuery.from } : {}),
         ...(appliedQuery.to ? { period_end: appliedQuery.to } : {}),
@@ -607,7 +663,7 @@ export default function PayrollPage() {
                       <dl className="rounded-md border p-3 text-sm space-y-1">
                         <div className="flex justify-between gap-4">
                           <dt className="text-muted-foreground">Filters</dt>
-                          <dd className="text-right font-medium">{describeQuery(appliedQuery) || 'None — all records'}</dd>
+                          <dd className="text-right font-medium">{describeQuery(appliedQuery, filterOptions) || 'None — all records'}</dd>
                         </div>
                         <div className="flex justify-between gap-4">
                           <dt className="text-muted-foreground">Records</dt>
@@ -650,13 +706,17 @@ export default function PayrollPage() {
                       </p>
                       <div className="space-y-1">
                         <Label>Import by</Label>
-                        <Select value={calcMode} onValueChange={(v) => setCalcMode(v as 'employee' | 'site' | 'rota')}>
+                        <Select
+                          value={calcMode}
+                          onValueChange={(v) => setCalcMode(v as 'employee' | 'site' | 'client' | 'rota')}
+                        >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="employee">Individual employee</SelectItem>
                             <SelectItem value="site">By site (all staff on site)</SelectItem>
+                            <SelectItem value="client">By client (all of the client&rsquo;s sites)</SelectItem>
                             <SelectItem value="rota">By rota (all staff on rota)</SelectItem>
                           </SelectContent>
                         </Select>
@@ -688,6 +748,23 @@ export default function PayrollPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      ) : calcMode === 'client' ? (
+                        <div className="space-y-1">
+                          <Label>Client <span className="text-destructive">*</span></Label>
+                          <Select value={calcClientId} onValueChange={setCalcClientId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select client" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filterOptions.clients.map((c) => (
+                                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            Covers every site assigned to this client &mdash; there is no need to import each one.
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-1">
@@ -730,6 +807,20 @@ export default function PayrollPage() {
                           Splits the imported rota payable into bank and/or cash. Existing records for the same guard and period are updated, not duplicated.
                         </p>
                       </div>
+                      <div className="space-y-1">
+                        <Label>Narrow by (optional)</Label>
+                        <WorkFilterBar
+                          value={calcNarrow}
+                          onChange={setCalcNarrow}
+                          options={filterOptions}
+                          keys={
+                            calcMode === 'client'
+                              ? ['site', 'contractor', 'subContractor', 'guard', 'jobTitle']
+                              : ['client', 'contractor', 'subContractor', 'jobTitle']
+                          }
+                          className="flex flex-wrap items-center gap-2 pt-1"
+                        />
+                      </div>
                       <Button
                         className="w-full"
                         onClick={() => void handleImportFromRota()}
@@ -739,6 +830,7 @@ export default function PayrollPage() {
                           !calcEnd ||
                           (calcMode === 'employee' && !calcGuardId) ||
                           (calcMode === 'site' && !calcSiteId) ||
+                          (calcMode === 'client' && !calcClientId) ||
                           (calcMode === 'rota' && !calcRotaId)
                         }
                       >
@@ -828,6 +920,19 @@ export default function PayrollPage() {
                     Back to search
                   </Button>
                 )}
+                <div className="space-y-1 w-full">
+                  <Label>Filter by</Label>
+                  {/* Same six filters as the records search below; a client covers all
+                      of its sites, so the run does not have to name them one by one. */}
+                  <WorkFilterBar
+                    value={pvFilters}
+                    onChange={setPvFilters}
+                    options={filterOptions}
+                    keys={['client', 'site', 'contractor', 'subContractor', 'jobTitle']}
+                    disabled={pvLoading}
+                    className="flex flex-wrap items-center gap-2"
+                  />
+                </div>
                 <Button
                   type="button"
                   variant={inBreakdown ? 'outline' : 'default'}
@@ -1073,13 +1178,23 @@ export default function PayrollPage() {
                 </Button>
               )}
             </div>
+            {/* Applied on Search with everything else, so one press answers the whole row. */}
+            <WorkFilterBar
+              value={filterDraft}
+              onChange={setFilterDraft}
+              options={filterOptions}
+              disabled={loading}
+              className="flex flex-wrap items-center gap-2 w-full"
+            />
           </div>
 
           <Card>
             <CardHeader>
               <CardTitle>Payroll Records</CardTitle>
-              {hasSearched && describeQuery(appliedQuery) ? (
-                <p className="text-sm text-muted-foreground">Showing results for {describeQuery(appliedQuery)}</p>
+              {hasSearched && describeQuery(appliedQuery, filterOptions) ? (
+                <p className="text-sm text-muted-foreground">
+                  Showing results for {describeQuery(appliedQuery, filterOptions)}
+                </p>
               ) : null}
             </CardHeader>
             <CardContent>
@@ -1092,7 +1207,7 @@ export default function PayrollPage() {
                 </div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  {describeQuery(appliedQuery)
+                  {describeQuery(appliedQuery, filterOptions)
                     ? 'No records match your search.'
                     : 'No payroll records yet. Use “Import from Rota” to pull payable totals, then Edit if anything needs correcting.'}
                 </div>

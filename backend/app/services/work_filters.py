@@ -92,10 +92,6 @@ class WorkScope:
     def active(self) -> bool:
         return self.site_ids is not None or self.guard_ids is not None or bool(self.contractor_pairs)
 
-    @property
-    def restricts_sites(self) -> bool:
-        return self.site_ids is not None or bool(self.contractor_pairs)
-
     def matches(self, site_id: Optional[int], guard_id: Optional[int]) -> bool:
         """Whether one shift-shaped row survives the filters. Used for planner rows,
         which live in JSON and never see the database."""

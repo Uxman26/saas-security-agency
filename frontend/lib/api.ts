@@ -1,4 +1,4 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -99,6 +99,25 @@ async function requestBlob(
 
 function sanitizeInput(input: string): string {
   return input.trim().replace(/[<>]/g, '');
+}
+
+/**
+ * Writes the shared Client / Site / Contractor / Sub-contractor / Staff / Job title
+ * filters onto a query string. Every endpoint behind Invoices, Payroll and Rota reads
+ * the same six names, so they are serialised in one place.
+ *
+ * Blank values are left off entirely — an empty `client_id=` would be a filter the
+ * server has to guess at, while an absent one plainly means "all".
+ */
+function appendWorkFilters(q: URLSearchParams, params?: WorkFilterParams): URLSearchParams {
+  if (!params) return q;
+  if (params.client_id) q.append('client_id', String(params.client_id));
+  if (params.site_id) q.append('site_id', String(params.site_id));
+  if (params.contractor_id) q.append('contractor_id', String(params.contractor_id));
+  if (params.sub_contractor_id) q.append('sub_contractor_id', String(params.sub_contractor_id));
+  if (params.guard_id) q.append('guard_id', String(params.guard_id));
+  if (params.job_title) q.append('job_title', params.job_title);
+  return q;
 }
 
 export const api = {
@@ -237,50 +256,35 @@ export const api = {
       }),
   },
   assignments: {
-    list: (params?: { guard_id?: number; site_id?: number; client_id?: number; start_date?: string; end_date?: string }): Promise<Assignment[]> => {
-      const query = new URLSearchParams();
-      if (params?.guard_id) query.append('guard_id', params.guard_id.toString());
-      if (params?.site_id) query.append('site_id', params.site_id.toString());
-      if (params?.client_id) query.append('client_id', params.client_id.toString());
+    list: (params?: { start_date?: string; end_date?: string } & WorkFilterParams): Promise<Assignment[]> => {
+      const query = appendWorkFilters(new URLSearchParams(), params);
       if (params?.start_date) query.append('start_date', params.start_date);
       if (params?.end_date) query.append('end_date', params.end_date);
       return request<Assignment[]>(`/assignments?${query.toString()}`);
     },
-    rota: (params?: { start_date?: string; end_date?: string; guard_id?: number; site_id?: number; client_id?: number }): Promise<Rota[]> => {
-      const query = new URLSearchParams();
+    rota: (params?: { start_date?: string; end_date?: string } & WorkFilterParams): Promise<Rota[]> => {
+      const query = appendWorkFilters(new URLSearchParams(), params);
       if (params?.start_date) query.append('start_date', params.start_date);
       if (params?.end_date) query.append('end_date', params.end_date);
-      if (params?.guard_id) query.append('guard_id', params.guard_id.toString());
-      if (params?.site_id) query.append('site_id', params.site_id.toString());
-      if (params?.client_id) query.append('client_id', params.client_id.toString());
       return request<Rota[]>(`/assignments/rota?${query.toString()}`);
     },
-    rotaDetail: (params: { start_date: string; end_date: string; guard_id?: number; site_id?: number; client_id?: number }): Promise<RotaDetail[]> => {
-      const query = new URLSearchParams();
+    rotaDetail: (params: { start_date: string; end_date: string } & WorkFilterParams): Promise<RotaDetail[]> => {
+      const query = appendWorkFilters(new URLSearchParams(), params);
       query.append('start_date', params.start_date);
       query.append('end_date', params.end_date);
-      if (params.guard_id) query.append('guard_id', params.guard_id.toString());
-      if (params.site_id) query.append('site_id', params.site_id.toString());
-      if (params.client_id) query.append('client_id', params.client_id.toString());
       return request<RotaDetail[]>(`/assignments/rota/detail?${query.toString()}`);
     },
-    rotaSummary: (params: { start_date: string; end_date: string; guard_id?: number; site_id?: number; client_id?: number }): Promise<RotaSummary[]> => {
-      const query = new URLSearchParams();
+    rotaSummary: (params: { start_date: string; end_date: string } & WorkFilterParams): Promise<RotaSummary[]> => {
+      const query = appendWorkFilters(new URLSearchParams(), params);
       query.append('start_date', params.start_date);
       query.append('end_date', params.end_date);
-      if (params.guard_id) query.append('guard_id', params.guard_id.toString());
-      if (params.site_id) query.append('site_id', params.site_id.toString());
-      if (params.client_id) query.append('client_id', params.client_id.toString());
       return request<RotaSummary[]>(`/assignments/rota/summary?${query.toString()}`);
     },
-    rotaExport: (params: { start_date: string; end_date: string; format?: 'xlsx' | 'pdf'; guard_id?: number; site_id?: number; client_id?: number }): Promise<Blob> => {
-      const query = new URLSearchParams();
+    rotaExport: (params: { start_date: string; end_date: string; format?: 'xlsx' | 'pdf' } & WorkFilterParams): Promise<Blob> => {
+      const query = appendWorkFilters(new URLSearchParams(), params);
       query.append('start_date', params.start_date);
       query.append('end_date', params.end_date);
       query.append('format', params.format || 'xlsx');
-      if (params.guard_id) query.append('guard_id', params.guard_id.toString());
-      if (params.site_id) query.append('site_id', params.site_id.toString());
-      if (params.client_id) query.append('client_id', params.client_id.toString());
       return requestBlob(`/assignments/rota/export?${query.toString()}`);
     },
     create: (data: Omit<Assignment, 'id' | 'created_at'>): Promise<Assignment> => {
@@ -304,7 +308,10 @@ export const api = {
       request<import('./types').ShiftLateLog>('/assignments/by-shift/lateness', { method: 'POST', body: JSON.stringify(data) }),
   },
   rotaPlans: {
-    list: (): Promise<RotaPlanListItem[]> => request<RotaPlanListItem[]>('/rotas'),
+    list: (params?: WorkFilterParams): Promise<RotaPlanListItem[]> => {
+      const qs = appendWorkFilters(new URLSearchParams(), params).toString();
+      return request<RotaPlanListItem[]>(`/rotas${qs ? `?${qs}` : ''}`);
+    },
     get: (id: number): Promise<RotaPlanDetail> => request<RotaPlanDetail>(`/rotas/${id}`),
     create: (data: {
       name: string;
@@ -918,14 +925,12 @@ export const api = {
   },
   payroll: {
     list: (params?: {
-      guard_id?: number;
       period_start?: string;
       period_end?: string;
       /** Matches guard name or either period date, server-side. */
       search?: string;
-    }): Promise<Payroll[]> => {
-      const q = new URLSearchParams();
-      if (params?.guard_id) q.append('guard_id', params.guard_id.toString());
+    } & WorkFilterParams): Promise<Payroll[]> => {
+      const q = appendWorkFilters(new URLSearchParams(), params);
       if (params?.period_start) q.append('period_start', params.period_start);
       if (params?.period_end) q.append('period_end', params.period_end);
       if (params?.search) q.append('search', params.search);
@@ -934,13 +939,11 @@ export const api = {
     get: (id: number): Promise<Payroll> => request<Payroll>(`/payroll/${id}`),
     /** The records table as a PDF, filtered exactly as the screen filtered it. */
     exportPdf: (params?: {
-      guard_id?: number;
       period_start?: string;
       period_end?: string;
       search?: string;
-    }): Promise<Blob> => {
-      const q = new URLSearchParams();
-      if (params?.guard_id) q.append('guard_id', params.guard_id.toString());
+    } & WorkFilterParams): Promise<Blob> => {
+      const q = appendWorkFilters(new URLSearchParams(), params);
       if (params?.period_start) q.append('period_start', params.period_start);
       if (params?.period_end) q.append('period_end', params.period_end);
       if (params?.search) q.append('search', params.search);
@@ -948,28 +951,40 @@ export const api = {
       return requestBlob(`/payroll/export/pdf${qs ? `?${qs}` : ''}`);
     },
     /** Employee hours & pay as a PDF; with guard_id it is that breakdown alone. */
-    previewPdf: (period_start: string, period_end: string, guard_id?: number): Promise<Blob> => {
-      const q = new URLSearchParams({ period_start, period_end });
-      if (guard_id) q.append('guard_id', guard_id.toString());
+    previewPdf: (
+      period_start: string,
+      period_end: string,
+      guard_id?: number,
+      filters?: WorkFilterParams
+    ): Promise<Blob> => {
+      const q = appendWorkFilters(new URLSearchParams({ period_start, period_end }), {
+        ...filters,
+        guard_id,
+      });
       return requestBlob(`/payroll/preview/pdf?${q.toString()}`);
     },
     /** Omit guard_id for every employee. */
-    preview: (period_start: string, period_end: string, guard_id?: number): Promise<PayrollPreview> => {
-      const q = new URLSearchParams({ period_start, period_end });
-      if (guard_id) q.append('guard_id', guard_id.toString());
+    preview: (
+      period_start: string,
+      period_end: string,
+      guard_id?: number,
+      filters?: WorkFilterParams
+    ): Promise<PayrollPreview> => {
+      const q = appendWorkFilters(new URLSearchParams({ period_start, period_end }), {
+        ...filters,
+        guard_id,
+      });
       return request<PayrollPreview>(`/payroll/preview?${q.toString()}`);
     },
     create: (data: Partial<Payroll>): Promise<Payroll> => request<Payroll>('/payroll', { method: 'POST', body: JSON.stringify(data) }),
     calculate: (guard_id: number, period_start: string, period_end: string): Promise<Payroll> =>
       request<Payroll>(`/payroll/calculate?guard_id=${guard_id}&period_start=${period_start}&period_end=${period_end}`, { method: 'POST' }),
     calculateBatch: (data: {
-      mode: 'employee' | 'site' | 'rota';
+      mode: 'employee' | 'site' | 'client' | 'rota' | 'filter';
       period_start: string;
       period_end: string;
-      guard_id?: number;
-      site_id?: number;
       rota_plan_id?: number;
-    }): Promise<Payroll[]> =>
+    } & WorkFilterParams): Promise<Payroll[]> =>
       request<Payroll[]>('/payroll/calculate-batch', { method: 'POST', body: JSON.stringify(data) }),
     update: (
       id: number,
@@ -979,15 +994,13 @@ export const api = {
   },
   invoices: {
     list: (params?: {
-      client_id?: number;
       status?: string;
       status_group?: 'unpaid' | 'draft' | 'all';
       due_from?: string;
       due_to?: string;
       search?: string;
-    }): Promise<Invoice[]> => {
-      const q = new URLSearchParams();
-      if (params?.client_id) q.append('client_id', params.client_id.toString());
+    } & WorkFilterParams): Promise<Invoice[]> => {
+      const q = appendWorkFilters(new URLSearchParams(), params);
       if (params?.status) q.append('status', params.status);
       if (params?.status_group && params.status_group !== 'all') q.append('status_group', params.status_group);
       if (params?.due_from) q.append('due_from', params.due_from);
@@ -1022,15 +1035,11 @@ export const api = {
     generate: (params: {
       period_start: string;
       period_end: string;
-      client_id?: number;
-      site_id?: number;
-    }): Promise<Invoice> => {
-      const q = new URLSearchParams({
-        period_start: params.period_start,
-        period_end: params.period_end,
-      });
-      if (params.client_id) q.append('client_id', params.client_id.toString());
-      if (params.site_id) q.append('site_id', params.site_id.toString());
+    } & WorkFilterParams): Promise<Invoice> => {
+      const q = appendWorkFilters(
+        new URLSearchParams({ period_start: params.period_start, period_end: params.period_end }),
+        params
+      );
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),

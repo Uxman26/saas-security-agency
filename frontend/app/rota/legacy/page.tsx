@@ -13,12 +13,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  EMPTY_WORK_FILTERS,
+  WorkFilterBar,
+  toWorkFilterParams,
+  useWorkFilterOptions,
+  type WorkFilterValues,
+} from '@/components/work-filter-bar';
 import { useRotaDetail, useRotaSummary, useCreateAssignment, useUpdateAssignment, useDeleteAssignment, type RotaFilterParams } from '@/hooks/use-assignments';
 import { useGuards } from '@/hooks/use-guards';
 import { useSites } from '@/hooks/use-sites';
 import { api } from '@/lib/api';
 import { assignmentSchema, type AssignmentFormData } from '@/lib/validation';
-import type { Client, RotaDetail, RotaSummary } from '@/lib/types';
+import type { RotaDetail, RotaSummary } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Calendar, ChevronLeft, ChevronRight, Download, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
@@ -81,10 +88,11 @@ export default function RotaPage() {
   const canDeleteMod = canModule(permUser, 'rota', 'delete');
   const [view, setView] = useState<'week' | 'month'>('week');
   const [anchor, setAnchor] = useState(() => new Date());
-  const [clients, setClients] = useState<Client[]>([]);
-  const [fSite, setFSite] = useState<number | ''>('');
-  const [fClient, setFClient] = useState<number | ''>('');
-  const [fGuard, setFGuard] = useState<number | ''>('');
+  // Client / Site / Contractor / Sub-contractor / Staff / Job title, in any combination.
+  // The client covers every site assigned to it, resolved server-side.
+  const [workFilters, setWorkFilters] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
+  const filterOptions = useWorkFilterOptions();
+  const fGuard: number | '' = workFilters.guard ? parseInt(workFilters.guard, 10) : '';
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const range = useMemo(() => (view === 'week' ? weekRange(anchor) : monthRange(anchor)), [view, anchor]);
@@ -94,11 +102,9 @@ export default function RotaPage() {
     () => ({
       start_date: range.start,
       end_date: range.end,
-      ...(fSite !== '' ? { site_id: fSite } : {}),
-      ...(fClient !== '' ? { client_id: fClient } : {}),
-      ...(fGuard !== '' ? { guard_id: fGuard } : {}),
+      ...toWorkFilterParams(workFilters),
     }),
-    [range.start, range.end, fSite, fClient, fGuard],
+    [range.start, range.end, workFilters],
   );
 
   const { data: details = [], isLoading, refetch, isRefetching } = useRotaDetail(filterParams);
@@ -115,10 +121,6 @@ export default function RotaPage() {
   const deleteAssignment = useDeleteAssignment();
 
   const form = useForm<AssignmentFormData>({ resolver: zodResolver(assignmentSchema) });
-
-  useEffect(() => {
-    api.clients.list().then(setClients).catch(() => {});
-  }, []);
 
   useEffect(() => {
     api.specialDays
@@ -270,7 +272,7 @@ export default function RotaPage() {
 
   useEffect(() => {
     setSummaryPage(1);
-  }, [summarySearch, range.start, range.end, fSite, fClient, fGuard]);
+  }, [summarySearch, range.start, range.end, workFilters]);
   useEffect(() => {
     setSummaryPage((x) => Math.min(x, summaryList.pageCount));
   }, [summaryList.pageCount]);
@@ -418,45 +420,18 @@ export default function RotaPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Filters</CardTitle>
-              <CardDescription>Site, client, and guard — use any combination.</CardDescription>
+              <CardDescription>
+                Client, site, contractor, sub-contractor, staff and job title &mdash; use any
+                combination. Picking a client covers every site assigned to it.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="grid sm:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <Label>Site</Label>
-                <Select value={fSite === '' ? '__all' : String(fSite)} onValueChange={(v) => setFSite(v === '__all' ? '' : parseInt(v, 10))}>
-                  <SelectTrigger><SelectValue placeholder="All sites" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all">All sites</SelectItem>
-                    {sites.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Client</Label>
-                <Select value={fClient === '' ? '__all' : String(fClient)} onValueChange={(v) => setFClient(v === '__all' ? '' : parseInt(v, 10))}>
-                  <SelectTrigger><SelectValue placeholder="All clients" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all">All clients</SelectItem>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Guard</Label>
-                <Select value={fGuard === '' ? '__all' : String(fGuard)} onValueChange={(v) => setFGuard(v === '__all' ? '' : parseInt(v, 10))}>
-                  <SelectTrigger><SelectValue placeholder="All guards" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all">All guards</SelectItem>
-                    {guards.map((g) => (
-                      <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <CardContent>
+              <WorkFilterBar
+                value={workFilters}
+                onChange={setWorkFilters}
+                options={filterOptions}
+                className="flex flex-wrap items-center gap-2"
+              />
             </CardContent>
           </Card>
 

@@ -24,6 +24,13 @@ import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
 import { StatusPieChart } from '@/components/charts/status-chart';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import {
+  EMPTY_WORK_FILTERS,
+  WorkFilterBar,
+  toWorkFilterParams,
+  useWorkFilterOptions,
+  type WorkFilterValues,
+} from '@/components/work-filter-bar';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -56,10 +63,16 @@ export default function InvoicesPage() {
   const [genStart, setGenStart] = useState('');
   const [genEnd, setGenEnd] = useState('');
   const [genLoading, setGenLoading] = useState(false);
+  // Optional narrowing on top of the client/site the invoice is raised for.
+  const [genNarrow, setGenNarrow] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
   const [sites, setSites] = useState<Site[]>([]);
   const [pageTab, setPageTab] = useState<'overview' | 'invoices'>('invoices');
   const [listTab, setListTab] = useState<'unpaid' | 'draft' | 'all'>('unpaid');
-  const [clientFilter, setClientFilter] = useState('');
+  // Client / Site / Contractor / Sub-contractor / Staff / Job title, in any combination.
+  // The Client control is the old "All customers" dropdown: it now covers every site
+  // assigned to that client rather than only invoices raised against the client record.
+  const [workFilters, setWorkFilters] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
+  const filterOptions = useWorkFilterOptions();
   const [dueFrom, setDueFrom] = useState('');
   const [dueTo, setDueTo] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -98,7 +111,7 @@ export default function InvoicesPage() {
     setLoading(true);
     api.invoices
       .list({
-        client_id: clientFilter ? parseInt(clientFilter, 10) : undefined,
+        ...toWorkFilterParams(workFilters),
         status_group: listTab,
         status: statusFilter || undefined,
         due_from: dueFrom || undefined,
@@ -107,7 +120,7 @@ export default function InvoicesPage() {
       .then(setInvoices)
       .catch(() => toast.error('Could not load invoices'))
       .finally(() => setLoading(false));
-  }, [clientFilter, listTab, statusFilter, dueFrom, dueTo]);
+  }, [workFilters, listTab, statusFilter, dueFrom, dueTo]);
 
   useEffect(() => {
     loadInvoices();
@@ -128,12 +141,14 @@ export default function InvoicesPage() {
       await api.invoices.generate({
         period_start: genStart,
         period_end: genEnd,
+        ...toWorkFilterParams(genNarrow),
         ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
       });
       setGenOpen(false);
       setGenClientId('');
       setGenSiteId('');
+      setGenNarrow(EMPTY_WORK_FILTERS);
       setGenStart('');
       setGenEnd('');
       loadInvoices();
@@ -222,7 +237,7 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, workFilters]);
 
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount));
@@ -400,6 +415,20 @@ export default function InvoicesPage() {
                         />
                       </div>
                     </div>
+                    <div className="space-y-1">
+                      <Label>Narrow by (optional)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Leave blank to bill every shift in the period. Generating by client already
+                        covers all of that client&rsquo;s sites.
+                      </p>
+                      <WorkFilterBar
+                        value={genNarrow}
+                        onChange={setGenNarrow}
+                        options={filterOptions}
+                        keys={['contractor', 'subContractor', 'guard', 'jobTitle']}
+                        className="flex flex-wrap items-center gap-2 pt-1"
+                      />
+                    </div>
                     {genStart && genEnd && genStart > genEnd ? (
                       <p className="text-sm text-destructive">Period start cannot be after period end</p>
                     ) : null}
@@ -508,15 +537,7 @@ export default function InvoicesPage() {
           </div>
 
           <div className="flex flex-col lg:flex-row gap-3 flex-wrap">
-            <Select value={clientFilter || '__all'} onValueChange={(v) => setClientFilter(v === '__all' ? '' : v)}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="All customers" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">All customers</SelectItem>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <WorkFilterBar value={workFilters} onChange={setWorkFilters} options={filterOptions} />
             <Select value={statusFilter || '__all'} onValueChange={(v) => setStatusFilter(v === '__all' ? '' : v)}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
               <SelectContent>

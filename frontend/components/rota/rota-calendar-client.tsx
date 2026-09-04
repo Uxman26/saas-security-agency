@@ -25,6 +25,11 @@ import { ShiftRotaSections, ShiftTypeBadge } from '@/components/rota/shift-rota-
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { useCreateGuard } from '@/hooks/use-guards';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
+import { useMainContractors } from '@/hooks/use-main-contractors';
+import { useSubContractors } from '@/hooks/use-sub-contractors';
+import { useGuards } from '@/hooks/use-guards';
+import { useSites } from '@/hooks/use-sites';
+import { contractorMatcher, usedContractorOptions } from '@/lib/contractor-match';
 import { guardFormDefaults, formToGuardPayload } from '@/lib/guard-form-map';
 import { guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
@@ -335,6 +340,18 @@ export function RotaCalendarClient() {
     () => dirRows.filter((c) => c.type === 'sub').map((c) => ({ id: c.id, name: c.name })),
     [dirRows]
   );
+  // Contractor links live on the staff and site records, not in the planner JSON, so the
+  // contractor filters below read them from here. Legacy rows carry the pre-directory
+  // integer ids; a company without the sub-contractors feature simply gets none.
+  const { data: legacyMains = [] } = useMainContractors();
+  const { data: legacySubs = [] } = useSubContractors();
+  const { data: allGuards = [] } = useGuards();
+  const { data: allSites = [] } = useSites();
+  const guardById = useMemo(() => new Map(allGuards.map((g) => [String(g.id), g])), [allGuards]);
+  const siteByName = useMemo(
+    () => new Map(allSites.map((s) => [(s.name || '').trim().toLowerCase(), s])),
+    [allSites]
+  );
   const addStaffForm = useForm<GuardFormData>({
     resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData>,
     defaultValues: guardFormDefaults,
@@ -520,6 +537,8 @@ export function RotaCalendarClient() {
   const [statusFilter, setStatusFilter] = useState<'all' | AttStatus>('all');
   const [jobTitleFilter, setJobTitleFilter] = useState('all');
   const [siteFilter, setSiteFilter] = useState('all');
+  const [contractorFilter, setContractorFilter] = useState('all');
+  const [subContractorFilter, setSubContractorFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState<'all' | ShiftType>('all');
   const [shiftOpen, setShiftOpen] = useState(false);
   const [shiftPref, setShiftPref] = useState<{ dk: string; empId: string }>({ dk: '', empId: '' });
@@ -677,6 +696,34 @@ export function RotaCalendarClient() {
     return [...seen.values()].sort((a, b) => a.localeCompare(b));
   }, [state.shifts]);
 
+  /**
+   * Contractors reachable from this rota: linked to a member of staff on it, or to a
+   * site it uses. Same principle as the lists above — never offer a choice that would
+   * only empty the grid.
+   */
+  const rotaContractorRows = useMemo(() => {
+    const rows: ({ contractor_id?: string | null; main_contractor_id?: number | null; sub_contractor_id?: number | null } | undefined)[] = [];
+    for (const e of state.employees) rows.push(guardById.get(e.id));
+    for (const byDay of Object.values(state.shifts)) {
+      for (const list of Object.values(byDay || {})) {
+        for (const sh of list || []) {
+          const site = siteByName.get((sh.site || '').trim().toLowerCase());
+          if (site) rows.push(site);
+        }
+      }
+    }
+    return rows;
+  }, [state.employees, state.shifts, guardById, siteByName]);
+
+  const contractorOptions = useMemo(
+    () => usedContractorOptions(mains, legacyMains, 'main', rotaContractorRows),
+    [mains, legacyMains, rotaContractorRows]
+  );
+  const subContractorOptions = useMemo(
+    () => usedContractorOptions(subs, legacySubs, 'sub', rotaContractorRows),
+    [subs, legacySubs, rotaContractorRows]
+  );
+
   const typeOptions = useMemo(() => {
     const present = new Set<string>();
     for (const byDay of Object.values(state.shifts)) {
@@ -691,7 +738,37 @@ export function RotaCalendarClient() {
   }, [state.shifts]);
 
   /** Filters that narrow which *shifts* show, as opposed to which employees. */
-  const shiftFiltersActive = statusFilter !== 'all' || siteFilter !== 'all' || typeFilter !== 'all';
+  const shiftFiltersActive =
+    statusFilter !== 'all' ||
+    siteFilter !== 'all' ||
+    typeFilter !== 'all' ||
+    contractorFilter !== 'all' ||
+    subContractorFilter !== 'all';
+
+  /**
+   * A contractor owns the staff member, the site, or both, so a shift counts as theirs
+   * when *either* side is linked to them — the rule the backend applies to Payroll,
+   * Invoices and the rota list. In practice: pick a contractor and you keep everything
+   * their people did anywhere, plus everything anyone did on their sites.
+   */
+  const matchesContractorFilters = useCallback(
+    (empId: string, siteName: string) => {
+      if (contractorFilter === 'all' && subContractorFilter === 'all') return true;
+      const guard = guardById.get(empId);
+      const site = siteByName.get((siteName || '').trim().toLowerCase());
+      const checks: [string, 'main' | 'sub', typeof mains, typeof legacyMains][] = [
+        [contractorFilter, 'main', mains, legacyMains],
+        [subContractorFilter, 'sub', subs, legacySubs],
+      ];
+      for (const [selected, kind, directory, legacy] of checks) {
+        if (selected === 'all') continue;
+        const matches = contractorMatcher(selected, kind, directory, legacy);
+        if (!matches(guard) && !matches(site)) return false;
+      }
+      return true;
+    },
+    [contractorFilter, subContractorFilter, guardById, siteByName, mains, subs, legacyMains, legacySubs]
+  );
 
   const shiftMatchesFilters = useCallback(
     (empId: string, dk: string, idx: number, sh: ShiftRec) => {
@@ -703,9 +780,10 @@ export function RotaCalendarClient() {
         return false;
       }
       if (typeFilter !== 'all' && normalizeShiftType(sh.shiftType) !== typeFilter) return false;
+      if (!matchesContractorFilters(empId, sh.site || '')) return false;
       return true;
     },
-    [state.attendance, statusFilter, siteFilter, typeFilter]
+    [state.attendance, statusFilter, siteFilter, typeFilter, matchesContractorFilters]
   );
 
   /** An employee stays on the grid while at least one of their shifts survives the filters. */
@@ -740,6 +818,8 @@ export function RotaCalendarClient() {
     (statusFilter !== 'all' ? 1 : 0) +
     (jobTitleFilter !== 'all' ? 1 : 0) +
     (siteFilter !== 'all' ? 1 : 0) +
+    (contractorFilter !== 'all' ? 1 : 0) +
+    (subContractorFilter !== 'all' ? 1 : 0) +
     (typeFilter !== 'all' ? 1 : 0) +
     (empFilter.trim() ? 1 : 0);
 
@@ -747,6 +827,8 @@ export function RotaCalendarClient() {
     setStatusFilter('all');
     setJobTitleFilter('all');
     setSiteFilter('all');
+    setContractorFilter('all');
+    setSubContractorFilter('all');
     setTypeFilter('all');
     setEmpFilter('');
   }, []);
@@ -2377,6 +2459,36 @@ export function RotaCalendarClient() {
               {siteOptions.map((t) => (
                 <option key={t} value={t}>
                   Site: {t}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {contractorOptions.length > 0 ? (
+            <select
+              className="h-8 max-w-[170px] rounded-md border border-input bg-background px-2 text-xs"
+              value={contractorFilter}
+              onChange={(e) => setContractorFilter(e.target.value)}
+              aria-label="Contractor"
+            >
+              <option value="all">Contractor: All</option>
+              {contractorOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Contractor: {c.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {subContractorOptions.length > 0 ? (
+            <select
+              className="h-8 max-w-[170px] rounded-md border border-input bg-background px-2 text-xs"
+              value={subContractorFilter}
+              onChange={(e) => setSubContractorFilter(e.target.value)}
+              aria-label="Sub-contractor"
+            >
+              <option value="all">Sub-contractor: All</option>
+              {subContractorOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Sub-contractor: {c.name}
                 </option>
               ))}
             </select>

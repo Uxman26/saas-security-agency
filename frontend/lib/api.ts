@@ -1,4 +1,4 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -170,6 +170,24 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ email: sanitizeInput(email) }),
       }),
+    verifyMfa: (mfa_token: string, code: string): Promise<LoginResponse> =>
+      request<LoginResponse>('/auth/mfa/verify', {
+        method: 'POST',
+        body: JSON.stringify({ mfa_token, code }),
+      }),
+    mfaSetup: (): Promise<MfaSetupResponse> =>
+      request<MfaSetupResponse>('/auth/mfa/setup', { method: 'POST' }),
+    mfaConfirm: (code: string): Promise<MfaConfirmResponse> =>
+      request<MfaConfirmResponse>('/auth/mfa/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }),
+    mfaDisable: (code: string): Promise<{ enabled: boolean }> =>
+      request<{ enabled: boolean }>('/auth/mfa/disable', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }),
+    mfaStatus: (): Promise<MfaStatus> => request<MfaStatus>('/auth/mfa/status'),
   },
   /** The company's job title pick-list, managed on Staff → Job titles. */
   jobTitles: {
@@ -1282,6 +1300,280 @@ export const api = {
       request<AdminUserDetail>(`/admin/admins/${id}/reset-password`, {
         method: 'POST',
         body: JSON.stringify({ new_password }),
+      }),
+    dashboardExtended: (): Promise<import('./types').AdminDashboard> =>
+      request<import('./types').AdminDashboard>('/admin/dashboard/extended'),
+    search: (q: string, limit?: number): Promise<import('./types').GlobalSearchResult> => {
+      const params = new URLSearchParams({ q });
+      if (limit != null) params.append('limit', String(limit));
+      return request<import('./types').GlobalSearchResult>(`/admin/search?${params}`);
+    },
+    companySupportView: (id: number): Promise<import('./types').TenantSupportView> =>
+      request<import('./types').TenantSupportView>(`/admin/companies/${id}/support-view`),
+    setAccountStatus: (id: number, data: { status: string; reason?: string }) =>
+      request<{ id: number; account_status?: string; subscription_status?: string }>(
+        `/admin/companies/${id}/account-status`,
+        { method: 'POST', body: JSON.stringify(data) }
+      ),
+    grantTempAccess: (id: number, reason: string) =>
+      request<Record<string, unknown>>(`/admin/companies/${id}/temp-access`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    subscriptionAction: (
+      id: number,
+      data: { action: string; tier?: string; billing_cycle?: string; note?: string }
+    ): Promise<import('./types').Company> =>
+      request<import('./types').Company>(`/admin/companies/${id}/subscription-action`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    tickets: (params?: {
+      company_id?: number;
+      status?: string;
+      priority?: string;
+      assigned_to_user_id?: number;
+    }): Promise<import('./types').SupportTicket[]> => {
+      const q = new URLSearchParams();
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      if (params?.status) q.append('status', params.status);
+      if (params?.priority) q.append('priority', params.priority);
+      if (params?.assigned_to_user_id != null) q.append('assigned_to_user_id', String(params.assigned_to_user_id));
+      const qs = q.toString();
+      return request<import('./types').SupportTicket[]>(`/admin/tickets${qs ? `?${qs}` : ''}`);
+    },
+    createTicket: (data: {
+      subject: string;
+      body?: string;
+      company_id?: number;
+      category?: string;
+      priority?: string;
+      assigned_to_user_id?: number;
+    }): Promise<import('./types').SupportTicket> =>
+      request<import('./types').SupportTicket>('/admin/tickets', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    ticket: (id: number): Promise<import('./types').SupportTicket> =>
+      request<import('./types').SupportTicket>(`/admin/tickets/${id}`),
+    patchTicket: (
+      id: number,
+      data: {
+        subject?: string;
+        category?: string;
+        priority?: string;
+        status?: string;
+        assigned_to_user_id?: number | null;
+        company_id?: number | null;
+      }
+    ): Promise<import('./types').SupportTicket> =>
+      request<import('./types').SupportTicket>(`/admin/tickets/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    addTicketMessage: (id: number, data: { body: string; is_internal?: boolean }): Promise<import('./types').SupportTicket> =>
+      request<import('./types').SupportTicket>(`/admin/tickets/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    errors: (params?: {
+      company_id?: number;
+      severity?: string;
+      status?: string;
+      source?: string;
+    }): Promise<import('./types').ErrorLogItem[]> => {
+      const q = new URLSearchParams();
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      if (params?.severity) q.append('severity', params.severity);
+      if (params?.status) q.append('status', params.status);
+      if (params?.source) q.append('source', params.source);
+      const qs = q.toString();
+      return request<import('./types').ErrorLogItem[]>(`/admin/errors${qs ? `?${qs}` : ''}`);
+    },
+    resolveError: (id: number) =>
+      request<{ id: number; status: string }>(`/admin/errors/${id}/resolve`, { method: 'POST' }),
+    securityEvents: (company_id?: number) => {
+      const q = company_id != null ? `?company_id=${company_id}` : '';
+      return request<Record<string, unknown>[]>(`/admin/security-events${q}`);
+    },
+    sessions: (company_id?: number): Promise<import('./types').AdminSession[]> => {
+      const q = company_id != null ? `?company_id=${company_id}` : '';
+      return request<import('./types').AdminSession[]>(`/admin/sessions${q}`);
+    },
+    revokeSession: (id: number) =>
+      request<{ id: number; revoked: boolean }>(`/admin/sessions/${id}/revoke`, { method: 'POST' }),
+    impersonate: (data: { user_id: number; reason: string; mode?: string }) =>
+      request<{
+        access_token: string;
+        token_type: string;
+        expires_at: string;
+        target_user_id: number;
+        target_email: string;
+        target_name?: string;
+        company_id?: number;
+        mode: string;
+      }>('/admin/impersonate', { method: 'POST', body: JSON.stringify(data) }),
+    endImpersonate: () => request<{ ended: boolean }>('/admin/impersonate/end', { method: 'POST' }),
+    featureFlags: (): Promise<import('./types').FeatureFlag[]> =>
+      request<import('./types').FeatureFlag[]>('/admin/feature-flags'),
+    putFeatureFlag: (
+      key: string,
+      data: { name?: string; description?: string; enabled?: boolean }
+    ): Promise<import('./types').FeatureFlag> =>
+      request<import('./types').FeatureFlag>(`/admin/feature-flags/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    jobs: (status?: string): Promise<import('./types').BackgroundJobItem[]> => {
+      const q = status ? `?status=${encodeURIComponent(status)}` : '';
+      return request<import('./types').BackgroundJobItem[]>(`/admin/jobs${q}`);
+    },
+    retryJob: (id: number) =>
+      request<{ id: number; status: string; attempts?: number }>(`/admin/jobs/${id}/retry`, { method: 'POST' }),
+    cancelJob: (id: number) =>
+      request<{ id: number; status: string }>(`/admin/jobs/${id}/cancel`, { method: 'POST' }),
+    webhooks: (company_id?: number) => {
+      const q = company_id != null ? `?company_id=${company_id}` : '';
+      return request<Record<string, unknown>[]>(`/admin/webhooks${q}`);
+    },
+    platformRoles: () => request<Record<string, unknown>[]>('/admin/platform-roles'),
+    config: () => request<Record<string, unknown>[]>('/admin/config'),
+    putConfig: (key: string, data: { value: unknown; category?: string; is_sensitive?: boolean }) =>
+      request<Record<string, unknown>>(`/admin/config/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    notify: (data: {
+      company_id?: number;
+      user_id?: number;
+      subject: string;
+      body: string;
+      channel?: string;
+    }) =>
+      request<{ id: number; status: string; recipient?: string | null }>('/admin/notify', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    sendResetEmail: (user_id: number) =>
+      request<{ sent: boolean; email: string }>('/admin/users/send-reset-email', {
+        method: 'POST',
+        body: JSON.stringify({ user_id }),
+      }),
+    reportsSummary: (days?: number): Promise<import('./types').AdminReportsSummary> => {
+      const q = days != null ? `?days=${days}` : '';
+      return request<import('./types').AdminReportsSummary>(`/admin/reports/summary${q}`);
+    },
+    reportsTimeseries: (days?: number): Promise<AdminReportsTimeseries> => {
+      const q = days != null ? `?days=${days}` : '';
+      return request<AdminReportsTimeseries>(`/admin/reports/timeseries${q}`);
+    },
+    reportsExport: (days?: number): Promise<Blob> => {
+      const q = days != null ? `?days=${days}` : '';
+      return requestBlob(`/admin/reports/export${q}`);
+    },
+    tempAccess: (company_id?: number) => {
+      const q = company_id != null ? `?company_id=${company_id}` : '';
+      return request<Record<string, unknown>[]>(`/admin/temp-access${q}`);
+    },
+    apiUsage: (params?: { days?: number; company_id?: number }): Promise<ApiUsageSummary> => {
+      const q = new URLSearchParams();
+      if (params?.days != null) q.append('days', String(params.days));
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      const qs = q.toString();
+      return request<ApiUsageSummary>(`/admin/api-usage${qs ? `?${qs}` : ''}`);
+    },
+    refunds: (company_id?: number): Promise<PaymentRefund[]> => {
+      const q = company_id != null ? `?company_id=${company_id}` : '';
+      return request<PaymentRefund[]>(`/admin/refunds${q}`);
+    },
+    createRefund: (data: {
+      company_id: number;
+      amount: number;
+      invoice_id?: number;
+      reason?: string;
+    }): Promise<PaymentRefund> =>
+      request<PaymentRefund>('/admin/refunds', { method: 'POST', body: JSON.stringify(data) }),
+    disputeInvoice: (id: number, note?: string) =>
+      request<{ id: number; status: string; invoice_number?: string }>(`/admin/invoices/${id}/dispute`, {
+        method: 'POST',
+        body: JSON.stringify({ note }),
+      }),
+    notificationTemplates: (): Promise<NotificationTemplate[]> =>
+      request<NotificationTemplate[]>('/admin/notification-templates'),
+    putNotificationTemplate: (
+      key: string,
+      data: { name?: string; channel?: string; subject?: string; body?: string; is_active?: boolean }
+    ): Promise<NotificationTemplate> =>
+      request<NotificationTemplate>(`/admin/notification-templates/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    notificationLogs: (): Promise<NotificationLogItem[]> =>
+      request<NotificationLogItem[]>('/admin/notification-logs'),
+    uploadTicketAttachment: async (id: number, file: File) => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch(`${API_URL}/admin/tickets/${id}/attachments`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+        const d = error.detail;
+        throw new ApiError(response.status, typeof d === 'string' ? d : 'Upload failed');
+      }
+      return response.json();
+    },
+    exportCompany: (id: number, format: 'json' | 'csv' = 'json'): Promise<Blob | Record<string, unknown>> => {
+      if (format === 'csv') return requestBlob(`/admin/companies/${id}/export?format=csv`);
+      return request<Record<string, unknown>>(`/admin/companies/${id}/export?format=json`);
+    },
+    retention: (): Promise<RetentionPolicy> => request<RetentionPolicy>('/admin/compliance/retention'),
+    putRetention: async (data: Partial<RetentionPolicy>): Promise<RetentionPolicy> => {
+      const res = await request<RetentionPolicy | { value: RetentionPolicy }>('/admin/compliance/retention', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      return 'value' in res && res.value ? res.value : (res as RetentionPolicy);
+    },
+    purgeLogs: (): Promise<Record<string, unknown>> =>
+      request<Record<string, unknown>>('/admin/compliance/purge', { method: 'POST' }),
+    gdprDelete: (id: number, data: { confirm_name: string; hard_delete?: boolean }) =>
+      request<Record<string, unknown>>(`/admin/companies/${id}/gdpr-delete`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    suspicious: (): Promise<SuspiciousEvent[]> => request<SuspiciousEvent[]>('/admin/suspicious'),
+    scanSuspicious: (): Promise<{ findings: SuspiciousEvent[] }> =>
+      request<{ findings: SuspiciousEvent[] }>('/admin/suspicious/scan', { method: 'POST' }),
+    passwordPolicy: (): Promise<PasswordPolicy> => request<PasswordPolicy>('/admin/password-policy'),
+    putPasswordPolicy: async (data: Partial<PasswordPolicy>): Promise<PasswordPolicy> => {
+      const res = await request<PasswordPolicy | { value: PasswordPolicy }>('/admin/password-policy', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      return 'value' in res && res.value ? res.value : (res as PasswordPolicy);
+    },
+    maintenance: (): Promise<MaintenanceConfig> => request<MaintenanceConfig>('/admin/maintenance'),
+    putMaintenance: async (data: { enabled: boolean; message?: string | null }): Promise<MaintenanceConfig> => {
+      const res = await request<MaintenanceConfig | { value: MaintenanceConfig }>('/admin/maintenance', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      return 'value' in res && res.value ? res.value : (res as MaintenanceConfig);
+    },
+    platformRoleAssignments: (): Promise<PlatformRoleAssignment[]> =>
+      request<PlatformRoleAssignment[]>('/admin/platform-role-assignments'),
+    assignPlatformRole: (data: { user_id: number; role_slug: string }) =>
+      request<{ user_id: number; role: string }>('/admin/platform-role-assignments', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    syncWorkers: (): Promise<{ created: number; jobs: { job_name: string; queue: string }[] }> =>
+      request<{ created: number; jobs: { job_name: string; queue: string }[] }>('/admin/jobs/sync-workers', {
+        method: 'POST',
       }),
   },
   roles: {

@@ -2,6 +2,7 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -68,7 +69,7 @@ export default function AdminCompaniesPage() {
 
   const getSearchText = useCallback(
     (c: Company) =>
-      [String(c.id), c.name, String(c.admin_id), c.subscription_tier ?? '', c.subscription_status ?? '', c.created_at]
+      [String(c.id), c.name, String(c.admin_id), c.subscription_tier ?? '', c.subscription_status ?? '', c.account_status ?? '', c.created_at]
         .filter(Boolean)
         .join(' '),
     []
@@ -83,6 +84,8 @@ export default function AdminCompaniesPage() {
         return c.subscription_tier || '';
       case 'status':
         return c.subscription_status || '';
+      case 'account':
+        return c.account_status || '';
       case 'users':
         return c.user_count ?? 0;
       default:
@@ -177,6 +180,7 @@ export default function AdminCompaniesPage() {
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Plan" colKey="tier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Account" colKey="account" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Users" colKey="users" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableCell>Billing</TableCell>
                         <TableCell />
@@ -186,12 +190,20 @@ export default function AdminCompaniesPage() {
                       {pageRows.map((c) => (
                         <TableRow key={c.id}>
                           <TableCell>{c.id}</TableCell>
-                          <TableCell className="font-medium">{c.name}</TableCell>
+                          <TableCell className="font-medium">
+                            <Link href={`/admin/companies/${c.id}`} className="text-primary hover:underline">
+                              {c.name}
+                            </Link>
+                          </TableCell>
                           <TableCell className="capitalize">{c.subscription_tier ?? '—'}</TableCell>
                           <TableCell className="capitalize">{c.subscription_status ?? '—'}</TableCell>
+                          <TableCell className="capitalize">{c.account_status ?? 'active'}</TableCell>
                           <TableCell>{c.user_count ?? 0}{c.max_users != null ? ` / ${c.max_users}` : ''}</TableCell>
                           <TableCell className="capitalize">{c.billing_cycle || 'monthly'}</TableCell>
-                          <TableCell>
+                          <TableCell className="space-x-2">
+                            <Button size="sm" variant="outline" asChild>
+                              <Link href={`/admin/companies/${c.id}`}>Support</Link>
+                            </Button>
                             <Button size="sm" variant="outline" onClick={() => openEdit(c)}>Manage</Button>
                           </TableCell>
                         </TableRow>

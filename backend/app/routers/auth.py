@@ -9,6 +9,8 @@ from app.models import User, Company
 from app.schemas import (
     ForgotPasswordRequest,
     MessageResponse,
+    MfaConfirmRequest,
+    MfaVerifyRequest,
     ProfileUpdate,
     ResendVerificationRequest,
     ResetPasswordRequest,
@@ -66,6 +68,45 @@ def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db
     return auth_service.authenticate_user(
         db, credentials.email, credentials.password, ip_address=ip, user_agent=ua, remember_me=bool(credentials.remember_me)
     )
+
+
+@router.post("/mfa/verify", response_model=TokenResponse)
+def mfa_verify(body: MfaVerifyRequest, request: Request, db: Session = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    return auth_service.complete_mfa_login(db, body.mfa_token, body.code, ip_address=ip, user_agent=ua)
+
+
+@router.post("/mfa/setup")
+def mfa_setup(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services import mfa_service
+    if getattr(current_user, "role", None) != SUPER_ADMIN_ROLE:
+        raise HTTPException(status_code=403, detail="Super admin only")
+    return mfa_service.setup_mfa(db, current_user)
+
+
+@router.post("/mfa/confirm")
+def mfa_confirm(body: MfaConfirmRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services import mfa_service
+    if getattr(current_user, "role", None) != SUPER_ADMIN_ROLE:
+        raise HTTPException(status_code=403, detail="Super admin only")
+    return mfa_service.confirm_mfa(db, current_user, body.code)
+
+
+@router.post("/mfa/disable")
+def mfa_disable(body: MfaConfirmRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services import mfa_service
+    if getattr(current_user, "role", None) != SUPER_ADMIN_ROLE:
+        raise HTTPException(status_code=403, detail="Super admin only")
+    return mfa_service.disable_mfa(db, current_user, body.code)
+
+
+@router.get("/mfa/status")
+def mfa_status(current_user: User = Depends(get_current_user)):
+    return {
+        "enabled": bool(getattr(current_user, "mfa_enabled", False)),
+        "required_for_role": getattr(current_user, "role", None) == SUPER_ADMIN_ROLE,
+    }
 
 
 @router.post("/swagger-login", response_model=TokenResponse, include_in_schema=False)

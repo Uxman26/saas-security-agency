@@ -101,6 +101,9 @@ class User(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=True)
     sidebar_modules_json = Column(Text, nullable=True)
+    mfa_enabled = Column(Boolean, default=False)
+    mfa_secret = Column(String, nullable=True)
+    mfa_backup_codes_json = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="users", foreign_keys=[company_id])
@@ -170,6 +173,11 @@ class Company(Base):
     twilio_phone_number = Column(String)
     sms_templates_json = Column(Text)
     contract_expiry_alert_sent_date = Column(Date, nullable=True)
+    account_status = Column(String, default="active")
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    locked_reason = Column(Text, nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    archived_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     admin = relationship("User", back_populates="admin_company", foreign_keys=[admin_id])
@@ -1770,3 +1778,277 @@ class LoneWorkerEvent(Base):
     source = Column(String, default="system")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     actor = relationship("User", foreign_keys=[actor_user_id])
+
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_number = Column(String, unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_to_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    subject = Column(String, nullable=False)
+    category = Column(String, default="general")
+    priority = Column(String, default="medium")
+    status = Column(String, default="open", index=True)
+    sla_due_at = Column(DateTime(timezone=True), nullable=True)
+    sla_breached = Column(Boolean, default=False)
+    escalated_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+    assigned_to = relationship("User", foreign_keys=[assigned_to_user_id])
+    messages = relationship("SupportTicketMessage", back_populates="ticket", cascade="all, delete-orphan")
+    attachments = relationship("SupportTicketAttachment", back_populates="ticket", cascade="all, delete-orphan")
+
+
+class SupportTicketMessage(Base):
+    __tablename__ = "support_ticket_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("support_tickets.id"), nullable=False, index=True)
+    author_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    body = Column(Text, nullable=False)
+    is_internal = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    ticket = relationship("SupportTicket", back_populates="messages")
+    author = relationship("User")
+
+
+class SupportTicketAttachment(Base):
+    __tablename__ = "support_ticket_attachments"
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_id = Column(Integer, ForeignKey("support_tickets.id"), nullable=False, index=True)
+    message_id = Column(Integer, ForeignKey("support_ticket_messages.id"), nullable=True)
+    file_name = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    content_type = Column(String)
+    size_bytes = Column(Integer)
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    ticket = relationship("SupportTicket", back_populates="attachments")
+
+
+class TemporaryAccessSession(Base):
+    __tablename__ = "temporary_access_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    granted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reason = Column(Text, nullable=False)
+    token = Column(String(64), unique=True, index=True, nullable=False)
+    starts_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    company = relationship("Company")
+    granted_by = relationship("User")
+
+
+class ErrorLog(Base):
+    __tablename__ = "error_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    source = Column(String, default="application", index=True)
+    module = Column(String)
+    severity = Column(String, default="error", index=True)
+    status = Column(String, default="open", index=True)
+    error_code = Column(String)
+    message = Column(Text, nullable=False)
+    stack_trace = Column(Text)
+    request_id = Column(String, index=True)
+    path = Column(String)
+    method = Column(String)
+    occurrence_count = Column(Integer, default=1)
+    first_seen_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    fingerprint = Column(String, index=True)
+    meta_json = Column(Text)
+
+
+class SecurityEvent(Base):
+    __tablename__ = "security_events"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    severity = Column(String, default="info")
+    message = Column(Text)
+    ip_address = Column(String)
+    user_agent = Column(String(500))
+    meta_json = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class FeatureFlag(Base):
+    __tablename__ = "feature_flags"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    enabled = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class TenantFeature(Base):
+    __tablename__ = "tenant_features"
+    __table_args__ = (UniqueConstraint("company_id", "feature_key", name="uq_tenant_feature"),)
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    feature_key = Column(String, nullable=False)
+    enabled = Column(Boolean, default=True)
+    limit_value = Column(Integer, nullable=True)
+    config_json = Column(Text)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class SubscriptionChange(Base):
+    __tablename__ = "subscription_changes"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    change_type = Column(String, nullable=False)
+    from_tier = Column(String)
+    to_tier = Column(String)
+    from_status = Column(String)
+    to_status = Column(String)
+    from_cycle = Column(String)
+    to_cycle = Column(String)
+    note = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class PaymentRefund(Base):
+    __tablename__ = "payment_refunds"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    subscription_invoice_id = Column(Integer, ForeignKey("subscription_invoices.id"), nullable=True)
+    amount = Column(Float, nullable=False)
+    currency = Column(String, default="gbp")
+    reason = Column(Text)
+    status = Column(String, default="completed")
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class NotificationTemplate(Base):
+    __tablename__ = "notification_templates"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    channel = Column(String, default="email")
+    subject = Column(String)
+    body = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PlatformNotification(Base):
+    __tablename__ = "platform_notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    template_key = Column(String)
+    channel = Column(String, default="email")
+    subject = Column(String)
+    body = Column(Text)
+    status = Column(String, default="queued")
+    error_message = Column(Text)
+    sent_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class BackgroundJob(Base):
+    __tablename__ = "background_jobs"
+    id = Column(Integer, primary_key=True, index=True)
+    job_name = Column(String, nullable=False, index=True)
+    queue = Column(String, default="default")
+    status = Column(String, default="queued", index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    payload_json = Column(Text)
+    result_json = Column(Text)
+    error_message = Column(Text)
+    attempts = Column(Integer, default=0)
+    max_attempts = Column(Integer, default=3)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class WebhookLog(Base):
+    __tablename__ = "webhook_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    provider = Column(String, index=True)
+    event_type = Column(String)
+    status = Column(String, default="received")
+    http_status = Column(Integer)
+    request_body = Column(Text)
+    response_body = Column(Text)
+    error_message = Column(Text)
+    attempts = Column(Integer, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class PlatformRole(Base):
+    __tablename__ = "platform_roles"
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PlatformPermission(Base):
+    __tablename__ = "platform_permissions"
+    id = Column(Integer, primary_key=True, index=True)
+    module = Column(String, nullable=False, index=True)
+    action = Column(String, nullable=False)
+    code = Column(String, unique=True, nullable=False, index=True)
+    description = Column(String)
+    is_sensitive = Column(Boolean, default=False)
+
+
+class PlatformRolePermission(Base):
+    __tablename__ = "platform_role_permissions"
+    __table_args__ = (UniqueConstraint("role_id", "permission_id", name="uq_platform_role_perm"),)
+    id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("platform_roles.id"), nullable=False, index=True)
+    permission_id = Column(Integer, ForeignKey("platform_permissions.id"), nullable=False)
+
+
+class PlatformAdminRole(Base):
+    __tablename__ = "platform_admin_roles"
+    __table_args__ = (UniqueConstraint("user_id", "role_id", name="uq_platform_admin_role"),)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role_id = Column(Integer, ForeignKey("platform_roles.id"), nullable=False, index=True)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PasswordResetRequest(Base):
+    __tablename__ = "password_reset_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    requested_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    channel = Column(String, default="email")
+    status = Column(String, default="sent")
+    ip_address = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class SystemConfiguration(Base):
+    __tablename__ = "system_configurations"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, nullable=False, index=True)
+    value_json = Column(Text)
+    category = Column(String, default="general")
+    is_sensitive = Column(Boolean, default=False)
+    updated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

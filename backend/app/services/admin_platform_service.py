@@ -104,6 +104,12 @@ def company_admin_out(db: Session, co: Company) -> dict:
         "user_count": int(user_count or 0),
         "enabled_modules": parse_modules(co.enabled_modules_json),
         "usage": company_usage(db, co.id),
+        "account_status": getattr(co, "account_status", None) or "active",
+        "locked_at": getattr(co, "locked_at", None),
+        "locked_reason": getattr(co, "locked_reason", None),
+        "archived_at": getattr(co, "archived_at", None),
+        "email": co.email,
+        "phone": co.phone,
         "created_at": co.created_at,
     }
 

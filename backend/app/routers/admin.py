@@ -66,9 +66,37 @@ def _receipt_row(r: SubscriptionReceipt, db: Session) -> SubscriptionReceiptResp
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    from datetime import datetime, timedelta, timezone
+    from app.models import ErrorLog, BackgroundJob
+    from app.services import support_ticket_service as tickets
+
     sub_inv.ensure_renewal_invoices(db)
     stats = sub_inv.dashboard_stats(db)
     stats["platform_usage"] = tenant_usage_service.platform_usage_summary(db)
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+    companies = db.query(Company).all()
+    stats["inactive_tenants"] = sum(1 for c in companies if (c.subscription_status or "") not in ("active", "trialing"))
+    stats["new_tenants_7d"] = sum(
+        1
+        for c in companies
+        if c.created_at and (c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=timezone.utc)) >= week_ago
+    )
+    stats["active_users"] = db.query(User).filter(User.is_active == True, User.company_id.isnot(None)).count()
+    stats["locked_accounts"] = sum(1 for c in companies if (getattr(c, "account_status", None) or "") == "locked")
+    stats["trial_subscriptions"] = sum(1 for c in companies if (c.subscription_status or "") in ("trial", "trialing"))
+    stats["expiring_subscriptions"] = sum(
+        1
+        for c in companies
+        if c.subscription_end
+        and (c.subscription_end if c.subscription_end.tzinfo else c.subscription_end.replace(tzinfo=timezone.utc))
+        <= now + timedelta(days=14)
+        and (c.subscription_status or "") == "active"
+    )
+    stats["open_tickets"] = tickets.open_ticket_count(db)
+    stats["sla_breaches"] = tickets.sla_breach_count(db)
+    stats["critical_errors"] = db.query(ErrorLog).filter(ErrorLog.severity == "critical", ErrorLog.status == "open").count()
+    stats["failed_jobs"] = db.query(BackgroundJob).filter(BackgroundJob.status == "failed").count()
     return AdminDashboardResponse(**stats)
 
 

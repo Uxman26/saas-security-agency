@@ -2,6 +2,7 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -73,9 +74,14 @@ export default function AdminPaymentsPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">All payments</h1>
-            <Button variant="outline" size="sm" onClick={load}>
-              Refresh
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/admin/refunds">Refunds</Link>
+              </Button>
+              <Button variant="outline" size="sm" onClick={load}>
+                Refresh
+              </Button>
+            </div>
           </div>
           <Input
             placeholder="Search payments..."

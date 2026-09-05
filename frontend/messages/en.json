@@ -115,7 +115,15 @@
     "loginFailed": "Login failed",
     "signupFailed": "Signup failed",
     "accountCreatedVerify": "Account created — check your email to verify",
-    "accountCreatedPayment": "Account created — complete payment to activate"
+    "accountCreatedPayment": "Account created — complete payment to activate",
+    "mfaTitle": "Two-factor authentication",
+    "mfaSubtitle": "Enter the 6-digit code from your authenticator app",
+    "mfaCode": "Authentication code",
+    "mfaCodeRequired": "Enter your 6-digit code",
+    "mfaInvalid": "Invalid or expired code",
+    "verifyMfa": "Verify and continue",
+    "verifyingMfa": "Verifying…",
+    "mfaBack": "Back to sign in"
   },
   "payment": {
     "title": "Awaiting Payment",
@@ -214,13 +222,26 @@
     "adminCompanies": "Companies",
     "adminUsers": "Users",
     "adminAdmins": "Admins",
+    "adminTickets": "Tickets",
+    "adminErrors": "Errors",
+    "adminSessions": "Sessions",
+    "adminJobs": "Jobs",
+    "adminReports": "Reports",
+    "adminSearch": "Search",
+    "adminFlags": "Feature flags",
     "adminInvoices": "Sub invoices",
     "adminPayments": "Payments",
     "adminReceipts": "Receipts",
     "adminPackages": "Packages",
     "adminAudit": "Audit trail",
     "adminSmtp": "SMTP email",
-    "adminLogs": "Activity logs"
+    "adminLogs": "Activity logs",
+    "adminSecurity": "Security",
+    "adminCompliance": "Compliance",
+    "adminApiUsage": "API usage",
+    "adminTemplates": "Templates",
+    "adminRefunds": "Refunds",
+    "adminRoles": "Platform roles"
   },
   "marketing": {
     "nav": {

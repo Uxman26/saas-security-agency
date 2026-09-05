@@ -131,7 +131,8 @@ def get_current_user(
         raise credentials_exception
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
-    if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
+    is_impersonating = bool(getattr(session, "impersonator_user_id", None))
+    if getattr(user, "role", None) != SUPER_ADMIN_ROLE and not is_impersonating:
         from app.services.receipt_service import company_subscription_blocked
         block = company_subscription_blocked(db, user)
         if block:
@@ -139,7 +140,23 @@ def get_current_user(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=block,
             )
-    # Only a request that actually succeeded counts as activity.
+        if user.company_id:
+            from app.models import Company, TemporaryAccessSession
+            from datetime import datetime, timezone
+            co = db.query(Company).filter(Company.id == user.company_id).first()
+            if co and (getattr(co, "account_status", None) or "") == "locked":
+                now = datetime.now(timezone.utc)
+                temp = (
+                    db.query(TemporaryAccessSession)
+                    .filter(
+                        TemporaryAccessSession.company_id == co.id,
+                        TemporaryAccessSession.revoked_at.is_(None),
+                        TemporaryAccessSession.expires_at > now,
+                    )
+                    .first()
+                )
+                if not temp:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is locked")
     session_service.touch(db, session)
     return user
 

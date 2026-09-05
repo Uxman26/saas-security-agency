@@ -29,9 +29,11 @@ export default function LoginPage() {
   const t = useTranslations('auth');
   const tc = useTranslations('common');
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, completeMfa } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
 
   const {
     register,
@@ -46,14 +48,21 @@ export default function LoginPage() {
     },
   });
 
+  const goAfterLogin = (role?: string | null) => {
+    const r = (role || '').toLowerCase();
+    router.push(r === 'client' || r === 'staff' ? '/my-portal' : '/dashboard');
+  };
+
   const onSubmit = async (data: { email: string; password: string; remember_me?: boolean }) => {
     setLoading(true);
     try {
-      const signedIn = await login(data.email, data.password, data.remember_me ?? true);
-      // Portal roles can only view the portal modules, so /dashboard would render an
-      // empty shell before they navigated away themselves.
-      const role = (signedIn?.role || '').toLowerCase();
-      router.push(role === 'client' || role === 'staff' ? '/my-portal' : '/dashboard');
+      const result = await login(data.email, data.password, data.remember_me ?? true);
+      if ('mfa_required' in result && result.mfa_required) {
+        setMfaToken(result.mfa_token);
+        setMfaCode('');
+        return;
+      }
+      goAfterLogin(result.user.role);
     } catch (err: unknown) {
       const pending = parsePaymentPending(err);
       if (pending?.receipt_ref) {
@@ -73,85 +82,139 @@ export default function LoginPage() {
     }
   };
 
+  const onMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaToken || mfaCode.trim().length < 6) {
+      toast.error(t('mfaCodeRequired'));
+      return;
+    }
+    setLoading(true);
+    try {
+      const signedIn = await completeMfa(mfaToken, mfaCode.trim());
+      goAfterLogin(signedIn.role);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : t('mfaInvalid'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Auth3DShell
-      title={t('loginTitle')}
-      subtitle={t('loginSubtitle')}
+      title={mfaToken ? t('mfaTitle') : t('loginTitle')}
+      subtitle={mfaToken ? t('mfaSubtitle') : t('loginSubtitle')}
       topLink={{ href: '/pricing', label: tc('viewPlans') }}
       footer={
-        <>
-          {tc('dontHaveAccount')}{' '}
-          <Link href="/pricing" className={authDarkLinkClass}>
-            {tc('signUp')}
-          </Link>
-        </>
+        mfaToken ? (
+          <button
+            type="button"
+            className={authDarkLinkClass}
+            onClick={() => {
+              setMfaToken(null);
+              setMfaCode('');
+            }}
+          >
+            {t('mfaBack')}
+          </button>
+        ) : (
+          <>
+            {tc('dontHaveAccount')}{' '}
+            <Link href="/pricing" className={authDarkLinkClass}>
+              {tc('signUp')}
+            </Link>
+          </>
+        )
       }
     >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSubmit(onSubmit)(e);
-        }}
-        className="space-y-5"
-      >
-        <div className="space-y-2">
-          <Label htmlFor="email" className="text-sm font-medium text-white/70">
-            {t('email')}
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="name@company.com"
-            className={fieldClass}
-            {...register('email')}
-          />
-          {errors.email && <p className={authDarkErrorClass}>{errors.email.message as string}</p>}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password" className="text-sm font-medium text-white/70">
-            {t('password')}
-          </Label>
-          <div className="relative">
+      {mfaToken ? (
+        <form onSubmit={onMfaSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="mfa_code" className="text-sm font-medium text-white/70">
+              {t('mfaCode')}
+            </Label>
             <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              className={cn(fieldClass, 'pe-11')}
-              {...register('password')}
+              id="mfa_code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={8}
+              placeholder="000000"
+              className={cn(fieldClass, 'tracking-[0.3em] text-center text-lg')}
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              autoFocus
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute end-3 top-1/2 -translate-y-1/2 text-white/40 transition-colors hover:text-white"
-              aria-label={showPassword ? t('hidePassword') : t('showPassword')}
-            >
-              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </button>
           </div>
-          {errors.password && <p className={authDarkErrorClass}>{errors.password.message as string}</p>}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <label className="flex cursor-pointer items-center gap-2 text-white/60">
-            <input
-              type="checkbox"
-              className="size-4 rounded border-white/20 bg-white/5 accent-[#F45100]"
-              {...register('remember_me')}
+          <Button type="submit" className={authDarkBtnClass} disabled={loading || mfaCode.length < 6}>
+            {loading ? t('verifyingMfa') : t('verifyMfa')}
+          </Button>
+        </form>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit(onSubmit)(e);
+          }}
+          className="space-y-5"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm font-medium text-white/70">
+              {t('email')}
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="name@company.com"
+              className={fieldClass}
+              {...register('email')}
             />
-            <span>{t('rememberMe')}</span>
-          </label>
-          <Link href="/forgot-password" className={authDarkLinkClass}>
-            {t('forgotPassword')}
-          </Link>
-        </div>
+            {errors.email && <p className={authDarkErrorClass}>{errors.email.message as string}</p>}
+          </div>
 
-        <Button type="submit" className={authDarkBtnClass} disabled={loading}>
-          {loading ? t('signingIn') : tc('signIn')}
-        </Button>
-      </form>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm font-medium text-white/70">
+              {t('password')}
+            </Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="Enter your password"
+                className={cn(fieldClass, 'pe-11')}
+                {...register('password')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-white/40 transition-colors hover:text-white"
+                aria-label={showPassword ? t('hidePassword') : t('showPassword')}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            {errors.password && <p className={authDarkErrorClass}>{errors.password.message as string}</p>}
+          </div>
+
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <label className="flex cursor-pointer items-center gap-2 text-white/60">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-white/20 bg-white/5 accent-[#F45100]"
+                {...register('remember_me')}
+              />
+              <span>{t('rememberMe')}</span>
+            </label>
+            <Link href="/forgot-password" className={authDarkLinkClass}>
+              {t('forgotPassword')}
+            </Link>
+          </div>
+
+          <Button type="submit" className={authDarkBtnClass} disabled={loading}>
+            {loading ? t('signingIn') : tc('signIn')}
+          </Button>
+        </form>
+      )}
     </Auth3DShell>
   );
 }

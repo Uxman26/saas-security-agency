@@ -1303,6 +1303,254 @@ def run():
         )
         cur.execute("CREATE INDEX IF NOT EXISTS ix_occ_entries_sheet ON occurrence_entries(sheet_id)")
 
+    for table, col, spec in (
+        ("companies", "account_status", "TEXT DEFAULT 'active'"),
+        ("companies", "locked_at", "TEXT"),
+        ("companies", "locked_reason", "TEXT"),
+        ("companies", "archived_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("users", "mfa_enabled", "INTEGER DEFAULT 0"),
+        ("users", "mfa_secret", "TEXT"),
+        ("users", "mfa_backup_codes_json", "TEXT"),
+    ):
+        if table_exists(cur, table) and not column_exists(cur, table, col):
+            try:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+
+    platform_tables = {
+        "support_tickets": """CREATE TABLE support_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_number TEXT UNIQUE NOT NULL,
+            company_id INTEGER REFERENCES companies(id),
+            created_by_user_id INTEGER REFERENCES users(id),
+            assigned_to_user_id INTEGER REFERENCES users(id),
+            subject TEXT NOT NULL,
+            category TEXT DEFAULT 'general',
+            priority TEXT DEFAULT 'medium',
+            status TEXT DEFAULT 'open',
+            sla_due_at TEXT,
+            sla_breached INTEGER DEFAULT 0,
+            escalated_at TEXT,
+            resolved_at TEXT,
+            closed_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "support_ticket_messages": """CREATE TABLE support_ticket_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER NOT NULL REFERENCES support_tickets(id),
+            author_user_id INTEGER REFERENCES users(id),
+            body TEXT NOT NULL,
+            is_internal INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "support_ticket_attachments": """CREATE TABLE support_ticket_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER NOT NULL REFERENCES support_tickets(id),
+            message_id INTEGER REFERENCES support_ticket_messages(id),
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            content_type TEXT,
+            size_bytes INTEGER,
+            uploaded_by_user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "temporary_access_sessions": """CREATE TABLE temporary_access_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            granted_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            reason TEXT NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            starts_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expires_at TEXT NOT NULL,
+            revoked_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "error_logs": """CREATE TABLE error_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            source TEXT DEFAULT 'application',
+            module TEXT,
+            severity TEXT DEFAULT 'error',
+            status TEXT DEFAULT 'open',
+            error_code TEXT,
+            message TEXT NOT NULL,
+            stack_trace TEXT,
+            request_id TEXT,
+            path TEXT,
+            method TEXT,
+            occurrence_count INTEGER DEFAULT 1,
+            first_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TEXT,
+            resolved_by_user_id INTEGER REFERENCES users(id),
+            fingerprint TEXT,
+            meta_json TEXT
+        )""",
+        "security_events": """CREATE TABLE security_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            user_id INTEGER REFERENCES users(id),
+            event_type TEXT NOT NULL,
+            severity TEXT DEFAULT 'info',
+            message TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            meta_json TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "feature_flags": """CREATE TABLE feature_flags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            enabled INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "tenant_features": """CREATE TABLE tenant_features (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            feature_key TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            limit_value INTEGER,
+            config_json TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(company_id, feature_key)
+        )""",
+        "subscription_changes": """CREATE TABLE subscription_changes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            actor_user_id INTEGER REFERENCES users(id),
+            change_type TEXT NOT NULL,
+            from_tier TEXT,
+            to_tier TEXT,
+            from_status TEXT,
+            to_status TEXT,
+            from_cycle TEXT,
+            to_cycle TEXT,
+            note TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "payment_refunds": """CREATE TABLE payment_refunds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            subscription_invoice_id INTEGER REFERENCES subscription_invoices(id),
+            amount REAL NOT NULL,
+            currency TEXT DEFAULT 'gbp',
+            reason TEXT,
+            status TEXT DEFAULT 'completed',
+            actor_user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "notification_templates": """CREATE TABLE notification_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            channel TEXT DEFAULT 'email',
+            subject TEXT,
+            body TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "platform_notifications": """CREATE TABLE platform_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            user_id INTEGER REFERENCES users(id),
+            template_key TEXT,
+            channel TEXT DEFAULT 'email',
+            subject TEXT,
+            body TEXT,
+            status TEXT DEFAULT 'queued',
+            error_message TEXT,
+            sent_by_user_id INTEGER REFERENCES users(id),
+            sent_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "background_jobs": """CREATE TABLE background_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_name TEXT NOT NULL,
+            queue TEXT DEFAULT 'default',
+            status TEXT DEFAULT 'queued',
+            company_id INTEGER REFERENCES companies(id),
+            payload_json TEXT,
+            result_json TEXT,
+            error_message TEXT,
+            attempts INTEGER DEFAULT 0,
+            max_attempts INTEGER DEFAULT 3,
+            started_at TEXT,
+            finished_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "webhook_logs": """CREATE TABLE webhook_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            provider TEXT,
+            event_type TEXT,
+            status TEXT DEFAULT 'received',
+            http_status INTEGER,
+            request_body TEXT,
+            response_body TEXT,
+            error_message TEXT,
+            attempts INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "platform_roles": """CREATE TABLE platform_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            is_system INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "platform_permissions": """CREATE TABLE platform_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module TEXT NOT NULL,
+            action TEXT NOT NULL,
+            code TEXT UNIQUE NOT NULL,
+            description TEXT,
+            is_sensitive INTEGER DEFAULT 0
+        )""",
+        "platform_role_permissions": """CREATE TABLE platform_role_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role_id INTEGER NOT NULL REFERENCES platform_roles(id),
+            permission_id INTEGER NOT NULL REFERENCES platform_permissions(id),
+            UNIQUE(role_id, permission_id)
+        )""",
+        "platform_admin_roles": """CREATE TABLE platform_admin_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            role_id INTEGER NOT NULL REFERENCES platform_roles(id),
+            assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, role_id)
+        )""",
+        "password_reset_requests": """CREATE TABLE password_reset_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            requested_by_user_id INTEGER REFERENCES users(id),
+            channel TEXT DEFAULT 'email',
+            status TEXT DEFAULT 'sent',
+            ip_address TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "system_configurations": """CREATE TABLE system_configurations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value_json TEXT,
+            category TEXT DEFAULT 'general',
+            is_sensitive INTEGER DEFAULT 0,
+            updated_by_user_id INTEGER REFERENCES users(id),
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+    }
+    for name, ddl in platform_tables.items():
+        if not table_exists(cur, name):
+            try:
+                cur.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
+
     conn.commit()
     conn.close()
     try:
@@ -1312,10 +1560,13 @@ def run():
         from app.models import Role
         from app.rbac_matrix import default_matrix_client_portal, default_matrix_staff_portal, default_matrix_supervisor, wrap_matrix
 
+from app.services import admin_platform_ext_service
+
         db = SessionLocal()
         try:
             ensure_app_modules(db)
             db.commit()
+            admin_platform_ext_service.ensure_platform_rbac(db)
             backfill_user_roles(db)
             backfill_role_module_permissions(db)
             # Newly shipped sidebar modules must reach logins whose stored allow-list

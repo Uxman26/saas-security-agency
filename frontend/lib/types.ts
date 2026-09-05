@@ -273,6 +273,16 @@ export interface AdminDashboard {
     whatsapp_sent: number;
     mobile_app_sessions: number;
   };
+  inactive_tenants?: number;
+  new_tenants_7d?: number;
+  active_users?: number;
+  locked_accounts?: number;
+  trial_subscriptions?: number;
+  expiring_subscriptions?: number;
+  open_tickets?: number;
+  sla_breaches?: number;
+  critical_errors?: number;
+  failed_jobs?: number;
 }
 
 export interface AdminUserListItem {
@@ -334,7 +344,139 @@ export interface Company {
   user_count?: number;
   enabled_modules?: Record<string, boolean>;
   usage?: TenantUsage;
+  account_status?: string;
+  locked_at?: string | null;
+  locked_reason?: string | null;
+  email?: string | null;
+  phone?: string | null;
   created_at: string;
+}
+
+export interface SupportTicketMessage {
+  id: number;
+  author_user_id?: number | null;
+  author_name?: string | null;
+  author_email?: string | null;
+  body: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+export interface SupportTicket {
+  id: number;
+  ticket_number: string;
+  company_id?: number | null;
+  company_name?: string | null;
+  created_by_user_id?: number | null;
+  assigned_to_user_id?: number | null;
+  assigned_to_name?: string | null;
+  subject: string;
+  category?: string;
+  priority?: string;
+  status?: string;
+  sla_due_at?: string | null;
+  sla_breached?: boolean;
+  escalated_at?: string | null;
+  resolved_at?: string | null;
+  closed_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+  message_count?: number;
+  messages?: SupportTicketMessage[];
+  attachments?: { id: number; file_name: string; content_type?: string; size_bytes?: number; created_at?: string }[];
+}
+
+export interface ErrorLogItem {
+  id: number;
+  company_id?: number | null;
+  source?: string | null;
+  module?: string | null;
+  severity?: string;
+  status?: string;
+  error_code?: string | null;
+  message?: string;
+  stack_trace?: string | null;
+  path?: string | null;
+  method?: string | null;
+  occurrence_count?: number;
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
+  resolved_at?: string | null;
+}
+
+export interface AdminSession {
+  id: number;
+  user_id: number;
+  email?: string | null;
+  full_name?: string | null;
+  company_id?: number | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  last_seen_at?: string | null;
+  expires_at?: string | null;
+  is_impersonation?: boolean;
+  impersonator_user_id?: number | null;
+}
+
+export interface FeatureFlag {
+  id?: number;
+  key: string;
+  name?: string | null;
+  description?: string | null;
+  enabled: boolean;
+}
+
+export interface BackgroundJobItem {
+  id: number;
+  job_name?: string;
+  queue?: string | null;
+  status?: string;
+  company_id?: number | null;
+  attempts?: number;
+  error_message?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at?: string;
+}
+
+export interface GlobalSearchResult {
+  tenants: { id: number; name: string; status?: string | null }[];
+  users: { id: number; email: string; full_name?: string | null; company_id?: number | null; role?: string | null }[];
+  tickets: { id: number; ticket_number: string; subject: string; status?: string; company_id?: number | null }[];
+  invoices: { id: number; invoice_number: string; status?: string; company_id?: number | null; total_amount?: number }[];
+  errors: { id: number; message: string; severity?: string; status?: string }[];
+}
+
+export type TenantSupportView = Company & {
+  address?: string | null;
+  postcode?: string | null;
+  website?: string | null;
+  registration_number?: string | null;
+  vat_number?: string | null;
+  archived_at?: string | null;
+  primary_contact?: Record<string, unknown> | null;
+  administrators?: Record<string, unknown>[];
+  users?: Record<string, unknown>[];
+  login_history?: Record<string, unknown>[];
+  security_events?: Record<string, unknown>[];
+  recent_activities?: Record<string, unknown>[];
+  support_tickets?: SupportTicket[];
+  recent_errors?: Record<string, unknown>[];
+  email_logs?: Record<string, unknown>[];
+  api_request_count?: number;
+};
+
+export interface AdminReportsSummary {
+  period_days: number;
+  new_tenants: number;
+  revenue_collected: number;
+  invoices_created: number;
+  logins: number;
+  open_tickets: number;
+  errors: number;
+  api_calls: number;
+  tenants_by_tier: Record<string, number>;
+  active_tenants: number;
 }
 
 export interface Guard {
@@ -597,8 +739,123 @@ export interface RotaSummary {
 }
 
 export interface LoginResponse {
-  access_token: string;
+  access_token: string | null;
   token_type: string;
+  mfa_required?: boolean;
+  mfa_token?: string | null;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  required_for_role?: boolean;
+}
+
+export interface MfaSetupResponse {
+  secret: string;
+  otpauth_uri: string;
+  enabled: boolean;
+}
+
+export interface MfaConfirmResponse {
+  enabled: boolean;
+  backup_codes: string[];
+}
+
+export interface ApiUsageSummary {
+  total: number;
+  days: number;
+  by_company: { company_id: number | null; company_name?: string | null; count: number }[];
+  by_path: { path: string | null; count: number }[];
+  recent: { id: number; company_id?: number | null; path?: string | null; method?: string | null; logged_at?: string }[];
+}
+
+export interface PaymentRefund {
+  id: number;
+  company_id: number;
+  subscription_invoice_id?: number | null;
+  amount: number;
+  currency?: string;
+  reason?: string | null;
+  status?: string;
+  actor_user_id?: number | null;
+  created_at?: string;
+}
+
+export interface NotificationTemplate {
+  id: number;
+  key: string;
+  name?: string | null;
+  channel?: string | null;
+  subject?: string | null;
+  body?: string | null;
+  is_active?: boolean;
+  updated_at?: string | null;
+}
+
+export interface NotificationLogItem {
+  id: number;
+  channel?: string | null;
+  recipient?: string | null;
+  subject?: string | null;
+  status?: string | null;
+  company_id?: number | null;
+  user_id?: number | null;
+  template_key?: string | null;
+  created_at?: string;
+  sent_at?: string | null;
+  error_message?: string | null;
+}
+
+export interface RetentionPolicy {
+  login_logs_days: number;
+  audit_logs_days: number;
+  api_usage_days: number;
+  email_logs_days: number;
+  error_logs_days: number;
+  security_events_days: number;
+}
+
+export interface PasswordPolicy {
+  min_length: number;
+  require_upper: boolean;
+  require_lower: boolean;
+  require_digit: boolean;
+  require_special: boolean;
+  max_age_days?: number | null;
+}
+
+export interface MaintenanceConfig {
+  enabled: boolean;
+  message?: string | null;
+}
+
+export interface SuspiciousEvent {
+  id: number;
+  event_type?: string;
+  severity?: string;
+  message?: string | null;
+  company_id?: number | null;
+  user_id?: number | null;
+  ip_address?: string | null;
+  created_at?: string;
+}
+
+export interface PlatformRoleAssignment {
+  user_id: number;
+  email?: string | null;
+  full_name?: string | null;
+  role_id?: number;
+  role_slug?: string | null;
+  role_name?: string | null;
+  assigned_at?: string | null;
+}
+
+export interface AdminReportsTimeseries {
+  labels: string[];
+  new_tenants: number[];
+  revenue: number[];
+  logins: number[];
+  tickets: number[];
 }
 
 export interface JobTitle {

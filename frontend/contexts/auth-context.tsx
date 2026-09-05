@@ -6,13 +6,16 @@ import type { User } from '@/lib/types';
 import { api } from '@/lib/api';
 import { broadcastLogout, onRemoteLogout, TOKEN_KEY } from '@/lib/session-sync';
 
+export type LoginResult =
+  | { user: User }
+  | { mfa_required: true; mfa_token: string };
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<User>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<LoginResult>;
+  completeMfa: (mfaToken: string, code: string) => Promise<User>;
   logout: () => Promise<void>;
-  /** Re-read /auth/me. Call after anything that changes the signed-in user's own row,
-   *  so the greeting and sidebar pick the change up without a reload. */
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -25,8 +28,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    // Resolved asynchronously in every branch so there is no synchronous setState in
-    // the effect body, and so an unmount mid-flight cannot set state on a dead tree.
     const token = localStorage.getItem(TOKEN_KEY);
     let cancelled = false;
 
@@ -54,20 +55,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace('/login');
   }, [router]);
 
-  // Another tab signed out, or the API rejected our token as expired. Either way this
-  // tab must stop showing authenticated content without waiting for its own failure.
   useEffect(() => onRemoteLogout(() => clearSession()), [clearSession]);
 
-  const login = async (email: string, password: string, rememberMe = true) => {
-    const response = await api.auth.login({ email, password, remember_me: rememberMe });
-    const token = (response.access_token || '').trim();
-    if (!token) throw new Error('No token received');
-    localStorage.setItem(TOKEN_KEY, token);
+  const finishLogin = async (token: string) => {
+    localStorage.setItem(TOKEN_KEY, token.trim());
     const userData = await api.auth.me();
     setUser(userData);
-    // Returned so the caller can pick a landing page from the role without waiting for
-    // the context state to propagate.
     return userData;
+  };
+
+  const login = async (email: string, password: string, rememberMe = true): Promise<LoginResult> => {
+    const response = await api.auth.login({ email, password, remember_me: rememberMe });
+    if (response.mfa_required && response.mfa_token) {
+      return { mfa_required: true, mfa_token: response.mfa_token };
+    }
+    const token = (response.access_token || '').trim();
+    if (!token) throw new Error('No token received');
+    const userData = await finishLogin(token);
+    return { user: userData };
+  };
+
+  const completeMfa = async (mfaToken: string, code: string) => {
+    const response = await api.auth.verifyMfa(mfaToken, code);
+    const token = (response.access_token || '').trim();
+    if (!token) throw new Error('No token received');
+    return finishLogin(token);
   };
 
   const refreshUser = useCallback(async () => {
@@ -75,20 +87,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // Revoke server-side first: that is what stops the token working in other tabs and
-    // on other devices. A failure here must not trap the user in the app, so the local
-    // teardown happens either way.
     try {
       await api.auth.logout();
     } catch {
-      // Already expired or offline — nothing left to revoke.
+      /* already expired */
     }
     broadcastLogout();
     clearSession();
   }, [clearSession]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, isAuthenticated: !!user }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, completeMfa, logout, refreshUser, isAuthenticated: !!user }}
+    >
       {children}
     </AuthContext.Provider>
   );

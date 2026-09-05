@@ -1,11 +1,23 @@
 import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
   Building2,
   Clock,
+  Cog,
   CreditCard,
   FileText,
+  Flag,
   Gift,
+  KeyRound,
+  LifeBuoy,
   Mail,
+  Monitor,
+  RotateCcw,
+  Scale,
   ScrollText,
+  Search,
+  Shield,
   UserCog,
   Users,
   Wallet,
@@ -14,22 +26,27 @@ import {
 
 export type AdminNavItem = {
   href: string;
-  /** Key under the `sidebar` namespace in messages/*.json */
   labelKey: string;
   icon: LucideIcon;
 };
 
-/**
- * The super admin portal's navigation, in one place.
- *
- * Both the desktop sidebar and the mobile drawer render from this list. They used to
- * carry their own hardcoded copies, so every new admin page had to be added twice and
- * the two drifted apart.
- */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: '/admin/companies', labelKey: 'adminCompanies', icon: Building2 },
   { href: '/admin/users', labelKey: 'adminUsers', icon: Users },
   { href: '/admin/admins', labelKey: 'adminAdmins', icon: UserCog },
+  { href: '/admin/tickets', labelKey: 'adminTickets', icon: LifeBuoy },
+  { href: '/admin/errors', labelKey: 'adminErrors', icon: AlertTriangle },
+  { href: '/admin/sessions', labelKey: 'adminSessions', icon: Monitor },
+  { href: '/admin/jobs', labelKey: 'adminJobs', icon: Cog },
+  { href: '/admin/reports', labelKey: 'adminReports', icon: BarChart3 },
+  { href: '/admin/search', labelKey: 'adminSearch', icon: Search },
+  { href: '/admin/flags', labelKey: 'adminFlags', icon: Flag },
+  { href: '/admin/security', labelKey: 'adminSecurity', icon: Shield },
+  { href: '/admin/compliance', labelKey: 'adminCompliance', icon: Scale },
+  { href: '/admin/api-usage', labelKey: 'adminApiUsage', icon: Activity },
+  { href: '/admin/templates', labelKey: 'adminTemplates', icon: Mail },
+  { href: '/admin/refunds', labelKey: 'adminRefunds', icon: RotateCcw },
+  { href: '/admin/roles', labelKey: 'adminRoles', icon: KeyRound },
   { href: '/admin/invoices', labelKey: 'adminInvoices', icon: FileText },
   { href: '/admin/payments', labelKey: 'adminPayments', icon: CreditCard },
   { href: '/admin/receipts', labelKey: 'adminReceipts', icon: Wallet },
@@ -39,7 +56,6 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: '/admin/logs', labelKey: 'adminLogs', icon: Clock },
 ] as const;
 
-/** True when `pathname` is this item's page or one nested under it. */
 export function isAdminNavActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }

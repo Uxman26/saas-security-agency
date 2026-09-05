@@ -147,6 +147,20 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.password_hash):
         login_log_service.log_login(db, email=email, status="failed", ip_address=ip_address, user_agent=user_agent)
+        try:
+            from app.services.admin_platform_ext_service import record_security_event
+            record_security_event(
+                db,
+                event_type="login.failed",
+                message=f"Failed login for {email}",
+                severity="warning",
+                company_id=user.company_id if user else None,
+                user_id=user.id if user else None,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="The email or password is incorrect.")
     if not user.is_active:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
@@ -171,6 +185,15 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=402, detail=block)
 
+    if getattr(user, "role", None) == SUPER_ADMIN_ROLE and getattr(user, "mfa_enabled", False):
+        from app.services import mfa_service
+        return {
+            "access_token": None,
+            "token_type": "bearer",
+            "mfa_required": True,
+            "mfa_token": mfa_service.create_mfa_challenge_token(user.id, remember_me=remember_me),
+        }
+
     login_log_service.log_login(db, email=email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
     if remember_me:
         access_token_expires = timedelta(days=settings.remember_me_expire_days)
@@ -190,7 +213,45 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
     access_token = create_access_token(
         data={"sub": user.id, "jti": jti}, expires_delta=access_token_expires
     )
-    return {"access_token": str(access_token), "token_type": "bearer"}
+    return {"access_token": str(access_token), "token_type": "bearer", "mfa_required": False, "mfa_token": None}
+
+
+def complete_mfa_login(
+    db: Session,
+    mfa_token: str,
+    code: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> dict:
+    from app.services import mfa_service, login_log_service, session_service
+
+    user_id, remember_me = mfa_service.verify_mfa_challenge_token(mfa_token)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Invalid MFA challenge")
+    if not mfa_service.validate_mfa_code(user, code):
+        login_log_service.log_login(db, email=user.email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
+        raise HTTPException(status_code=401, detail="Invalid authenticator code")
+    db.commit()
+    login_log_service.log_login(db, email=user.email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
+    if remember_me:
+        access_token_expires = timedelta(days=settings.remember_me_expire_days)
+    else:
+        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    jti = session_service.new_jti()
+    session_service.create_session(
+        db,
+        user.id,
+        jti,
+        expires_at=datetime.now(timezone.utc) + access_token_expires,
+        remember_me=remember_me,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    access_token = create_access_token(
+        data={"sub": user.id, "jti": jti}, expires_delta=access_token_expires
+    )
+    return {"access_token": str(access_token), "token_type": "bearer", "mfa_required": False, "mfa_token": None}
 
 
 def logout(db: Session, jti: str | None) -> None:

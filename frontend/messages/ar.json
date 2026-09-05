@@ -115,7 +115,15 @@
     "loginFailed": "فشل تسجيل الدخول",
     "signupFailed": "فشل التسجيل",
     "accountCreatedVerify": "تم إنشاء الحساب — تحقق من بريدك للتفعيل",
-    "accountCreatedPayment": "تم إنشاء الحساب — أكمل الدفع للتفعيل"
+    "accountCreatedPayment": "تم إنشاء الحساب — أكمل الدفع للتفعيل",
+    "mfaTitle": "المصادقة الثنائية",
+    "mfaSubtitle": "أدخل الرمز المكون من 6 أرقام من تطبيق المصادقة",
+    "mfaCode": "رمز المصادقة",
+    "mfaCodeRequired": "أدخل الرمز المكون من 6 أرقام",
+    "mfaInvalid": "رمز غير صالح أو منتهي",
+    "verifyMfa": "تحقق ومتابعة",
+    "verifyingMfa": "جاري التحقق…",
+    "mfaBack": "العودة لتسجيل الدخول"
   },
   "payment": {
     "title": "في انتظار الدفع",
@@ -185,13 +193,26 @@
     "adminCompanies": "الشركات",
     "adminUsers": "المستخدمون",
     "adminAdmins": "المسؤولون",
+    "adminTickets": "التذاكر",
+    "adminErrors": "الأخطاء",
+    "adminSessions": "الجلسات",
+    "adminJobs": "المهام",
+    "adminReports": "التقارير",
+    "adminSearch": "بحث",
+    "adminFlags": "ميزات النظام",
     "adminInvoices": "فواتير الاشتراك",
     "adminPayments": "المدفوعات",
     "adminReceipts": "الإيصالات",
     "adminPackages": "الباقات",
     "adminAudit": "سجل التدقيق",
     "adminSmtp": "بريد SMTP",
-    "adminLogs": "سجل النشاط"
+    "adminLogs": "سجل النشاط",
+    "adminSecurity": "الأمان",
+    "adminCompliance": "الامتثال",
+    "adminApiUsage": "استخدام API",
+    "adminTemplates": "القوالب",
+    "adminRefunds": "المبالغ المستردة",
+    "adminRoles": "أدوار المنصة"
   },
   "marketing": {
     "nav": {

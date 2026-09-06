@@ -7,6 +7,7 @@ from app.services.company_service import get_company_by_user_id
 from app.services.plan_enforcement import enforce_site_quota
 from app.services import audit_service
 from app.services import contractor_scope
+from app.services import soft_delete
 
 
 # Carried on SiteCreate to drive portal-login creation; not columns on Site, so they must
@@ -119,10 +120,11 @@ def _create_site_login(db: Session, db_site: Site, company_id: int, data: SiteCr
     )
 
 
-def get_sites(db: Session, user_id: int) -> List[Site]:
+def get_sites(db: Session, user_id: int, view: str = soft_delete.VIEW_ACTIVE) -> List[Site]:
+    """Sites. Archived ones are left out unless ``view`` asks for them."""
     company = get_company_by_user_id(db, user_id)
     user = db.query(User).filter(User.id == user_id).first()
-    q = db.query(Site).filter(Site.company_id == company.id)
+    q = soft_delete.apply_view(db.query(Site).filter(Site.company_id == company.id), Site, view)
     if user:
         from app.services.portal_access import filter_sites_for_user, is_portal_role
 
@@ -196,12 +198,21 @@ def set_site_login_password(db: Session, site_id: int, login_user_id: int, new_p
     return user_service.reset_company_user_password(db, company.id, login_user_id, new_password)
 
 
+def _assert_not_archived(site: Site) -> None:
+    if soft_delete.is_archived(site):
+        raise HTTPException(
+            status_code=409,
+            detail=f"“{site.name}” is archived. Restore it before making changes.",
+        )
+
+
 def update_site(db: Session, site_id: int, site: SiteCreate, user_id: int) -> Site:
     _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     db_site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
     if not db_site:
         raise HTTPException(status_code=404, detail="Site not found")
+    _assert_not_archived(db_site)
     cid_attr = getattr(site, "client_id", None)
     if cid_attr and not db.query(Client).filter(Client.id == cid_attr, Client.company_id == company.id).first():
         raise HTTPException(status_code=400, detail="Client not found")
@@ -272,6 +283,15 @@ def _site_blockers(db: Session, company_id: int, site: Site) -> list[str]:
     return blockers
 
 
+def _site_for_write(db: Session, site_id: int, user_id: int):
+    _block_portal_roles(db, user_id)
+    company = get_company_by_user_id(db, user_id)
+    site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Site not found")
+    return site, company
+
+
 def delete_site(db: Session, site_id: int, user_id: int) -> None:
     """Permanently remove a site.
 
@@ -279,11 +299,7 @@ def delete_site(db: Session, site_id: int, user_id: int) -> None:
     shifts orphaned and, the next time a rota naming it was published, the site was
     silently re-created — so it looked as though the delete had never happened.
     """
-    _block_portal_roles(db, user_id)
-    company = get_company_by_user_id(db, user_id)
-    site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
+    site, company = _site_for_write(db, site_id, user_id)
 
     blockers = _site_blockers(db, company.id, site)
     if blockers:
@@ -291,11 +307,15 @@ def delete_site(db: Session, site_id: int, user_id: int) -> None:
             status_code=409,
             detail=(
                 f"“{site.name}” is still used by {', '.join(blockers)}. "
-                "Remove or move those first — deleting now would leave them without a site, "
-                "and publishing a rota that names this site would create it again."
+                "Remove or move those first, or archive the site instead — deleting now "
+                "would leave them without a site, and publishing a rota that names this "
+                "site would create it again."
             ),
         )
 
+    from app.models import UserSite
+
+    pins = db.query(UserSite).filter(UserSite.site_id == site.id).delete(synchronize_session=False)
     audit_service.log_action(
         db,
         company_id=company.id,
@@ -303,6 +323,76 @@ def delete_site(db: Session, site_id: int, user_id: int) -> None:
         action="delete",
         entity_type="site",
         entity_id=site_id,
+        meta={"name": site.name, "login_pins_removed": pins},
     )
     db.delete(site)
     db.commit()
+
+
+def archive_site(db: Session, site_id: int, user_id: int) -> Site:
+    """Soft delete: the site leaves every list and picker, its history stays.
+
+    Unlike a permanent delete this is *not* blocked by existing shifts or patrol records
+    — leaving them readable is the point. It is the right answer for a site that has gone
+    but whose rota you still need to bill and pay from.
+    """
+    site, company = _site_for_write(db, site_id, user_id)
+    if soft_delete.is_archived(site):
+        return site
+    soft_delete.mark_archived(site, user_id)
+    audit_service.log_action(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        action="archive",
+        entity_type="site",
+        entity_id=site_id,
+        meta={"name": site.name},
+    )
+    db.commit()
+    db.refresh(site)
+    return site
+
+
+def restore_site(db: Session, site_id: int, user_id: int) -> Site:
+    """Bring an archived site back into the lists."""
+    site, company = _site_for_write(db, site_id, user_id)
+    if not soft_delete.is_archived(site):
+        return site
+    soft_delete.mark_restored(site)
+    audit_service.log_action(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        action="restore",
+        entity_type="site",
+        entity_id=site_id,
+        meta={"name": site.name},
+    )
+    db.commit()
+    db.refresh(site)
+    return site
+
+
+def site_delete_impact(db: Session, site_id: int, user_id: int) -> dict:
+    """What stands in the way of a permanent delete, and what it would take with it."""
+    from app.models import Assignment, InvoiceLine, PatrolCheckpoint, PatrolRoute, UserSite
+
+    site, company = _site_for_write(db, site_id, user_id)
+    counts = {
+        "shifts": db.query(Assignment).filter(Assignment.site_id == site.id).count(),
+        "invoice lines": db.query(InvoiceLine).filter(InvoiceLine.site_id == site.id).count(),
+        "patrol routes": db.query(PatrolRoute).filter(PatrolRoute.site_id == site.id).count(),
+        "patrol checkpoints": db.query(PatrolCheckpoint).filter(PatrolCheckpoint.site_id == site.id).count(),
+        "login site pins": db.query(UserSite).filter(UserSite.site_id == site.id).count(),
+    }
+    return {
+        "id": site.id,
+        "name": site.name,
+        "archived": soft_delete.is_archived(site),
+        "records": [{"label": k, "count": v} for k, v in counts.items() if v],
+        # Sites keep their long-standing rule: a permanent delete is refused while
+        # anything still points at them, because a published rota naming the site would
+        # simply create it again.
+        "blockers": _site_blockers(db, company.id, site),
+    }

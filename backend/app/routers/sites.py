@@ -3,8 +3,14 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.models import User
-from app.schemas import CompanyUserResetPassword, PortalLoginOut, SiteCreate, SiteResponse
-from app.rbac import require_internal_module, require_module
+from app.schemas import (
+    CompanyUserResetPassword,
+    DeleteImpactResponse,
+    PortalLoginOut,
+    SiteCreate,
+    SiteResponse,
+)
+from app.rbac import require_internal_module, require_module, user_has_permission_db
 from app.services import site_service
 from app.services.portal_access import redact_sites_for_portal
 from app.services.portal_login_view import portal_login_out
@@ -16,8 +22,15 @@ def create_site(site: SiteCreate, db: Session = Depends(get_db), current_user: U
     return site_service.create_site(db, site, current_user.id)
 
 @router.get("", response_model=List[SiteResponse])
-def get_sites(db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "view"))):
-    rows = site_service.get_sites(db, current_user.id)
+def get_sites(
+    view: str = "active",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("sites", "view")),
+):
+    """Sites. `view` is active (the default), archived, or all."""
+    if view != "active" and not user_has_permission_db(db, current_user, "sites.archived_view"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    rows = site_service.get_sites(db, current_user.id, view)
     return redact_sites_for_portal(current_user, rows)
 
 @router.get("/{site_id}", response_model=SiteResponse)
@@ -65,7 +78,48 @@ def set_site_portal_login_password(
     return portal_login_out(db, user)
 
 
+@router.get("/{site_id}/delete-impact", response_model=DeleteImpactResponse)
+def site_delete_impact(
+    site_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("sites", "delete")),
+):
+    """What a permanent delete would destroy, and what would refuse it.
+
+    The confirmation dialog reads this so it can name the consequences instead of asking
+    the operator to take it on trust.
+    """
+    return site_service.site_delete_impact(db, site_id, current_user.id)
+
+
+@router.post("/{site_id}/restore", response_model=SiteResponse)
+def restore_site(
+    site_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("sites", "restore")),
+):
+    return site_service.restore_site(db, site_id, current_user.id)
+
+
 @router.delete("/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_site(site_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "delete"))):
-    site_service.delete_site(db, site_id, current_user.id)
+def delete_site(
+    site_id: int,
+    permanent: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("sites", "delete")),
+):
+    """Archive the site, or destroy it outright with `permanent=true`.
+
+    Archiving is the default: it hides the site everywhere while leaving its shifts,
+    invoices and patrol history readable, and it can be undone. A permanent delete keeps
+    the long-standing rule that it is refused while anything still points at the site.
+    """
+    if permanent:
+        if not user_has_permission_db(db, current_user, "sites.delete_permanent"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        site_service.delete_site(db, site_id, current_user.id)
+        return None
+    if not user_has_permission_db(db, current_user, "sites.archive"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    site_service.archive_site(db, site_id, current_user.id)
     return None

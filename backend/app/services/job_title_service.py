@@ -33,7 +33,12 @@ DEFAULT_JOB_TITLES: tuple[str, ...] = (
 def _staff_counts(db: Session, company_id: int) -> dict[str, int]:
     rows = (
         db.query(Guard.job_title, func.count(Guard.id))
-        .filter(Guard.company_id == company_id, Guard.job_title.isnot(None), Guard.job_title != "")
+        .filter(
+            Guard.company_id == company_id,
+            Guard.deleted_at.is_(None),
+            Guard.job_title.isnot(None),
+            Guard.job_title != "",
+        )
         .group_by(Guard.job_title)
         .all()
     )
@@ -64,7 +69,12 @@ def _seed_if_empty(db: Session, company_id: int) -> None:
     seen = {n.strip().lower() for n in names}
     in_use = (
         db.query(Guard.job_title)
-        .filter(Guard.company_id == company_id, Guard.job_title.isnot(None), Guard.job_title != "")
+        .filter(
+            Guard.company_id == company_id,
+            Guard.deleted_at.is_(None),
+            Guard.job_title.isnot(None),
+            Guard.job_title != "",
+        )
         .distinct()
         .all()
     )

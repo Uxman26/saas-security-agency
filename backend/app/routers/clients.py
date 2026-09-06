@@ -8,9 +8,10 @@ from app.schemas import (
     ClientRenewContract,
     ClientContractRenewalResponse,
     CompanyUserResetPassword,
+    DeleteImpactResponse,
     PortalLoginOut,
 )
-from app.rbac import require_internal_module
+from app.rbac import require_internal_module, user_has_permission_db
 from app.services import client_service
 from app.services.portal_login_view import portal_login_out
 
@@ -21,8 +22,15 @@ def create_client(client: ClientCreate, db: Session = Depends(get_db), current_u
     return client_service.create_client(db, client, current_user.id)
 
 @router.get("", response_model=list[ClientResponse])
-def get_clients(db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("clients", "view"))):
-    return client_service.get_clients(db, current_user.id)
+def get_clients(
+    view: str = "active",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "view")),
+):
+    """Clients. `view` is active (the default), archived, or all."""
+    if view != "active" and not user_has_permission_db(db, current_user, "clients.archived_view"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    return client_service.get_clients(db, current_user.id, view)
 
 @router.get("/{client_id}", response_model=ClientResponse)
 def get_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("clients", "view"))):
@@ -68,9 +76,46 @@ def set_client_portal_login_password(
     return portal_login_out(db, user)
 
 
+@router.get("/{client_id}/delete-impact", response_model=DeleteImpactResponse)
+def client_delete_impact(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "delete")),
+):
+    """What a permanent delete would destroy, for the confirmation dialog to spell out."""
+    return client_service.client_delete_impact(db, client_id, current_user.id)
+
+
+@router.post("/{client_id}/restore", response_model=ClientResponse)
+def restore_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "restore")),
+):
+    return client_service.restore_client(db, client_id, current_user.id)
+
+
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("clients", "delete"))):
-    client_service.delete_client(db, client_id, current_user.id)
+def delete_client(
+    client_id: int,
+    permanent: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "delete")),
+):
+    """Archive the client, or destroy it and its invoices with `permanent=true`.
+
+    Archiving is the default and is reversible; its sites stay linked so a restore puts
+    everything back. A permanent delete takes the invoices, renewals and staff requests
+    with it, and unlinks the sites rather than deleting them.
+    """
+    if permanent:
+        if not user_has_permission_db(db, current_user, "clients.delete_permanent"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        client_service.delete_client(db, client_id, current_user.id)
+        return None
+    if not user_has_permission_db(db, current_user, "clients.archive"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    client_service.archive_client(db, client_id, current_user.id)
     return None
 
 

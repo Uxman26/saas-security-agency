@@ -1,4 +1,4 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, RecordView, DeleteImpact } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -181,11 +181,12 @@ export const api = {
     delete: (id: number): Promise<void> => request<void>(`/job-titles/${id}`, { method: 'DELETE' }),
   },
   guards: {
-    list: (params?: { area?: string; postcode?: string; nearby?: string }): Promise<Guard[]> => {
+    list: (params?: { area?: string; postcode?: string; nearby?: string; view?: RecordView }): Promise<Guard[]> => {
       const q = new URLSearchParams();
       if (params?.area) q.append('area', params.area);
       if (params?.postcode) q.append('postcode', params.postcode);
       if (params?.nearby) q.append('nearby', params.nearby);
+      if (params?.view && params.view !== 'active') q.append('view', params.view);
       const qs = q.toString();
       return request<Guard[]>(`/guards${qs ? `?${qs}` : ''}`);
     },
@@ -202,7 +203,11 @@ export const api = {
       );
       return request<Guard>(`/guards/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
     },
-    delete: (id: number): Promise<void> => request<void>(`/guards/${id}`, { method: 'DELETE' }),
+    /** Archives by default; `permanent` destroys the record and everything cascading from it. */
+    delete: (id: number, opts?: { permanent?: boolean }): Promise<void> =>
+      request<void>(`/guards/${id}${opts?.permanent ? '?permanent=true' : ''}`, { method: 'DELETE' }),
+    restore: (id: number): Promise<Guard> => request<Guard>(`/guards/${id}/restore`, { method: 'POST' }),
+    deleteImpact: (id: number): Promise<DeleteImpact> => request<DeleteImpact>(`/guards/${id}/delete-impact`),
     portalLogins: (id: number): Promise<PortalLogin[]> => request<PortalLogin[]>(`/guards/${id}/portal-logins`),
     createPortalLogin: (id: number, data: { email?: string; password: string }): Promise<PortalLogin> =>
       request<PortalLogin>(`/guards/${id}/portal-logins`, {
@@ -233,7 +238,8 @@ export const api = {
     },
   },
   sites: {
-    list: (): Promise<Site[]> => request<Site[]>('/sites'),
+    list: (params?: { view?: RecordView }): Promise<Site[]> =>
+      request<Site[]>(`/sites${params?.view && params.view !== 'active' ? `?view=${params.view}` : ''}`),
     get: (id: number): Promise<Site> => request<Site>(`/sites/${id}`),
     create: (data: Omit<Site, 'id' | 'company_id' | 'created_at'>): Promise<Site> => {
       const sanitized = Object.fromEntries(
@@ -247,7 +253,11 @@ export const api = {
       );
       return request<Site>(`/sites/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
     },
-    delete: (id: number): Promise<void> => request<void>(`/sites/${id}`, { method: 'DELETE' }),
+    /** Archives by default; `permanent` destroys the record, and is refused while anything still uses it. */
+    delete: (id: number, opts?: { permanent?: boolean }): Promise<void> =>
+      request<void>(`/sites/${id}${opts?.permanent ? '?permanent=true' : ''}`, { method: 'DELETE' }),
+    restore: (id: number): Promise<Site> => request<Site>(`/sites/${id}/restore`, { method: 'POST' }),
+    deleteImpact: (id: number): Promise<DeleteImpact> => request<DeleteImpact>(`/sites/${id}/delete-impact`),
     portalLogins: (id: number): Promise<PortalLogin[]> => request<PortalLogin[]>(`/sites/${id}/portal-logins`),
     setPortalLoginPassword: (id: number, loginUserId: number, new_password: string): Promise<PortalLogin> =>
       request<PortalLogin>(`/sites/${id}/portal-logins/${loginUserId}/password`, {
@@ -596,7 +606,8 @@ export const api = {
     blankPdf: (): Promise<Blob> => requestBlob('/accident-reports/blank.pdf'),
   },
   clients: {
-    list: (): Promise<Client[]> => request<Client[]>('/clients'),
+    list: (params?: { view?: RecordView }): Promise<Client[]> =>
+      request<Client[]>(`/clients${params?.view && params.view !== 'active' ? `?view=${params.view}` : ''}`),
     get: (id: number): Promise<Client> => request<Client>(`/clients/${id}`),
     create: (data: Omit<Client, 'id' | 'company_id' | 'created_at'>): Promise<Client> => {
       const sanitized = Object.fromEntries(
@@ -610,7 +621,11 @@ export const api = {
       );
       return request<Client>(`/clients/${id}`, { method: 'PUT', body: JSON.stringify(sanitized) });
     },
-    delete: (id: number): Promise<void> => request<void>(`/clients/${id}`, { method: 'DELETE' }),
+    /** Archives by default; `permanent` destroys the client and its invoices. */
+    delete: (id: number, opts?: { permanent?: boolean }): Promise<void> =>
+      request<void>(`/clients/${id}${opts?.permanent ? '?permanent=true' : ''}`, { method: 'DELETE' }),
+    restore: (id: number): Promise<Client> => request<Client>(`/clients/${id}/restore`, { method: 'POST' }),
+    deleteImpact: (id: number): Promise<DeleteImpact> => request<DeleteImpact>(`/clients/${id}/delete-impact`),
     renew: (id: number, data: { new_end_date: string; note?: string }): Promise<ClientContractRenewal> =>
       request<ClientContractRenewal>(`/clients/${id}/renew`, { method: 'POST', body: JSON.stringify(data) }),
     renewals: (id: number): Promise<ClientContractRenewal[]> => request<ClientContractRenewal[]>(`/clients/${id}/renewals`),

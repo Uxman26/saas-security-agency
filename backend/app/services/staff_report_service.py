@@ -18,7 +18,12 @@ def _committed_hours(guard: Optional[Guard], start_date: date, end_date: date) -
 
 def _all_employee_rows(db: Session, company_id: int, start_date: date, end_date: date, summary_rows) -> list[dict]:
     summary_map = {r.guard_id: r.model_dump() for r in summary_rows}
-    guards = db.query(Guard).filter(Guard.company_id == company_id).order_by(Guard.full_name).all()
+    guards = (
+        db.query(Guard)
+        .filter(Guard.company_id == company_id, Guard.deleted_at.is_(None))
+        .order_by(Guard.full_name)
+        .all()
+    )
     rows = []
     for g in guards:
         if g.id in summary_map:

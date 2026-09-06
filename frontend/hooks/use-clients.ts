@@ -1,12 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast, toastMutationError } from '@/lib/toast';
-import type { Client } from '@/lib/types';
+import type { Client, RecordView } from '@/lib/types';
 
-export function useClients() {
+/** Live clients by default; pass 'archived' or 'all' for the Archived tab. */
+export function useClients(view: RecordView = 'active') {
   return useQuery({
-    queryKey: ['clients'],
-    queryFn: () => api.clients.list(),
+    queryKey: ['clients', 'list', view],
+    queryFn: () => api.clients.list({ view }),
     refetchOnMount: true,
   });
 }
@@ -47,14 +48,29 @@ export function useUpdateClient() {
   });
 }
 
+/** Archives by default; pass `permanent` to destroy the client and its invoices. */
 export function useDeleteClient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => api.clients.delete(id),
+    mutationFn: ({ id, permanent }: { id: number; permanent?: boolean }) =>
+      api.clients.delete(id, { permanent }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      queryClient.refetchQueries({ queryKey: ['clients'] });
+      toast.success(variables.permanent ? 'Client permanently deleted' : 'Client archived');
+    },
+    onError: (err) => toastMutationError(err),
+  });
+}
+
+export function useRestoreClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.clients.restore(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] });
       queryClient.refetchQueries({ queryKey: ['clients'] });
-      toast.success('Client deleted');
+      toast.success('Client restored');
     },
     onError: (err) => toastMutationError(err),
   });

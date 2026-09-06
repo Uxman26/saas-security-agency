@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
-import { useSites, useCreateSite, useUpdateSite, useDeleteSite } from '@/hooks/use-sites';
+import { useSites, useCreateSite, useUpdateSite, useDeleteSite, useRestoreSite } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
@@ -21,12 +21,13 @@ import { TEXT_LIMITS } from '@/lib/text-limits';
 import { PASSWORD_REQUIREMENTS_MSG, siteSchema, type SiteFormData } from '@/lib/validation';
 import { PasswordInput } from '@/components/ui/password-input';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
-import type { Client, Site } from '@/lib/types';
+import type { Client, RecordView, Site } from '@/lib/types';
+import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { MapPin, Pencil, Trash2 } from 'lucide-react';
-import { toast } from '@/lib/toast';
+import { ArchiveRestore, MapPin, Pencil, Trash2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { useAuth } from '@/contexts/auth-context';
@@ -277,7 +278,12 @@ export default function SitesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
-  const { data: sites = [], isLoading, refetch, isRefetching } = useSites();
+  // Archived sites live behind their own tab: hidden from the normal list and from every
+  // picker, but a click away for restoring or deleting outright.
+  const [listView, setListView] = useState<RecordView>('active');
+  const { data: sites = [], isLoading, refetch, isRefetching } = useSites(listView);
+  const { data: archivedSites = [] } = useSites('archived');
+  const [deleteTarget, setDeleteTarget] = useState<DeleteRecordTarget | null>(null);
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
   const { data: legMains = [] } = useMainContractors();
   const { data: legSubs = [] } = useSubContractors();
@@ -292,6 +298,7 @@ export default function SitesPage() {
   const createSite = useCreateSite();
   const updateSite = useUpdateSite();
   const deleteSite = useDeleteSite();
+  const restoreSite = useRestoreSite();
 
   // The API is the real boundary — these only stop the UI offering actions it knows
   // will be refused, which is what a view-only role was seeing before.
@@ -427,11 +434,8 @@ export default function SitesPage() {
     } catch (err) { console.error(err); }
   };
 
-  const handleDelete = (id: number) => {
-    toast.confirm('Delete this site?', async () => { await deleteSite.mutateAsync(id); }, {
-      label: 'Delete',
-      description: 'This cannot be undone.',
-    });
+  const handleDelete = (site: Site) => {
+    setDeleteTarget({ id: site.id, name: site.name, archived: site.deleted_at != null });
   };
 
   const getSearchText = useCallback(
@@ -485,7 +489,7 @@ export default function SitesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, listView]);
 
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount));
@@ -499,7 +503,11 @@ export default function SitesPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2"><MapPin className="size-7" /> Sites</h1>
-              <p className="text-muted-foreground mt-1">{sites.length} site{sites.length !== 1 ? 's' : ''} configured</p>
+              <p className="text-muted-foreground mt-1">
+                {sites.length} {listView === 'archived' ? 'archived site' : 'site'}
+                {sites.length !== 1 ? 's' : ''}
+                {listView === 'archived' ? '' : ' configured'}
+              </p>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
@@ -521,6 +529,27 @@ export default function SitesPage() {
             </div>
           </div>
 
+          <div className="mb-4 flex flex-wrap gap-2 border-b pb-3">
+            {([
+              ['active', 'Active sites'],
+              ['archived', `Archived (${archivedSites.length})`],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setListView(id)}
+                className={cn(
+                  'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                  listView === id
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="mb-4">
             <Input
               placeholder="Search by site name, client or address..."
@@ -539,7 +568,13 @@ export default function SitesPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>All Sites</CardTitle>
+              <CardTitle>{listView === 'archived' ? 'Archived Sites' : 'All Sites'}</CardTitle>
+              {listView === 'archived' ? (
+                <p className="text-sm text-muted-foreground">
+                  Hidden from every list and picker. Their shifts, invoices and patrol history are
+                  untouched — restore a site to bring it back into use.
+                </p>
+              ) : null}
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -603,9 +638,20 @@ export default function SitesPage() {
                           <TableCell>{site.contact_phone || '-'}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
-                              {canEditSites ? (
+                              {canEditSites && site.deleted_at == null ? (
                                 <Button variant="ghost" size="sm" onClick={() => openEdit(site)} title="Edit site">
                                   <Pencil className="size-4" />
+                                </Button>
+                              ) : null}
+                              {canDeleteSites && site.deleted_at != null ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => void restoreSite.mutateAsync(site.id)}
+                                  disabled={restoreSite.isPending}
+                                  title="Restore site"
+                                >
+                                  <ArchiveRestore className="size-4" />
                                 </Button>
                               ) : null}
                               {canDeleteSites ? (
@@ -613,9 +659,9 @@ export default function SitesPage() {
                                   variant="ghost"
                                   size="sm"
                                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(site.id)}
+                                  onClick={() => handleDelete(site)}
                                   disabled={deleteSite.isPending}
-                                  title="Delete site"
+                                  title={site.deleted_at != null ? 'Delete permanently' : 'Archive or delete site'}
                                 >
                                   <Trash2 className="size-4" />
                                 </Button>
@@ -667,6 +713,18 @@ export default function SitesPage() {
             ) : null}
           </DialogContent>
         </Dialog>
+
+        <DeleteRecordDialog
+          target={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          noun="site"
+          archiveHint="Its shifts, invoice lines and patrol records stay exactly as they are, and rotas already published keep working."
+          loadImpact={api.sites.deleteImpact}
+          onArchive={(id) => deleteSite.mutateAsync({ id })}
+          onDeletePermanently={(id) => deleteSite.mutateAsync({ id, permanent: true })}
+          canArchive={canDeleteSites}
+          canDeletePermanently={canDeleteSites}
+        />
       </div>
     </AppShell>
     </ProtectedRoute>

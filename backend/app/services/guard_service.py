@@ -8,6 +8,7 @@ from app.services.company_service import get_company_by_user_id
 from app.services.plan_enforcement import enforce_guard_quota
 from app.services import audit_service
 from app.services import contractor_scope
+from app.services import soft_delete
 
 
 # Carried on GuardCreate to drive portal-login creation; not columns on Guard, so they
@@ -198,9 +199,13 @@ def get_guards(
     area: Optional[str] = None,
     postcode: Optional[str] = None,
     nearby: Optional[str] = None,
+    view: str = soft_delete.VIEW_ACTIVE,
 ) -> List[Guard]:
+    """Staff records. Archived people are left out unless ``view`` asks for them."""
     company = get_company_by_user_id(db, user_id)
-    q = db.query(Guard).filter(Guard.company_id == company.id)
+    q = soft_delete.apply_view(
+        db.query(Guard).filter(Guard.company_id == company.id), Guard, view
+    )
     if area and area.strip():
         pat = f"%{area.strip()}%"
         q = q.filter(or_(Guard.service_area.ilike(pat), Guard.town_city.ilike(pat), Guard.postcode.ilike(pat)))
@@ -227,11 +232,21 @@ def get_guard_by_id(db: Session, guard_id: int, user_id: int) -> Guard:
     return guard
 
 
+def _assert_not_archived(guard: Guard) -> None:
+    """Editing an archived record would quietly bring half of it back to life."""
+    if soft_delete.is_archived(guard):
+        raise HTTPException(
+            status_code=409,
+            detail=f"“{guard.full_name}” is archived. Restore them before making changes.",
+        )
+
+
 def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -> Guard:
     company = get_company_by_user_id(db, user_id)
     db_guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
     if not db_guard:
         raise HTTPException(status_code=404, detail="Guard not found")
+    _assert_not_archived(db_guard)
     touched = guard.model_dump(exclude_unset=True) if hasattr(guard, "model_dump") else {}
     data = _payload(guard, only_set=True)
     if any(k in touched for k in ("contractor_id", "main_contractor_id", "sub_contractor_id")):
@@ -260,11 +275,107 @@ def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -
     return db_guard
 
 
-def delete_guard(db: Session, guard_id: int, user_id: int) -> None:
+def _guard_for_write(db: Session, guard_id: int, user_id: int) -> tuple[Guard, "Company"]:
     company = get_company_by_user_id(db, user_id)
     guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
     if not guard:
         raise HTTPException(status_code=404, detail="Guard not found")
+    return guard, company
+
+
+def _deactivate_guard_logins(db: Session, guard: Guard) -> int:
+    """Archiving someone has to close their way in, or the record is only half gone."""
+    from app.models import User
+
+    return (
+        db.query(User)
+        .filter(User.company_id == guard.company_id, User.guard_id == guard.id, User.is_active.is_(True))
+        .update({User.is_active: False}, synchronize_session=False)
+    )
+
+
+def archive_guard(db: Session, guard_id: int, user_id: int) -> Guard:
+    """Soft delete: the person leaves the Staff list, their history stays intact.
+
+    Their shifts, payroll and documents are untouched, so every past record still reads
+    correctly. Any portal login they hold is switched off — restoring the record does not
+    switch it back on, which is deliberate: re-granting access should be a decision, not
+    a side effect.
+    """
+    guard, company = _guard_for_write(db, guard_id, user_id)
+    if soft_delete.is_archived(guard):
+        return guard
+    logins = _deactivate_guard_logins(db, guard)
+    soft_delete.mark_archived(guard, user_id)
+    audit_service.log_action(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        action="archive",
+        entity_type="guard",
+        entity_id=guard_id,
+        meta={"name": guard.full_name, "logins_disabled": logins},
+    )
+    db.commit()
+    db.refresh(guard)
+    return guard
+
+
+def restore_guard(db: Session, guard_id: int, user_id: int) -> Guard:
+    """Bring an archived staff member back to the Staff list. Logins stay disabled."""
+    guard, company = _guard_for_write(db, guard_id, user_id)
+    if not soft_delete.is_archived(guard):
+        return guard
+    soft_delete.mark_restored(guard)
+    audit_service.log_action(
+        db,
+        company_id=company.id,
+        user_id=user_id,
+        action="restore",
+        entity_type="guard",
+        entity_id=guard_id,
+        meta={"name": guard.full_name},
+    )
+    db.commit()
+    db.refresh(guard)
+    return guard
+
+
+def guard_delete_impact(db: Session, guard_id: int, user_id: int) -> dict:
+    """What a permanent delete would destroy, so the confirmation can say it out loud."""
+    from app.models import Assignment, Attendance, GuardDocument, GuardRate, Payroll, User
+
+    guard, _company = _guard_for_write(db, guard_id, user_id)
+    counts = {
+        "shifts": db.query(Assignment).filter(Assignment.guard_id == guard.id).count(),
+        "attendance records": db.query(Attendance).filter(Attendance.guard_id == guard.id).count(),
+        "payroll records": db.query(Payroll).filter(Payroll.guard_id == guard.id).count(),
+        "documents": db.query(GuardDocument).filter(GuardDocument.guard_id == guard.id).count(),
+        "pay rates": db.query(GuardRate).filter(GuardRate.guard_id == guard.id).count(),
+        "portal logins": db.query(User).filter(User.guard_id == guard.id).count(),
+    }
+    return {
+        "id": guard.id,
+        "name": guard.full_name,
+        "archived": soft_delete.is_archived(guard),
+        "records": [{"label": k, "count": v} for k, v in counts.items() if v],
+        "blockers": [],
+    }
+
+
+def delete_guard(db: Session, guard_id: int, user_id: int) -> None:
+    """Permanent delete: the record and everything cascading from it, irreversibly.
+
+    Portal logins are unpinned rather than deleted — a login is a company account that
+    may have its own audit trail, so it is left for the Users screen to remove.
+    """
+    from app.models import User
+
+    guard, company = _guard_for_write(db, guard_id, user_id)
+    impact = guard_delete_impact(db, guard_id, user_id)
+    db.query(User).filter(User.guard_id == guard.id).update(
+        {User.guard_id: None, User.is_active: False}, synchronize_session=False
+    )
     audit_service.log_action(
         db,
         company_id=company.id,
@@ -272,6 +383,7 @@ def delete_guard(db: Session, guard_id: int, user_id: int) -> None:
         action="delete",
         entity_type="guard",
         entity_id=guard_id,
+        meta={"name": guard.full_name, "destroyed": impact["records"]},
     )
     db.delete(guard)
     db.commit()

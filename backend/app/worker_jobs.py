@@ -17,6 +17,7 @@ def _scheduled_maintenance_sync() -> dict[str, Any]:
         soon = today + timedelta(days=30)
         q = (
             db.query(Guard)
+            .filter(Guard.deleted_at.is_(None))
             .filter(Guard.sia_expiry_date.isnot(None))
             .filter(Guard.sia_expiry_date <= soon)
         )

@@ -17,20 +17,22 @@ import {
   useCreateClient,
   useUpdateClient,
   useDeleteClient,
+  useRestoreClient,
   useClientRenewals,
   useRenewClientContract,
 } from '@/hooks/use-clients';
 import { PasswordInput } from '@/components/ui/password-input';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { clientSchema, clientRenewSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
-import type { Client } from '@/lib/types';
+import type { Client, RecordView } from '@/lib/types';
+import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
 import type { z } from 'zod';
 import { EmailDialog } from '@/components/email-dialog';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Building2, Eye, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
-import { toast } from '@/lib/toast';
+import { ArchiveRestore, Building2, Eye, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -250,10 +252,16 @@ export default function ClientsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
-  const { data: clients = [], isLoading, refetch, isRefetching } = useClients();
+  // Archived clients live behind their own tab: out of every list and picker, still
+  // there to restore or delete outright.
+  const [listView, setListView] = useState<RecordView>('active');
+  const { data: clients = [], isLoading, refetch, isRefetching } = useClients(listView);
+  const { data: archivedClients = [] } = useClients('archived');
+  const [deleteTarget, setDeleteTarget] = useState<DeleteRecordTarget | null>(null);
   const createClient = useCreateClient();
   const updateClient = useUpdateClient();
   const deleteClient = useDeleteClient();
+  const restoreClient = useRestoreClient();
   const renewContract = useRenewClientContract();
 
   const clientDefaults: ClientFormData = {
@@ -322,11 +330,8 @@ export default function ClientsPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    toast.confirm('Delete this client?', async () => { await deleteClient.mutateAsync(id); }, {
-      label: 'Delete',
-      description: 'This cannot be undone.',
-    });
+  const handleDelete = (client: Client) => {
+    setDeleteTarget({ id: client.id, name: client.name, archived: client.deleted_at != null });
   };
 
   const openRenew = (c: Client) => {
@@ -401,7 +406,7 @@ export default function ClientsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, listView]);
 
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount));
@@ -441,6 +446,27 @@ export default function ClientsPage() {
             </div>
           </div>
 
+          <div className="mb-4 flex flex-wrap gap-2 border-b pb-3">
+            {([
+              ['active', 'Active clients'],
+              ['archived', `Archived (${archivedClients.length})`],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setListView(id)}
+                className={cn(
+                  'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                  listView === id
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="mb-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
             <Input
               placeholder="Search name, email, phone, address, contract dates..."
@@ -464,7 +490,13 @@ export default function ClientsPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>All Clients</CardTitle>
+              <CardTitle>{listView === 'archived' ? 'Archived Clients' : 'All Clients'}</CardTitle>
+              {listView === 'archived' ? (
+                <p className="text-sm text-muted-foreground">
+                  Out of every list and picker. Their invoices, renewals and sites are untouched —
+                  restore a client to bring the whole relationship back.
+                </p>
+              ) : null}
             </CardHeader>
             <CardContent className="min-h-[280px]">
               {isLoading ? (
@@ -520,9 +552,20 @@ export default function ClientsPage() {
                                     <Eye className="size-4" />
                                   </Button>
                                 ) : null}
-                                {canEditMod ? (
+                                {canEditMod && client.deleted_at == null ? (
                                   <Button variant="ghost" size="sm" onClick={() => openEdit(client)} title="Edit client">
                                     <Pencil className="size-4" />
+                                  </Button>
+                                ) : null}
+                                {canDeleteMod && client.deleted_at != null ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => void restoreClient.mutateAsync(client.id)}
+                                    disabled={restoreClient.isPending}
+                                    title="Restore client"
+                                  >
+                                    <ArchiveRestore className="size-4" />
                                   </Button>
                                 ) : null}
                                 <Button variant="ghost" size="sm" onClick={() => openRenew(client)} title="Renew contract">
@@ -542,9 +585,9 @@ export default function ClientsPage() {
                                     variant="ghost"
                                     size="sm"
                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => handleDelete(client.id)}
+                                    onClick={() => handleDelete(client)}
                                     disabled={deleteClient.isPending}
-                                    title="Delete client"
+                                    title={client.deleted_at != null ? 'Delete permanently' : 'Archive or delete client'}
                                   >
                                     <Trash2 className="size-4" />
                                   </Button>
@@ -641,6 +684,18 @@ export default function ClientsPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <DeleteRecordDialog
+          target={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          noun="client"
+          archiveHint="Its invoices, renewals and sites stay exactly as they are, and the sites keep pointing at it so a restore puts everything back."
+          loadImpact={api.clients.deleteImpact}
+          onArchive={(id) => deleteClient.mutateAsync({ id })}
+          onDeletePermanently={(id) => deleteClient.mutateAsync({ id, permanent: true })}
+          canArchive={canDeleteMod}
+          canDeletePermanently={canDeleteMod}
+        />
       </div>
     </AppShell>
     </ProtectedRoute>

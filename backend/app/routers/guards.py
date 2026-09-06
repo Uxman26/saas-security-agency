@@ -7,12 +7,13 @@ from app.database import get_db
 from app.models import User
 from app.schemas import (
     CompanyUserResetPassword,
+    DeleteImpactResponse,
     GuardCreate,
     GuardResponse,
     PortalLoginCreate,
     PortalLoginOut,
 )
-from app.rbac import require_internal_module
+from app.rbac import require_internal_module, user_has_permission_db
 from app.services import guard_service
 from app.services.portal_login_view import portal_login_out
 from app.storage_paths import GUARD_PHOTOS_DIR, ensure_upload_dirs, resolve_storage_path
@@ -29,10 +30,16 @@ def get_guards(
     area: Optional[str] = Query(None),
     postcode: Optional[str] = Query(None),
     nearby: Optional[str] = Query(None),
+    view: str = Query("active"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("guards", "view")),
 ):
-    return guard_service.get_guards(db, current_user.id, area=area, postcode=postcode, nearby=nearby)
+    """Staff. `view` is active (the default), archived, or all."""
+    if view != "active" and not user_has_permission_db(db, current_user, "guards.archived_view"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    return guard_service.get_guards(
+        db, current_user.id, area=area, postcode=postcode, nearby=nearby, view=view
+    )
 
 @router.get("/{guard_id}", response_model=GuardResponse)
 def get_guard(guard_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "view"))):
@@ -132,7 +139,45 @@ def get_guard_photo(
         raise HTTPException(status_code=404, detail="No photo")
     return FileResponse(path)
 
+@router.get("/{guard_id}/delete-impact", response_model=DeleteImpactResponse)
+def guard_delete_impact(
+    guard_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "delete")),
+):
+    """What a permanent delete would destroy, for the confirmation dialog to spell out."""
+    return guard_service.guard_delete_impact(db, guard_id, current_user.id)
+
+
+@router.post("/{guard_id}/restore", response_model=GuardResponse)
+def restore_guard(
+    guard_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "restore")),
+):
+    """Bring an archived staff member back. Their portal login stays disabled."""
+    return guard_service.restore_guard(db, guard_id, current_user.id)
+
+
 @router.delete("/{guard_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_guard(guard_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "delete"))):
-    guard_service.delete_guard(db, guard_id, current_user.id)
+def delete_guard(
+    guard_id: int,
+    permanent: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "delete")),
+):
+    """Archive the staff member, or destroy the record with `permanent=true`.
+
+    Archiving is the default: they leave the Staff list and their portal login is
+    switched off, while their shifts, attendance and payroll stay readable. A permanent
+    delete takes all of that with them and cannot be undone.
+    """
+    if permanent:
+        if not user_has_permission_db(db, current_user, "guards.delete_permanent"):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        guard_service.delete_guard(db, guard_id, current_user.id)
+        return None
+    if not user_has_permission_db(db, current_user, "guards.archive"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    guard_service.archive_guard(db, guard_id, current_user.id)
     return None

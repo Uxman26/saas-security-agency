@@ -341,6 +341,8 @@ export interface Guard {
   id: number;
   company_id: number;
   full_name: string;
+  /** Set when the record is archived (soft deleted); null on everything live. */
+  deleted_at?: string | null;
   title?: string;
   first_name?: string;
   middle_name?: string;
@@ -437,6 +439,8 @@ export interface Site {
   company_id: number;
   client_id?: number | null;
   name: string;
+  /** Set when the record is archived (soft deleted); null on everything live. */
+  deleted_at?: string | null;
   color?: string;
   address?: string;
   postcode?: string;
@@ -614,6 +618,8 @@ export interface Client {
   id: number;
   company_id: number;
   name: string;
+  /** Set when the record is archived (soft deleted); null on everything live. */
+  deleted_at?: string | null;
   email?: string;
   phone?: string;
   address?: string;
@@ -1589,4 +1595,19 @@ export interface WorkFilterParams {
   sub_contractor_id?: string;
   guard_id?: number;
   job_title?: string;
+}
+
+
+/** Which slice of a soft-deletable list to read. Omit for the live records. */
+export type RecordView = 'active' | 'archived' | 'all';
+
+/** What a permanent delete would actually do, read before the confirmation is offered. */
+export interface DeleteImpact {
+  id: number;
+  name: string;
+  archived: boolean;
+  /** Things that would be destroyed along with the record. */
+  records: { label: string; count: number }[];
+  /** Things that refuse the delete outright. Archiving is the way forward instead. */
+  blockers: string[];
 }

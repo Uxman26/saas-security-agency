@@ -218,7 +218,11 @@ def notify_shift_changes(
     guards = {
         g.id: g
         for g in db.query(Guard)
-        .filter(Guard.company_id == company.id, Guard.id.in_(list(by_guard.keys())))
+        .filter(
+            Guard.company_id == company.id,
+            Guard.deleted_at.is_(None),
+            Guard.id.in_(list(by_guard.keys())),
+        )
         .all()
     }
 

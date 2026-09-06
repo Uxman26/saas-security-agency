@@ -117,6 +117,15 @@ def run():
         ("audit_logs", "actor_user_id", "INTEGER"),
         ("audit_logs", "impersonated", "INTEGER NOT NULL DEFAULT 0"),
         ("audit_logs", "ip_address", "TEXT"),
+        # Soft delete ("archive") for the records that carry history: the row survives so
+        # past shifts, invoices and payroll still name it, but it leaves every list until
+        # it is restored or permanently deleted.
+        ("guards", "deleted_at", "TEXT"),
+        ("guards", "deleted_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("clients", "deleted_at", "TEXT"),
+        ("clients", "deleted_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("sites", "deleted_at", "TEXT"),
+        ("sites", "deleted_by_user_id", "INTEGER REFERENCES users(id)"),
     ]
     for table, col, spec in alters:
         if table_exists(cur, table) and not column_exists(cur, table, col):

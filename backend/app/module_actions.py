@@ -33,6 +33,18 @@ DELETE = ActionDef("delete", "Delete")
 
 CRUD: tuple[ActionDef, ...] = (VIEW, CREATE, EDIT, DELETE)
 
+# Records that carry history — staff, clients, sites — can be archived (soft deleted)
+# instead of destroyed. Archiving and restoring hang off the existing delete right, and
+# permanent deletion off it too, so a role that could already delete keeps working
+# exactly as before; a role that should only archive can now have the permanent one
+# taken away on its own.
+ARCHIVING: tuple[ActionDef, ...] = (
+    ActionDef("archived_view", "View archived", "view"),
+    ActionDef("archive", "Archive", "delete"),
+    ActionDef("restore", "Restore archived", "delete"),
+    ActionDef("delete_permanent", "Delete permanently", "delete"),
+)
+
 # Actions every module row starts with, in display order, followed by the special
 # actions that module's endpoints actually implement.
 MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
@@ -42,6 +54,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     # The job title list is Staff's own pick-list, managed from a tab on that screen, so
     # it hangs off this module rather than becoming a module (and sidebar entry) of its own.
     "guards": CRUD
+    + ARCHIVING
     + (
         ActionDef("photo_upload", "Upload photo", "edit"),
         ActionDef("photo_view", "View photo", "view"),
@@ -95,7 +108,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("incidents_view", "View incidents", "view"),
         ActionDef("incidents_create", "Report incidents", "create"),
     ),
-    "sites": CRUD,
+    "sites": CRUD + ARCHIVING,
     # The /assignments API is guarded by the rota.* codes, so the shift-log and export
     # actions live on `rota` where they are actually enforced. This row drives the
     # Assignments screen and sidebar entry.
@@ -179,6 +192,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     "staff_requests": (VIEW, ActionDef("approve", "Approve", "edit"), ActionDef("reject", "Reject", "edit")),
     # --- Sales ----------------------------------------------------------------------
     "clients": CRUD
+    + ARCHIVING
     + (
         ActionDef("renew", "Renew contract", "edit"),
         ActionDef("renewals_view", "View renewals", "view"),

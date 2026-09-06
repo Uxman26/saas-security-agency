@@ -554,6 +554,8 @@ class GuardResponse(GuardBase):
     full_name: str
     created_at: datetime
     photo_url: Optional[str] = None
+    # Set only on archived (soft-deleted) records; null on everything in the normal lists.
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -611,6 +613,8 @@ class SiteResponse(SiteBase):
     id: int
     company_id: int
     created_at: datetime
+    # Set only on archived (soft-deleted) records; null on everything in the normal lists.
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -858,6 +862,8 @@ class ClientResponse(ClientBase):
     id: int
     company_id: int
     created_at: datetime
+    # Set only on archived (soft-deleted) records; null on everything in the normal lists.
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -2792,3 +2798,24 @@ class JobTitleResponse(BaseModel):
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DeleteImpactRecord(BaseModel):
+    """One thing a permanent delete would take with it."""
+
+    label: str
+    count: int
+
+
+class DeleteImpactResponse(BaseModel):
+    """What pressing "Delete permanently" would actually do to this record.
+
+    ``blockers`` is what stops it outright — a site still carrying shifts, say. When it is
+    non-empty the delete will be refused, and archiving is the way forward instead.
+    """
+
+    id: int
+    name: str
+    archived: bool
+    records: List[DeleteImpactRecord] = []
+    blockers: List[str] = []

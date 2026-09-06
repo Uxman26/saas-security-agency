@@ -564,6 +564,11 @@ class Guard(Base):
     pay_frequency = Column(String, default="weekly")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Soft delete ("archived"): the row stays for its history — past shifts, invoices and
+    # payroll still resolve their names — but it is hidden from every list and picker
+    # until restored. Permanent deletion is a separate, explicit action.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company = relationship("Company", back_populates="guards")
     contractor = relationship("Contractor", foreign_keys=[contractor_id])
     main_contractor = relationship("MainContractor", back_populates="guards")
@@ -608,6 +613,11 @@ class Client(Base):
     contract_expiry_alert_sent_date = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Soft delete ("archived"): the row stays for its history — past shifts, invoices and
+    # payroll still resolve their names — but it is hidden from every list and picker
+    # until restored. Permanent deletion is a separate, explicit action.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company = relationship("Company", back_populates="clients")
     sites = relationship("Site", back_populates="client")
     invoices = relationship("Invoice", back_populates="client", cascade="all, delete-orphan")
@@ -662,6 +672,11 @@ class Site(Base):
     longitude = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Soft delete ("archived"): the row stays for its history — past shifts, invoices and
+    # payroll still resolve their names — but it is hidden from every list and picker
+    # until restored. Permanent deletion is a separate, explicit action.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company = relationship("Company", back_populates="sites")
     contractor = relationship("Contractor", foreign_keys=[contractor_id])
     main_contractor = relationship("MainContractor", back_populates="sites")

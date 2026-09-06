@@ -12,13 +12,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard } from '@/hooks/use-guards';
+import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard, useRestoreGuard } from '@/hooks/use-guards';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { guardSchema, guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import { guardFormDefaults, guardToForm, formToGuardPayload } from '@/lib/guard-form-map';
-import type { Guard } from '@/lib/types';
+import type { Guard, RecordView } from '@/lib/types';
+import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { EmailDialog } from '@/components/email-dialog';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
@@ -29,9 +30,10 @@ import { JobTitlesPanel } from '@/app/guards/job-titles-panel';
 import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Pencil, Trash2, Users, Eye } from 'lucide-react';
+import { ArchiveRestore, Pencil, Trash2, Users, Eye } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import type { JobTitle } from '@/lib/types';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
@@ -68,11 +70,17 @@ export default function GuardsPage() {
   const areaQ = filterArea.trim() || undefined;
   const postcodeQ = filterPostcode.trim() || undefined;
   const nearbyQ = filterNearby.trim() || undefined;
+  // Archived staff live behind their own tab: off the Staff list, out of every rota and
+  // payroll picker, and with their portal login switched off — but still restorable.
+  const [listView, setListView] = useState<RecordView>('active');
   const { data: guards = [], isLoading, refetch, isRefetching, error: guardsError } = useGuards({
     area: areaQ,
     postcode: postcodeQ,
     nearby: nearbyQ,
+    view: listView,
   });
+  const { data: archivedGuards = [] } = useGuards({ view: 'archived' });
+  const [deleteTarget, setDeleteTarget] = useState<DeleteRecordTarget | null>(null);
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
   const { data: legMains = [] } = useMainContractors();
   const { data: legSubs = [] } = useSubContractors();
@@ -87,6 +95,7 @@ export default function GuardsPage() {
   const createGuard = useCreateGuard();
   const updateGuard = useUpdateGuard();
   const deleteGuard = useDeleteGuard();
+  const restoreGuard = useRestoreGuard();
 
   // Job titles are a company record served by /job-titles. The Staff page owns the list so
   // the tab and both staff forms always show the same one.
@@ -174,11 +183,8 @@ export default function GuardsPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    toast.confirm('Delete this staff member?', async () => { await deleteGuard.mutateAsync(id); }, {
-      label: 'Delete',
-      description: 'This cannot be undone.',
-    });
+  const handleDelete = (guard: Guard) => {
+    setDeleteTarget({ id: guard.id, name: guard.full_name, archived: guard.deleted_at != null });
   };
 
   const getSearchText = useCallback(
@@ -291,7 +297,7 @@ export default function GuardsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, filterContractor, filterSubContractor]);
+  }, [listView, search, filterContractor, filterSubContractor]);
 
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount));
@@ -407,9 +413,37 @@ export default function GuardsPage() {
             </div>
           )}
 
+          <div className="mb-4 flex flex-wrap gap-2 border-b pb-3">
+            {([
+              ['active', 'Active staff'],
+              ['archived', `Archived (${archivedGuards.length})`],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setListView(id)}
+                className={cn(
+                  'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
+                  listView === id
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <Card>
             <CardHeader>
-              <CardTitle>All staff</CardTitle>
+              <CardTitle>{listView === 'archived' ? 'Archived staff' : 'All staff'}</CardTitle>
+              {listView === 'archived' ? (
+                <p className="text-sm text-muted-foreground">
+                  Off the Staff list and out of every rota and payroll picker, with their portal login
+                  switched off. Their shifts, attendance and payroll history are untouched — restoring
+                  someone brings the record back but leaves their login disabled.
+                </p>
+              ) : null}
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -495,9 +529,22 @@ export default function GuardsPage() {
                                     <Eye className="size-4" />
                                   </Link>
                                 </Button>
-                                <Button variant="ghost" size="sm" className="size-8 p-0" onClick={() => openEdit(guard)} title="Edit staff" disabled={!can(user, 'guards.write')}>
-                                  <Pencil className="size-4" />
-                                </Button>
+                                {guard.deleted_at == null ? (
+                                  <Button variant="ghost" size="sm" className="size-8 p-0" onClick={() => openEdit(guard)} title="Edit staff" disabled={!can(user, 'guards.write')}>
+                                    <Pencil className="size-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="size-8 p-0"
+                                    onClick={() => void restoreGuard.mutateAsync(guard.id)}
+                                    disabled={restoreGuard.isPending || !can(user, 'guards.delete')}
+                                    title="Restore staff member"
+                                  >
+                                    <ArchiveRestore className="size-4" />
+                                  </Button>
+                                )}
                                 {guard.email && (
                                   <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} compact />
                                 )}
@@ -505,9 +552,9 @@ export default function GuardsPage() {
                                   variant="ghost"
                                   size="sm"
                                   className="size-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(guard.id)}
+                                  onClick={() => handleDelete(guard)}
                                   disabled={deleteGuard.isPending || !can(user, 'guards.delete')}
-                                  title="Delete guard"
+                                  title={guard.deleted_at != null ? 'Delete permanently' : 'Archive or delete staff member'}
                                 >
                                   <Trash2 className="size-4" />
                                 </Button>
@@ -571,6 +618,18 @@ export default function GuardsPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <DeleteRecordDialog
+          target={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          noun="staff member"
+          archiveHint="Their shifts, attendance and payroll history stay exactly as they are, and any portal login they hold is switched off."
+          loadImpact={api.guards.deleteImpact}
+          onArchive={(id) => deleteGuard.mutateAsync({ id })}
+          onDeletePermanently={(id) => deleteGuard.mutateAsync({ id, permanent: true })}
+          canArchive={can(user, 'guards.delete')}
+          canDeletePermanently={can(user, 'guards.delete')}
+        />
       </div>
     </AppShell>
     </ProtectedRoute>

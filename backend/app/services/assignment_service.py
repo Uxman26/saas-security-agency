@@ -32,10 +32,22 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
     guard = db.query(Guard).filter(Guard.id == assignment.guard_id, Guard.company_id == company.id).first()
     if not guard:
         raise HTTPException(status_code=404, detail="Guard not found")
-    
+
     site = db.query(Site).filter(Site.id == assignment.site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    # Existing shifts on an archived record stay readable; new ones would quietly bring
+    # it back into use, so they are refused until it is restored.
+    if guard.deleted_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"“{guard.full_name}” is archived. Restore them before scheduling shifts.",
+        )
+    if site.deleted_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"“{site.name}” is archived. Restore it before scheduling shifts.",
+        )
     if not guard_has_contractor(guard) or not site_has_contractor(site):
         raise HTTPException(
             status_code=400,

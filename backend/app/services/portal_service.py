@@ -124,7 +124,7 @@ def _total_pay(db: Session, company_id: int, rows: List[RotaDetailResponse]) -> 
 
 def list_portal_sites(db: Session, user: User) -> List[SiteResponse]:
     company = get_company_by_user_id(db, user.id)
-    q = db.query(Site).filter(Site.company_id == company.id)
+    q = db.query(Site).filter(Site.company_id == company.id, Site.deleted_at.is_(None))
     q = filter_sites_for_user(db, user, q)
     rows = q.order_by(Site.name).all()
     return redact_sites_for_portal(user, rows)

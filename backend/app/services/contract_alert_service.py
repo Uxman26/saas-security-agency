@@ -13,6 +13,7 @@ def count_contracts_expiring_soon(db: Session, company_id: int, days: int = 30) 
         db.query(Client)
         .filter(
             Client.company_id == company_id,
+            Client.deleted_at.is_(None),
             Client.contract_end_date.isnot(None),
             Client.contract_end_date >= today,
             Client.contract_end_date <= today + timedelta(days=days),
@@ -29,6 +30,7 @@ def list_contract_expiry_alerts(db: Session, company_id: int, days: int = 30):
         db.query(Client)
         .filter(
             Client.company_id == company_id,
+            Client.deleted_at.is_(None),
             Client.contract_end_date.isnot(None),
             Client.contract_end_date >= today,
             Client.contract_end_date <= today + timedelta(days=days),
@@ -51,6 +53,7 @@ def notify_admin_contract_expiry(db: Session, company_id: int) -> None:
         db.query(Client)
         .filter(
             Client.company_id == company_id,
+            Client.deleted_at.is_(None),
             Client.contract_end_date.isnot(None),
             Client.contract_end_date >= today,
             Client.contract_end_date <= window_end,

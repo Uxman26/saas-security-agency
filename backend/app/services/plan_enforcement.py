@@ -79,8 +79,8 @@ def enforce_user_quota(db: Session, company: Company) -> None:
 
 def plan_summary(db: Session, company: Company) -> dict:
     tier = normalize_tier(company.subscription_tier)
-    ug = db.query(Guard).filter(Guard.company_id == company.id).count()
-    us = db.query(Site).filter(Site.company_id == company.id).count()
+    ug = db.query(Guard).filter(Guard.company_id == company.id, Guard.deleted_at.is_(None)).count()
+    us = db.query(Site).filter(Site.company_id == company.id, Site.deleted_at.is_(None)).count()
     uu = db.query(func.count(User.id)).filter(User.company_id == company.id, User.is_active == True).scalar()
     cap = user_limit_for_company(company)
     return {

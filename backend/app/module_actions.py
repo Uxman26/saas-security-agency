@@ -62,6 +62,17 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("job_titles_create", "Add job titles", "create"),
         ActionDef("job_titles_edit", "Edit job titles", "edit"),
         ActionDef("job_titles_delete", "Delete job titles", "delete"),
+        ActionDef("teams_view", "View teams", "view"),
+        ActionDef("teams_manage", "Manage teams", "edit"),
+        ActionDef("profile_view", "View employee profile", "view"),
+        ActionDef("sensitive_view", "View sensitive information", "view"),
+        ActionDef("salary_view", "View salary & payroll details", "view"),
+        ActionDef("terminate", "Record termination", "edit"),
+    ),
+    "absence": CRUD
+    + (
+        ActionDef("approve", "Approve or decline", "edit"),
+        ActionDef("export", "Export", "view"),
     ),
     "documents": (VIEW, CREATE, DELETE)
     + (

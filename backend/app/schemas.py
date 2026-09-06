@@ -431,6 +431,32 @@ class GuardBase(BaseModel):
     job_title: Optional[str] = None
     employment_start_date: Optional[date] = None
     probation_end_date: Optional[date] = None
+    # --- Employee Profile: Personal tab ---
+    personal_email: Optional[EmailStr] = None
+    home_phone: Optional[str] = None
+    work_extension: Optional[str] = None
+    covid_vaccinated: Optional[str] = None
+    medical_notes: Optional[str] = None
+    # --- Employee Profile: Employment tab ---
+    contract_type: Optional[str] = None
+    working_location: Optional[str] = None
+    reports_to: Optional[str] = None
+    probation_required: Optional[bool] = None
+    notice_period: Optional[str] = None
+    salary_amount: Optional[float] = None
+    salary_rate: Optional[str] = None
+    salary_frequency: Optional[str] = None
+    payroll_number: Optional[str] = None
+    pension_scheme: Optional[str] = None
+    pension_contribution: Optional[str] = None
+    external_reference: Optional[str] = None
+    employee_notes: Optional[str] = None
+    sickness_entitlement_hrs: Optional[int] = None
+    sickness_entitlement_mins: Optional[int] = None
+    # --- Termination: a leaving date, not an archive. See Guard.is_terminated. ---
+    termination_date: Optional[date] = None
+    termination_reason: Optional[str] = None
+    termination_notes: Optional[str] = None
     address_line_1: Optional[str] = None
     address_line_2: Optional[str] = None
     address_line_3: Optional[str] = None
@@ -2819,3 +2845,214 @@ class DeleteImpactResponse(BaseModel):
     archived: bool
     records: List[DeleteImpactRecord] = []
     blockers: List[str] = []
+
+
+# --- HR module: teams -------------------------------------------------------------
+
+class TeamCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class TeamMembersUpdate(BaseModel):
+    guard_ids: List[int] = []
+
+
+class TeamResponse(BaseModel):
+    id: int
+    company_id: int
+    name: str
+    description: Optional[str] = None
+    member_count: int = 0
+    member_ids: List[int] = []
+    created_at: Optional[datetime] = None
+
+
+class TeamRef(BaseModel):
+    """A team as it appears against an employee, e.g. the list view's Team(s) column."""
+
+    id: int
+    name: str
+
+
+# --- HR module: absence -----------------------------------------------------------
+
+class AbsenceCreate(BaseModel):
+    guard_id: int
+    kind: str
+    start_date: date
+    end_date: Optional[date] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    #: Omit to bill the employee's own average working day for each day in the range.
+    hours: Optional[float] = None
+    status: Optional[str] = "approved"
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AbsenceUpdate(BaseModel):
+    kind: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    hours: Optional[float] = None
+    status: Optional[str] = None
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AbsenceResponse(BaseModel):
+    id: int
+    company_id: int
+    guard_id: int
+    kind: str
+    start_date: date
+    end_date: date
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    hours: float = 0
+    status: str
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+    guard_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AbsenceKindSummary(BaseModel):
+    kind: str
+    #: None where the kind has no entitlement to measure against (lateness, other).
+    entitlement_hours: Optional[float] = None
+    taken_hours: float = 0
+    remaining_hours: Optional[float] = None
+    pending_hours: float = 0
+    logged: int = 0
+    pending_count: int = 0
+
+
+class AbsenceSummaryResponse(BaseModel):
+    guard_id: int
+    guard_name: str
+    period_start: date
+    period_end: date
+    annual_leave: AbsenceKindSummary
+    sickness: AbsenceKindSummary
+    lateness: AbsenceKindSummary
+    other: AbsenceKindSummary
+
+
+# --- HR module: emergency contacts -------------------------------------------------
+
+class EmergencyContactBase(BaseModel):
+    first_name: str
+    last_name: Optional[str] = None
+    relationship_to_employee: Optional[str] = None
+    mobile_phone: Optional[str] = None
+    home_phone: Optional[str] = None
+    work_phone: Optional[str] = None
+    email: Optional[str] = None
+    address_line_1: Optional[str] = None
+    address_line_2: Optional[str] = None
+    address_line_3: Optional[str] = None
+    town_city: Optional[str] = None
+    county: Optional[str] = None
+    postcode: Optional[str] = None
+    is_primary: Optional[bool] = None
+
+
+class EmergencyContactResponse(EmergencyContactBase):
+    id: int
+    guard_id: int
+    is_primary: bool = False
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# --- HR module: the Employee Hub row ------------------------------------------------
+
+class EmployeeHubRow(BaseModel):
+    """One employee as the hub shows them, in either Teams View or List View."""
+
+    id: int
+    full_name: str
+    job_title: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    photo_url: Optional[str] = None
+    teams: List[TeamRef] = []
+    #: True once a termination date is set; these are hidden unless asked for.
+    terminated: bool = False
+    termination_date: Optional[date] = None
+    #: Whether this person has a portal login. Drives the "not registered" count.
+    registered: bool = False
+    archived: bool = False
+
+
+class EmployeeHubGroup(BaseModel):
+    """A team and the employees in it. Team id 0 is the "No team" bucket."""
+
+    team_id: int
+    team_name: str
+    employees: List[EmployeeHubRow] = []
+
+
+class EmployeeHubResponse(BaseModel):
+    total: int
+    #: How many of the returned employees have no portal login yet.
+    not_registered: int
+    terminated_count: int
+    groups: List[EmployeeHubGroup] = []
+    employees: List[EmployeeHubRow] = []
+
+
+# --- HR module: documents ----------------------------------------------------------
+
+class DocumentDetailResponse(BaseModel):
+    """One document as the Details tab shows it."""
+
+    id: int
+    guard_id: int
+    guard_name: Optional[str] = None
+    document_type: str
+    file_name: Optional[str] = None
+    folder: Optional[str] = None
+    #: Short label for the Information panel — "Word", "Pdf", "Image".
+    file_type: str
+    mime_type: str
+    file_size: Optional[int] = None
+    #: False means the page shows "Preview unavailable for this file type" instead.
+    previewable: bool = False
+    expiry_date: Optional[date] = None
+    follow_up_date: Optional[date] = None
+    visible_to_employee: bool = True
+    requires_acceptance: bool = False
+    uploaded_by: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class DocumentSettingsUpdate(BaseModel):
+    document_type: Optional[str] = None
+    folder: Optional[str] = None
+    expiry_date: Optional[date] = None
+    follow_up_date: Optional[date] = None
+    visible_to_employee: Optional[bool] = None
+    requires_acceptance: Optional[bool] = None
+
+
+class DocumentReceiptRow(BaseModel):
+    user_id: int
+    name: Optional[str] = None
+    email: Optional[str] = None
+    read_at: Optional[datetime] = None
+    accepted_at: Optional[datetime] = None

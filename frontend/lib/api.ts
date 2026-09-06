@@ -1,4 +1,4 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, RecordView, DeleteImpact } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, RecordView, DeleteImpact, Team, AbsenceRecord, AbsenceSummary, AbsenceKind, EmergencyContact, EmployeeHub, DocumentDetail, DocumentReceipt } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -207,6 +207,46 @@ export const api = {
     delete: (id: number, opts?: { permanent?: boolean }): Promise<void> =>
       request<void>(`/guards/${id}${opts?.permanent ? '?permanent=true' : ''}`, { method: 'DELETE' }),
     restore: (id: number): Promise<Guard> => request<Guard>(`/guards/${id}/restore`, { method: 'POST' }),
+    /** Everyone in the Employee Hub, grouped by team and flat, from one call. */
+    hub: (params?: {
+      search?: string;
+      team_id?: number;
+      status?: string;
+      sort?: string;
+      include_terminated?: boolean;
+      view?: RecordView;
+    } & WorkFilterParams): Promise<EmployeeHub> => {
+      const q = appendWorkFilters(new URLSearchParams(), params);
+      if (params?.search) q.append('search', params.search);
+      if (params?.team_id != null) q.append('team_id', String(params.team_id));
+      if (params?.status && params.status !== 'all') q.append('status', params.status);
+      if (params?.sort) q.append('sort', params.sort);
+      if (params?.include_terminated) q.append('include_terminated', 'true');
+      if (params?.view && params.view !== 'active') q.append('view', params.view);
+      const qs = q.toString();
+      return request<EmployeeHub>(`/guards/hub${qs ? `?${qs}` : ''}`);
+    },
+    teams: (id: number): Promise<number[]> => request<number[]>(`/guards/${id}/teams`),
+    setTeams: (id: number, teamIds: number[]): Promise<number[]> =>
+      request<number[]>(`/guards/${id}/teams`, { method: 'PUT', body: JSON.stringify(teamIds) }),
+    emergencyContacts: (id: number): Promise<EmergencyContact[]> =>
+      request<EmergencyContact[]>(`/guards/${id}/emergency-contacts`),
+    createEmergencyContact: (id: number, data: Partial<EmergencyContact>): Promise<EmergencyContact> =>
+      request<EmergencyContact>(`/guards/${id}/emergency-contacts`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateEmergencyContact: (
+      id: number,
+      contactId: number,
+      data: Partial<EmergencyContact>
+    ): Promise<EmergencyContact> =>
+      request<EmergencyContact>(`/guards/${id}/emergency-contacts/${contactId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    deleteEmergencyContact: (id: number, contactId: number): Promise<void> =>
+      request<void>(`/guards/${id}/emergency-contacts/${contactId}`, { method: 'DELETE' }),
     deleteImpact: (id: number): Promise<DeleteImpact> => request<DeleteImpact>(`/guards/${id}/delete-impact`),
     portalLogins: (id: number): Promise<PortalLogin[]> => request<PortalLogin[]>(`/guards/${id}/portal-logins`),
     createPortalLogin: (id: number, data: { email?: string; password: string }): Promise<PortalLogin> =>
@@ -1067,6 +1107,59 @@ export const api = {
     duplicate: (id: number): Promise<Invoice> =>
       request<Invoice>(`/invoices/${id}/duplicate`, { method: 'POST' }),
   },
+  teams: {
+    list: (): Promise<Team[]> => request<Team[]>('/teams'),
+    get: (id: number): Promise<Team> => request<Team>(`/teams/${id}`),
+    create: (data: { name: string; description?: string }): Promise<Team> =>
+      request<Team>('/teams', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: { name?: string; description?: string }): Promise<Team> =>
+      request<Team>(`/teams/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    /** Replaces the whole membership in one call — what Manage teams sends on save. */
+    setMembers: (id: number, guard_ids: number[]): Promise<Team> =>
+      request<Team>(`/teams/${id}/members`, { method: 'PUT', body: JSON.stringify({ guard_ids }) }),
+    delete: (id: number): Promise<void> => request<void>(`/teams/${id}`, { method: 'DELETE' }),
+  },
+  absence: {
+    list: (params?: {
+      guard_id?: number;
+      kind?: AbsenceKind;
+      start_date?: string;
+      end_date?: string;
+      status?: string;
+    }): Promise<AbsenceRecord[]> => {
+      const q = new URLSearchParams();
+      if (params?.guard_id) q.append('guard_id', String(params.guard_id));
+      if (params?.kind) q.append('kind', params.kind);
+      if (params?.start_date) q.append('start_date', params.start_date);
+      if (params?.end_date) q.append('end_date', params.end_date);
+      if (params?.status) q.append('status_filter', params.status);
+      const qs = q.toString();
+      return request<AbsenceRecord[]>(`/absence${qs ? `?${qs}` : ''}`);
+    },
+    /** The four cards on the Absence tab. Defaults to the employee's own leave year. */
+    summary: (guard_id: number, start_date?: string, end_date?: string): Promise<AbsenceSummary> => {
+      const q = new URLSearchParams({ guard_id: String(guard_id) });
+      if (start_date) q.append('start_date', start_date);
+      if (end_date) q.append('end_date', end_date);
+      return request<AbsenceSummary>(`/absence/summary?${q.toString()}`);
+    },
+    create: (data: {
+      guard_id: number;
+      kind: AbsenceKind;
+      start_date: string;
+      end_date?: string;
+      start_time?: string;
+      end_time?: string;
+      hours?: number;
+      status?: string;
+      reason?: string;
+      notes?: string;
+    }): Promise<AbsenceRecord> =>
+      request<AbsenceRecord>('/absence', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<AbsenceRecord>): Promise<AbsenceRecord> =>
+      request<AbsenceRecord>(`/absence/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/absence/${id}`, { method: 'DELETE' }),
+  },
   expenses: {
     meta: (): Promise<ExpenseMeta> => request<ExpenseMeta>('/expenses/meta'),
     list: (params?: {
@@ -1387,13 +1480,16 @@ export const api = {
       guard_id: number,
       document_type: string,
       files: File[],
-      expiry_date?: string
+      expiry_date?: string,
+      opts?: { folder?: string; follow_up_date?: string }
     ): Promise<GuardDocument[]> => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
       const form = new FormData();
       form.append('guard_id', String(guard_id));
       form.append('document_type', document_type);
       if (expiry_date) form.append('expiry_date', expiry_date);
+      if (opts?.folder) form.append('folder', opts.folder);
+      if (opts?.follow_up_date) form.append('follow_up_date', opts.follow_up_date);
       files.forEach((f) => form.append('files', f));
       const response = await fetch(`${API_URL}/documents/upload`, {
         method: 'POST',
@@ -1416,6 +1512,27 @@ export const api = {
       return response.json();
     },
     downloadUrl: (id: number) => `${API_URL}/documents/${id}/file`,
+    /** Everything the Details tab shows, including whether it previews in page. */
+    detail: (id: number): Promise<DocumentDetail> => request<DocumentDetail>(`/documents/${id}/detail`),
+    updateSettings: (
+      id: number,
+      data: {
+        document_type?: string;
+        folder?: string | null;
+        expiry_date?: string | null;
+        follow_up_date?: string | null;
+        visible_to_employee?: boolean;
+        requires_acceptance?: boolean;
+      }
+    ): Promise<DocumentDetail> =>
+      request<DocumentDetail>(`/documents/${id}/settings`, { method: 'PATCH', body: JSON.stringify(data) }),
+    receipts: (id: number): Promise<DocumentReceipt[]> =>
+      request<DocumentReceipt[]>(`/documents/${id}/receipts`),
+    recordReceipt: (id: number, accept = false): Promise<DocumentReceipt> =>
+      request<DocumentReceipt>(`/documents/${id}/receipts${accept ? '?accept=true' : ''}`, { method: 'POST' }),
+    /** The file inline rather than as an attachment, for the in-page preview. */
+    file: (id: number): Promise<Blob> => requestBlob(`/documents/${id}/preview`),
+    download: (id: number): Promise<Blob> => requestBlob(`/documents/${id}/file`),
     delete: (id: number): Promise<void> => request<void>(`/documents/${id}`, { method: 'DELETE' }),
   },
   attendance: {

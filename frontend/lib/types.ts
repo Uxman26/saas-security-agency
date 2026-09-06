@@ -354,6 +354,32 @@ export interface Guard {
   phone?: string;
   work_phone?: string;
   job_title?: string;
+  // --- Employee Profile: Personal tab ---
+  personal_email?: string | null;
+  home_phone?: string | null;
+  work_extension?: string | null;
+  covid_vaccinated?: string | null;
+  medical_notes?: string | null;
+  // --- Employee Profile: Employment tab ---
+  contract_type?: string | null;
+  working_location?: string | null;
+  reports_to?: string | null;
+  probation_required?: boolean | null;
+  notice_period?: string | null;
+  salary_amount?: number | null;
+  salary_rate?: string | null;
+  salary_frequency?: string | null;
+  payroll_number?: string | null;
+  pension_scheme?: string | null;
+  pension_contribution?: string | null;
+  external_reference?: string | null;
+  employee_notes?: string | null;
+  sickness_entitlement_hrs?: number | null;
+  sickness_entitlement_mins?: number | null;
+  /** A leaving date, not an archive: terminated staff stay in the hub behind a switch. */
+  termination_date?: string | null;
+  termination_reason?: string | null;
+  termination_notes?: string | null;
   employment_start_date?: string;
   probation_end_date?: string;
   address_line_1?: string;
@@ -1610,4 +1636,144 @@ export interface DeleteImpact {
   records: { label: string; count: number }[];
   /** Things that refuse the delete outright. Archiving is the way forward instead. */
   blockers: string[];
+}
+
+// --- HR module -------------------------------------------------------------------
+
+export interface Team {
+  id: number;
+  company_id: number;
+  name: string;
+  description?: string | null;
+  member_count: number;
+  member_ids: number[];
+  created_at?: string;
+}
+
+/** A team as it appears against an employee. */
+export interface TeamRef {
+  id: number;
+  name: string;
+}
+
+export type AbsenceKind = 'annual_leave' | 'sickness' | 'lateness' | 'other';
+export type AbsenceStatus = 'pending' | 'approved' | 'declined';
+
+export interface AbsenceRecord {
+  id: number;
+  company_id: number;
+  guard_id: number;
+  kind: AbsenceKind;
+  start_date: string;
+  end_date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  hours: number;
+  status: AbsenceStatus;
+  reason?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  guard_name?: string | null;
+}
+
+export interface AbsenceKindSummary {
+  kind: AbsenceKind;
+  /** Null where the kind has no entitlement to measure against. */
+  entitlement_hours?: number | null;
+  taken_hours: number;
+  remaining_hours?: number | null;
+  pending_hours: number;
+  logged: number;
+  pending_count: number;
+}
+
+export interface AbsenceSummary {
+  guard_id: number;
+  guard_name: string;
+  period_start: string;
+  period_end: string;
+  annual_leave: AbsenceKindSummary;
+  sickness: AbsenceKindSummary;
+  lateness: AbsenceKindSummary;
+  other: AbsenceKindSummary;
+}
+
+export interface EmergencyContact {
+  id: number;
+  guard_id: number;
+  first_name: string;
+  last_name?: string | null;
+  relationship_to_employee?: string | null;
+  mobile_phone?: string | null;
+  home_phone?: string | null;
+  work_phone?: string | null;
+  email?: string | null;
+  address_line_1?: string | null;
+  address_line_2?: string | null;
+  address_line_3?: string | null;
+  town_city?: string | null;
+  county?: string | null;
+  postcode?: string | null;
+  is_primary: boolean;
+  created_at?: string;
+}
+
+/** One employee as the Employee Hub shows them, in either view. */
+export interface EmployeeHubRow {
+  id: number;
+  full_name: string;
+  job_title?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+  teams: TeamRef[];
+  terminated: boolean;
+  termination_date?: string | null;
+  /** Whether this person has a portal login yet. */
+  registered: boolean;
+  archived: boolean;
+}
+
+/** Team id 0 is the "No team" bucket. */
+export interface EmployeeHubGroup {
+  team_id: number;
+  team_name: string;
+  employees: EmployeeHubRow[];
+}
+
+export interface EmployeeHub {
+  total: number;
+  not_registered: number;
+  terminated_count: number;
+  groups: EmployeeHubGroup[];
+  employees: EmployeeHubRow[];
+}
+
+export interface DocumentDetail {
+  id: number;
+  guard_id: number;
+  guard_name?: string | null;
+  document_type: string;
+  file_name?: string | null;
+  folder?: string | null;
+  /** Short label for the Information panel — "Word", "Pdf", "Image". */
+  file_type: string;
+  mime_type: string;
+  file_size?: number | null;
+  /** False means the page shows "Preview unavailable for this file type". */
+  previewable: boolean;
+  expiry_date?: string | null;
+  follow_up_date?: string | null;
+  visible_to_employee: boolean;
+  requires_acceptance: boolean;
+  uploaded_by?: string | null;
+  created_at?: string;
+}
+
+export interface DocumentReceipt {
+  user_id: number;
+  name?: string | null;
+  email?: string | null;
+  read_at?: string | null;
+  accepted_at?: string | null;
 }

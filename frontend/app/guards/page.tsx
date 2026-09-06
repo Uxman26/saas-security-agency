@@ -18,7 +18,7 @@ import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { guardSchema, guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import { guardFormDefaults, guardToForm, formToGuardPayload } from '@/lib/guard-form-map';
-import type { Guard, RecordView } from '@/lib/types';
+import type { EmployeeHub, EmployeeHubRow, Guard, RecordView, Team } from '@/lib/types';
 import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { EmailDialog } from '@/components/email-dialog';
@@ -30,10 +30,18 @@ import { JobTitlesPanel } from '@/app/guards/job-titles-panel';
 import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ArchiveRestore, Pencil, Trash2, Users, Eye } from 'lucide-react';
+import { ArchiveRestore, Pencil, Trash2, UserRound, Users, Eye } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import {
+  EMPTY_HUB_QUERY,
+  EmployeeHubControls,
+  type HubQuery,
+  type HubView,
+} from '@/components/hr/employee-hub-controls';
+import { EmployeeCard, EmployeeQuickView, initialsOf } from '@/components/hr/employee-quick-view';
+import { ManageTeamsPanel } from '@/components/hr/manage-teams-panel';
 import type { JobTitle } from '@/lib/types';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
@@ -45,7 +53,8 @@ function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' 
 }
 
 const TABS = [
-  { id: 'staff', label: 'All staff' },
+  { id: 'staff', label: 'Employees' },
+  { id: 'teams', label: 'Manage teams' },
   { id: 'job-titles', label: 'Job titles' },
 ] as const;
 type StaffTab = (typeof TABS)[number]['id'];
@@ -81,6 +90,14 @@ export default function GuardsPage() {
   });
   const { data: archivedGuards = [] } = useGuards({ view: 'archived' });
   const [deleteTarget, setDeleteTarget] = useState<DeleteRecordTarget | null>(null);
+  // The Employee Hub: one server call feeds both views, so Teams View and List View can
+  // never disagree about who is in scope.
+  const [hubView, setHubView] = useState<HubView>('list');
+  const [hubQuery, setHubQuery] = useState<HubQuery>(EMPTY_HUB_QUERY);
+  const [hub, setHub] = useState<EmployeeHub | null>(null);
+  const [hubLoading, setHubLoading] = useState(true);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [quickView, setQuickView] = useState<EmployeeHubRow | null>(null);
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
   const { data: legMains = [] } = useMainContractors();
   const { data: legSubs = [] } = useSubContractors();
@@ -183,6 +200,53 @@ export default function GuardsPage() {
     }
   };
 
+  const loadHub = useCallback(() => {
+    setHubLoading(true);
+    api.guards
+      .hub({
+        search: hubQuery.search || undefined,
+        team_id: hubQuery.teamId === 'all' ? undefined : parseInt(hubQuery.teamId, 10),
+        status: hubQuery.status,
+        sort: hubQuery.sort,
+        include_terminated: hubQuery.includeTerminated,
+        view: listView,
+      })
+      .then(setHub)
+      .catch(() => setHub(null))
+      .finally(() => setHubLoading(false));
+  }, [hubQuery, listView]);
+
+  useEffect(() => {
+    loadHub();
+  }, [loadHub]);
+
+  const loadTeams = useCallback(() => {
+    api.teams.list().then(setTeams).catch(() => setTeams([]));
+  }, []);
+
+  useEffect(() => {
+    loadTeams();
+  }, [loadTeams]);
+
+  /** guard id → the teams they are in, for the list view's Team(s) column. */
+  const teamsByGuard = useMemo(() => {
+    const m = new Map<number, string[]>();
+    for (const e of hub?.employees ?? []) {
+      m.set(e.id, e.teams.map((t) => t.name));
+    }
+    return m;
+  }, [hub]);
+
+  /**
+   * The hub decides who is in scope; the table below still owns the compliance columns
+   * and the contractor filters. Intersecting the two keeps one source of truth for
+   * membership without losing the columns a security company actually works from.
+   */
+  const hubIds = useMemo(
+    () => new Set((hub?.employees ?? []).map((e) => e.id)),
+    [hub]
+  );
+
   const handleDelete = (guard: Guard) => {
     setDeleteTarget({ id: guard.id, name: guard.full_name, archived: guard.deleted_at != null });
   };
@@ -243,6 +307,8 @@ export default function GuardsPage() {
           return g.postcode || '';
         case 'car':
           return g.has_car ? 1 : 0;
+        case 'job_title':
+          return g.job_title || '';
         case 'rtw':
           return g.rtw_status || '';
         case 'visa':
@@ -279,9 +345,12 @@ export default function GuardsPage() {
   const contractorFiltered = useMemo(
     () =>
       guards
+        // Find / Filter by / Sort by / Status are answered by the hub; the contractor
+        // pickers stay here because they are this product's own, not the spec's.
+        .filter((g) => hubIds.has(g.id))
         .filter((g) => matchesContractor(g, filterContractor, 'main'))
         .filter((g) => matchesContractor(g, filterSubContractor, 'sub')),
-    [guards, filterContractor, filterSubContractor, matchesContractor]
+    [guards, hubIds, filterContractor, filterSubContractor, matchesContractor]
   );
 
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
@@ -310,8 +379,11 @@ export default function GuardsPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><Users className="size-7" /> Staff</h1>
-              <p className="text-muted-foreground mt-1">{guards.length} staff member{guards.length !== 1 ? 's' : ''} registered</p>
+              <h1 className="text-3xl font-bold flex items-center gap-2"><Users className="size-7" /> Employee hub</h1>
+              <p className="text-muted-foreground mt-1">
+                {hub?.total ?? guards.length} employee{(hub?.total ?? guards.length) !== 1 ? 's' : ''}
+                {hub && hub.not_registered > 0 ? ` · ${hub.not_registered} without a portal login` : ''}
+              </p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -323,7 +395,7 @@ export default function GuardsPage() {
               </Button>
               <Dialog open={addOpen} onOpenChange={setAddOpen}>
                 <DialogTrigger asChild>
-                  <Button disabled={!can(user, 'guards.write')}>Add staff</Button>
+                  <Button disabled={!can(user, 'guards.write')}>Add employees</Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
                   <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
@@ -359,7 +431,16 @@ export default function GuardsPage() {
             </div>
           )}
 
-          {tab === 'job-titles' && canJobTitlesView ? (
+          {tab === 'teams' ? (
+            <ManageTeamsPanel
+              guards={guards}
+              canManage={canModule(user, 'guards', 'teams_manage')}
+              onChanged={() => {
+                loadTeams();
+                loadHub();
+              }}
+            />
+          ) : tab === 'job-titles' && canJobTitlesView ? (
             <JobTitlesPanel
               titles={jobTitles}
               loading={jobTitlesLoading}
@@ -370,6 +451,19 @@ export default function GuardsPage() {
             />
           ) : (
           <>
+          <div className="mb-4">
+            <EmployeeHubControls
+              query={hubQuery}
+              onChange={setHubQuery}
+              teams={teams}
+              view={hubView}
+              onViewChange={setHubView}
+              notRegistered={hub?.not_registered ?? 0}
+              terminatedCount={hub?.terminated_count ?? 0}
+              showStatus={hubView === 'teams'}
+            />
+          </div>
+
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <Input
               placeholder="Search staff (name, phone, area, postcode…)"
@@ -434,6 +528,42 @@ export default function GuardsPage() {
             ))}
           </div>
 
+          {hubView === 'teams' ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{listView === 'archived' ? 'Archived staff' : 'Employees by team'}</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Grouped by team. Anyone in no team is listed under “No team”, so the two views
+                  always add up to the same people.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {hubLoading ? (
+                  <InlineTableSkeleton />
+                ) : !hub || hub.groups.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">
+                    No employees match your filters.
+                  </p>
+                ) : (
+                  hub.groups.map((group) => (
+                    <div key={group.team_id}>
+                      <h3 className="mb-2 text-sm font-semibold">
+                        {group.team_name}{' '}
+                        <span className="font-normal text-muted-foreground">
+                          ({group.employees.length})
+                        </span>
+                      </h3>
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {group.employees.map((e) => (
+                          <EmployeeCard key={`${group.team_id}-${e.id}`} employee={e} onQuickView={setQuickView} />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          ) : (
           <Card>
             <CardHeader>
               <CardTitle>{listView === 'archived' ? 'Archived staff' : 'All staff'}</CardTitle>
@@ -460,6 +590,8 @@ export default function GuardsPage() {
                     <TableHeader>
                       <TableRow>
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Job title" colKey="job_title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead>Team(s)</TableHead>
                         <SortableHead label="DOB" colKey="dob" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Visa Type" colKey="visa_type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Visa Expiry" colKey="visa_expiry" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -479,7 +611,18 @@ export default function GuardsPage() {
                         const visaStatus = getSiaStatus(guard.visa_expiry_date);
                         return (
                           <TableRow key={guard.id}>
-                            <TableCell className="font-medium whitespace-nowrap">{guard.full_name}</TableCell>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              <Link href={`/guards/${guard.id}`} className="flex items-center gap-2 hover:underline">
+                                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                                  {initialsOf(guard.full_name)}
+                                </span>
+                                {guard.full_name}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="text-sm">{guard.job_title || '-'}</TableCell>
+                            <TableCell className="text-sm max-w-[160px] truncate">
+                              {(teamsByGuard.get(guard.id) ?? []).join(', ') || '-'}
+                            </TableCell>
                             <TableCell className="whitespace-nowrap text-sm">{guard.date_of_birth ? formatDateUK(guard.date_of_birth) : '-'}</TableCell>
                             <TableCell className="text-sm max-w-[140px] truncate" title={guard.visa_status || undefined}>
                               {guard.visa_status || '-'}
@@ -524,9 +667,33 @@ export default function GuardsPage() {
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               <div className="flex items-center gap-0.5 flex-nowrap">
-                                <Button variant="ghost" size="sm" className="size-8 p-0" asChild title="View staff">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="size-8 p-0"
+                                  onClick={() =>
+                                    setQuickView(
+                                      hub?.employees.find((e) => e.id === guard.id) ?? {
+                                        id: guard.id,
+                                        full_name: guard.full_name,
+                                        job_title: guard.job_title,
+                                        email: guard.email,
+                                        phone: guard.phone,
+                                        photo_url: guard.photo_url,
+                                        teams: [],
+                                        terminated: false,
+                                        registered: false,
+                                        archived: guard.deleted_at != null,
+                                      }
+                                    )
+                                  }
+                                  title="Quick view"
+                                >
+                                  <Eye className="size-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" className="size-8 p-0" asChild title="View full profile">
                                   <Link href={`/guards/${guard.id}`}>
-                                    <Eye className="size-4" />
+                                    <UserRound className="size-4" />
                                   </Link>
                                 </Button>
                                 {guard.deleted_at == null ? (
@@ -582,9 +749,12 @@ export default function GuardsPage() {
               )}
             </CardContent>
           </Card>
+          )}
           </>
           )}
         </div>
+
+        <EmployeeQuickView employee={quickView} onClose={() => setQuickView(null)} />
 
         {/* Edit Dialog */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>

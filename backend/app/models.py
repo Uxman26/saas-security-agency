@@ -562,6 +562,41 @@ class Guard(Base):
     available_days = Column(String)
     availability_timing = Column(String)
     pay_frequency = Column(String, default="weekly")
+
+    # --- Employee profile: Personal tab -------------------------------------------
+    personal_email = Column(String)
+    home_phone = Column(String)
+    work_extension = Column(String)
+    # Medical information is shown to the employee, so it is kept apart from the
+    # Sensitive information section rather than mixed in with tax and eligibility.
+    covid_vaccinated = Column(String)
+    medical_notes = Column(Text)
+
+    # --- Employee profile: Employment tab -----------------------------------------
+    contract_type = Column(String)
+    working_location = Column(String)
+    reports_to = Column(String)
+    probation_required = Column(Boolean, default=False)
+    notice_period = Column(String)
+    salary_amount = Column(Float)
+    salary_rate = Column(String)
+    salary_frequency = Column(String)
+    payroll_number = Column(String)
+    pension_scheme = Column(String)
+    pension_contribution = Column(String)
+    external_reference = Column(String)
+    employee_notes = Column(Text)
+    sickness_entitlement_hrs = Column(Integer)
+    sickness_entitlement_mins = Column(Integer)
+
+    # --- Termination ---------------------------------------------------------------
+    # A terminated employee is not archived: they stay in the lists behind the
+    # "include terminated employees" switch, because their leaving date is what payroll
+    # and reporting need. Archiving is the separate act of hiding the record entirely.
+    termination_date = Column(Date)
+    termination_reason = Column(String)
+    termination_notes = Column(Text)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     # Soft delete ("archived"): the row stays for its history — past shifts, invoices and
@@ -578,6 +613,13 @@ class Guard(Base):
     rates = relationship("GuardRate", back_populates="guard", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="guard", cascade="all, delete-orphan")
     payrolls = relationship("Payroll", back_populates="guard", cascade="all, delete-orphan")
+    team_memberships = relationship("TeamMember", back_populates="guard", cascade="all, delete-orphan")
+    absences = relationship("AbsenceRecord", back_populates="guard", cascade="all, delete-orphan")
+    emergency_contacts = relationship("EmergencyContact", back_populates="guard", cascade="all, delete-orphan")
+
+    @property
+    def is_terminated(self) -> bool:
+        return self.termination_date is not None
 
     @property
     def photo_url(self):
@@ -593,9 +635,134 @@ class GuardDocument(Base):
     file_path = Column(String, nullable=False)
     file_name = Column(String)
     expiry_date = Column(Date)
+    # Folder is free text rather than a table: documents are filed per employee and the
+    # folder is a label on the breadcrumb, not something to manage in its own screen.
+    folder = Column(String)
+    file_size = Column(Integer)
+    mime_type = Column(String)
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"))
+    # A date to chase the document again — a contract to re-sign, a certificate to renew.
+    follow_up_date = Column(Date)
+    # Settings tab: whether the employee sees it at all, and whether they must accept it.
+    visible_to_employee = Column(Boolean, default=True, nullable=False)
+    requires_acceptance = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     guard = relationship("Guard", back_populates="documents")
+    uploaded_by = relationship("User", foreign_keys=[uploaded_by_user_id])
+    receipts = relationship("DocumentReadReceipt", back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentReadReceipt(Base):
+    """Who has opened a document, and who has accepted it.
+
+    One row per person per document: ``read_at`` is stamped the first time they open it,
+    ``accepted_at`` only when the document asks for acceptance and they give it.
+    """
+
+    __tablename__ = "document_read_receipts"
+    __table_args__ = (UniqueConstraint("document_id", "user_id", name="uq_document_receipt_user"),)
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("guard_documents.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    read_at = Column(DateTime(timezone=True))
+    accepted_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    document = relationship("GuardDocument", back_populates="receipts")
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class Team(Base):
+    """A named group of staff, used to group the Employee Hub and to filter reports."""
+
+    __tablename__ = "teams"
+    __table_args__ = (UniqueConstraint("company_id", "name", name="uq_team_company_name"),)
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company")
+    members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
+
+
+class TeamMember(Base):
+    """Staff belong to any number of teams; the hub groups them by the first one."""
+
+    __tablename__ = "team_members"
+    __table_args__ = (UniqueConstraint("team_id", "guard_id", name="uq_team_member"),)
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    team = relationship("Team", back_populates="members")
+    guard = relationship("Guard", back_populates="team_memberships")
+
+
+# The four things the Absence tab records. Lateness is logged in minutes against a single
+# day; the rest span a date range.
+ABSENCE_KINDS = ("annual_leave", "sickness", "lateness", "other")
+ABSENCE_STATUSES = ("pending", "approved", "declined")
+
+
+class AbsenceRecord(Base):
+    """One booked or logged absence: annual leave, sickness, lateness or other.
+
+    Hours are stored rather than days because the rest of the system — contracted hours,
+    rota, payroll — is measured in hours, and a part-day absence has to reconcile with a
+    shift.
+    """
+
+    __tablename__ = "absence_records"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    kind = Column(String, nullable=False, index=True)
+    start_date = Column(Date, nullable=False, index=True)
+    end_date = Column(Date, nullable=False, index=True)
+    start_time = Column(String)
+    end_time = Column(String)
+    hours = Column(Float, default=0, nullable=False)
+    status = Column(String, default="approved", nullable=False)
+    reason = Column(String)
+    notes = Column(Text)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    guard = relationship("Guard", back_populates="absences")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+
+
+class EmergencyContact(Base):
+    """Emergency contacts for a staff member.
+
+    Guard carries one legacy embedded contact from before this table existed; that one is
+    migrated in on first read so nothing already captured is lost.
+    """
+
+    __tablename__ = "emergency_contacts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    first_name = Column(String, nullable=False)
+    last_name = Column(String)
+    relationship_to_employee = Column(String)
+    mobile_phone = Column(String)
+    home_phone = Column(String)
+    work_phone = Column(String)
+    email = Column(String)
+    address_line_1 = Column(String)
+    address_line_2 = Column(String)
+    address_line_3 = Column(String)
+    town_city = Column(String)
+    county = Column(String)
+    postcode = Column(String)
+    is_primary = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    guard = relationship("Guard", back_populates="emergency_contacts")
 
 class Client(Base):
     __tablename__ = "clients"

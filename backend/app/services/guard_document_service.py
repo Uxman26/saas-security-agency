@@ -125,6 +125,8 @@ def upload_documents(
     document_type: str,
     files: List[UploadFile],
     expiry_date: Optional[date] = None,
+    folder: Optional[str] = None,
+    follow_up_date: Optional[date] = None,
 ) -> List[GuardDocument]:
     company = get_company_by_user_id(db, user_id)
     _guard_in_company(db, guard_id, company.id)
@@ -136,6 +138,13 @@ def upload_documents(
         file_path=path,
         file_name=name,
         expiry_date=expiry_date,
+        folder=(folder or "").strip() or None,
+        follow_up_date=follow_up_date,
+        # Recorded at upload so the Details panel can show size and type without going
+        # back to disk — and so it still reads correctly if the file is ever moved.
+        file_size=sum(len(raw) for _n, raw in items),
+        mime_type=mime_for_filename(name),
+        uploaded_by_user_id=user_id,
     )
     db.add(db_doc)
     db.commit()
@@ -166,6 +175,223 @@ def get_expiring(db: Session, user_id: int, days: int = 30) -> List[GuardDocumen
     )
 
 
+# Extension → mime. Anything not listed downloads rather than previews, which is what
+# the "Preview unavailable for this file type" panel is telling the user.
+_MIME_BY_EXT = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".zip": "application/zip",
+}
+
+# What the browser can render in the page itself. Everything else gets the download
+# prompt instead of an empty frame.
+PREVIEWABLE_MIMES = frozenset(
+    {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp", "text/plain", AVIF_MIME}
+)
+
+
+def mime_for_filename(name: Optional[str]) -> str:
+    ext = os.path.splitext(name or "")[1].lower()
+    if ext == AVIF_EXT:
+        return AVIF_MIME
+    return _MIME_BY_EXT.get(ext, "application/octet-stream")
+
+
+def document_detail(db: Session, doc_id: int, user_id: int) -> dict:
+    """Everything the Documents screens show about one file.
+
+    ``previewable`` is decided here rather than in the browser so both screens agree on
+    when to offer an in-page preview and when to say it is unavailable.
+    """
+    company = get_company_by_user_id(db, user_id)
+    doc = (
+        db.query(GuardDocument)
+        .join(Guard)
+        .filter(GuardDocument.id == doc_id, Guard.company_id == company.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    mime = doc.mime_type or mime_for_filename(doc.file_name)
+    size = doc.file_size
+    if size is None:
+        # Older rows predate the stored size; read it off disk rather than show a blank.
+        path = resolve_storage_path(doc.file_path)
+        if path and os.path.exists(path):
+            size = os.path.getsize(path)
+    uploader = None
+    if doc.uploaded_by_user_id:
+        from app.models import User
+
+        row = db.query(User).filter(User.id == doc.uploaded_by_user_id).first()
+        uploader = row.full_name if row else None
+    if not uploader:
+        uploader = company.name
+    return {
+        "id": doc.id,
+        "guard_id": doc.guard_id,
+        "guard_name": doc.guard.full_name if doc.guard else None,
+        "document_type": doc.document_type,
+        "file_name": doc.file_name,
+        "folder": doc.folder,
+        "file_type": _friendly_type(mime, doc.file_name),
+        "mime_type": mime,
+        "file_size": size,
+        "previewable": mime in PREVIEWABLE_MIMES,
+        "expiry_date": doc.expiry_date,
+        "follow_up_date": doc.follow_up_date,
+        "visible_to_employee": bool(doc.visible_to_employee),
+        "requires_acceptance": bool(doc.requires_acceptance),
+        "uploaded_by": uploader,
+        "created_at": doc.created_at,
+    }
+
+
+def _friendly_type(mime: str, name: Optional[str]) -> str:
+    """The short label the Information panel shows — "Word", "Pdf", "Image"."""
+    if mime == "application/pdf":
+        return "Pdf"
+    if "wordprocessingml" in mime or mime == "application/msword":
+        return "Word"
+    if "spreadsheetml" in mime or mime == "application/vnd.ms-excel":
+        return "Excel"
+    if mime.startswith("image/"):
+        return "Image"
+    if mime.startswith("text/"):
+        return "Text"
+    ext = os.path.splitext(name or "")[1].lstrip(".").upper()
+    return ext or "File"
+
+
+def update_document_settings(db: Session, doc_id: int, user_id: int, data: dict) -> dict:
+    """The Settings tab: folder, dates, and who may see or must accept the document."""
+    company = get_company_by_user_id(db, user_id)
+    doc = (
+        db.query(GuardDocument)
+        .join(Guard)
+        .filter(GuardDocument.id == doc_id, Guard.company_id == company.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if "folder" in data:
+        doc.folder = (data.get("folder") or "").strip() or None
+    if "document_type" in data and data["document_type"]:
+        doc.document_type = str(data["document_type"]).strip()
+    for field in ("expiry_date", "follow_up_date"):
+        if field in data:
+            setattr(doc, field, data[field])
+    for field in ("visible_to_employee", "requires_acceptance"):
+        if field in data and data[field] is not None:
+            setattr(doc, field, bool(data[field]))
+    db.commit()
+    return document_detail(db, doc_id, user_id)
+
+
+def list_receipts(db: Session, doc_id: int, user_id: int) -> list[dict]:
+    """Who has read the document, and who has accepted it.
+
+    Everyone the document is aimed at is listed, read or not — an empty row is the point
+    of a read-receipt screen, so people who have not opened it are the ones you chase.
+    """
+    from app.models import DocumentReadReceipt, User
+
+    company = get_company_by_user_id(db, user_id)
+    doc = (
+        db.query(GuardDocument)
+        .join(Guard)
+        .filter(GuardDocument.id == doc_id, Guard.company_id == company.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    receipts = {
+        r.user_id: r
+        for r in db.query(DocumentReadReceipt).filter(DocumentReadReceipt.document_id == doc_id).all()
+    }
+    audience = (
+        db.query(User)
+        .filter(User.company_id == company.id, User.guard_id == doc.guard_id)
+        .order_by(User.email)
+        .all()
+    )
+    out = []
+    for u in audience:
+        r = receipts.get(u.id)
+        out.append(
+            {
+                "user_id": u.id,
+                "name": u.full_name,
+                "email": u.email,
+                "read_at": r.read_at if r else None,
+                "accepted_at": r.accepted_at if r else None,
+            }
+        )
+    # Anyone who read it but is not in the audience any more still shows, so the trail is
+    # complete rather than tidy.
+    seen = {u.id for u in audience}
+    for uid, r in receipts.items():
+        if uid in seen:
+            continue
+        u = db.query(User).filter(User.id == uid).first()
+        out.append(
+            {
+                "user_id": uid,
+                "name": u.full_name if u else f"User #{uid}",
+                "email": u.email if u else None,
+                "read_at": r.read_at,
+                "accepted_at": r.accepted_at,
+            }
+        )
+    return out
+
+
+def record_receipt(db: Session, doc_id: int, user_id: int, accept: bool = False) -> dict:
+    """Stamps that the caller has opened — and optionally accepted — the document."""
+    from datetime import datetime, timezone
+
+    from app.models import DocumentReadReceipt
+
+    company = get_company_by_user_id(db, user_id)
+    doc = (
+        db.query(GuardDocument)
+        .join(Guard)
+        .filter(GuardDocument.id == doc_id, Guard.company_id == company.id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if accept and not doc.requires_acceptance:
+        raise HTTPException(status_code=400, detail="This document does not ask for acceptance")
+    row = (
+        db.query(DocumentReadReceipt)
+        .filter(DocumentReadReceipt.document_id == doc_id, DocumentReadReceipt.user_id == user_id)
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if not row:
+        row = DocumentReadReceipt(document_id=doc_id, user_id=user_id)
+        db.add(row)
+    # First open wins: re-reading does not reset when they first saw it.
+    if row.read_at is None:
+        row.read_at = now
+    if accept and row.accepted_at is None:
+        row.accepted_at = now
+    db.commit()
+    db.refresh(row)
+    return {"user_id": user_id, "read_at": row.read_at, "accepted_at": row.accepted_at}
+
+
 def get_document_file_path(db: Session, doc_id: int, user_id: int) -> tuple[str, str, str]:
     company = get_company_by_user_id(db, user_id)
     doc = (
@@ -179,14 +405,9 @@ def get_document_file_path(db: Session, doc_id: int, user_id: int) -> tuple[str,
     path = resolve_storage_path(doc.file_path)
     if not path:
         raise HTTPException(status_code=404, detail="File not found")
-    ext = os.path.splitext(path)[1].lower()
-    mime = {
-        ".pdf": "application/pdf",
-        AVIF_EXT: AVIF_MIME,
-        ".doc": "application/msword",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ".zip": "application/zip",
-    }.get(ext, "application/octet-stream")
+    mime = doc.mime_type or mime_for_filename(doc.file_name or os.path.basename(path))
+    if mime == "application/octet-stream":
+        mime = mime_for_filename(os.path.basename(path))
     download_name = doc.file_name or os.path.basename(path)
     return path, mime, download_name
 

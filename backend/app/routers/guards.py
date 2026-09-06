@@ -8,13 +8,16 @@ from app.models import User
 from app.schemas import (
     CompanyUserResetPassword,
     DeleteImpactResponse,
+    EmergencyContactBase,
+    EmergencyContactResponse,
+    EmployeeHubResponse,
     GuardCreate,
     GuardResponse,
     PortalLoginCreate,
     PortalLoginOut,
 )
 from app.rbac import require_internal_module, user_has_permission_db
-from app.services import guard_service
+from app.services import emergency_contact_service, employee_hub_service, guard_service, team_service
 from app.services.portal_login_view import portal_login_out
 from app.storage_paths import GUARD_PHOTOS_DIR, ensure_upload_dirs, resolve_storage_path
 from app.services.image_avif_service import AVIF_EXT, is_image_filename, save_upload_as_avif
@@ -41,9 +44,125 @@ def get_guards(
         db, current_user.id, area=area, postcode=postcode, nearby=nearby, view=view
     )
 
+@router.get("/hub", response_model=EmployeeHubResponse)
+def employee_hub(
+    search: Optional[str] = Query(None, description="Matches a name or a job title"),
+    team_id: Optional[int] = Query(None, description="0 is the No team bucket"),
+    status_filter: str = Query("all", alias="status"),
+    sort: str = Query("first_name_asc"),
+    include_terminated: bool = Query(False),
+    view: str = Query("active"),
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    contractor_id: Optional[str] = None,
+    sub_contractor_id: Optional[str] = None,
+    job_title: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "view")),
+):
+    """Everyone in the Employee Hub, both grouped by team and flat.
+
+    One response feeds both Teams View and List View so the two can never disagree on
+    who is in scope. Declared above /{guard_id} so the dynamic route does not swallow it.
+    """
+    return employee_hub_service.list_employee_hub(
+        db,
+        current_user.id,
+        search=search,
+        team_id=team_id,
+        status=status_filter,
+        sort=sort,
+        include_terminated=include_terminated,
+        view=view,
+        client_id=client_id,
+        site_id=site_id,
+        contractor_id=contractor_id,
+        sub_contractor_id=sub_contractor_id,
+        job_title=job_title,
+    )
+
+
 @router.get("/{guard_id}", response_model=GuardResponse)
 def get_guard(guard_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "view"))):
     return guard_service.get_guard_by_id(db, guard_id, current_user.id)
+
+
+@router.get("/{guard_id}/teams", response_model=list[int])
+def get_guard_teams(
+    guard_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "view")),
+):
+    """The team ids this employee belongs to, for the Employment tab's Team(s) field."""
+    from app.services.company_service import get_company_by_user_id
+
+    company = get_company_by_user_id(db, current_user.id)
+    guard_service.get_guard_by_id(db, guard_id, current_user.id)
+    return [t["id"] for t in team_service.teams_by_guard(db, company.id).get(guard_id, [])]
+
+
+@router.put("/{guard_id}/teams", response_model=list[int])
+def set_guard_teams(
+    guard_id: int,
+    team_ids: list[int],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "teams_manage")),
+):
+    return team_service.set_guard_teams(db, current_user.id, guard_id, team_ids)
+
+
+@router.get("/{guard_id}/emergency-contacts", response_model=List[EmergencyContactResponse])
+def list_emergency_contacts(
+    guard_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "view")),
+):
+    """This employee's emergency contacts, migrating the one legacy contact on first read."""
+    return emergency_contact_service.list_contacts(db, current_user.id, guard_id)
+
+
+@router.post(
+    "/{guard_id}/emergency-contacts",
+    response_model=EmergencyContactResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_emergency_contact(
+    guard_id: int,
+    body: EmergencyContactBase,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "edit")),
+):
+    return emergency_contact_service.create_contact(
+        db, current_user.id, guard_id, body.model_dump(exclude_unset=True)
+    )
+
+
+@router.patch(
+    "/{guard_id}/emergency-contacts/{contact_id}", response_model=EmergencyContactResponse
+)
+def update_emergency_contact(
+    guard_id: int,
+    contact_id: int,
+    body: EmergencyContactBase,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "edit")),
+):
+    return emergency_contact_service.update_contact(
+        db, current_user.id, contact_id, body.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete(
+    "/{guard_id}/emergency-contacts/{contact_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_emergency_contact(
+    guard_id: int,
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "edit")),
+):
+    emergency_contact_service.delete_contact(db, current_user.id, contact_id)
+    return None
 
 @router.put("/{guard_id}", response_model=GuardResponse)
 def update_guard(guard_id: int, guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "edit"))):

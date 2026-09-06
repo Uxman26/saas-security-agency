@@ -42,8 +42,11 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     # /sub-contractors endpoints and the sub-contractor rows inside the directory.
     ("sub_contractors", "Sub-contractors", "UserCog", "", 12, "sectionHr"),
     ("attendance", "Attendance", "Clock", "/attendance", 13, "sectionHr"),
-    ("staff_requests", "Staff requests", "ClipboardList", "/requests", 14, "sectionHr"),
-    ("documents", "Documents", "FolderOpen", "/documents", 15, "sectionHr"),
+    # Absence lives beside Attendance: attendance is who turned up, absence is who did
+    # not and why. Booked from the employee profile, listed on its own screen.
+    ("absence", "Absence", "CalendarOff", "/absence", 14, "sectionHr"),
+    ("staff_requests", "Staff requests", "ClipboardList", "/requests", 16, "sectionHr"),
+    ("documents", "Documents", "FolderOpen", "/documents", 17, "sectionHr"),
     # Scheduling — planning who works when.
     ("rota", "Rotas & Shifts", "Calendar", "/rota", 20, "sectionScheduling"),
     ("rota_payable", "Rota — Payable amounts", "PoundSterling", "", 21, "sectionScheduling"),

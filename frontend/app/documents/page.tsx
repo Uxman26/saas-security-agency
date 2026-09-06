@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { GuardDocument, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -402,7 +403,14 @@ export default function DocumentsPage() {
                                 <span className="text-xs text-muted-foreground">{guardDocCounts.get(doc.guard_id)} docs</span>
                               )}
                             </TableCell>
-                            <TableCell>{doc.document_type}</TableCell>
+                            <TableCell>
+                              <Link href={`/documents/${doc.id}`} className="text-primary hover:underline">
+                                {doc.document_type}
+                              </Link>
+                              {doc.file_name ? (
+                                <span className="block truncate text-xs text-muted-foreground">{doc.file_name}</span>
+                              ) : null}
+                            </TableCell>
                             <TableCell className="whitespace-nowrap">
                               {doc.expiry_date ? (
                                 <span className={

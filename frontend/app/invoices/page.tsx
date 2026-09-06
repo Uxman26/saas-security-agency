@@ -4,7 +4,6 @@ import { InlineKpiTableSkeleton } from '@/components/skeletons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,16 +11,30 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import type { Invoice, Client, Site } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, ChevronDown } from 'lucide-react';
+import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
-import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { ModulePage, ModuleTabs } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  RowActionsMenu,
+  ShowingCount,
+  StatCards,
+  type ResultsView,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { StatusPieChart } from '@/components/charts/status-chart';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
@@ -33,16 +46,6 @@ import {
 } from '@/components/work-filter-bar';
 import { cn } from '@/lib/utils';
 
-const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-secondary text-secondary-foreground',
-  sent: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  partial: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  unpaid: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-  overdue: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  cancelled: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-};
-
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
 
 function formatGbp(n: unknown): string {
@@ -53,6 +56,7 @@ function formatGbp(n: unknown): string {
 
 export default function InvoicesPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,13 +81,13 @@ export default function InvoicesPage() {
   const [dueTo, setDueTo] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payLoading, setPayLoading] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [resultsView, setResultsView] = useState<ResultsView>('list');
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
 
@@ -249,9 +253,7 @@ export default function InvoicesPage() {
     .filter((i) => !['draft', 'paid', 'cancelled'].includes(i.status))
     .reduce((sum, i) => sum + (i.balance_due ?? (i.status === 'paid' ? 0 : i.total)), 0);
   const draftInvoices = invoices.filter((i) => i.status === 'draft');
-  const sentInvoices = invoices.filter((i) => i.status === 'sent');
   const draftTotal = draftInvoices.reduce((sum, i) => sum + i.total, 0);
-  const sentTotal = sentInvoices.reduce((sum, i) => sum + i.total, 0);
 
   const handleDuplicate = async (id: number) => {
     try {
@@ -260,8 +262,6 @@ export default function InvoicesPage() {
       toast.success(`Invoice #${dup.id} created`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Duplicate failed');
-    } finally {
-      setOpenMenuId(null);
     }
   };
 
@@ -307,6 +307,87 @@ export default function InvoicesPage() {
     if (diff <= 7) return `In ${diff} days`;
     return formatDueDate(inv.due_date);
   };
+  /**
+   * What one invoice can have done to it. Defined once so the table rows and the card
+   * grid offer exactly the same menu, and so a permission is checked in one place.
+   */
+  const rowActions = (inv: Invoice) => [
+    { label: 'View invoice', icon: Eye, onSelect: () => router.push(`/invoices/${inv.id}/view`) },
+    {
+      label: 'Edit invoice',
+      icon: Pencil,
+      onSelect: () => router.push(`/invoices/${inv.id}/edit`),
+      disabled: !can(user, 'invoices.write'),
+    },
+    { label: 'Download PDF', icon: Download, onSelect: () => void downloadPdf(inv.id) },
+    {
+      label: 'Record payment',
+      icon: CreditCard,
+      onSelect: () => setPayInvoice(inv),
+      disabled: !can(user, 'invoices.write') || inv.status === 'paid',
+    },
+    {
+      label: 'Duplicate',
+      icon: Copy,
+      onSelect: () => void handleDuplicate(inv.id),
+      disabled: !can(user, 'invoices.write'),
+    },
+    {
+      label: 'Delete',
+      icon: Trash2,
+      onSelect: () => handleDelete(inv.id),
+      destructive: true,
+      disabled: !can(user, 'invoices.delete'),
+    },
+  ];
+
+  /** The five cards along the top. Same shape on every module dashboard. */
+  const statCards: StatCardSpec[] = [
+    {
+      key: 'total',
+      label: 'Total invoiced',
+      value: formatGbp(totalAmount),
+      icon: ReceiptText,
+      tone: 'neutral',
+      caption: `${invoices.length} invoice${invoices.length === 1 ? '' : 's'}`,
+    },
+    {
+      key: 'paid',
+      label: 'Paid',
+      value: formatGbp(paidAmount),
+      icon: CheckCircle2,
+      tone: 'positive',
+    },
+    {
+      key: 'outstanding',
+      label: 'Outstanding',
+      value: formatGbp(outstanding),
+      icon: Wallet,
+      tone: 'warning',
+      caption: `${unpaidCount} unpaid`,
+      action: unpaidCount ? { label: 'View', onClick: () => setListTab('unpaid') } : undefined,
+    },
+    {
+      key: 'overdue',
+      label: 'Overdue',
+      value: invoices.filter((i) => i.status === 'overdue').length,
+      icon: AlertTriangle,
+      tone: 'danger',
+      action: invoices.some((i) => i.status === 'overdue')
+        ? { label: 'View', onClick: () => setStatusFilter('overdue') }
+        : undefined,
+    },
+    {
+      key: 'draft',
+      label: 'Draft',
+      value: formatGbp(draftTotal),
+      icon: FilePlus2,
+      tone: 'muted',
+      caption: `${draftCount} draft${draftCount === 1 ? '' : 's'}`,
+      action: draftCount ? { label: 'View', onClick: () => setListTab('draft') } : undefined,
+    },
+  ];
+
   const statusChart = STATUS_OPTIONS.map((s) => ({
     name: s.charAt(0).toUpperCase() + s.slice(1),
     value: invoices.filter((i) => i.status === s).length,
@@ -316,9 +397,10 @@ export default function InvoicesPage() {
     <ProtectedRoute>
       <AppShell>
         <ModulePage>
-          <ModuleHeader
-            title={<span className="flex items-center gap-2"><FileText className="size-7" /> Invoices</span>}
-            description={`${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}`}
+          <DashboardHeader
+            title="Invoices"
+            hint="Invoices are generated from published rota shifts. Generating by client covers every site assigned to that client."
+            description="Raise, track and chase invoices for your clients. Generate from the rota, record payments and export."
             actions={
               <div className="flex gap-2">
                 <Button variant="outline" onClick={loadInvoices} disabled={loading}>
@@ -453,6 +535,8 @@ export default function InvoicesPage() {
             }
           />
 
+          <StatCards cards={statCards} />
+
           <ModuleTabs
             tabs={[
               { id: 'overview', label: 'Overview' },
@@ -462,55 +546,9 @@ export default function InvoicesPage() {
             onChange={setPageTab}
           />
 
-          {pageTab === 'overview' && invoices.length > 0 && (
-            <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Invoiced</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold">{formatGbp(totalAmount)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Draft</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold">{formatGbp(draftTotal)}</span>
-                  <p className="text-xs text-muted-foreground mt-1">{draftInvoices.length} invoice{draftInvoices.length !== 1 ? 's' : ''}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Sent</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold text-blue-600">{formatGbp(sentTotal)}</span>
-                  <p className="text-xs text-muted-foreground mt-1">{sentInvoices.length} invoice{sentInvoices.length !== 1 ? 's' : ''}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Paid</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold text-green-600">{formatGbp(paidAmount)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Outstanding</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold text-amber-600">{formatGbp(outstanding)}</span>
-                </CardContent>
-              </Card>
-            </div>
+          {pageTab === 'overview' && invoices.length > 0 ? (
             <StatusPieChart data={statusChart} title="Invoices by status" />
-            </>
-          )}
+          ) : null}
 
           {pageTab === 'invoices' && (
           <>
@@ -536,34 +574,97 @@ export default function InvoicesPage() {
             ))}
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-3 flex-wrap">
-            <WorkFilterBar value={workFilters} onChange={setWorkFilters} options={filterOptions} />
-            <Select value={statusFilter || '__all'} onValueChange={(v) => setStatusFilter(v === '__all' ? '' : v)}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all">All statuses</SelectItem>
-                {STATUS_OPTIONS.map((s) => (
-                  <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} className="w-[160px]" placeholder="From" />
-            <Input type="date" value={dueTo} onChange={(e) => setDueTo(e.target.value)} className="w-[160px]" placeholder="To" />
-            <Input
-              placeholder="Enter invoice #"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-xs"
-            />
-          </div>
+          <FilterBar
+            onClear={() => {
+              setSearch('');
+              setStatusFilter('');
+              setDueFrom('');
+              setDueTo('');
+              setWorkFilters(EMPTY_WORK_FILTERS);
+            }}
+          >
+            <FilterField label="Search" className="min-w-[220px] flex-1">
+              <Input
+                placeholder="Invoice number, customer or status…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </FilterField>
+            <FilterField label="Status">
+              <Select value={statusFilter || '__all'} onValueChange={(v) => setStatusFilter(v === '__all' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="All statuses" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all">All statuses</SelectItem>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label="Due from">
+              <Input type="date" value={dueFrom} onChange={(e) => setDueFrom(e.target.value)} />
+            </FilterField>
+            <FilterField label="Due to">
+              <Input type="date" value={dueTo} onChange={(e) => setDueTo(e.target.value)} />
+            </FilterField>
+            <div className="w-full">
+              <WorkFilterBar value={workFilters} onChange={setWorkFilters} options={filterOptions} />
+            </div>
+          </FilterBar>
 
-          <Card>
-            <CardContent className="pt-6">
+          <ResultsCard
+            title="Invoices"
+            count={total}
+            view={resultsView}
+            onViewChange={setResultsView}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {loading ? (
                 <InlineKpiTableSkeleton />
               ) : total === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
+                <div className="py-12 text-center text-muted-foreground">
                   {search ? 'No invoices match your search.' : 'No invoices yet. Use "Generate Invoice" to create one.'}
+                </div>
+              ) : resultsView === 'cards' ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {pageRows.map((inv) => (
+                    <div key={inv.id} className="rounded-lg border p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <Link href={`/invoices/${inv.id}/view`} className="font-medium hover:underline">
+                            #{inv.id}
+                          </Link>
+                          <p className="truncate text-sm text-muted-foreground">
+                            {inv.client_name ?? clientMap.get(inv.client_id) ?? '—'}
+                          </p>
+                        </div>
+                        <Pill
+                          tone={
+                            inv.status === 'paid'
+                              ? 'positive'
+                              : inv.status === 'overdue'
+                                ? 'danger'
+                                : inv.status === 'draft'
+                                  ? 'muted'
+                                  : 'neutral'
+                          }
+                          dot
+                        >
+                          {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                        </Pill>
+                      </div>
+                      <p className="mt-3 text-xl font-bold tabular-nums">{formatGbp(inv.total)}</p>
+                      <p className="text-xs text-muted-foreground">Due {formatDueLabel(inv)}</p>
+                      <div className="mt-3 flex justify-end">
+                        <RowActionsMenu actions={rowActions(inv)} label={`Invoice ${inv.id} actions`} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -595,9 +696,22 @@ export default function InvoicesPage() {
                           className={cn(pastDue && 'bg-red-50/60 dark:bg-red-950/20')}
                         >
                           <TableCell>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLES[inv.status] ?? 'bg-secondary text-secondary-foreground'}`}>
+                            <Pill
+                              dot
+                              tone={
+                                inv.status === 'paid'
+                                  ? 'positive'
+                                  : inv.status === 'overdue'
+                                    ? 'danger'
+                                    : inv.status === 'draft'
+                                      ? 'muted'
+                                      : inv.status === 'partial'
+                                        ? 'warning'
+                                        : 'neutral'
+                              }
+                            >
                               {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
-                            </span>
+                            </Pill>
                           </TableCell>
                           <TableCell className={cn('text-sm whitespace-nowrap', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
                             {formatDueLabel(inv)}
@@ -608,53 +722,26 @@ export default function InvoicesPage() {
                             {customer}
                           </TableCell>
                           <TableCell className="font-semibold whitespace-nowrap tabular-nums">{formatGbp(safeBalance)}</TableCell>
-                          <TableCell className="text-right relative">
-                            <Button variant="outline" size="sm" onClick={() => setOpenMenuId(openMenuId === inv.id ? null : inv.id)}>
-                              Actions <ChevronDown className="size-3.5 ml-1" />
-                            </Button>
-                            {openMenuId === inv.id && (
-                              <>
-                                <button type="button" className="fixed inset-0 z-40" aria-label="Close menu" onClick={() => setOpenMenuId(null)} />
-                                <div className="absolute right-0 z-50 mt-1 w-48 rounded-md border bg-popover shadow-lg py-1 text-sm">
-                                  <Link href={`/invoices/${inv.id}/view`} className="flex items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => setOpenMenuId(null)}>
-                                    <Eye className="size-4" /> View
-                                  </Link>
-                                  {can(user, 'inv.write') && (
-                                    <Link href={`/invoices/${inv.id}/edit`} className="flex items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => setOpenMenuId(null)}>
-                                      <Pencil className="size-4" /> Edit
-                                    </Link>
-                                  )}
-                                  {can(user, 'inv.write') && (
-                                    <button type="button" className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => void handleDuplicate(inv.id)}>
-                                      <Copy className="size-4" /> Duplicate
-                                    </button>
-                                  )}
-                                  {can(user, 'pay.write') && safeBalance > 0 && (
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted"
-                                      onClick={() => { setPayInvoice(inv); setPayAmount(safeBalance.toFixed(2)); setOpenMenuId(null); }}
-                                    >
-                                      <CreditCard className="size-4" /> Record payment
-                                    </button>
-                                  )}
-                                  <button type="button" className="flex w-full items-center gap-2 px-3 py-2 hover:bg-muted" onClick={() => { void downloadPdf(inv.id); setOpenMenuId(null); }}>
-                                    <Download className="size-4" /> Export PDF
-                                  </button>
-                                  {can(user, 'inv.delete') && (
-                                    <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-destructive hover:bg-destructive/10" onClick={() => { handleDelete(inv.id); setOpenMenuId(null); }}>
-                                      <Trash2 className="size-4" /> Delete
-                                    </button>
-                                  )}
-                                </div>
-                              </>
-                            )}
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="size-8" asChild title="View invoice">
+                                <Link href={`/invoices/${inv.id}/view`}>
+                                  <Eye className="size-4" />
+                                </Link>
+                              </Button>
+                              <RowActionsMenu actions={rowActions(inv)} label={`Invoice ${inv.id} actions`} />
+                            </div>
                           </TableCell>
                         </TableRow>
                         );
                       })}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="invoices" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -663,15 +750,40 @@ export default function InvoicesPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <QuickLinks
+            links={[
+              {
+                key: 'payments',
+                title: 'Payments',
+                description: 'Record and reconcile payments received against invoices.',
+                icon: CreditCard,
+                tone: 'positive',
+                action: { label: 'View payments', href: '/payments' },
+              },
+              {
+                key: 'clients',
+                title: 'Clients',
+                description: 'Client records, contracts and the sites they are billed for.',
+                icon: BadgePoundSterling,
+                tone: 'info',
+                action: { label: 'Manage clients', href: '/clients' },
+              },
+              {
+                key: 'reports',
+                title: 'Reports',
+                description: 'Revenue, ageing and outstanding balance reports.',
+                icon: FileText,
+                tone: 'neutral',
+                action: { label: 'View reports', href: '/reports' },
+              },
+            ]}
+          />
 
           <Dialog open={!!payInvoice} onOpenChange={(open) => !open && setPayInvoice(null)}>
             <DialogContent className="sm:max-w-md">

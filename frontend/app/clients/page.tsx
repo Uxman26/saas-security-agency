@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -31,8 +30,22 @@ import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete
 import type { z } from 'zod';
 import { EmailDialog } from '@/components/email-dialog';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  RecordAvatar,
+  ResultsCard,
+  RowActionsMenu,
+  ShowingCount,
+  StatCards,
+  type ResultsView,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ArchiveRestore, Building2, Eye, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
+import { ArchiveRestore, Building2, Eye, Pencil, Trash2, CalendarClock, History, AlertTriangle, CheckCircle2, FileText, MapPin, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -251,6 +264,7 @@ export default function ClientsPage() {
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [resultsView, setResultsView] = useState<ResultsView>('list');
 
   // Archived clients live behind their own tab: out of every list and picker, still
   // there to restore or delete outright.
@@ -412,21 +426,101 @@ export default function ClientsPage() {
     setPage((p) => Math.min(p, pageCount));
   }, [pageCount]);
 
+  /**
+   * What one client can have done to it. Defined once so the table and the card grid
+   * offer the same menu and each permission is checked in a single place.
+   */
+  const clientActions = (client: Client) => [
+    { label: 'View details', icon: Eye, onSelect: () => setViewClient(client), disabled: !canViewMod },
+    {
+      label: 'Edit client',
+      icon: Pencil,
+      onSelect: () => openEdit(client),
+      disabled: !canEditMod || client.deleted_at != null,
+    },
+    { label: 'Renew contract', icon: CalendarClock, onSelect: () => openRenew(client), disabled: !canEditMod },
+    { label: 'Renewal history', icon: History, onSelect: () => setHistoryClient(client) },
+    {
+      label: 'Restore client',
+      icon: ArchiveRestore,
+      onSelect: () => void restoreClient.mutateAsync(client.id),
+      disabled: !canDeleteMod || client.deleted_at == null,
+    },
+    {
+      label: client.deleted_at != null ? 'Delete permanently' : 'Archive or delete',
+      icon: Trash2,
+      onSelect: () => handleDelete(client),
+      destructive: true,
+      disabled: !canDeleteMod,
+    },
+  ];
+
+  /** The five cards along the top, in the same shape every module dashboard uses. */
+  const contractCounts = clients.reduce(
+    (acc, c) => {
+      const t = contractTone(c.contract_end_date).tone;
+      acc[t] = (acc[t] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+  const statCards: StatCardSpec[] = [
+    {
+      key: 'total',
+      label: 'Total clients',
+      value: clients.length,
+      icon: Building2,
+      tone: 'neutral',
+      caption: listView === 'archived' ? 'archived' : 'active',
+    },
+    {
+      key: 'valid',
+      label: 'Contracts valid',
+      value: contractCounts.ok ?? 0,
+      icon: CheckCircle2,
+      tone: 'positive',
+    },
+    {
+      key: 'soon',
+      label: 'Expiring soon',
+      value: contractCounts.soon ?? 0,
+      icon: CalendarClock,
+      tone: 'warning',
+      caption: 'within 30 days',
+      action: contractCounts.soon ? { label: 'View', onClick: () => setStatusFilter('soon') } : undefined,
+    },
+    {
+      key: 'expired',
+      label: 'Expired',
+      value: contractCounts.expired ?? 0,
+      icon: AlertTriangle,
+      tone: 'danger',
+      action: contractCounts.expired
+        ? { label: 'View', onClick: () => setStatusFilter('expired') }
+        : undefined,
+    },
+    {
+      key: 'archived',
+      label: 'Archived',
+      value: archivedClients.length,
+      icon: Trash2,
+      tone: 'muted',
+      action: archivedClients.length ? { label: 'View', onClick: () => setListView('archived') } : undefined,
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
       <div>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Building2 className="size-7" /> Clients
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                {clients.length} client{clients.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <div className="flex gap-2">
+          <DashboardHeader
+            title="Clients"
+            hint="A client can own many sites. Anything filtered by client — invoices, payroll, rota — covers every site assigned to it."
+            description="Client records, contracts and portal access. Track renewals and the sites each client is billed for."
+            actions={
+              <>
+
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>
@@ -443,8 +537,11 @@ export default function ClientsPage() {
                   <ClientForm form={addForm} onSubmit={handleCreate} isPending={createClient.isPending} submitLabel="Create Client" allowLogin />
                 </DialogContent>
               </Dialog>
-            </div>
-          </div>
+              </>
+            }
+          />
+
+          <StatCards cards={statCards} />
 
           <div className="mb-4 flex flex-wrap gap-2 border-b pb-3">
             {([
@@ -467,38 +564,55 @@ export default function ClientsPage() {
             ))}
           </div>
 
-          <div className="mb-4 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-            <Input
-              placeholder="Search name, email, phone, address, contract dates..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full sm:max-w-md sm:flex-1 min-w-0"
-            />
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-              <SelectTrigger className="w-full sm:w-[200px] shrink-0">
-                <SelectValue placeholder="Contract status" />
-              </SelectTrigger>
-              <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="valid">Valid (&gt;30d)</SelectItem>
-                <SelectItem value="soon">Expiring (≤30d)</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
-                <SelectItem value="none">No end date</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="mb-4">
+            <FilterBar
+              onClear={() => {
+                setSearch('');
+                setStatusFilter('all');
+              }}
+            >
+              <FilterField label="Search" className="min-w-[240px] flex-1">
+                <Input
+                  placeholder="Name, email, phone, address or contract date…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FilterField>
+              <FilterField label="Contract status">
+                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Contract status" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="w-[var(--radix-select-trigger-width)]">
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="valid">Valid (&gt;30d)</SelectItem>
+                    <SelectItem value="soon">Expiring (≤30d)</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="none">No end date</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            </FilterBar>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{listView === 'archived' ? 'Archived Clients' : 'All Clients'}</CardTitle>
+          <ResultsCard
+            title={listView === 'archived' ? 'Archived clients' : 'Clients'}
+            count={total}
+            view={resultsView}
+            onViewChange={setResultsView}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="min-h-[280px] p-4">
               {listView === 'archived' ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="mb-3 text-sm text-muted-foreground">
                   Out of every list and picker. Their invoices, renewals and sites are untouched —
                   restore a client to bring the whole relationship back.
                 </p>
               ) : null}
-            </CardHeader>
-            <CardContent className="min-h-[280px]">
               {isLoading ? (
                 <InlineTableSkeleton />
               ) : total === 0 ? (
@@ -506,6 +620,40 @@ export default function ClientsPage() {
                   {search || statusFilter !== 'all'
                     ? 'No clients match your filters.'
                     : 'No clients yet. Click "Add Client" to get started.'}
+                </div>
+              ) : resultsView === 'cards' ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {pageRows.map((client) => {
+                    const { label, tone } = contractTone(client.contract_end_date);
+                    return (
+                      <div key={client.id} className="rounded-lg border p-4">
+                        <div className="flex items-start gap-3">
+                          <RecordAvatar name={client.name} />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{client.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {client.contact_person || client.email || '—'}
+                            </p>
+                          </div>
+                          <RowActionsMenu actions={clientActions(client)} label={`${client.name} actions`} />
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <Pill
+                            dot
+                            tone={
+                              tone === 'expired' ? 'danger' : tone === 'soon' ? 'warning' : tone === 'ok' ? 'positive' : 'muted'
+                            }
+                          >
+                            {label}
+                          </Pill>
+                          {client.deleted_at ? <Pill tone="muted">Archived</Pill> : null}
+                        </div>
+                        <p className="mt-2 truncate text-xs text-muted-foreground">
+                          {[client.address, client.postcode].filter(Boolean).join(', ') || 'No address'}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -552,46 +700,24 @@ export default function ClientsPage() {
                                     <Eye className="size-4" />
                                   </Button>
                                 ) : null}
-                                {canEditMod && client.deleted_at == null ? (
-                                  <Button variant="ghost" size="sm" onClick={() => openEdit(client)} title="Edit client">
-                                    <Pencil className="size-4" />
-                                  </Button>
-                                ) : null}
-                                {canDeleteMod && client.deleted_at != null ? (
+                                {canViewMod ? (
                                   <Button
                                     variant="ghost"
-                                    size="sm"
-                                    onClick={() => void restoreClient.mutateAsync(client.id)}
-                                    disabled={restoreClient.isPending}
-                                    title="Restore client"
+                                    size="icon"
+                                    className="size-8"
+                                    onClick={() => setViewClient(client)}
+                                    title="View details"
                                   >
-                                    <ArchiveRestore className="size-4" />
+                                    <Eye className="size-4" />
                                   </Button>
                                 ) : null}
-                                <Button variant="ghost" size="sm" onClick={() => openRenew(client)} title="Renew contract">
-                                  <CalendarClock className="size-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setHistoryClient(client)}
-                                  title="Renewal history"
-                                >
-                                  <History className="size-4" />
-                                </Button>
-                                {client.email && <EmailDialog defaultEmail={client.email} defaultName={client.name} />}
-                                {canDeleteMod ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => handleDelete(client)}
-                                    disabled={deleteClient.isPending}
-                                    title={client.deleted_at != null ? 'Delete permanently' : 'Archive or delete client'}
-                                  >
-                                    <Trash2 className="size-4" />
-                                  </Button>
+                                {client.email ? (
+                                  <EmailDialog defaultEmail={client.email} defaultName={client.name} />
                                 ) : null}
+                                <RowActionsMenu
+                                  actions={clientActions(client)}
+                                  label={`${client.name} actions`}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>
@@ -599,6 +725,11 @@ export default function ClientsPage() {
                       })}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="clients" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -607,15 +738,42 @@ export default function ClientsPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <div className="mt-6">
+            <QuickLinks
+              links={[
+                {
+                  key: 'sites',
+                  title: 'Sites',
+                  description: 'The places each client is billed for, and who covers them.',
+                  icon: MapPin,
+                  tone: 'neutral',
+                  action: { label: 'Manage sites', href: '/sites' },
+                },
+                {
+                  key: 'invoices',
+                  title: 'Invoices',
+                  description: 'Raise and chase invoices across every site a client owns.',
+                  icon: FileText,
+                  tone: 'positive',
+                  action: { label: 'View invoices', href: '/invoices' },
+                },
+                {
+                  key: 'requests',
+                  title: 'Staff requests',
+                  description: 'Cover requests raised by clients from their portal.',
+                  icon: Users,
+                  tone: 'info',
+                  action: { label: 'View requests', href: '/requests' },
+                },
+              ]}
+            />
+          </div>
         </div>
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>

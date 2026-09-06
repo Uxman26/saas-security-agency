@@ -2,13 +2,13 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,7 @@ import { JobTitlesPanel } from '@/app/guards/job-titles-panel';
 import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ArchiveRestore, Pencil, Trash2, UserRound, Users, Eye } from 'lucide-react';
+import { ArchiveRestore, Pencil, Trash2, UserRound, Users, Eye, BadgeCheck, CalendarOff, FolderOpen, ShieldAlert, UserMinus, UserPlus } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -42,6 +42,18 @@ import {
 } from '@/components/hr/employee-hub-controls';
 import { EmployeeCard, EmployeeQuickView, initialsOf } from '@/components/hr/employee-quick-view';
 import { ManageTeamsPanel } from '@/components/hr/manage-teams-panel';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  ResultsCard,
+  QuickLinks,
+  RowActionsMenu,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import type { JobTitle } from '@/lib/types';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
   if (!date) return null;
@@ -61,6 +73,7 @@ type StaffTab = (typeof TABS)[number]['id'];
 
 export default function GuardsPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [tab, setTab] = useState<StaffTab>('staff');
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -372,20 +385,103 @@ export default function GuardsPage() {
     setPage((p) => Math.min(p, pageCount));
   }, [pageCount]);
 
+  /** What one employee can have done to them, defined once for every view. */
+  const guardActions = (guard: Guard) => [
+    { label: 'View full profile', icon: UserRound, onSelect: () => router.push(`/guards/${guard.id}`) },
+    {
+      label: 'Edit staff',
+      icon: Pencil,
+      onSelect: () => openEdit(guard),
+      disabled: !can(user, 'guards.write') || guard.deleted_at != null,
+    },
+    {
+      label: 'Absence',
+      icon: CalendarOff,
+      onSelect: () => router.push(`/guards/${guard.id}?tab=absence`),
+    },
+    {
+      label: 'Documents',
+      icon: FolderOpen,
+      onSelect: () => router.push(`/guards/${guard.id}?tab=documents`),
+    },
+    {
+      label: 'Restore staff member',
+      icon: ArchiveRestore,
+      onSelect: () => void restoreGuard.mutateAsync(guard.id),
+      disabled: !can(user, 'guards.delete') || guard.deleted_at == null,
+    },
+    {
+      label: guard.deleted_at != null ? 'Delete permanently' : 'Archive or delete',
+      icon: Trash2,
+      onSelect: () => handleDelete(guard),
+      destructive: true,
+      disabled: !can(user, 'guards.delete'),
+    },
+  ];
+
+  /** Compliance is what a security firm watches, so it leads the cards here. */
+  const expiringSia = guards.filter((g) => {
+    const s = getSiaStatus(g.sia_expiry_date);
+    return s === 'expired' || s === 'critical';
+  }).length;
+
+  const statCards: StatCardSpec[] = [
+    {
+      key: 'total',
+      label: 'Employees',
+      value: hub?.total ?? guards.length,
+      icon: Users,
+      tone: 'neutral',
+      caption: listView === 'archived' ? 'archived' : 'in this view',
+    },
+    {
+      key: 'registered',
+      label: 'With a portal login',
+      value: (hub?.total ?? 0) - (hub?.not_registered ?? 0),
+      icon: BadgeCheck,
+      tone: 'positive',
+    },
+    {
+      key: 'not_registered',
+      label: 'Not registered',
+      value: hub?.not_registered ?? 0,
+      icon: UserPlus,
+      tone: 'info',
+      action: hub?.not_registered
+        ? { label: 'View', onClick: () => setHubQuery({ ...hubQuery, status: 'not_registered' }) }
+        : undefined,
+    },
+    {
+      key: 'sia',
+      label: 'SIA expiring',
+      value: expiringSia,
+      icon: ShieldAlert,
+      tone: 'warning',
+      caption: 'expired or within 30 days',
+    },
+    {
+      key: 'terminated',
+      label: 'Terminated',
+      value: hub?.terminated_count ?? 0,
+      icon: UserMinus,
+      tone: 'muted',
+      action: hub?.terminated_count
+        ? { label: 'View', onClick: () => setHubQuery({ ...hubQuery, status: 'terminated', includeTerminated: true }) }
+        : undefined,
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
       <div>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><Users className="size-7" /> Employee hub</h1>
-              <p className="text-muted-foreground mt-1">
-                {hub?.total ?? guards.length} employee{(hub?.total ?? guards.length) !== 1 ? 's' : ''}
-                {hub && hub.not_registered > 0 ? ` · ${hub.not_registered} without a portal login` : ''}
-              </p>
-            </div>
-            <div className="flex gap-2">
+          <DashboardHeader
+            title="Employee hub"
+            hint="Teams View and List View show the same people — only the grouping changes. Terminated staff stay in the hub behind the switch; archived staff leave it entirely."
+            description="Staff records, teams, absence, documents and compliance. Add employees, manage teams and open a full profile."
+            actions={
+              <>
               <Button
                 variant="outline"
                 onClick={() => (tab === 'staff' ? refetch() : loadJobTitles())}
@@ -422,7 +518,12 @@ export default function GuardsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
+              </>
+            }
+          />
+
+          <div className="mb-6 mt-6">
+            <StatCards cards={statCards} />
           </div>
 
           {canJobTitlesView && (
@@ -464,41 +565,64 @@ export default function GuardsPage() {
             />
           </div>
 
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            <Input
-              placeholder="Search staff (name, phone, area, postcode…)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={filterContractor}
-              onChange={(e) => setFilterContractor(e.target.value)}
-              aria-label="Filter by contractor"
+          <div className="mb-4">
+            <FilterBar
+              onClear={() => {
+                setSearch('');
+                setFilterContractor('all');
+                setFilterSubContractor('all');
+                setFilterArea('');
+                setFilterPostcode('');
+                setFilterNearby('');
+              }}
             >
-              <option value="all">Contractor: All</option>
-              {mains.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-              value={filterSubContractor}
-              onChange={(e) => setFilterSubContractor(e.target.value)}
-              aria-label="Filter by sub-contractor"
-            >
-              <option value="all">Sub-contractor: All</option>
-              {subs.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <Input placeholder="Filter by area" value={filterArea} onChange={(e) => setFilterArea(e.target.value)} />
-            <Input placeholder="Filter by postcode" value={filterPostcode} onChange={(e) => setFilterPostcode(e.target.value)} />
-            <Input placeholder="Filter nearby areas" value={filterNearby} onChange={(e) => setFilterNearby(e.target.value)} />
+              <FilterField label="Search" className="min-w-[220px] flex-1">
+                <Input
+                  placeholder="Name, phone, area or postcode…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FilterField>
+              <FilterField label="Contractor">
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={filterContractor}
+                  onChange={(e) => setFilterContractor(e.target.value)}
+                  aria-label="Filter by contractor"
+                >
+                  <option value="all">All contractors</option>
+                  {mains.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="Sub-contractor">
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={filterSubContractor}
+                  onChange={(e) => setFilterSubContractor(e.target.value)}
+                  aria-label="Filter by sub-contractor"
+                >
+                  <option value="all">All sub-contractors</option>
+                  {subs.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="Area">
+                <Input placeholder="Service area" value={filterArea} onChange={(e) => setFilterArea(e.target.value)} />
+              </FilterField>
+              <FilterField label="Postcode">
+                <Input placeholder="Postcode" value={filterPostcode} onChange={(e) => setFilterPostcode(e.target.value)} />
+              </FilterField>
+              <FilterField label="Nearby areas">
+                <Input placeholder="Nearby" value={filterNearby} onChange={(e) => setFilterNearby(e.target.value)} />
+              </FilterField>
+            </FilterBar>
           </div>
           {(mains.length === 0 && subs.length === 0) && (
             <div className="mb-4 rounded-md border border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
@@ -529,15 +653,12 @@ export default function GuardsPage() {
           </div>
 
           {hubView === 'teams' ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>{listView === 'archived' ? 'Archived staff' : 'Employees by team'}</CardTitle>
+            <ResultsCard title={listView === 'archived' ? 'Archived staff' : 'Employees by team'} count={hub?.total}>
+              <div className="space-y-6 p-4">
                 <p className="text-sm text-muted-foreground">
                   Grouped by team. Anyone in no team is listed under “No team”, so the two views
                   always add up to the same people.
                 </p>
-              </CardHeader>
-              <CardContent className="space-y-6">
                 {hubLoading ? (
                   <InlineTableSkeleton />
                 ) : !hub || hub.groups.length === 0 ? (
@@ -561,21 +682,26 @@ export default function GuardsPage() {
                     </div>
                   ))
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </ResultsCard>
           ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>{listView === 'archived' ? 'Archived staff' : 'All staff'}</CardTitle>
+          <ResultsCard
+            title={listView === 'archived' ? 'Archived staff' : 'Employees'}
+            count={total}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {listView === 'archived' ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="mb-3 text-sm text-muted-foreground">
                   Off the Staff list and out of every rota and payroll picker, with their portal login
                   switched off. Their shifts, attendance and payroll history are untouched — restoring
                   someone brings the record back but leaves their login disabled.
                 </p>
               ) : null}
-            </CardHeader>
-            <CardContent>
               {isLoading ? (
                 <InlineTableSkeleton />
               ) : total === 0 ? (
@@ -620,8 +746,18 @@ export default function GuardsPage() {
                               </Link>
                             </TableCell>
                             <TableCell className="text-sm">{guard.job_title || '-'}</TableCell>
-                            <TableCell className="text-sm max-w-[160px] truncate">
-                              {(teamsByGuard.get(guard.id) ?? []).join(', ') || '-'}
+                            <TableCell className="max-w-[200px] text-sm">
+                              <div className="flex flex-wrap gap-1">
+                                {(teamsByGuard.get(guard.id) ?? []).length ? (
+                                  (teamsByGuard.get(guard.id) ?? []).map((t) => (
+                                    <Pill key={t} tone="info">
+                                      {t}
+                                    </Pill>
+                                  ))
+                                ) : (
+                                  <Pill tone="muted">No team</Pill>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-sm">{guard.date_of_birth ? formatDateUK(guard.date_of_birth) : '-'}</TableCell>
                             <TableCell className="text-sm max-w-[140px] truncate" title={guard.visa_status || undefined}>
@@ -696,35 +832,13 @@ export default function GuardsPage() {
                                     <UserRound className="size-4" />
                                   </Link>
                                 </Button>
-                                {guard.deleted_at == null ? (
-                                  <Button variant="ghost" size="sm" className="size-8 p-0" onClick={() => openEdit(guard)} title="Edit staff" disabled={!can(user, 'guards.write')}>
-                                    <Pencil className="size-4" />
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="size-8 p-0"
-                                    onClick={() => void restoreGuard.mutateAsync(guard.id)}
-                                    disabled={restoreGuard.isPending || !can(user, 'guards.delete')}
-                                    title="Restore staff member"
-                                  >
-                                    <ArchiveRestore className="size-4" />
-                                  </Button>
-                                )}
-                                {guard.email && (
+                                {guard.email ? (
                                   <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} compact />
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="size-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(guard)}
-                                  disabled={deleteGuard.isPending || !can(user, 'guards.delete')}
-                                  title={guard.deleted_at != null ? 'Delete permanently' : 'Archive or delete staff member'}
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
+                                ) : null}
+                                <RowActionsMenu
+                                  actions={guardActions(guard)}
+                                  label={`${guard.full_name} actions`}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>
@@ -732,6 +846,9 @@ export default function GuardsPage() {
                       })}
                     </TableBody>
                   </Table>
+                  <div className="mt-3 border-t pt-3">
+                    <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="employees" />
+                  </div>
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -747,11 +864,42 @@ export default function GuardsPage() {
                   />
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </ResultsCard>
           )}
           </>
           )}
+        </div>
+
+        <div className="container mx-auto px-4 pb-8">
+          <QuickLinks
+            links={[
+              {
+                key: 'absence',
+                title: 'Absence',
+                description: 'Annual leave, sickness and lateness, booked from each employee profile.',
+                icon: CalendarOff,
+                tone: 'info',
+                action: { label: 'Open a profile', href: '/guards' },
+              },
+              {
+                key: 'documents',
+                title: 'Staff documents',
+                description: 'Contracts, SIA badges and certificates, with expiry tracking.',
+                icon: FolderOpen,
+                tone: 'neutral',
+                action: { label: 'Manage documents', href: '/documents' },
+              },
+              {
+                key: 'rota',
+                title: 'Rotas & shifts',
+                description: 'Schedule these employees and publish their shifts.',
+                icon: Users,
+                tone: 'positive',
+                action: { label: 'Open rotas', href: '/rota' },
+              },
+            ]}
+          />
         </div>
 
         <EmployeeQuickView employee={quickView} onClose={() => setQuickView(null)} />

@@ -11,13 +11,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import type { Payroll, Guard, PayrollPreview } from '@/lib/types';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Search, Calculator, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { ModulePage } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  ResultsCard,
+  QuickLinks,
+  RowActionsMenu,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
+import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Search, Calculator, AlertTriangle, ArrowLeft, Banknote, Coins, Gift, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -125,6 +138,7 @@ function payableAmount(p: Payroll) {
 }
 
 export default function PayrollPage() {
+  const router = useRouter();
   // The API is the real boundary; these stop the UI offering actions it
   // already knows the role will be refused.
   const { user: permUser } = useAuth();
@@ -552,6 +566,47 @@ export default function PayrollPage() {
   const totalAllowances = summaryRows.reduce((sum, p) => sum + p.allowance_total, 0);
   const totalPayable = totalBank + totalCash;
 
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    {
+      key: 'records',
+      label: 'Records',
+      value: payrolls.length,
+      icon: FileText,
+      tone: 'neutral',
+      caption: 'this search',
+    },
+    {
+      key: 'bank',
+      label: 'Total bank',
+      value: formatMoney(totalBank),
+      icon: Banknote,
+      tone: 'positive',
+    },
+    {
+      key: 'cash',
+      label: 'Total cash',
+      value: formatMoney(totalCash),
+      icon: Coins,
+      tone: 'info',
+    },
+    {
+      key: 'allowances',
+      label: 'Allowances',
+      value: formatMoney(totalAllowances),
+      icon: Gift,
+      tone: 'muted',
+    },
+    {
+      key: 'payable',
+      label: 'Total payable',
+      value: formatMoney(totalPayable),
+      icon: PoundSterling,
+      tone: 'warning',
+      caption: 'bank + cash',
+    },
+  ];
+
   // Exports exactly the rows the table is showing — the current search result, every page
   // of it — so the file can never disagree with the screen it was taken from.
   const exportCsv = () => {
@@ -618,12 +673,13 @@ export default function PayrollPage() {
     <ProtectedRoute>
       <AppShell>
         <ModulePage>
-          <ModuleHeader
-            title={<span className="flex items-center gap-2"><PoundSterling className="size-7" /> Payroll</span>}
+          <DashboardHeader
+            title="Payroll"
+            hint="Records are imported from published rota hours. Only shifts marked On time or Late are payable, so the rota'd and attended totals are shown side by side."
             description={
               hasSearched
                 ? `${payrolls.length} payroll record${payrolls.length !== 1 ? 's' : ''} for this search`
-                : 'Search below to load payroll records'
+                : 'Search below to load payroll records. Import payable hours from the rota, then edit anything that needs correcting.'
             }
             actions={
               <div className="flex flex-wrap gap-2">
@@ -843,43 +899,7 @@ export default function PayrollPage() {
             }
           />
 
-          {payrolls.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Bank</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold">{formatMoney(totalBank)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Cash</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold">{formatMoney(totalCash)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Allowances</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold">{formatMoney(totalAllowances)}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Payable</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold">{formatMoney(totalPayable)}</span>
-                  <p className="text-xs text-muted-foreground mt-1">Bank + cash, this search</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+          {payrolls.length > 0 ? <StatCards cards={statCards} /> : null}
 
           <Card>
             <CardHeader className="pb-3">
@@ -1142,62 +1162,60 @@ export default function PayrollPage() {
             </CardContent>
           </Card>
 
-          <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-            <Input
-              placeholder="Search by guard name or period..."
-              value={searchDraft}
-              onChange={(e) => setSearchDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') runSearch();
-              }}
-              className="max-w-md"
-            />
-            <div className="flex flex-wrap gap-2 items-center">
+          <FilterBar onSearch={runSearch} onClear={clearSearch} searching={loading} showClear={hasSearched}>
+            <FilterField label="Find" className="min-w-[240px] flex-1">
+              <Input
+                placeholder="Guard name or period…"
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') runSearch();
+                }}
+              />
+            </FilterField>
+            <FilterField label="Period from">
               <Input
                 type="date"
                 value={dateFromDraft}
                 onChange={(e) => setDateFromDraft(e.target.value)}
-                className="w-auto"
                 aria-label="Filter from"
               />
-              <span className="text-muted-foreground text-sm">to</span>
+            </FilterField>
+            <FilterField label="Period to">
               <Input
                 type="date"
                 value={dateToDraft}
                 onChange={(e) => setDateToDraft(e.target.value)}
-                className="w-auto"
                 aria-label="Filter to"
               />
-              <Button type="button" variant="secondary" onClick={runSearch} disabled={loading}>
-                <Search className="size-4 mr-1.5" />
-                {loading ? 'Searching…' : 'Search'}
-              </Button>
-              {hasSearched && (
-                <Button type="button" variant="ghost" size="sm" onClick={clearSearch}>
-                  Clear
-                </Button>
-              )}
-            </div>
+            </FilterField>
             {/* Applied on Search with everything else, so one press answers the whole row. */}
-            <WorkFilterBar
-              value={filterDraft}
-              onChange={setFilterDraft}
-              options={filterOptions}
-              disabled={loading}
-              className="flex flex-wrap items-center gap-2 w-full"
-            />
-          </div>
+            <div className="w-full">
+              <WorkFilterBar
+                value={filterDraft}
+                onChange={setFilterDraft}
+                options={filterOptions}
+                disabled={loading}
+                className="flex flex-wrap items-center gap-2 w-full"
+              />
+            </div>
+          </FilterBar>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Payroll Records</CardTitle>
+          <ResultsCard
+            title="Payroll records"
+            count={hasSearched ? total : undefined}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {hasSearched && describeQuery(appliedQuery, filterOptions) ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="mb-3 text-sm text-muted-foreground">
                   Showing results for {describeQuery(appliedQuery, filterOptions)}
                 </p>
               ) : null}
-            </CardHeader>
-            <CardContent>
               {loading ? (
                 <InlineKpiTableSkeleton />
               ) : !hasSearched ? (
@@ -1242,38 +1260,56 @@ export default function PayrollPage() {
                           <TableCell>{formatMoney(p.allowance_total)}</TableCell>
                           <TableCell className="font-semibold">{formatMoney(payableAmount(p))}</TableCell>
                           <TableCell>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
+                            <Pill tone={p.payment_mode === '100_cash' ? 'info' : p.payment_mode === 'split' ? 'warning' : 'neutral'}>
                               {PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}
-                            </span>
+                            </Pill>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => setViewRec(p)} title="View record">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-8"
+                                onClick={() => setViewRec(p)}
+                                title="View record"
+                              >
                                 <Eye className="size-4" />
                               </Button>
-                              {canEditMod ? (
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payroll">
-                                  <Pencil className="size-4" />
-                                  <span className="sr-only">Edit</span>
-                                </Button>
-                              ) : null}
-                              {canDeleteMod ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(p.id)}
-                                  title="Delete record"
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
-                              ) : null}
+                              <RowActionsMenu
+                                actions={[
+                                  { label: 'View record', icon: Eye, onSelect: () => setViewRec(p) },
+                                  {
+                                    label: 'Edit record',
+                                    icon: Pencil,
+                                    onSelect: () => openEdit(p),
+                                    disabled: !canEditMod,
+                                  },
+                                  {
+                                    label: 'Employee profile',
+                                    icon: Users,
+                                    onSelect: () => router.push(`/guards/${p.guard_id}`),
+                                  },
+                                  {
+                                    label: 'Delete record',
+                                    icon: Trash2,
+                                    onSelect: () => handleDelete(p.id),
+                                    destructive: true,
+                                    disabled: !canDeleteMod,
+                                  },
+                                ]}
+                                label={`Payroll record ${p.id} actions`}
+                              />
                             </div>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {hasSearched && total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="records" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -1282,15 +1318,40 @@ export default function PayrollPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <QuickLinks
+            links={[
+              {
+                key: 'rota',
+                title: 'Rotas & shifts',
+                description: 'Payable hours come from published rotas. Correct a shift there and re-import.',
+                icon: Calculator,
+                tone: 'neutral',
+                action: { label: 'Open rotas', href: '/rota' },
+              },
+              {
+                key: 'staff',
+                title: 'Employee hub',
+                description: 'Pay rates, contracted hours and bank details live on the staff record.',
+                icon: Users,
+                tone: 'info',
+                action: { label: 'Open employees', href: '/guards' },
+              },
+              {
+                key: 'reports',
+                title: 'Reports',
+                description: 'Hours, cost and attendance reports across any period.',
+                icon: FileText,
+                tone: 'positive',
+                action: { label: 'View reports', href: '/reports' },
+              },
+            ]}
+          />
         </ModulePage>
 
       <Dialog open={!!viewRec} onOpenChange={(open) => !open && setViewRec(null)}>

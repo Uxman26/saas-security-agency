@@ -102,13 +102,26 @@ export default function InvoicesPage() {
     () => clients.map((c) => ({ value: String(c.id), label: c.name })),
     [clients]
   );
+  // Every site is listed so nothing looks missing; the ones with no client are
+  // flagged in the label and blocked at generate time, because an invoice needs a
+  // customer to bill and the API rejects them with the same reason.
   const siteOptions = useMemo(
     () =>
-      invoiceableSites.map((s) => ({
-        value: String(s.id),
-        label: `${s.name}${s.client_id && clientMap.get(s.client_id) ? ` · ${clientMap.get(s.client_id)}` : ''}`,
-      })),
-    [invoiceableSites, clientMap]
+      sites.map((s) => {
+        const client = s.client_id ? clientMap.get(s.client_id) : undefined;
+        return {
+          value: String(s.id),
+          label: `${s.name} · ${client ?? 'No client'}`,
+        };
+      }),
+    [sites, clientMap]
+  );
+  const selectedSiteUnlinked = useMemo(
+    () =>
+      genMode === 'site' &&
+      !!genSiteId &&
+      !invoiceableSites.some((s) => String(s.id) === genSiteId),
+    [genMode, genSiteId, invoiceableSites]
   );
 
   const loadInvoices = useCallback(() => {
@@ -457,22 +470,29 @@ export default function InvoicesPage() {
                         <SearchableSelect
                           value={genSiteId}
                           options={siteOptions}
-                          placeholder={
-                            invoiceableSites.length ? 'Select site' : 'No sites linked to a client'
-                          }
+                          placeholder={sites.length ? 'Select site' : 'No sites yet'}
                           searchPlaceholder="Search sites…"
                           emptyText="No matching sites"
                           onChange={setGenSiteId}
-                          disabled={invoiceableSites.length === 0}
+                          disabled={sites.length === 0}
                         />
-                        {unlinkedSiteCount > 0 ? (
-                          <p className="text-xs text-muted-foreground">
-                            {unlinkedSiteCount} site{unlinkedSiteCount === 1 ? '' : 's'} hidden because{' '}
-                            {unlinkedSiteCount === 1 ? 'it is' : 'they are'} not linked to a client.{' '}
-                            <Link href="/sites" className="text-primary underline underline-offset-2">
+                        {selectedSiteUnlinked ? (
+                          <p className="text-xs text-destructive">
+                            This site is not linked to a client, so it cannot be invoiced yet.{' '}
+                            <Link href="/sites" className="underline underline-offset-2">
                               Edit sites
                             </Link>{' '}
                             to assign a client first.
+                          </p>
+                        ) : unlinkedSiteCount > 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            {unlinkedSiteCount} of {sites.length} sites{' '}
+                            {unlinkedSiteCount === 1 ? 'is' : 'are'} not linked to a client and cannot
+                            be invoiced.{' '}
+                            <Link href="/sites" className="text-primary underline underline-offset-2">
+                              Edit sites
+                            </Link>{' '}
+                            to assign a client.
                           </p>
                         ) : null}
                       </div>
@@ -523,7 +543,8 @@ export default function InvoicesPage() {
                         !genEnd ||
                         genStart > genEnd ||
                         (genMode === 'client' && !genClientId) ||
-                        (genMode === 'site' && !genSiteId)
+                        (genMode === 'site' && !genSiteId) ||
+                        selectedSiteUnlinked
                       }
                     >
                       {genLoading ? 'Generating...' : 'Generate Invoice'}

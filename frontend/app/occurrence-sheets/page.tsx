@@ -4,8 +4,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleGuard } from '@/components/module-guard';
-import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ModulePage } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -161,14 +171,35 @@ export default function OccurrenceSheetsPage() {
     }
   };
 
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    { key: 'total', label: 'Sheets', value: rows.length, icon: NotebookPen, tone: 'neutral' },
+    {
+      key: 'sites',
+      label: 'Sites covered',
+      value: new Set(rows.map((r) => r.site_id).filter(Boolean)).size,
+      icon: Search,
+      tone: 'info',
+    },
+    {
+      key: 'entries',
+      label: 'Entries logged',
+      value: rows.reduce((n, r) => n + (r.entry_count ?? 0), 0),
+      icon: Printer,
+      tone: 'positive',
+      caption: 'across all sheets',
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
         <ModuleGuard moduleKey="occurrence_sheets">
           <ModulePage>
-            <ModuleHeader
-              title={<span className="flex items-center gap-2"><NotebookPen className="size-7" /> Occurrence sheets</span>}
-              description="The daily occurrences sheet — what happened on shift and what was done about it. Fill it in here, or print a blank one."
+            <DashboardHeader
+              title="Occurrence sheets"
+              hint="One sheet per shift per site. Fill it in here, or print a blank and key it in afterwards."
+              description="The daily occurrences log — what happened on shift and what was done about it."
               actions={
                 <div className="flex flex-wrap gap-2">
                   {canBlank ? (
@@ -187,28 +218,26 @@ export default function OccurrenceSheetsPage() {
               }
             />
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1">
-                <Label>From</Label>
-                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
-              </div>
-              <div className="space-y-1">
-                <Label>To</Label>
-                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
-              </div>
-              <Button variant="secondary" onClick={load}>
-                <Search className="size-4 mr-1.5" />
-                Search
-              </Button>
-            </div>
+            <StatCards cards={statCards} />
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">
-                  {loading ? 'Loading…' : `${rows.length} sheet${rows.length === 1 ? '' : 's'}`}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <FilterBar
+              onSearch={load}
+              searching={loading}
+              onClear={() => {
+                setFrom('');
+                setTo('');
+              }}
+            >
+              <FilterField label="From">
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </FilterField>
+              <FilterField label="To">
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </FilterField>
+            </FilterBar>
+
+            <ResultsCard title="Occurrence sheets" count={loading ? undefined : rows.length}>
+              <div className="p-4">
                 <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
@@ -242,9 +271,9 @@ export default function OccurrenceSheetsPage() {
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{s.entry_count}</TableCell>
                           <TableCell>
-                            <span className="inline-flex rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                            <Pill dot tone={s.status === 'submitted' ? 'warning' : s.status === 'closed' ? 'positive' : 'muted'}>
                               {STATUS_LABELS[s.status] ?? s.status}
-                            </span>
+                            </Pill>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
@@ -276,8 +305,42 @@ export default function OccurrenceSheetsPage() {
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
+                {rows.length > 0 ? (
+                  <div className="mt-3 border-t pt-3">
+                    <ShowingCount rangeStart={1} rangeEnd={rows.length} total={rows.length} noun="sheets" />
+                  </div>
+                ) : null}
+              </div>
+            </ResultsCard>
+
+            <QuickLinks
+              links={[
+                {
+                  key: 'incidents',
+                  title: 'Incidents',
+                  description: 'Anything on a sheet that became a formal incident.',
+                  icon: NotebookPen,
+                  tone: 'warning',
+                  action: { label: 'View incidents', href: '/incidents' },
+                },
+                {
+                  key: 'accidents',
+                  title: 'Accident reports',
+                  description: 'Injuries and near misses recorded on X-FORM-077.',
+                  icon: Printer,
+                  tone: 'danger',
+                  action: { label: 'View accident reports', href: '/accident-reports' },
+                },
+                {
+                  key: 'sites',
+                  title: 'Sites',
+                  description: 'The sites these sheets were kept at.',
+                  icon: Search,
+                  tone: 'neutral',
+                  action: { label: 'View sites', href: '/sites' },
+                },
+              ]}
+            />
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">

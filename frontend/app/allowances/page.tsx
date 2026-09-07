@@ -6,7 +6,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -16,8 +15,19 @@ import { api } from '@/lib/api';
 import type { Allowance } from '@/lib/types';
 import { z } from 'zod';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Wallet, Pencil, Trash2 } from 'lucide-react';
+import { FileText, PoundSterling, Wallet, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -223,17 +233,35 @@ export default function AllowancesPage() {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
 
+  const inPayroll = allowances.filter((a) => a.in_payroll).length;
+  const inInvoice = allowances.filter((a) => a.in_invoice).length;
+
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    { key: 'total', label: 'Allowances', value: allowances.length, icon: Wallet, tone: 'neutral' },
+    { key: 'payroll', label: 'Applied to payroll', value: inPayroll, icon: PoundSterling, tone: 'positive' },
+    { key: 'invoice', label: 'Applied to invoices', value: inInvoice, icon: FileText, tone: 'info' },
+    {
+      key: 'both',
+      label: 'Both',
+      value: allowances.filter((a) => a.in_payroll && a.in_invoice).length,
+      icon: Wallet,
+      tone: 'warning',
+      caption: 'paid and billed',
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
       <div>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><Wallet className="size-7" /> Allowances</h1>
-              <p className="text-muted-foreground mt-1">Configure payroll and invoice allowances</p>
-            </div>
-            <Dialog open={addOpen} onOpenChange={setAddOpen}>
+          <DashboardHeader
+            title="Allowances"
+            hint="An allowance can apply to payroll, to invoices, or to both — the two flags are independent, so a cost you absorb need not be billed on."
+            description="Configure the payroll and invoice allowances applied on top of shift hours."
+            actions={
+              <Dialog open={addOpen} onOpenChange={setAddOpen}>
               {canCreateMod ? (
                 <DialogTrigger asChild>
                   <Button>Add Allowance</Button>
@@ -245,23 +273,36 @@ export default function AllowancesPage() {
                 </DialogHeader>
                 <AllowanceForm form={addForm} onSubmit={handleCreate} isPending={false} submitLabel="Create Allowance" />
               </DialogContent>
-            </Dialog>
+              </Dialog>
+            }
+          />
+
+          <div className="mb-6 mt-6">
+            <StatCards cards={statCards} />
           </div>
 
           <div className="mb-4">
-            <Input
-              placeholder="Search allowances..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
-            />
+            <FilterBar onClear={() => setSearch('')}>
+              <FilterField label="Search" className="min-w-[260px] flex-1">
+                <Input
+                  placeholder="Allowance name or type…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FilterField>
+            </FilterBar>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>All Allowances</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <ResultsCard
+            title="Allowances"
+            count={total}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {loading ? (
                 <InlineTableSkeleton />
               ) : allowances.length === 0 ? (
@@ -298,18 +339,10 @@ export default function AllowancesPage() {
                           </TableCell>
                           <TableCell className="font-medium">£{a.amount.toFixed(2)}</TableCell>
                           <TableCell>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              a.in_payroll ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-secondary text-secondary-foreground'
-                            }`}>
-                              {a.in_payroll ? 'Yes' : 'No'}
-                            </span>
+                            <Pill tone={a.in_payroll ? 'positive' : 'muted'}>{a.in_payroll ? 'Yes' : 'No'}</Pill>
                           </TableCell>
                           <TableCell>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              a.in_invoice ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : 'bg-secondary text-secondary-foreground'
-                            }`}>
-                              {a.in_invoice ? 'Yes' : 'No'}
-                            </span>
+                            <Pill tone={a.in_invoice ? 'positive' : 'muted'}>{a.in_invoice ? 'Yes' : 'No'}</Pill>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
@@ -335,6 +368,11 @@ export default function AllowancesPage() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="allowances" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -343,15 +381,40 @@ export default function AllowancesPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <div className="mt-6">
+            <QuickLinks links={[
+              {
+                key: 'payroll',
+                title: 'Payroll',
+                description: 'Allowances marked for payroll are added to what staff are paid.',
+                icon: PoundSterling,
+                tone: 'positive',
+                action: { label: 'Open payroll', href: '/payroll' },
+              },
+              {
+                key: 'invoices',
+                title: 'Invoices',
+                description: 'Allowances marked for invoicing appear as a line on the bill.',
+                icon: FileText,
+                tone: 'neutral',
+                action: { label: 'Open invoices', href: '/invoices' },
+              },
+              {
+                key: 'rates',
+                title: 'Rates',
+                description: 'Shift rates per site and per staff member.',
+                icon: Wallet,
+                tone: 'info',
+                action: { label: 'Open sites', href: '/sites' },
+              },
+            ]} />
+          </div>
         </div>
 
         {/* Edit Dialog */}

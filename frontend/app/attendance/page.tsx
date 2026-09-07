@@ -4,7 +4,6 @@ import { InlineKpiTableSkeleton } from '@/components/skeletons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,20 +16,24 @@ import type { Attendance, Guard, Assignment } from '@/lib/types';
 import { attStatusLabel, normalizeAttStatus } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { ModulePage, ModuleTabs } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { StatusPieChart } from '@/components/charts/status-chart';
-import { Clock, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Calendar, Clock, Plus, Pencil, PoundSterling, Trash2, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { TimeHmField, normalizeHm } from '@/components/ui/time-hm-field';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
-
-const STATUS_STYLES: Record<string, string> = {
-  on_time: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  late: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  absent: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
-  no_show: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-};
 
 const STATUS_OPTIONS = [
   { value: 'on_time', label: 'On time' },
@@ -268,13 +271,35 @@ export default function AttendancePage() {
   const lateCount = useMemo(() => attendance.filter((a) => normalizeAttStatus(a.status) === 'late').length, [attendance]);
   const onTimeCount = useMemo(() => attendance.filter((a) => normalizeAttStatus(a.status) === 'on_time').length, [attendance]);
 
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    { key: 'total', label: 'Records', value: attendance.length, icon: Clock, tone: 'neutral' },
+    { key: 'on_time', label: 'On time', value: onTimeCount, icon: Clock, tone: 'positive' },
+    {
+      key: 'late',
+      label: 'Late arrivals',
+      value: lateCount,
+      icon: Clock,
+      tone: lateCount ? 'danger' : 'muted',
+      action: lateCount ? { label: 'View', onClick: () => setTab('late') } : undefined,
+    },
+    {
+      key: 'other',
+      label: 'Other / not marked',
+      value: attendance.length - onTimeCount - lateCount,
+      icon: Users,
+      tone: 'muted',
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
         <ModulePage>
-          <ModuleHeader
-            title={<span className="flex items-center gap-2"><Clock className="size-7" /> Attendance</span>}
-            description={`${attendance.length} attendance record${attendance.length !== 1 ? 's' : ''}`}
+          <DashboardHeader
+            title="Attendance"
+            hint="Booking on or off stamps the current time against an assignment. Late is decided against the shift's scheduled start."
+            description="Who turned up, when they booked on and off, and who was late."
             actions={
               <div className="flex gap-2">
                 <Button variant="outline" onClick={loadAttendance} disabled={loading}>
@@ -371,34 +396,10 @@ export default function AttendancePage() {
             onChange={setTab}
           />
 
+          <StatCards cards={statCards} />
+
           {tab === 'overview' && attendance.length > 0 && (
             <>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Records</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold">{attendance.length}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">On Time</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold text-green-600">{onTimeCount}</span>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Late Arrivals</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold text-red-600">{lateCount}</span>
-                </CardContent>
-              </Card>
-            </div>
             <StatusPieChart
               data={[
                 { name: 'On time', value: onTimeCount },
@@ -412,20 +413,26 @@ export default function AttendancePage() {
 
           {tab !== 'overview' && (
           <>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Input
-              placeholder="Search by guard name..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-          </div>
+          <FilterBar onClear={() => setSearch('')}>
+            <FilterField label="Search" className="min-w-[260px] flex-1">
+              <Input
+                placeholder="Staff name…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </FilterField>
+          </FilterBar>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Attendance Records</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <ResultsCard
+            title="Attendance records"
+            count={total}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {loading ? (
                 <InlineKpiTableSkeleton />
               ) : total === 0 ? (
@@ -456,13 +463,22 @@ export default function AttendancePage() {
                           </TableCell>
                           <TableCell>
                             {a.status ? (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[normalizeAttStatus(a.status) ?? ''] ?? 'bg-secondary text-secondary-foreground'}`}>
+                              <Pill
+                                dot
+                                tone={
+                                  normalizeAttStatus(a.status) === 'on_time'
+                                    ? 'positive'
+                                    : normalizeAttStatus(a.status) === 'late'
+                                      ? 'danger'
+                                      : normalizeAttStatus(a.status) === 'absent'
+                                        ? 'warning'
+                                        : 'muted'
+                                }
+                              >
                                 {displayStatus(a.status)}
-                              </span>
+                              </Pill>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                                Pending
-                              </span>
+                              <Pill tone="muted">Pending</Pill>
                             )}
                           </TableCell>
                           <TableCell className="text-sm max-w-[200px] truncate" title={a.note ?? undefined}>
@@ -505,6 +521,11 @@ export default function AttendancePage() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="records" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -513,15 +534,40 @@ export default function AttendancePage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <QuickLinks
+            links={[
+              {
+                key: 'rota',
+                title: 'Rotas & shifts',
+                description: 'Attendance is marked against the shifts planned here.',
+                icon: Calendar,
+                tone: 'neutral',
+                action: { label: 'Open rotas', href: '/rota' },
+              },
+              {
+                key: 'payroll',
+                title: 'Payroll',
+                description: 'Only shifts marked On time or Late are payable.',
+                icon: PoundSterling,
+                tone: 'positive',
+                action: { label: 'Open payroll', href: '/payroll' },
+              },
+              {
+                key: 'staff',
+                title: 'Employee hub',
+                description: 'Absence, lateness and the rest of each person\u2019s record.',
+                icon: Users,
+                tone: 'info',
+                action: { label: 'Open employees', href: '/guards' },
+              },
+            ]}
+          />
           </>
           )}
 

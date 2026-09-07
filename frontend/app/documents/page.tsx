@@ -4,7 +4,6 @@ import { InlineTableSkeleton } from '@/components/skeletons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +14,19 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { GuardDocument, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FolderOpen, Plus, Trash2, AlertTriangle, Upload, Download, X, FileText } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, AlertTriangle, Upload, Download, X, FileText, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -234,18 +244,51 @@ export default function DocumentsPage() {
     return s === 'expired' || s === 'critical';
   }).length;
 
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    {
+      key: 'total',
+      label: 'Documents',
+      value: documents.length,
+      icon: FolderOpen,
+      tone: 'neutral',
+      caption: `across ${guardDocCounts.size} staff member${guardDocCounts.size === 1 ? '' : 's'}`,
+    },
+    {
+      key: 'expiring',
+      label: 'Expiring or expired',
+      value: expiringCount,
+      icon: AlertTriangle,
+      tone: expiringCount ? 'danger' : 'positive',
+      caption: 'within 30 days',
+    },
+    {
+      key: 'with_expiry',
+      label: 'With an expiry date',
+      value: documents.filter((d) => d.expiry_date).length,
+      icon: FileText,
+      tone: 'info',
+    },
+    {
+      key: 'staff',
+      label: 'Staff with documents',
+      value: guardDocCounts.size,
+      icon: Users,
+      tone: 'positive',
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><FolderOpen className="size-7" /> Documents</h1>
-              <p className="text-muted-foreground mt-1">
-                {documents.length} document{documents.length !== 1 ? 's' : ''} across {guardDocCounts.size} staff member{guardDocCounts.size !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <div className="flex gap-2">
+          <DashboardHeader
+            title="Documents"
+            hint="Documents are filed against a staff member. Open one to set its folder, follow-up date and whether the employee must accept it."
+            description="Contracts, SIA badges and certificates for your staff, with expiry tracking."
+            actions={
+              <>
+
               <Button variant="outline" onClick={() => loadDocuments(filterGuardId ? parseInt(filterGuardId) : undefined)} disabled={loading}>
                 {loading ? 'Loading...' : 'Refresh'}
               </Button>
@@ -336,7 +379,12 @@ export default function DocumentsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
+              </>
+            }
+          />
+
+          <div className="mb-6 mt-6">
+            <StatCards cards={statCards} />
           </div>
 
           {expiringCount > 0 && (
@@ -348,29 +396,44 @@ export default function DocumentsPage() {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <Input
-              placeholder="Search by guard or document type..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-sm"
-            />
-            <Select value={filterGuardId || 'all'} onValueChange={handleFilterGuard}>
-              <SelectTrigger className="w-[200px]"><SelectValue placeholder="All Guards" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Guards</SelectItem>
-                {guards.map((g) => (
-                  <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="mb-4">
+            <FilterBar
+              onClear={() => {
+                setSearch('');
+                handleFilterGuard('all');
+              }}
+            >
+              <FilterField label="Search" className="min-w-[240px] flex-1">
+                <Input
+                  placeholder="Staff name or document type…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FilterField>
+              <FilterField label="Staff member">
+                <Select value={filterGuardId || 'all'} onValueChange={handleFilterGuard}>
+                  <SelectTrigger><SelectValue placeholder="All staff" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All staff</SelectItem>
+                    {guards.map((g) => (
+                      <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            </FilterBar>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Document records</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <ResultsCard
+            title="Document records"
+            count={total}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {loading ? (
                 <InlineTableSkeleton />
               ) : total === 0 ? (
@@ -424,20 +487,26 @@ export default function DocumentsPage() {
                             </TableCell>
                             <TableCell>
                               {doc.expiry_date ? (
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                  status === 'expired' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                  status === 'critical' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
-                                  status === 'warning' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
-                                  'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                }`}>
-                                  {status === 'expired' ? 'Expired' :
-                                   status === 'critical' ? 'Expiring Soon' :
-                                   status === 'warning' ? 'Due Soon' : 'Valid'}
-                                </span>
+                                <Pill
+                                  dot
+                                  tone={
+                                    status === 'expired'
+                                      ? 'danger'
+                                      : status === 'critical' || status === 'warning'
+                                        ? 'warning'
+                                        : 'positive'
+                                  }
+                                >
+                                  {status === 'expired'
+                                    ? 'Expired'
+                                    : status === 'critical'
+                                      ? 'Expiring soon'
+                                      : status === 'warning'
+                                        ? 'Due soon'
+                                        : 'Valid'}
+                                </Pill>
                               ) : (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                                  No Expiry
-                                </span>
+                                <Pill tone="muted">No expiry</Pill>
                               )}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
@@ -487,6 +556,11 @@ export default function DocumentsPage() {
                       })}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="documents" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -495,15 +569,42 @@ export default function DocumentsPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <div className="mt-6">
+            <QuickLinks
+              links={[
+                {
+                  key: 'staff',
+                  title: 'Employee hub',
+                  description: 'Open a profile to file documents against that person.',
+                  icon: Users,
+                  tone: 'neutral',
+                  action: { label: 'Open employees', href: '/guards' },
+                },
+                {
+                  key: 'expiring',
+                  title: 'Expiring documents',
+                  description: 'Badges and certificates due for renewal in the next 30 days.',
+                  icon: AlertTriangle,
+                  tone: 'warning',
+                  action: { label: 'Show expiring', onClick: () => setSearch('') },
+                },
+                {
+                  key: 'reports',
+                  title: 'Reports',
+                  description: 'Compliance and document-expiry reporting.',
+                  icon: FileText,
+                  tone: 'info',
+                  action: { label: 'View reports', href: '/reports' },
+                },
+              ]}
+            />
+          </div>
         </div>
       </AppShell>
     </ProtectedRoute>

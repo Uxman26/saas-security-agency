@@ -15,7 +15,18 @@ import { api } from '@/lib/api';
 import type { Expense, ExpenseDashboard, ExpenseMeta, ExpenseReport, VatReport } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
+import { ModulePage, ModuleTabs } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { StatusBarChart } from '@/components/charts/status-chart';
 import { Download, Pencil, Plus, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -474,6 +485,47 @@ export default function ExpensesPage() {
     </div>
   );
 
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = dashboard
+    ? [
+        {
+          key: 'total',
+          label: 'Total expenses',
+          value: fmt(dashboard.total_expenses_inc_vat),
+          icon: Receipt,
+          tone: 'neutral',
+          caption: `Ex VAT ${fmt(dashboard.total_expenses_ex_vat)}`,
+        },
+        {
+          key: 'expense_vat',
+          label: 'Expense VAT',
+          value: fmt(dashboard.total_expense_vat),
+          icon: TrendingDown,
+          tone: 'warning',
+          caption: 'VAT paid on expenses',
+        },
+        {
+          key: 'invoice_vat',
+          label: 'Invoice VAT',
+          value: fmt(dashboard.total_invoice_vat),
+          icon: TrendingUp,
+          tone: 'info',
+          caption:
+            (dashboard.issued_invoice_count ?? 0) === 0
+              ? 'No issued invoices in this period'
+              : `on ${dashboard.issued_invoice_count} issued invoice${dashboard.issued_invoice_count === 1 ? '' : 's'}`,
+        },
+        {
+          key: 'net_vat',
+          label: dashboard.net_vat_payable >= 0 ? 'Net VAT payable' : 'Net VAT reclaimable',
+          value: fmt(Math.abs(dashboard.net_vat_payable)),
+          icon: dashboard.net_vat_payable >= 0 ? TrendingUp : TrendingDown,
+          tone: dashboard.net_vat_payable >= 0 ? 'danger' : 'positive',
+          caption: 'invoice VAT less expense VAT',
+        },
+      ]
+    : [];
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -481,9 +533,10 @@ export default function ExpensesPage() {
           <div className="p-8 text-center text-muted-foreground">Expenses module is not enabled for your account.</div>
         ) : (
         <ModulePage>
-          <ModuleHeader
-            title={<span className="flex items-center gap-2"><Receipt className="size-7 text-primary" /> Expenses</span>}
-            description="Record business expenses, VAT, and supporting documents"
+          <DashboardHeader
+            title="Expenses"
+            hint="Net VAT is the VAT you charged on issued invoices less the VAT you paid on expenses, over the period selected below."
+            description="Record business expenses, reclaim VAT and keep the supporting documents."
             actions={
               canWrite ? (
                 <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
@@ -540,39 +593,7 @@ export default function ExpensesPage() {
             </CardContent>
           </Card>
 
-          {dashboard && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total expenses</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold">{fmt(dashboard.total_expenses_inc_vat)}</p><p className="text-xs text-muted-foreground">Ex VAT: {fmt(dashboard.total_expenses_ex_vat)}</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Expense VAT</CardTitle></CardHeader>
-                <CardContent><p className="text-2xl font-bold text-amber-600">{fmt(dashboard.total_expense_vat)}</p><p className="text-xs text-muted-foreground">VAT paid on expenses</p></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Invoice VAT</CardTitle></CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold text-blue-600">{fmt(dashboard.total_invoice_vat)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(dashboard.issued_invoice_count ?? 0) === 0
-                      ? 'No issued invoices in this period'
-                      : `VAT on ${dashboard.issued_invoice_count} issued invoice${dashboard.issued_invoice_count === 1 ? '' : 's'}`}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Net VAT</CardTitle></CardHeader>
-                <CardContent>
-                  <p className={cn('text-2xl font-bold flex items-center gap-1', dashboard.net_vat_payable >= 0 ? 'text-red-600' : 'text-green-600')}>
-                    {dashboard.net_vat_payable >= 0 ? <TrendingUp className="size-5" /> : <TrendingDown className="size-5" />}
-                    {fmt(Math.abs(dashboard.net_vat_payable))}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{dashboard.net_vat_payable >= 0 ? 'Payable to HMRC' : 'Refundable'}</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+          <StatCards cards={statCards} />
 
           <ModuleTabs
             tabs={[
@@ -602,30 +623,40 @@ export default function ExpensesPage() {
                 </Card>
               )}
 
-              <Card>
-                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <CardTitle>Expense records</CardTitle>
-                  <div className="flex flex-wrap gap-2">
-                    <Input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-44" />
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger className="w-36"><SelectValue placeholder="Category" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All categories</SelectItem>
-                        {categories.map((c) => <SelectItem key={c} value={c}>{CAT_LABELS[c] || c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-32"><SelectValue placeholder="Status" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        {(meta?.payment_statuses || Object.keys(STATUS_LABELS)).map((s) => (
-                          <SelectItem key={s} value={s}>{STATUS_LABELS[s] || s}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </CardHeader>
-                <CardContent>
+              <FilterBar
+                onClear={() => {
+                  setSearch('');
+                  setCategoryFilter('all');
+                  setStatusFilter('all');
+                }}
+              >
+                <FilterField label="Search" className="min-w-[220px] flex-1">
+                  <Input placeholder="Vendor, reference or description…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                </FilterField>
+                <FilterField label="Category">
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {categories.map((c) => <SelectItem key={c} value={c}>{CAT_LABELS[c] || c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </FilterField>
+                <FilterField label="Status">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      {(meta?.payment_statuses || Object.keys(STATUS_LABELS)).map((s) => (
+                        <SelectItem key={s} value={s}>{STATUS_LABELS[s] || s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FilterField>
+              </FilterBar>
+
+              <ResultsCard title="Expense records" count={total}>
+                <div className="p-4">
                   {loading ? (
                     <InlineKpiTableSkeleton />
                   ) : pageRows.length === 0 ? (
@@ -659,9 +690,20 @@ export default function ExpensesPage() {
                               <TableCell>{fmt(e.vat_amount)}</TableCell>
                               <TableCell className="font-medium">{fmt(e.total_amount)}</TableCell>
                               <TableCell>
-                                <span className={cn('px-2 py-0.5 rounded text-xs font-medium', STATUS_STYLES[e.payment_status])}>
+                                <Pill
+                                  dot
+                                  tone={
+                                    e.payment_status === 'paid'
+                                      ? 'positive'
+                                      : e.payment_status === 'overdue'
+                                        ? 'danger'
+                                        : e.payment_status === 'pending'
+                                          ? 'warning'
+                                          : 'muted'
+                                  }
+                                >
                                   {STATUS_LABELS[e.payment_status] || e.payment_status}
-                                </span>
+                                </Pill>
                               </TableCell>
                               <TableCell>
                                 <div className="flex gap-1">
@@ -686,20 +728,52 @@ export default function ExpensesPage() {
                           ))}
                         </TableBody>
                       </Table>
-                      <TablePaginationBar
-                        safePage={safePage}
-                        pageCount={pageCount}
-                        total={total}
-                        pageSize={pageSize}
-                        rangeStart={rangeStart}
-                        rangeEnd={rangeEnd}
-                        onPageChange={setPage}
-                        onPageSizeChange={setPageSize}
-                      />
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                        <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="expenses" />
+                        <TablePaginationBar
+                          safePage={safePage}
+                          pageCount={pageCount}
+                          total={total}
+                          pageSize={pageSize}
+                          rangeStart={rangeStart}
+                          rangeEnd={rangeEnd}
+                          onPageChange={setPage}
+                          onPageSizeChange={setPageSize}
+                        />
+                      </div>
                     </>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </ResultsCard>
+
+              <QuickLinks
+                links={[
+                  {
+                    key: 'invoices',
+                    title: 'Invoices',
+                    description: 'The VAT you charged, which nets off against expense VAT.',
+                    icon: Receipt,
+                    tone: 'neutral',
+                    action: { label: 'View invoices', href: '/invoices' },
+                  },
+                  {
+                    key: 'payments',
+                    title: 'Payments',
+                    description: 'Money received against those invoices.',
+                    icon: TrendingUp,
+                    tone: 'positive',
+                    action: { label: 'View payments', href: '/payments' },
+                  },
+                  {
+                    key: 'reports',
+                    title: 'Reports',
+                    description: 'Cost and revenue reporting across any period.',
+                    icon: TrendingDown,
+                    tone: 'info',
+                    action: { label: 'View reports', href: '/reports' },
+                  },
+                ]}
+              />
 
               {dashboard && dashboard.recent_expenses.length > 0 && (
                 <Card>

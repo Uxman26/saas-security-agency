@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -26,8 +25,22 @@ import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  RecordAvatar,
+  ResultsCard,
+  RowActionsMenu,
+  ShowingCount,
+  StatCards,
+  type ResultsView,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ArchiveRestore, MapPin, Pencil, Trash2 } from 'lucide-react';
+import { ArchiveRestore, Building2, MapPin, Pencil, PoundSterling, Trash2, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { useAuth } from '@/contexts/auth-context';
@@ -284,6 +297,7 @@ export default function SitesPage() {
   const { data: sites = [], isLoading, refetch, isRefetching } = useSites(listView);
   const { data: archivedSites = [] } = useSites('archived');
   const [deleteTarget, setDeleteTarget] = useState<DeleteRecordTarget | null>(null);
+  const [resultsView, setResultsView] = useState<ResultsView>('list');
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
   const { data: legMains = [] } = useMainContractors();
   const { data: legSubs = [] } = useSubContractors();
@@ -495,21 +509,86 @@ export default function SitesPage() {
     setPage((p) => Math.min(p, pageCount));
   }, [pageCount]);
 
+  /** What one site can have done to it, defined once for both views. */
+  const siteActions = (site: Site) => [
+    {
+      label: 'Edit site',
+      icon: Pencil,
+      onSelect: () => openEdit(site),
+      disabled: !canEditSites || site.deleted_at != null,
+    },
+    {
+      label: 'Restore site',
+      icon: ArchiveRestore,
+      onSelect: () => void restoreSite.mutateAsync(site.id),
+      disabled: !canDeleteSites || site.deleted_at == null,
+    },
+    {
+      label: site.deleted_at != null ? 'Delete permanently' : 'Archive or delete',
+      icon: Trash2,
+      onSelect: () => handleDelete(site),
+      destructive: true,
+      disabled: !canDeleteSites,
+    },
+  ];
+
+  const withClient = sites.filter((s) => s.client_id != null).length;
+  const withRate = sites.filter((s) => s.default_hourly_rate != null).length;
+
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    {
+      key: 'total',
+      label: listView === 'archived' ? 'Archived sites' : 'Total sites',
+      value: sites.length,
+      icon: MapPin,
+      tone: 'neutral',
+    },
+    {
+      key: 'client',
+      label: 'Linked to a client',
+      value: withClient,
+      icon: Building2,
+      tone: 'positive',
+      caption: sites.length ? `${sites.length - withClient} unlinked` : undefined,
+    },
+    {
+      key: 'rate',
+      label: 'With a billing rate',
+      value: withRate,
+      icon: PoundSterling,
+      tone: 'info',
+      caption: sites.length ? `${sites.length - withRate} without` : undefined,
+    },
+    {
+      key: 'adhoc',
+      label: 'Ad-hoc sites',
+      value: sites.filter((s) => s.site_type === 2).length,
+      icon: Users,
+      tone: 'warning',
+    },
+    {
+      key: 'archived',
+      label: 'Archived',
+      value: archivedSites.length,
+      icon: Trash2,
+      tone: 'muted',
+      action: archivedSites.length ? { label: 'View', onClick: () => setListView('archived') } : undefined,
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
       <div>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><MapPin className="size-7" /> Sites</h1>
-              <p className="text-muted-foreground mt-1">
-                {sites.length} {listView === 'archived' ? 'archived site' : 'site'}
-                {sites.length !== 1 ? 's' : ''}
-                {listView === 'archived' ? '' : ' configured'}
-              </p>
-            </div>
-            <div className="flex gap-2">
+          <DashboardHeader
+            title="Sites"
+            hint="A site belongs to one client and is covered by one contractor. Archiving a site hides it everywhere while its shifts, invoices and patrol history stay readable."
+            description="The places your staff work. Manage site details, rates, contractors and portal access."
+            actions={
+              <>
+
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>
@@ -526,7 +605,12 @@ export default function SitesPage() {
                   <SiteForm form={addForm} clients={clients} mains={mains} subs={subs} onSubmit={handleCreate} isPending={createSite.isPending} submitLabel="Create Site" allowLogin />
                 </DialogContent>
               </Dialog>
-            </div>
+              </>
+            }
+          />
+
+          <div className="mb-6 mt-6">
+            <StatCards cards={statCards} />
           </div>
 
           <div className="mb-4 flex flex-wrap gap-2 border-b pb-3">
@@ -551,12 +635,15 @@ export default function SitesPage() {
           </div>
 
           <div className="mb-4">
-            <Input
-              placeholder="Search by site name, client or address..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
-            />
+            <FilterBar onClear={() => setSearch('')}>
+              <FilterField label="Search" className="min-w-[260px] flex-1">
+                <Input
+                  placeholder="Site name, client or address…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FilterField>
+            </FilterBar>
           </div>
 
           {(mains.length === 0 && subs.length === 0) && (
@@ -566,22 +653,58 @@ export default function SitesPage() {
             </div>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{listView === 'archived' ? 'Archived Sites' : 'All Sites'}</CardTitle>
+          <ResultsCard
+            title={listView === 'archived' ? 'Archived sites' : 'Sites'}
+            count={total}
+            view={resultsView}
+            onViewChange={setResultsView}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {listView === 'archived' ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="mb-3 text-sm text-muted-foreground">
                   Hidden from every list and picker. Their shifts, invoices and patrol history are
                   untouched — restore a site to bring it back into use.
                 </p>
               ) : null}
-            </CardHeader>
-            <CardContent>
               {isLoading ? (
                 <InlineTableSkeleton />
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {search ? 'No sites match your search.' : 'No sites yet. Click "Add Site" to get started.'}
+                </div>
+              ) : resultsView === 'cards' ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {pageRows.map((site) => (
+                    <div key={site.id} className="rounded-lg border p-4">
+                      <div className="flex items-start gap-3">
+                        <RecordAvatar name={site.name} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{site.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {site.client_id ? clientMap.get(site.client_id) ?? 'Unknown client' : 'No client'}
+                          </p>
+                        </div>
+                        <RowActionsMenu actions={siteActions(site)} label={`${site.name} actions`} />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Pill tone={site.site_type === 2 ? 'warning' : 'neutral'}>
+                          {site.site_type === 2 ? 'Ad-hoc' : 'Regular'}
+                        </Pill>
+                        {site.deleted_at ? <Pill tone="muted">Archived</Pill> : null}
+                        {site.default_hourly_rate != null ? (
+                          <Pill tone="positive">£{Number(site.default_hourly_rate).toFixed(2)}/hr</Pill>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 truncate text-xs text-muted-foreground">
+                        {[site.address, site.postcode].filter(Boolean).join(', ') || 'No address'}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -639,42 +762,28 @@ export default function SitesPage() {
                           <TableCell>
                             <div className="flex items-center gap-1">
                               {canEditSites && site.deleted_at == null ? (
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(site)} title="Edit site">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                  onClick={() => openEdit(site)}
+                                  title="Edit site"
+                                >
                                   <Pencil className="size-4" />
                                 </Button>
                               ) : null}
-                              {canDeleteSites && site.deleted_at != null ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => void restoreSite.mutateAsync(site.id)}
-                                  disabled={restoreSite.isPending}
-                                  title="Restore site"
-                                >
-                                  <ArchiveRestore className="size-4" />
-                                </Button>
-                              ) : null}
-                              {canDeleteSites ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(site)}
-                                  disabled={deleteSite.isPending}
-                                  title={site.deleted_at != null ? 'Delete permanently' : 'Archive or delete site'}
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
-                              ) : null}
-                              {!canEditSites && !canDeleteSites ? (
-                                <span className="text-muted-foreground text-xs">—</span>
-                              ) : null}
+                              <RowActionsMenu actions={siteActions(site)} label={`${site.name} actions`} />
                             </div>
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="sites" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -683,15 +792,42 @@ export default function SitesPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <div className="mt-6">
+            <QuickLinks
+              links={[
+                {
+                  key: 'clients',
+                  title: 'Clients',
+                  description: 'Who each site is billed to, and their contract dates.',
+                  icon: Building2,
+                  tone: 'info',
+                  action: { label: 'Manage clients', href: '/clients' },
+                },
+                {
+                  key: 'rota',
+                  title: 'Rotas & shifts',
+                  description: 'Schedule cover for these sites and publish the rota.',
+                  icon: Users,
+                  tone: 'neutral',
+                  action: { label: 'Open rotas', href: '/rota' },
+                },
+                {
+                  key: 'rates',
+                  title: 'Invoices',
+                  description: 'Bill a client for every site it owns in one document.',
+                  icon: PoundSterling,
+                  tone: 'positive',
+                  action: { label: 'View invoices', href: '/invoices' },
+                },
+              ]}
+            />
+          </div>
         </div>
 
         {/* Edit Dialog */}

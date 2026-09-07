@@ -4,8 +4,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleGuard } from '@/components/module-guard';
-import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ModulePage } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +25,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import type { Guard, Site, Task, TaskCounts } from '@/lib/types';
-import { ListChecks, Plus, Trash2, Pencil } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, ListChecks, Plus, Trash2, Pencil, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -34,13 +44,6 @@ const STATUSES = [
   { key: 'done', label: 'Done' },
   { key: 'cancelled', label: 'Cancelled' },
 ];
-
-const PRIORITY_STYLE: Record<string, string> = {
-  low: 'bg-muted text-muted-foreground',
-  normal: 'bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-100',
-  high: 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-100',
-  urgent: 'bg-destructive/15 text-destructive',
-};
 
 const EMPTY = { title: '', description: '', guard_id: '', site_id: '', due_date: '', priority: 'normal' };
 
@@ -157,12 +160,41 @@ export default function TasksPage() {
     }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
-  const tiles = counts
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = counts
     ? [
-        { label: 'To do', value: counts.todo },
-        { label: 'In progress', value: counts.in_progress },
-        { label: 'Done', value: counts.done },
-        { label: 'Overdue', value: counts.overdue, alert: counts.overdue > 0 },
+        {
+          key: 'todo',
+          label: 'To do',
+          value: counts.todo,
+          icon: ListChecks,
+          tone: 'neutral',
+          action: counts.todo ? { label: 'View', onClick: () => setStatusFilter('todo') } : undefined,
+        },
+        {
+          key: 'in_progress',
+          label: 'In progress',
+          value: counts.in_progress,
+          icon: Clock,
+          tone: 'info',
+          action: counts.in_progress ? { label: 'View', onClick: () => setStatusFilter('in_progress') } : undefined,
+        },
+        {
+          key: 'done',
+          label: 'Done',
+          value: counts.done,
+          icon: CheckCircle2,
+          tone: 'positive',
+          action: counts.done ? { label: 'View', onClick: () => setStatusFilter('done') } : undefined,
+        },
+        {
+          key: 'overdue',
+          label: 'Overdue',
+          value: counts.overdue,
+          icon: AlertTriangle,
+          tone: counts.overdue > 0 ? 'danger' : 'muted',
+          caption: 'past their due date',
+        },
       ]
     : [];
 
@@ -171,9 +203,10 @@ export default function TasksPage() {
       <AppShell>
         <ModuleGuard moduleKey="tasks">
           <ModulePage>
-            <ModuleHeader
-              title={<span className="flex items-center gap-2"><ListChecks className="size-7" /> Tasks</span>}
-              description="Jobs assigned to your team. Everyone sees their own list; managers see everyone's."
+            <DashboardHeader
+              title="Tasks"
+              hint="Everyone sees their own list; managers see everyone's. Overdue counts anything past its due date that is not done."
+              description="Jobs assigned to your team, with due dates and status."
               actions={
                 canCreate ? (
                   <Button onClick={openNew}>
@@ -184,26 +217,15 @@ export default function TasksPage() {
               }
             />
 
-            {counts ? (
-              <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-                {tiles.map((t) => (
-                  <Card key={t.label} className={cn(t.alert && 'border-destructive/40 bg-destructive/5')}>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">{t.label}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <span className={cn('text-2xl font-bold tabular-nums', t.alert && 'text-destructive')}>
-                        {t.value}
-                      </span>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : null}
+            <StatCards cards={statCards} />
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1 min-w-44">
-                <Label>Status</Label>
+            <FilterBar
+              onClear={() => {
+                setStatusFilter('all');
+                setGuardFilter('all');
+              }}
+            >
+              <FilterField label="Status">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -211,10 +233,9 @@ export default function TasksPage() {
                     {STATUSES.map((s) => <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
+              </FilterField>
               {guards.length > 0 ? (
-                <div className="space-y-1 min-w-52">
-                  <Label>Assigned to</Label>
+                <FilterField label="Assigned to" className="min-w-[200px]">
                   <Select value={guardFilter} onValueChange={setGuardFilter}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -222,17 +243,12 @@ export default function TasksPage() {
                       {guards.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                </div>
+                </FilterField>
               ) : null}
-            </div>
+            </FilterBar>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">
-                  {loading ? 'Loading…' : `${rows.length} task${rows.length === 1 ? '' : 's'}`}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <ResultsCard title="Tasks" count={loading ? undefined : rows.length}>
+              <div className="p-4">
                 <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
@@ -283,12 +299,23 @@ export default function TasksPage() {
                             ) : '—'}
                           </TableCell>
                           <TableCell>
-                            <span className={cn('inline-flex rounded-full px-2 py-0.5 text-xs font-medium', PRIORITY_STYLE[t.priority] ?? '')}>
+                            <Pill
+                              tone={
+                                t.priority === 'high' ? 'danger' : t.priority === 'medium' ? 'warning' : 'muted'
+                              }
+                            >
                               {PRIORITIES.find((p) => p.key === t.priority)?.label ?? t.priority}
-                            </span>
+                            </Pill>
                           </TableCell>
                           <TableCell className="text-xs">
-                            {STATUSES.find((s) => s.key === t.status)?.label ?? t.status}
+                            <Pill
+                              dot
+                              tone={
+                                t.status === 'done' ? 'positive' : t.status === 'in_progress' ? 'info' : 'muted'
+                              }
+                            >
+                              {STATUSES.find((s) => s.key === t.status)?.label ?? t.status}
+                            </Pill>
                             {t.status === 'done' && t.completed_by_name ? (
                               <div className="text-muted-foreground">by {t.completed_by_name}</div>
                             ) : null}
@@ -318,8 +345,42 @@ export default function TasksPage() {
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
+                {rows.length > 0 ? (
+                  <div className="mt-3 border-t pt-3">
+                    <ShowingCount rangeStart={1} rangeEnd={rows.length} total={rows.length} noun="tasks" />
+                  </div>
+                ) : null}
+              </div>
+            </ResultsCard>
+
+            <QuickLinks
+              links={[
+                {
+                  key: 'staff',
+                  title: 'Employee hub',
+                  description: 'Who tasks can be assigned to, and their current shifts.',
+                  icon: Users,
+                  tone: 'neutral',
+                  action: { label: 'Open employees', href: '/guards' },
+                },
+                {
+                  key: 'rota',
+                  title: 'Rotas & shifts',
+                  description: 'Check someone is on shift before assigning them work.',
+                  icon: Clock,
+                  tone: 'info',
+                  action: { label: 'Open rotas', href: '/rota' },
+                },
+                {
+                  key: 'incidents',
+                  title: 'Incidents',
+                  description: 'Tasks raised off the back of something that went wrong.',
+                  icon: AlertTriangle,
+                  tone: 'warning',
+                  action: { label: 'View incidents', href: '/incidents' },
+                },
+              ]}
+            />
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogContent className="sm:max-w-lg">

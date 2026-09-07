@@ -4,7 +4,6 @@ import { InlineKpiTableSkeleton } from '@/components/skeletons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +13,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/lib/api';
 import type { Payment, Invoice } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { CreditCard, Plus, Trash2, Pencil } from 'lucide-react';
+import { BarChart3, Building2, CreditCard, FileText, Plus, Trash2, Pencil } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -220,17 +230,48 @@ export default function PaymentsPage() {
     return map;
   }, [payments]);
 
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const topMethods = Object.entries(byMethod)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3);
+  const statCards: StatCardSpec[] = [
+    {
+      key: 'total',
+      label: 'Total received',
+      value: `£${totalPaid.toFixed(2)}`,
+      icon: CreditCard,
+      tone: 'positive',
+      caption: `${payments.length} payment${payments.length === 1 ? '' : 's'}`,
+    },
+    {
+      key: 'count',
+      label: 'Payments recorded',
+      value: payments.length,
+      icon: FileText,
+      tone: 'neutral',
+    },
+    ...topMethods.map(([method, amount]) => ({
+      key: `m-${method}`,
+      label: METHOD_LABELS[method] ?? method,
+      value: `£${amount.toFixed(2)}`,
+      icon: Building2,
+      tone: 'info' as const,
+      action: { label: 'View', onClick: () => setMethodFilter(method) },
+    })),
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
       <div>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><CreditCard className="size-7" /> Payments</h1>
-              <p className="text-muted-foreground mt-1">{payments.length} payment{payments.length !== 1 ? 's' : ''} recorded</p>
-            </div>
-            <div className="flex gap-2">
+          <DashboardHeader
+            title="Payments"
+            hint="A payment is recorded against an invoice, so an invoice moves to Partial or Paid as payments land."
+            description="Record and reconcile the money received against your invoices."
+            actions={
+              <>
+
               <Button variant="outline" onClick={loadPayments} disabled={loading}>
                 {loading ? 'Loading...' : 'Refresh'}
               </Button>
@@ -308,60 +349,56 @@ export default function PaymentsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
-            </div>
+              </>
+            }
+          />
+
+          <div className="mb-6 mt-6">
+            <StatCards cards={statCards} />
           </div>
 
-          {/* Summary */}
-          {payments.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Total Received</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <span className="text-2xl font-bold text-green-600">£{totalPaid.toFixed(2)}</span>
-                </CardContent>
-              </Card>
-              {Object.entries(byMethod).map(([method, total]) => (
-                <Card key={method}>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">{METHOD_LABELS[method] ?? method}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <span className="text-2xl font-bold">£{total.toFixed(2)}</span>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          <div className="mb-4 flex flex-col sm:flex-row gap-3 flex-wrap">
-            <Input
-              placeholder="Search by method, date or invoice ID..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
-            />
-            <Select value={methodFilter} onValueChange={setMethodFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All methods</SelectItem>
-                {PAYMENT_METHODS.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {METHOD_LABELS[m] ?? m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="mb-4">
+            <FilterBar
+              onClear={() => {
+                setSearch('');
+                setMethodFilter('all');
+              }}
+            >
+              <FilterField label="Search" className="min-w-[240px] flex-1">
+                <Input
+                  placeholder="Method, date or invoice ID…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FilterField>
+              <FilterField label="Payment method">
+                <Select value={methodFilter} onValueChange={setMethodFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All methods</SelectItem>
+                    {PAYMENT_METHODS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {METHOD_LABELS[m] ?? m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            </FilterBar>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Records</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <ResultsCard
+            title="Payment records"
+            count={total}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {loading ? (
                 <InlineKpiTableSkeleton />
               ) : total === 0 ? (
@@ -404,9 +441,7 @@ export default function PaymentsPage() {
                               £{p.amount.toFixed(2)}
                             </TableCell>
                             <TableCell>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-secondary text-secondary-foreground">
-                                {METHOD_LABELS[p.method] ?? p.method}
-                              </span>
+                              <Pill tone="info">{METHOD_LABELS[p.method] ?? p.method}</Pill>
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '—'}
@@ -436,6 +471,11 @@ export default function PaymentsPage() {
                       })}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="payments" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -444,15 +484,42 @@ export default function PaymentsPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <div className="mt-6">
+            <QuickLinks
+              links={[
+                {
+                  key: 'invoices',
+                  title: 'Invoices',
+                  description: 'What is owed, what is overdue and what is still draft.',
+                  icon: FileText,
+                  tone: 'neutral',
+                  action: { label: 'View invoices', href: '/invoices' },
+                },
+                {
+                  key: 'clients',
+                  title: 'Clients',
+                  description: 'Contract dates and the sites each client is billed for.',
+                  icon: Building2,
+                  tone: 'info',
+                  action: { label: 'Manage clients', href: '/clients' },
+                },
+                {
+                  key: 'reports',
+                  title: 'Reports',
+                  description: 'Revenue and outstanding balance over any period.',
+                  icon: BarChart3,
+                  tone: 'positive',
+                  action: { label: 'View reports', href: '/reports' },
+                },
+              ]}
+            />
+          </div>
         </div>
       </div>
 

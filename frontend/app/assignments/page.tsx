@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -19,8 +18,19 @@ import { useSites } from '@/hooks/use-sites';
 import { assignmentSchema, type AssignmentFormData } from '@/lib/validation';
 import type { Assignment } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
+import { Calendar, ClipboardList, Clock, Pencil, Trash2, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { TimeHmField } from '@/components/ui/time-hm-field';
 import { useAuth } from '@/contexts/auth-context';
@@ -281,17 +291,35 @@ export default function AssignmentsPage() {
     setPage((p) => Math.min(p, pageCount));
   }, [pageCount]);
 
+  const byType = (t: string) => assignments.filter((a) => a.shift_type === t).length;
+
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    { key: 'total', label: 'Assignments', value: assignments.length, icon: ClipboardList, tone: 'neutral' },
+    { key: 'day', label: 'Day shifts', value: byType('day'), icon: Clock, tone: 'positive' },
+    { key: 'night', label: 'Night shifts', value: byType('night'), icon: Clock, tone: 'info' },
+    { key: 'weekend', label: 'Weekend shifts', value: byType('weekend'), icon: Calendar, tone: 'warning' },
+    {
+      key: 'sites',
+      label: 'Sites covered',
+      value: new Set(assignments.map((a) => a.site_id)).size,
+      icon: Users,
+      tone: 'muted',
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
       <div>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2"><ClipboardList className="size-7" /> Assignments</h1>
-              <p className="text-muted-foreground mt-1">{assignments.length} assignment{assignments.length !== 1 ? 's' : ''} scheduled</p>
-            </div>
-            <div className="flex gap-2">
+          <DashboardHeader
+            title="Assignments"
+            hint="An assignment is one shift for one person at one site. Both the staff member and the site need a contractor linked before one can be created."
+            description="Individual shift assignments. For planning a week at a time, use Rotas & shifts."
+            actions={
+              <>
+
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>
@@ -315,27 +343,42 @@ export default function AssignmentsPage() {
                   />
                 </DialogContent>
               </Dialog>
-            </div>
+              </>
+            }
+          />
+
+          <div className="mb-6 mt-6">
+            <StatCards cards={statCards} />
           </div>
 
-          <div className="mb-4 flex flex-col sm:flex-row gap-3 flex-wrap">
-            <Input
-              placeholder="Search by guard name, site or date..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="max-w-md"
-            />
-            <Select value={shiftFilter} onValueChange={setShiftFilter}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Shift type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All shift types</SelectItem>
-                <SelectItem value="day">Day</SelectItem>
-                <SelectItem value="night">Night</SelectItem>
-                <SelectItem value="weekend">Weekend</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="mb-4">
+            <FilterBar
+              onClear={() => {
+                setSearch('');
+                setShiftFilter('all');
+              }}
+            >
+              <FilterField label="Search" className="min-w-[240px] flex-1">
+                <Input
+                  placeholder="Staff name, site or date…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </FilterField>
+              <FilterField label="Shift type">
+                <Select value={shiftFilter} onValueChange={setShiftFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Shift type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All shift types</SelectItem>
+                    <SelectItem value="day">Day</SelectItem>
+                    <SelectItem value="night">Night</SelectItem>
+                    <SelectItem value="weekend">Weekend</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            </FilterBar>
           </div>
 
           {!canAssign && (
@@ -344,11 +387,16 @@ export default function AssignmentsPage() {
             </div>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>All Assignments</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <ResultsCard
+            title="Assignments"
+            count={total}
+            pageSize={pageSize}
+            onPageSizeChange={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          >
+            <div className="p-4">
               {isLoading ? (
                 <InlineTableSkeleton />
               ) : total === 0 ? (
@@ -379,13 +427,17 @@ export default function AssignmentsPage() {
                           <TableCell className="whitespace-nowrap">{a.date}</TableCell>
                           <TableCell>
                             {a.shift_type ? (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                                a.shift_type === 'night' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                a.shift_type === 'weekend' || a.shift_type === 'holiday' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' :
-                                'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                              }`}>
+                              <Pill
+                                tone={
+                                  a.shift_type === 'night'
+                                    ? 'info'
+                                    : a.shift_type === 'weekend' || a.shift_type === 'holiday'
+                                      ? 'warning'
+                                      : 'neutral'
+                                }
+                              >
                                 {SHIFT_TYPE_LABELS[a.shift_type] ?? a.shift_type}
-                              </span>
+                              </Pill>
                             ) : '-'}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
@@ -417,6 +469,11 @@ export default function AssignmentsPage() {
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+              {total > 0 ? (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="assignments" />
                   <TablePaginationBar
                     safePage={safePage}
                     pageCount={pageCount}
@@ -425,15 +482,42 @@ export default function AssignmentsPage() {
                     rangeStart={rangeStart}
                     rangeEnd={rangeEnd}
                     onPageChange={setPage}
-                    onPageSizeChange={(n) => {
-                      setPageSize(n);
-                      setPage(1);
-                    }}
                   />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <div className="mt-6">
+            <QuickLinks
+              links={[
+                {
+                  key: 'rota',
+                  title: 'Rotas & shifts',
+                  description: 'Plan a whole week at once, then publish it as assignments.',
+                  icon: Calendar,
+                  tone: 'neutral',
+                  action: { label: 'Open rotas', href: '/rota' },
+                },
+                {
+                  key: 'attendance',
+                  title: 'Attendance',
+                  description: 'Who booked on and off against each assignment.',
+                  icon: Clock,
+                  tone: 'info',
+                  action: { label: 'View attendance', href: '/attendance' },
+                },
+                {
+                  key: 'staff',
+                  title: 'Employee hub',
+                  description: 'Staff records, contractors and compliance dates.',
+                  icon: Users,
+                  tone: 'positive',
+                  action: { label: 'Open employees', href: '/guards' },
+                },
+              ]}
+            />
+          </div>
         </div>
 
         {/* Edit Dialog */}

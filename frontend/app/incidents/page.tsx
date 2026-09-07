@@ -4,9 +4,19 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
-import { ModuleHeader, ModulePage } from '@/components/module-layout';
+import { ModulePage } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -105,18 +115,45 @@ export default function IncidentsPage() {
     }
   };
 
+  const countBy = (status: string) => items.filter((i) => i.status === status).length;
+
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    { key: 'total', label: 'Incidents', value: items.length, icon: AlertTriangle, tone: 'neutral' },
+    {
+      key: 'open',
+      label: 'Open',
+      value: countBy('open'),
+      icon: AlertTriangle,
+      tone: 'danger',
+      action: countBy('open') ? { label: 'View', onClick: () => setStatusFilter('open') } : undefined,
+    },
+    {
+      key: 'reviewing',
+      label: 'Reviewing',
+      value: countBy('reviewing'),
+      icon: BarChart3,
+      tone: 'warning',
+      action: countBy('reviewing') ? { label: 'View', onClick: () => setStatusFilter('reviewing') } : undefined,
+    },
+    {
+      key: 'closed',
+      label: 'Closed',
+      value: countBy('closed'),
+      icon: BarChart3,
+      tone: 'positive',
+      action: countBy('closed') ? { label: 'View', onClick: () => setStatusFilter('closed') } : undefined,
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
         <ModulePage>
-          <ModuleHeader
-            title={
-              <span className="flex items-center gap-2">
-                <AlertTriangle className="size-7 text-primary" />
-                Incidents
-              </span>
-            }
-            description="Raise, review, and close incident reports."
+          <DashboardHeader
+            title="Incidents"
+            hint="An incident stays open until someone reviews and closes it, so the open count is the queue rather than a total."
+            description="Raise, review and close incident reports from across your sites."
             actions={
               <div className="flex gap-2">
                 <Button variant="outline" asChild>
@@ -135,11 +172,12 @@ export default function IncidentsPage() {
             }
           />
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base">All incidents</CardTitle>
+          <StatCards cards={statCards} />
+
+          <FilterBar onClear={() => setStatusFilter('all')}>
+            <FilterField label="Status">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -149,8 +187,11 @@ export default function IncidentsPage() {
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
-            </CardHeader>
-            <CardContent>
+            </FilterField>
+          </FilterBar>
+
+          <ResultsCard title="Incidents" count={items.length}>
+            <div className="p-4">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -178,7 +219,16 @@ export default function IncidentsPage() {
                         {[inc.police_called && 'Police', inc.ambulance_called && 'Ambulance', inc.fire_brigade_called && 'Fire']
                           .filter(Boolean).join(', ') || <span className="text-muted-foreground">—</span>}
                       </TableCell>
-                      <TableCell className="capitalize text-xs">{inc.status}</TableCell>
+                      <TableCell>
+                        <Pill
+                          dot
+                          tone={
+                            inc.status === 'closed' ? 'positive' : inc.status === 'reviewing' ? 'warning' : 'danger'
+                          }
+                        >
+                          {inc.status.charAt(0).toUpperCase() + inc.status.slice(1)}
+                        </Pill>
+                      </TableCell>
                       <TableCell>
                         <Button
                           size="sm"
@@ -205,8 +255,42 @@ export default function IncidentsPage() {
                   ) : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+              {items.length > 0 ? (
+                <div className="mt-3 border-t pt-3">
+                  <ShowingCount rangeStart={1} rangeEnd={items.length} total={items.length} noun="incidents" />
+                </div>
+              ) : null}
+            </div>
+          </ResultsCard>
+
+          <QuickLinks
+            links={[
+              {
+                key: 'accidents',
+                title: 'Accident reports',
+                description: 'RIDDOR-style records for injuries and near misses.',
+                icon: AlertTriangle,
+                tone: 'warning',
+                action: { label: 'View accident reports', href: '/accident-reports' },
+              },
+              {
+                key: 'occurrence',
+                title: 'Occurrence sheets',
+                description: 'The shift-by-shift log each site keeps.',
+                icon: BarChart3,
+                tone: 'neutral',
+                action: { label: 'View occurrence sheets', href: '/occurrence-sheets' },
+              },
+              {
+                key: 'summary',
+                title: 'Incident summary',
+                description: 'Trends by site, category and outcome.',
+                icon: BarChart3,
+                tone: 'info',
+                action: { label: 'Open summary', href: '/incidents/reports' },
+              },
+            ]}
+          />
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent>

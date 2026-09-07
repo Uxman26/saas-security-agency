@@ -4,8 +4,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleGuard } from '@/components/module-guard';
-import { ModuleHeader, ModulePage } from '@/components/module-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ModulePage } from '@/components/module-layout';
+import {
+  DashboardHeader,
+  FilterBar,
+  FilterField,
+  Pill,
+  QuickLinks,
+  ResultsCard,
+  ShowingCount,
+  StatCards,
+  type StatCardSpec,
+} from '@/components/module-dashboard';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -182,14 +192,46 @@ export default function AccidentReportsPage() {
     }
   };
 
+  const byStatus = (k: string) => rows.filter((r) => r.status === k).length;
+
+  /** The cards along the top, in the shape every module dashboard uses. */
+  const statCards: StatCardSpec[] = [
+    { key: 'total', label: 'Reports', value: rows.length, icon: ClipboardCheck, tone: 'neutral' },
+    {
+      key: 'draft',
+      label: 'Draft',
+      value: byStatus('draft'),
+      icon: ClipboardCheck,
+      tone: 'muted',
+      action: byStatus('draft') ? { label: 'View', onClick: () => setStatusFilter('draft') } : undefined,
+    },
+    {
+      key: 'submitted',
+      label: 'Submitted',
+      value: byStatus('submitted'),
+      icon: Search,
+      tone: 'warning',
+      action: byStatus('submitted') ? { label: 'View', onClick: () => setStatusFilter('submitted') } : undefined,
+    },
+    {
+      key: 'services',
+      label: 'Services called',
+      value: rows.filter((r) => r.police_informed || r.ambulance_informed || r.fire_informed).length,
+      icon: Printer,
+      tone: 'danger',
+      caption: 'police, ambulance or fire',
+    },
+  ];
+
   return (
     <ProtectedRoute>
       <AppShell>
         <ModuleGuard moduleKey="accident_reports">
           <ModulePage>
-            <ModuleHeader
-              title={<span className="flex items-center gap-2"><ClipboardCheck className="size-7" /> Accident reports</span>}
-              description="The accident report log (X-FORM-077). Complete it here, or print a blank form for sites working on paper."
+            <DashboardHeader
+              title="Accident reports"
+              hint="X-FORM-077. Complete it here, or print a blank for sites working on paper and key it in afterwards."
+              description="The accident report log — injuries, near misses and the services called."
               actions={
                 <div className="flex flex-wrap gap-2">
                   {canBlank ? (
@@ -208,17 +250,24 @@ export default function AccidentReportsPage() {
               }
             />
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1">
-                <Label>From</Label>
-                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-auto" />
-              </div>
-              <div className="space-y-1">
-                <Label>To</Label>
-                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-auto" />
-              </div>
-              <div className="space-y-1 min-w-44">
-                <Label>Status</Label>
+            <StatCards cards={statCards} />
+
+            <FilterBar
+              onSearch={load}
+              searching={loading}
+              onClear={() => {
+                setFrom('');
+                setTo('');
+                setStatusFilter('all');
+              }}
+            >
+              <FilterField label="From">
+                <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </FilterField>
+              <FilterField label="To">
+                <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </FilterField>
+              <FilterField label="Status">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -228,20 +277,11 @@ export default function AccidentReportsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <Button variant="secondary" onClick={load}>
-                <Search className="size-4 mr-1.5" />
-                Search
-              </Button>
-            </div>
+              </FilterField>
+            </FilterBar>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">
-                  {loading ? 'Loading…' : `${rows.length} report${rows.length === 1 ? '' : 's'}`}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <ResultsCard title="Accident reports" count={loading ? undefined : rows.length}>
+              <div className="p-4">
                 <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
@@ -281,9 +321,9 @@ export default function AccidentReportsPage() {
                               {called.length ? called.join(', ') : <span className="text-muted-foreground">None</span>}
                             </TableCell>
                             <TableCell>
-                              <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+                              <Pill dot tone={r.status === 'submitted' ? 'warning' : r.status === 'closed' ? 'positive' : 'muted'}>
                                 {STATUS_LABELS[r.status] ?? r.status}
-                              </span>
+                              </Pill>
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-end gap-1">
@@ -316,8 +356,42 @@ export default function AccidentReportsPage() {
                     </TableBody>
                   </Table>
                 </div>
-              </CardContent>
-            </Card>
+                {rows.length > 0 ? (
+                  <div className="mt-3 border-t pt-3">
+                    <ShowingCount rangeStart={1} rangeEnd={rows.length} total={rows.length} noun="reports" />
+                  </div>
+                ) : null}
+              </div>
+            </ResultsCard>
+
+            <QuickLinks
+              links={[
+                {
+                  key: 'incidents',
+                  title: 'Incidents',
+                  description: 'The wider incident log this sits alongside.',
+                  icon: ClipboardCheck,
+                  tone: 'warning',
+                  action: { label: 'View incidents', href: '/incidents' },
+                },
+                {
+                  key: 'occurrence',
+                  title: 'Occurrence sheets',
+                  description: 'The shift-by-shift log kept at each site.',
+                  icon: Search,
+                  tone: 'neutral',
+                  action: { label: 'View occurrence sheets', href: '/occurrence-sheets' },
+                },
+                {
+                  key: 'sites',
+                  title: 'Sites',
+                  description: 'Where these reports were raised.',
+                  icon: Printer,
+                  tone: 'info',
+                  action: { label: 'View sites', href: '/sites' },
+                },
+              ]}
+            />
 
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">

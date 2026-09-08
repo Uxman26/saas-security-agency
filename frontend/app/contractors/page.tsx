@@ -301,14 +301,14 @@ export default function ContractorsDirectoryPage() {
               setStatusFilter('all');
             }}
           >
-            <FilterField label="Search" className="min-w-[240px] flex-1">
+            <FilterField label="Search" className="min-w-[240px] flex-[3]">
               <Input
                 placeholder="Name or email…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </FilterField>
-            <FilterField label="Contractor type">
+            <FilterField label="Contractor type" className="flex-1">
               <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
                 <SelectTrigger>
                   <SelectValue />
@@ -320,7 +320,7 @@ export default function ContractorsDirectoryPage() {
                 </SelectContent>
               </Select>
             </FilterField>
-            <FilterField label="Status">
+            <FilterField label="Status" className="flex-1">
               <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
                 <SelectTrigger>
                   <SelectValue />

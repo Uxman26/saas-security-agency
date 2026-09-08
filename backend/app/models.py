@@ -1052,7 +1052,9 @@ class Invoice(Base):
     __tablename__ = "invoices"
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
+    # Optional: a site need not belong to a client, and an invoice can be raised straight
+    # against such a site. The site name stands in for the customer wherever one is shown.
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
     due_date = Column(Date)

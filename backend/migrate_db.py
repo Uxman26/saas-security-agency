@@ -15,6 +15,14 @@ def column_exists(cursor, table, col):
     cursor.execute(f"PRAGMA table_info({table})")
     return any(r[1] == col for r in cursor.fetchall())
 
+def column_is_nullable(cursor, table, col):
+    cursor.execute(f"PRAGMA table_info({table})")
+    for r in cursor.fetchall():
+        if r[1] == col:
+            return not r[3]
+    return None
+
+
 def table_exists(cursor, table):
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
     return cursor.fetchone() is not None
@@ -1343,6 +1351,82 @@ def run():
         )"""
         )
         cur.execute("CREATE INDEX IF NOT EXISTS ix_occ_entries_sheet ON occurrence_entries(sheet_id)")
+
+    # A site need not belong to a client, and an invoice may now be raised straight
+    # against one. SQLite cannot drop a NOT NULL in place, so the table is rebuilt by the
+    # documented procedure: build the replacement, copy every row, swap the names, put the
+    # indexes back. Guarded on the flag so it runs once and is a no-op thereafter.
+    _invoice_cols = {
+        "id", "company_id", "client_id", "period_start", "period_end", "due_date", "notes",
+        "subtotal", "tax_rate", "tax_amount", "total", "status", "pdf_path", "created_at",
+        "updated_at",
+    }
+    if table_exists(cur, "invoices") and column_is_nullable(cur, "invoices", "client_id") is False:
+        cur.execute("PRAGMA table_info(invoices)")
+        _live_cols = {r[1] for r in cur.fetchall()}
+        if _live_cols != _invoice_cols:
+            # The replacement table is written out in full below, so a column this code
+            # does not know about would be dropped along with its data. Refuse instead.
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Skipping invoices.client_id migration: unexpected columns %s",
+                sorted(_live_cols ^ _invoice_cols),
+            )
+        else:
+            try:
+                conn.commit()
+                cur.execute("PRAGMA foreign_keys=OFF")
+                cur.execute("DROP TABLE IF EXISTS invoices_rebuild")
+                cur.execute(
+                    """CREATE TABLE invoices_rebuild (
+                    id INTEGER NOT NULL,
+                    company_id INTEGER NOT NULL,
+                    client_id INTEGER,
+                    period_start DATE NOT NULL,
+                    period_end DATE NOT NULL,
+                    due_date DATE,
+                    notes TEXT,
+                    subtotal FLOAT,
+                    tax_rate FLOAT,
+                    tax_amount FLOAT,
+                    total FLOAT,
+                    status VARCHAR,
+                    pdf_path VARCHAR,
+                    created_at DATETIME DEFAULT (CURRENT_TIMESTAMP),
+                    updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP),
+                    PRIMARY KEY (id),
+                    FOREIGN KEY(company_id) REFERENCES companies (id),
+                    FOREIGN KEY(client_id) REFERENCES clients (id)
+                )"""
+                )
+                cur.execute(
+                    """INSERT INTO invoices_rebuild (
+                        id, company_id, client_id, period_start, period_end, due_date, notes,
+                        subtotal, tax_rate, tax_amount, total, status, pdf_path, created_at, updated_at
+                    )
+                    SELECT id, company_id, client_id, period_start, period_end, due_date, notes,
+                        subtotal, tax_rate, tax_amount, total, status, pdf_path, created_at, updated_at
+                    FROM invoices"""
+                )
+                cur.execute("DROP TABLE invoices")
+                cur.execute("ALTER TABLE invoices_rebuild RENAME TO invoices")
+                cur.execute("CREATE INDEX IF NOT EXISTS ix_invoices_id ON invoices (id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS ix_invoices_company ON invoices(company_id)")
+                conn.commit()
+                cur.execute("PRAGMA foreign_key_check(invoices)")
+                bad = cur.fetchall()
+                if bad:
+                    import logging
+
+                    logging.getLogger(__name__).warning("invoices rebuild left FK issues: %s", bad[:5])
+            except Exception as e:
+                conn.rollback()
+                import logging
+
+                logging.getLogger(__name__).warning("invoices.client_id nullable migration failed: %s", e)
+            finally:
+                cur.execute("PRAGMA foreign_keys=ON")
 
     conn.commit()
     conn.close()

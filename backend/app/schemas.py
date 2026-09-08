@@ -1292,6 +1292,9 @@ class InvoiceUpdate(BaseModel):
 class InvoiceResponse(InvoiceBase):
     id: int
     company_id: int
+    # Overrides the required field on InvoiceBase: an invoice raised against a site that
+    # belongs to no client carries no customer record. Creation still demands one.
+    client_id: Optional[int] = None
     pdf_path: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

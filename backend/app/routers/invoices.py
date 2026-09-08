@@ -27,6 +27,31 @@ from app.services.company_profile_service import company_logo_url
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 
+def _site_stand_in_name(inv: Invoice, db: Session | None = None) -> Optional[str]:
+    """The site an invoice with no client is billed against, by name.
+
+    List responses load with noload(Invoice.lines), so fall back to a direct lookup —
+    otherwise the Customer column would be blank for every client-less invoice.
+    """
+    for ln in sorted(inv.lines, key=lambda x: x.id):
+        site = getattr(ln, "site", None)
+        if site and site.name:
+            return site.name
+    if db is not None:
+        from app.models import Site
+
+        row = (
+            db.query(Site.name)
+            .join(InvoiceLine, InvoiceLine.site_id == Site.id)
+            .filter(InvoiceLine.invoice_id == inv.id)
+            .order_by(InvoiceLine.id)
+            .first()
+        )
+        if row:
+            return row[0]
+    return None
+
+
 def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = None) -> InvoiceResponse:
     lines_out: list[InvoiceLineResponse] = []
     if include_lines:
@@ -110,7 +135,9 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         pdf_path=inv.pdf_path,
         created_at=inv.created_at,
         updated_at=inv.updated_at,
-        client_name=cl.name if cl else None,
+        # No client means the invoice was raised against a site directly; the site name
+        # is what stands in for the customer everywhere one is shown.
+        client_name=cl.name if cl else _site_stand_in_name(inv, db),
         company_name=co.name if co else None,
         company_email=company_email,
         company_phone=company_phone,

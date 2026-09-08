@@ -891,7 +891,8 @@ export interface PayrollPreview {
 export interface Invoice {
   id: number;
   company_id: number;
-  client_id: number;
+  /** Null when the invoice was raised against a site that belongs to no client. */
+  client_id: number | null;
   period_start: string;
   period_end: string;
   total: number;

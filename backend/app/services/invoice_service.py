@@ -340,7 +340,7 @@ def _rota_invoice_shift_lines(
     company_id: int,
     period_start: date,
     period_end: date,
-    client_id: int,
+    client_id: Optional[int],
     site_id: Optional[int] = None,
     scope=None,
 ) -> list[dict]:
@@ -349,8 +349,15 @@ def _rota_invoice_shift_lines(
     Every site the client owns is in play unless ``site_id`` narrows it to one, so
     invoicing a client bills all of its sites in a single document. ``scope`` carries
     any further contractor / staff / job-title narrowing.
+
+    ``client_id`` may be None when billing a single site that belongs to no client; the
+    site alone is then in play, so ``site_id`` is required in that case.
     """
-    sites_q = db.query(Site).filter(Site.company_id == company_id, Site.client_id == client_id)
+    sites_q = db.query(Site).filter(Site.company_id == company_id)
+    if client_id:
+        sites_q = sites_q.filter(Site.client_id == client_id)
+    elif not site_id:
+        return []
     if site_id:
         sites_q = sites_q.filter(Site.id == site_id)
     sites = sites_q.all()
@@ -433,27 +440,26 @@ def generate_from_rota(
     if period_start > period_end:
         raise HTTPException(status_code=400, detail="Period start cannot be after period end")
     company = get_company_by_user_id(db, user_id)
+    # A site with no client is billable on its own: the invoice simply carries no
+    # customer record, and the site name stands in for one wherever it is displayed.
+    site = None
     if site_id:
         site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
-        if not site.client_id:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f'Site "{site.name}" is not linked to a client. '
-                    "Open Sites, edit this site, and assign a client before generating an invoice."
-                ),
-            )
         client_id = site.client_id
-    if not client_id:
+    if not client_id and not site_id:
         raise HTTPException(status_code=400, detail="client_id or site_id required")
-    client = db.query(Client).filter(Client.id == client_id, Client.company_id == company.id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
-    sites = db.query(Site).filter(Site.company_id == company.id, Site.client_id == client_id).all()
-    if not sites:
-        raise HTTPException(status_code=400, detail="No sites linked to this client")
+    client = None
+    if client_id:
+        client = db.query(Client).filter(Client.id == client_id, Client.company_id == company.id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        sites = db.query(Site).filter(Site.company_id == company.id, Site.client_id == client_id).all()
+        if not sites:
+            raise HTTPException(status_code=400, detail="No sites linked to this client")
+    else:
+        sites = [site]
 
     scope = resolve_work_scope(
         db,
@@ -471,7 +477,7 @@ def generate_from_rota(
         raise HTTPException(
             status_code=400,
             detail=(
-                "No published rota shifts found for this client in the selected period"
+                f"No published rota shifts found for {'this site' if client is None else 'this client'} in the selected period"
                 + (" with the filters applied." if scope.active else ". Publish the rota first.")
             ),
         )

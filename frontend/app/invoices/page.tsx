@@ -91,20 +91,19 @@ export default function InvoicesPage() {
 
   const clientMap = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
 
-  /** Sites that can be used for invoice generation (must have a client). */
+  /** Sites that carry a client, so the invoice gets a real customer record. */
   const invoiceableSites = useMemo(
     () => sites.filter((s) => s.client_id != null && s.client_id > 0),
     [sites]
   );
-  const unlinkedSiteCount = sites.length - invoiceableSites.length;
 
   const clientOptions = useMemo(
     () => clients.map((c) => ({ value: String(c.id), label: c.name })),
     [clients]
   );
-  // Every site is listed so nothing looks missing; the ones with no client are
-  // flagged in the label and blocked at generate time, because an invoice needs a
-  // customer to bill and the API rejects them with the same reason.
+  // Every site can be invoiced, linked to a client or not. A site with no client is
+  // still labelled as such, because the invoice it raises carries no customer record —
+  // the site name stands in for one on the document and in the Customer column.
   const siteOptions = useMemo(
     () =>
       sites.map((s) => {
@@ -203,11 +202,19 @@ export default function InvoicesPage() {
     }
   };
 
+  /** What the Customer column shows. The API already substitutes the site name for a
+   *  client-less invoice; the map is only a fallback for older cached rows. */
+  const customerLabel = useCallback(
+    (inv: Invoice) =>
+      inv.client_name ?? (inv.client_id != null ? clientMap.get(inv.client_id) : undefined),
+    [clientMap]
+  );
+
   const getSearchText = useCallback(
     (inv: Invoice) =>
       [
         String(inv.id),
-        inv.client_name ?? clientMap.get(inv.client_id),
+        customerLabel(inv),
         inv.status,
         inv.period_start,
         inv.period_end,
@@ -216,7 +223,7 @@ export default function InvoicesPage() {
       ]
         .filter(Boolean)
         .join(' '),
-    [clientMap]
+    [customerLabel]
   );
 
   const getSortValue = useCallback(
@@ -225,7 +232,7 @@ export default function InvoicesPage() {
         case 'id':
           return inv.id;
         case 'client':
-          return inv.client_name ?? clientMap.get(inv.client_id) ?? '';
+          return customerLabel(inv) ?? '';
         case 'period':
           return inv.period_start;
         case 'due':
@@ -238,7 +245,7 @@ export default function InvoicesPage() {
           return '';
       }
     },
-    [clientMap]
+    [customerLabel]
   );
 
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
@@ -477,22 +484,13 @@ export default function InvoicesPage() {
                           disabled={sites.length === 0}
                         />
                         {selectedSiteUnlinked ? (
-                          <p className="text-xs text-destructive">
-                            This site is not linked to a client, so it cannot be invoiced yet.{' '}
-                            <Link href="/sites" className="underline underline-offset-2">
-                              Edit sites
-                            </Link>{' '}
-                            to assign a client first.
-                          </p>
-                        ) : unlinkedSiteCount > 0 ? (
                           <p className="text-xs text-muted-foreground">
-                            {unlinkedSiteCount} of {sites.length} sites{' '}
-                            {unlinkedSiteCount === 1 ? 'is' : 'are'} not linked to a client and cannot
-                            be invoiced.{' '}
+                            This site has no client, so the invoice will carry the site name as the
+                            customer.{' '}
                             <Link href="/sites" className="text-primary underline underline-offset-2">
                               Edit sites
                             </Link>{' '}
-                            to assign a client.
+                            to assign a client instead.
                           </p>
                         ) : null}
                       </div>
@@ -543,8 +541,7 @@ export default function InvoicesPage() {
                         !genEnd ||
                         genStart > genEnd ||
                         (genMode === 'client' && !genClientId) ||
-                        (genMode === 'site' && !genSiteId) ||
-                        selectedSiteUnlinked
+                        (genMode === 'site' && !genSiteId)
                       }
                     >
                       {genLoading ? 'Generating...' : 'Generate Invoice'}
@@ -661,7 +658,7 @@ export default function InvoicesPage() {
                             #{inv.id}
                           </Link>
                           <p className="truncate text-sm text-muted-foreground">
-                            {inv.client_name ?? clientMap.get(inv.client_id) ?? '—'}
+                            {customerLabel(inv) ?? '—'}
                           </p>
                         </div>
                         <Pill

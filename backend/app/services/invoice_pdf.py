@@ -27,7 +27,7 @@ def render_invoice_pdf(
     db: Session,
     inv: Invoice,
     company: Company,
-    client: Client,
+    client: Optional[Client],
     lines: List[InvoiceLine],
     admin: Optional[User] = None,
 ) -> bytes:
@@ -84,12 +84,26 @@ def render_invoice_pdf(
     story.append(Paragraph(f"<b>Invoice</b> #{inv.id}", styles["Heading2"]))
     story.append(Spacer(1, 12))
 
+    # An invoice raised against a site that belongs to no client has no customer record.
+    # The site's own name and contact details are what the bill is addressed to instead.
+    bill_site = None
+    if client is None:
+        for ln in lines:
+            if getattr(ln, "site", None):
+                bill_site = ln.site
+                break
+    bill_to = client.name if client else (bill_site.name if bill_site else "—")
+    bill_contact = (client.contact_person if client else (bill_site.contact_person if bill_site else None)) or "—"
+    bill_address = (client.address if client else (bill_site.address if bill_site else None)) or "—"
+    bill_email = (client.email if client else (bill_site.contact_email if bill_site else None)) or "—"
+    bill_phone = (client.phone if client else (bill_site.contact_phone if bill_site else None)) or "—"
+
     meta_data = [
-        ["Bill to", client.name],
-        ["Contact", client.contact_person or "—"],
-        ["Address", client.address or "—"],
-        ["Email", client.email or "—"],
-        ["Phone", client.phone or "—"],
+        ["Bill to", bill_to],
+        ["Contact", bill_contact],
+        ["Address", bill_address],
+        ["Email", bill_email],
+        ["Phone", bill_phone],
         ["Period", f"{inv.period_start} – {inv.period_end}"],
         ["Due date", str(inv.due_date) if inv.due_date else "—"],
         ["Status", (inv.status or "draft").title()],

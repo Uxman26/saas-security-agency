@@ -201,7 +201,10 @@ export function FilterField({
   className?: string;
 }) {
   return (
-    <div className={cn('min-w-[160px] space-y-1', className)}>
+    // The Select trigger is w-fit by default, so a field set to grow would widen while its
+    // control stayed at its intrinsic size, leaving a gap after every dropdown. Filter
+    // controls always fill their field.
+    <div className={cn('min-w-[160px] space-y-1 [&>button]:w-full', className)}>
       <label className="block text-xs font-medium text-muted-foreground">{label}</label>
       {children}
     </div>

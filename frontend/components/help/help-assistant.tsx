@@ -26,6 +26,7 @@ const APP_PREFIXES = [
   '/client-portal',
   '/requests',
   '/attendance',
+  '/absence',
   '/documents',
   '/contractors',
   '/sub-contractors',

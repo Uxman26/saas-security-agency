@@ -60,6 +60,20 @@ def _parse_mins(t: Optional[str]) -> int:
         return 0
 
 
+def _elapsed_mins(start: Optional[str], t: Optional[str], *, full_day_on_zero: bool = False) -> int:
+    """Minutes from the shift start to `t`, unwrapping across midnight.
+
+    Overnight shifts wrap the clock, so comparing raw HH:MM calls 17:30 "after" an
+    01:15 end and rejects a legitimate early finish. Measuring every time as an offset
+    from the shift start puts them back on one timeline. `full_day_on_zero` is for a
+    scheduled end equal to the start, which means a 24-hour shift, not a zero-length one.
+    """
+    d = (_parse_mins(t) - _parse_mins(start)) % (24 * 60)
+    if d == 0 and full_day_on_zero:
+        return 24 * 60
+    return d
+
+
 def _mins_to_time(m: int) -> str:
     m = max(0, int(m)) % (24 * 60)
     return f"{m // 60:02d}:{m % 60:02d}"
@@ -195,7 +209,7 @@ def record_overtime(
         raise HTTPException(status_code=400, detail="New end time is required")
     a = _assignment_for_company(db, company.id, assignment_id, user_id)
     scheduled = a.shift_end or ""
-    if _parse_mins(new_end) <= _parse_mins(scheduled):
+    if _elapsed_mins(a.shift_start, new_end) <= _elapsed_mins(a.shift_start, scheduled, full_day_on_zero=True):
         raise HTTPException(status_code=400, detail="New end time must be after scheduled end")
     log = ShiftOvertimeLog(
         company_id=company.id,
@@ -250,7 +264,10 @@ def record_early_finish(
         raise HTTPException(status_code=400, detail="Actual end time is required")
     a = _assignment_for_company(db, company.id, assignment_id, user_id)
     scheduled = a.shift_end or ""
-    if _parse_mins(actual_end) >= _parse_mins(scheduled):
+    actual_mins = _elapsed_mins(a.shift_start, actual_end)
+    if actual_mins == 0:
+        raise HTTPException(status_code=400, detail="Actual end time must be after the shift start")
+    if actual_mins >= _elapsed_mins(a.shift_start, scheduled, full_day_on_zero=True):
         raise HTTPException(status_code=400, detail="Actual end time must be before scheduled end")
     log = ShiftEarlyFinishLog(
         company_id=company.id,

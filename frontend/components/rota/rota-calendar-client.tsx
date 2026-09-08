@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, normalizeShiftType, shiftTypeOption } from '@/lib/rota-shifts-types';
@@ -43,6 +43,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Download,
   FileSpreadsheet,
   GripVertical,
@@ -854,6 +855,31 @@ export function RotaCalendarClient() {
 
   const todayKey = dateKey(new Date());
 
+  // A shift whose start time has passed with no attendance recorded is flagged in the
+  // grid, so a missed mark is visible without opening every card. Ticks each minute so a
+  // shift starting while the rota is open lights up on its own.
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowTs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const shiftStartTs = useCallback((dk: string, start: string) => {
+    const d = parseDateKey(dk);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() + timeMins(start || '00:00') * 60_000;
+  }, []);
+
+  /** Started (or should have), and nobody has marked it on time / late / absent / no show. */
+  const isAttendanceMissing = useCallback(
+    (dk: string, sh: { start?: string }, att: { status?: string } | undefined) => {
+      if (normalizeAttStatus(att?.status)) return false;
+      if (!sh.start) return false;
+      return shiftStartTs(dk, sh.start) <= nowTs;
+    },
+    [nowTs, shiftStartTs]
+  );
+
   // Keep "now" marker fresh while timeline is open
   useEffect(() => {
     if (state.rotaView !== 'timeline') {
@@ -1644,7 +1670,10 @@ export function RotaCalendarClient() {
       toast.warning('Remove early finish before adding overtime');
       return;
     }
-    if (timeMins(otEnd) <= timeMins(scheduled)) {
+    // Measured from the shift start so an overnight shift (20:00–08:00) compares on one
+    // timeline; raw HH:MM would read 09:00 as earlier than the 08:00 scheduled end.
+    const otStart = sh.scheduledStart || sh.start;
+    if (elapsedFromStart(otStart, otEnd) <= elapsedFromStart(otStart, scheduled, true)) {
       toast.warning('New end time must be after scheduled end');
       return;
     }
@@ -1672,7 +1701,13 @@ export function RotaCalendarClient() {
       toast.warning('Remove overtime before adding an early finish');
       return;
     }
-    if (timeMins(efEnd) >= timeMins(scheduled)) {
+    const efStart = sh.scheduledStart || sh.start;
+    const efMins = elapsedFromStart(efStart, efEnd);
+    if (efMins === 0) {
+      toast.warning(`Actual end time must be after the shift start (${efStart})`);
+      return;
+    }
+    if (efMins >= elapsedFromStart(efStart, scheduled, true)) {
       toast.warning(`Actual end time must be before scheduled end (${scheduled})`);
       return;
     }
@@ -2838,6 +2873,7 @@ export function RotaCalendarClient() {
                           {shiftsInTimeOrder(list).map(({ shift: sh, idx }) => {
                             const att = state.attendance[attKey(emp.id, dk, idx)];
                             const attStatus = att ? normalizeAttStatus(att.status) : null;
+                            const attMissing = isAttendanceMissing(dk, sh, att);
                             if (!shiftMatchesFilters(emp.id, dk, idx, sh)) return null;
                             const menuOpen = shiftMenu?.empId === emp.id && shiftMenu?.dk === dk && shiftMenu.idx === idx;
                             const conflicts = shiftConflicts.get(shiftConflictKey(emp.id, dk, idx)) || [];
@@ -2846,6 +2882,7 @@ export function RotaCalendarClient() {
                               sh.site,
                               (sh.notes || '').trim() || (sh.label || '').trim(),
                               attStatus ? attStatusLabel(attStatus) : '',
+                              attMissing ? 'Attendance not marked — this shift has already started' : '',
                               conflicts.length
                                 ? `${conflicts.length} shift conflict${conflicts.length === 1 ? '' : 's'}`
                                 : '',
@@ -2865,7 +2902,12 @@ export function RotaCalendarClient() {
                                   !mark && canEditRota && 'cursor-grab active:cursor-grabbing',
                                   !mark && !canEditRota && 'cursor-default',
                                   menuOpen && 'ring-2 ring-primary/60',
-                                  conflicts.length > 0 && 'border-amber-500 bg-amber-50 dark:bg-amber-950'
+                                  conflicts.length > 0 && 'border-amber-500 bg-amber-50 dark:bg-amber-950',
+                                  // Conflicts keep the amber treatment; an unmarked shift gets a
+                                  // dashed rose edge so the two are never read as the same problem.
+                                  conflicts.length === 0 &&
+                                    attMissing &&
+                                    'border-dashed border-rose-500 bg-rose-50 dark:bg-rose-950/40'
                                 )}
                                 onClick={
                                   mark || !canEditRota
@@ -2897,8 +2939,15 @@ export function RotaCalendarClient() {
                                 />
                                 {conflicts.length > 0 ? (
                                   <AlertTriangle className="absolute top-1 right-1 size-3 text-amber-600 dark:text-amber-400" />
+                                ) : attMissing ? (
+                                  <Clock className="absolute top-1 right-1 size-3 text-rose-600 dark:text-rose-400" />
                                 ) : null}
                                 <ShiftRotaSections shift={sh} attendance={att} compact />
+                                {conflicts.length === 0 && attMissing ? (
+                                  <div className="mt-0.5 text-[8px] font-semibold text-rose-700 dark:text-rose-300">
+                                    Attendance not marked
+                                  </div>
+                                ) : null}
                                 {conflicts.length > 0 ? (
                                   <div className="mt-0.5 flex items-center gap-0.5 text-[8px] font-semibold text-amber-700 dark:text-amber-300">
                                     <span>

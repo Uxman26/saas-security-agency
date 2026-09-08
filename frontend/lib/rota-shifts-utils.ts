@@ -113,6 +113,18 @@ export function minutesBetweenTimes(from: string, to: string): number {
   return Math.max(0, d);
 }
 
+/**
+ * Minutes from a shift's start to `t`, unwrapping across midnight.
+ *
+ * Overnight shifts wrap the clock, so comparing raw HH:MM calls 17:30 "after" an 01:15
+ * end. Measuring from the start puts both on one timeline. `fullDayOnZero` is for a
+ * scheduled end equal to the start, which means a 24-hour shift, not a zero-length one.
+ */
+export function elapsedFromStart(start: string, t: string, fullDayOnZero = false): number {
+  const d = minutesBetweenTimes(start, t);
+  return d === 0 && fullDayOnZero ? 24 * 60 : d;
+}
+
 /** e.g. 60 → "1 hour", 30 → "30 min" */
 export function formatDurationMins(mins: number): string {
   const m = Math.max(0, Math.round(mins));

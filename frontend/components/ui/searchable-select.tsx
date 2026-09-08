@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Popover } from 'radix-ui';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,8 @@ export function SearchableSelect({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const [modal, setModal] = useState(false);
 
   const selectedLabel = useMemo(() => {
     if (noneOption && value === noneOption.value) return noneOption.label;
@@ -68,12 +70,20 @@ export function SearchableSelect({
   return (
     <Popover.Root
       open={open}
+      // Radix Dialog locks the page with react-remove-scroll, which cancels wheel and
+      // touch scrolling on anything portalled outside the dialog — so the options list
+      // rendered fine but would not scroll. A modal popover brings its own scroll lock,
+      // which takes over while it is open and allows scrolling inside it. Only switched
+      // on inside a dialog: everywhere else modal would swallow the first outside click,
+      // dismissing the popover instead of landing on whatever was clicked.
+      modal={modal}
       onOpenChange={(next) => {
+        if (next) setModal(!!fieldRef.current?.closest('[data-slot="dialog-content"]'));
         setOpen(next);
         if (!next) setQ('');
       }}
     >
-      <div className={cn('relative', className)}>
+      <div ref={fieldRef} className={cn('relative', className)}>
         <Popover.Trigger asChild>
           <Button
             type="button"

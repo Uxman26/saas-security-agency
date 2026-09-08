@@ -433,6 +433,7 @@ def preview_pay(
     sites: dict[Optional[int], PayrollPreviewSite] = {}
     people: dict[int, PayrollPreviewEmployee] = {}
     missing_rate = 0
+    unmarked_shifts = 0
 
     for d in details:
         hours = round(float(d.hours or 0), 2)
@@ -441,6 +442,17 @@ def preview_pay(
         amount = round(hours * rate, 2) if payable else 0.0
         if payable and rate <= 0:
             missing_rate += 1
+        # A shift that has been and gone with nobody marking it is held back from pay in
+        # exactly the same way as a recorded absence, so it has to be called out before
+        # payroll is generated. Future shifts are not late yet; unpublished planner rows
+        # (synthetic negative ids) have no attendance to mark.
+        unmarked = (
+            not getattr(d, "attendance_marked", False)
+            and d.attendance_status != "scheduled"
+            and (d.id or 0) > 0
+        )
+        if unmarked:
+            unmarked_shifts += 1
 
         shifts.append(
             PayrollPreviewShift(
@@ -457,6 +469,7 @@ def preview_pay(
                 attendance_status=d.attendance_status,
                 late_minutes=d.late_minutes,
                 shift_rate=d.shift_rate,
+                attendance_marked=not unmarked,
                 payable=payable,
                 amount=amount,
             )
@@ -478,6 +491,9 @@ def preview_pay(
                 bucket.amount = round(bucket.amount + amount, 2)
             else:
                 bucket.unattended_hours = round(bucket.unattended_hours + hours, 2)
+            if unmarked:
+                bucket.unmarked_shifts += 1
+                bucket.unmarked_hours = round(bucket.unmarked_hours + hours, 2)
 
     by_site = sorted(sites.values(), key=lambda r: r.site_name.lower())
     # Biggest payment first: on the all-employees view that is the order you check.
@@ -498,6 +514,9 @@ def preview_pay(
         amount=round(sum(x.amount for x in shifts), 2),
         rota_amount=round(sum(x.hours * _number(x.shift_rate) for x in shifts), 2),
         shifts_missing_rate=missing_rate,
+        unmarked_shifts=unmarked_shifts,
+        unmarked_hours=round(sum(x.unmarked_hours for x in by_employee), 2),
+        unmarked_employee_count=sum(1 for x in by_employee if x.unmarked_shifts),
         employee_count=len(by_employee),
         by_employee=by_employee,
         by_site=by_site,

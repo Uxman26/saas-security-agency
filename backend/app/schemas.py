@@ -753,6 +753,10 @@ class RotaDetailResponse(BaseModel):
     shift_type: str = "day"
     hours: float = 0
     attendance_status: str
+    # Whether anyone recorded attendance for this shift. A past shift with no record
+    # reports attendance_status "absent" exactly like a marked absence, so this is the
+    # only way to spot a mark that was forgotten rather than made.
+    attendance_marked: bool = False
     late_minutes: Optional[int] = None
     # The rate stored on the shift itself. Optional so older callers are unaffected.
     shift_rate: Optional[float] = None
@@ -775,6 +779,10 @@ class PayrollPreviewShift(BaseModel):
     break_minutes: int = 0
     hours: float = 0
     attendance_status: str
+    # False only when this shift needs a mark and has not got one: it has already been
+    # and gone, is a published assignment, and nobody recorded attendance. A future shift
+    # is not overdue, so it reports True.
+    attendance_marked: bool = True
     late_minutes: Optional[int] = None
     shift_rate: Optional[float] = None
     payable: bool = False
@@ -788,6 +796,9 @@ class PayrollPreviewSite(BaseModel):
     rota_hours: float = 0
     attended_hours: float = 0
     unattended_hours: float = 0
+    # The subset of unattended work that is unpaid only because nobody marked it.
+    unmarked_shifts: int = 0
+    unmarked_hours: float = 0
     amount: float = 0
 
 
@@ -798,6 +809,8 @@ class PayrollPreviewEmployee(BaseModel):
     rota_hours: float = 0
     attended_hours: float = 0
     unattended_hours: float = 0
+    unmarked_shifts: int = 0
+    unmarked_hours: float = 0
     amount: float = 0
 
 
@@ -818,6 +831,12 @@ class PayrollPreviewResponse(BaseModel):
     amount: float = 0
     rota_amount: float = 0
     shifts_missing_rate: int = 0
+    # Shifts that have been and gone with no attendance recorded at all. These are held
+    # back from pay indistinguishably from real absences, so they are counted separately
+    # and surfaced before payroll is generated.
+    unmarked_shifts: int = 0
+    unmarked_hours: float = 0
+    unmarked_employee_count: int = 0
     employee_count: int = 0
     by_employee: List[PayrollPreviewEmployee] = []
     by_site: List[PayrollPreviewSite] = []

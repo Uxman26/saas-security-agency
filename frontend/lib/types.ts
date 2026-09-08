@@ -831,6 +831,9 @@ export interface PayrollPreviewShift {
   break_minutes: number;
   hours: number;
   attendance_status: string;
+  /** False when nobody recorded attendance — a past shift with no record reports
+   *  attendance_status "absent" exactly like a marked absence. */
+  attendance_marked: boolean;
   late_minutes: number | null;
   shift_rate: number | null;
   payable: boolean;
@@ -844,6 +847,9 @@ export interface PayrollPreviewSite {
   rota_hours: number;
   attended_hours: number;
   unattended_hours: number;
+  /** The subset of unattended work that is unpaid only because nobody marked it. */
+  unmarked_shifts: number;
+  unmarked_hours: number;
   amount: number;
 }
 
@@ -854,6 +860,8 @@ export interface PayrollPreviewEmployee {
   rota_hours: number;
   attended_hours: number;
   unattended_hours: number;
+  unmarked_shifts: number;
+  unmarked_hours: number;
   amount: number;
 }
 
@@ -870,6 +878,10 @@ export interface PayrollPreview {
   amount: number;
   rota_amount: number;
   shifts_missing_rate: number;
+  /** Shifts that have been and gone with no attendance recorded at all. */
+  unmarked_shifts: number;
+  unmarked_hours: number;
+  unmarked_employee_count: number;
   employee_count: number;
   by_employee: PayrollPreviewEmployee[];
   by_site: PayrollPreviewSite[];

@@ -213,6 +213,9 @@ def list_rota_details(
         st = normalize_shift_type(a.shift_type)
         status = _attendance_status(a, att, late_log, today)
         late_m = _late_minutes(a, att, late_log) if status == "late" else None
+        # A past shift nobody touched also reports "absent", so the status alone cannot
+        # tell a recorded absence from a forgotten mark. This says whether anyone marked it.
+        marked = bool(late_log) or bool(att and (att.booked_at or att.status))
         out.append(
             RotaDetailResponse(
                 id=a.id,
@@ -229,6 +232,7 @@ def list_rota_details(
                 shift_type=st,
                 hours=round(hrs, 2),
                 attendance_status=status,
+                attendance_marked=marked,
                 late_minutes=late_m,
                 shift_rate=a.shift_rate,
             )

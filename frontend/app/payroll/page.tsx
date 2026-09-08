@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import type { Payroll, Guard, PayrollPreview } from '@/lib/types';
 import { formatMoney } from '@/lib/rota-shifts-utils';
@@ -30,7 +32,7 @@ import {
   StatCards,
   type StatCardSpec,
 } from '@/components/module-dashboard';
-import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Search, Calculator, AlertTriangle, ArrowLeft, Banknote, Coins, Gift, Users } from 'lucide-react';
+import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Search, Calculator, AlertTriangle, ArrowLeft, Banknote, Clock, Coins, Gift, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -1015,6 +1017,37 @@ export default function PayrollPage() {
                     </div>
                   </div>
 
+                  {preview.unmarked_shifts > 0 && (
+                    <div className="rounded-md border border-rose-500/50 bg-rose-50/70 dark:bg-rose-950/25 p-3 text-sm text-rose-900 dark:text-rose-200">
+                      <p className="flex items-start gap-2">
+                        <Clock className="size-4 shrink-0 mt-0.5" />
+                        <span>
+                          <strong>
+                            {preview.unmarked_shifts} shift{preview.unmarked_shifts === 1 ? '' : 's'} across{' '}
+                            {preview.unmarked_employee_count} employee
+                            {preview.unmarked_employee_count === 1 ? '' : 's'} have no attendance marked
+                          </strong>{' '}
+                          ({preview.unmarked_hours.toFixed(2)} hrs). These have already been and gone, and are being
+                          treated as unworked — the same as a recorded absence. Mark them on the rota before generating,
+                          or this pay run will be short.
+                        </span>
+                      </p>
+                      {preview.guard_id === null && preview.by_employee.some((e) => e.unmarked_shifts > 0) ? (
+                        <p className="mt-2 pl-6 text-xs">
+                          {preview.by_employee
+                            .filter((e) => e.unmarked_shifts > 0)
+                            .map((e) => `${e.guard_name} (${e.unmarked_shifts})`)
+                            .join(' · ')}
+                        </p>
+                      ) : null}
+                      <p className="mt-2 pl-6">
+                        <Link href="/rota" className="underline underline-offset-2 font-medium">
+                          Open the rota to mark attendance
+                        </Link>
+                      </p>
+                    </div>
+                  )}
+
                   {preview.unattended_hours > 0 && (
                     <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
                       <AlertTriangle className="size-4 shrink-0 mt-0.5" />
@@ -1050,8 +1083,24 @@ export default function PayrollPage() {
                           </TableHeader>
                           <TableBody>
                             {preview.by_employee.map((e) => (
-                              <TableRow key={e.guard_id}>
-                                <TableCell className="font-medium">{e.guard_name}</TableCell>
+                              <TableRow
+                                key={e.guard_id}
+                                className={
+                                  e.unmarked_shifts > 0 ? 'bg-rose-50/70 dark:bg-rose-950/25' : undefined
+                                }
+                              >
+                                <TableCell className="font-medium">
+                                  {e.guard_name}
+                                  {e.unmarked_shifts > 0 ? (
+                                    <span
+                                      className="ml-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
+                                      title={`${e.unmarked_shifts} shift${e.unmarked_shifts === 1 ? '' : 's'} with no attendance marked (${e.unmarked_hours.toFixed(2)} hrs)`}
+                                    >
+                                      <Clock className="size-3" />
+                                      {e.unmarked_shifts} unmarked
+                                    </span>
+                                  ) : null}
+                                </TableCell>
                                 <TableCell className="text-right tabular-nums">{e.shifts}</TableCell>
                                 <TableCell className="text-right tabular-nums">{e.rota_hours.toFixed(2)}</TableCell>
                                 <TableCell className="text-right tabular-nums">
@@ -1130,15 +1179,31 @@ export default function PayrollPage() {
                         </TableHeader>
                         <TableBody>
                           {preview.shifts.map((sh) => (
-                            <TableRow key={sh.assignment_id} className={sh.payable ? undefined : 'opacity-60'}>
+                            <TableRow
+                              key={sh.assignment_id}
+                              className={cn(
+                                !sh.payable && 'opacity-60',
+                                !sh.attendance_marked && 'bg-rose-50/70 dark:bg-rose-950/25 opacity-100'
+                              )}
+                            >
                               <TableCell className="whitespace-nowrap">{sh.date}</TableCell>
                               <TableCell>{sh.site_name || '\u2014'}</TableCell>
                               <TableCell className="whitespace-nowrap tabular-nums">{sh.shift_start}&ndash;{sh.shift_end}</TableCell>
                               <TableCell className="text-right tabular-nums">{sh.hours.toFixed(2)}</TableCell>
                               <TableCell className="whitespace-nowrap">
-                                <span className={sh.payable ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}>
-                                  {ATT_LABELS[sh.attendance_status] ?? sh.attendance_status}
-                                </span>
+                                {sh.attendance_marked ? (
+                                  <span className={sh.payable ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}>
+                                    {ATT_LABELS[sh.attendance_status] ?? sh.attendance_status}
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1 font-medium text-rose-700 dark:text-rose-400"
+                                    title="Nobody marked this shift, so it is counting as unworked"
+                                  >
+                                    <Clock className="size-3" />
+                                    Not marked
+                                  </span>
+                                )}
                                 {sh.late_minutes ? <span className="text-muted-foreground"> +{sh.late_minutes}m</span> : null}
                               </TableCell>
                               <TableCell className="text-right tabular-nums">{sh.shift_rate ? formatMoney(sh.shift_rate) : '\u2014'}</TableCell>

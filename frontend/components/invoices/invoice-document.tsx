@@ -25,6 +25,12 @@ type Props = {
   printId?: string;
 };
 
+function fmtDay(iso?: string | null) {
+  if (!iso) return '—';
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB');
+}
+
 export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
 
@@ -53,6 +59,15 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
   }, [invoice.company_logo_url]);
 
   const lines = invoice.lines ?? [];
+  // Chronological, matching the PDF. Allowance lines carry no date and fall to the end,
+  // where a summary charge belongs.
+  const orderedLines = [...lines].sort((a, b) => {
+    if (!a.shift_date !== !b.shift_date) return a.shift_date ? -1 : 1;
+    if (a.shift_date && b.shift_date && a.shift_date !== b.shift_date) {
+      return a.shift_date < b.shift_date ? -1 : 1;
+    }
+    return a.id - b.id;
+  });
   const accountLines = invoiceAccountLines(invoice);
   const showAccountFooter = hasInvoiceAccountDetails(invoice);
   const paid = invoice.amount_paid ?? 0;
@@ -110,8 +125,10 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-slate-100 text-left">
+              <th className="p-2.5 font-semibold border border-slate-200">Date</th>
               <th className="p-2.5 font-semibold border border-slate-200">Site</th>
               <th className="p-2.5 font-semibold border border-slate-200">Guard</th>
+              <th className="p-2.5 font-semibold border border-slate-200">Details</th>
               <th className="p-2.5 font-semibold border border-slate-200 text-right">Hours</th>
               <th className="p-2.5 font-semibold border border-slate-200 text-right">Rate</th>
               <th className="p-2.5 font-semibold border border-slate-200 text-right">Amount</th>
@@ -120,20 +137,33 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
           <tbody>
             {lines.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-4 text-center text-slate-500 border border-slate-200">
+                <td colSpan={7} className="p-4 text-center text-slate-500 border border-slate-200">
                   No line items
                 </td>
               </tr>
             ) : (
-              lines.map((ln) => (
-                <tr key={ln.id} className="border-b border-slate-200">
-                  <td className="p-2.5 border border-slate-200">{ln.site_name ?? `Site #${ln.site_id}`}</td>
-                  <td className="p-2.5 border border-slate-200">{ln.guard_name ?? '—'}</td>
-                  <td className="p-2.5 border border-slate-200 text-right tabular-nums">{ln.hours.toFixed(2)}</td>
-                  <td className="p-2.5 border border-slate-200 text-right tabular-nums">{fmtMoney(ln.rate)}</td>
-                  <td className="p-2.5 border border-slate-200 text-right tabular-nums font-medium">{fmtMoney(ln.amount)}</td>
-                </tr>
-              ))
+              orderedLines.map((ln) => {
+                // An allowance is a flat charge: showing 0.00 hours at £0.00 next to a
+                // real amount reads as a fault in the bill, so those cells are dashed.
+                const isAllowance = !ln.shift_date && (ln.allowance_amount ?? 0) > 0;
+                return (
+                  <tr key={ln.id} className="border-b border-slate-200">
+                    <td className="p-2.5 border border-slate-200 whitespace-nowrap">{fmtDay(ln.shift_date)}</td>
+                    <td className="p-2.5 border border-slate-200">{ln.site_name ?? `Site #${ln.site_id}`}</td>
+                    <td className="p-2.5 border border-slate-200">{ln.guard_name ?? '—'}</td>
+                    <td className="p-2.5 border border-slate-200 text-slate-600">
+                      {ln.description ?? (isAllowance ? 'Allowance' : 'Shift')}
+                    </td>
+                    <td className="p-2.5 border border-slate-200 text-right tabular-nums">
+                      {isAllowance ? '—' : ln.hours.toFixed(2)}
+                    </td>
+                    <td className="p-2.5 border border-slate-200 text-right tabular-nums">
+                      {isAllowance ? '—' : fmtMoney(ln.rate)}
+                    </td>
+                    <td className="p-2.5 border border-slate-200 text-right tabular-nums font-medium">{fmtMoney(ln.amount)}</td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

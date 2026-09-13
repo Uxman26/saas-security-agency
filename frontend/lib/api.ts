@@ -1090,11 +1090,15 @@ export const api = {
     generate: (params: {
       period_start: string;
       period_end: string;
+      /** Raise a second invoice for a period already covered. The API refuses with a
+       *  409 unless this is set, so a double-click cannot quietly bill twice. */
+      force?: boolean;
     } & WorkFilterParams): Promise<Invoice> => {
       const q = appendWorkFilters(
         new URLSearchParams({ period_start: params.period_start, period_end: params.period_end }),
         params
       );
+      if (params.force) q.append('force', 'true');
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),

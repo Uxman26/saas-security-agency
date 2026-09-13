@@ -703,7 +703,16 @@ class RotaPlanListItem(BaseModel):
     status: str
     shift_count: int = 0
     staff_count: int = 0
+    # The sites (and their clients) this rota actually puts people on, so the list can
+    # say who the work is for without opening each rota. Derived: from the assignments
+    # for a published rota, from the planner's own shift site names for a draft.
+    site_names: List[str] = Field(default_factory=list)
+    client_names: List[str] = Field(default_factory=list)
+    # Shifts already past with no attendance recorded. These are silently unpaid, so the
+    # rota list flags them rather than letting payroll be the first to notice.
+    unmarked_attendance_count: int = 0
     created_at: datetime
+    updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
 
     class Config:
@@ -1246,6 +1255,10 @@ class PayrollResponse(PayrollBase):
 class InvoiceLineBase(BaseModel):
     site_id: int
     guard_id: Optional[int] = None
+    # The day worked, and what the line is for. Both optional: manual lines and every
+    # line raised before these existed carry neither.
+    shift_date: Optional[date] = None
+    description: Optional[str] = None
     hours: float = 0
     rate: float = 0
     amount: float = 0
@@ -1264,6 +1277,8 @@ class InvoiceLineResponse(InvoiceLineBase):
 class InvoiceLineUpdate(BaseModel):
     site_id: Optional[int] = None
     guard_id: Optional[int] = None
+    shift_date: Optional[date] = None
+    description: Optional[str] = None
     hours: Optional[float] = None
     rate: Optional[float] = None
     allowance_amount: Optional[float] = None

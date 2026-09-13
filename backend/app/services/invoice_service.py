@@ -16,6 +16,16 @@ from app.services.work_filters import resolve_work_scope
 
 DEFAULT_INVOICE_VAT_RATE = 20.0
 
+# How a shift line describes itself on the bill.
+SHIFT_TYPE_LABELS = {
+    "day": "Day shift",
+    "night": "Night shift",
+    "morning": "Morning shift",
+    "afternoon": "Afternoon shift",
+    "evening": "Evening shift",
+}
+
+
 def recalc_invoice_totals(db: Session, inv: Invoice) -> None:
     # The session runs with autoflush=False, so lines added/removed earlier in this
     # transaction are invisible to a plain query. Without this flush, generating an
@@ -430,6 +440,7 @@ def generate_from_rota(
     sub_contractor_id: Optional[str] = None,
     guard_id: Optional[int] = None,
     job_title: Optional[str] = None,
+    force: bool = False,
 ) -> Invoice:
     """Create a draft invoice from published rota planner shifts for a client/site period.
 
@@ -473,7 +484,12 @@ def generate_from_rota(
         db, company.id, period_start, period_end, client_id=client_id, site_id=site_id, scope=scope
     )
     allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
-    if not details and not allowance_inv:
+    # Allowances ride along with billed work; they are never a reason to raise an invoice
+    # on their own. This used to read "not details AND not allowance_inv", so a company
+    # with any standing invoice allowance got a real invoice for a period with no shifts
+    # at all — one line, no guard, 0.00 hours, £0.00 rate, and the allowance as the whole
+    # amount. Those bills looked legitimate and were impossible to explain.
+    if not details:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -481,6 +497,42 @@ def generate_from_rota(
                 + (" with the filters applied." if scope.active else ". Publish the rota first.")
             ),
         )
+
+    # Generating the same period twice is nearly always a double-click or a forgotten
+    # earlier run, and a duplicate draft is indistinguishable from the real one. Refuse
+    # by default and name the existing invoice; the caller re-sends with force=True when
+    # a second invoice really is wanted (a narrower set of filters, say).
+    if not force:
+        dup_q = db.query(Invoice).filter(
+            Invoice.company_id == company.id,
+            Invoice.period_start == period_start,
+            Invoice.period_end == period_end,
+        )
+        dup_q = dup_q.filter(Invoice.client_id == client_id) if client_id else dup_q.filter(Invoice.client_id.is_(None))
+        existing = None
+        for cand in dup_q.order_by(Invoice.id.desc()).all():
+            # Billing one site does not duplicate an invoice for a different site of the
+            # same client, or for a different client-less site. Matching on client and
+            # period alone would block the second site every time, so when a single site
+            # is being billed the candidate has to actually carry that site.
+            if site_id:
+                hit = (
+                    db.query(InvoiceLine.id)
+                    .filter(InvoiceLine.invoice_id == cand.id, InvoiceLine.site_id == site_id)
+                    .first()
+                )
+                if not hit:
+                    continue
+            existing = cand
+            break
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Invoice #{existing.id} already covers this period "
+                    f"({period_start} to {period_end}). Generate another only if you meant to."
+                ),
+            )
     due = period_end + timedelta(days=30)
     inv = Invoice(
         company_id=company.id,
@@ -515,11 +567,16 @@ def generate_from_rota(
         if hours < 0 or hours > 24 * 14:
             continue
         amt = round(hours * r, 2)
+        shift_label = SHIFT_TYPE_LABELS.get(d["shift_type"], "Shift")
+        if double_client and d["date"] in special_dates:
+            shift_label = f"{shift_label} (special day, double rate)"
         db.add(
             InvoiceLine(
                 invoice_id=inv.id,
                 site_id=d["site_id"],
                 guard_id=d["guard_id"],
+                shift_date=d["date"],
+                description=shift_label,
                 hours=hours,
                 rate=r,
                 amount=amt,
@@ -532,6 +589,10 @@ def generate_from_rota(
                 invoice_id=inv.id,
                 site_id=anchor_site_id,
                 guard_id=None,
+                shift_date=None,
+                # Named, so a nil-hours nil-rate line on the bill explains itself instead
+                # of reading as a broken shift.
+                description=f"Allowance: {al.name}",
                 hours=0,
                 rate=0,
                 amount=al.amount,

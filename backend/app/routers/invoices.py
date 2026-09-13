@@ -55,7 +55,9 @@ def _site_stand_in_name(inv: Invoice, db: Session | None = None) -> Optional[str
 def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = None) -> InvoiceResponse:
     lines_out: list[InvoiceLineResponse] = []
     if include_lines:
-        for ln in sorted(inv.lines, key=lambda x: x.id):
+        # Chronological, so the bill reads the way the work happened. Allowance lines
+        # carry no date and sort to the end, where a summary charge belongs.
+        for ln in sorted(inv.lines, key=lambda x: (x.shift_date is None, x.shift_date or date.min, x.id)):
             site = getattr(ln, "site", None)
             g = getattr(ln, "guard", None)
             lines_out.append(
@@ -63,6 +65,8 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
                     id=ln.id,
                     invoice_id=ln.invoice_id,
                     site_id=ln.site_id,
+                    shift_date=ln.shift_date,
+                    description=ln.description,
                     guard_id=ln.guard_id,
                     hours=ln.hours,
                     rate=ln.rate,
@@ -183,6 +187,7 @@ def generate_invoice(
     sub_contractor_id: Optional[str] = None,
     guard_id: Optional[int] = None,
     job_title: Optional[str] = None,
+    force: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("invoices", "generate")),
 ):
@@ -199,6 +204,7 @@ def generate_invoice(
         sub_contractor_id=sub_contractor_id,
         guard_id=guard_id,
         job_title=job_title,
+        force=force,
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)

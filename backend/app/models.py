@@ -1078,6 +1078,11 @@ class InvoiceLine(Base):
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
     guard_id = Column(Integer, ForeignKey("guards.id"))
+    # What this line is for. A bill that only says site/guard/hours cannot be checked
+    # against anything: the date says which shift, the description says what kind of line
+    # it is (a shift, or an allowance that legitimately has no hours or rate).
+    shift_date = Column(Date)
+    description = Column(String)
     hours = Column(Float, default=0)
     rate = Column(Float, default=0)
     amount = Column(Float, default=0)

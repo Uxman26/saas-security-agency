@@ -1352,6 +1352,17 @@ def run():
         )
         cur.execute("CREATE INDEX IF NOT EXISTS ix_occ_entries_sheet ON occurrence_entries(sheet_id)")
 
+    # Invoice lines say which day they bill and what they are for. Without these an
+    # allowance line reads as a shift with no guard, no hours and no rate — which is
+    # exactly how an unexplainable bill gets sent to a client.
+    if table_exists(cur, "invoice_lines"):
+        for col, ddl in (("shift_date", "DATE"), ("description", "VARCHAR")):
+            if not column_exists(cur, "invoice_lines", col):
+                try:
+                    cur.execute(f"ALTER TABLE invoice_lines ADD COLUMN {col} {ddl}")
+                except sqlite3.OperationalError:
+                    pass
+
     # A site need not belong to a client, and an invoice may now be raised straight
     # against one. SQLite cannot drop a NOT NULL in place, so the table is rebuilt by the
     # documented procedure: build the replacement, copy every row, swap the names, put the

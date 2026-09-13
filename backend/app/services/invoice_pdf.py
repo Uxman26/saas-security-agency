@@ -1,3 +1,4 @@
+from datetime import date
 from io import BytesIO
 import os
 from typing import List, Optional
@@ -129,22 +130,30 @@ def render_invoice_pdf(
         for g in db.query(Guard).filter(Guard.id.in_(gids)).all():
             guard_map[g.id] = g
 
-    hdr = ["Site", "Guard", "Hours", "Rate", "Amount"]
+    # Date and description earn their place: without them a line reading
+    # "site / — / 0.00 / £0.00 / £15.00" cannot be explained to the client who queries it.
+    hdr = ["Date", "Site", "Guard", "Details", "Hours", "Rate", "Amount"]
     data = [hdr]
-    for ln in lines:
+    ordered = sorted(
+        lines, key=lambda l: (l.shift_date is None, l.shift_date or date.min, l.id)
+    )
+    for ln in ordered:
         site = site_map.get(ln.site_id)
         g = guard_map.get(ln.guard_id) if ln.guard_id else None
+        is_allowance = not ln.shift_date and float(ln.allowance_amount or 0) > 0
         data.append(
             [
-                (site.name if site else f"#{ln.site_id}")[:40],
-                (g.full_name if g else "—")[:32],
-                f"{ln.hours or 0:.2f}",
-                _money(ln.rate or 0),
+                ln.shift_date.strftime("%d/%m/%Y") if ln.shift_date else "—",
+                (site.name if site else f"#{ln.site_id}")[:28],
+                (g.full_name if g else "—")[:24],
+                (ln.description or ("Allowance" if is_allowance else "Shift"))[:28],
+                "—" if is_allowance else f"{ln.hours or 0:.2f}",
+                "—" if is_allowance else _money(ln.rate or 0),
                 _money(ln.amount or 0),
             ]
         )
 
-    tw = [5 * cm, 4 * cm, 2 * cm, 2.5 * cm, 2.5 * cm]
+    tw = [2.2 * cm, 3.4 * cm, 3 * cm, 3.2 * cm, 1.6 * cm, 1.9 * cm, 2.1 * cm]
     t_lines = Table(data, colWidths=tw, repeatRows=1)
     t_lines.setStyle(
         TableStyle(

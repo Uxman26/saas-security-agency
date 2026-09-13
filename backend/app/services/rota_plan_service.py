@@ -3,10 +3,10 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Attendance, Guard, RotaPlan, ShiftAuditLog, Site
+from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftAuditLog, ShiftLateLog, Site
 from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
 from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
@@ -129,6 +129,96 @@ def _apply_plan_span(plan: RotaPlan, start: date, day_count: int) -> None:
     plan.end_date = _end_date(start, n)
 
 
+def _site_names_from_json(planner_data: Optional[str]) -> List[str]:
+    """Distinct site names a draft's planner shifts name, in first-seen order.
+
+    A draft has no assignments yet — its shifts carry the site as free text — so this is
+    the only place the sites can come from until the rota is published.
+    """
+    if not planner_data:
+        return []
+    try:
+        data = json.loads(planner_data)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, dict):
+        return []
+    seen: dict[str, str] = {}
+    for by_day in (data.get("shifts") or {}).values():
+        for day_shifts in (by_day or {}).values():
+            for sh in day_shifts or []:
+                if not isinstance(sh, dict):
+                    continue
+                name = str(sh.get("site") or "").strip()
+                if name and name.lower() not in seen:
+                    seen[name.lower()] = name
+    return list(seen.values())
+
+
+def _plan_site_and_client_names(db: Session, plan: RotaPlan) -> tuple[List[str], List[str]]:
+    """The sites this rota works, and the clients those sites belong to."""
+    if plan.status == "published":
+        rows = (
+            db.query(Site.name, Client.name)
+            .select_from(Assignment)
+            .join(Site, Site.id == Assignment.site_id)
+            .outerjoin(Client, Client.id == Site.client_id)
+            .filter(Assignment.rota_plan_id == plan.id)
+            .distinct()
+            .all()
+        )
+        sites = sorted({r[0] for r in rows if r[0]})
+        clients = sorted({r[1] for r in rows if r[1]})
+        return sites, clients
+
+    sites = _site_names_from_json(plan.planner_data)
+    if not sites:
+        return [], []
+    lowered = [n.lower() for n in sites]
+    rows = (
+        db.query(Site.name, Client.name)
+        .outerjoin(Client, Client.id == Site.client_id)
+        .filter(Site.company_id == plan.company_id, func.lower(Site.name).in_(lowered))
+        .all()
+    )
+    clients = sorted({r[1] for r in rows if r[1]})
+    return sorted(sites), clients
+
+
+def _unmarked_attendance_count(db: Session, plan: RotaPlan) -> int:
+    """Shifts in this rota that have been and gone with nobody marking attendance.
+
+    A past shift with no attendance record reports as "absent" everywhere it is shown,
+    exactly like a deliberately marked absence — and it is held back from pay the same
+    way. Counting it here lets the rota list flag the rota that still needs marking,
+    instead of the omission only surfacing when payroll comes up short.
+
+    Drafts hold no assignments, so there is nothing to mark until they are published.
+    Matches the payroll preview's rule: anything not still in the future counts.
+    """
+    if plan.status != "published":
+        return 0
+    return (
+        db.query(func.count(func.distinct(Assignment.id)))
+        .outerjoin(Attendance, Attendance.assignment_id == Assignment.id)
+        .outerjoin(ShiftLateLog, ShiftLateLog.assignment_id == Assignment.id)
+        .filter(
+            Assignment.rota_plan_id == plan.id,
+            Assignment.date <= date.today(),
+            ShiftLateLog.id.is_(None),
+            or_(
+                Attendance.id.is_(None),
+                and_(
+                    Attendance.booked_at.is_(None),
+                    or_(Attendance.status.is_(None), Attendance.status == ""),
+                ),
+            ),
+        )
+        .scalar()
+        or 0
+    )
+
+
 def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
     if plan.status == "published":
         shift_count = db.query(Assignment).filter(Assignment.rota_plan_id == plan.id).count()
@@ -146,6 +236,7 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
     start_date = span[0] if span else plan.start_date
     end_date = span[1] if span else plan.end_date
     day_count = span[2] if span else plan.day_count
+    site_names, client_names = _plan_site_and_client_names(db, plan)
     return RotaPlanListItem(
         id=plan.id,
         name=plan.name,
@@ -157,7 +248,11 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
         status=plan.status,
         shift_count=shift_count,
         staff_count=int(staff_count),
+        site_names=site_names,
+        client_names=client_names,
+        unmarked_attendance_count=_unmarked_attendance_count(db, plan),
         created_at=plan.created_at,
+        updated_at=plan.updated_at,
         published_at=plan.published_at,
     )
 

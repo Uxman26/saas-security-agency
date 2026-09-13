@@ -561,7 +561,14 @@ export interface RotaPlanListItem {
   status: string;
   shift_count: number;
   staff_count: number;
+  /** Sites this rota puts people on, and the clients those sites belong to. Derived
+   *  server-side from assignments (published) or planner shift site names (draft). */
+  site_names: string[];
+  client_names: string[];
+  /** Shifts already past with no attendance recorded — silently unpaid until marked. */
+  unmarked_attendance_count: number;
   created_at: string;
+  updated_at?: string | null;
   published_at?: string | null;
 }
 
@@ -1089,6 +1096,10 @@ export interface InvoiceLine {
   invoice_id: number;
   site_id: number;
   guard_id?: number;
+  /** The day worked. Null on allowance lines and on anything entered by hand. */
+  shift_date?: string | null;
+  /** What the line is for — "Night shift", "Allowance: Meal Allowance". */
+  description?: string | null;
   hours: number;
   rate: number;
   amount: number;

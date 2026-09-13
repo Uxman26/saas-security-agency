@@ -21,6 +21,7 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
+import { formatMoney } from '@/lib/rota-shifts-utils';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
 import {
   DashboardHeader,
@@ -144,7 +145,7 @@ export default function InvoicesPage() {
     api.sites.list().then(setSites).catch(() => {});
   }, [loadInvoices]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (force = false) => {
     if (!genStart || !genEnd) return;
     if (genMode === 'client' && !genClientId) return;
     if (genMode === 'site' && !genSiteId) return;
@@ -154,9 +155,10 @@ export default function InvoicesPage() {
     }
     setGenLoading(true);
     try {
-      await api.invoices.generate({
+      const inv = await api.invoices.generate({
         period_start: genStart,
         period_end: genEnd,
+        ...(force ? { force: true } : {}),
         ...toWorkFilterParams(genNarrow),
         ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
@@ -168,8 +170,25 @@ export default function InvoicesPage() {
       setGenStart('');
       setGenEnd('');
       loadInvoices();
-      toast.success('Invoice generated');
+      const shifts = (inv.lines ?? []).filter((l) => l.shift_date).length;
+      toast.success(
+        `Invoice #${inv.id} — ${formatMoney(inv.total ?? 0)} from ${shifts} shift${shifts === 1 ? '' : 's'}`
+      );
+      // "Where did it go?" is the commonest question about this button, so it lands on
+      // the invoice itself rather than a list the user then has to search.
+      router.push(`/invoices/${inv.id}/view`);
     } catch (err) {
+      // 409 means an invoice already covers this period. That is nearly always a repeat
+      // run, so it is offered as a choice rather than pushed through or lost as an error.
+      const status = (err as { status?: number } | null)?.status;
+      if (status === 409 && !force) {
+        toast.confirm(
+          err instanceof Error ? err.message : 'An invoice already covers this period.',
+          () => handleGenerate(true),
+          { label: 'Generate anyway', description: 'A second invoice will be raised for the same period.' }
+        );
+        return;
+      }
       toast.error(err instanceof Error ? err.message : 'Invoice generation failed');
     } finally {
       setGenLoading(false);
@@ -534,7 +553,7 @@ export default function InvoicesPage() {
                     ) : null}
                     <Button
                       className="w-full"
-                      onClick={handleGenerate}
+                      onClick={() => void handleGenerate()}
                       disabled={
                         genLoading ||
                         !genStart ||

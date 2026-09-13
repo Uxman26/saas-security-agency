@@ -25,6 +25,7 @@ import {
   FilterBar,
   FilterField,
   Pill,
+  RecordAvatar,
   ResultsCard,
   QuickLinks,
   RowActionsMenu,
@@ -567,30 +568,42 @@ export default function PayrollPage() {
   const totalCash = summaryRows.reduce((sum, p) => sum + p.cash_amount, 0);
   const totalAllowances = summaryRows.reduce((sum, p) => sum + p.allowance_total, 0);
   const totalPayable = totalBank + totalCash;
+  const totalHours = summaryRows.reduce((sum, p) => sum + (p.total_hours ?? 0), 0);
+  const employeeCount = new Set(summaryRows.map((p) => p.guard_id)).size;
 
-  /** The cards along the top, in the shape every module dashboard uses. */
+  /** The cards along the top, in the shape every module dashboard uses. Total pay leads,
+   *  because that is the number this screen exists to produce. */
   const statCards: StatCardSpec[] = [
     {
-      key: 'records',
-      label: 'Records',
-      value: payrolls.length,
-      icon: FileText,
-      tone: 'neutral',
-      caption: 'this search',
+      key: 'payable',
+      label: 'Total pay',
+      value: formatMoney(totalPayable),
+      icon: PoundSterling,
+      tone: 'warning',
+      caption: hasSearched ? 'bank + cash, this search' : 'search to load records',
     },
     {
-      key: 'bank',
-      label: 'Total bank',
-      value: formatMoney(totalBank),
+      key: 'employees',
+      label: 'Employees',
+      value: employeeCount,
+      icon: Users,
+      tone: 'neutral',
+      caption: `${payrolls.length} record${payrolls.length === 1 ? '' : 's'}`,
+    },
+    {
+      key: 'hours',
+      label: 'Total hours',
+      value: totalHours.toFixed(2),
+      icon: Calculator,
+      tone: 'info',
+    },
+    {
+      key: 'split',
+      label: 'Bank / cash',
+      value: `${formatMoney(totalBank)} / ${formatMoney(totalCash)}`,
       icon: Banknote,
       tone: 'positive',
-    },
-    {
-      key: 'cash',
-      label: 'Total cash',
-      value: formatMoney(totalCash),
-      icon: Coins,
-      tone: 'info',
+      caption: 'how it is paid out',
     },
     {
       key: 'allowances',
@@ -598,14 +611,7 @@ export default function PayrollPage() {
       value: formatMoney(totalAllowances),
       icon: Gift,
       tone: 'muted',
-    },
-    {
-      key: 'payable',
-      label: 'Total payable',
-      value: formatMoney(totalPayable),
-      icon: PoundSterling,
-      tone: 'warning',
-      caption: 'bank + cash',
+      caption: 'included in total pay',
     },
   ];
 
@@ -901,7 +907,7 @@ export default function PayrollPage() {
             }
           />
 
-          {payrolls.length > 0 ? <StatCards cards={statCards} /> : null}
+          <StatCards cards={statCards} />
 
           <Card>
             <CardHeader className="pb-3">
@@ -1314,7 +1320,17 @@ export default function PayrollPage() {
                       {pageRows.map((p) => (
                         <TableRow key={p.id}>
                           <TableCell className="font-medium whitespace-nowrap">
-                            {guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`}
+                            <span className="flex items-center gap-2">
+                              <RecordAvatar name={guardMap.get(p.guard_id) ?? `Guard ${p.guard_id}`} />
+                              <span className="min-w-0">
+                                <span className="block truncate">
+                                  {guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`}
+                                </span>
+                                <span className="block text-xs font-normal text-muted-foreground tabular-nums">
+                                  {(p.total_hours ?? 0).toFixed(2)}h @ {formatMoney(p.hourly_rate ?? 0)}
+                                </span>
+                              </span>
+                            </span>
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-sm">
                             {p.period_start} – {p.period_end}

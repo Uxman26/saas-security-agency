@@ -1,17 +1,34 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Globe, Mail, MapPin, Phone } from 'lucide-react';
 import type { Invoice } from '@/lib/types';
-import { hasInvoiceAccountDetails, invoiceAccountLines } from '@/lib/invoice-account';
+import { hasInvoiceAccountDetails } from '@/lib/invoice-account';
+import { groupInvoiceLines } from '@/lib/invoice-lines';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+/**
+ * The one accent colour the document is built from — the table header, the rules and the
+ * amount-due panel all take it. Kept in a single constant so a tenant's brand colour can
+ * be swapped here (or driven from company settings) without hunting through the layout.
+ */
+const ACCENT = '#c8102e';
 
 function fmtMoney(n: number) {
   return `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function fmtLongDate(value?: string | null) {
+  if (!value) return '—';
+  const d = new Date(value.length <= 10 ? `${value}T12:00:00` : value);
+  return Number.isNaN(d.getTime())
+    ? value
+    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 const STATUS_STYLES: Record<string, string> = {
-  draft: 'bg-slate-100 text-slate-700',
+  draft: 'bg-slate-200 text-slate-700',
   sent: 'bg-blue-100 text-blue-800',
   paid: 'bg-green-100 text-green-800',
   partial: 'bg-amber-100 text-amber-800',
@@ -24,12 +41,6 @@ type Props = {
   invoice: Invoice;
   printId?: string;
 };
-
-function fmtDay(iso?: string | null) {
-  if (!iso) return '—';
-  const d = new Date(`${iso}T12:00:00`);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB');
-}
 
 export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
@@ -58,184 +69,280 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
     };
   }, [invoice.company_logo_url]);
 
-  const lines = invoice.lines ?? [];
-  // Chronological, matching the PDF. Allowance lines carry no date and fall to the end,
-  // where a summary charge belongs.
-  const orderedLines = [...lines].sort((a, b) => {
-    if (!a.shift_date !== !b.shift_date) return a.shift_date ? -1 : 1;
-    if (a.shift_date && b.shift_date && a.shift_date !== b.shift_date) {
-      return a.shift_date < b.shift_date ? -1 : 1;
-    }
-    return a.id - b.id;
-  });
-  const accountLines = invoiceAccountLines(invoice);
+  const rows = groupInvoiceLines(invoice.lines ?? []);
+  const multiSite = new Set(rows.flatMap((r) => r.siteNames)).size > 1;
   const showAccountFooter = hasInvoiceAccountDetails(invoice);
   const paid = invoice.amount_paid ?? 0;
   const balance = invoice.balance_due ?? Math.max(0, invoice.total - paid);
-  const statusStyle = STATUS_STYLES[invoice.status] || 'bg-slate-100 text-slate-700';
+  const amountDue = paid > 0 ? balance : invoice.total;
+  const statusStyle = STATUS_STYLES[invoice.status] || 'bg-slate-200 text-slate-700';
+
+  const meta: { label: string; value: string }[] = [
+    { label: 'Invoice Number', value: `#${invoice.id}` },
+    { label: 'Invoice Date', value: fmtLongDate(invoice.created_at) },
+    { label: 'Payment Due', value: fmtLongDate(invoice.due_date) },
+    { label: 'Invoice Period', value: `${fmtLongDate(invoice.period_start)} – ${fmtLongDate(invoice.period_end)}` },
+  ];
 
   return (
     <div
       id={printId}
-      className="bg-white text-slate-900 rounded-lg border shadow-sm p-8 sm:p-10 max-w-4xl mx-auto print:shadow-none print:border-0 print:rounded-none print:max-w-none print:p-0"
+      // print-color-adjust keeps the accent bands and the dark payment panel from being
+      // dropped to white by the browser's default ink saving.
+      className="bg-white text-slate-900 rounded-lg border shadow-sm max-w-4xl mx-auto overflow-hidden print:shadow-none print:border-0 print:rounded-none print:max-w-none [print-color-adjust:exact] [-webkit-print-color-adjust:exact]"
     >
-      <div className="flex flex-col sm:flex-row sm:justify-between gap-6 border-b border-slate-200 pb-6 mb-6">
-        <div className="space-y-2 min-w-0">
-          {logoSrc ? (
-            <img src={logoSrc} alt="" className="h-16 max-w-[280px] object-contain object-left mb-2" />
-          ) : null}
-          <h2 className="text-xl font-bold text-slate-900">{invoice.company_name ?? 'Company'}</h2>
-          {invoice.company_email ? <p className="text-sm text-slate-600">{invoice.company_email}</p> : null}
-          {invoice.company_phone ? <p className="text-sm text-slate-600">{invoice.company_phone}</p> : null}
-          {invoice.company_address ? <p className="text-sm text-slate-600 whitespace-pre-line">{invoice.company_address}</p> : null}
-          {invoice.company_registration_number ? (
-            <p className="text-sm text-slate-600">Registered in England &amp; Wales No. {invoice.company_registration_number}</p>
-          ) : null}
-          {invoice.company_vat_number ? (
-            <p className="text-sm text-slate-600">VAT Registration No. {invoice.company_vat_number}</p>
-          ) : null}
+      {/* ── Header ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-6 p-8 sm:flex-row sm:items-start sm:justify-between sm:p-10">
+        <div className="flex min-w-0 gap-4">
+          {logoSrc ? <img src={logoSrc} alt="" className="h-20 w-20 shrink-0 object-contain object-left" /> : null}
+          <div className="min-w-0 space-y-1.5">
+            <h2 className="text-lg font-bold uppercase tracking-tight text-slate-900 sm:text-xl">
+              {invoice.company_name ?? 'Company'}
+            </h2>
+            {invoice.company_address ? (
+              <p className="flex items-start gap-2 text-sm text-slate-600">
+                <MapPin className="mt-0.5 size-3.5 shrink-0" style={{ color: ACCENT }} />
+                <span className="whitespace-pre-line">{invoice.company_address}</span>
+              </p>
+            ) : null}
+            {invoice.company_phone ? (
+              <p className="flex items-center gap-2 text-sm text-slate-600">
+                <Phone className="size-3.5 shrink-0" style={{ color: ACCENT }} />
+                {invoice.company_phone}
+              </p>
+            ) : null}
+            {invoice.company_email ? (
+              <p className="flex items-center gap-2 text-sm text-slate-600">
+                <Globe className="size-3.5 shrink-0" style={{ color: ACCENT }} />
+                {invoice.company_email}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <div className="text-left sm:text-right shrink-0">
-          <p className="text-2xl font-bold tracking-tight text-slate-900">INVOICE</p>
-          <p className="text-sm text-slate-500 mt-1">#{invoice.id}</p>
-          <span className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusStyle}`}>{invoice.status.replace('_', ' ')}</span>
-          {invoice.due_date ? <p className="text-sm text-slate-600 mt-2">Due: {invoice.due_date}</p> : null}
+        <div className="shrink-0 sm:text-right">
+          <p className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">INVOICE</p>
+          <div className="mt-1.5 h-1 w-full rounded-full sm:ml-auto" style={{ backgroundColor: ACCENT }} />
+          <span
+            className={`mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${statusStyle}`}
+          >
+            {invoice.status}
+          </span>
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-6 mb-8">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Bill to</p>
-          <p className="font-semibold text-slate-900">{invoice.client_name ?? `Client #${invoice.client_id}`}</p>
-          {invoice.client_contact_person ? <p className="text-sm text-slate-600">{invoice.client_contact_person}</p> : null}
-          {invoice.client_address ? <p className="text-sm text-slate-600 whitespace-pre-line">{invoice.client_address}</p> : null}
-          {invoice.client_email ? <p className="text-sm text-slate-600">{invoice.client_email}</p> : null}
-          {invoice.client_phone ? <p className="text-sm text-slate-600">{invoice.client_phone}</p> : null}
-        </div>
-        <div className="sm:text-right">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Invoice period</p>
-          <p className="text-sm text-slate-700">
-            {invoice.period_start} – {invoice.period_end}
+      {/* ── Bill to / meta ───────────────────────────────────────────────── */}
+      <div className="grid gap-5 px-8 pb-8 sm:grid-cols-2 sm:px-10">
+        <div className="rounded-lg bg-slate-50 p-5">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: ACCENT }}>
+            Bill to
           </p>
-          <p className="text-xs text-slate-500 mt-3">Issued {new Date(invoice.created_at).toLocaleDateString('en-GB')}</p>
+          <p className="text-base font-bold uppercase text-slate-900">
+            {invoice.client_name ?? `Client #${invoice.client_id}`}
+          </p>
+          {invoice.client_contact_person ? (
+            <p className="mt-1 text-sm text-slate-600">{invoice.client_contact_person}</p>
+          ) : null}
+          {invoice.client_address ? (
+            <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{invoice.client_address}</p>
+          ) : null}
+          {invoice.client_phone ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+              <Phone className="size-3.5 shrink-0" style={{ color: ACCENT }} />
+              {invoice.client_phone}
+            </p>
+          ) : null}
+          {invoice.client_email ? (
+            <p className="mt-1 flex items-center gap-2 text-sm text-slate-600">
+              <Mail className="size-3.5 shrink-0" style={{ color: ACCENT }} />
+              {invoice.client_email}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-5">
+          <dl className="space-y-0">
+            {meta.map((m) => (
+              <div
+                key={m.label}
+                className="flex items-baseline justify-between gap-4 border-b border-slate-100 py-2 last:border-b-0"
+              >
+                <dt className="text-sm font-semibold text-slate-700">{m.label}:</dt>
+                <dd className="text-right text-sm text-slate-600">{m.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-3 flex items-center justify-between gap-4 rounded-md p-3" style={{ backgroundColor: '#fdf0f2' }}>
+            <span className="text-sm font-bold" style={{ color: ACCENT }}>
+              Amount Due (GBP):
+            </span>
+            <span className="text-xl font-extrabold tabular-nums text-slate-900">{fmtMoney(amountDue)}</span>
+          </div>
         </div>
       </div>
 
-      <div className="overflow-x-auto mb-6">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-slate-100 text-left">
-              <th className="p-2.5 font-semibold border border-slate-200">Date</th>
-              <th className="p-2.5 font-semibold border border-slate-200">Site</th>
-              <th className="p-2.5 font-semibold border border-slate-200">Guard</th>
-              <th className="p-2.5 font-semibold border border-slate-200">Details</th>
-              <th className="p-2.5 font-semibold border border-slate-200 text-right">Hours</th>
-              <th className="p-2.5 font-semibold border border-slate-200 text-right">Rate</th>
-              <th className="p-2.5 font-semibold border border-slate-200 text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="p-4 text-center text-slate-500 border border-slate-200">
-                  No line items
-                </td>
+      {/* ── Lines ────────────────────────────────────────────────────────── */}
+      <div className="px-8 sm:px-10">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr style={{ backgroundColor: ACCENT }}>
+                <th className="p-3 text-left text-xs font-bold uppercase tracking-wider text-white">Date</th>
+                <th className="p-3 text-center text-xs font-bold uppercase tracking-wider text-white">Operatives</th>
+                <th className="p-3 text-right text-xs font-bold uppercase tracking-wider text-white">Hours</th>
+                <th className="p-3 text-right text-xs font-bold uppercase tracking-wider text-white">Rate</th>
+                <th className="p-3 text-right text-xs font-bold uppercase tracking-wider text-white">Amount</th>
               </tr>
-            ) : (
-              orderedLines.map((ln) => {
-                // An allowance is a flat charge: showing 0.00 hours at £0.00 next to a
-                // real amount reads as a fault in the bill, so those cells are dashed.
-                const isAllowance = !ln.shift_date && (ln.allowance_amount ?? 0) > 0;
-                return (
-                  <tr key={ln.id} className="border-b border-slate-200">
-                    <td className="p-2.5 border border-slate-200 whitespace-nowrap">{fmtDay(ln.shift_date)}</td>
-                    <td className="p-2.5 border border-slate-200">{ln.site_name ?? `Site #${ln.site_id}`}</td>
-                    <td className="p-2.5 border border-slate-200">{ln.guard_name ?? '—'}</td>
-                    <td className="p-2.5 border border-slate-200 text-slate-600">
-                      {ln.description ?? (isAllowance ? 'Allowance' : 'Shift')}
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="border-b border-slate-200 p-6 text-center text-slate-500">
+                    No line items
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.key} className="border-b border-slate-200">
+                    <td className="p-3 text-slate-800">
+                      {r.label}
+                      {/* Only worth the ink when the bill actually spans more than one site. */}
+                      {multiSite && r.siteNames.length ? (
+                        <span className="block text-xs text-slate-500">{r.siteNames.join(', ')}</span>
+                      ) : null}
                     </td>
-                    <td className="p-2.5 border border-slate-200 text-right tabular-nums">
-                      {isAllowance ? '—' : ln.hours.toFixed(2)}
+                    <td className="p-3 text-center tabular-nums text-slate-800">{r.operatives ?? '—'}</td>
+                    <td className="p-3 text-right tabular-nums text-slate-800">
+                      {r.hours > 0 ? r.hours.toFixed(2).replace(/\.00$/, '') : '—'}
                     </td>
-                    <td className="p-2.5 border border-slate-200 text-right tabular-nums">
-                      {isAllowance ? '—' : fmtMoney(ln.rate)}
+                    <td className="p-3 text-right tabular-nums text-slate-800">
+                      {r.rate == null ? '—' : fmtMoney(r.rate)}
+                      {r.rateIsBlended ? <span className="ml-1 text-xs text-slate-400">avg</span> : null}
                     </td>
-                    <td className="p-2.5 border border-slate-200 text-right tabular-nums font-medium">{fmtMoney(ln.amount)}</td>
+                    <td className="p-3 text-right font-semibold tabular-nums text-slate-900">{fmtMoney(r.amount)}</td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex justify-end">
-        <div className="w-full sm:w-72 space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-slate-600">Subtotal</span>
-            <span className="tabular-nums">{fmtMoney(invoice.subtotal)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-slate-600">Tax ({invoice.tax_rate}%)</span>
-            <span className="tabular-nums">{fmtMoney(invoice.tax_amount)}</span>
-          </div>
-          <div className="flex justify-between border-t border-slate-300 pt-2 font-bold text-base">
-            <span>Total</span>
-            <span className="tabular-nums">{fmtMoney(invoice.total)}</span>
-          </div>
-          {paid > 0 && (
-            <>
-              <div className="flex justify-between text-green-700"><span>Amount paid</span><span className="tabular-nums">{fmtMoney(paid)}</span></div>
-              <div className="flex justify-between font-semibold text-red-700"><span>Balance due</span><span className="tabular-nums">{fmtMoney(balance)}</span></div>
-            </>
-          )}
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {(invoice.payments?.length ?? 0) > 0 && (
-        <div className="mt-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Payment history</p>
-          <table className="w-full text-sm border-collapse">
+      {/* ── Totals ───────────────────────────────────────────────────────── */}
+      <div className="flex justify-end px-8 py-6 sm:px-10">
+        <div className="w-full sm:w-80">
+          <div className="rounded-lg bg-slate-50 p-4 text-sm">
+            <div className="flex justify-between py-1">
+              <span className="text-slate-600">Subtotal:</span>
+              <span className="font-semibold tabular-nums">{fmtMoney(invoice.subtotal)}</span>
+            </div>
+            <div className="flex justify-between border-b border-slate-200 py-1 pb-2">
+              <span className="text-slate-600">VAT {invoice.tax_rate}%:</span>
+              <span className="font-semibold tabular-nums">{fmtMoney(invoice.tax_amount)}</span>
+            </div>
+            <div
+              className="mt-2 flex items-center justify-between rounded-md p-3"
+              style={{ backgroundColor: '#fdf0f2' }}
+            >
+              <span className="font-bold" style={{ color: ACCENT }}>
+                Total Due (GBP):
+              </span>
+              <span className="text-xl font-extrabold tabular-nums text-slate-900">{fmtMoney(invoice.total)}</span>
+            </div>
+            {paid > 0 ? (
+              <div className="mt-2 space-y-1">
+                <div className="flex justify-between text-green-700">
+                  <span>Amount paid</span>
+                  <span className="tabular-nums">{fmtMoney(paid)}</span>
+                </div>
+                <div className="flex justify-between font-semibold" style={{ color: ACCENT }}>
+                  <span>Balance due</span>
+                  <span className="tabular-nums">{fmtMoney(balance)}</span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Payment details ──────────────────────────────────────────────── */}
+      {showAccountFooter ? (
+        <div className="px-8 pb-6 sm:px-10">
+          <div className="flex flex-col gap-4 rounded-lg bg-slate-900 p-5 text-white sm:flex-row sm:items-center sm:justify-between">
+            <div className="border-l-4 pl-3" style={{ borderColor: ACCENT }}>
+              <p className="text-sm font-bold uppercase tracking-wider">Payment details</p>
+              {invoice.bank_name ? <p className="mt-1 text-sm font-semibold text-slate-100">{invoice.bank_name}</p> : null}
+              {invoice.account_name ? (
+                <p className="text-sm text-slate-300">Account Name: {invoice.account_name}</p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {invoice.account_number ? (
+                <div className="rounded-md bg-slate-800 px-4 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Account No.</p>
+                  <p className="text-base font-bold tabular-nums">{invoice.account_number}</p>
+                </div>
+              ) : null}
+              {invoice.sort_code ? (
+                <div className="rounded-md bg-slate-800 px-4 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Sort Code</p>
+                  <p className="text-base font-bold tabular-nums">{invoice.sort_code}</p>
+                </div>
+              ) : null}
+              {invoice.iban ? (
+                <div className="rounded-md bg-slate-800 px-4 py-2">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">IBAN</p>
+                  <p className="text-base font-bold tabular-nums">{invoice.iban}</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Payments taken / notes ───────────────────────────────────────── */}
+      {(invoice.payments?.length ?? 0) > 0 ? (
+        <div className="px-8 pb-6 sm:px-10">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Payment history</p>
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-slate-50">
-                <th className="p-2 text-left border border-slate-200">Date</th>
-                <th className="p-2 text-left border border-slate-200">Method</th>
-                <th className="p-2 text-right border border-slate-200">Amount</th>
+                <th className="border border-slate-200 p-2 text-left">Date</th>
+                <th className="border border-slate-200 p-2 text-left">Method</th>
+                <th className="border border-slate-200 p-2 text-right">Amount</th>
               </tr>
             </thead>
             <tbody>
               {invoice.payments!.map((p) => (
                 <tr key={p.id}>
-                  <td className="p-2 border border-slate-200">{p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB') : '—'}</td>
-                  <td className="p-2 border border-slate-200 capitalize">{p.method || '—'}</td>
-                  <td className="p-2 border border-slate-200 text-right tabular-nums">{fmtMoney(p.amount)}</td>
+                  <td className="border border-slate-200 p-2">
+                    {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB') : '—'}
+                  </td>
+                  <td className="border border-slate-200 p-2 capitalize">{p.method || '—'}</td>
+                  <td className="border border-slate-200 p-2 text-right tabular-nums">{fmtMoney(p.amount)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
 
       {invoice.notes ? (
-        <div className="mt-8 pt-6 border-t border-slate-200">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Notes</p>
-          <p className="text-sm text-slate-700 whitespace-pre-line">{invoice.notes}</p>
+        <div className="px-8 pb-6 sm:px-10">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Notes</p>
+          <p className="whitespace-pre-line text-sm text-slate-700">{invoice.notes}</p>
         </div>
       ) : null}
 
-      {showAccountFooter ? (
-        <div className="mt-8 pt-6 border-t-2 border-slate-300">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Account details — please pay to</p>
-          <dl className="grid gap-2 text-sm max-w-md">
-            {accountLines.map(({ label, value }) => (
-              <div key={label} className="grid grid-cols-[7.5rem_1fr] gap-2">
-                <dt className="text-slate-500 font-medium">{label}</dt>
-                <dd className="text-slate-900 font-mono break-all">{value}</dd>
-              </div>
-            ))}
-          </dl>
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-2 border-t border-slate-200 px-8 py-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-10">
+        <div className="space-y-0.5">
+          {invoice.company_vat_number ? <p>VAT Registration Number: {invoice.company_vat_number}</p> : null}
+          {invoice.company_registration_number ? (
+            <p>Company Registration Number: {invoice.company_registration_number}</p>
+          ) : null}
         </div>
-      ) : null}
+        <p className="border-slate-200 sm:border-l sm:pl-4">Invoice #{invoice.id}</p>
+      </div>
     </div>
   );
 }

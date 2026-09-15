@@ -255,11 +255,19 @@ def record_payment(db: Session, invoice_id: int, amount: float) -> dict:
     inv = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.id == invoice_id).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    inv.amount_paid = round(float(inv.amount_paid or 0) + max(0, amount), 2)
+    cash = max(0.0, float(amount or 0))
+    due = max(0.0, float(inv.total_amount or 0) - float(inv.amount_paid or 0))
+    credit_used = 0.0
+    co = db.query(Company).filter(Company.id == inv.company_id).first()
+    if co and due > 0:
+        from app.services import refund_service
+
+        credit_used = refund_service.consume_account_credit(db, co, max(0.0, due - cash))
+    applied = min(due, cash + credit_used) if due > 0 else cash
+    inv.amount_paid = round(float(inv.amount_paid or 0) + applied, 2)
     inv.status = _sync_status(inv)
     if inv.status == "paid":
         inv.paid_at = _utcnow()
-        co = db.query(Company).filter(Company.id == inv.company_id).first()
         if co and inv.period_end:
             co.subscription_end = inv.period_end
             co.subscription_status = "active"

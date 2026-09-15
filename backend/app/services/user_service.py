@@ -1,7 +1,6 @@
 from typing import List, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
@@ -54,13 +53,13 @@ def _set_site_pins(
 
 
 def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -> User:
+    from app.services.email_uniqueness import assert_email_available
+
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
     enforce_user_quota(db, company)
-    email = data.email.lower().strip()
-    if db.query(User).filter(User.email == email).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    email = assert_email_available(db, data.email)
     role = db.query(Role).filter(Role.id == data.role_id, Role.company_id == company_id).first()
     if not role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
@@ -123,13 +122,11 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
 
 
 def update_company_user(db: Session, company_id: int, user_id: int, data: CompanyUserUpdate) -> User:
+    from app.services.email_uniqueness import assert_email_available
+
     user = _get_user(db, company_id, user_id)
     if data.email is not None:
-        email = data.email.lower().strip()
-        clash = db.query(User).filter(func.lower(User.email) == email, User.id != user_id).first()
-        if clash:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
-        user.email = email
+        user.email = assert_email_available(db, data.email, exclude_user_id=user_id)
     if data.full_name is not None:
         user.full_name = data.full_name.strip()
     if data.password:
@@ -173,10 +170,14 @@ def update_company_user(db: Session, company_id: int, user_id: int, data: Compan
 
 
 def reset_company_user_password(db: Session, company_id: int, user_id: int, new_password: str) -> User:
+    from app.services import login_guard_service, session_service
+
     user = _get_user(db, company_id, user_id)
     user.password_hash = get_password_hash(new_password)
+    login_guard_service.clear_lockout_state(user)
     db.commit()
     db.refresh(user)
+    session_service.revoke_all_for_user(db, user.id)
     return user
 
 

@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     # How stale last_seen_at may get before we write it again. Without this every
     # authenticated request would issue an UPDATE.
     session_touch_interval_seconds: int = 60
-    # Failed logins allowed per account, and per IP, inside the window below.
-    login_max_attempts_per_account: int = 5
+    # Failed logins allowed per account before a timed lockout, and per IP spray limit.
+    login_max_attempts_per_account: int = 3
     login_max_attempts_per_ip: int = 20
     login_attempt_window_minutes: int = 15
     login_lockout_minutes: int = 15
@@ -39,6 +39,27 @@ class Settings(BaseSettings):
     stripe_application_fee_percent: float = 0
     stripe_yearly_discount_coupon_id: str = ""
     payment_failed_lock_retries: int = 3
+
+    # Social sign-in (leave blank to disable a provider). Redirect URIs must match
+    # the provider console exactly — defaults use FRONTEND_URL / API paths below.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: str = ""
+    google_oauth_redirect_uri: str = ""
+
+    microsoft_oauth_client_id: str = ""
+    microsoft_oauth_client_secret: str = ""
+    microsoft_oauth_tenant_id: str = "common"
+    microsoft_oauth_redirect_uri: str = ""
+
+    apple_oauth_client_id: str = ""
+    apple_oauth_team_id: str = ""
+    apple_oauth_key_id: str = ""
+    # PEM private key contents (use \n for newlines) or absolute path to .p8 file
+    apple_oauth_private_key: str = ""
+    apple_oauth_redirect_uri: str = ""
+
+    # Public API origin used to build default OAuth redirect URIs when unset
+    api_public_url: str = "http://localhost:8000"
 
     @field_validator("database_url", mode="before")
     @classmethod

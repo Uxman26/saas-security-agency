@@ -24,6 +24,7 @@ const ACTION_STYLES: Record<string, string> = {
   'company.archived': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
   'company.suspended': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
   'user.password_reset': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
+  'user.password_reset_email': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
   'user.deactivated': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
   'impersonation.start': 'bg-primary/15 text-primary',
   'impersonation.end': 'bg-muted text-muted-foreground',

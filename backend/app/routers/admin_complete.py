@@ -28,9 +28,20 @@ router = APIRouter(prefix="/admin", tags=["admin-complete"])
 
 class RefundBody(BaseModel):
     company_id: int
-    amount: float
+    amount: Optional[float] = None
     invoice_id: Optional[int] = None
+    billing_receipt_id: Optional[int] = None
+    subscription_receipt_id: Optional[int] = None
+    policy_id: Optional[int] = None
+    scenario_type: Optional[str] = None
     reason: Optional[str] = None
+    notes: Optional[str] = None
+    refund_method: Optional[str] = None
+    override: bool = False
+    override_reason: Optional[str] = None
+    skip_approval: bool = False
+    auto_process: bool = False
+    idempotency_key: Optional[str] = None
 
 
 class DisputeBody(BaseModel):
@@ -131,10 +142,13 @@ def api_usage(
 @router.get("/refunds")
 def list_refunds(
     company_id: Optional[int] = None,
+    status: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_platform_perm("billing.read")),
+    _: User = Depends(require_platform_perm("refunds.read", "billing.read")),
 ):
-    return billing_notify.list_refunds(db, company_id)
+    from app.services import refund_service
+
+    return refund_service.list_refunds(db, company_id=company_id, status=status)
 
 
 @router.post("/refunds")
@@ -142,15 +156,66 @@ def create_refund(
     body: RefundBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_platform_perm("billing.write")),
+    current_user: User = Depends(require_platform_perm("refunds.create", "billing.write")),
 ):
-    return billing_notify.create_refund(
+    from app.services import refund_service
+    from app.services import platform_rbac_service as rbac_svc
+
+    perms = rbac_svc.user_platform_permission_codes(db, current_user)
+    override = body.override
+    if override and "refunds.override" not in perms and current_user.role != "super_admin":
+        # Legacy super_admin without platform role still gets full PLATFORM_PERMS via rbac helper
+        if "refunds.override" not in perms:
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=403, detail="Missing platform permission: refunds.override")
+
+    skip = body.skip_approval
+    if skip and "refunds.approve" not in perms and "billing.write" not in perms:
+        skip = False
+
+    auto = body.auto_process
+    if auto and "refunds.process" not in perms and "billing.write" not in perms:
+        auto = False
+
+    # Backward compatible: amount + invoice only → legacy path
+    if (
+        body.amount is not None
+        and body.invoice_id
+        and not body.policy_id
+        and not body.billing_receipt_id
+        and not body.subscription_receipt_id
+        and not body.scenario_type
+        and not body.refund_method
+    ):
+        return billing_notify.create_refund(
+            db,
+            actor=current_user,
+            company_id=body.company_id,
+            amount=body.amount,
+            invoice_id=body.invoice_id,
+            reason=body.reason,
+            request=request,
+        )
+
+    return refund_service.create_refund(
         db,
         actor=current_user,
         company_id=body.company_id,
         amount=body.amount,
         invoice_id=body.invoice_id,
+        billing_receipt_id=body.billing_receipt_id,
+        subscription_receipt_id=body.subscription_receipt_id,
+        policy_id=body.policy_id,
+        scenario_type=body.scenario_type,
         reason=body.reason,
+        notes=body.notes,
+        refund_method=body.refund_method,
+        override=override,
+        override_reason=body.override_reason,
+        skip_approval=skip,
+        auto_process=auto,
+        idempotency_key=body.idempotency_key,
         request=request,
     )
 

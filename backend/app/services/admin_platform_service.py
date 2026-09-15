@@ -88,9 +88,13 @@ def update_company(db: Session, company_id: int, payload: dict[str, Any]) -> Com
 
 def company_admin_out(db: Session, co: Company) -> dict:
     from app.services.tenant_usage_service import company_usage, user_limit_for_company
+    from app.services import trial_service
     from sqlalchemy import func
 
+    trial_service.sync_if_needed(db, co)
+    db.refresh(co)
     user_count = db.query(func.count(User.id)).filter(User.company_id == co.id, User.is_active == True).scalar()
+    trial = trial_service.tenant_trial_status(db, co)
     return {
         "id": co.id,
         "name": co.name,
@@ -110,6 +114,7 @@ def company_admin_out(db: Session, co: Company) -> dict:
         "archived_at": getattr(co, "archived_at", None),
         "email": co.email,
         "phone": co.phone,
+        "trial": trial,
         "created_at": co.created_at,
     }
 
@@ -202,10 +207,30 @@ def get_admin_detail(db: Session, user_id: int) -> tuple[User, Company | None, l
 
 
 def reset_admin_password(db: Session, user_id: int, new_password: str) -> User:
+    from app.services import login_guard_service, session_service
+
     u, _, _ = get_admin_detail(db, user_id)
     u.password_hash = get_password_hash(new_password)
+    login_guard_service.clear_lockout_state(u)
     db.commit()
     db.refresh(u)
+    session_service.revoke_all_for_user(db, u.id)
+    return u
+
+
+def reset_tenant_user_password(db: Session, user_id: int, new_password: str) -> User:
+    from app.services import login_guard_service, session_service
+
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u or not u.company_id:
+        raise HTTPException(status_code=404, detail="User not found")
+    if (u.role or "").lower() == "super_admin":
+        raise HTTPException(status_code=400, detail="Cannot reset platform admin password here")
+    u.password_hash = get_password_hash(new_password)
+    login_guard_service.clear_lockout_state(u)
+    db.commit()
+    db.refresh(u)
+    session_service.revoke_all_for_user(db, u.id)
     return u
 
 

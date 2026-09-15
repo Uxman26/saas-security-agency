@@ -290,6 +290,15 @@ PLATFORM_PERMS = [
     ("tenants", "lock", "tenants.lock", True),
     ("billing", "read", "billing.read", False),
     ("billing", "write", "billing.write", True),
+    ("trials", "read", "trials.read", False),
+    ("trials", "write", "trials.write", True),
+    ("refunds", "read", "refunds.read", False),
+    ("refunds", "create", "refunds.create", True),
+    ("refunds", "approve", "refunds.approve", True),
+    ("refunds", "process", "refunds.process", True),
+    ("refunds", "cancel", "refunds.cancel", True),
+    ("refunds", "override", "refunds.override", True),
+    ("refunds", "policies", "refunds.policies", True),
     ("support", "read", "support.read", False),
     ("support", "write", "support.write", False),
     ("security", "read", "security.read", False),
@@ -312,14 +321,51 @@ PLATFORM_ROLES = [
     ("admin_viewer", "Admin Viewer", True),
 ]
 
+_REFUND_ALL = [
+    "refunds.read",
+    "refunds.create",
+    "refunds.approve",
+    "refunds.process",
+    "refunds.cancel",
+    "refunds.override",
+    "refunds.policies",
+]
+
 ROLE_PERMS = {
     "super_admin": [p[2] for p in PLATFORM_PERMS],
     "platform_admin": [p[2] for p in PLATFORM_PERMS if p[2] != "impersonate.start"],
-    "billing_admin": ["tenants.read", "billing.read", "billing.write", "audit.read"],
-    "support_admin": ["tenants.read", "support.read", "support.write", "impersonate.start", "audit.read"],
+    "billing_admin": [
+        "tenants.read",
+        "billing.read",
+        "billing.write",
+        "trials.read",
+        "trials.write",
+        "audit.read",
+        *_REFUND_ALL,
+    ],
+    "support_admin": [
+        "tenants.read",
+        "support.read",
+        "support.write",
+        "trials.read",
+        "impersonate.start",
+        "audit.read",
+        "refunds.read",
+        "refunds.create",
+    ],
     "security_admin": ["tenants.read", "security.read", "security.write", "audit.read"],
     "operations_admin": ["tenants.read", "ops.read", "ops.write", "audit.read"],
-    "admin_viewer": ["tenants.read", "billing.read", "support.read", "security.read", "ops.read", "config.read", "audit.read"],
+    "admin_viewer": [
+        "tenants.read",
+        "billing.read",
+        "trials.read",
+        "refunds.read",
+        "support.read",
+        "security.read",
+        "ops.read",
+        "config.read",
+        "audit.read",
+    ],
 }
 
 

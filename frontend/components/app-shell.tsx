@@ -21,6 +21,7 @@ import { navModulesFromUser } from '@/lib/nav-modules';
 import { useModulePathGuard } from '@/components/module-guard';
 import { api } from '@/lib/api';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
+import { TrialBanner } from '@/components/trial-banner';
 
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
@@ -73,6 +74,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <AppSidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ImpersonationBanner />
+        <TrialBanner />
         <header className="z-40 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
           {/* min-w-0 + truncation keeps a long company name from pushing the menu
               button off the start of the header on narrow screens. */}

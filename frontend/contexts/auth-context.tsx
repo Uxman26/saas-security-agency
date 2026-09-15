@@ -14,6 +14,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<LoginResult>;
+  loginWithToken: (token: string) => Promise<User>;
   completeMfa: (mfaToken: string, code: string) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -64,6 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return userData;
   };
 
+  const loginWithToken = async (token: string) => {
+    return finishLogin(token);
+  };
+
   const login = async (email: string, password: string, rememberMe = true): Promise<LoginResult> => {
     const response = await api.auth.login({ email, password, remember_me: rememberMe });
     if (response.mfa_required && response.mfa_token) {
@@ -98,7 +103,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, completeMfa, logout, refreshUser, isAuthenticated: !!user }}
+      value={{
+        user,
+        loading,
+        login,
+        loginWithToken,
+        completeMfa,
+        logout,
+        refreshUser,
+        isAuthenticated: !!user,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
-from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, admin_ext, admin_complete, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles
+from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, admin_ext, admin_complete, admin_trials, admin_refunds, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.middleware.client_source import ClientSourceMiddleware
 from app.database import engine, Base
@@ -122,6 +122,9 @@ app.include_router(reports.router)
 app.include_router(admin.router)
 app.include_router(admin_ext.router)
 app.include_router(admin_complete.router)
+app.include_router(admin_trials.router)
+app.include_router(admin_trials.tenant_router)
+app.include_router(admin_refunds.router)
 app.include_router(receipts.router)
 app.include_router(roles.router)
 app.include_router(modules.router)

@@ -1,12 +1,14 @@
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Form
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Company
 from app.schemas import (
+    EmailAvailabilityRequest,
+    EmailAvailabilityResponse,
     ForgotPasswordRequest,
     MessageResponse,
     MfaConfirmRequest,
@@ -24,7 +26,8 @@ from app.schemas import (
     VerifyEmailRequest,
 )
 from app.auth import current_session_jti, get_current_user, SUPER_ADMIN_ROLE
-from app.services import auth_service
+from app.services import auth_service, oauth_service
+from typing import Optional
 from app.rbac import permissions_for_user_db, permission_bypass
 from app.services.module_service import ensure_app_modules, module_access_for_role
 from app.services.plan_enforcement import plan_summary
@@ -61,12 +64,132 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/check-email", response_model=EmailAvailabilityResponse)
+def check_email(body: EmailAvailabilityRequest, db: Session = Depends(get_db)):
+    from app.services.email_uniqueness import DUPLICATE_EMAIL_MESSAGE, email_available
+
+    available = email_available(db, body.email, exclude_user_id=body.exclude_user_id)
+    return EmailAvailabilityResponse(
+        available=available,
+        message=None if available else DUPLICATE_EMAIL_MESSAGE,
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     return auth_service.authenticate_user(
         db, credentials.email, credentials.password, ip_address=ip, user_agent=ua, remember_me=bool(credentials.remember_me)
+    )
+
+
+@router.get("/oauth/providers")
+def oauth_providers():
+    return {"providers": oauth_service.list_enabled_providers()}
+
+
+@router.get("/oauth/{provider}/start")
+def oauth_start(provider: str, remember_me: bool = True):
+    url = oauth_service.authorization_url(provider.lower().strip(), remember_me=remember_me)
+    return RedirectResponse(url=url, status_code=302)
+
+
+def _oauth_finish(
+    provider: str,
+    *,
+    code: Optional[str],
+    state: Optional[str],
+    error: Optional[str],
+    request: Request,
+    db: Session,
+    apple_user: Optional[str] = None,
+):
+    provider = provider.lower().strip()
+    if error:
+        return RedirectResponse(
+            oauth_service.frontend_callback_url("", error=str(error)),
+            status_code=302,
+        )
+    if not code or not state:
+        return RedirectResponse(
+            oauth_service.frontend_callback_url("", error="Missing authorization code"),
+            status_code=302,
+        )
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    try:
+        result = oauth_service.complete_oauth_login(
+            db,
+            provider=provider,
+            code=code,
+            state=state,
+            ip_address=ip,
+            user_agent=ua,
+            apple_user=apple_user,
+        )
+        if result.get("payment_pending"):
+            return RedirectResponse(
+                oauth_service.frontend_callback_url(
+                    None,
+                    receipt_ref=result.get("receipt_ref"),
+                    payment_pending=True,
+                ),
+                status_code=302,
+            )
+        return RedirectResponse(
+            oauth_service.frontend_callback_url(
+                result.get("access_token"),
+                receipt_ref=result.get("receipt_ref"),
+            ),
+            status_code=302,
+        )
+    except HTTPException as e:
+        detail = e.detail
+        if isinstance(detail, dict):
+            if detail.get("code") == "payment_pending" and detail.get("receipt_ref"):
+                return RedirectResponse(
+                    oauth_service.frontend_callback_url(
+                        None, receipt_ref=detail.get("receipt_ref"), payment_pending=True
+                    ),
+                    status_code=302,
+                )
+            msg = detail.get("message") or detail.get("code") or "OAuth sign-in failed"
+        else:
+            msg = str(detail)
+        return RedirectResponse(oauth_service.frontend_callback_url(error=msg), status_code=302)
+    except Exception:
+        return RedirectResponse(
+            oauth_service.frontend_callback_url(error="OAuth sign-in failed"),
+            status_code=302,
+        )
+
+
+@router.get("/oauth/{provider}/callback")
+def oauth_callback_get(
+    provider: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    return _oauth_finish(provider, code=code, state=state, error=error, request=request, db=db)
+
+
+@router.post("/oauth/{provider}/callback")
+async def oauth_callback_post(
+    provider: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    code: Optional[str] = Form(None),
+    state: Optional[str] = Form(None),
+    error: Optional[str] = Form(None),
+    user: Optional[str] = Form(None),
+):
+    # Apple uses response_mode=form_post
+    return _oauth_finish(
+        provider, code=code, state=state, error=error, request=request, db=db, apple_user=user
     )
 
 

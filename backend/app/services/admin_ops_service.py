@@ -333,7 +333,15 @@ def tenant_support_view(db: Session, company_id: int) -> dict[str, Any]:
             for u in admins
         ],
         "users": [
-            {"id": u.id, "email": u.email, "full_name": u.full_name, "role": u.role, "is_active": u.is_active}
+            {
+                "id": u.id,
+                "email": u.email,
+                "full_name": u.full_name,
+                "role": u.role,
+                "is_active": u.is_active,
+                "must_reset_password": bool(getattr(u, "must_reset_password", False)),
+                "lockout_until": getattr(u, "lockout_until", None),
+            }
             for u in users
         ],
         "login_history": [

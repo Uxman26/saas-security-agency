@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth import current_session_jti, get_current_super_admin, get_current_user
@@ -99,59 +99,59 @@ class SendResetEmailBody(BaseModel):
 
 @router.get("/dashboard/extended")
 def extended_dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    from app.services import admin_hq_service
+
     sub_inv.ensure_renewal_invoices(db)
     base = sub_inv.dashboard_stats(db)
-    now = datetime.now(timezone.utc)
-    week_ago = now - timedelta(days=7)
-    companies = db.query(Company).all()
-    active_users = db.query(User).filter(User.is_active == True, User.company_id.isnot(None)).count()
-    locked = sum(1 for c in companies if (getattr(c, "account_status", None) or "") == "locked")
-    inactive = sum(1 for c in companies if (c.subscription_status or "") not in ("active", "trialing"))
-    trials = sum(1 for c in companies if (c.subscription_status or "") in ("trial", "trialing"))
-    expiring = sum(
-        1
-        for c in companies
-        if c.subscription_end
-        and (c.subscription_end if c.subscription_end.tzinfo else c.subscription_end.replace(tzinfo=timezone.utc))
-        <= now + timedelta(days=14)
-        and (c.subscription_status or "") == "active"
-    )
-    new_tenants = sum(
-        1
-        for c in companies
-        if c.created_at
-        and (c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=timezone.utc)) >= week_ago
-    )
-    from app.models import ErrorLog, BackgroundJob, SecurityEvent
-
-    critical_errors = db.query(ErrorLog).filter(ErrorLog.severity == "critical", ErrorLog.status == "open").count()
-    failed_jobs = db.query(BackgroundJob).filter(BackgroundJob.status == "failed").count()
-    recent_security = db.query(SecurityEvent).order_by(SecurityEvent.id.desc()).limit(10).all()
+    hq = admin_hq_service.hq_snapshot(db)
     return {
         **base,
-        "inactive_tenants": inactive,
-        "new_tenants_7d": new_tenants,
-        "active_users": active_users,
-        "locked_accounts": locked,
-        "trial_subscriptions": trials,
-        "expiring_subscriptions": expiring,
-        "mrr": round(float(base.get("total_collected") or 0) / max(1, base.get("paid_invoices") or 1), 2),
-        "open_tickets": tickets.open_ticket_count(db),
-        "sla_breaches": tickets.sla_breach_count(db),
-        "critical_errors": critical_errors,
-        "failed_jobs": failed_jobs,
-        "platform_usage": tenant_usage_service.platform_usage_summary(db),
-        "recent_security_events": [
-            {
-                "id": e.id,
-                "event_type": e.event_type,
-                "severity": e.severity,
-                "message": e.message,
-                "created_at": e.created_at,
-            }
-            for e in recent_security
-        ],
+        "inactive_tenants": hq["tenants"]["total"] - hq["tenants"]["active"] - hq["tenants"]["trialing"],
+        "new_tenants_7d": hq["tenants"]["new_7d"],
+        "active_users": hq["tenants"]["active_users"],
+        "locked_accounts": hq["tenants"]["locked"],
+        "trial_subscriptions": hq["tenants"]["trialing"],
+        "expiring_subscriptions": hq["tenants"]["expiring_14d"],
+        "mrr": hq["billing"]["mrr"],
+        "arr": hq["billing"]["arr"],
+        "net_revenue": hq["billing"]["net_revenue"],
+        "refunds_total": hq["billing"]["refunds_total"],
+        "refunds_30d": hq["billing"]["refunds_30d"],
+        "refunds_pending": hq["billing"]["refunds_pending"],
+        "credit_liability": hq["billing"]["credit_liability"],
+        "churn_rate_30d_pct": hq["billing"]["churn_rate_30d_pct"],
+        "failed_subscriptions": hq["billing"]["failed_subscriptions"],
+        "failed_invoices": hq["billing"]["failed_invoices"],
+        "open_tickets": hq["ops"]["open_tickets"],
+        "sla_breaches": hq["ops"]["sla_breaches"],
+        "critical_errors": hq["ops"]["critical_errors"],
+        "failed_jobs": hq["ops"]["failed_jobs"],
+        "platform_usage": hq["ops"]["platform_usage"],
+        "hq": hq,
+        "recent_security_events": hq["lists"]["recent_security_events"],
     }
+
+
+@router.get("/hq")
+def admin_hq(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read", "billing.read", "ops.read"))):
+    from app.services import admin_hq_service
+
+    return admin_hq_service.hq_snapshot(db)
+
+
+@router.get("/ops/health")
+def ops_health(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("ops.read", "tenants.read"))):
+    from app.services import admin_hq_service
+
+    return admin_hq_service.ops_health(db)
+
+
+@router.get("/me/permissions")
+def my_permissions(db: Session = Depends(get_db), current_user: User = Depends(get_current_super_admin)):
+    from app.services.platform_rbac_service import user_platform_permission_codes
+
+    codes = sorted(user_platform_permission_codes(db, current_user))
+    return {"permissions": codes, "user_id": current_user.id}
 
 
 @router.get("/search")
@@ -232,8 +232,40 @@ def subscription_action(
     elif action == "reactivate":
         co.subscription_status = "active"
     elif action == "start_trial":
-        co.subscription_status = "trialing"
-        co.subscription_end = datetime.now(timezone.utc) + timedelta(days=14)
+        from app.services import trial_service
+        trial_service.start_trial(
+            db,
+            company_id,
+            actor=current_user,
+            duration_days=None,
+            notes=body.note,
+            source="admin",
+            force=bool(body.note and len(body.note) >= 5),
+            request=request,
+        )
+        co = db.query(Company).filter(Company.id == company_id).first()
+        return ap.company_admin_out(db, co)
+    elif action == "extend_trial":
+        from app.services import trial_service
+        from fastapi import HTTPException
+        trial = trial_service.active_trial_for_company(db, company_id)
+        if not trial:
+            hist = trial_service.trial_history_for_company(db, company_id)
+            trial = next((t for t in hist if t.status in ("expired", "extended", "active")), None)
+        if not trial:
+            raise HTTPException(status_code=404, detail="No trial to extend")
+        days = 14
+        reason = body.note or "Admin extension via subscription action"
+        trial_service.extend_trial(
+            db,
+            trial.id,
+            actor=current_user,
+            extension_days=days,
+            reason=reason,
+            request=request,
+        )
+        co = db.query(Company).filter(Company.id == company_id).first()
+        return ap.company_admin_out(db, co)
     if body.billing_cycle:
         co.billing_cycle = body.billing_cycle
     change = SubscriptionChange(
@@ -683,27 +715,21 @@ def send_reset_email(
     body: SendResetEmailBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("security.write", "tenants.write", "support.write")),
 ):
     from app.services import auth_service
-    from app.models import PasswordResetRequest
 
     u = db.query(User).filter(User.id == body.user_id).first()
     if not u:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="User not found")
-    auth_service.request_password_reset(db, u.email)
     ip, _ = platform_audit_service.request_meta(request)
-    db.add(
-        PasswordResetRequest(
-            user_id=u.id,
-            requested_by_user_id=current_user.id,
-            channel="email",
-            status="sent",
-            ip_address=ip,
-        )
+    auth_service.request_password_reset(
+        db,
+        u.email,
+        requested_by_user_id=current_user.id,
+        ip_address=ip,
     )
-    db.commit()
     platform_audit_service.log(
         db,
         actor=current_user,
@@ -715,6 +741,42 @@ def send_reset_email(
         request=request,
     )
     return {"sent": True, "email": u.email}
+
+
+class SetTenantPasswordBody(BaseModel):
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        from app.schemas import validate_password_strength
+
+        return validate_password_strength(v)
+
+
+@router.post("/users/{user_id}/set-password")
+def set_tenant_password(
+    user_id: int,
+    body: SetTenantPasswordBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("security.write", "tenants.write")),
+):
+    from app.services import admin_platform_service as ap
+
+    u = ap.reset_tenant_user_password(db, user_id, body.new_password)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="user.password_reset",
+        target_type="user",
+        target_id=u.id,
+        target_label=u.email,
+        company_id=u.company_id,
+        request=request,
+        after={"method": "admin_set_password"},
+    )
+    return {"id": u.id, "email": u.email, "reset": True}
 
 
 @router.get("/reports/summary")
@@ -735,6 +797,14 @@ def reports_summary(
 
     invoices = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.created_at >= since).all()
     paid = sum(float(i.amount_paid or 0) for i in invoices)
+    from app.models import PaymentRefund
+
+    refunds = (
+        db.query(PaymentRefund)
+        .filter(PaymentRefund.status == "completed", PaymentRefund.created_at >= since)
+        .all()
+    )
+    refunded = sum(float(r.processed_amount or r.amount or 0) for r in refunds)
     logins = db.query(LoginLog).filter(LoginLog.login_at >= since).count()
     open_tickets = db.query(SupportTicket).filter(SupportTicket.status.in_(["open", "in_progress", "escalated"])).count()
     errors = db.query(ErrorLog).filter(ErrorLog.last_seen_at >= since).count()
@@ -747,6 +817,8 @@ def reports_summary(
         "period_days": days,
         "new_tenants": len(new_tenants),
         "revenue_collected": round(paid, 2),
+        "refunds_total": round(refunded, 2),
+        "net_revenue": round(paid - refunded, 2),
         "invoices_created": len(invoices),
         "logins": logins,
         "open_tickets": open_tickets,

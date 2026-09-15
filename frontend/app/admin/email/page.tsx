@@ -74,7 +74,12 @@ export default function AdminEmailPage() {
             <CardHeader>
               <CardTitle>Platform mail server</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Used for system emails: password resets, invoice notifications, shift reminders, and tenant manual sends.
+                Used for system emails: password resets, account verification, lockout alerts, trial/billing notices, and tenant notifications.
+                Manage message content under{' '}
+                <a href="/admin/templates" className="text-primary underline">
+                  Notification templates
+                </a>
+                .
               </p>
             </CardHeader>
             <CardContent className="space-y-4">

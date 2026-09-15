@@ -67,6 +67,13 @@ def _scheduled_maintenance_sync() -> dict[str, Any]:
                 suspicious_activity_service.scan_suspicious_activity(db)
             except Exception:
                 logger.exception("suspicious scan failed")
+            try:
+                from app.services import trial_service
+                expired = trial_service.sync_expired_trials(db)
+                reminders = trial_service.send_trial_reminders(db)
+                logger.info("trial maintenance: %s %s", expired, reminders)
+            except Exception:
+                logger.exception("trial maintenance failed")
             return {"sia_expiry_due_count": due, "sessions_purged": purged}
         finally:
             db.close()
@@ -115,3 +122,21 @@ def _sweep_lone_worker_sync() -> dict[str, Any]:
 
 async def sweep_lone_worker(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_sweep_lone_worker_sync)
+
+
+def _sweep_trials_sync() -> dict[str, Any]:
+    def run():
+        db: Session = SessionLocal()
+        try:
+            from app.services import trial_service
+            expired = trial_service.sync_expired_trials(db)
+            reminders = trial_service.send_trial_reminders(db)
+            return {**expired, **reminders}
+        finally:
+            db.close()
+
+    return _track_job("sweep_trials", run)()
+
+
+async def sweep_trials(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_sweep_trials_sync)

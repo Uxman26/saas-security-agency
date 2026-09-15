@@ -17,6 +17,7 @@ const PATH_GUARD_EXEMPT_PREFIXES = [
   '/reset-password',
   '/verify-email',
   '/payment-pending',
+  '/settings',
 ];
 
 function pathGuardExempt(pathname: string): boolean {

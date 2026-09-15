@@ -9,7 +9,9 @@ import {
   FileText,
   Flag,
   Gift,
+  Hourglass,
   KeyRound,
+  LayoutDashboard,
   LifeBuoy,
   Mail,
   Monitor,
@@ -21,6 +23,7 @@ import {
   UserCog,
   Users,
   Wallet,
+  Webhook,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -31,6 +34,7 @@ export type AdminNavItem = {
 };
 
 export const ADMIN_NAV: readonly AdminNavItem[] = [
+  { href: '/admin', labelKey: 'adminHq', icon: LayoutDashboard },
   { href: '/admin/companies', labelKey: 'adminCompanies', icon: Building2 },
   { href: '/admin/users', labelKey: 'adminUsers', icon: Users },
   { href: '/admin/admins', labelKey: 'adminAdmins', icon: UserCog },
@@ -38,6 +42,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: '/admin/errors', labelKey: 'adminErrors', icon: AlertTriangle },
   { href: '/admin/sessions', labelKey: 'adminSessions', icon: Monitor },
   { href: '/admin/jobs', labelKey: 'adminJobs', icon: Cog },
+  { href: '/admin/webhooks', labelKey: 'adminWebhooks', icon: Webhook },
   { href: '/admin/reports', labelKey: 'adminReports', icon: BarChart3 },
   { href: '/admin/search', labelKey: 'adminSearch', icon: Search },
   { href: '/admin/flags', labelKey: 'adminFlags', icon: Flag },
@@ -51,11 +56,13 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: '/admin/payments', labelKey: 'adminPayments', icon: CreditCard },
   { href: '/admin/receipts', labelKey: 'adminReceipts', icon: Wallet },
   { href: '/admin/packages', labelKey: 'adminPackages', icon: Gift },
+  { href: '/admin/trials', labelKey: 'adminTrials', icon: Hourglass },
   { href: '/admin/audit', labelKey: 'adminAudit', icon: ScrollText },
   { href: '/admin/email', labelKey: 'adminSmtp', icon: Mail },
   { href: '/admin/logs', labelKey: 'adminLogs', icon: Clock },
 ] as const;
 
 export function isAdminNavActive(pathname: string, href: string): boolean {
+  if (href === '/admin') return pathname === '/admin';
   return pathname === href || pathname.startsWith(`${href}/`);
 }

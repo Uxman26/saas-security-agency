@@ -91,6 +91,17 @@ export function parsePaymentPending(err: unknown): import('./types').PaymentPend
   return null;
 }
 
+export function parseSubscriptionRequired(err: unknown): import('./types').SubscriptionRequiredDetail | null {
+  if (!(err instanceof Error)) return null;
+  try {
+    const d = JSON.parse(err.message);
+    if (d?.code === 'subscription_required') return d;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function parseEmailVerificationRequired(err: unknown): { email?: string; receipt_ref?: string } | null {
   if (!(err instanceof Error)) return null;
   try {
@@ -100,4 +111,54 @@ export function parseEmailVerificationRequired(err: unknown): { email?: string; 
     return null;
   }
   return null;
+}
+
+export function parseAccountLocked(err: unknown): {
+  message?: string;
+  retry_after_seconds?: number;
+  locked_until?: string;
+  email?: string;
+} | null {
+  if (!err || typeof err !== 'object') return null;
+  const anyErr = err as { code?: string; detail?: unknown; retryAfterSeconds?: number; message?: string };
+  const detail =
+    anyErr.detail && typeof anyErr.detail === 'object'
+      ? (anyErr.detail as Record<string, unknown>)
+      : (() => {
+          try {
+            return JSON.parse(String(anyErr.message || ''));
+          } catch {
+            return null;
+          }
+        })();
+  if (!detail || detail.code !== 'account_locked') return null;
+  return {
+    message: typeof detail.message === 'string' ? detail.message : undefined,
+    retry_after_seconds:
+      typeof detail.retry_after_seconds === 'number'
+        ? detail.retry_after_seconds
+        : anyErr.retryAfterSeconds,
+    locked_until: typeof detail.locked_until === 'string' ? detail.locked_until : undefined,
+    email: typeof detail.email === 'string' ? detail.email : undefined,
+  };
+}
+
+export function parsePasswordResetRequired(err: unknown): { message?: string; email?: string } | null {
+  if (!err || typeof err !== 'object') return null;
+  const anyErr = err as { code?: string; detail?: unknown; message?: string };
+  const detail =
+    anyErr.detail && typeof anyErr.detail === 'object'
+      ? (anyErr.detail as Record<string, unknown>)
+      : (() => {
+          try {
+            return JSON.parse(String(anyErr.message || ''));
+          } catch {
+            return null;
+          }
+        })();
+  if (!detail || detail.code !== 'password_reset_required') return null;
+  return {
+    message: typeof detail.message === 'string' ? detail.message : undefined,
+    email: typeof detail.email === 'string' ? detail.email : undefined,
+  };
 }

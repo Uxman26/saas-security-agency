@@ -42,6 +42,11 @@ class UserCreate(StrictModel):
     company_name: CompanyNameStr
     subscription_tier: Optional[ShortTextStr] = None
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
     @field_validator("password")
     @classmethod
     def password_rules(cls, v: str) -> str:
@@ -80,6 +85,21 @@ class MessageResponse(BaseModel):
 
 class ForgotPasswordRequest(StrictModel):
     email: EmailStr = Field(max_length=EMAIL_MAX)
+
+
+class EmailAvailabilityRequest(StrictModel):
+    email: EmailStr = Field(max_length=EMAIL_MAX)
+    exclude_user_id: Optional[int] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+
+class EmailAvailabilityResponse(BaseModel):
+    available: bool
+    message: Optional[str] = None
 
 class ResetPasswordRequest(StrictModel):
     token: TokenStr
@@ -382,6 +402,7 @@ class CompanyAdminResponse(CompanyBase):
     archived_at: Optional[datetime] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    trial: Optional[dict[str, Any]] = None
     created_at: datetime
 
 
@@ -1476,6 +1497,11 @@ class CompanyUserCreate(StrictModel):
     # Client-role user sees every site of its client — the behaviour before pins existed.
     site_ids: Optional[list[int]] = None
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
     @field_validator("password")
     @classmethod
     def password_rules(cls, v: str) -> str:
@@ -1491,6 +1517,13 @@ class CompanyUserUpdate(StrictModel):
     guard_id: Optional[int] = None
     # None leaves existing pins alone; [] clears them back to client-wide access.
     site_ids: Optional[list[int]] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return v.strip().lower()
 
     @field_validator("password")
     @classmethod

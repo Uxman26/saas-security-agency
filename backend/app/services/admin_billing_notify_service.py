@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     NotificationTemplate,
-    PaymentRefund,
     PlatformNotification,
     SubscriptionInvoice,
     SupportTicket,
@@ -31,14 +30,77 @@ DEFAULT_TEMPLATES = [
         "name": "Password reset",
         "channel": "email",
         "subject": "Reset your ControlOps password",
-        "body": "Click the link to reset your password: {{reset_url}}",
+        "body": "Hi {{full_name}},\n\nClick the link to reset your password (expires in 1 hour):\n{{reset_url}}\n\nIf you did not request this, you can ignore this email.",
+    },
+    {
+        "key": "account_verification",
+        "name": "Account verification",
+        "channel": "email",
+        "subject": "Verify your ControlOps email",
+        "body": "Hi {{full_name}},\n\nPlease verify your email address to activate your ControlOps account:\n{{verify_url}}\n\nThis link expires in 24 hours.",
+    },
+    {
+        "key": "welcome_onboarding",
+        "name": "Welcome / onboarding",
+        "channel": "email",
+        "subject": "Welcome to ControlOps",
+        "body": "Hi {{full_name}},\n\nWelcome to ControlOps. Your company {{company_name}} is ready — sign in to finish setup and invite your team.\n\n{{login_url}}",
+    },
+    {
+        "key": "login_security_alert",
+        "name": "Login / security alert",
+        "channel": "email",
+        "subject": "Security alert for your ControlOps account",
+        "body": "Hi {{full_name}},\n\nWe detected a security event on your account ({{email}}): {{action}}.\n\nIf this was not you, reset your password immediately.",
+    },
+    {
+        "key": "account_lockout",
+        "name": "Account lockout",
+        "channel": "email",
+        "subject": "Your ControlOps sign-in is temporarily locked",
+        "body": "Hi {{full_name}},\n\nYour account was temporarily locked for {{lockout_minutes}} minute(s) after repeated failed sign-in attempts.\n\nYou can try again after {{locked_until}}. Another failed attempt after the lockout may require a password reset.",
     },
     {
         "key": "account_locked",
-        "name": "Account locked",
+        "name": "Tenant account locked",
         "channel": "email",
         "subject": "Your ControlOps account was locked",
         "body": "Your tenant account {{company_name}} was locked. Contact support if this was unexpected.",
+    },
+    {
+        "key": "trial_reminder",
+        "name": "Trial reminder",
+        "channel": "email",
+        "subject": "Your ControlOps trial reminder",
+        "body": "Hi {{full_name}},\n\nThis is a reminder about the ControlOps trial for {{company_name}}. {{message}}",
+    },
+    {
+        "key": "trial_expiring",
+        "name": "Trial expiring soon",
+        "channel": "email",
+        "subject": "Your ControlOps trial ends in {{days}} day(s)",
+        "body": "Your trial for {{company_name}} ({{tier}}) ends on {{ends_at}}. Upgrade in Billing to keep full access to operational features. Your existing data remains safe.",
+    },
+    {
+        "key": "trial_expired",
+        "name": "Trial expired",
+        "channel": "email",
+        "subject": "Your ControlOps trial has ended",
+        "body": "The trial for {{company_name}} has ended. You can still sign in to view your data and upgrade from Billing settings.",
+    },
+    {
+        "key": "subscription_billing",
+        "name": "Subscription / billing notification",
+        "channel": "email",
+        "subject": "ControlOps billing update — {{company_name}}",
+        "body": "Hi {{full_name}},\n\n{{message}}\n\nPlan: {{tier}}\nAmount: {{amount}}",
+    },
+    {
+        "key": "payment_notification",
+        "name": "Payment notification",
+        "channel": "email",
+        "subject": "Payment update — {{company_name}}",
+        "body": "Hi {{full_name}},\n\n{{message}}\n\nReference: {{reference}}\nAmount: {{amount}}",
     },
     {
         "key": "billing_overdue",
@@ -46,6 +108,34 @@ DEFAULT_TEMPLATES = [
         "channel": "email",
         "subject": "Invoice overdue — {{invoice_number}}",
         "body": "Invoice {{invoice_number}} for {{company_name}} is overdue. Amount due: {{amount}}.",
+    },
+    {
+        "key": "expiry_renewal",
+        "name": "Expiry / renewal reminder",
+        "channel": "email",
+        "subject": "Renewal reminder — {{company_name}}",
+        "body": "Hi {{full_name}},\n\nYour ControlOps subscription for {{company_name}} renews or expires on {{ends_at}}. {{message}}",
+    },
+    {
+        "key": "refund_processed",
+        "name": "Refund processed",
+        "channel": "email",
+        "subject": "Refund processed — {{amount}}",
+        "body": "A refund of {{amount}} {{currency}} for {{company_name}} has been processed. Reference: refund #{{refund_id}}. Reason: {{reason}}.",
+    },
+    {
+        "key": "promotional_marketing",
+        "name": "Promotional / marketing",
+        "channel": "email",
+        "subject": "{{subject}}",
+        "body": "{{body}}",
+    },
+    {
+        "key": "system_notification",
+        "name": "General system notification",
+        "channel": "email",
+        "subject": "{{subject}}",
+        "body": "{{body}}",
     },
     {
         "key": "service_announcement",
@@ -139,74 +229,23 @@ def create_refund(
     reason: Optional[str] = None,
     request=None,
 ) -> dict:
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    inv = None
-    if invoice_id:
-        inv = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.id == invoice_id).first()
-        if not inv or inv.company_id != company_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
-        paid = float(inv.amount_paid or 0)
-        if amount > paid:
-            raise HTTPException(status_code=400, detail="Refund exceeds amount paid")
-        inv.amount_paid = round(paid - amount, 2)
-        if inv.amount_paid <= 0:
-            inv.status = "refunded"
-            inv.amount_paid = 0
-        elif inv.amount_paid < float(inv.total_amount or 0):
-            inv.status = "partial"
-    row = PaymentRefund(
-        company_id=company_id,
-        subscription_invoice_id=invoice_id,
-        amount=amount,
-        reason=reason,
-        status="completed",
-        actor_user_id=actor.id,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    platform_audit_service.log(
+    from app.services import refund_service
+
+    return refund_service.create_refund_legacy(
         db,
         actor=actor,
-        action="payment.refunded",
-        target_type="refund",
-        target_id=row.id,
         company_id=company_id,
-        after={"amount": amount, "invoice_id": invoice_id},
-        note=reason,
+        amount=amount,
+        invoice_id=invoice_id,
+        reason=reason,
         request=request,
     )
-    return {
-        "id": row.id,
-        "company_id": row.company_id,
-        "subscription_invoice_id": row.subscription_invoice_id,
-        "amount": row.amount,
-        "currency": row.currency,
-        "reason": row.reason,
-        "status": row.status,
-        "created_at": row.created_at,
-    }
 
 
 def list_refunds(db: Session, company_id: Optional[int] = None) -> list[dict]:
-    q = db.query(PaymentRefund)
-    if company_id:
-        q = q.filter(PaymentRefund.company_id == company_id)
-    return [
-        {
-            "id": r.id,
-            "company_id": r.company_id,
-            "subscription_invoice_id": r.subscription_invoice_id,
-            "amount": r.amount,
-            "currency": r.currency,
-            "reason": r.reason,
-            "status": r.status,
-            "actor_user_id": r.actor_user_id,
-            "created_at": r.created_at,
-        }
-        for r in q.order_by(PaymentRefund.id.desc()).limit(200).all()
-    ]
+    from app.services import refund_service
+
+    return refund_service.list_refunds(db, company_id=company_id)
 
 
 def mark_invoice_disputed(db: Session, invoice_id: int, actor: User, note: Optional[str] = None, request=None) -> dict:

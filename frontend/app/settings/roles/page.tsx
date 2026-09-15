@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { companyUserSchema, companyUserUpdateSchema, passwordFieldSchema } from '@/lib/validation';
+import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import type { z } from 'zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -597,6 +598,12 @@ export default function RolesSettingsPage() {
     }
     setSaving(true);
     try {
+      const dup = await assertEmailAvailable(data.email);
+      if (dup) {
+        userForm.setError('email', { type: 'manual', message: dup });
+        toast.error(dup);
+        return;
+      }
       await api.users.create({
         email: data.email,
         password: data.password,
@@ -611,7 +618,12 @@ export default function RolesSettingsPage() {
       await load();
       toast.success('User created');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to create user');
+      if (isDuplicateEmailError(e)) {
+        userForm.setError('email', { type: 'manual', message: DUPLICATE_EMAIL_MESSAGE });
+        toast.error(DUPLICATE_EMAIL_MESSAGE);
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to create user');
+      }
     } finally {
       setSaving(false);
     }
@@ -692,6 +704,12 @@ export default function RolesSettingsPage() {
     if (!editUser) return;
     setSaving(true);
     try {
+      const dup = await assertEmailAvailable(data.email, { excludeUserId: editUser.id });
+      if (dup) {
+        editUserForm.setError('email', { type: 'manual', message: dup });
+        toast.error(dup);
+        return;
+      }
       const slug = slugForRoleId(data.role_id);
       await api.users.update(editUser.id, {
         email: data.email,
@@ -708,7 +726,12 @@ export default function RolesSettingsPage() {
       await load();
       toast.success('User updated');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to update user');
+      if (isDuplicateEmailError(e)) {
+        editUserForm.setError('email', { type: 'manual', message: DUPLICATE_EMAIL_MESSAGE });
+        toast.error(DUPLICATE_EMAIL_MESSAGE);
+      } else {
+        toast.error(e instanceof Error ? e.message : 'Failed to update user');
+      }
     } finally {
       setSaving(false);
     }
@@ -1221,7 +1244,17 @@ export default function RolesSettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Email</Label>
-                      <Input type="email" autoComplete="off" {...userForm.register('email')} placeholder="user@company.com" />
+                      <Input
+                        type="email"
+                        autoComplete="off"
+                        {...userForm.register('email', {
+                          onBlur: async (e) => {
+                            const dup = await assertEmailAvailable(e.target.value);
+                            if (dup) userForm.setError('email', { type: 'manual', message: dup });
+                          },
+                        })}
+                        placeholder="user@company.com"
+                      />
                       {userForm.formState.errors.email && (
                         <p className="text-xs text-destructive">{userForm.formState.errors.email.message}</p>
                       )}
@@ -1309,7 +1342,19 @@ export default function RolesSettingsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Email</Label>
-                      <Input type="email" autoComplete="off" {...editUserForm.register('email')} />
+                      <Input
+                        type="email"
+                        autoComplete="off"
+                        {...editUserForm.register('email', {
+                          onBlur: async (e) => {
+                            if (!editUser) return;
+                            const dup = await assertEmailAvailable(e.target.value, {
+                              excludeUserId: editUser.id,
+                            });
+                            if (dup) editUserForm.setError('email', { type: 'manual', message: dup });
+                          },
+                        })}
+                      />
                       {editUserForm.formState.errors.email && (
                         <p className="text-xs text-destructive">{editUserForm.formState.errors.email.message}</p>
                       )}

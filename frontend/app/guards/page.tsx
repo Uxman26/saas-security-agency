@@ -31,6 +31,7 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Pencil, Trash2, Users, Eye } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import { api } from '@/lib/api';
 import type { JobTitle } from '@/lib/types';
 function getSiaStatus(date?: string): 'expired' | 'critical' | 'warning' | 'ok' | null {
@@ -141,6 +142,13 @@ export default function GuardsPage() {
 
   const handleCreate = async (data: GuardFormData) => {
     try {
+      if (data.create_login) {
+        const dup = await assertEmailAvailable(data.email || '');
+        if (dup) {
+          toast.error(dup);
+          return;
+        }
+      }
       const created = await createGuard.mutateAsync(formToGuardPayload(data));
       if (photoFile && created?.id) {
         try {
@@ -152,8 +160,8 @@ export default function GuardsPage() {
       setPhotoFile(null);
       setAddOpen(false);
       addForm.reset(guardFormDefaults);
-    } catch {
-      /* toast via mutation hook */
+    } catch (err) {
+      if (isDuplicateEmailError(err)) toast.error(DUPLICATE_EMAIL_MESSAGE);
     }
   };
 

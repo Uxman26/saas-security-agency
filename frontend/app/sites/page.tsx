@@ -27,6 +27,7 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { MapPin, Pencil, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { useAuth } from '@/contexts/auth-context';
@@ -377,15 +378,24 @@ export default function SitesPage() {
       const payload = sanitize(data);
       // Login fields ride along on POST only; the API rejects them on PUT.
       if (data.create_login) {
+        const loginEmail = data.login_email || data.contact_email || '';
+        const dup = await assertEmailAvailable(loginEmail);
+        if (dup) {
+          toast.error(dup);
+          return;
+        }
         payload.create_login = true;
-        payload.login_email = data.login_email || data.contact_email || undefined;
+        payload.login_email = loginEmail || undefined;
         payload.login_full_name = data.login_full_name || undefined;
         payload.login_password = data.login_password;
       }
       await createSite.mutateAsync(payload);
       setAddOpen(false);
       addForm.reset();
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      if (isDuplicateEmailError(err)) toast.error(DUPLICATE_EMAIL_MESSAGE);
+      else console.error(err);
+    }
   };
 
   const openEdit = (site: Site) => {

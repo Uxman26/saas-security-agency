@@ -80,6 +80,8 @@ export default function AdminReportsPage() {
         { label: 'New tenants', value: summary.new_tenants },
         { label: 'Active tenants', value: summary.active_tenants },
         { label: 'Revenue collected', value: `£${summary.revenue_collected.toFixed(2)}` },
+        { label: 'Refunds', value: `£${(summary.refunds_total ?? 0).toFixed(2)}` },
+        { label: 'Net revenue', value: `£${(summary.net_revenue ?? summary.revenue_collected).toFixed(2)}` },
         { label: 'Invoices created', value: summary.invoices_created },
         { label: 'Logins', value: summary.logins },
         { label: 'Open tickets', value: summary.open_tickets },

@@ -33,6 +33,7 @@ from app.schemas import (
     AdminCouponCreate,
 )
 from app.auth import get_current_super_admin
+from app.services.platform_rbac_service import require_platform_perm
 from app.services import admin_platform_service as ap
 from app.services import platform_plans_service
 from app.services import subscription_invoice_service as sub_inv
@@ -336,13 +337,13 @@ def patch_package(
 
 
 @router.get("/smtp", response_model=SmtpConfigResponse)
-def get_smtp(_: User = Depends(get_current_super_admin)):
+def get_smtp(_: User = Depends(require_platform_perm("config.read", "config.write"))):
     from app.services.platform_smtp_service import smtp_status
     return SmtpConfigResponse(**smtp_status())
 
 
 @router.patch("/smtp", response_model=SmtpConfigResponse)
-def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(get_current_super_admin)):
+def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(require_platform_perm("config.write"))):
     from app.services.platform_smtp_service import update_smtp_config
     return SmtpConfigResponse(**update_smtp_config(body.model_dump(exclude_unset=True)))
 
@@ -493,11 +494,10 @@ def reset_password(
     body: AdminResetPassword,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("security.write", "tenants.write")),
 ):
     u = ap.reset_admin_password(db, user_id, body.new_password)
     co = db.query(Company).filter(Company.id == u.company_id).first()
-    # Never record the password itself — only that it was changed, by whom.
     platform_audit_service.log(
         db,
         actor=current_user,
@@ -507,6 +507,7 @@ def reset_password(
         target_label=u.email,
         company=co,
         request=request,
+        after={"method": "admin_set_password"},
     )
     receipts = (
         db.query(SubscriptionReceipt)

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BillingCycleToggle } from '@/components/billing/billing-cycle-toggle';
 import { PricingGrid } from '@/components/billing/pricing-grid';
 import { api } from '@/lib/api';
-import type { PlanTier } from '@/lib/types';
+import type { PlanTier, TrialStatus } from '@/lib/types';
 import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
 import { CreditCard, Loader2, Receipt } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -30,6 +30,7 @@ export default function BillingSettingsPage() {
   const tb = useTranslations('billing');
   const [tiers, setTiers] = useState<PlanTier[]>([]);
   const [sub, setSub] = useState<Subscription | null>(null);
+  const [trial, setTrial] = useState<TrialStatus | null>(null);
   const [receipts, setReceipts] = useState<Awaited<ReturnType<typeof api.billing.receipts>>>([]);
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [yearlyDiscount, setYearlyDiscount] = useState(20);
@@ -39,7 +40,7 @@ export default function BillingSettingsPage() {
   const [preview, setPreview] = useState<{ tier: string; amount: number } | null>(null);
 
   const load = async () => {
-    const [pkg, subscription, billingReceipts, stripeCfg] = await Promise.all([
+    const [pkg, subscription, billingReceipts, stripeCfg, trialStatus] = await Promise.all([
       api.packages.list().catch(() => DEFAULT_PLAN_TIERS),
       api.subscriptions.get().catch(() => null),
       api.billing.receipts().catch(() => []),
@@ -47,9 +48,11 @@ export default function BillingSettingsPage() {
         enabled: false,
         publishable_key: '',
       })),
+      api.subscriptions.trialStatus().catch(() => null),
     ]);
     setTiers(pkg.length ? pkg : DEFAULT_PLAN_TIERS);
     setSub(subscription);
+    setTrial(trialStatus);
     setReceipts(billingReceipts);
     setStripeEnabled(stripeCfg.enabled);
     if (stripeCfg.yearly_discount_percent) setYearlyDiscount(stripeCfg.yearly_discount_percent);
@@ -123,6 +126,50 @@ export default function BillingSettingsPage() {
             }
           />
 
+          {trial && (trial.trial_active || trial.trial_expired || trial.subscription_required) && (
+            <Card className="mb-8 border-primary/20">
+              <CardHeader>
+                <CardTitle className="text-base">{tb('trialStatus')}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-6 text-sm">
+                <div>
+                  <p className="text-muted-foreground">{tb('status')}</p>
+                  <p className="font-semibold">
+                    {trial.label ||
+                      (trial.trial_active
+                        ? tb('trialActive')
+                        : trial.trial_expired
+                          ? tb('trialExpired')
+                          : tb('subscriptionRequired'))}
+                  </p>
+                </div>
+                {trial.trial_active && (
+                  <>
+                    <div>
+                      <p className="text-muted-foreground">{tb('daysRemaining')}</p>
+                      <p className="font-semibold">{trial.days_remaining ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">{tb('endsOn')}</p>
+                      <p className="font-semibold">
+                        {trial.trial_ends_on
+                          ? new Date(trial.trial_ends_on).toLocaleDateString()
+                          : '—'}
+                      </p>
+                    </div>
+                  </>
+                )}
+                {(trial.trial_expired || trial.subscription_required) && !trial.can_use_paid_features && (
+                  <div className="w-full">
+                    <p className="text-muted-foreground mb-2">
+                      Subscription required to use paid features. You can still view your data and upgrade below.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {sub && (
             <Card className="mb-8">
               <CardHeader>
@@ -141,6 +188,12 @@ export default function BillingSettingsPage() {
                   <p className="text-muted-foreground">{tb('status')}</p>
                   <p className="font-semibold capitalize">{sub.subscription_status || '—'}</p>
                 </div>
+                {sub.subscription_end && (
+                  <div>
+                    <p className="text-muted-foreground">{tb('endsOn')}</p>
+                    <p className="font-semibold">{new Date(sub.subscription_end).toLocaleDateString()}</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

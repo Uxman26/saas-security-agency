@@ -159,15 +159,94 @@ def mark_receipt_paid(db: Session, receipt_id: int) -> SubscriptionReceipt:
 
 
 def company_subscription_blocked(db: Session, user: User) -> dict | None:
+    """Gate for paid operational APIs.
+
+    Returns None when the tenant may use paid features (active or valid trial).
+    Returns a structured detail for payment_pending / subscription_required otherwise.
+    Never deletes or deactivates tenant data.
+    """
     if not user.company_id:
         return None
     co = db.query(Company).filter(Company.id == user.company_id).first()
-    if not co or co.subscription_status == "active":
+    if not co:
+        return None
+
+    from app.services import trial_service
+
+    trial_service.sync_if_needed(db, co)
+    db.refresh(co)
+
+    status = (co.subscription_status or "pending").lower()
+    if status == "active":
+        return None
+    if status == "trialing":
+        end = co.subscription_end
+        if end is not None:
+            if end.tzinfo is None:
+                from datetime import timezone as tz
+                end = end.replace(tzinfo=tz.utc)
+            from datetime import datetime, timezone as tz
+            if end > datetime.now(tz.utc):
+                return None
+        trial_service.sync_if_needed(db, co)
+        db.refresh(co)
+        status = (co.subscription_status or "pending").lower()
+        if status == "trialing":
+            return None
+
+    pending = latest_pending_receipt(db, co.id)
+    trial_snap = trial_service.tenant_trial_status(db, co)
+
+    if status == "pending":
+        return {
+            "code": "payment_pending",
+            "message": "Complete payment to activate your subscription.",
+            "subscription_status": status,
+            "receipt_ref": pending.ref_id if pending else None,
+            "amount": pending.amount if pending else price_for_tier(co.subscription_tier),
+            "tier": co.subscription_tier,
+            "company_name": co.name,
+        }
+
+    return {
+        "code": "subscription_required",
+        "message": "Your trial has ended or paid access is required. You can still sign in, view your data, and upgrade from Billing.",
+        "subscription_status": status,
+        "receipt_ref": pending.ref_id if pending else None,
+        "amount": pending.amount if pending else price_for_tier(co.subscription_tier),
+        "tier": co.subscription_tier,
+        "company_name": co.name,
+        "trial_ends_on": trial_snap.get("trial_ends_on"),
+        "days_remaining": trial_snap.get("days_remaining"),
+        "label": trial_snap.get("label"),
+    }
+
+
+def company_login_blocked(db: Session, user: User) -> dict | None:
+    """Blocks login only when the account has never completed initial payment (pending).
+
+    Trial-expired tenants must still be able to sign in to view data and upgrade.
+    """
+    if not user.company_id:
+        return None
+    co = db.query(Company).filter(Company.id == user.company_id).first()
+    if not co:
+        return None
+    from app.services import trial_service
+
+    trial_service.sync_if_needed(db, co)
+    db.refresh(co)
+    status = (co.subscription_status or "pending").lower()
+    if status in ("active", "trialing", "trial_expired", "past_due"):
+        return None
+    if status in ("suspended", "cancelled", "canceled"):
+        # Allow login so they can open Billing / contact support; APIs still gate paid ops.
         return None
     pending = latest_pending_receipt(db, co.id)
     return {
         "code": "payment_pending",
-        "subscription_status": co.subscription_status or "pending",
+        "message": "Complete payment to activate your account.",
+        "subscription_status": status,
         "receipt_ref": pending.ref_id if pending else None,
         "amount": pending.amount if pending else price_for_tier(co.subscription_tier),
         "tier": co.subscription_tier,

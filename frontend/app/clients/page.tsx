@@ -31,6 +31,7 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { Building2, Eye, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -284,11 +285,19 @@ export default function ClientsPage() {
 
   const handleCreate = async (data: ClientFormData) => {
     try {
+      if (data.create_login) {
+        const dup = await assertEmailAvailable(data.email || '');
+        if (dup) {
+          toast.error(dup);
+          return;
+        }
+      }
       await createClient.mutateAsync(stripEmptyDates(data));
       setAddOpen(false);
       addForm.reset();
     } catch (err) {
-      console.error(err);
+      if (isDuplicateEmailError(err)) toast.error(DUPLICATE_EMAIL_MESSAGE);
+      else console.error(err);
     }
   };
 

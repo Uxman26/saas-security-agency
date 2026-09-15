@@ -160,6 +160,82 @@ export interface PaymentPendingDetail {
   company_name?: string;
 }
 
+export interface SubscriptionRequiredDetail {
+  code: string;
+  message?: string;
+  subscription_status?: string;
+  receipt_ref?: string | null;
+  amount?: number;
+  tier?: string;
+  company_name?: string;
+  trial_ends_on?: string | null;
+  days_remaining?: number | null;
+  label?: string;
+}
+
+export interface TrialExtension {
+  id: number;
+  previous_ends_at: string;
+  new_ends_at: string;
+  extension_days: number;
+  reason: string;
+  extended_by_user_id?: number | null;
+  created_at: string;
+}
+
+export interface TrialPeriod {
+  id: number;
+  company_id: number;
+  company_name?: string | null;
+  user_id?: number | null;
+  plan_tier?: string | null;
+  status: string;
+  source?: string | null;
+  duration_days: number;
+  started_at: string;
+  original_ends_at: string;
+  ends_at: string;
+  days_remaining?: number | null;
+  granted_by_user_id?: number | null;
+  converted_at?: string | null;
+  expired_at?: string | null;
+  stripe_subscription_id?: string | null;
+  notes?: string | null;
+  created_at: string;
+  extensions?: TrialExtension[];
+}
+
+export interface TrialStatus {
+  subscription_status?: string | null;
+  label?: string;
+  trial_active: boolean;
+  trial_expired: boolean;
+  trial_ends_on?: string | null;
+  days_remaining?: number | null;
+  plan_tier?: string | null;
+  trial_id?: number | null;
+  can_use_paid_features: boolean;
+  subscription_required: boolean;
+}
+
+export interface TrialConfig {
+  default_days: number;
+  allowed_days: number[];
+  allow_repeat: boolean;
+  require_card: boolean;
+  reminder_days: number[];
+  eligible_tiers: string[];
+  enabled: boolean;
+}
+
+export interface CompanyTrialsResponse {
+  company_id: number;
+  eligible_for_new_trial: boolean;
+  eligibility_reason: string;
+  current: TrialStatus;
+  history: TrialPeriod[];
+}
+
 export interface AdminUserDetail {
   id: number;
   email: string;
@@ -350,6 +426,7 @@ export interface Company {
   email?: string | null;
   phone?: string | null;
   created_at: string;
+  trial?: TrialStatus;
 }
 
 export interface SupportTicketMessage {
@@ -470,6 +547,8 @@ export interface AdminReportsSummary {
   period_days: number;
   new_tenants: number;
   revenue_collected: number;
+  refunds_total?: number;
+  net_revenue?: number;
   invoices_created: number;
   logins: number;
   open_tickets: number;
@@ -477,6 +556,93 @@ export interface AdminReportsSummary {
   api_calls: number;
   tenants_by_tier: Record<string, number>;
   active_tenants: number;
+}
+
+export interface AdminHqSnapshot {
+  generated_at?: string;
+  tenants: {
+    total: number;
+    active: number;
+    trialing: number;
+    trial_expired: number;
+    past_due: number;
+    cancelled: number;
+    locked: number;
+    new_7d: number;
+    new_30d: number;
+    expiring_14d: number;
+    by_tier: Record<string, number>;
+    by_status: Record<string, number>;
+    active_users: number;
+  };
+  billing: {
+    mrr: number;
+    arr: number;
+    collected_all_time: number;
+    outstanding: number;
+    net_revenue: number;
+    refunds_total: number;
+    refunds_30d: number;
+    refunds_pending: number;
+    credit_liability: number;
+    failed_subscriptions: number;
+    failed_invoices: number;
+    churn_rate_30d_pct: number;
+    cancelled_30d: number;
+    billing_receipts: number;
+  };
+  trials: { active_rows: number; companies_trialing: number; companies_expired: number };
+  ops: {
+    open_tickets: number;
+    sla_breaches: number;
+    critical_errors: number;
+    failed_jobs: number;
+    queued_jobs: number;
+    webhook_failure_count: number;
+    notification_failures: number;
+    api_calls_7d: number;
+    logins_7d: number;
+    platform_usage?: Record<string, unknown>;
+  };
+  lists: {
+    upcoming_renewals: {
+      company_id: number;
+      company_name: string;
+      subscription_end?: string;
+      tier?: string | null;
+      billing_cycle?: string | null;
+    }[];
+    recent_security_events: { id: number; event_type?: string; severity?: string; message?: string | null; created_at?: string }[];
+    recent_refunds: { id: number; company_id: number; amount: number; status?: string; created_at?: string }[];
+    recent_webhooks: { id: number; event_type?: string | null; status?: string; created_at?: string }[];
+    failed_webhooks: {
+      id: number;
+      event_type?: string | null;
+      status?: string;
+      error_message?: string | null;
+      created_at?: string;
+    }[];
+  };
+}
+
+export interface OpsHealth {
+  status: string;
+  issues: string[];
+  ops?: Record<string, unknown>;
+  billing_alerts?: Record<string, unknown>;
+  generated_at?: string;
+}
+
+export interface WebhookLogItem {
+  id: number;
+  company_id?: number | null;
+  provider?: string | null;
+  event_type?: string | null;
+  status?: string | null;
+  http_status?: number | null;
+  error_message?: string | null;
+  attempts?: number | null;
+  created_at?: string;
 }
 
 export interface Guard {
@@ -769,16 +935,119 @@ export interface ApiUsageSummary {
   recent: { id: number; company_id?: number | null; path?: string | null; method?: string | null; logged_at?: string }[];
 }
 
+export interface RefundPolicy {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  scenario_type: string;
+  calculation_type: string;
+  percentage?: number | null;
+  fixed_amount?: number | null;
+  requires_approval: boolean;
+  auto_approve_below?: number | null;
+  max_refund_percent?: number | null;
+  max_refund_amount?: number | null;
+  min_days_after_payment?: number | null;
+  max_days_after_payment?: number | null;
+  eligible_payment_statuses?: string[];
+  allow_stripe: boolean;
+  allow_credit: boolean;
+  allow_manual: boolean;
+  default_refund_method?: string | null;
+  is_active: boolean;
+  priority?: number;
+  updated_at?: string | null;
+  created_at?: string | null;
+}
+
 export interface PaymentRefund {
   id: number;
   company_id: number;
+  company_name?: string | null;
   subscription_invoice_id?: number | null;
+  billing_receipt_id?: number | null;
+  subscription_receipt_id?: number | null;
+  policy_id?: number | null;
+  policy_code?: string | null;
   amount: number;
   currency?: string;
   reason?: string | null;
   status?: string;
   actor_user_id?: number | null;
+  scenario_type?: string | null;
+  calculation_type?: string | null;
+  payment_source?: string | null;
+  requested_amount?: number | null;
+  calculated_amount?: number | null;
+  approved_amount?: number | null;
+  processed_amount?: number | null;
+  original_paid_amount?: number | null;
+  previously_refunded_amount?: number | null;
+  remaining_refundable?: number | null;
+  refund_method?: string | null;
+  stripe_refund_id?: string | null;
+  stripe_invoice_id?: string | null;
+  credit_applied?: boolean;
+  credit_amount?: number | null;
+  requires_approval?: boolean;
+  requested_by_user_id?: number | null;
+  approved_by_user_id?: number | null;
+  approved_at?: string | null;
+  rejected_by_user_id?: number | null;
+  rejected_at?: string | null;
+  rejection_reason?: string | null;
+  processed_by_user_id?: number | null;
+  processed_at?: string | null;
+  cancelled_by_user_id?: number | null;
+  cancelled_at?: string | null;
+  override_used?: boolean;
+  override_reason?: string | null;
+  idempotency_key?: string | null;
+  error_message?: string | null;
+  notes?: string | null;
   created_at?: string;
+  updated_at?: string | null;
+  events?: RefundEvent[];
+  policy?: RefundPolicy;
+}
+
+export interface RefundEvent {
+  id: number;
+  action: string;
+  from_status?: string | null;
+  to_status?: string | null;
+  amount?: number | null;
+  note?: string | null;
+  actor_user_id?: number | null;
+  created_at?: string;
+  detail?: Record<string, unknown> | null;
+}
+
+export interface RefundPreview {
+  eligible: boolean;
+  errors: string[];
+  company_id: number;
+  company_name?: string | null;
+  payment_source?: string;
+  payment_label?: string | null;
+  payment_status?: string;
+  subscription_status?: string | null;
+  subscription_tier?: string | null;
+  original_paid_amount: number;
+  previously_refunded_amount: number;
+  remaining_refundable: number;
+  calculated_amount: number;
+  currency?: string;
+  requires_approval: boolean;
+  refund_method?: string;
+  stripe_invoice_id?: string | null;
+  account_credit_balance?: number;
+  days_since_payment?: number | null;
+  policy: RefundPolicy;
+  invoice_id?: number | null;
+  billing_receipt_id?: number | null;
+  subscription_receipt_id?: number | null;
 }
 
 export interface NotificationTemplate {

@@ -1,12 +1,32 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  status: number;
+  detail?: unknown;
+  retryAfterSeconds?: number;
+  code?: string;
+
+  constructor(status: number, message: string, detail?: unknown, retryAfterSeconds?: number) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.detail = detail;
+    this.retryAfterSeconds = retryAfterSeconds;
+    if (detail && typeof detail === 'object' && detail !== null && 'code' in detail) {
+      this.code = String((detail as { code?: string }).code || '');
+    }
   }
+}
+
+function detailMessage(d: unknown): string {
+  if (Array.isArray(d)) {
+    return d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed';
+  }
+  if (typeof d === 'string') return d;
+  if (d && typeof d === 'object' && 'message' in d) return JSON.stringify(d);
+  return 'Request failed';
 }
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -32,23 +52,32 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
-    throw new ApiError(401, msg);
+    throw new ApiError(401, msg, d);
   }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
     const d = error.detail;
-    if (response.status === 402 && d && typeof d === 'object' && d.code === 'payment_pending') {
-      throw new ApiError(402, JSON.stringify(d));
+    if (
+      response.status === 402 &&
+      d &&
+      typeof d === 'object' &&
+      (d.code === 'payment_pending' || d.code === 'subscription_required')
+    ) {
+      throw new ApiError(402, JSON.stringify(d), d);
     }
-    const msg = Array.isArray(d)
-      ? d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed'
-      : typeof d === 'string'
-        ? d
-        : typeof d === 'object' && d !== null && 'message' in d
-          ? JSON.stringify(d)
-          : 'Request failed';
-    throw new ApiError(response.status, msg);
+    const retryHeader = response.headers.get('Retry-After');
+    const retryFromDetail =
+      d && typeof d === 'object' && d !== null && 'retry_after_seconds' in d
+        ? Number((d as { retry_after_seconds?: number }).retry_after_seconds)
+        : undefined;
+    const retryAfterSeconds =
+      Number.isFinite(retryFromDetail) && (retryFromDetail as number) > 0
+        ? (retryFromDetail as number)
+        : retryHeader
+          ? parseInt(retryHeader, 10)
+          : undefined;
+    throw new ApiError(response.status, detailMessage(d), d, retryAfterSeconds);
   }
 
   if (response.status === 204) {
@@ -140,6 +169,21 @@ export const api = {
       };
       return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
     },
+    oauthProviders: (): Promise<{ providers: { provider: string; enabled: boolean }[] }> =>
+      request<{ providers: { provider: string; enabled: boolean }[] }>('/auth/oauth/providers'),
+    oauthStartUrl: (provider: string, rememberMe = true) =>
+      `${API_URL}/auth/oauth/${encodeURIComponent(provider)}/start?remember_me=${rememberMe ? 'true' : 'false'}`,
+    checkEmail: (
+      email: string,
+      exclude_user_id?: number
+    ): Promise<{ available: boolean; message?: string | null }> =>
+      request<{ available: boolean; message?: string | null }>('/auth/check-email', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          ...(exclude_user_id != null ? { exclude_user_id } : {}),
+        }),
+      }),
     me: (): Promise<User> => request<User>('/auth/me'),
     updateProfile: (full_name: string): Promise<User> =>
       request<User>('/auth/me/profile', {
@@ -1197,6 +1241,8 @@ export const api = {
       subscription_status?: string;
       subscription_end?: string;
     }> => request('/subscriptions'),
+    trialStatus: (): Promise<import('./types').TrialStatus> =>
+      request<import('./types').TrialStatus>('/subscriptions/trial-status'),
   },
   admin: {
     dashboard: (): Promise<import('./types').AdminDashboard> => request<import('./types').AdminDashboard>('/admin/dashboard'),
@@ -1303,6 +1349,12 @@ export const api = {
       }),
     dashboardExtended: (): Promise<import('./types').AdminDashboard> =>
       request<import('./types').AdminDashboard>('/admin/dashboard/extended'),
+    hq: (): Promise<import('./types').AdminHqSnapshot> =>
+      request<import('./types').AdminHqSnapshot>('/admin/hq'),
+    opsHealth: (): Promise<import('./types').OpsHealth> =>
+      request<import('./types').OpsHealth>('/admin/ops/health'),
+    myPermissions: (): Promise<{ permissions: string[]; user_id: number }> =>
+      request<{ permissions: string[]; user_id: number }>('/admin/me/permissions'),
     search: (q: string, limit?: number): Promise<import('./types').GlobalSearchResult> => {
       const params = new URLSearchParams({ q });
       if (limit != null) params.append('limit', String(limit));
@@ -1327,6 +1379,44 @@ export const api = {
       request<import('./types').Company>(`/admin/companies/${id}/subscription-action`, {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    trialsConfig: (): Promise<import('./types').TrialConfig> =>
+      request<import('./types').TrialConfig>('/admin/trials/config'),
+    putTrialsConfig: (data: Partial<import('./types').TrialConfig>): Promise<import('./types').TrialConfig> =>
+      request<import('./types').TrialConfig>('/admin/trials/config', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    trials: (params?: { status?: string; company_id?: number }): Promise<import('./types').TrialPeriod[]> => {
+      const q = new URLSearchParams();
+      if (params?.status) q.append('status', params.status);
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      const qs = q.toString();
+      return request<import('./types').TrialPeriod[]>(`/admin/trials${qs ? `?${qs}` : ''}`);
+    },
+    trial: (id: number): Promise<import('./types').TrialPeriod> =>
+      request<import('./types').TrialPeriod>(`/admin/trials/${id}`),
+    startCompanyTrial: (
+      companyId: number,
+      data?: { duration_days?: number; notes?: string; force?: boolean }
+    ): Promise<import('./types').TrialPeriod> =>
+      request<import('./types').TrialPeriod>(`/admin/companies/${companyId}/trials`, {
+        method: 'POST',
+        body: JSON.stringify(data || {}),
+      }),
+    extendTrial: (
+      id: number,
+      data: { extension_days: number; reason: string }
+    ): Promise<import('./types').TrialPeriod> =>
+      request<import('./types').TrialPeriod>(`/admin/trials/${id}/extend`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    companyTrials: (companyId: number): Promise<import('./types').CompanyTrialsResponse> =>
+      request<import('./types').CompanyTrialsResponse>(`/admin/companies/${companyId}/trials`),
+    expireDueTrials: (): Promise<{ expired_trials: number; orphan_companies?: number }> =>
+      request<{ expired_trials: number; orphan_companies?: number }>('/admin/trials/expire-due', {
+        method: 'POST',
       }),
     tickets: (params?: {
       company_id?: number;
@@ -1459,6 +1549,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ user_id }),
       }),
+    setTenantPassword: (user_id: number, new_password: string) =>
+      request<{ id: number; email: string; reset: boolean }>(`/admin/users/${user_id}/set-password`, {
+        method: 'POST',
+        body: JSON.stringify({ new_password }),
+      }),
     reportsSummary: (days?: number): Promise<import('./types').AdminReportsSummary> => {
       const q = days != null ? `?days=${days}` : '';
       return request<import('./types').AdminReportsSummary>(`/admin/reports/summary${q}`);
@@ -1482,17 +1577,69 @@ export const api = {
       const qs = q.toString();
       return request<ApiUsageSummary>(`/admin/api-usage${qs ? `?${qs}` : ''}`);
     },
-    refunds: (company_id?: number): Promise<PaymentRefund[]> => {
-      const q = company_id != null ? `?company_id=${company_id}` : '';
-      return request<PaymentRefund[]>(`/admin/refunds${q}`);
+    refunds: (params?: { company_id?: number; status?: string }): Promise<PaymentRefund[]> => {
+      const q = new URLSearchParams();
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      if (params?.status) q.append('status', params.status);
+      const qs = q.toString();
+      return request<PaymentRefund[]>(`/admin/refunds${qs ? `?${qs}` : ''}`);
     },
+    getRefund: (id: number): Promise<PaymentRefund> => request<PaymentRefund>(`/admin/refunds/${id}`),
+    previewRefund: (data: {
+      company_id: number;
+      policy_id?: number;
+      scenario_type?: string;
+      invoice_id?: number;
+      billing_receipt_id?: number;
+      subscription_receipt_id?: number;
+      requested_amount?: number;
+      refund_method?: string;
+      override?: boolean;
+    }): Promise<RefundPreview> =>
+      request<RefundPreview>('/admin/refunds/preview', { method: 'POST', body: JSON.stringify(data) }),
     createRefund: (data: {
       company_id: number;
-      amount: number;
+      amount?: number;
       invoice_id?: number;
+      billing_receipt_id?: number;
+      subscription_receipt_id?: number;
+      policy_id?: number;
+      scenario_type?: string;
       reason?: string;
+      notes?: string;
+      refund_method?: string;
+      override?: boolean;
+      override_reason?: string;
+      skip_approval?: boolean;
+      auto_process?: boolean;
+      idempotency_key?: string;
     }): Promise<PaymentRefund> =>
       request<PaymentRefund>('/admin/refunds', { method: 'POST', body: JSON.stringify(data) }),
+    approveRefund: (id: number, data?: { approved_amount?: number; note?: string }) =>
+      request<PaymentRefund>(`/admin/refunds/${id}/approve`, {
+        method: 'POST',
+        body: JSON.stringify(data || {}),
+      }),
+    rejectRefund: (id: number, reason: string) =>
+      request<PaymentRefund>(`/admin/refunds/${id}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    processRefund: (id: number) =>
+      request<PaymentRefund>(`/admin/refunds/${id}/process`, { method: 'POST', body: '{}' }),
+    cancelRefund: (id: number, reason?: string) =>
+      request<PaymentRefund>(`/admin/refunds/${id}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }),
+    refundPolicies: (activeOnly?: boolean): Promise<RefundPolicy[]> => {
+      const q = activeOnly ? '?active_only=true' : '';
+      return request<RefundPolicy[]>(`/admin/refund-policies${q}`);
+    },
+    createRefundPolicy: (data: Partial<RefundPolicy> & { code: string; name: string; scenario_type: string }) =>
+      request<RefundPolicy>('/admin/refund-policies', { method: 'POST', body: JSON.stringify(data) }),
+    updateRefundPolicy: (id: number, data: Partial<RefundPolicy>) =>
+      request<RefundPolicy>(`/admin/refund-policies/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     disputeInvoice: (id: number, note?: string) =>
       request<{ id: number; status: string; invoice_number?: string }>(`/admin/invoices/${id}/dispute`, {
         method: 'POST',

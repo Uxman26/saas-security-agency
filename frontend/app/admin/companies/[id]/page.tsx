@@ -13,9 +13,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import type { TenantSupportView } from '@/lib/types';
+import type { CompanyTrialsResponse, TenantSupportView, TrialPeriod } from '@/lib/types';
 import { TOKEN_KEY } from '@/lib/session-sync';
 import { toast } from '@/lib/toast';
+import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
+import { PasswordInput } from '@/components/ui/password-input';
+import { passwordFieldSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
 
 const ADMIN_TOKEN_BACKUP = 'admin_token_backup';
 
@@ -39,13 +42,31 @@ export default function AdminCompanySupportPage() {
   const [gdprOpen, setGdprOpen] = useState(false);
   const [confirmName, setConfirmName] = useState('');
   const [hardDelete, setHardDelete] = useState(false);
+  const [trialInfo, setTrialInfo] = useState<CompanyTrialsResponse | null>(null);
+  const [startTrialOpen, setStartTrialOpen] = useState(false);
+  const [startDays, setStartDays] = useState('14');
+  const [startNotes, setStartNotes] = useState('');
+  const [startForce, setStartForce] = useState(false);
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [extensionDays, setExtensionDays] = useState('7');
+  const [extendReason, setExtendReason] = useState('');
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRows, setHistoryRows] = useState<TrialPeriod[]>([]);
+  const [pwUser, setPwUser] = useState<{ id: number; email: string; name?: string } | null>(null);
+  const [pwValue, setPwValue] = useState('');
+  const { can } = usePlatformPermissions();
 
   const load = useCallback(() => {
     if (!id) return;
     setLoading(true);
-    api.admin
-      .companySupportView(id)
-      .then(setView)
+    Promise.all([
+      api.admin.companySupportView(id),
+      api.admin.companyTrials(id).catch(() => null),
+    ])
+      .then(([v, trials]) => {
+        setView(v);
+        setTrialInfo(trials);
+      })
       .catch(() => toast.error('Failed to load support view'))
       .finally(() => setLoading(false));
   }, [id]);
@@ -96,6 +117,39 @@ export default function AdminCompanySupportPage() {
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Temp access failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendUserResetEmail = async (userId: number) => {
+    setBusy(true);
+    try {
+      const res = await api.admin.sendResetEmail(userId);
+      toast.success(`Reset email sent to ${res.email}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send reset email');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveUserPassword = async () => {
+    if (!pwUser) return;
+    const parsed = passwordFieldSchema.safeParse(pwValue);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? PASSWORD_REQUIREMENTS_MSG);
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.admin.setTenantPassword(pwUser.id, pwValue);
+      toast.success(`Password reset for ${pwUser.email}`);
+      setPwUser(null);
+      setPwValue('');
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Password reset failed');
     } finally {
       setBusy(false);
     }
@@ -197,6 +251,7 @@ export default function AdminCompanySupportPage() {
   const logins = (view?.login_history || []) as { id: number; email?: string; login_at?: string; ip_address?: string; status?: string }[];
   const errors = (view?.recent_errors || []) as { id: number; severity?: string; message?: string; status?: string; last_seen_at?: string; occurrence_count?: number }[];
   const security = (view?.security_events || []) as { id: number; event_type?: string; severity?: string; message?: string; created_at?: string }[];
+  const currentTrial = trialInfo?.current || view?.trial;
 
   return (
     <ProtectedRoute>
@@ -321,13 +376,160 @@ export default function AdminCompanySupportPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Subscription</CardTitle></CardHeader>
-                <CardContent className="text-sm grid sm:grid-cols-2 gap-2">
-                  <p><span className="text-muted-foreground">Tier:</span> <span className="capitalize">{view.subscription_tier || '—'}</span></p>
-                  <p><span className="text-muted-foreground">Status:</span> <span className="capitalize">{view.subscription_status || '—'}</span></p>
-                  <p><span className="text-muted-foreground">Billing:</span> <span className="capitalize">{view.billing_cycle || '—'}</span></p>
-                  <p><span className="text-muted-foreground">Ends:</span> {view.subscription_end ? new Date(view.subscription_end).toLocaleDateString() : '—'}</p>
-                  <p><span className="text-muted-foreground">Users:</span> {view.user_count ?? 0}{view.max_users != null ? ` / ${view.max_users}` : ''}</p>
+                <CardHeader>
+                  <CardTitle>Tenant users & password reset</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(view.users || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No users found.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Role</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(view.users || []).map((u) => {
+                          const row = u as {
+                            id: number;
+                            full_name?: string;
+                            email?: string;
+                            role?: string;
+                            is_active?: boolean;
+                            must_reset_password?: boolean;
+                          };
+                          return (
+                            <TableRow key={row.id}>
+                              <TableCell>{row.full_name || '—'}</TableCell>
+                              <TableCell>{row.email || '—'}</TableCell>
+                              <TableCell className="capitalize">{row.role || '—'}</TableCell>
+                              <TableCell className="text-xs">
+                                {!row.is_active
+                                  ? 'Inactive'
+                                  : row.must_reset_password
+                                    ? 'Reset required'
+                                    : 'Active'}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap gap-2 justify-end">
+                                  {can('security.write', 'tenants.write', 'support.write') && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={busy}
+                                      onClick={() => void sendUserResetEmail(row.id)}
+                                    >
+                                      Send reset email
+                                    </Button>
+                                  )}
+                                  {can('security.write', 'tenants.write') && (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      disabled={busy}
+                                      onClick={() => {
+                                        setPwUser({
+                                          id: row.id,
+                                          email: row.email || '',
+                                          name: row.full_name,
+                                        });
+                                        setPwValue('');
+                                      }}
+                                    >
+                                      Set password
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Subscription</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm grid sm:grid-cols-2 gap-2">
+                    <p><span className="text-muted-foreground">Tier:</span> <span className="capitalize">{view.subscription_tier || '—'}</span></p>
+                    <p><span className="text-muted-foreground">Status:</span> <span className="capitalize">{view.subscription_status || '—'}</span></p>
+                    <p><span className="text-muted-foreground">Billing:</span> <span className="capitalize">{view.billing_cycle || '—'}</span></p>
+                    <p><span className="text-muted-foreground">Ends:</span> {view.subscription_end ? new Date(view.subscription_end).toLocaleDateString() : '—'}</p>
+                    <p><span className="text-muted-foreground">Users:</span> {view.user_count ?? 0}{view.max_users != null ? ` / ${view.max_users}` : ''}</p>
+                  </div>
+                  {currentTrial && (
+                      <div className="rounded-md border p-3 text-sm space-y-1">
+                        <p className="font-medium">{currentTrial.label || 'Trial'}</p>
+                        {currentTrial.trial_active && (
+                          <>
+                            <p>
+                              <span className="text-muted-foreground">Days remaining:</span>{' '}
+                              {currentTrial.days_remaining ?? '—'}
+                            </p>
+                            <p>
+                              <span className="text-muted-foreground">Ends on:</span>{' '}
+                              {currentTrial.trial_ends_on
+                                ? new Date(currentTrial.trial_ends_on).toLocaleDateString()
+                                : '—'}
+                            </p>
+                          </>
+                        )}
+                        {currentTrial.trial_expired && (
+                          <p className="text-muted-foreground">Trial expired — subscription required</p>
+                        )}
+                      </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        setStartDays('14');
+                        setStartNotes('');
+                        setStartForce(false);
+                        setStartTrialOpen(true);
+                      }}
+                    >
+                      Start Trial
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy || !trialInfo?.current?.trial_id}
+                      onClick={() => {
+                        setExtensionDays('7');
+                        setExtendReason('');
+                        setExtendOpen(true);
+                      }}
+                    >
+                      Extend Trial
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        setHistoryRows(trialInfo?.history || []);
+                        setHistoryOpen(true);
+                      }}
+                    >
+                      View Trial History
+                    </Button>
+                  </div>
+                  {trialInfo && !trialInfo.eligible_for_new_trial && !trialInfo.current?.trial_active && (
+                    <p className="text-xs text-muted-foreground">{trialInfo.eligibility_reason}</p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -483,6 +685,176 @@ export default function AdminCompanySupportPage() {
               </label>
               <Button variant="destructive" disabled={busy} onClick={() => void runGdprDelete()}>
                 {busy ? 'Working...' : 'Confirm delete'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={startTrialOpen} onOpenChange={setStartTrialOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Start trial</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="co_start_days">Duration (days)</Label>
+                <Input
+                  id="co_start_days"
+                  type="number"
+                  className="mt-1"
+                  value={startDays}
+                  onChange={(e) => setStartDays(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="co_start_notes">Notes</Label>
+                <Input
+                  id="co_start_notes"
+                  className="mt-1"
+                  value={startNotes}
+                  onChange={(e) => setStartNotes(e.target.value)}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={startForce}
+                  onChange={(e) => setStartForce(e.target.checked)}
+                />
+                Force grant
+              </label>
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await api.admin.startCompanyTrial(id, {
+                      duration_days: parseInt(startDays, 10) || undefined,
+                      notes: startNotes.trim() || undefined,
+                      force: startForce,
+                    });
+                    toast.success('Trial started');
+                    setStartTrialOpen(false);
+                    load();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Start trial failed');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? 'Working...' : 'Start'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={extendOpen} onOpenChange={setExtendOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Extend trial</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="co_ext_days">Extension days</Label>
+                <Input
+                  id="co_ext_days"
+                  type="number"
+                  className="mt-1"
+                  value={extensionDays}
+                  onChange={(e) => setExtensionDays(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="co_ext_reason">Reason</Label>
+                <Input
+                  id="co_ext_reason"
+                  className="mt-1"
+                  value={extendReason}
+                  onChange={(e) => setExtendReason(e.target.value)}
+                />
+              </div>
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  const trialId = trialInfo?.current?.trial_id;
+                  if (!trialId) {
+                    toast.error('No active trial');
+                    return;
+                  }
+                  const days = parseInt(extensionDays, 10);
+                  if (!days || extendReason.trim().length < 3) {
+                    toast.error('Days and reason required');
+                    return;
+                  }
+                  setBusy(true);
+                  try {
+                    await api.admin.extendTrial(trialId, {
+                      extension_days: days,
+                      reason: extendReason.trim(),
+                    });
+                    toast.success('Trial extended');
+                    setExtendOpen(false);
+                    load();
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Extend failed');
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {busy ? 'Working...' : 'Extend'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle>Trial history</DialogTitle></DialogHeader>
+            {historyRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No trial history.</p>
+            ) : (
+              <ul className="space-y-3 text-sm max-h-80 overflow-y-auto">
+                {historyRows.map((h) => (
+                  <li key={h.id} className="border-b pb-2 last:border-0">
+                    <p className="font-medium capitalize">
+                      #{h.id} · {h.status} · {h.duration_days}d
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {h.started_at ? new Date(h.started_at).toLocaleDateString() : '—'} →{' '}
+                      {h.ends_at ? new Date(h.ends_at).toLocaleDateString() : '—'}
+                      {h.extensions?.length ? ` · ${h.extensions.length} extension(s)` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={!!pwUser}
+          onOpenChange={(o) => {
+            if (!o) {
+              setPwUser(null);
+              setPwValue('');
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Set password — {pwUser?.name || pwUser?.email}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{pwUser?.email}</p>
+              <div>
+                <Label htmlFor="tenant_pw">New password</Label>
+                <PasswordInput
+                  id="tenant_pw"
+                  className="mt-1"
+                  value={pwValue}
+                  onChange={(e) => setPwValue(e.target.value)}
+                />
+              </div>
+              <Button variant="destructive" disabled={busy} onClick={() => void saveUserPassword()}>
+                {busy ? 'Saving…' : 'Reset password'}
               </Button>
             </div>
           </DialogContent>

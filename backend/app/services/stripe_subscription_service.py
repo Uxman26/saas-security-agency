@@ -96,11 +96,53 @@ def _sync_company_subscription(db: Session, sub: Any, company: Company, user_id:
     company.stripe_subscription_id = sub.id
     company.subscription_tier = row.plan_tier
     company.billing_cycle = row.billing_cycle
-    company.subscription_status = "active" if sub.status in ("active", "trialing") else sub.status
-    if row.current_period_end:
-        company.subscription_end = row.current_period_end
-    if row.current_period_start:
-        company.subscription_start = row.current_period_start
+    if sub.status == "trialing":
+        company.subscription_status = "trialing"
+        # Prefer Stripe trial end when present.
+        trial_end = _ts(getattr(sub, "trial_end", None))
+        if trial_end:
+            company.subscription_end = trial_end
+        elif row.current_period_end:
+            company.subscription_end = row.current_period_end
+        if row.current_period_start:
+            company.subscription_start = row.current_period_start
+        from app.services import trial_service
+        if not trial_service.active_trial_for_company(db, company.id):
+            days_meta = (sub.metadata or {}).get("trial_days")
+            try:
+                days = int(days_meta) if days_meta else None
+            except (TypeError, ValueError):
+                days = None
+            trial_end = _ts(getattr(sub, "trial_end", None)) or company.subscription_end
+            try:
+                trial_service.start_trial(
+                    db,
+                    company.id,
+                    actor=None,
+                    duration_days=days,
+                    ends_at=trial_end,
+                    source="stripe_checkout",
+                    force=True,
+                    notes="Started via Stripe Checkout card verification",
+                    user_id=user_id or company.admin_id,
+                    stripe_subscription_id=sub.id,
+                )
+            except Exception:
+                pass
+    elif sub.status == "active":
+        company.subscription_status = "active"
+        if row.current_period_end:
+            company.subscription_end = row.current_period_end
+        if row.current_period_start:
+            company.subscription_start = row.current_period_start
+        from app.services import trial_service
+        trial_service.mark_trial_converted(db, company.id)
+    else:
+        company.subscription_status = sub.status
+        if row.current_period_end:
+            company.subscription_end = row.current_period_end
+        if row.current_period_start:
+            company.subscription_start = row.current_period_start
     db.commit()
     db.refresh(row)
     return row
@@ -111,6 +153,7 @@ def create_checkout_session(
     ref_id: str,
     billing_cycle: str = "monthly",
     coupon_code: str | None = None,
+    start_trial: bool = True,
 ) -> dict[str, str]:
     if not _configure():
         raise HTTPException(status_code=503, detail="Stripe is not configured")
@@ -126,6 +169,7 @@ def create_checkout_session(
     if not company or not user:
         raise HTTPException(status_code=404, detail="Company not found")
     customer_id = ensure_customer(db, company, user.email, user.full_name or company.name)
+    credit_to_apply = float(getattr(company, "account_credit_balance", 0) or 0)
     price_id = stripe_plan_service.resolve_price_id(db, receipt.subscription_tier, cycle)
     params: dict[str, Any] = {
         "customer": customer_id,
@@ -144,6 +188,20 @@ def create_checkout_session(
         "success_url": f"{settings.frontend_url}/payment-pending?ref={receipt.ref_id}&success=1&session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{settings.frontend_url}/payment-pending?ref={receipt.ref_id}&canceled=1",
     }
+    # Optional Stripe-native trial after card verification (controlled by platform trial_config).
+    try:
+        from app.services import trial_service
+        tcfg = trial_service.get_trial_config(db)
+        use_trial = bool(tcfg.get("enabled")) and bool(start_trial)
+        if use_trial and (company.subscription_status or "") == "pending":
+            ok, _ = trial_service.is_eligible_for_trial(db, company, force=False)
+            if ok:
+                days = int(tcfg.get("default_days") or 14)
+                params["subscription_data"]["trial_period_days"] = days
+                params["subscription_data"]["metadata"]["trial_days"] = str(days)
+                params["payment_method_collection"] = "always"
+    except Exception:
+        pass
     discounts = []
     if cycle == "yearly":
         coupon_id = stripe_plan_service.ensure_yearly_coupon(db)
@@ -154,6 +212,14 @@ def create_checkout_session(
         params["discounts"] = discounts
     session = stripe.checkout.Session.create(**params)
     receipt.stripe_checkout_session_id = session.id
+    if credit_to_apply > 0:
+        try:
+            from app.services import refund_service
+
+            refund_service._push_credit_to_stripe(company, credit_to_apply)
+            company.account_credit_balance = 0
+        except Exception:
+            pass
     db.commit()
     if not session.url:
         raise HTTPException(status_code=500, detail="Failed to create checkout session")
@@ -328,13 +394,21 @@ def _handle_subscription_updated(db: Session, sub: Any) -> None:
         company = db.query(Company).filter(Company.stripe_subscription_id == sub.id).first()
     if not company:
         return
-    row = _sync_company_subscription(db, sub, company)
-    if sub.status in ("active", "trialing"):
+    _sync_company_subscription(db, sub, company)
+    if sub.status == "trialing":
+        company.subscription_status = "trialing"
+    elif sub.status == "active":
         company.subscription_status = "active"
+        from app.services import trial_service
+        trial_service.mark_trial_converted(db, company.id)
     elif sub.status == "past_due":
         company.subscription_status = "past_due"
+    elif sub.status in ("canceled", "unpaid"):
+        company.subscription_status = "cancelled" if sub.status == "canceled" else sub.status
     elif sub.cancel_at_period_end and sub.status == "active":
         company.subscription_status = "active"
+    else:
+        company.subscription_status = sub.status
     db.commit()
 
 
@@ -372,18 +446,41 @@ def handle_webhook(db: Session, payload: bytes, sig_header: str | None) -> None:
         event = stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
     except stripe.SignatureVerificationError as e:
         raise HTTPException(status_code=400, detail="Invalid signature") from e
-    obj = event.data.object
-    et = event.type
-    if et == "checkout.session.completed":
-        _handle_checkout_completed(db, obj)
-    elif et in ("invoice.paid", "invoice.payment_succeeded"):
-        _handle_invoice_paid(db, obj)
-    elif et == "invoice.payment_failed":
-        _handle_invoice_failed(db, obj)
-    elif et == "customer.subscription.updated":
-        _handle_subscription_updated(db, obj)
-    elif et == "customer.subscription.deleted":
-        _handle_subscription_deleted(db, obj)
+    from app.models import WebhookLog
+
+    log = WebhookLog(
+        provider="stripe",
+        event_type=event.type,
+        status="received",
+        http_status=200,
+        request_body=(payload[:4000].decode("utf-8", errors="ignore") if payload else None),
+    )
+    db.add(log)
+    db.commit()
+    try:
+        obj = event.data.object
+        et = event.type
+        if et == "checkout.session.completed":
+            _handle_checkout_completed(db, obj)
+        elif et in ("invoice.paid", "invoice.payment_succeeded"):
+            _handle_invoice_paid(db, obj)
+        elif et == "invoice.payment_failed":
+            _handle_invoice_failed(db, obj)
+        elif et == "customer.subscription.updated":
+            _handle_subscription_updated(db, obj)
+        elif et == "customer.subscription.deleted":
+            _handle_subscription_deleted(db, obj)
+        elif et in ("charge.refunded", "charge.refund.updated"):
+            from app.services import refund_service
+
+            refund_service.sync_stripe_refund_event(db, obj)
+        log.status = "processed"
+        db.commit()
+    except Exception as e:
+        log.status = "failed"
+        log.error_message = str(e)[:500]
+        db.commit()
+        raise
 
 
 def create_billing_portal(db: Session, user: User) -> dict[str, str]:

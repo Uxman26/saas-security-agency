@@ -2,7 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
-from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles, teams, absence
+from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, admin_ext, admin_complete, admin_trials, admin_refunds, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.middleware.client_source import ClientSourceMiddleware
 from app.database import engine, Base
@@ -54,6 +54,40 @@ app.add_middleware(ApiUsageMiddleware)
 # to know whether a change came from the web or the mobile app before any handler runs.
 app.add_middleware(ClientSourceMiddleware)
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse as StarletteJSONResponse
+
+
+class MaintenanceModeMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path = request.url.path or ""
+        if (
+            path.startswith("/auth/")
+            or path in ("/", "/swagger/", "/swagger/openapi.json")
+            or path.startswith("/admin/maintenance")
+            or path.startswith("/admin/")
+        ):
+            return await call_next(request)
+        try:
+            from app.database import SessionLocal
+            from app.services.admin_platform_ext_service import get_config
+            db = SessionLocal()
+            try:
+                cfg = get_config(db, "maintenance_mode", {"enabled": False})
+            finally:
+                db.close()
+            if cfg and cfg.get("enabled"):
+                return StarletteJSONResponse(
+                    status_code=503,
+                    content={"detail": cfg.get("message") or "Platform is under maintenance"},
+                )
+        except Exception:
+            pass
+        return await call_next(request)
+
+
+app.add_middleware(MaintenanceModeMiddleware)
+
 origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -88,6 +122,11 @@ app.include_router(invoices.router)
 app.include_router(payments.router)
 app.include_router(reports.router)
 app.include_router(admin.router)
+app.include_router(admin_ext.router)
+app.include_router(admin_complete.router)
+app.include_router(admin_trials.router)
+app.include_router(admin_trials.tenant_router)
+app.include_router(admin_refunds.router)
 app.include_router(receipts.router)
 app.include_router(roles.router)
 app.include_router(modules.router)
@@ -119,6 +158,49 @@ app.include_router(lone_worker.router)
 #   guard photo       -> GET /guards/{guard_id}/photo
 _uploads = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 os.makedirs(_uploads, exist_ok=True)
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import traceback
+import logging
+
+_log = logging.getLogger("controlops")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, (StarletteHTTPException, RequestValidationError)):
+        if isinstance(exc, StarletteHTTPException):
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    _log.exception("Unhandled error on %s %s", request.method, request.url.path)
+    try:
+        from app.database import SessionLocal
+        from app.services.admin_platform_ext_service import record_error
+        db = SessionLocal()
+        try:
+            record_error(
+                db,
+                message=str(exc) or type(exc).__name__,
+                source="api",
+                module=(request.url.path or "")[:200],
+                severity="critical",
+                stack_trace=traceback.format_exc()[-4000:],
+                path=request.url.path,
+                method=request.method,
+            )
+        finally:
+            db.close()
+    except Exception:
+        _log.exception("Failed to persist error log")
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+@app.get("/")
+def root():
+    return {"message": "ControlOps API"}
 
 @app.get("/")
 def root():

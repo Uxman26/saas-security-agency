@@ -1,7 +1,13 @@
-import { LegalPageClient } from '@/components/marketing/legal-page-client';
+import { LegalPage } from '@/components/marketing/legal-page';
+import { TermsOfServiceContent } from '@/components/marketing/terms-of-service-content';
+import { termsMetadata } from '@/lib/marketing-seo';
 
-export const metadata = { title: { absolute: 'Terms of Service | ControlOps' } };
+export const metadata = termsMetadata;
 
 export default function TermsPage() {
-  return <LegalPageClient page="terms" />;
+  return (
+    <LegalPage title="Terms of Service" effectiveDate="14 September 2026" version="1.0">
+      <TermsOfServiceContent />
+    </LegalPage>
+  );
 }

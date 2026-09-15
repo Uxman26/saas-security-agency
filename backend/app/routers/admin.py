@@ -33,6 +33,7 @@ from app.schemas import (
     AdminCouponCreate,
 )
 from app.auth import get_current_super_admin
+from app.services.platform_rbac_service import require_platform_perm
 from app.services import admin_platform_service as ap
 from app.services import platform_plans_service
 from app.services import subscription_invoice_service as sub_inv
@@ -66,9 +67,37 @@ def _receipt_row(r: SubscriptionReceipt, db: Session) -> SubscriptionReceiptResp
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+    from datetime import datetime, timedelta, timezone
+    from app.models import ErrorLog, BackgroundJob
+    from app.services import support_ticket_service as tickets
+
     sub_inv.ensure_renewal_invoices(db)
     stats = sub_inv.dashboard_stats(db)
     stats["platform_usage"] = tenant_usage_service.platform_usage_summary(db)
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+    companies = db.query(Company).all()
+    stats["inactive_tenants"] = sum(1 for c in companies if (c.subscription_status or "") not in ("active", "trialing"))
+    stats["new_tenants_7d"] = sum(
+        1
+        for c in companies
+        if c.created_at and (c.created_at if c.created_at.tzinfo else c.created_at.replace(tzinfo=timezone.utc)) >= week_ago
+    )
+    stats["active_users"] = db.query(User).filter(User.is_active == True, User.company_id.isnot(None)).count()
+    stats["locked_accounts"] = sum(1 for c in companies if (getattr(c, "account_status", None) or "") == "locked")
+    stats["trial_subscriptions"] = sum(1 for c in companies if (c.subscription_status or "") in ("trial", "trialing"))
+    stats["expiring_subscriptions"] = sum(
+        1
+        for c in companies
+        if c.subscription_end
+        and (c.subscription_end if c.subscription_end.tzinfo else c.subscription_end.replace(tzinfo=timezone.utc))
+        <= now + timedelta(days=14)
+        and (c.subscription_status or "") == "active"
+    )
+    stats["open_tickets"] = tickets.open_ticket_count(db)
+    stats["sla_breaches"] = tickets.sla_breach_count(db)
+    stats["critical_errors"] = db.query(ErrorLog).filter(ErrorLog.severity == "critical", ErrorLog.status == "open").count()
+    stats["failed_jobs"] = db.query(BackgroundJob).filter(BackgroundJob.status == "failed").count()
     return AdminDashboardResponse(**stats)
 
 
@@ -308,13 +337,13 @@ def patch_package(
 
 
 @router.get("/smtp", response_model=SmtpConfigResponse)
-def get_smtp(_: User = Depends(get_current_super_admin)):
+def get_smtp(_: User = Depends(require_platform_perm("config.read", "config.write"))):
     from app.services.platform_smtp_service import smtp_status
     return SmtpConfigResponse(**smtp_status())
 
 
 @router.patch("/smtp", response_model=SmtpConfigResponse)
-def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(get_current_super_admin)):
+def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(require_platform_perm("config.write"))):
     from app.services.platform_smtp_service import update_smtp_config
     return SmtpConfigResponse(**update_smtp_config(body.model_dump(exclude_unset=True)))
 
@@ -465,11 +494,10 @@ def reset_password(
     body: AdminResetPassword,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("security.write", "tenants.write")),
 ):
     u = ap.reset_admin_password(db, user_id, body.new_password)
     co = db.query(Company).filter(Company.id == u.company_id).first()
-    # Never record the password itself — only that it was changed, by whom.
     platform_audit_service.log(
         db,
         actor=current_user,
@@ -479,6 +507,7 @@ def reset_password(
         target_label=u.email,
         company=co,
         request=request,
+        after={"method": "admin_set_password"},
     )
     receipts = (
         db.query(SubscriptionReceipt)

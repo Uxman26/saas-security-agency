@@ -1,7 +1,7 @@
 import bcrypt
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -51,18 +51,21 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return str(encoded_jwt) if not isinstance(encoded_jwt, str) else encoded_jwt
 
-def create_password_reset_token(user_id: int) -> str:
+def create_password_reset_token(user_id: int, jti: str) -> str:
     expire = datetime.utcnow() + timedelta(hours=1)
-    payload = {"sub": str(user_id), "type": PASSWORD_RESET_TOKEN_TYPE, "exp": expire}
+    payload = {"sub": str(user_id), "type": PASSWORD_RESET_TOKEN_TYPE, "jti": jti, "exp": expire}
     token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
     return str(token) if not isinstance(token, str) else token
 
-def verify_password_reset_token(token: str) -> int:
+def verify_password_reset_token(token: str) -> tuple[int, str]:
     try:
         payload = jwt.decode(token.strip(), settings.secret_key, algorithms=[settings.algorithm])
         if payload.get("type") != PASSWORD_RESET_TOKEN_TYPE:
             raise HTTPException(status_code=400, detail="Invalid or expired reset link")
-        return int(payload["sub"])
+        jti = payload.get("jti")
+        if not jti:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+        return int(payload["sub"]), str(jti)
     except (JWTError, ValueError, KeyError):
         raise HTTPException(status_code=400, detail="Invalid or expired reset link")
 
@@ -84,7 +87,8 @@ def verify_email_verification_token(token: str) -> int:
 AUTH_PROVIDER_LOCAL = "local"
 AUTH_PROVIDER_GOOGLE = "google"
 AUTH_PROVIDER_MICROSOFT = "microsoft"
-OAUTH_AUTH_PROVIDERS = frozenset({AUTH_PROVIDER_GOOGLE, AUTH_PROVIDER_MICROSOFT})
+AUTH_PROVIDER_APPLE = "apple"
+OAUTH_AUTH_PROVIDERS = frozenset({AUTH_PROVIDER_GOOGLE, AUTH_PROVIDER_MICROSOFT, AUTH_PROVIDER_APPLE})
 
 def requires_email_verification(user: User) -> bool:
     provider = getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL
@@ -93,6 +97,7 @@ def requires_email_verification(user: User) -> bool:
     return not bool(getattr(user, "email_verified", False))
 
 def get_current_user(
+    request: Request,
     token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ):
@@ -116,10 +121,6 @@ def get_current_user(
     except (JWTError, ValueError):
         raise credentials_exception
 
-    # The token is only a pointer to a session row. If that row is gone, revoked, past
-    # its absolute expiry, or idle for too long, the token is spent — regardless of the
-    # `exp` it carries. This is what makes logout and idle timeout take effect in every
-    # tab rather than only the one that cleared its storage.
     from app.services import session_service
 
     session = session_service.active_session(db, jti)
@@ -131,15 +132,39 @@ def get_current_user(
         raise credentials_exception
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
-    if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
+    is_impersonating = bool(getattr(session, "impersonator_user_id", None))
+    if getattr(user, "role", None) != SUPER_ADMIN_ROLE and not is_impersonating:
         from app.services.receipt_service import company_subscription_blocked
+        from app.services.trial_service import path_allowed_when_subscription_required
+
         block = company_subscription_blocked(db, user)
         if block:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=block,
-            )
-    # Only a request that actually succeeded counts as activity.
+            path = request.url.path or ""
+            # Trial-expired (and similar) tenants keep account/billing routes; paid ops stay gated.
+            if block.get("code") == "subscription_required" and path_allowed_when_subscription_required(path):
+                pass
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=block,
+                )
+        if user.company_id:
+            from app.models import Company, TemporaryAccessSession
+            from datetime import datetime, timezone
+            co = db.query(Company).filter(Company.id == user.company_id).first()
+            if co and (getattr(co, "account_status", None) or "") == "locked":
+                now = datetime.now(timezone.utc)
+                temp = (
+                    db.query(TemporaryAccessSession)
+                    .filter(
+                        TemporaryAccessSession.company_id == co.id,
+                        TemporaryAccessSession.revoked_at.is_(None),
+                        TemporaryAccessSession.expires_at > now,
+                    )
+                    .first()
+                )
+                if not temp:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is locked")
     session_service.touch(db, session)
     return user
 

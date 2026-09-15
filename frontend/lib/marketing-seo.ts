@@ -55,6 +55,21 @@ export const staffingIndustryMetadata = abs(
   'Manage workers, client assignments, pay and charge rates, payroll preparation and invoices in one operational platform.'
 );
 
+export const privacyMetadata = abs(
+  'Privacy Notice | ControlOps',
+  'How ControlOps collects, uses and protects personal data for its UK workforce operations website and SaaS platform.'
+);
+
+export const termsMetadata = abs(
+  'Terms of Service | ControlOps',
+  'Terms governing use of the ControlOps workforce operations SaaS platform and public website for UK business customers.'
+);
+
+export const cookiesMetadata = abs(
+  'Cookie Policy | ControlOps',
+  'How ControlOps uses cookies and similar technologies on controlops.co.uk and the ControlOps Service.'
+);
+
 export const noIndexFollow: Metadata = {
   robots: { index: false, follow: true },
 };

@@ -363,7 +363,26 @@ export default function AdminAdminsPage() {
                   <p className="font-medium mb-2">Reset password</p>
                   <Label htmlFor="new_pw">New password</Label>
                   <PasswordInput id="new_pw" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="mt-1" />
-                  <Button className="mt-2" size="sm" variant="destructive" onClick={savePassword}>Reset password</Button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button size="sm" variant="destructive" onClick={savePassword}>
+                      Set password
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        if (!selected) return;
+                        try {
+                          const res = await api.admin.sendResetEmail(selected.id);
+                          toast.success(`Reset email sent to ${res.email}`);
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Failed to send reset email');
+                        }
+                      }}
+                    >
+                      Send reset email
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

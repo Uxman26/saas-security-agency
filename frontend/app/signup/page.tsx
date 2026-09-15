@@ -16,6 +16,7 @@ import { toast } from '@/lib/toast';
 import { useTranslations } from 'next-intl';
 import { Building2, Eye, EyeOff, Lock, Mail, User, Loader2 } from 'lucide-react';
 import { parseEmailVerificationRequired } from '@/lib/sidebar-modules';
+import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import {
   authDarkBtnClass,
   authDarkErrorClass,
@@ -56,6 +57,7 @@ function SignupForm() {
     register,
     handleSubmit,
     setValue,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(signupSchema),
@@ -72,6 +74,12 @@ function SignupForm() {
   }) => {
     setLoading(true);
     try {
+      const dup = await assertEmailAvailable(data.email);
+      if (dup) {
+        setError('email', { type: 'manual', message: dup });
+        toast.error(dup);
+        return;
+      }
       const res = await api.auth.signup({ ...data, subscription_tier });
       const ref = encodeURIComponent(res.receipt.ref_id);
       const email = encodeURIComponent(data.email);
@@ -95,6 +103,11 @@ function SignupForm() {
         if (code) q.set('coupon', code);
         toast.info(t('accountCreatedVerify'));
         router.push(`/verify-email?${q.toString()}`);
+        return;
+      }
+      if (isDuplicateEmailError(err)) {
+        setError('email', { type: 'manual', message: DUPLICATE_EMAIL_MESSAGE });
+        toast.error(DUPLICATE_EMAIL_MESSAGE);
         return;
       }
       toast.error(err instanceof Error ? err.message : t('signupFailed'));
@@ -167,7 +180,12 @@ function SignupForm() {
               type="email"
               placeholder="name@company.com"
               className={cn(authDarkFieldClass, 'h-11 ps-10')}
-              {...register('email')}
+              {...register('email', {
+                onBlur: async (e) => {
+                  const dup = await assertEmailAvailable(e.target.value);
+                  if (dup) setError('email', { type: 'manual', message: dup });
+                },
+              })}
             />
           </div>
           {errors.email && <p className={authDarkErrorClass}>{errors.email.message as string}</p>}

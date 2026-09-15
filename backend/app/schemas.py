@@ -42,6 +42,11 @@ class UserCreate(StrictModel):
     company_name: CompanyNameStr
     subscription_tier: Optional[ShortTextStr] = None
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
     @field_validator("password")
     @classmethod
     def password_rules(cls, v: str) -> str:
@@ -59,8 +64,19 @@ class UserLogin(StrictModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
+    access_token: Optional[str] = None
     token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: Optional[str] = None
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_token: str
+    code: str
+
+
+class MfaConfirmRequest(BaseModel):
+    code: str
 
 
 class MessageResponse(BaseModel):
@@ -69,6 +85,21 @@ class MessageResponse(BaseModel):
 
 class ForgotPasswordRequest(StrictModel):
     email: EmailStr = Field(max_length=EMAIL_MAX)
+
+
+class EmailAvailabilityRequest(StrictModel):
+    email: EmailStr = Field(max_length=EMAIL_MAX)
+    exclude_user_id: Optional[int] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+
+class EmailAvailabilityResponse(BaseModel):
+    available: bool
+    message: Optional[str] = None
 
 class ResetPasswordRequest(StrictModel):
     token: TokenStr
@@ -334,19 +365,6 @@ class PlatformAuditLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class AdminDashboardResponse(BaseModel):
-    total_companies: int
-    active_subscriptions: int
-    total_invoices: int
-    paid_invoices: int
-    unpaid_invoices: int
-    overdue_invoices: int
-    partial_invoices: int
-    outstanding_balance: float
-    total_collected: float
-    platform_usage: dict[str, Any] = Field(default_factory=dict)
-
-
 class CompanyBase(BaseModel):
     name: str
 
@@ -378,7 +396,37 @@ class CompanyAdminResponse(CompanyBase):
     user_count: Optional[int] = None
     enabled_modules: dict[str, bool] = Field(default_factory=dict)
     usage: dict[str, Any] = Field(default_factory=dict)
+    account_status: Optional[str] = "active"
+    locked_at: Optional[datetime] = None
+    locked_reason: Optional[str] = None
+    archived_at: Optional[datetime] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    trial: Optional[dict[str, Any]] = None
     created_at: datetime
+
+
+class AdminDashboardResponse(BaseModel):
+    total_companies: int
+    active_subscriptions: int
+    total_invoices: int
+    paid_invoices: int
+    unpaid_invoices: int
+    overdue_invoices: int
+    partial_invoices: int
+    outstanding_balance: float
+    total_collected: float
+    platform_usage: dict[str, Any] = Field(default_factory=dict)
+    inactive_tenants: Optional[int] = None
+    new_tenants_7d: Optional[int] = None
+    active_users: Optional[int] = None
+    locked_accounts: Optional[int] = None
+    trial_subscriptions: Optional[int] = None
+    expiring_subscriptions: Optional[int] = None
+    open_tickets: Optional[int] = None
+    sla_breaches: Optional[int] = None
+    critical_errors: Optional[int] = None
+    failed_jobs: Optional[int] = None
 
 
 class CompanyProfileUpdate(BaseModel):
@@ -1518,6 +1566,11 @@ class CompanyUserCreate(StrictModel):
     # Client-role user sees every site of its client — the behaviour before pins existed.
     site_ids: Optional[list[int]] = None
 
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
+
     @field_validator("password")
     @classmethod
     def password_rules(cls, v: str) -> str:
@@ -1533,6 +1586,13 @@ class CompanyUserUpdate(StrictModel):
     guard_id: Optional[int] = None
     # None leaves existing pins alone; [] clears them back to client-wide access.
     site_ids: Optional[list[int]] = None
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return v.strip().lower()
 
     @field_validator("password")
     @classmethod

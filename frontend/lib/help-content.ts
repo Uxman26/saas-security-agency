@@ -504,7 +504,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
           { label: 'Book a demo', href: '/book-demo' },
           { label: 'Contact', href: '/contact' },
           { label: 'Pricing', href: '/pricing' },
-          { label: 'Privacy Policy', href: '/privacy' },
+          { label: 'Privacy Notice', href: '/privacy' },
           { label: 'Terms of Service', href: '/terms' },
         ],
       },

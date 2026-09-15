@@ -11,6 +11,7 @@ import { canModule } from '@/lib/permissions';
 import { PASSWORD_REQUIREMENTS_MSG, passwordFieldSchema } from '@/lib/validation';
 import type { PortalLogin } from '@/lib/types';
 import { toast } from '@/lib/toast';
+import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import { KeyRound } from 'lucide-react';
 
 type Props = {
@@ -108,12 +109,23 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
     }
     setSaving(true);
     try {
+      const dup = await assertEmailAvailable(email);
+      if (dup) {
+        toast.error(dup);
+        return;
+      }
       await create(recordId, { email, password });
       setPassword('');
       toast.success('Portal login created');
       refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to create the login');
+      toast.error(
+        isDuplicateEmailError(e)
+          ? DUPLICATE_EMAIL_MESSAGE
+          : e instanceof Error
+            ? e.message
+            : 'Failed to create the login'
+      );
     } finally {
       setSaving(false);
     }

@@ -41,6 +41,13 @@ import {
   Activity,
   BadgeCheck,
   TrendingUp,
+  LifeBuoy,
+  Monitor,
+  Cog,
+  BarChart3,
+  Search,
+  Flag,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { can, PERMS } from '@/lib/permissions';
@@ -74,6 +81,13 @@ const adminTiles = [
   { href: '/admin/companies', title: 'Companies', desc: 'Tenants, modules & user limits', icon: Building2, color: 'text-primary' },
   { href: '/admin/users', title: 'Users', desc: 'All platform users — activate or deactivate', icon: Users, color: 'text-blue-600 dark:text-blue-400' },
   { href: '/admin/admins', title: 'Admins', desc: 'Tenant admin accounts & module access', icon: UserCog, color: 'text-indigo-600 dark:text-indigo-400' },
+  { href: '/admin/tickets', title: 'Tickets', desc: 'Support tickets & SLA tracking', icon: LifeBuoy, color: 'text-sky-600 dark:text-sky-400' },
+  { href: '/admin/errors', title: 'Errors', desc: 'Platform error logs & resolve', icon: AlertTriangle, color: 'text-red-600 dark:text-red-400' },
+  { href: '/admin/sessions', title: 'Sessions', desc: 'Active sessions & force logout', icon: Monitor, color: 'text-teal-600 dark:text-teal-400' },
+  { href: '/admin/jobs', title: 'Jobs', desc: 'Background jobs — retry or cancel', icon: Cog, color: 'text-slate-600 dark:text-slate-400' },
+  { href: '/admin/reports', title: 'Reports', desc: 'Platform KPI summary', icon: BarChart3, color: 'text-emerald-600 dark:text-emerald-400' },
+  { href: '/admin/search', title: 'Search', desc: 'Global search across tenants & tickets', icon: Search, color: 'text-orange-600 dark:text-orange-400' },
+  { href: '/admin/flags', title: 'Feature flags', desc: 'Toggle platform feature flags', icon: Flag, color: 'text-pink-600 dark:text-pink-400' },
   { href: '/admin/invoices', title: 'Subscription invoices', desc: 'Auto-generated platform billing', icon: FileText, color: 'text-rose-600 dark:text-rose-400' },
   { href: '/admin/payments', title: 'Payments', desc: 'Subscription payment records', icon: CreditCard, color: 'text-violet-600 dark:text-violet-400' },
   { href: '/admin/receipts', title: 'Receipts', desc: 'Signup payments & mark paid', icon: Wallet, color: 'text-emerald-600 dark:text-emerald-400' },
@@ -542,8 +556,39 @@ export default function DashboardPage() {
                     <DashboardKpi label="Collected" value={Math.round(adminStats.total_collected)} prefix="£" icon={Wallet} accent="text-green-600 dark:text-green-400" delay={0.17} />
                   </div>
                   <div className={KPI_SPAN_SIXTH}>
-                    <DashboardKpi label="Active users" value={adminStats.platform_usage.total_active_users} sub={`${adminStats.platform_usage.storage_mb} MB storage`} icon={Users} delay={0.2} />
+                    <DashboardKpi
+                      label="Active users"
+                      value={adminStats.active_users ?? adminStats.platform_usage.total_active_users}
+                      sub={`${adminStats.platform_usage.storage_mb} MB storage`}
+                      icon={Users}
+                      delay={0.2}
+                    />
                   </div>
+                  {adminStats.locked_accounts != null && (
+                    <div className={KPI_SPAN_SIXTH}>
+                      <DashboardKpi label="Locked" value={adminStats.locked_accounts} icon={Lock} warn={adminStats.locked_accounts > 0} href="/admin/companies" delay={0.23} />
+                    </div>
+                  )}
+                  {adminStats.open_tickets != null && (
+                    <div className={KPI_SPAN_SIXTH}>
+                      <DashboardKpi label="Open tickets" value={adminStats.open_tickets} icon={LifeBuoy} warn={adminStats.open_tickets > 0} href="/admin/tickets" delay={0.26} />
+                    </div>
+                  )}
+                  {adminStats.critical_errors != null && (
+                    <div className={KPI_SPAN_SIXTH}>
+                      <DashboardKpi label="Critical errors" value={adminStats.critical_errors} icon={AlertTriangle} warn={adminStats.critical_errors > 0} href="/admin/errors" delay={0.29} />
+                    </div>
+                  )}
+                  {adminStats.expiring_subscriptions != null && (
+                    <div className={KPI_SPAN_SIXTH}>
+                      <DashboardKpi label="Expiring soon" value={adminStats.expiring_subscriptions} sub="Within 14 days" icon={Clock} warn={adminStats.expiring_subscriptions > 0} href="/admin/companies" delay={0.32} />
+                    </div>
+                  )}
+                  {adminStats.new_tenants_7d != null && (
+                    <div className={KPI_SPAN_SIXTH}>
+                      <DashboardKpi label="New (7d)" value={adminStats.new_tenants_7d} icon={Building2} href="/admin/companies" delay={0.35} />
+                    </div>
+                  )}
                 </div>
               </DashboardSection>
             )}

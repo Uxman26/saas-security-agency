@@ -443,6 +443,33 @@ def run():
             cur.execute("UPDATE users SET auth_provider = 'local' WHERE auth_provider IS NULL")
         except sqlite3.OperationalError:
             pass
+    if table_exists(cur, "users") and not column_exists(cur, "users", "oauth_subject"):
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN oauth_subject TEXT")
+        except sqlite3.OperationalError:
+            pass
+    for col, ddl in (
+        ("failed_login_count", "INTEGER DEFAULT 0"),
+        ("lockout_until", "TEXT"),
+        ("post_lockout_watch", "INTEGER DEFAULT 0"),
+        ("must_reset_password", "INTEGER DEFAULT 0"),
+    ):
+        if table_exists(cur, "users") and not column_exists(cur, "users", col):
+            try:
+                cur.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
+            except sqlite3.OperationalError:
+                pass
+    if table_exists(cur, "password_reset_requests"):
+        for col, ddl in (
+            ("token_jti", "TEXT"),
+            ("used_at", "TEXT"),
+            ("expires_at", "TEXT"),
+        ):
+            if not column_exists(cur, "password_reset_requests", col):
+                try:
+                    cur.execute(f"ALTER TABLE password_reset_requests ADD COLUMN {col} {ddl}")
+                except sqlite3.OperationalError:
+                    pass
     if not table_exists(cur, "staff_requests"):
         try:
             cur.execute(
@@ -909,6 +936,7 @@ def run():
             stripe_invoice_id TEXT UNIQUE,
             receipt_number TEXT UNIQUE,
             amount REAL NOT NULL,
+            amount_refunded REAL DEFAULT 0,
             currency TEXT DEFAULT 'gbp',
             plan_name TEXT,
             billing_cycle TEXT,
@@ -1439,6 +1467,420 @@ def run():
             finally:
                 cur.execute("PRAGMA foreign_keys=ON")
 
+    for table, col, spec in (
+        ("companies", "account_status", "TEXT DEFAULT 'active'"),
+        ("companies", "locked_at", "TEXT"),
+        ("companies", "locked_reason", "TEXT"),
+        ("companies", "archived_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("users", "mfa_enabled", "INTEGER DEFAULT 0"),
+        ("users", "mfa_secret", "TEXT"),
+        ("users", "mfa_backup_codes_json", "TEXT"),
+    ):
+        if table_exists(cur, table) and not column_exists(cur, table, col):
+            try:
+                cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+
+    platform_tables = {
+        "support_tickets": """CREATE TABLE support_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_number TEXT UNIQUE NOT NULL,
+            company_id INTEGER REFERENCES companies(id),
+            created_by_user_id INTEGER REFERENCES users(id),
+            assigned_to_user_id INTEGER REFERENCES users(id),
+            subject TEXT NOT NULL,
+            category TEXT DEFAULT 'general',
+            priority TEXT DEFAULT 'medium',
+            status TEXT DEFAULT 'open',
+            sla_due_at TEXT,
+            sla_breached INTEGER DEFAULT 0,
+            escalated_at TEXT,
+            resolved_at TEXT,
+            closed_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "support_ticket_messages": """CREATE TABLE support_ticket_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER NOT NULL REFERENCES support_tickets(id),
+            author_user_id INTEGER REFERENCES users(id),
+            body TEXT NOT NULL,
+            is_internal INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "support_ticket_attachments": """CREATE TABLE support_ticket_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER NOT NULL REFERENCES support_tickets(id),
+            message_id INTEGER REFERENCES support_ticket_messages(id),
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            content_type TEXT,
+            size_bytes INTEGER,
+            uploaded_by_user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "temporary_access_sessions": """CREATE TABLE temporary_access_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            granted_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            reason TEXT NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            starts_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expires_at TEXT NOT NULL,
+            revoked_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "error_logs": """CREATE TABLE error_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            source TEXT DEFAULT 'application',
+            module TEXT,
+            severity TEXT DEFAULT 'error',
+            status TEXT DEFAULT 'open',
+            error_code TEXT,
+            message TEXT NOT NULL,
+            stack_trace TEXT,
+            request_id TEXT,
+            path TEXT,
+            method TEXT,
+            occurrence_count INTEGER DEFAULT 1,
+            first_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TEXT,
+            resolved_by_user_id INTEGER REFERENCES users(id),
+            fingerprint TEXT,
+            meta_json TEXT
+        )""",
+        "security_events": """CREATE TABLE security_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            user_id INTEGER REFERENCES users(id),
+            event_type TEXT NOT NULL,
+            severity TEXT DEFAULT 'info',
+            message TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            meta_json TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "feature_flags": """CREATE TABLE feature_flags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            enabled INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "tenant_features": """CREATE TABLE tenant_features (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            feature_key TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            limit_value INTEGER,
+            config_json TEXT,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(company_id, feature_key)
+        )""",
+        "subscription_changes": """CREATE TABLE subscription_changes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            actor_user_id INTEGER REFERENCES users(id),
+            change_type TEXT NOT NULL,
+            from_tier TEXT,
+            to_tier TEXT,
+            from_status TEXT,
+            to_status TEXT,
+            from_cycle TEXT,
+            to_cycle TEXT,
+            note TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "refund_policies": """CREATE TABLE refund_policies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            scenario_type TEXT NOT NULL,
+            calculation_type TEXT NOT NULL DEFAULT 'full',
+            percentage REAL,
+            fixed_amount REAL,
+            requires_approval INTEGER DEFAULT 1,
+            auto_approve_below REAL,
+            max_refund_percent REAL,
+            max_refund_amount REAL,
+            min_days_after_payment INTEGER DEFAULT 0,
+            max_days_after_payment INTEGER,
+            eligible_payment_statuses_json TEXT,
+            allow_stripe INTEGER DEFAULT 1,
+            allow_credit INTEGER DEFAULT 1,
+            allow_manual INTEGER DEFAULT 1,
+            default_refund_method TEXT DEFAULT 'stripe',
+            is_active INTEGER DEFAULT 1,
+            priority INTEGER DEFAULT 100,
+            updated_by_user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "payment_refunds": """CREATE TABLE payment_refunds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            subscription_invoice_id INTEGER REFERENCES subscription_invoices(id),
+            billing_receipt_id INTEGER REFERENCES billing_receipts(id),
+            subscription_receipt_id INTEGER REFERENCES subscription_receipts(id),
+            policy_id INTEGER REFERENCES refund_policies(id),
+            amount REAL NOT NULL,
+            currency TEXT DEFAULT 'gbp',
+            reason TEXT,
+            status TEXT DEFAULT 'completed',
+            actor_user_id INTEGER REFERENCES users(id),
+            scenario_type TEXT,
+            calculation_type TEXT,
+            payment_source TEXT DEFAULT 'subscription_invoice',
+            requested_amount REAL,
+            calculated_amount REAL,
+            approved_amount REAL,
+            processed_amount REAL,
+            original_paid_amount REAL,
+            previously_refunded_amount REAL,
+            remaining_refundable REAL,
+            refund_method TEXT DEFAULT 'manual',
+            stripe_refund_id TEXT UNIQUE,
+            stripe_invoice_id TEXT,
+            stripe_charge_id TEXT,
+            credit_applied INTEGER DEFAULT 0,
+            credit_amount REAL DEFAULT 0,
+            requires_approval INTEGER DEFAULT 1,
+            requested_by_user_id INTEGER REFERENCES users(id),
+            approved_by_user_id INTEGER REFERENCES users(id),
+            approved_at TEXT,
+            rejected_by_user_id INTEGER REFERENCES users(id),
+            rejected_at TEXT,
+            rejection_reason TEXT,
+            processed_by_user_id INTEGER REFERENCES users(id),
+            processed_at TEXT,
+            cancelled_by_user_id INTEGER REFERENCES users(id),
+            cancelled_at TEXT,
+            override_used INTEGER DEFAULT 0,
+            override_reason TEXT,
+            idempotency_key TEXT UNIQUE,
+            error_message TEXT,
+            notes TEXT,
+            metadata_json TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "refund_events": """CREATE TABLE refund_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            refund_id INTEGER NOT NULL REFERENCES payment_refunds(id),
+            actor_user_id INTEGER REFERENCES users(id),
+            action TEXT NOT NULL,
+            from_status TEXT,
+            to_status TEXT,
+            amount REAL,
+            note TEXT,
+            detail_json TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "notification_templates": """CREATE TABLE notification_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            channel TEXT DEFAULT 'email',
+            subject TEXT,
+            body TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "platform_notifications": """CREATE TABLE platform_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            user_id INTEGER REFERENCES users(id),
+            template_key TEXT,
+            channel TEXT DEFAULT 'email',
+            subject TEXT,
+            body TEXT,
+            status TEXT DEFAULT 'queued',
+            error_message TEXT,
+            sent_by_user_id INTEGER REFERENCES users(id),
+            sent_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "background_jobs": """CREATE TABLE background_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_name TEXT NOT NULL,
+            queue TEXT DEFAULT 'default',
+            status TEXT DEFAULT 'queued',
+            company_id INTEGER REFERENCES companies(id),
+            payload_json TEXT,
+            result_json TEXT,
+            error_message TEXT,
+            attempts INTEGER DEFAULT 0,
+            max_attempts INTEGER DEFAULT 3,
+            started_at TEXT,
+            finished_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "webhook_logs": """CREATE TABLE webhook_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER REFERENCES companies(id),
+            provider TEXT,
+            event_type TEXT,
+            status TEXT DEFAULT 'received',
+            http_status INTEGER,
+            request_body TEXT,
+            response_body TEXT,
+            error_message TEXT,
+            attempts INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "platform_roles": """CREATE TABLE platform_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            is_system INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "platform_permissions": """CREATE TABLE platform_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            module TEXT NOT NULL,
+            action TEXT NOT NULL,
+            code TEXT UNIQUE NOT NULL,
+            description TEXT,
+            is_sensitive INTEGER DEFAULT 0
+        )""",
+        "platform_role_permissions": """CREATE TABLE platform_role_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role_id INTEGER NOT NULL REFERENCES platform_roles(id),
+            permission_id INTEGER NOT NULL REFERENCES platform_permissions(id),
+            UNIQUE(role_id, permission_id)
+        )""",
+        "platform_admin_roles": """CREATE TABLE platform_admin_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            role_id INTEGER NOT NULL REFERENCES platform_roles(id),
+            assigned_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, role_id)
+        )""",
+        "password_reset_requests": """CREATE TABLE password_reset_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            requested_by_user_id INTEGER REFERENCES users(id),
+            channel TEXT DEFAULT 'email',
+            status TEXT DEFAULT 'sent',
+            token_jti TEXT UNIQUE,
+            ip_address TEXT,
+            used_at TEXT,
+            expires_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "system_configurations": """CREATE TABLE system_configurations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL,
+            value_json TEXT,
+            category TEXT DEFAULT 'general',
+            is_sensitive INTEGER DEFAULT 0,
+            updated_by_user_id INTEGER REFERENCES users(id),
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "trial_periods": """CREATE TABLE trial_periods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            user_id INTEGER REFERENCES users(id),
+            plan_tier TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            source TEXT DEFAULT 'admin',
+            duration_days INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            original_ends_at TEXT NOT NULL,
+            ends_at TEXT NOT NULL,
+            granted_by_user_id INTEGER REFERENCES users(id),
+            converted_at TEXT,
+            expired_at TEXT,
+            stripe_subscription_id TEXT,
+            notes TEXT,
+            reminder_sent_json TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "trial_extensions": """CREATE TABLE trial_extensions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trial_id INTEGER NOT NULL REFERENCES trial_periods(id),
+            extended_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            previous_ends_at TEXT NOT NULL,
+            new_ends_at TEXT NOT NULL,
+            extension_days INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+    }
+    for name, ddl in platform_tables.items():
+        if not table_exists(cur, name):
+            try:
+                cur.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
+
+    if table_exists(cur, "billing_receipts") and not column_exists(cur, "billing_receipts", "amount_refunded"):
+        try:
+            cur.execute("ALTER TABLE billing_receipts ADD COLUMN amount_refunded REAL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+
+    if table_exists(cur, "companies") and not column_exists(cur, "companies", "account_credit_balance"):
+        try:
+            cur.execute("ALTER TABLE companies ADD COLUMN account_credit_balance REAL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+
+    refund_cols = [
+        ("billing_receipt_id", "INTEGER REFERENCES billing_receipts(id)"),
+        ("subscription_receipt_id", "INTEGER REFERENCES subscription_receipts(id)"),
+        ("policy_id", "INTEGER REFERENCES refund_policies(id)"),
+        ("scenario_type", "TEXT"),
+        ("calculation_type", "TEXT"),
+        ("payment_source", "TEXT DEFAULT 'subscription_invoice'"),
+        ("requested_amount", "REAL"),
+        ("calculated_amount", "REAL"),
+        ("approved_amount", "REAL"),
+        ("processed_amount", "REAL"),
+        ("original_paid_amount", "REAL"),
+        ("previously_refunded_amount", "REAL"),
+        ("remaining_refundable", "REAL"),
+        ("refund_method", "TEXT DEFAULT 'manual'"),
+        ("stripe_refund_id", "TEXT"),
+        ("stripe_invoice_id", "TEXT"),
+        ("stripe_charge_id", "TEXT"),
+        ("credit_applied", "INTEGER DEFAULT 0"),
+        ("credit_amount", "REAL DEFAULT 0"),
+        ("requires_approval", "INTEGER DEFAULT 1"),
+        ("requested_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("approved_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("approved_at", "TEXT"),
+        ("rejected_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("rejected_at", "TEXT"),
+        ("rejection_reason", "TEXT"),
+        ("processed_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("processed_at", "TEXT"),
+        ("cancelled_by_user_id", "INTEGER REFERENCES users(id)"),
+        ("cancelled_at", "TEXT"),
+        ("override_used", "INTEGER DEFAULT 0"),
+        ("override_reason", "TEXT"),
+        ("idempotency_key", "TEXT"),
+        ("error_message", "TEXT"),
+        ("notes", "TEXT"),
+        ("metadata_json", "TEXT"),
+        ("updated_at", "TEXT"),
+    ]
+    if table_exists(cur, "payment_refunds"):
+        for col, spec in refund_cols:
+            if not column_exists(cur, "payment_refunds", col):
+                try:
+                    cur.execute(f"ALTER TABLE payment_refunds ADD COLUMN {col} {spec}")
+                except sqlite3.OperationalError:
+                    pass
+
     conn.commit()
     conn.close()
     try:
@@ -1447,11 +1889,16 @@ def run():
         from app.services.module_service import ensure_app_modules, backfill_role_module_permissions
         from app.models import Role
         from app.rbac_matrix import default_matrix_client_portal, default_matrix_staff_portal, default_matrix_supervisor, wrap_matrix
+        from app.services import admin_platform_ext_service
 
         db = SessionLocal()
         try:
             ensure_app_modules(db)
             db.commit()
+            admin_platform_ext_service.ensure_platform_rbac(db)
+            from app.services import refund_service
+
+            refund_service.ensure_default_policies(db)
             backfill_user_roles(db)
             backfill_role_module_permissions(db)
             # Newly shipped sidebar modules must reach logins whose stored allow-list

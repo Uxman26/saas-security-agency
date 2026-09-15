@@ -23,6 +23,7 @@ const STATUS_STYLES: Record<string, string> = {
   overdue: 'text-red-600',
   partial: 'text-amber-600',
   cancelled: 'text-gray-500',
+  disputed: 'text-orange-600',
 };
 
 export default function AdminSubscriptionInvoicePage() {
@@ -48,6 +49,17 @@ export default function AdminSubscriptionInvoicePage() {
       toast.success('Marked as paid');
     } catch {
       toast.error('Update failed');
+    }
+  };
+
+  const dispute = async () => {
+    try {
+      await api.admin.disputeInvoice(id);
+      const updated = await api.admin.invoice(id);
+      setInv(updated);
+      toast.success('Marked as disputed');
+    } catch {
+      toast.error('Dispute failed');
     }
   };
 
@@ -84,6 +96,12 @@ export default function AdminSubscriptionInvoicePage() {
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={sendEmail}><Mail className="size-4 mr-1" />Send email</Button>
               {inv.status !== 'paid' && <Button size="sm" onClick={markPaid}>Mark paid</Button>}
+              {inv.status !== 'disputed' && (
+                <Button variant="outline" size="sm" onClick={() => void dispute()}>Dispute</Button>
+              )}
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/admin/refunds">Refunds</Link>
+              </Button>
             </div>
           </div>
 

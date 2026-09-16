@@ -1,4 +1,4 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries, AbsenceKind, AbsenceRecord, AbsenceSummary, DeleteImpact, DocumentDetail, DocumentReceipt, EmergencyContact, EmployeeHub, RecordView, Team } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -1636,7 +1636,7 @@ export const api = {
       request<{ id: number; status: string }>(`/admin/jobs/${id}/cancel`, { method: 'POST' }),
     webhooks: (company_id?: number) => {
       const q = company_id != null ? `?company_id=${company_id}` : '';
-      return request<Record<string, unknown>[]>(`/admin/webhooks${q}`);
+      return request<import('./types').WebhookLogItem[]>(`/admin/webhooks${q}`);
     },
     platformRoles: () => request<Record<string, unknown>[]>('/admin/platform-roles'),
     config: () => request<Record<string, unknown>[]>('/admin/config'),

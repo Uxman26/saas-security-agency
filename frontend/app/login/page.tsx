@@ -147,7 +147,7 @@ function LoginForm() {
       const result = await login(data.email, data.password, data.remember_me ?? true);
       setLockoutSeconds(0);
       setPasswordResetRequired(false);
-      if ('mfa_required' in result && result.mfa_required) {
+      if ('mfa_required' in result) {
         setMfaToken(result.mfa_token);
         setMfaCode('');
         return;

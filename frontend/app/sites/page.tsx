@@ -40,7 +40,7 @@ import {
   type StatCardSpec,
 } from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { MapPin, Pencil, Trash2 } from 'lucide-react';
+import { MapPin, Pencil, Trash2, ArchiveRestore, Building2, PoundSterling, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

@@ -45,7 +45,7 @@ import {
   type StatCardSpec,
 } from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Building2, Eye, Pencil, Trash2, CalendarClock, History } from 'lucide-react';
+import { Building2, Eye, Pencil, Trash2, CalendarClock, History, ArchiveRestore, CheckCircle2, AlertTriangle, MapPin, FileText, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

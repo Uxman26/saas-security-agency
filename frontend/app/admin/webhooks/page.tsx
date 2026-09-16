@@ -20,7 +20,7 @@ export default function AdminWebhooksPage() {
     setLoading(true);
     api.admin
       .webhooks()
-      .then((data) => setRows(data as WebhookLogItem[]))
+      .then((data) => setRows(data))
       .catch(() => toast.error('Failed to load webhooks'))
       .finally(() => setLoading(false));
   }, []);

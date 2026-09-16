@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
+from app.routers import teams, absence
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, admin_ext, admin_complete, admin_trials, admin_refunds, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.middleware.client_source import ClientSourceMiddleware
@@ -197,10 +198,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         _log.exception("Failed to persist error log")
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
-
-@app.get("/")
-def root():
-    return {"message": "ControlOps API"}
 
 @app.get("/")
 def root():

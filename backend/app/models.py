@@ -102,6 +102,7 @@ class User(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=True)
     sidebar_modules_json = Column(Text, nullable=True)
+    theme_preference = Column(String, nullable=True)
     mfa_enabled = Column(Boolean, default=False)
     mfa_secret = Column(String, nullable=True)
     mfa_backup_codes_json = Column(Text, nullable=True)

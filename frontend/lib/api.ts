@@ -194,6 +194,11 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ full_name: sanitizeInput(full_name) }),
       }),
+    updateTheme: (theme: 'light' | 'dark' | 'system'): Promise<User> =>
+      request<User>('/auth/me/theme', {
+        method: 'PATCH',
+        body: JSON.stringify({ theme }),
+      }),
     logout: (): Promise<{ message: string }> =>
       request<{ message: string }>('/auth/logout', { method: 'POST' }),
     logoutAll: (): Promise<{ message: string }> =>

@@ -19,7 +19,25 @@ def table_exists(cursor, table):
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
     return cursor.fetchone() is not None
 
+def _ensure_user_theme_preference():
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("users"):
+            return
+        cols = {c["name"] for c in insp.get_columns("users")}
+        if "theme_preference" in cols:
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN theme_preference VARCHAR"))
+    except Exception:
+        pass
+
+
 def run():
+    _ensure_user_theme_preference()
     path = get_db_path()
     if not path:
         return
@@ -404,6 +422,7 @@ def run():
         ("lockout_until", "TEXT"),
         ("post_lockout_watch", "INTEGER DEFAULT 0"),
         ("must_reset_password", "INTEGER DEFAULT 0"),
+        ("theme_preference", "TEXT"),
     ):
         if table_exists(cur, "users") and not column_exists(cur, "users", col):
             try:

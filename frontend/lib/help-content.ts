@@ -469,7 +469,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: 'heading', text: 'Dark mode and language' },
       {
         type: 'paragraph',
-        text: 'Use the theme toggle and language switcher (EN / Arabic) in the header. Preference applies across marketing and app chrome.',
+        text: 'Use the theme toggle and language switcher (EN / Arabic) in the header. Light or dark mode is saved to your own account and does not change other users or companies.',
       },
     ],
   },

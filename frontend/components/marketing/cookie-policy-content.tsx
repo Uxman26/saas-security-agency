@@ -37,8 +37,11 @@ export function CookiePolicyContent() {
             </tr>
             <tr>
               <td className="py-3 pr-3 text-foreground">Theme preference</td>
-              <td className="py-3 pr-3">Remembers light / dark / system appearance where the theme control is shown</td>
-              <td className="py-3">Browser local storage (via theme tooling)</td>
+              <td className="py-3 pr-3">
+                Remembers light / dark / system appearance. Signed-in users store this on their own account; it does not
+                apply to other users or tenants. Signed-out visitors use a separate device-only setting.
+              </td>
+              <td className="py-3">Account record for signed-in users; browser local storage otherwise</td>
             </tr>
           </tbody>
         </table>

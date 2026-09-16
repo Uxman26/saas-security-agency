@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import date, datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 from uuid import UUID
 
 from app.validators import (
@@ -138,6 +138,10 @@ class ProfileUpdate(BaseModel):
     full_name: NameStr
 
 
+class ThemeUpdate(StrictModel):
+    theme: Literal["light", "dark", "system"]
+
+
 class UserMeResponse(UserResponse):
     permissions: List[str] = Field(default_factory=list)
     module_access: List[dict[str, Any]] = Field(default_factory=list)
@@ -148,6 +152,7 @@ class UserMeResponse(UserResponse):
     subscription_end: Optional[datetime] = None
     sidebar_modules: Optional[List[str]] = None
     enabled_modules: Optional[dict[str, bool]] = None
+    theme_preference: Optional[str] = None
 
 
 class SubscriptionReceiptResponse(BaseModel):

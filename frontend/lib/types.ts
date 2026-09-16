@@ -62,6 +62,7 @@ export interface User {
   subscription_end?: string | null;
   sidebar_modules?: string[] | null;
   enabled_modules?: Record<string, boolean> | null;
+  theme_preference?: 'light' | 'dark' | 'system' | null;
   client_id?: number | null;
   guard_id?: number | null;
   module_access?: ModuleAccess[];

@@ -1,37 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { LanguageSwitcher } from '@/components/language-switcher';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { loginSchema } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
 import { parsePaymentPending, parseEmailVerificationRequired, parseAccountLocked, parsePasswordResetRequired } from '@/lib/sidebar-modules';
 import { api } from '@/lib/api';
-import {
-  Clock,
-  Eye,
-  EyeOff,
-  FileText,
-  Lock,
-  Mail,
-  MapPin,
-  Shield,
-  UserRound,
-  Coins,
-  ChevronRight,
-  Globe,
-} from 'lucide-react';
+import { setLocale } from '@/actions/locale';
+import { ChevronRight, Eye, EyeOff, Globe, Lock, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Suspense } from 'react';
 
 const ORANGE = '#F45100';
 
@@ -65,14 +52,36 @@ function AppleIcon({ className }: { className?: string }) {
   );
 }
 
-const FEATURES = [
-  { icon: Clock, title: 'Real-time shift tracking', desc: 'Monitor attendance, breaks, and overtime as it happens.' },
-  { icon: MapPin, title: 'Geo-verified clock in/out', desc: 'Ensure accountability with GPS-verified check-ins and patrols.' },
-  { icon: Shield, title: 'Incident reporting & rota management', desc: 'Streamline incident logs, compliance, and shift scheduling.' },
-  { icon: Coins, title: 'Manage Expenses', desc: 'Track and manage operational expenses, costs and budgets.' },
-  { icon: UserRound, title: 'Payroll', desc: 'Automate payroll, manage hours and stay compliant.' },
-  { icon: FileText, title: 'Invoices', desc: 'Create, track and manage invoices with ease.' },
-] as const;
+function LoginLocale() {
+  const locale = useLocale();
+  const router = useRouter();
+
+  return (
+    <div className="flex items-center text-neutral-500">
+      <Globe className="size-4 shrink-0" aria-hidden />
+      <Select
+        value={locale}
+        onValueChange={async (next) => {
+          if (next === locale) return;
+          await setLocale(next);
+          router.refresh();
+        }}
+      >
+        <SelectTrigger
+          size="sm"
+          aria-label="Language"
+          className="h-8 border-0 bg-transparent px-1.5 text-[13px] font-medium text-neutral-600 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent"
+        >
+          {locale === 'ar' ? 'العربية' : 'English'}
+        </SelectTrigger>
+        <SelectContent align="end" className="min-w-[9rem]">
+          <SelectItem value="en">English</SelectItem>
+          <SelectItem value="ar">العربية</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 function LoginForm() {
   const t = useTranslations('auth');
@@ -213,318 +222,273 @@ function LoginForm() {
   };
 
   const fieldClass =
-    'h-11 rounded-lg border border-neutral-200 bg-white pl-10 pr-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-[#F45100]/30 focus-visible:border-[#F45100]';
+    'h-12 rounded-xl border border-neutral-200 bg-white pl-10 pr-3 text-[15px] text-neutral-800 placeholder:text-neutral-400 shadow-none focus-visible:ring-2 focus-visible:ring-[#F45100]/25 focus-visible:border-[#F45100]';
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F7F6F3] text-neutral-900">
+    <div className="relative min-h-svh overflow-hidden bg-[#F7F8FB] text-neutral-900 scheme-light">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(ellipse 50% 40% at 8% 0%, rgba(244,81,0,0.14), transparent 55%), radial-gradient(ellipse 45% 40% at 100% 100%, rgba(255,180,120,0.22), transparent 50%)',
+            'radial-gradient(ellipse 48% 52% at 4% -4%, rgba(255,140,50,0.34), transparent 58%), radial-gradient(ellipse 32% 36% at 96% 108%, rgba(255,176,110,0.14), transparent 52%)',
         }}
       />
 
-      <div className="relative z-10 mx-auto flex min-h-svh max-w-[1280px] flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <header className="mb-4 flex items-center justify-between gap-3 lg:mb-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image
-              src="/ControlOps-Logos/controlOps-icon.png"
-              alt=""
-              width={28}
-              height={28}
-              className="size-7 object-contain"
-              priority
-            />
-            <span className="text-sm font-semibold tracking-tight" style={{ color: ORANGE }}>
-              Shift Coverage Everywhere
-            </span>
-          </Link>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/80 px-1 py-0.5 shadow-sm backdrop-blur">
-              <Globe className="ms-2 size-3.5 text-neutral-500" aria-hidden />
-              <LanguageSwitcher className="border-0 bg-transparent shadow-none dark:bg-transparent" />
-            </div>
-          </div>
-        </header>
+      <div className="relative z-10 grid min-h-svh w-full lg:grid-cols-[minmax(0,1.2fr)_minmax(460px,0.8fr)]">
+        <section className="relative hidden min-h-svh lg:block">
+          <img
+            src="/auth/login-left.jpg"
+            alt="ControlOps workforce operations: live shift tracking, geo-verified clock in, patrols, payroll and invoices"
+            className="absolute inset-0 h-full w-full object-contain object-left object-center pl-4 pr-2"
+          />
+        </section>
 
-        <div className="grid flex-1 items-center gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:gap-10 xl:gap-14">
-          <section className="hidden lg:block">
-            <h1 className="max-w-xl text-4xl font-bold leading-[1.15] tracking-tight text-neutral-900 xl:text-[2.75rem]">
-              Smart Workforce Management for Smarter Operations
-              <span style={{ color: ORANGE }}>.</span>
-            </h1>
-            <p className="mt-4 max-w-lg text-base leading-relaxed text-neutral-500">
-              One platform to plan, manage, track, and optimise your workforce operations in real time.
-            </p>
-            <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-5">
-              {FEATURES.map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex gap-3">
-                  <div
-                    className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg"
-                    style={{ background: 'rgba(244,81,0,0.1)', color: ORANGE }}
-                  >
-                    <Icon className="size-4.5" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-neutral-900">{title}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">{desc}</p>
-                  </div>
-                </div>
-              ))}
+        <section className="relative flex min-h-svh flex-col px-4 pb-8 sm:px-8 lg:px-8 lg:pr-14">
+          <div className="flex justify-end pt-4 lg:pt-5">
+            <LoginLocale />
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center">
+          <div className="mb-4 w-full max-w-[440px] overflow-hidden rounded-2xl lg:hidden">
+            <Image
+              src="/auth/login-left.jpg"
+              alt=""
+              width={508}
+              height={650}
+              priority
+              unoptimized
+              className="h-auto w-full object-contain"
+            />
+          </div>
+          <div className="w-full max-w-[440px] rounded-[32px] border border-white bg-white px-7 py-8 shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:px-10 sm:py-10">
+            <div className="mb-6 flex justify-center">
+              <Image
+                src="/ControlOps-Logos/controlOps-horizontal-logo-card.png"
+                alt="Control Operations — Command with Clarity"
+                width={320}
+                height={86}
+                priority
+                unoptimized
+                className="h-[82px] w-auto object-contain"
+              />
             </div>
-            <div className="relative mt-10 overflow-hidden rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-6 shadow-sm">
-              <div className="grid gap-4 sm:grid-cols-3">
-                {[
-                  { label: 'Live Tracking', value: 'Active' },
-                  { label: 'Compliance', value: '98%' },
-                  { label: 'Incidents', value: '3 open' },
-                ].map((s) => (
-                  <div key={s.label} className="rounded-xl border border-white/80 bg-white/90 px-3 py-3 shadow-sm">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{s.label}</p>
-                    <p className="mt-1 text-sm font-semibold text-neutral-900">{s.value}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-4 text-sm text-neutral-500">
-                Plan shifts, verify attendance, and run payroll from one operational system.
+
+            <div className="mb-7 text-center">
+              <h1 className="text-[32px] font-bold leading-tight tracking-tight text-neutral-900">
+                {mfaToken ? t('mfaTitle') : 'Welcome back'}
+              </h1>
+              <p className="mt-1.5 text-[15px] text-neutral-500">
+                {mfaToken ? t('mfaSubtitle') : 'Sign in to manage your workforce'}
               </p>
             </div>
-          </section>
 
-          <section className="mx-auto w-full max-w-[420px]">
-            <div className="rounded-2xl border border-neutral-200/80 bg-white p-6 shadow-[0_12px_40px_rgba(15,23,42,0.08)] sm:p-8">
-              <div className="mb-6 text-center">
-                <div className="mb-3 flex items-center justify-center gap-2.5">
-                  <Image
-                    src="/ControlOps-Logos/controlOps-icon.png"
-                    alt=""
-                    width={36}
-                    height={36}
-                    className="size-9 object-contain"
+            {mfaToken ? (
+              <form onSubmit={onMfaSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="mfa_code" className="text-sm font-medium text-neutral-700">
+                    {t('mfaCode')}
+                  </Label>
+                  <Input
+                    id="mfa_code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={8}
+                    placeholder="000000"
+                    className={cn(fieldClass, 'pl-3 text-center text-lg tracking-[0.3em]')}
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                    autoFocus
                   />
-                  <span className="text-lg font-bold tracking-wide text-neutral-900">CONTROL OPERATIONS</span>
                 </div>
-                <div className="mx-auto flex max-w-[220px] items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-neutral-400">
-                  <span className="h-px flex-1 bg-neutral-200" />
-                  Command with Clarity
-                  <span className="h-px flex-1 bg-neutral-200" />
-                </div>
-                <h2 className="mt-5 text-2xl font-bold text-neutral-900">
-                  {mfaToken ? t('mfaTitle') : 'Welcome back'}
-                </h2>
-                <p className="mt-1 text-sm text-neutral-500">
-                  {mfaToken ? t('mfaSubtitle') : 'Sign in to manage your workforce'}
-                </p>
-              </div>
-
-              {mfaToken ? (
-                <form onSubmit={onMfaSubmit} className="space-y-4">
+                <Button
+                  type="submit"
+                  disabled={loading || mfaCode.length < 6}
+                  className="h-12 w-full rounded-xl text-white hover:opacity-95"
+                  style={{ background: ORANGE }}
+                >
+                  {loading ? t('verifyingMfa') : t('verifyMfa')}
+                </Button>
+                <button
+                  type="button"
+                  className="w-full text-center text-sm font-medium"
+                  style={{ color: ORANGE }}
+                  onClick={() => {
+                    setMfaToken(null);
+                    setMfaCode('');
+                  }}
+                >
+                  {t('mfaBack')}
+                </button>
+              </form>
+            ) : (
+              <>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSubmit(onSubmit)(e);
+                  }}
+                  className="space-y-4"
+                >
                   <div className="space-y-1.5">
-                    <Label htmlFor="mfa_code" className="text-sm font-medium text-neutral-700">
-                      {t('mfaCode')}
+                    <Label htmlFor="email" className="text-sm font-medium text-neutral-700">
+                      Email address
                     </Label>
-                    <Input
-                      id="mfa_code"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={8}
-                      placeholder="000000"
-                      className={cn(fieldClass, 'pl-3 tracking-[0.3em] text-center text-lg')}
-                      value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                      autoFocus
-                    />
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+                      <Input
+                        id="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        className={fieldClass}
+                        {...register('email')}
+                      />
+                    </div>
+                    {errors.email && (
+                      <p className="text-xs text-red-600">{errors.email.message as string}</p>
+                    )}
                   </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="password" className="text-sm font-medium text-neutral-700">
+                      {t('password')}
+                    </Label>
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        className={cn(fieldClass, 'pr-11')}
+                        {...register('password')}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+                        aria-label={showPassword ? t('hidePassword') : t('showPassword')}
+                      >
+                        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <p className="text-xs text-red-600">{errors.password.message as string}</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <label className="flex cursor-pointer items-center gap-2 text-neutral-600">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-neutral-300"
+                        style={{ accentColor: ORANGE }}
+                        {...register('remember_me')}
+                      />
+                      <span>{t('rememberMe')}</span>
+                    </label>
+                    <Link href="/forgot-password" className="font-medium" style={{ color: ORANGE }}>
+                      {t('forgotPassword')}
+                    </Link>
+                  </div>
+
+                  {lockoutSeconds > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                      <p className="font-medium">Account temporarily locked</p>
+                      <p className="mt-0.5 text-amber-800/90">
+                        Too many failed sign-in attempts. Try again in{' '}
+                        <span className="font-semibold tabular-nums">{formatLockout(lockoutSeconds)}</span>.
+                      </p>
+                    </div>
+                  )}
+
+                  {passwordResetRequired && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-900">
+                      <p className="font-medium">Password reset required</p>
+                      <p className="mt-0.5">
+                        Your account is locked until you reset your password.{' '}
+                        <Link href="/forgot-password" className="font-semibold underline">
+                          Reset password
+                        </Link>
+                      </p>
+                    </div>
+                  )}
+
                   <Button
                     type="submit"
-                    disabled={loading || mfaCode.length < 6}
-                    className="h-11 w-full rounded-lg text-white hover:opacity-95"
-                    style={{ background: ORANGE }}
+                    disabled={signInDisabled}
+                    className="relative h-12 w-full rounded-xl text-[15px] font-semibold text-white hover:opacity-95 disabled:opacity-60"
+                    style={{ background: `linear-gradient(180deg, #FF6A1F 0%, ${ORANGE} 100%)` }}
                   >
-                    {loading ? t('verifyingMfa') : t('verifyMfa')}
+                    <span>
+                      {loading
+                        ? t('signingIn')
+                        : lockoutSeconds > 0
+                          ? `Locked (${formatLockout(lockoutSeconds)})`
+                          : passwordResetRequired
+                            ? 'Reset required'
+                            : 'Sign In'}
+                    </span>
+                    {!loading && lockoutSeconds <= 0 && !passwordResetRequired && (
+                      <ChevronRight className="absolute right-4 size-5" />
+                    )}
                   </Button>
-                  <button
-                    type="button"
-                    className="w-full text-center text-sm font-medium"
-                    style={{ color: ORANGE }}
-                    onClick={() => {
-                      setMfaToken(null);
-                      setMfaCode('');
-                    }}
-                  >
-                    {t('mfaBack')}
-                  </button>
                 </form>
-              ) : (
-                <>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSubmit(onSubmit)(e);
-                    }}
-                    className="space-y-4"
-                  >
-                    <div className="space-y-1.5">
-                      <Label htmlFor="email" className="text-sm font-medium text-neutral-700">
-                        Email address
-                      </Label>
-                      <div className="relative">
-                        <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
-                        <Input
-                          id="email"
-                          type="email"
-                          autoComplete="email"
-                          placeholder="you@example.com"
-                          className={fieldClass}
-                          {...register('email')}
-                        />
-                      </div>
-                      {errors.email && (
-                        <p className="text-xs text-red-600">{errors.email.message as string}</p>
+
+                <div className="my-5 flex items-center gap-3">
+                  <span className="h-px flex-1 bg-neutral-200" />
+                  <span className="text-xs text-neutral-400">or</span>
+                  <span className="h-px flex-1 bg-neutral-200" />
+                </div>
+
+                <div className="space-y-2.5">
+                  {(
+                    [
+                      { id: 'microsoft', label: 'Sign in with Microsoft', Icon: MicrosoftIcon },
+                      { id: 'google', label: 'Sign in with Google', Icon: GoogleIcon },
+                      { id: 'apple', label: 'Sign in with Apple', Icon: AppleIcon },
+                    ] as const
+                  ).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => startOAuth(id)}
+                      disabled={loading}
+                      className={cn(
+                        'flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-neutral-200 bg-white text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50',
+                        !oauthProviders[id] && 'opacity-70'
                       )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="password" className="text-sm font-medium text-neutral-700">
-                        {t('password')}
-                      </Label>
-                      <div className="relative">
-                        <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
-                        <Input
-                          id="password"
-                          type={showPassword ? 'text' : 'password'}
-                          autoComplete="current-password"
-                          placeholder="••••••••"
-                          className={cn(fieldClass, 'pr-10')}
-                          {...register('password')}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword((v) => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
-                          aria-label={showPassword ? t('hidePassword') : t('showPassword')}
-                        >
-                          {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                        </button>
-                      </div>
-                      {errors.password && (
-                        <p className="text-xs text-red-600">{errors.password.message as string}</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 text-sm">
-                      <label className="flex cursor-pointer items-center gap-2 text-neutral-600">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-neutral-300"
-                          style={{ accentColor: ORANGE }}
-                          {...register('remember_me')}
-                        />
-                        <span>{t('rememberMe')}</span>
-                      </label>
-                      <Link href="/forgot-password" className="font-medium" style={{ color: ORANGE }}>
-                        {t('forgotPassword')}
-                      </Link>
-                    </div>
-
-                    {lockoutSeconds > 0 && (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-                        <p className="font-medium">Account temporarily locked</p>
-                        <p className="mt-0.5 text-amber-800/90">
-                          Too many failed sign-in attempts. Try again in{' '}
-                          <span className="font-semibold tabular-nums">{formatLockout(lockoutSeconds)}</span>.
-                        </p>
-                      </div>
-                    )}
-
-                    {passwordResetRequired && (
-                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-900">
-                        <p className="font-medium">Password reset required</p>
-                        <p className="mt-0.5">
-                          Your account is locked until you reset your password.{' '}
-                          <Link href="/forgot-password" className="font-semibold underline">
-                            Reset password
-                          </Link>
-                        </p>
-                      </div>
-                    )}
-
-                    <Button
-                      type="submit"
-                      disabled={signInDisabled}
-                      className="h-11 w-full rounded-lg text-base font-semibold text-white hover:opacity-95 disabled:opacity-60"
-                      style={{ background: ORANGE }}
                     >
-                      <span className="flex items-center justify-center gap-1.5">
-                        {loading
-                          ? t('signingIn')
-                          : lockoutSeconds > 0
-                            ? `Locked (${formatLockout(lockoutSeconds)})`
-                            : passwordResetRequired
-                              ? 'Reset required'
-                              : tc('signIn')}
-                        {!loading && lockoutSeconds <= 0 && !passwordResetRequired && (
-                          <ChevronRight className="size-4" />
-                        )}
-                      </span>
-                    </Button>
-                  </form>
-                  <div className="my-5 flex items-center gap-3">
-                    <span className="h-px flex-1 bg-neutral-200" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">or</span>
-                    <span className="h-px flex-1 bg-neutral-200" />
-                  </div>
+                      <Icon className="size-5 shrink-0" />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
 
-                  <div className="space-y-2.5">
-                    {(
-                      [
-                        { id: 'microsoft', label: 'Sign in with Microsoft', Icon: MicrosoftIcon },
-                        { id: 'google', label: 'Sign in with Google', Icon: GoogleIcon },
-                        { id: 'apple', label: 'Sign in with Apple', Icon: AppleIcon },
-                      ] as const
-                    ).map(({ id, label, Icon }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => startOAuth(id)}
-                        disabled={loading}
-                        className={cn(
-                          'flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-neutral-200 bg-white text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50',
-                          !oauthProviders[id] && 'opacity-70'
-                        )}
-                      >
-                        <Icon className="size-5 shrink-0" />
-                        <span>{label}</span>
-                      </button>
-                    ))}
-                  </div>
+                <p className="mt-5 text-center text-sm text-neutral-500">
+                  {tc('dontHaveAccount')}{' '}
+                  <Link href="/pricing" className="font-semibold" style={{ color: ORANGE }}>
+                    {tc('signUp')}
+                  </Link>
+                </p>
+              </>
+            )}
+          </div>
 
-                  <p className="mt-5 text-center text-sm text-neutral-500">
-                    {tc('dontHaveAccount')}{' '}
-                    <Link href="/pricing" className="font-semibold" style={{ color: ORANGE }}>
-                      {tc('signUp')}
-                    </Link>
-                  </p>
-                </>
-              )}
-            </div>
-
-            <footer className="mt-6 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-neutral-400">
-              <span>© {new Date().getFullYear()} ControlOps. All rights reserved.</span>
-              <span className="flex items-center gap-2">
-                <Link href="/privacy" className="hover:text-neutral-600">
-                  Privacy Notice
-                </Link>
-                <span aria-hidden>|</span>
-                <Link href="/help" className="hover:text-neutral-600">
-                  Support
-                </Link>
-              </span>
-            </footer>
-          </section>
-        </div>
+          <footer className="mt-6 flex w-full max-w-[440px] flex-wrap items-center justify-between gap-2 px-1 text-xs text-neutral-400">
+            <span>© {new Date().getFullYear()} ControlOps. All rights reserved.</span>
+            <span className="flex items-center gap-2">
+              <Link href="/privacy" className="hover:text-neutral-600">
+                Privacy Policy
+              </Link>
+              <span aria-hidden>|</span>
+              <Link href="/help" className="hover:text-neutral-600">
+                Support
+              </Link>
+            </span>
+          </footer>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -532,7 +496,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-svh bg-[#F7F6F3]" />}>
+    <Suspense fallback={<div className="min-h-svh bg-[#F7F8FB]" />}>
       <LoginForm />
     </Suspense>
   );

@@ -11,6 +11,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import type { AdminReportsSummary, AdminReportsTimeseries } from '@/lib/types';
 import { toast } from '@/lib/toast';
+import {
+  DashboardKpi,
+  DashboardSection,
+  KPI_GRID,
+  KPI_SPAN_QUARTER,
+} from '@/components/dashboard/dashboard-kpi';
+import {
+  Activity,
+  AlertTriangle,
+  Building2,
+  FileText,
+  LifeBuoy,
+  LogIn,
+  PoundSterling,
+  RotateCcw,
+  Users,
+} from 'lucide-react';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -77,16 +94,16 @@ export default function AdminReportsPage() {
 
   const kpis = summary
     ? [
-        { label: 'New tenants', value: summary.new_tenants },
-        { label: 'Active tenants', value: summary.active_tenants },
-        { label: 'Revenue collected', value: `£${summary.revenue_collected.toFixed(2)}` },
-        { label: 'Refunds', value: `£${(summary.refunds_total ?? 0).toFixed(2)}` },
-        { label: 'Net revenue', value: `£${(summary.net_revenue ?? summary.revenue_collected).toFixed(2)}` },
-        { label: 'Invoices created', value: summary.invoices_created },
-        { label: 'Logins', value: summary.logins },
-        { label: 'Open tickets', value: summary.open_tickets },
-        { label: 'Errors', value: summary.errors },
-        { label: 'API calls', value: summary.api_calls },
+        { label: 'New tenants', value: summary.new_tenants, icon: Building2 },
+        { label: 'Active tenants', value: summary.active_tenants, icon: Users },
+        { label: 'Revenue collected', value: summary.revenue_collected, prefix: '£', icon: PoundSterling },
+        { label: 'Refunds', value: summary.refunds_total ?? 0, prefix: '£', icon: RotateCcw },
+        { label: 'Net revenue', value: summary.net_revenue ?? summary.revenue_collected, prefix: '£', icon: PoundSterling },
+        { label: 'Invoices created', value: summary.invoices_created, icon: FileText },
+        { label: 'Logins', value: summary.logins, icon: LogIn },
+        { label: 'Open tickets', value: summary.open_tickets, icon: LifeBuoy },
+        { label: 'Errors', value: summary.errors, icon: AlertTriangle, warn: summary.errors > 0 },
+        { label: 'API calls', value: summary.api_calls, icon: Activity },
       ]
     : [];
 
@@ -94,8 +111,13 @@ export default function AdminReportsPage() {
     <ProtectedRoute>
       <AppShell>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-            <h1 className="text-3xl font-bold">Platform reports</h1>
+          <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
+            <div>
+              <h1 className="text-3xl font-bold">Platform reports</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Tenant growth, billing, logins, and support volume for the selected period. Export CSV for offline analysis.
+              </p>
+            </div>
             <div className="flex gap-2">
               <Select value={days} onValueChange={setDays}>
                 <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
@@ -115,18 +137,21 @@ export default function AdminReportsPage() {
             <p className="text-muted-foreground">Loading...</p>
           ) : summary ? (
             <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {kpis.map((k) => (
-                  <Card key={k.label}>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">{k.label}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-2xl font-bold tabular-nums">{k.value}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <DashboardSection title="Summary">
+                <div className={KPI_GRID}>
+                  {kpis.map((k) => (
+                    <div key={k.label} className={KPI_SPAN_QUARTER}>
+                      <DashboardKpi
+                        label={k.label}
+                        value={k.value}
+                        prefix={k.prefix}
+                        icon={k.icon}
+                        warn={k.warn}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </DashboardSection>
               <Card>
                 <CardHeader><CardTitle>Tenants by plan</CardTitle></CardHeader>
                 <CardContent>

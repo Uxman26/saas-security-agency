@@ -31,21 +31,25 @@ export function TrialBanner() {
 
   if (!status) return null;
 
+  const plan = status.plan_tier ? status.plan_tier.replace(/_/g, ' ') : null;
+  const cycle = status.billing_cycle;
+  const start = status.trial_starts_on ? new Date(status.trial_starts_on).toLocaleDateString() : null;
+  const ends = status.trial_ends_on ? new Date(status.trial_ends_on).toLocaleDateString() : null;
+
   if (status.trial_active) {
-    const ends = status.trial_ends_on
-      ? new Date(status.trial_ends_on).toLocaleDateString()
-      : null;
     const days = status.days_remaining ?? 0;
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 bg-sky-700 px-4 py-2 text-sm text-white">
         <span>
-          Trial Active — {days} day{days === 1 ? '' : 's'} left
-          {ends ? ` (ends ${ends})` : ''}
+          {status.label || 'Trial Active'}
+          {plan ? ` · ${plan}` : ''}
+          {cycle ? ` (${cycle})` : ''}
+          {' — '}
+          {days} day{days === 1 ? '' : 's'} left
+          {start ? ` · started ${start}` : ''}
+          {ends ? ` · ends ${ends}` : ''}
         </span>
-        <Link
-          href="/settings/billing"
-          className="underline font-medium hover:text-white/90"
-        >
+        <Link href="/settings/billing" className="underline font-medium hover:text-white/90">
           Upgrade
         </Link>
       </div>
@@ -54,16 +58,20 @@ export function TrialBanner() {
 
   if (status.trial_expired || (status.subscription_required && status.subscription_status !== 'pending' && !status.can_use_paid_features)) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-700 px-4 py-2 text-sm text-white">
-        <span>
-          Trial expired — Subscription required. You can still view your data and upgrade.
-        </span>
-        <Link
-          href="/settings/billing"
-          className="underline font-medium hover:text-white/90"
-        >
-          Go to Billing
-        </Link>
+      <div className="space-y-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-700 px-4 py-2 text-sm text-white">
+          <span>
+            {status.label || 'Trial expired'}
+            {plan ? ` · ${plan}` : ''}
+            {ends ? ` · ended ${ends}` : ''}
+            {' — '}
+            {status.restriction ||
+              'You can still sign in, view, and edit existing data. Adding new records and paid features are locked until the subscription is activated.'}
+          </span>
+          <Link href="/settings/billing" className="underline font-medium hover:text-white/90">
+            Go to Billing
+          </Link>
+        </div>
       </div>
     );
   }

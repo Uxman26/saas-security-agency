@@ -34,8 +34,9 @@ import {
 } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { cn } from '@/lib/utils';
-import { ADMIN_NAV, isAdminNavActive } from '@/lib/admin-nav';
+import { ADMIN_NAV_SECTIONS, filterAdminNavSections, isAdminNavActive } from '@/lib/admin-nav';
 import { moduleNavAllowed } from '@/lib/nav-modules';
+import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -109,6 +110,11 @@ export function AppSidebar() {
   const pathname = usePathname();
   const ts = useTranslations('sidebar');
   const isSuperAdmin = user?.role === 'super_admin';
+  const { can, loaded } = usePlatformPermissions();
+  const adminSections = useMemo(
+    () => (loaded ? filterAdminNavSections(can) : ADMIN_NAV_SECTIONS.map((s) => ({ titleKey: s.titleKey, items: [...s.items] }))),
+    [can, loaded]
+  );
 
   const grouped = useMemo(() => {
     const access = user?.module_access;
@@ -133,23 +139,25 @@ export function AppSidebar() {
           <CompanyBrand />
         </div>
         <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
-          <div>
-            <p className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
-              {ts('sectionAdmin')}
-            </p>
-            <div className="mt-1 space-y-0.5">
-              {ADMIN_NAV.map(({ href, labelKey, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={navLinkClass(isAdminNavActive(pathname, href))}
-                >
-                  <Icon className="size-4 shrink-0" />
-                  <span className="truncate">{ts(labelKey)}</span>
-                </Link>
-              ))}
+          {adminSections.map((section) => (
+            <div key={section.titleKey}>
+              <p className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                {ts(section.titleKey)}
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {section.items.map(({ href, labelKey, icon: Icon }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={navLinkClass(isAdminNavActive(pathname, href))}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span className="truncate">{ts(labelKey)}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
         </nav>
       </aside>
     );

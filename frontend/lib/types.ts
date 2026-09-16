@@ -180,6 +180,8 @@ export interface TrialExtension {
   extension_days: number;
   reason: string;
   extended_by_user_id?: number | null;
+  extended_by_email?: string | null;
+  extended_by_name?: string | null;
   created_at: string;
 }
 
@@ -210,12 +212,19 @@ export interface TrialStatus {
   label?: string;
   trial_active: boolean;
   trial_expired: boolean;
+  trial_starts_on?: string | null;
   trial_ends_on?: string | null;
+  original_ends_on?: string | null;
   days_remaining?: number | null;
   plan_tier?: string | null;
+  billing_cycle?: string | null;
   trial_id?: number | null;
+  duration_days?: number | null;
   can_use_paid_features: boolean;
+  can_create_records?: boolean;
+  can_edit_existing?: boolean;
   subscription_required: boolean;
+  restriction?: string | null;
 }
 
 export interface TrialConfig {
@@ -298,6 +307,21 @@ export interface SubscriptionInvoice {
   created_at: string;
 }
 
+export interface BillingReceipt {
+  id: number;
+  receipt_number: string;
+  amount: number;
+  amount_refunded?: number;
+  currency: string;
+  plan_name?: string;
+  billing_cycle?: string;
+  payment_method_last4?: string;
+  invoice_url?: string;
+  status?: string;
+  next_renewal_date?: string;
+  paid_at?: string;
+}
+
 export interface LoginLog {
   id: number;
   user_id?: number | null;
@@ -367,6 +391,7 @@ export interface AdminUserListItem {
   full_name: string;
   role?: string | null;
   is_active: boolean;
+  email_verified?: boolean;
   created_at: string;
   company_id?: number | null;
   company_name?: string | null;
@@ -381,6 +406,7 @@ export interface PlanTier {
   max_sites?: number | null;
   max_users?: number | null;
   features: Record<string, boolean>;
+  trial_days?: number;
 }
 
 export interface AdminPayment extends Payment {

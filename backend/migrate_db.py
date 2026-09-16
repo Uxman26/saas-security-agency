@@ -1698,6 +1698,16 @@ def run():
         except sqlite3.OperationalError:
             pass
 
+    for col, spec in (
+        ("stripe_payment_method_id", "TEXT"),
+        ("card_verified_at", "TEXT"),
+    ):
+        if table_exists(cur, "companies") and not column_exists(cur, "companies", col):
+            try:
+                cur.execute(f"ALTER TABLE companies ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+
     refund_cols = [
         ("billing_receipt_id", "INTEGER REFERENCES billing_receipts(id)"),
         ("subscription_receipt_id", "INTEGER REFERENCES subscription_receipts(id)"),

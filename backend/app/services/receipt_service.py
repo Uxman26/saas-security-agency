@@ -210,7 +210,11 @@ def company_subscription_blocked(db: Session, user: User) -> dict | None:
 
     return {
         "code": "subscription_required",
-        "message": "Your trial has ended or paid access is required. You can still sign in, view your data, and upgrade from Billing.",
+        "message": "Your trial has ended or paid access is required. You can still sign in, view and edit existing data, and upgrade from Billing.",
+        "restriction": trial_snap.get("restriction")
+        or "Adding new records and paid features are locked until the subscription is activated.",
+        "allowed": ["view", "edit_existing"],
+        "blocked": ["create", "paid_features"],
         "subscription_status": status,
         "receipt_ref": pending.ref_id if pending else None,
         "amount": pending.amount if pending else price_for_tier(co.subscription_tier),
@@ -237,7 +241,7 @@ def company_login_blocked(db: Session, user: User) -> dict | None:
     trial_service.sync_if_needed(db, co)
     db.refresh(co)
     status = (co.subscription_status or "pending").lower()
-    if status in ("active", "trialing", "trial_expired", "past_due"):
+    if status in ("active", "trialing", "trial_expired", "past_due", "locked", "unpaid"):
         return None
     if status in ("suspended", "cancelled", "canceled"):
         # Allow login so they can open Billing / contact support; APIs still gate paid ops.

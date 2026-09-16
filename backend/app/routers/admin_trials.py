@@ -33,7 +33,7 @@ class StartTrialBody(BaseModel):
 
 
 class ExtendTrialBody(BaseModel):
-    extension_days: int = Field(..., ge=1, le=90)
+    extension_days: int = Field(..., ge=1, le=365)
     reason: str
 
 

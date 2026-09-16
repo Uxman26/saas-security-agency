@@ -44,7 +44,7 @@ def _invoice_number(db: Session) -> str:
 
 
 def _sync_status(inv: SubscriptionInvoice) -> str:
-    if inv.status == "cancelled":
+    if inv.status in ("cancelled", "voided"):
         return inv.status
     paid = float(inv.amount_paid or 0)
     total = float(inv.total_amount or 0)
@@ -228,8 +228,143 @@ def get_invoice(db: Session, invoice_id: int) -> dict:
     return data
 
 
+def load_company_invoice(db: Session, invoice_id: int, company_id: Optional[int]) -> SubscriptionInvoice:
+    if not company_id:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    inv = (
+        db.query(SubscriptionInvoice)
+        .options(joinedload(SubscriptionInvoice.company))
+        .filter(SubscriptionInvoice.id == invoice_id, SubscriptionInvoice.company_id == company_id)
+        .first()
+    )
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return inv
+
+
+def get_invoice_for_company(db: Session, invoice_id: int, company_id: Optional[int]) -> dict:
+    inv = load_company_invoice(db, invoice_id, company_id)
+    data = _serialize(inv, db)
+    db.commit()
+    return data
+
+
+def _pdf_money(v) -> str:
+    return f"£{float(v or 0):,.2f}"
+
+
+def _pdf_date(v) -> str:
+    if not v:
+        return "—"
+    if hasattr(v, "strftime"):
+        return v.strftime("%d %b %Y")
+    return str(v)[:10]
+
+
+def render_subscription_invoice_pdf(inv: SubscriptionInvoice, company: Optional[Company] = None) -> bytes:
+    from io import BytesIO
+
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=1.6 * cm,
+        rightMargin=1.6 * cm,
+        topMargin=1.4 * cm,
+        bottomMargin=1.4 * cm,
+    )
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("InvTitle", parent=styles["Heading1"], fontSize=18, spaceAfter=4)
+    muted = ParagraphStyle("InvMuted", parent=styles["Normal"], textColor=colors.HexColor("#64748b"), fontSize=9)
+    story = [
+        Paragraph("ControlOps", muted),
+        Paragraph("Subscription Invoice", title),
+        Paragraph(esc(inv.invoice_number or ""), styles["Normal"]),
+        Spacer(1, 14),
+    ]
+    bill_to = (company.name if company else None) or "—"
+    email = (company.email if company else None) or ""
+    status = (inv.status or "unpaid").title()
+    meta = [
+        ["Bill to", bill_to, "Status", status],
+        ["Email", email or "—", "Invoice date", _pdf_date(inv.created_at)],
+        ["Plan", f"{(inv.subscription_tier or '').replace('_', ' ').title()} ({inv.billing_cycle or 'monthly'})", "Due date", _pdf_date(inv.due_date)],
+        ["Period", f"{_pdf_date(inv.period_start)} – {_pdf_date(inv.period_end)}", "Paid on", _pdf_date(inv.paid_at)],
+    ]
+    meta_table = Table(meta, colWidths=[3.2 * cm, 6.2 * cm, 3.2 * cm, 4.2 * cm])
+    meta_table.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#64748b")),
+                ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#64748b")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(meta_table)
+    story.append(Spacer(1, 16))
+    lines = [
+        ["Description", "Period", "Amount"],
+        [
+            f"{(inv.subscription_tier or 'subscription').replace('_', ' ').title()} plan — {(inv.billing_cycle or 'monthly')} billing",
+            f"{_pdf_date(inv.period_start)} – {_pdf_date(inv.period_end)}",
+            _pdf_money(inv.amount_ex_vat),
+        ],
+    ]
+    line_table = Table(lines, colWidths=[8.6 * cm, 5.2 * cm, 3 * cm])
+    line_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e293b")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e2e8f0")),
+                ("PADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    story.append(line_table)
+    story.append(Spacer(1, 14))
+    paid = float(inv.amount_paid or 0)
+    total = float(inv.total_amount or 0)
+    due = max(0.0, total - paid)
+    totals = [
+        ["Subtotal (ex VAT)", _pdf_money(inv.amount_ex_vat)],
+        ["VAT (20%)", _pdf_money(inv.vat_amount)],
+        ["Total payable", _pdf_money(total)],
+        ["Amount paid", _pdf_money(paid)],
+        ["Outstanding", _pdf_money(due)],
+    ]
+    totals_table = Table(totals, colWidths=[5 * cm, 3 * cm], hAlign="RIGHT")
+    totals_table.setStyle(
+        TableStyle(
+            [
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
+    story.append(totals_table)
+    story.append(Spacer(1, 24))
+    story.append(Paragraph("Thank you for your subscription. Download this invoice for your records.", muted))
+    doc.build(story)
+    return buf.getvalue()
+
+
 def set_invoice_status(db: Session, invoice_id: int, status: str) -> dict:
-    valid = {"paid", "unpaid", "overdue", "partial", "cancelled"}
+    valid = {"paid", "unpaid", "overdue", "partial", "cancelled", "voided"}
     if status not in valid:
         raise HTTPException(status_code=400, detail="Invalid status")
     inv = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.id == invoice_id).first()
@@ -243,7 +378,8 @@ def set_invoice_status(db: Session, invoice_id: int, status: str) -> dict:
         if co and inv.period_end:
             co.subscription_end = inv.period_end
             co.subscription_status = "active"
-    elif status == "cancelled":
+    elif status in ("cancelled", "voided"):
+        inv.status = status
         inv.amount_paid = 0
         inv.paid_at = None
     db.commit()

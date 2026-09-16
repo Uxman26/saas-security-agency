@@ -12,8 +12,8 @@ from app.services import platform_audit_service
 from app.services.admin_platform_ext_service import get_config, set_config
 
 DEFAULT_TRIAL_CONFIG = {
-    "default_days": 14,
-    "allowed_days": [7, 14, 30],
+    "default_days": 30,
+    "allowed_days": [7, 14, 30, 60],
     "allow_repeat": False,
     "require_card": True,
     "reminder_days": [7, 3, 1],
@@ -21,7 +21,6 @@ DEFAULT_TRIAL_CONFIG = {
     "enabled": True,
 }
 
-# Routes tenants may still call after trial expiry (account + billing only).
 SUBSCRIPTION_REQUIRED_ALLOW_PREFIXES = (
     "/auth/me",
     "/auth/logout",
@@ -63,7 +62,10 @@ def update_trial_config(db: Session, payload: dict, actor: User) -> dict:
     for k, v in payload.items():
         if k in DEFAULT_TRIAL_CONFIG and v is not None:
             cfg[k] = v
-    days = int(cfg.get("default_days") or 14)
+    days = int(cfg.get("default_days") or 30)
+    if days < 1 or days > 365:
+        raise HTTPException(status_code=400, detail="Default trial days must be between 1 and 365")
+    cfg["default_days"] = days
     allowed = [int(x) for x in (cfg.get("allowed_days") or [])]
     if days not in allowed:
         allowed = sorted(set(allowed + [days]))
@@ -104,7 +106,13 @@ def has_prior_trial(db: Session, company_id: int) -> bool:
     return db.query(TrialPeriod.id).filter(TrialPeriod.company_id == company_id).first() is not None
 
 
-def is_eligible_for_trial(db: Session, company: Company, *, force: bool = False) -> tuple[bool, str]:
+def trial_days_for_tier(tier: str | None) -> int:
+    from app.services import platform_plans_service
+
+    return platform_plans_service.get_trial_days(tier or "basic")
+
+
+def is_eligible_for_trial(db: Session, company: Company, *, force: bool = False, skip_card: bool = False) -> tuple[bool, str]:
     cfg = get_trial_config(db)
     if not cfg.get("enabled", True):
         return False, "Trials are disabled on this platform"
@@ -118,13 +126,23 @@ def is_eligible_for_trial(db: Session, company: Company, *, force: bool = False)
         return False, "An active trial already exists"
     if not force and not cfg.get("allow_repeat") and has_prior_trial(db, company.id):
         return False, "This tenant has already used a trial; enable allow_repeat or force with a reason"
-    if cfg.get("require_card") and not force:
-        if not (company.stripe_customer_id or company.stripe_subscription_id):
-            return False, "Card verification required before starting a trial (no Stripe customer on file)"
+    if cfg.get("require_card") and not force and not skip_card:
+        from app.services import stripe_subscription_service as stripe_svc
+
+        if not stripe_svc.customer_has_card(company):
+            return False, "Card verification required before starting a trial"
     return True, "eligible"
 
 
 def _trial_out(t: TrialPeriod, company: Company | None = None) -> dict[str, Any]:
+    actor_ids = {e.extended_by_user_id for e in (t.extensions or []) if e.extended_by_user_id}
+    actors = {}
+    if actor_ids:
+        from sqlalchemy.orm import object_session
+
+        sess = object_session(t)
+        if sess:
+            actors = {u.id: u for u in sess.query(User).filter(User.id.in_(actor_ids)).all()}
     return {
         "id": t.id,
         "company_id": t.company_id,
@@ -152,6 +170,8 @@ def _trial_out(t: TrialPeriod, company: Company | None = None) -> dict[str, Any]
                 "extension_days": e.extension_days,
                 "reason": e.reason,
                 "extended_by_user_id": e.extended_by_user_id,
+                "extended_by_email": (actors.get(e.extended_by_user_id).email if actors.get(e.extended_by_user_id) else None),
+                "extended_by_name": (actors.get(e.extended_by_user_id).full_name if actors.get(e.extended_by_user_id) else None),
                 "created_at": e.created_at,
             }
             for e in sorted(t.extensions or [], key=lambda x: x.id)
@@ -176,13 +196,9 @@ def start_trial(
     co = db.query(Company).filter(Company.id == company_id).first()
     if not co:
         raise HTTPException(status_code=404, detail="Company not found")
-    cfg = get_trial_config(db)
-    days = int(duration_days if duration_days is not None else cfg["default_days"])
-    allowed = [int(x) for x in cfg.get("allowed_days") or [7, 14, 30]]
-    if actor and days not in allowed and not force and ends_at is None:
-        raise HTTPException(status_code=400, detail=f"Duration must be one of {allowed}")
-    if days < 1 or days > 90:
-        raise HTTPException(status_code=400, detail="Duration must be between 1 and 90 days")
+    days = int(duration_days if duration_days is not None else trial_days_for_tier(co.subscription_tier))
+    if days < 1 or days > 365:
+        raise HTTPException(status_code=400, detail="Duration must be between 1 and 365 days")
     ok, reason = is_eligible_for_trial(db, co, force=force)
     if not ok:
         raise HTTPException(status_code=400, detail=reason)
@@ -253,7 +269,7 @@ def extend_trial(
     reason: str,
     request: Request | None = None,
 ) -> dict:
-    if extension_days < 1 or extension_days > 90:
+    if extension_days < 1 or extension_days > 365:
         raise HTTPException(status_code=400, detail="Extension must be 1–90 days")
     if not reason or len(reason.strip()) < 5:
         raise HTTPException(status_code=400, detail="Reason required (min 5 characters)")
@@ -322,7 +338,15 @@ def expire_trial(db: Session, trial: TrialPeriod, *, commit: bool = True, send_e
         co.subscription_status = "trial_expired"
     if commit:
         db.commit()
-    if send_email and co:
+    if co:
+        try:
+            from app.services import stripe_subscription_service as stripe_svc
+
+            stripe_svc.charge_trial_end(db, co)
+            db.refresh(co)
+        except Exception:
+            pass
+    if send_email and co and (co.subscription_status or "") != "active":
         _send_trial_expired_email(db, co, trial)
 
 
@@ -405,13 +429,21 @@ def sync_expired_trials(db: Session) -> dict:
             co.subscription_status = "trial_expired"
             orphan += 1
             orphan_companies.append(co)
+            try:
+                from app.services import stripe_subscription_service as stripe_svc
+
+                stripe_svc.charge_trial_end(db, co)
+            except Exception:
+                pass
     db.commit()
-    # Emails after commit so status is durable first.
     for t in rows:
         co = db.query(Company).filter(Company.id == t.company_id).first()
-        if co:
+        if co and (co.subscription_status or "") != "active":
             _send_trial_expired_email(db, co, t)
     for co in orphan_companies:
+        db.refresh(co)
+        if (co.subscription_status or "") == "active":
+            continue
         fake = TrialPeriod(
             company_id=co.id,
             plan_tier=co.subscription_tier or "basic",
@@ -498,8 +530,16 @@ def tenant_trial_status(db: Session, company: Company) -> dict[str, Any]:
     """Public-facing trial snapshot for tenant UI banners."""
     sync_if_needed(db, company)
     trial = active_trial_for_company(db, company.id)
+    if not trial:
+        trial = (
+            db.query(TrialPeriod)
+            .filter(TrialPeriod.company_id == company.id)
+            .order_by(TrialPeriod.id.desc())
+            .first()
+        )
     status = company.subscription_status or "pending"
-    end = _aware(company.subscription_end)
+    end = _aware(company.subscription_end) or (_aware(trial.ends_at) if trial else None)
+    start = (_aware(trial.started_at) if trial else None) or _aware(company.subscription_start)
     remaining = days_remaining(end) if status == "trialing" else None
     label = {
         "trialing": "Trial Active",
@@ -514,12 +554,23 @@ def tenant_trial_status(db: Session, company: Company) -> dict[str, Any]:
         "label": label,
         "trial_active": status == "trialing",
         "trial_expired": status == "trial_expired",
-        "trial_ends_on": end.isoformat() if end and status == "trialing" else None,
+        "trial_starts_on": start.isoformat() if start else None,
+        "trial_ends_on": end.isoformat() if end and status in ("trialing", "trial_expired") else None,
+        "original_ends_on": (_aware(trial.original_ends_at).isoformat() if trial and trial.original_ends_at else None),
         "days_remaining": remaining,
         "plan_tier": company.subscription_tier,
+        "billing_cycle": company.billing_cycle,
         "trial_id": trial.id if trial else None,
+        "duration_days": trial.duration_days if trial else None,
         "can_use_paid_features": status in ("active", "trialing"),
-        "subscription_required": status in ("trial_expired", "pending", "cancelled", "canceled", "suspended", "past_due"),
+        "can_create_records": status in ("active", "trialing"),
+        "can_edit_existing": status not in ("pending",),
+        "subscription_required": status in ("trial_expired", "pending", "cancelled", "canceled", "suspended", "past_due", "locked", "unpaid"),
+        "restriction": (
+            "Adding new records and paid features are locked until the subscription is activated. You can still sign in, view, and edit existing data."
+            if status in ("trial_expired", "cancelled", "canceled", "suspended", "past_due", "locked", "unpaid")
+            else None
+        ),
     }
 
 
@@ -535,12 +586,18 @@ def sync_if_needed(db: Session, company: Company) -> None:
                 db.commit()
 
 
-def path_allowed_when_subscription_required(path: str) -> bool:
+def path_allowed_when_subscription_required(path: str, method: str | None = None) -> bool:
     p = (path or "").split("?")[0]
-    # Strip optional /api prefix if present behind a reverse proxy.
     if p.startswith("/api/"):
         p = p[4:]
-    return any(p == prefix or p.startswith(prefix + "/") for prefix in SUBSCRIPTION_REQUIRED_ALLOW_PREFIXES)
+    if any(p == prefix or p.startswith(prefix + "/") for prefix in SUBSCRIPTION_REQUIRED_ALLOW_PREFIXES):
+        return True
+    m = (method or "GET").upper()
+    if m in ("GET", "HEAD", "OPTIONS"):
+        return True
+    if m in ("PATCH", "PUT", "DELETE"):
+        return True
+    return False
 
 
 def list_trials(

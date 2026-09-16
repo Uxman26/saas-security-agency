@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -32,7 +32,6 @@ from app.schemas import (
     BillingSettingsPatch,
     AdminCouponCreate,
 )
-from app.auth import get_current_super_admin
 from app.services.platform_rbac_service import require_platform_perm
 from app.services import admin_platform_service as ap
 from app.services import platform_plans_service
@@ -66,7 +65,7 @@ def _receipt_row(r: SubscriptionReceipt, db: Session) -> SubscriptionReceiptResp
 
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
-def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read", "billing.read", "ops.read"))):
     from datetime import datetime, timedelta, timezone
     from app.models import ErrorLog, BackgroundJob
     from app.services import support_ticket_service as tickets
@@ -102,12 +101,12 @@ def admin_dashboard(db: Session = Depends(get_db), _: User = Depends(get_current
 
 
 @router.get("/companies", response_model=List[CompanyAdminResponse])
-def list_all_companies(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_all_companies(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read"))):
     return [CompanyAdminResponse(**ap.company_admin_out(db, c)) for c in db.query(Company).order_by(Company.id).all()]
 
 
 @router.get("/companies/{company_id}", response_model=CompanyAdminResponse)
-def get_company(company_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def get_company(company_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read"))):
     co = db.query(Company).filter(Company.id == company_id).first()
     if not co:
         from fastapi import HTTPException
@@ -133,7 +132,7 @@ def patch_company(
     body: AdminCompanyUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("tenants.write")),
 ):
     payload = body.model_dump(exclude_unset=True)
     existing = db.query(Company).filter(Company.id == company_id).first()
@@ -160,7 +159,7 @@ def patch_company_modules(
     body: AdminModulesPatch,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("tenants.write")),
 ):
     existing = db.query(Company).filter(Company.id == company_id).first()
     before = existing.enabled_modules_json if existing else None
@@ -181,7 +180,7 @@ def patch_company_modules(
 
 
 @router.get("/users", response_model=List[AdminUserListItem])
-def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_users(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read"))):
     return [AdminUserListItem(**row) for row in ap.list_all_users(db)]
 
 
@@ -191,7 +190,7 @@ def patch_user_active(
     body: AdminUserActivePatch,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("tenants.write")),
 ):
     u = ap.set_user_active(db, user_id, body.is_active)
     co = db.query(Company).filter(Company.id == u.company_id).first() if u.company_id else None
@@ -212,6 +211,7 @@ def patch_user_active(
         full_name=u.full_name,
         role=u.role,
         is_active=u.is_active,
+        email_verified=bool(getattr(u, "email_verified", False)),
         created_at=u.created_at,
         company_id=u.company_id,
         company_name=co.name if co else None,
@@ -225,13 +225,13 @@ def list_invoices(
     company_id: Optional[int] = None,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("billing.read")),
 ):
     return [SubscriptionInvoiceResponse(**row) for row in sub_inv.list_invoices(db, company_id, status)]
 
 
 @router.get("/invoices/{invoice_id}", response_model=SubscriptionInvoiceResponse)
-def get_invoice(invoice_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def get_invoice(invoice_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("billing.read"))):
     return SubscriptionInvoiceResponse(**sub_inv.get_invoice(db, invoice_id))
 
 
@@ -240,7 +240,7 @@ def patch_invoice_status(
     invoice_id: int,
     body: SubscriptionInvoiceStatusPatch,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("billing.write")),
 ):
     return SubscriptionInvoiceResponse(**sub_inv.set_invoice_status(db, invoice_id, body.status))
 
@@ -250,7 +250,7 @@ def record_invoice_payment(
     invoice_id: int,
     body: SubscriptionInvoicePaymentPatch,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("billing.write")),
 ):
     return SubscriptionInvoiceResponse(**sub_inv.record_payment(db, invoice_id, body.amount))
 
@@ -259,7 +259,7 @@ def record_invoice_payment(
 def send_invoice_email(
     invoice_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("billing.write")),
 ):
     from app.models import SubscriptionInvoice
     inv = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.id == invoice_id).first()
@@ -271,7 +271,7 @@ def send_invoice_email(
 
 
 @router.post("/invoices/generate")
-def generate_invoices(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def generate_invoices(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("billing.write"))):
     created = sub_inv.ensure_renewal_invoices(db)
     return {"created": created}
 
@@ -280,7 +280,7 @@ def generate_invoices(db: Session = Depends(get_db), _: User = Depends(get_curre
 def list_payments(
     company_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("billing.read")),
 ):
     from app.models import SubscriptionInvoice
     q = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.amount_paid > 0).order_by(SubscriptionInvoice.paid_at.desc())
@@ -307,7 +307,7 @@ def list_payments(
 
 
 @router.get("/packages", response_model=List[PlanTierOut])
-def list_packages(_: User = Depends(get_current_super_admin)):
+def list_packages(_: User = Depends(require_platform_perm("billing.read", "config.read"))):
     return [PlanTierOut(**row) for row in platform_plans_service.list_tiers()]
 
 
@@ -317,7 +317,7 @@ def patch_package(
     body: PlanTierUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("billing.write", "config.write")),
 ):
     payload = body.model_dump(exclude_unset=True)
     before = platform_plans_service.get_limits(tier) | {"price_gbp": platform_plans_service.get_price(tier)}
@@ -349,7 +349,7 @@ def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(require_platform_perm("
 
 
 @router.get("/settings/billing", response_model=BillingSettingsResponse)
-def get_billing_settings(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def get_billing_settings(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("billing.read", "config.read"))):
     from app.services import platform_settings_service
     return BillingSettingsResponse(**platform_settings_service.get_billing_settings(db))
 
@@ -358,7 +358,7 @@ def get_billing_settings(db: Session = Depends(get_db), _: User = Depends(get_cu
 def patch_billing_settings(
     body: BillingSettingsPatch,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("billing.write", "config.write")),
 ):
     from app.services import platform_settings_service, stripe_plan_service
     data = body.model_dump(exclude_unset=True)
@@ -370,13 +370,13 @@ def patch_billing_settings(
 
 
 @router.post("/stripe/sync-plans")
-def sync_stripe_plans(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def sync_stripe_plans(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("billing.write", "config.write"))):
     from app.services import stripe_plan_service
     return stripe_plan_service.sync_all_plans(db)
 
 
 @router.post("/coupons")
-def create_coupon(body: AdminCouponCreate, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def create_coupon(body: AdminCouponCreate, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("billing.write"))):
     from app.services import stripe_plan_service
     return stripe_plan_service.create_admin_coupon(
         db,
@@ -388,7 +388,7 @@ def create_coupon(body: AdminCouponCreate, db: Session = Depends(get_db), _: Use
 
 
 @router.get("/receipts", response_model=List[SubscriptionReceiptResponse])
-def list_receipts(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_receipts(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("billing.read"))):
     rows = ap.list_receipts(db)
     return [_receipt_row(r, db) for r in rows]
 
@@ -398,7 +398,7 @@ def mark_paid(
     receipt_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("billing.write")),
 ):
     r = mark_receipt_paid(db, receipt_id)
     platform_audit_service.log(
@@ -415,12 +415,78 @@ def mark_paid(
     return _receipt_row(r, db)
 
 
+@router.post("/receipts/{receipt_id}/void", response_model=SubscriptionReceiptResponse)
+def void_receipt(
+    receipt_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("billing.write")),
+):
+    r = db.query(SubscriptionReceipt).filter(SubscriptionReceipt.id == receipt_id).first()
+    if not r:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    if r.status == "paid":
+        raise HTTPException(status_code=400, detail="Paid receipts cannot be voided. Use refunds.")
+    before = r.status
+    r.status = "void"
+    db.commit()
+    db.refresh(r)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="receipt.voided",
+        target_type="receipt",
+        target_id=r.id,
+        target_label=r.ref_id,
+        company_id=r.company_id,
+        before={"status": before},
+        after={"status": r.status},
+        request=request,
+    )
+    return _receipt_row(r, db)
+
+
+@router.delete("/users/{user_id}", response_model=AdminUserListItem)
+def archive_user(
+    user_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("tenants.write")),
+):
+    u = ap.set_user_active(db, user_id, False)
+    co = db.query(Company).filter(Company.id == u.company_id).first() if u.company_id else None
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="user.archived",
+        target_type="user",
+        target_id=u.id,
+        target_label=u.email,
+        company=co,
+        after={"is_active": False},
+        request=request,
+    )
+    return AdminUserListItem(
+        id=u.id,
+        email=u.email,
+        full_name=u.full_name,
+        role=u.role,
+        is_active=u.is_active,
+        email_verified=bool(getattr(u, "email_verified", False)),
+        created_at=u.created_at,
+        company_id=u.company_id,
+        company_name=co.name if co else None,
+        subscription_tier=co.subscription_tier if co else None,
+        subscription_status=co.subscription_status if co else None,
+    )
+
+
 @router.get("/login-logs", response_model=List[LoginLogResponse])
 def login_logs(
     company_id: Optional[int] = None,
     limit: int = 200,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("audit.read", "security.read")),
 ):
     return [LoginLogResponse.model_validate(r) for r in login_log_service.list_login_logs(db, limit, company_id)]
 
@@ -434,7 +500,7 @@ def platform_audit_logs(
     limit: int = 200,
     offset: int = 0,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("audit.read")),
 ):
     """Super-admin actions against the platform, newest first."""
     rows = platform_audit_service.list_logs(
@@ -450,7 +516,7 @@ def platform_audit_logs(
 
 
 @router.get("/admins", response_model=List[AdminUserDetail])
-def list_admins(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_admins(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read"))):
     out = []
     for u in ap.list_tenant_admins(db):
         co = db.query(Company).filter(Company.id == u.company_id).first()
@@ -465,7 +531,7 @@ def list_admins(db: Session = Depends(get_db), _: User = Depends(get_current_sup
 
 
 @router.get("/admins/{user_id}", response_model=AdminUserDetail)
-def get_admin(user_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def get_admin(user_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read"))):
     u, co, receipts = ap.get_admin_detail(db, user_id)
     return AdminUserDetail(**ap.admin_out(db, u, co, receipts))
 
@@ -475,7 +541,7 @@ def patch_sidebar(
     user_id: int,
     body: AdminSidebarPatch,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("tenants.write")),
 ):
     u = ap.set_sidebar_modules(db, user_id, body.sidebar_modules)
     co = db.query(Company).filter(Company.id == u.company_id).first()

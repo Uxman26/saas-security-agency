@@ -1,4 +1,4 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries, SubscriptionInvoice, BillingReceipt } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -64,7 +64,11 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
       typeof d === 'object' &&
       (d.code === 'payment_pending' || d.code === 'subscription_required')
     ) {
-      throw new ApiError(402, JSON.stringify(d), d);
+      throw new ApiError(
+        402,
+        String(d.restriction || d.message || JSON.stringify(d)),
+        d
+      );
     }
     const retryHeader = response.headers.get('Retry-After');
     const retryFromDetail =
@@ -802,34 +806,12 @@ export const api = {
       }),
   },
   billing: {
-    receipts: () =>
-      request<
-        {
-          id: number;
-          receipt_number: string;
-          amount: number;
-          currency: string;
-          plan_name?: string;
-          billing_cycle?: string;
-          payment_method_last4?: string;
-          invoice_url?: string;
-          next_renewal_date?: string;
-          paid_at?: string;
-        }[]
-      >('/billing/receipts'),
-    receipt: (id: number) =>
-      request<{
-        id: number;
-        receipt_number: string;
-        amount: number;
-        currency: string;
-        plan_name?: string;
-        billing_cycle?: string;
-        payment_method_last4?: string;
-        invoice_url?: string;
-        next_renewal_date?: string;
-        paid_at?: string;
-      }>(`/billing/receipts/${id}`),
+    receipts: () => request<BillingReceipt[]>('/billing/receipts'),
+    receipt: (id: number) => request<BillingReceipt>(`/billing/receipts/${id}`),
+    receiptPdf: (id: number): Promise<Blob> => requestBlob(`/billing/receipts/${id}/pdf`),
+    invoices: () => request<SubscriptionInvoice[]>('/billing/invoices'),
+    invoice: (id: number) => request<SubscriptionInvoice>(`/billing/invoices/${id}`),
+    invoicePdf: (id: number): Promise<Blob> => requestBlob(`/billing/invoices/${id}/pdf`),
   },
   mainContractors: {
     list: (): Promise<MainContractor[]> => request<MainContractor[]>('/main-contractors'),
@@ -1269,6 +1251,8 @@ export const api = {
     users: (): Promise<AdminUserListItem[]> => request<AdminUserListItem[]>('/admin/users'),
     patchUserActive: (id: number, is_active: boolean): Promise<AdminUserListItem> =>
       request<AdminUserListItem>(`/admin/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ is_active }) }),
+    archiveUser: (id: number): Promise<AdminUserListItem> =>
+      request<AdminUserListItem>(`/admin/users/${id}`, { method: 'DELETE' }),
     invoices: (params?: { company_id?: number; status?: string }): Promise<import('./types').SubscriptionInvoice[]> => {
       const q = new URLSearchParams();
       if (params?.company_id) q.append('company_id', params.company_id.toString());
@@ -1320,7 +1304,14 @@ export const api = {
     packages: (): Promise<PlanTier[]> => request<PlanTier[]>('/admin/packages'),
     patchPackage: (
       tier: string,
-      data: { price_gbp?: number; max_guards?: number; max_sites?: number; max_users?: number; features?: Record<string, boolean> }
+      data: {
+        price_gbp?: number;
+        max_guards?: number;
+        max_sites?: number;
+        max_users?: number;
+        features?: Record<string, boolean>;
+        trial_days?: number;
+      }
     ): Promise<PlanTier> =>
       request<PlanTier>(`/admin/packages/${tier}`, { method: 'PATCH', body: JSON.stringify(data) }),
     smtp: (): Promise<import('./types').SmtpConfig> => request<import('./types').SmtpConfig>('/admin/smtp'),
@@ -1335,6 +1326,8 @@ export const api = {
     receipts: (): Promise<SubscriptionReceipt[]> => request<SubscriptionReceipt[]>('/admin/receipts'),
     markReceiptPaid: (id: number): Promise<SubscriptionReceipt> =>
       request<SubscriptionReceipt>(`/admin/receipts/${id}/mark-paid`, { method: 'POST' }),
+    voidReceipt: (id: number): Promise<SubscriptionReceipt> =>
+      request<SubscriptionReceipt>(`/admin/receipts/${id}/void`, { method: 'POST' }),
     admins: (): Promise<AdminUserDetail[]> => request<AdminUserDetail[]>('/admin/admins'),
     admin: (id: number): Promise<AdminUserDetail> => request<AdminUserDetail>(`/admin/admins/${id}`),
     patchSidebar: (id: number, sidebar_modules: string[]): Promise<AdminUserDetail> =>

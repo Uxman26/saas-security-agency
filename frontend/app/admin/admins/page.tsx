@@ -179,6 +179,12 @@ export default function AdminAdminsPage() {
 
   const toggleActive = async () => {
     if (!selected) return;
+    if (
+      selected.is_active &&
+      !window.confirm(`Deactivate ${selected.email}? They will not be able to sign in.`)
+    ) {
+      return;
+    }
     try {
       await api.admin.patchUserActive(selected.id, !selected.is_active);
       const refreshed = await api.admin.admin(selected.id);
@@ -187,6 +193,22 @@ export default function AdminAdminsPage() {
       toast.success(refreshed.is_active ? 'Admin activated' : 'Admin deactivated');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Update failed');
+    }
+  };
+
+  const archiveAdmin = async () => {
+    if (!selected) return;
+    if (!window.confirm(`Archive ${selected.email}? This deactivates the account and keeps the record for audit.`)) {
+      return;
+    }
+    try {
+      await api.admin.archiveUser(selected.id);
+      const refreshed = await api.admin.admin(selected.id);
+      setSelected(refreshed);
+      load();
+      toast.success('Admin archived');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Archive failed');
     }
   };
 
@@ -317,9 +339,16 @@ export default function AdminAdminsPage() {
                   <span className={selected.is_active ? 'text-green-600' : 'text-red-600'}>{selected.is_active ? 'Yes' : 'No'}</span>
                 </div>
 
-                <Button size="sm" variant={selected.is_active ? 'destructive' : 'default'} onClick={toggleActive}>
-                  {selected.is_active ? 'Deactivate account' : 'Activate account'}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant={selected.is_active ? 'destructive' : 'default'} onClick={toggleActive}>
+                    {selected.is_active ? 'Deactivate account' : 'Activate account'}
+                  </Button>
+                  {selected.is_active && (
+                    <Button size="sm" variant="outline" onClick={() => void archiveAdmin()}>
+                      Archive
+                    </Button>
+                  )}
+                </div>
 
                 {selected.usage && (
                   <div>

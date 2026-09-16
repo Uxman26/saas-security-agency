@@ -14,9 +14,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import type { PlatformRoleAssignment } from '@/lib/types';
 import { toast } from '@/lib/toast';
+import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 
 export default function AdminRolesPage() {
   const { user } = useAuth();
+  const { can } = usePlatformPermissions();
   const [roles, setRoles] = useState<Record<string, unknown>[]>([]);
   const [assignments, setAssignments] = useState<PlatformRoleAssignment[]>([]);
   const [open, setOpen] = useState(false);
@@ -73,7 +75,9 @@ export default function AdminRolesPage() {
             <h1 className="text-3xl font-bold">Platform roles</h1>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
-              <Button size="sm" onClick={() => setOpen(true)}>Assign role</Button>
+              {can('config.write') && (
+                <Button size="sm" onClick={() => setOpen(true)}>Assign role</Button>
+              )}
             </div>
           </div>
 
@@ -88,7 +92,7 @@ export default function AdminRolesPage() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Slug</TableHead>
-                      <TableHead>Description</TableHead>
+                        <TableHead>Permissions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -96,8 +100,8 @@ export default function AdminRolesPage() {
                       <TableRow key={String(r.id ?? r.slug ?? i)}>
                         <TableCell>{String(r.name || '—')}</TableCell>
                         <TableCell className="font-mono text-xs">{String(r.slug || '—')}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {String(r.description || '—')}
+                        <TableCell className="text-xs text-muted-foreground max-w-md">
+                          {Array.isArray(r.permissions) ? (r.permissions as string[]).join(', ') : String(r.description || '—')}
                         </TableCell>
                       </TableRow>
                     ))}

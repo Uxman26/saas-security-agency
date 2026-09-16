@@ -152,6 +152,8 @@ class Company(Base):
     stripe_customer_id = Column(String)
     stripe_subscription_id = Column(String)
     stripe_connect_account_id = Column(String)
+    stripe_payment_method_id = Column(String)
+    card_verified_at = Column(DateTime(timezone=True), nullable=True)
     logo_path = Column(String)
     account_name = Column(String)
     bank_name = Column(String)

@@ -348,6 +348,7 @@ ROLE_PERMS = {
         "support.read",
         "support.write",
         "trials.read",
+        "billing.read",
         "impersonate.start",
         "audit.read",
         "refunds.read",

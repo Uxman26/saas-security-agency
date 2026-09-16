@@ -46,6 +46,7 @@ def list_all_users(db: Session) -> list[dict[str, Any]]:
                 "full_name": u.full_name,
                 "role": u.role,
                 "is_active": u.is_active,
+                "email_verified": bool(getattr(u, "email_verified", False)),
                 "created_at": u.created_at,
                 "company_id": u.company_id,
                 "company_name": co.name if co else None,

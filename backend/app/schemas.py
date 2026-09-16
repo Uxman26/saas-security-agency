@@ -240,6 +240,7 @@ class AdminUserListItem(BaseModel):
     full_name: str
     role: Optional[str] = None
     is_active: bool
+    email_verified: bool = False
     created_at: datetime
     company_id: Optional[int] = None
     company_name: Optional[str] = None
@@ -268,6 +269,7 @@ class PlanTierOut(BaseModel):
     max_sites: Optional[int] = None
     max_users: Optional[int] = None
     features: dict[str, Any] = Field(default_factory=dict)
+    trial_days: int = 30
 
 
 class PlanTierUpdate(BaseModel):
@@ -276,6 +278,7 @@ class PlanTierUpdate(BaseModel):
     max_sites: Optional[int] = None
     max_users: Optional[int] = None
     features: Optional[dict[str, Any]] = None
+    trial_days: Optional[int] = None
 
 
 class AdminUserDetail(BaseModel):

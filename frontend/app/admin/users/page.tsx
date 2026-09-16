@@ -14,9 +14,11 @@ import type { AdminUserListItem } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { toast } from '@/lib/toast';
+import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
+  const { can } = usePlatformPermissions();
   const [rows, setRows] = useState<AdminUserListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -46,7 +48,7 @@ export default function AdminUsersPage() {
 
   const getSearchText = useCallback(
     (u: AdminUserListItem) =>
-      [u.email, u.full_name, u.role, u.company_name, String(u.id)].filter(Boolean).join(' '),
+      [u.email, u.full_name, u.role, u.company_name, String(u.id), u.email_verified ? 'verified' : 'unverified'].filter(Boolean).join(' '),
     []
   );
   const getSortValue = useCallback((u: AdminUserListItem, key: string) => {
@@ -114,6 +116,7 @@ export default function AdminUsersPage() {
                         <SortableHead label="Role" colKey="role" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Company" colKey="company" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Active" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableCell>Verified</TableCell>
                         <SortableHead label="Created" colKey="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableCell>Action</TableCell>
                       </TableRow>
@@ -130,16 +133,40 @@ export default function AdminUsersPage() {
                               {u.is_active ? 'Active' : 'Inactive'}
                             </span>
                           </TableCell>
+                          <TableCell>{u.email_verified ? 'Verified' : 'Unverified'}</TableCell>
                           <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
                           <TableCell>
-                            {u.role !== 'super_admin' && (
-                              <Button
-                                size="sm"
-                                variant={u.is_active ? 'destructive' : 'default'}
-                                onClick={() => toggleActive(u)}
-                              >
-                                {u.is_active ? 'Deactivate' : 'Activate'}
-                              </Button>
+                            {u.role !== 'super_admin' && can('tenants.write') && (
+                              <div className="flex flex-wrap gap-1">
+                                <Button
+                                  size="sm"
+                                  variant={u.is_active ? 'destructive' : 'default'}
+                                  onClick={() => {
+                                    if (u.is_active && !window.confirm(`Deactivate ${u.email}? They will not be able to sign in.`)) return;
+                                    void toggleActive(u);
+                                  }}
+                                >
+                                  {u.is_active ? 'Deactivate' : 'Activate'}
+                                </Button>
+                                {u.is_active && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={async () => {
+                                      if (!window.confirm(`Archive ${u.email}? This deactivates the account and keeps the record for audit.`)) return;
+                                      try {
+                                        const updated = await api.admin.archiveUser(u.id);
+                                        setRows((prev) => prev.map((r) => (r.id === u.id ? updated : r)));
+                                        toast.success('User archived');
+                                      } catch (e) {
+                                        toast.error(e instanceof Error ? e.message : 'Archive failed');
+                                      }
+                                    }}
+                                  >
+                                    Archive
+                                  </Button>
+                                )}
+                              </div>
                             )}
                           </TableCell>
                         </TableRow>

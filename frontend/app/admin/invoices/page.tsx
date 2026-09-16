@@ -25,9 +25,10 @@ const STATUS_STYLES: Record<string, string> = {
   overdue: 'bg-red-100 text-red-800',
   partial: 'bg-amber-100 text-amber-800',
   cancelled: 'bg-gray-100 text-gray-600',
+  voided: 'bg-gray-100 text-gray-600',
 };
 
-const STATUS_OPTIONS = ['', 'unpaid', 'paid', 'overdue', 'partial', 'cancelled'];
+const STATUS_OPTIONS = ['', 'unpaid', 'paid', 'overdue', 'partial', 'cancelled', 'voided'];
 
 const fmt = (n: number) => `£${n.toFixed(2)}`;
 
@@ -114,7 +115,7 @@ export default function AdminInvoicesPage() {
   );
 
   const outstanding = invoices
-    .filter((i) => !['paid', 'cancelled'].includes(i.status))
+    .filter((i) => !['paid', 'cancelled', 'voided'].includes(i.status))
     .reduce((s, i) => s + Math.max(0, i.total_amount - i.amount_paid), 0);
 
   return (

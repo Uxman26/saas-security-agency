@@ -185,6 +185,48 @@ def _plan_site_and_client_names(db: Session, plan: RotaPlan) -> tuple[List[str],
     return sorted(sites), clients
 
 
+def _staff_ids_with_shifts_from_json(planner_data: Optional[str]) -> set:
+    """Staff who actually hold shifts on this rota, by id.
+
+    The planner's employees[] is only who appears on the grid; somebody added to the rota
+    but never given a shift has nothing to publish and must not be counted as missing.
+    """
+    if not planner_data:
+        return set()
+    try:
+        data = json.loads(planner_data)
+    except json.JSONDecodeError:
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    out = set()
+    for emp_id, by_day in (data.get("shifts") or {}).items():
+        has_shift = any(day_shifts for day_shifts in (by_day or {}).values())
+        if not has_shift:
+            continue
+        try:
+            out.add(int(emp_id))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _unpublished_staff_count(db: Session, plan: RotaPlan) -> int:
+    """Staff on a published rota whose shifts were never published.
+
+    Publishing is per-employee, so a rota can read "Published" while some people on it
+    were never sent — their shifts exist only in the planner and so are invisible to
+    attendance, payroll and invoicing. A draft returns 0: its status already says that
+    nothing on it is published, and repeating that per-head is just noise.
+    """
+    if plan.status != "published":
+        return 0
+    with_shifts = _staff_ids_with_shifts_from_json(plan.planner_data)
+    if not with_shifts:
+        return 0
+    return len(with_shifts - set(_published_guard_ids(db, plan.id)))
+
+
 def _unmarked_attendance_count(db: Session, plan: RotaPlan) -> int:
     """Shifts in this rota that have been and gone with nobody marking attendance.
 
@@ -251,6 +293,7 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
         site_names=site_names,
         client_names=client_names,
         unmarked_attendance_count=_unmarked_attendance_count(db, plan),
+        unpublished_staff_count=_unpublished_staff_count(db, plan),
         created_at=plan.created_at,
         updated_at=plan.updated_at,
         published_at=plan.published_at,

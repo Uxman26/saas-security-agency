@@ -602,10 +602,19 @@ function RotaHubPage() {
                           const status = rotaStatus(r);
                           const busy = busyId === r.id || bulkBusy;
                           const unmarked = r.unmarked_attendance_count ?? 0;
+                          const unpublished = r.unpublished_staff_count ?? 0;
                           return (
                             <TableRow
                               key={r.id}
-                              className={unmarked > 0 ? 'bg-rose-50/60 dark:bg-rose-950/20' : undefined}
+                              // Unmarked attendance wins the tint: it is already costing money,
+                              // where unpublished staff is work not yet sent.
+                              className={
+                                unmarked > 0
+                                  ? 'bg-rose-50/60 dark:bg-rose-950/20'
+                                  : unpublished > 0
+                                    ? 'bg-amber-50/60 dark:bg-amber-950/20'
+                                    : undefined
+                              }
                             >
                               <TableCell>
                                 <input
@@ -624,6 +633,16 @@ function RotaHubPage() {
                                 <p className="text-xs text-muted-foreground mt-0.5">
                                   {r.day_count} days · {r.staff_count} staff · {r.shift_count} shifts
                                 </p>
+                                {unpublished > 0 ? (
+                                  <Link
+                                    href={`/rota/calendar?id=${r.id}`}
+                                    className="mt-1 mr-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:underline dark:bg-amber-900/40 dark:text-amber-300"
+                                    title={`${unpublished} ${unpublished === 1 ? 'person has' : 'people have'} shifts on this rota that were never published. Their shifts do not reach attendance, payroll or invoicing until they are.`}
+                                  >
+                                    <Send className="size-3" />
+                                    {unpublished} staff rota unpublished
+                                  </Link>
+                                ) : null}
                                 {unmarked > 0 ? (
                                   <Link
                                     href={`/rota/calendar?id=${r.id}`}

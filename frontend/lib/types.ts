@@ -902,6 +902,8 @@ export interface RotaPlanListItem {
   client_names: string[];
   /** Shifts already past with no attendance recorded — silently unpaid until marked. */
   unmarked_attendance_count: number;
+  /** Staff on a published rota whose own shifts were never published. */
+  unpublished_staff_count: number;
   created_at: string;
   updated_at?: string | null;
   published_at?: string | null;

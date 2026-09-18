@@ -767,6 +767,9 @@ class RotaPlanListItem(BaseModel):
     # Shifts already past with no attendance recorded. These are silently unpaid, so the
     # rota list flags them rather than letting payroll be the first to notice.
     unmarked_attendance_count: int = 0
+    # Staff on a published rota whose own shifts were never published. Publishing is
+    # per-employee, so "Published" does not mean everyone on it was sent.
+    unpublished_staff_count: int = 0
     created_at: datetime
     updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None

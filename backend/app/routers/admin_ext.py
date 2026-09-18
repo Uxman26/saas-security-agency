@@ -98,7 +98,7 @@ class SendResetEmailBody(BaseModel):
 
 
 @router.get("/dashboard/extended")
-def extended_dashboard(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def extended_dashboard(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read", "billing.read", "ops.read"))):
     from app.services import admin_hq_service
 
     sub_inv.ensure_renewal_invoices(db)
@@ -155,12 +155,12 @@ def my_permissions(db: Session = Depends(get_db), current_user: User = Depends(g
 
 
 @router.get("/search")
-def search(q: str, limit: int = 20, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def search(q: str, limit: int = 20, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read"))):
     return ext.global_search(db, q, limit)
 
 
 @router.get("/companies/{company_id}/support-view")
-def company_support_view(company_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def company_support_view(company_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("support.read", "tenants.read"))):
     return ops.tenant_support_view(db, company_id)
 
 
@@ -182,13 +182,13 @@ def grant_temp_access(
     body: TempAccessBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("security.write", "tenants.write", "support.write")),
 ):
     return ops.grant_temporary_access(db, company_id, actor=current_user, reason=body.reason, request=request)
 
 
 @router.get("/temp-access")
-def list_temp_access(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_temp_access(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("security.read", "tenants.read", "support.read"))):
     return ops.list_temp_access(db, company_id)
 
 
@@ -197,7 +197,7 @@ def revoke_temp_access(
     session_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("security.write", "tenants.write", "support.write")),
 ):
     return ops.revoke_temp_access(db, session_id, current_user, request)
 
@@ -208,7 +208,7 @@ def subscription_action(
     body: SubscriptionActionBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("billing.write", "tenants.write")),
 ):
     co = db.query(Company).filter(Company.id == company_id).first()
     if not co:
@@ -268,6 +268,16 @@ def subscription_action(
         return ap.company_admin_out(db, co)
     if body.billing_cycle:
         co.billing_cycle = body.billing_cycle
+    if action in ("upgrade", "downgrade", "cancel", "reactivate"):
+        from app.services import stripe_subscription_service as stripe_svc
+
+        stripe_svc.apply_admin_stripe_action(
+            db,
+            co,
+            action,
+            tier=body.tier,
+            billing_cycle=body.billing_cycle or co.billing_cycle,
+        )
     change = SubscriptionChange(
         company_id=co.id,
         actor_user_id=current_user.id,
@@ -305,7 +315,7 @@ def list_tickets(
     priority: Optional[str] = None,
     assigned_to_user_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("support.read")),
 ):
     return tickets.list_tickets(
         db,
@@ -321,7 +331,7 @@ def create_ticket(
     body: TicketCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("support.write")),
 ):
     row = tickets.create_ticket(db, current_user, body.model_dump())
     platform_audit_service.log(
@@ -338,7 +348,7 @@ def create_ticket(
 
 
 @router.get("/tickets/{ticket_id}")
-def get_ticket(ticket_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def get_ticket(ticket_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("support.read"))):
     return tickets.get_ticket(db, ticket_id)
 
 
@@ -348,7 +358,7 @@ def patch_ticket(
     body: TicketUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("support.write")),
 ):
     row = tickets.update_ticket(db, ticket_id, body.model_dump(exclude_unset=True))
     platform_audit_service.log(
@@ -370,7 +380,7 @@ def ticket_message(
     ticket_id: int,
     body: TicketMessageCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("support.write")),
 ):
     return tickets.add_message(db, ticket_id, current_user, body.body, body.is_internal)
 
@@ -382,7 +392,7 @@ def list_errors(
     status: Optional[str] = None,
     source: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("ops.read")),
 ):
     rows = ext.list_errors(db, company_id=company_id, severity=severity, status=status, source=source)
     return [
@@ -412,7 +422,7 @@ def resolve_error(
     error_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("ops.write")),
 ):
     row = ext.resolve_error(db, error_id, current_user)
     platform_audit_service.log(
@@ -427,7 +437,7 @@ def resolve_error(
 
 
 @router.get("/security-events")
-def security_events(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def security_events(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("security.read"))):
     rows = ext.list_security_events(db, company_id=company_id)
     return [
         {
@@ -445,7 +455,7 @@ def security_events(company_id: Optional[int] = None, db: Session = Depends(get_
 
 
 @router.get("/sessions")
-def list_sessions(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_sessions(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("security.read"))):
     return ops.list_active_sessions(db, company_id=company_id)
 
 
@@ -454,7 +464,7 @@ def revoke_session(
     session_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("security.write")),
 ):
     return ops.force_logout_session(db, session_id, current_user, request)
 
@@ -513,7 +523,7 @@ def end_impersonate(
 
 
 @router.get("/feature-flags")
-def feature_flags(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def feature_flags(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("config.read"))):
     return [
         {"id": f.id, "key": f.key, "name": f.name, "description": f.description, "enabled": f.enabled}
         for f in ext.list_feature_flags(db)
@@ -526,7 +536,7 @@ def upsert_flag(
     body: FeatureFlagBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("config.write")),
 ):
     row = ext.upsert_feature_flag(db, key, body.model_dump(exclude_unset=True))
     platform_audit_service.log(
@@ -542,7 +552,7 @@ def upsert_flag(
 
 
 @router.get("/companies/{company_id}/features")
-def company_features(company_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def company_features(company_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("tenants.read", "config.read"))):
     return [
         {"id": f.id, "feature_key": f.feature_key, "enabled": f.enabled, "limit_value": f.limit_value, "config_json": f.config_json}
         for f in ext.list_tenant_features(db, company_id)
@@ -556,7 +566,7 @@ def set_company_feature(
     body: TenantFeatureBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("tenants.write", "config.write")),
 ):
     row = ext.set_tenant_feature(db, company_id, feature_key, body.model_dump(exclude_unset=True))
     platform_audit_service.log(
@@ -573,7 +583,7 @@ def set_company_feature(
 
 
 @router.get("/jobs")
-def list_jobs(status: Optional[str] = None, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_jobs(status: Optional[str] = None, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("ops.read"))):
     rows = ext.list_jobs(db, status=status)
     return [
         {
@@ -593,19 +603,19 @@ def list_jobs(status: Optional[str] = None, db: Session = Depends(get_db), _: Us
 
 
 @router.post("/jobs/{job_id}/retry")
-def retry_job(job_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def retry_job(job_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("ops.write"))):
     r = ext.retry_job(db, job_id)
     return {"id": r.id, "status": r.status, "attempts": r.attempts}
 
 
 @router.post("/jobs/{job_id}/cancel")
-def cancel_job(job_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def cancel_job(job_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("ops.write"))):
     r = ext.cancel_job(db, job_id)
     return {"id": r.id, "status": r.status}
 
 
 @router.get("/webhooks")
-def list_webhooks(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_webhooks(company_id: Optional[int] = None, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("ops.read"))):
     rows = ext.list_webhooks(db, company_id=company_id)
     return [
         {
@@ -624,12 +634,12 @@ def list_webhooks(company_id: Optional[int] = None, db: Session = Depends(get_db
 
 
 @router.get("/platform-roles")
-def platform_roles(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def platform_roles(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("config.read"))):
     return ext.list_platform_roles(db)
 
 
 @router.get("/config")
-def list_config(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def list_config(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("config.read"))):
     return ext.list_config(db)
 
 
@@ -639,7 +649,7 @@ def put_config(
     body: ConfigBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("config.write")),
 ):
     out = ext.set_config(db, key, body.value, actor=current_user, category=body.category, is_sensitive=body.is_sensitive)
     platform_audit_service.log(
@@ -659,7 +669,7 @@ def send_notification(
     body: NotifyBody,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_super_admin),
+    current_user: User = Depends(require_platform_perm("support.write", "config.write")),
 ):
     from app.models import PlatformNotification
     from app.services.email_service import send_email
@@ -783,7 +793,7 @@ def set_tenant_password(
 def reports_summary(
     days: int = 30,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_super_admin),
+    _: User = Depends(require_platform_perm("tenants.read", "billing.read", "ops.read")),
 ):
     now = datetime.now(timezone.utc)
     since = now - timedelta(days=max(1, min(days, 365)))

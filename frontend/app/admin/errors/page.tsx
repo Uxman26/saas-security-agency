@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import type { ErrorLogItem } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { downloadCsv } from '@/lib/csv';
 import { toast } from '@/lib/toast';
 
 const SEVERITIES = ['low', 'medium', 'high', 'critical'];
@@ -94,9 +95,39 @@ export default function AdminErrorsPage() {
     <ProtectedRoute>
       <AppShell>
         <div className="container mx-auto px-4 py-8">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">Error logs</h1>
-            <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
+          <div className="flex flex-wrap justify-between items-start gap-3 mb-2">
+            <div>
+              <h1 className="text-3xl font-bold">Error logs</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Application errors recorded by the platform. Filter by severity or status, then export if needed.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={rows.length === 0}
+                onClick={() =>
+                  downloadCsv(
+                    'error-logs.csv',
+                    ['Last seen', 'Severity', 'Status', 'Source', 'Module', 'Message', 'Path', 'Count'],
+                    rows.map((e) => [
+                      e.last_seen_at,
+                      e.severity,
+                      e.status,
+                      e.source,
+                      e.module,
+                      e.message,
+                      e.path,
+                      e.occurrence_count,
+                    ])
+                  )
+                }
+              >
+                Export CSV
+              </Button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-3 mb-4">
             <Input placeholder="Search errors..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-md" />

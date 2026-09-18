@@ -35,12 +35,24 @@ export default function AdminReceiptsPage() {
   }, [user, load]);
 
   const markPaid = async (id: number) => {
+    if (!window.confirm('Mark this receipt as paid and activate the subscription?')) return;
     try {
       await api.admin.markReceiptPaid(id);
       toast.success('Marked as paid — subscription activated');
       load();
     } catch {
       toast.error('Failed to mark paid');
+    }
+  };
+
+  const voidReceipt = async (id: number) => {
+    if (!window.confirm('Void this pending receipt? The record is kept for audit.')) return;
+    try {
+      await api.admin.voidReceipt(id);
+      toast.success('Receipt voided');
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to void receipt');
     }
   };
 
@@ -129,9 +141,14 @@ export default function AdminReceiptsPage() {
                           <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
                           <TableCell>
                             {r.status === 'pending' ? (
-                              <Button size="sm" onClick={() => markPaid(r.id)}>
-                                Mark paid
-                              </Button>
+                              <div className="flex flex-wrap gap-1">
+                                <Button size="sm" onClick={() => void markPaid(r.id)}>
+                                  Mark paid
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => void voidReceipt(r.id)}>
+                                  Void
+                                </Button>
+                              </div>
                             ) : (
                               <span className="text-muted-foreground text-sm">
                                 {r.period_end ? `Until ${new Date(r.period_end).toLocaleDateString()}` : 'Paid'}

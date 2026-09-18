@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { User } from '@/lib/types';
 import { api } from '@/lib/api';
 import { broadcastLogout, onRemoteLogout, TOKEN_KEY } from '@/lib/session-sync';
+import { bindUserTheme, clearActiveThemeUser } from '@/lib/user-theme';
 
 export type LoginResult =
   | { user: User }
@@ -34,11 +35,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void (token ? api.auth.me() : Promise.resolve(null))
       .then((u) => {
-        if (!cancelled) setUser(u);
+        if (!cancelled) {
+          if (u) bindUserTheme(u);
+          setUser(u);
+        }
       })
       .catch(() => {
         if (cancelled) return;
         localStorage.removeItem(TOKEN_KEY);
+        clearActiveThemeUser();
         setUser(null);
       })
       .finally(() => {
@@ -52,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearSession = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
+    clearActiveThemeUser();
     setUser(null);
     router.replace('/login');
   }, [router]);
@@ -61,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const finishLogin = async (token: string) => {
     localStorage.setItem(TOKEN_KEY, token.trim());
     const userData = await api.auth.me();
+    bindUserTheme(userData);
     setUser(userData);
     return userData;
   };
@@ -88,7 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshUser = useCallback(async () => {
-    setUser(await api.auth.me());
+    const next = await api.auth.me();
+    setUser((prev) => {
+      if (!prev || prev.id !== next.id) bindUserTheme(next);
+      return next;
+    });
   }, []);
 
   const logout = useCallback(async () => {

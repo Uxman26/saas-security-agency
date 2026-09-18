@@ -45,6 +45,17 @@ function isAppRoute(pathname: string) {
   return APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function isAuthRoute(pathname: string) {
+  return (
+    pathname === '/login' ||
+    pathname.startsWith('/login/') ||
+    pathname === '/signup' ||
+    pathname.startsWith('/signup/') ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password'
+  );
+}
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -71,7 +82,7 @@ export function HelpAssistant() {
     }
   }, [open, messages, busy]);
 
-  if (isAppRoute(pathname)) return null;
+  if (isAppRoute(pathname) || isAuthRoute(pathname)) return null;
 
   async function ask(question: string) {
     const q = question.trim();

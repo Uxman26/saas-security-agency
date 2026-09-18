@@ -12,7 +12,6 @@ from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_super_admin, get_current_user
 from app.database import get_db
 from app.models import ApiUsageLog, Company, User, WebhookLog
 from app.services import admin_billing_notify_service as billing_notify
@@ -377,7 +376,7 @@ def put_password_policy(
 
 
 @router.get("/maintenance")
-def get_maintenance(db: Session = Depends(get_db), _: User = Depends(get_current_super_admin)):
+def get_maintenance(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("config.read", "ops.read"))):
     return ext.get_config(db, "maintenance_mode", {"enabled": False, "message": None})
 
 
@@ -411,7 +410,7 @@ def assign_role(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_platform_perm("config.write")),
 ):
-    out = rbac.assign_platform_role(db, body.user_id, body.role_slug)
+    out = rbac.assign_platform_role(db, body.user_id, body.role_slug, actor=current_user)
     platform_audit_service.log(
         db,
         actor=current_user,

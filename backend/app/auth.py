@@ -141,7 +141,9 @@ def get_current_user(
         if block:
             path = request.url.path or ""
             # Trial-expired (and similar) tenants keep account/billing routes; paid ops stay gated.
-            if block.get("code") == "subscription_required" and path_allowed_when_subscription_required(path):
+            if block.get("code") == "subscription_required" and path_allowed_when_subscription_required(
+                path, request.method
+            ):
                 pass
             else:
                 raise HTTPException(

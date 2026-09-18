@@ -14,9 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { api } from '@/lib/api';
 import type { PlanTier } from '@/lib/types';
 import { toast } from '@/lib/toast';
+import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 
 export default function AdminPackagesPage() {
   const { user } = useAuth();
+  const { can } = usePlatformPermissions();
   const [tiers, setTiers] = useState<PlanTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PlanTier | null>(null);
@@ -26,6 +28,7 @@ export default function AdminPackagesPage() {
   const [maxUsers, setMaxUsers] = useState('');
   const [featSms, setFeatSms] = useState(false);
   const [featEmail, setFeatEmail] = useState(false);
+  const [trialDays, setTrialDays] = useState('30');
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
@@ -46,6 +49,7 @@ export default function AdminPackagesPage() {
     setMaxUsers(t.max_users != null ? String(t.max_users) : '');
     setFeatSms(!!t.features?.sms);
     setFeatEmail(!!t.features?.email);
+    setTrialDays(String(t.trial_days ?? 30));
   };
 
   const save = async () => {
@@ -58,6 +62,7 @@ export default function AdminPackagesPage() {
         max_sites: maxSites ? parseInt(maxSites, 10) : undefined,
         max_users: maxUsers ? parseInt(maxUsers, 10) : undefined,
         features: { sms: featSms, email: featEmail },
+        trial_days: trialDays ? parseInt(trialDays, 10) : undefined,
       });
       setTiers((prev) => prev.map((t) => (t.tier === updated.tier ? updated : t)));
       setSelected(updated);
@@ -96,6 +101,7 @@ export default function AdminPackagesPage() {
                     <TableRow>
                       <TableCell>Tier</TableCell>
                       <TableCell>Price (GBP/mo)</TableCell>
+                      <TableCell>Trial days</TableCell>
                       <TableCell>Max guards</TableCell>
                       <TableCell>Max sites</TableCell>
                       <TableCell>SMS</TableCell>
@@ -108,14 +114,17 @@ export default function AdminPackagesPage() {
                       <TableRow key={t.tier}>
                         <TableCell className="capitalize font-medium">{t.tier}</TableCell>
                         <TableCell>£{t.price_gbp.toFixed(2)}</TableCell>
+                        <TableCell>{t.trial_days ?? 30}</TableCell>
                         <TableCell>{t.max_guards ?? '∞'}</TableCell>
                         <TableCell>{t.max_sites ?? '∞'}</TableCell>
                         <TableCell>{t.features?.sms ? 'Yes' : 'No'}</TableCell>
                         <TableCell>{t.features?.email ? 'Yes' : 'No'}</TableCell>
                         <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => openEdit(t)}>
-                            Edit
-                          </Button>
+                          {can('billing.write', 'config.write') && (
+                            <Button size="sm" variant="outline" onClick={() => openEdit(t)}>
+                              Edit
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -136,6 +145,10 @@ export default function AdminPackagesPage() {
                 <div>
                   <Label htmlFor="price">Monthly price (GBP)</Label>
                   <Input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label htmlFor="trialDays">Trial days</Label>
+                  <Input id="trialDays" type="number" min={1} max={365} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} className="mt-1" />
                 </div>
                 <div>
                   <Label htmlFor="guards">Max guards</Label>

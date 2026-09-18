@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import type { PlatformAuditLog } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { downloadCsv } from '@/lib/csv';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +27,9 @@ const ACTION_STYLES: Record<string, string> = {
   'user.password_reset': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
   'user.password_reset_email': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
   'user.deactivated': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
+  'user.archived': 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
+  'trial.extended': 'bg-primary/15 text-primary',
+  'trial.started': 'bg-primary/15 text-primary',
   'impersonation.start': 'bg-primary/15 text-primary',
   'impersonation.end': 'bg-muted text-muted-foreground',
 };
@@ -117,9 +121,34 @@ export default function AdminAuditPage() {
                 it survives the records it describes.
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-              Refresh
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={filtered.length === 0}
+                onClick={() =>
+                  downloadCsv(
+                    'audit-trail.csv',
+                    ['When', 'Actor', 'Action', 'Target type', 'Target', 'Company', 'IP', 'Note'],
+                    filtered.map((r) => [
+                      r.created_at,
+                      r.actor_email,
+                      r.action,
+                      r.target_type,
+                      r.target_label,
+                      r.company_name,
+                      r.ip_address,
+                      r.note,
+                    ])
+                  )
+                }
+              >
+                Export CSV
+              </Button>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 flex-wrap mb-4">

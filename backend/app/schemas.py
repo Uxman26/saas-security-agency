@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import date, datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 from uuid import UUID
 
 from app.validators import (
@@ -138,6 +138,10 @@ class ProfileUpdate(BaseModel):
     full_name: NameStr
 
 
+class ThemeUpdate(StrictModel):
+    theme: Literal["light", "dark", "system"]
+
+
 class UserMeResponse(UserResponse):
     permissions: List[str] = Field(default_factory=list)
     module_access: List[dict[str, Any]] = Field(default_factory=list)
@@ -148,6 +152,7 @@ class UserMeResponse(UserResponse):
     subscription_end: Optional[datetime] = None
     sidebar_modules: Optional[List[str]] = None
     enabled_modules: Optional[dict[str, bool]] = None
+    theme_preference: Optional[str] = None
 
 
 class SubscriptionReceiptResponse(BaseModel):
@@ -240,6 +245,7 @@ class AdminUserListItem(BaseModel):
     full_name: str
     role: Optional[str] = None
     is_active: bool
+    email_verified: bool = False
     created_at: datetime
     company_id: Optional[int] = None
     company_name: Optional[str] = None
@@ -268,6 +274,7 @@ class PlanTierOut(BaseModel):
     max_sites: Optional[int] = None
     max_users: Optional[int] = None
     features: dict[str, Any] = Field(default_factory=dict)
+    trial_days: int = 30
 
 
 class PlanTierUpdate(BaseModel):
@@ -276,6 +283,7 @@ class PlanTierUpdate(BaseModel):
     max_sites: Optional[int] = None
     max_users: Optional[int] = None
     features: Optional[dict[str, Any]] = None
+    trial_days: Optional[int] = None
 
 
 class AdminUserDetail(BaseModel):

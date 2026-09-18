@@ -37,7 +37,7 @@ DEFAULT_TEMPLATES = [
         "name": "Account verification",
         "channel": "email",
         "subject": "Verify your ControlOps email",
-        "body": "Hi {{full_name}},\n\nPlease verify your email address to activate your ControlOps account:\n{{verify_url}}\n\nThis link expires in 24 hours.",
+        "body": "Hi {{full_name}},\n\nWelcome to ControlOps. Please verify this email to activate your account for {{company_name}}.\n\nVerify your email (link expires in 24 hours):\n{{verify_url}}\n\nIf you did not create this account, you can ignore this email.\n\n— Control Operations\nCommand with Clarity",
     },
     {
         "key": "welcome_onboarding",
@@ -94,6 +94,13 @@ DEFAULT_TEMPLATES = [
         "channel": "email",
         "subject": "ControlOps billing update — {{company_name}}",
         "body": "Hi {{full_name}},\n\n{{message}}\n\nPlan: {{tier}}\nAmount: {{amount}}",
+    },
+    {
+        "key": "payment_failed",
+        "name": "Payment failed",
+        "channel": "email",
+        "subject": "Payment failed — {{company_name}}",
+        "body": "Hi {{full_name}},\n\nA subscription payment for {{company_name}} failed ({{amount}}).\n\nUpdate your card in Billing to restore paid features. Your existing data remains available.\n\nReference: {{reference}}",
     },
     {
         "key": "payment_notification",

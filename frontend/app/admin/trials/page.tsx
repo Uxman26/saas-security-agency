@@ -16,12 +16,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { api } from '@/lib/api';
 import type { TrialConfig, TrialPeriod } from '@/lib/types';
 import { toast } from '@/lib/toast';
+import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 
 const STATUSES = ['active', 'extended', 'expired', 'converted'] as const;
-const DAY_OPTIONS = [7, 14, 30];
+const DAY_OPTIONS = [7, 14, 30, 60];
 
 export default function AdminTrialsPage() {
   const { user } = useAuth();
+  const { can } = usePlatformPermissions();
   const [config, setConfig] = useState<TrialConfig | null>(null);
   const [trials, setTrials] = useState<TrialPeriod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,12 +182,16 @@ export default function AdminTrialsPage() {
               <Button variant="outline" size="sm" onClick={() => { loadConfig(); loadTrials(); }}>
                 Refresh
               </Button>
-              <Button size="sm" onClick={() => setStartOpen(true)}>
-                Start trial
-              </Button>
-              <Button variant="outline" size="sm" disabled={expiring} onClick={() => void expireDue()}>
-                {expiring ? 'Expiring…' : 'Expire due'}
-              </Button>
+              {can('trials.write', 'billing.write') && (
+                <Button size="sm" onClick={() => setStartOpen(true)}>
+                  Start trial
+                </Button>
+              )}
+              {can('trials.write', 'billing.write', 'ops.write') && (
+                <Button variant="outline" size="sm" disabled={expiring} onClick={() => void expireDue()}>
+                  {expiring ? 'Expiring…' : 'Expire due'}
+                </Button>
+              )}
             </div>
           </div>
 
@@ -200,24 +206,33 @@ export default function AdminTrialsPage() {
                 <>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div>
-                      <Label>Default days</Label>
-                      <Select
-                        value={String(config.default_days)}
-                        onValueChange={(v) =>
-                          setConfig({ ...config, default_days: parseInt(v, 10) })
-                        }
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {DAY_OPTIONS.map((d) => (
-                            <SelectItem key={d} value={String(d)}>
-                              {d} days
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="default_days">Default days</Label>
+                      <Input
+                        id="default_days"
+                        type="number"
+                        min={1}
+                        max={365}
+                        className="mt-1"
+                        value={config.default_days}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10);
+                          if (!Number.isNaN(n)) setConfig({ ...config, default_days: n });
+                        }}
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">1–365. Quick set:</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {DAY_OPTIONS.map((d) => (
+                          <Button
+                            key={d}
+                            type="button"
+                            size="sm"
+                            variant={config.default_days === d ? 'default' : 'outline'}
+                            onClick={() => setConfig({ ...config, default_days: d })}
+                          >
+                            {d}d
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                     <div>
                       <Label htmlFor="reminder_days">Reminder days</Label>
@@ -238,6 +253,14 @@ export default function AdminTrialsPage() {
                     <label className="flex items-center gap-2 text-sm pt-6">
                       <input
                         type="checkbox"
+                        checked={config.require_card}
+                        onChange={(e) => setConfig({ ...config, require_card: e.target.checked })}
+                      />
+                      Require card verification
+                    </label>
+                    <label className="flex items-center gap-2 text-sm pt-6">
+                      <input
+                        type="checkbox"
                         checked={config.allow_repeat}
                         onChange={(e) => setConfig({ ...config, allow_repeat: e.target.checked })}
                       />
@@ -252,7 +275,7 @@ export default function AdminTrialsPage() {
                       Trials enabled
                     </label>
                   </div>
-                  <Button onClick={() => void saveConfig()} disabled={savingConfig}>
+                  <Button onClick={() => void saveConfig()} disabled={savingConfig || !can('trials.write', 'billing.write', 'config.write')}>
                     {savingConfig ? 'Saving…' : 'Save config'}
                   </Button>
                 </>
@@ -290,6 +313,7 @@ export default function AdminTrialsPage() {
                       <TableCell>Company</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Plan</TableCell>
+                      <TableCell>Started</TableCell>
                       <TableCell>Days left</TableCell>
                       <TableCell>Ends</TableCell>
                       <TableCell />
@@ -310,6 +334,9 @@ export default function AdminTrialsPage() {
                         <TableCell className="capitalize">{t.status}</TableCell>
                         <TableCell className="capitalize">{t.plan_tier || '—'}</TableCell>
                         <TableCell>
+                          {t.started_at ? new Date(t.started_at).toLocaleDateString() : '—'}
+                        </TableCell>
+                        <TableCell>
                           {t.status === 'active' || t.status === 'extended'
                             ? t.days_remaining ?? '—'
                             : '—'}
@@ -319,7 +346,7 @@ export default function AdminTrialsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
-                            {(t.status === 'active' || t.status === 'extended') && (
+                            {(t.status === 'active' || t.status === 'extended') && can('trials.write', 'billing.write') && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -358,7 +385,7 @@ export default function AdminTrialsPage() {
                   id="ext_days"
                   type="number"
                   min={1}
-                  max={90}
+                  max={365}
                   className="mt-1"
                   value={extensionDays}
                   onChange={(e) => setExtensionDays(e.target.value)}
@@ -395,10 +422,16 @@ export default function AdminTrialsPage() {
                       #{h.id} · {h.status} · {h.duration_days}d
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {h.started_at ? new Date(h.started_at).toLocaleDateString() : '—'} →{' '}
-                      {h.ends_at ? new Date(h.ends_at).toLocaleDateString() : '—'}
-                      {h.extensions?.length ? ` · ${h.extensions.length} extension(s)` : ''}
+                      Original {h.duration_days}d · {h.started_at ? new Date(h.started_at).toLocaleString() : '—'} →{' '}
+                      {h.ends_at ? new Date(h.ends_at).toLocaleString() : '—'}
                     </p>
+                    {(h.extensions || []).map((e) => (
+                      <p key={e.id} className="text-xs mt-1">
+                        +{e.extension_days}d on {new Date(e.created_at).toLocaleString()} by{' '}
+                        {e.extended_by_name || e.extended_by_email || `user #${e.extended_by_user_id}`}
+                        {e.reason ? ` — ${e.reason}` : ''}
+                      </p>
+                    ))}
                   </li>
                 ))}
               </ul>
@@ -423,19 +456,29 @@ export default function AdminTrialsPage() {
                 />
               </div>
               <div>
-                <Label>Duration</Label>
-                <Select value={startDays} onValueChange={setStartDays}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DAY_OPTIONS.map((d) => (
-                      <SelectItem key={d} value={String(d)}>
-                        {d} days
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="start_days">Duration (days)</Label>
+                <Input
+                  id="start_days"
+                  type="number"
+                  min={1}
+                  max={365}
+                  className="mt-1"
+                  value={startDays}
+                  onChange={(e) => setStartDays(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {DAY_OPTIONS.map((d) => (
+                    <Button
+                      key={d}
+                      type="button"
+                      size="sm"
+                      variant={startDays === String(d) ? 'default' : 'outline'}
+                      onClick={() => setStartDays(String(d))}
+                    >
+                      {d}d
+                    </Button>
+                  ))}
+                </div>
               </div>
               <div>
                 <Label htmlFor="start_notes">Notes</Label>

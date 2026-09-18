@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EmailDialog } from '@/components/email-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AppSidebar } from '@/components/app-sidebar';
-import { ADMIN_NAV, isAdminNavActive } from '@/lib/admin-nav';
+import { ADMIN_NAV_SECTIONS, filterAdminNavSections, isAdminNavActive } from '@/lib/admin-nav';
 import { LogOut, Menu } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { AlertsPanel } from '@/components/alerts-panel';
@@ -22,6 +22,7 @@ import { useModulePathGuard } from '@/components/module-guard';
 import { api } from '@/lib/api';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { TrialBanner } from '@/components/trial-banner';
+import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
@@ -35,6 +36,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const isSuperAdmin = user?.role === 'super_admin';
+  const { can, loaded: permsLoaded } = usePlatformPermissions();
+  const adminSections = useMemo(
+    () =>
+      permsLoaded
+        ? filterAdminNavSections(can)
+        : ADMIN_NAV_SECTIONS.map((s) => ({ titleKey: s.titleKey, items: [...s.items] })),
+    [can, permsLoaded]
+  );
   const queryClient = useQueryClient();
   useModulePathGuard(pathname);
 
@@ -124,22 +133,27 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
               <nav className="sidebar-nav-scroll flex-1 space-y-0.5 overflow-y-auto p-2">
                 {isSuperAdmin ? (
-                  ADMIN_NAV.map(({ href, labelKey }) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={cn(
-                        // Matches the desktop sidebar: soft orange fill, orange label and
-                        // a solid rule down the leading edge.
-                        'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
-                        isAdminNavActive(pathname, href)
-                          ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
-                      )}
-                      onClick={() => setDrawer(false)}
-                    >
-                      {ts(labelKey)}
-                    </Link>
+                  adminSections.map((section) => (
+                    <div key={section.titleKey} className="mb-3">
+                      <p className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                        {ts(section.titleKey)}
+                      </p>
+                      {section.items.map(({ href, labelKey }) => (
+                        <Link
+                          key={href}
+                          href={href}
+                          className={cn(
+                            'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
+                            isAdminNavActive(pathname, href)
+                              ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
+                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
+                          )}
+                          onClick={() => setDrawer(false)}
+                        >
+                          {ts(labelKey)}
+                        </Link>
+                      ))}
+                    </div>
                   ))
                 ) : (
                   links.map((m) => (

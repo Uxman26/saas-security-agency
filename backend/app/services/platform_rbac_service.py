@@ -53,7 +53,7 @@ def require_platform_perm(*codes: str):
     return dependency
 
 
-def assign_platform_role(db: Session, user_id: int, role_slug: str) -> dict:
+def assign_platform_role(db: Session, user_id: int, role_slug: str, actor: User | None = None) -> dict:
     ext.ensure_platform_rbac(db)
     user = db.query(User).filter(User.id == user_id).first()
     if not user or user.role != "super_admin":
@@ -61,6 +61,10 @@ def assign_platform_role(db: Session, user_id: int, role_slug: str) -> dict:
     role = db.query(PlatformRole).filter(PlatformRole.slug == role_slug).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
+    if role_slug == "super_admin" and actor:
+        have = user_platform_permission_codes(db, actor)
+        if "impersonate.start" not in have:
+            raise HTTPException(status_code=403, detail="Only Super Admin can assign the Super Admin role")
     existing = (
         db.query(PlatformAdminRole)
         .filter(PlatformAdminRole.user_id == user_id, PlatformAdminRole.role_id == role.id)

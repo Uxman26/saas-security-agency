@@ -52,6 +52,20 @@ def get_limits(tier: str) -> dict[str, Any]:
     return base
 
 
+def get_trial_days(tier: str) -> int:
+    t = normalize_tier(tier)
+    raw = _read_raw()
+    days_map = raw.get("trial_days") or {}
+    if t in days_map:
+        try:
+            days = int(days_map[t])
+            if 1 <= days <= 365:
+                return days
+        except (TypeError, ValueError):
+            pass
+    return 30
+
+
 def list_tiers() -> list[dict[str, Any]]:
     out = []
     for tier in VALID_TIERS:
@@ -64,6 +78,7 @@ def list_tiers() -> list[dict[str, Any]]:
                 "max_sites": lim.get("max_sites"),
                 "max_users": lim.get("max_users"),
                 "features": lim.get("features") or {},
+                "trial_days": get_trial_days(tier),
             }
         )
     out.sort(key=lambda x: x["price_gbp"])
@@ -89,6 +104,13 @@ def update_tier(tier: str, payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("features") is not None:
         entry["features"] = {**entry.get("features", {}), **payload["features"]}
     limits[t] = entry
+    if payload.get("trial_days") is not None:
+        days = int(payload["trial_days"])
+        if days < 1 or days > 365:
+            raise HTTPException(status_code=400, detail="Trial days must be between 1 and 365")
+        trial_days = dict(raw.get("trial_days") or {})
+        trial_days[t] = days
+        raw["trial_days"] = trial_days
     raw["prices"] = prices
     raw["limits"] = limits
     _write_raw(raw)
@@ -100,4 +122,5 @@ def update_tier(tier: str, payload: dict[str, Any]) -> dict[str, Any]:
         "max_sites": lim.get("max_sites"),
         "max_users": lim.get("max_users"),
         "features": lim.get("features") or {},
+        "trial_days": get_trial_days(t),
     }

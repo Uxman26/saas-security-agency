@@ -108,6 +108,7 @@ export default function AdminPaymentsPage() {
                         <SortableHead label="Amount" colKey="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Method" colKey="method" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Paid at" colKey="paid" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableCell />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -118,6 +119,26 @@ export default function AdminPaymentsPage() {
                           <TableCell>£{p.amount.toFixed(2)}</TableCell>
                           <TableCell className="capitalize">{p.method}</TableCell>
                           <TableCell>{new Date(p.paid_at).toLocaleString()}</TableCell>
+                          <TableCell>
+                            {p.invoice_id ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  if (!window.confirm('Void this payment invoice? The record is kept. Use refunds for money already collected.')) return;
+                                  try {
+                                    await api.admin.patchInvoiceStatus(p.invoice_id as number, 'cancelled');
+                                    toast.success('Invoice cancelled');
+                                    load();
+                                  } catch (e) {
+                                    toast.error(e instanceof Error ? e.message : 'Void failed');
+                                  }
+                                }}
+                              >
+                                Void
+                              </Button>
+                            ) : null}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

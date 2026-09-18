@@ -14,6 +14,7 @@ from app.schemas import (
     MfaConfirmRequest,
     MfaVerifyRequest,
     ProfileUpdate,
+    ThemeUpdate,
     ResendVerificationRequest,
     ResetPasswordRequest,
     SignupResponse,
@@ -329,6 +330,8 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
         current_user.role_id,
         permission_bypass(db, current_user),
     )
+    raw_theme = getattr(current_user, "theme_preference", None)
+    theme_preference = raw_theme if raw_theme in ("light", "dark", "system") else None
     base = UserResponse.model_validate(current_user)
     return UserMeResponse(
         **base.model_dump(),
@@ -341,6 +344,7 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
         subscription_end=sub_end,
         sidebar_modules=sidebar_modules,
         enabled_modules=enabled_modules,
+        theme_preference=theme_preference,
     )
 
 
@@ -363,6 +367,18 @@ def patch_my_profile(
     email and company are not settable here.
     """
     current_user.full_name = body.full_name
+    db.commit()
+    db.refresh(current_user)
+    return _me_response(db, current_user)
+
+
+@router.patch("/me/theme", response_model=UserMeResponse)
+def patch_my_theme(
+    body: ThemeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.theme_preference = body.theme
     db.commit()
     db.refresh(current_user)
     return _me_response(db, current_user)

@@ -470,22 +470,36 @@ export default function AdminCompanySupportPage() {
                   {currentTrial && (
                       <div className="rounded-md border p-3 text-sm space-y-1">
                         <p className="font-medium">{currentTrial.label || 'Trial'}</p>
-                        {currentTrial.trial_active && (
-                          <>
-                            <p>
-                              <span className="text-muted-foreground">Days remaining:</span>{' '}
-                              {currentTrial.days_remaining ?? '—'}
-                            </p>
-                            <p>
-                              <span className="text-muted-foreground">Ends on:</span>{' '}
-                              {currentTrial.trial_ends_on
-                                ? new Date(currentTrial.trial_ends_on).toLocaleDateString()
-                                : '—'}
-                            </p>
-                          </>
+                        <p>
+                          <span className="text-muted-foreground">Package:</span>{' '}
+                          <span className="capitalize">{currentTrial.plan_tier || view.subscription_tier || '—'}</span>
+                          {currentTrial.billing_cycle || view.billing_cycle
+                            ? ` · ${currentTrial.billing_cycle || view.billing_cycle}`
+                            : ''}
+                        </p>
+                        <p>
+                          <span className="text-muted-foreground">Started:</span>{' '}
+                          {currentTrial.trial_starts_on
+                            ? new Date(currentTrial.trial_starts_on).toLocaleDateString()
+                            : '—'}
+                        </p>
+                        <p>
+                          <span className="text-muted-foreground">Ends:</span>{' '}
+                          {currentTrial.trial_ends_on
+                            ? new Date(currentTrial.trial_ends_on).toLocaleDateString()
+                            : '—'}
+                        </p>
+                        {(currentTrial.trial_active || currentTrial.days_remaining != null) && (
+                          <p>
+                            <span className="text-muted-foreground">Days remaining:</span>{' '}
+                            {currentTrial.days_remaining ?? '—'}
+                          </p>
                         )}
                         {currentTrial.trial_expired && (
-                          <p className="text-muted-foreground">Trial expired — subscription required</p>
+                          <p className="text-muted-foreground">
+                            {currentTrial.restriction ||
+                              'Trial expired — tenant can view and edit existing data; adding records and paid features are locked.'}
+                          </p>
                         )}
                       </div>
                   )}

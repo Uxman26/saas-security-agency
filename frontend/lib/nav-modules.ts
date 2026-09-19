@@ -23,3 +23,11 @@ export function navModulesFromUser(user: User | null | undefined): ModuleAccess[
     .filter((m) => moduleNavAllowed(user, m))
     .sort((a, b) => a.sidebar_order - b.sidebar_order);
 }
+
+/** Where a role's "home" is. Super admins land in Platform HQ, portal roles in their portal. */
+export function homePathForRole(role: string | null | undefined): string {
+  const r = (role || '').toLowerCase();
+  if (r === 'super_admin') return '/admin';
+  if (r === 'client' || r === 'staff') return '/my-portal';
+  return '/dashboard';
+}

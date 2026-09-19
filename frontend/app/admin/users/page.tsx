@@ -15,6 +15,8 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { toast } from '@/lib/toast';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
+import { MODULE_LABELS } from '@/lib/plan-company-defaults';
+import { Check, X } from 'lucide-react';
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
@@ -35,6 +37,22 @@ export default function AdminUsersPage() {
     load();
     setLoading(false);
   }, [user, load]);
+
+  // Lead capture is a company-level switch, so flipping it from a user row updates
+  // every row that shares that company rather than just the one clicked.
+  const toggleLeadCapture = async (u: AdminUserListItem) => {
+    if (!u.company_id) return;
+    const next = { ...(u.enabled_modules || {}), lead_capture: !u.enabled_modules?.lead_capture };
+    try {
+      await api.admin.patchCompanyModules(u.company_id, next);
+      setRows((prev) =>
+        prev.map((r) => (r.company_id === u.company_id ? { ...r, enabled_modules: next } : r))
+      );
+      toast.success(next.lead_capture ? 'Lead capture enabled' : 'Lead capture disabled');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed');
+    }
+  };
 
   const toggleActive = async (u: AdminUserListItem) => {
     try {
@@ -65,6 +83,8 @@ export default function AdminUsersPage() {
         return u.is_active ? '1' : '0';
       case 'created':
         return u.created_at;
+      case 'lead_capture':
+        return u.enabled_modules?.lead_capture ? 1 : 0;
       default:
         return '';
     }
@@ -117,6 +137,7 @@ export default function AdminUsersPage() {
                         <SortableHead label="Company" colKey="company" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Active" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableCell>Verified</TableCell>
+                        <SortableHead label={MODULE_LABELS.lead_capture} colKey="lead_capture" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Created" colKey="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableCell>Action</TableCell>
                       </TableRow>
@@ -134,6 +155,33 @@ export default function AdminUsersPage() {
                             </span>
                           </TableCell>
                           <TableCell>{u.email_verified ? 'Verified' : 'Unverified'}</TableCell>
+                          <TableCell>
+                            {!u.company_id ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : can('tenants.write') ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 gap-1 px-2 text-xs"
+                                onClick={() => void toggleLeadCapture(u)}
+                                title={`Turn lead capture ${u.enabled_modules?.lead_capture ? 'off' : 'on'} for ${u.company_name ?? 'this company'}`}
+                              >
+                                {u.enabled_modules?.lead_capture ? (
+                                  <>
+                                    <Check className="size-3.5 text-green-600" /> On
+                                  </>
+                                ) : (
+                                  <>
+                                    <X className="size-3.5 text-muted-foreground" /> Off
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <span className={u.enabled_modules?.lead_capture ? 'text-green-600' : 'text-muted-foreground'}>
+                                {u.enabled_modules?.lead_capture ? 'On' : 'Off'}
+                              </span>
+                            )}
+                          </TableCell>
                           <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
                           <TableCell>
                             {u.role !== 'super_admin' && can('tenants.write') && (

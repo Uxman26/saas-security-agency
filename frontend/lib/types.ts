@@ -398,6 +398,7 @@ export interface AdminUserListItem {
   company_name?: string | null;
   subscription_tier?: string | null;
   subscription_status?: string | null;
+  enabled_modules?: Record<string, boolean>;
 }
 
 export interface PlanTier {
@@ -408,6 +409,15 @@ export interface PlanTier {
   max_users?: number | null;
   features: Record<string, boolean>;
   trial_days?: number;
+}
+
+export interface PackageFeature {
+  key: string;
+  label: string;
+  description: string;
+  group: string;
+  tenant_module?: string | null;
+  custom: boolean;
 }
 
 export interface AdminPayment extends Payment {

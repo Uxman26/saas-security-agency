@@ -116,6 +116,9 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
 
 export const ADMIN_NAV: readonly AdminNavItem[] = ADMIN_NAV_SECTIONS.flatMap((s) => s.items);
 
+/** Where the super admin portal opens: Platform HQ, the first item in the nav. */
+export const ADMIN_HOME = '/admin';
+
 export function isAdminNavActive(pathname: string, href: string): boolean {
   if (href === '/admin') return pathname === '/admin';
   return pathname === href || pathname.startsWith(`${href}/`);

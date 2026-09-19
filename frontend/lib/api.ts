@@ -1419,14 +1419,29 @@ export const api = {
       return request<AdminPayment[]>(`/admin/payments${q}`);
     },
     packages: (): Promise<PlanTier[]> => request<PlanTier[]>('/admin/packages'),
+    packageFeatures: (): Promise<import('./types').PackageFeature[]> =>
+      request<import('./types').PackageFeature[]>('/admin/packages/features'),
+    addPackageFeature: (data: {
+      key: string;
+      label: string;
+      description?: string;
+      group?: string;
+    }): Promise<import('./types').PackageFeature> =>
+      request<import('./types').PackageFeature>('/admin/packages/features', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deletePackageFeature: (key: string): Promise<void> =>
+      request<void>(`/admin/packages/features/${key}`, { method: 'DELETE' }),
     patchPackage: (
       tier: string,
       data: {
         price_gbp?: number;
-        max_guards?: number;
-        max_sites?: number;
-        max_users?: number;
+        max_guards?: number | null;
+        max_sites?: number | null;
+        max_users?: number | null;
         features?: Record<string, boolean>;
+        remove_features?: string[];
         trial_days?: number;
       }
     ): Promise<PlanTier> =>

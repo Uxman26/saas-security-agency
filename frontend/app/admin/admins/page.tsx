@@ -21,14 +21,7 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-
-const MODULE_LABELS: Record<string, string> = {
-  expenses: 'Expenses',
-  whatsapp: 'WhatsApp',
-  email: 'Email',
-  mobile_apps: 'Mobile Apps',
-  leads: 'Lead Management',
-};
+import { MODULE_DESCRIPTIONS, MODULE_LABELS, TENANT_MODULE_KEYS } from '@/lib/plan-company-defaults';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-green-100 text-green-800',
@@ -365,10 +358,15 @@ export default function AdminAdminsPage() {
                 <div>
                   <p className="font-medium mb-2">Tenant modules</p>
                   <div className="grid grid-cols-1 gap-2 border rounded-md p-3">
-                    {Object.keys(MODULE_LABELS).map((key) => (
-                      <label key={key} className="flex items-center gap-2">
-                        <input type="checkbox" checked={!!tenantModules[key]} onChange={() => toggleTenantModule(key)} className="rounded border" />
-                        <span>{MODULE_LABELS[key]}</span>
+                    {TENANT_MODULE_KEYS.map((key) => (
+                      <label key={key} className="flex items-start gap-2">
+                        <input type="checkbox" checked={!!tenantModules[key]} onChange={() => toggleTenantModule(key)} className="mt-0.5 rounded border" />
+                        <span>
+                          {MODULE_LABELS[key]}
+                          {MODULE_DESCRIPTIONS[key] ? (
+                            <span className="block text-xs text-muted-foreground">{MODULE_DESCRIPTIONS[key]}</span>
+                          ) : null}
+                        </span>
                       </label>
                     ))}
                   </div>

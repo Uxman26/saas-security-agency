@@ -20,6 +20,8 @@ from app.schemas import (
     AdminPaymentResponse,
     PlanTierOut,
     PlanTierUpdate,
+    PackageFeatureOut,
+    PackageFeatureCreate,
     SubscriptionInvoiceResponse,
     SubscriptionInvoiceStatusPatch,
     SubscriptionInvoicePaymentPatch,
@@ -217,6 +219,7 @@ def patch_user_active(
         company_name=co.name if co else None,
         subscription_tier=co.subscription_tier if co else None,
         subscription_status=co.subscription_status if co else None,
+        enabled_modules=ap.company_modules(co),
     )
 
 
@@ -309,6 +312,54 @@ def list_payments(
 @router.get("/packages", response_model=List[PlanTierOut])
 def list_packages(_: User = Depends(require_platform_perm("billing.read", "config.read"))):
     return [PlanTierOut(**row) for row in platform_plans_service.list_tiers()]
+
+
+@router.get("/packages/features", response_model=List[PackageFeatureOut])
+def list_package_features(_: User = Depends(require_platform_perm("billing.read", "config.read"))):
+    return [PackageFeatureOut(**row) for row in platform_plans_service.list_features()]
+
+
+@router.post("/packages/features", response_model=PackageFeatureOut)
+def create_package_feature(
+    body: PackageFeatureCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("billing.write", "config.write")),
+):
+    out = platform_plans_service.add_custom_feature(body.key, body.label, body.description, body.group)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="plan.feature_added",
+        target_type="plan_feature",
+        target_id=None,
+        target_label=out["key"],
+        before=None,
+        after=out,
+        request=request,
+    )
+    return PackageFeatureOut(**out)
+
+
+@router.delete("/packages/features/{key}", status_code=204)
+def delete_package_feature(
+    key: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("billing.write", "config.write")),
+):
+    platform_plans_service.delete_custom_feature(key)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="plan.feature_removed",
+        target_type="plan_feature",
+        target_id=None,
+        target_label=key,
+        before={"key": key},
+        after=None,
+        request=request,
+    )
 
 
 @router.patch("/packages/{tier}", response_model=PlanTierOut)
@@ -478,6 +529,7 @@ def archive_user(
         company_name=co.name if co else None,
         subscription_tier=co.subscription_tier if co else None,
         subscription_status=co.subscription_status if co else None,
+        enabled_modules=ap.company_modules(co),
     )
 
 

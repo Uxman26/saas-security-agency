@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { homePathForRole } from '@/lib/nav-modules';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
 
@@ -34,8 +35,7 @@ function OAuthCallbackInner() {
           router.replace(`/payment-pending?ref=${encodeURIComponent(ref)}`);
           return;
         }
-        const role = (user.role || '').toLowerCase();
-        router.replace(role === 'client' || role === 'staff' ? '/my-portal' : '/dashboard');
+        router.replace(homePathForRole(user.role));
       } catch (e) {
         if (cancelled) return;
         setMessage('Sign-in failed');

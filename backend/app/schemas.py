@@ -251,6 +251,7 @@ class AdminUserListItem(BaseModel):
     company_name: Optional[str] = None
     subscription_tier: Optional[str] = None
     subscription_status: Optional[str] = None
+    enabled_modules: dict[str, bool] = Field(default_factory=dict)
 
 
 class AdminCompanyUpdate(BaseModel):
@@ -283,7 +284,24 @@ class PlanTierUpdate(BaseModel):
     max_sites: Optional[int] = None
     max_users: Optional[int] = None
     features: Optional[dict[str, Any]] = None
+    remove_features: Optional[list[str]] = None
     trial_days: Optional[int] = None
+
+
+class PackageFeatureOut(BaseModel):
+    key: str
+    label: str
+    description: str = ""
+    group: str = "apps"
+    tenant_module: Optional[str] = None
+    custom: bool = False
+
+
+class PackageFeatureCreate(BaseModel):
+    key: str
+    label: str
+    description: str = ""
+    group: str = "apps"
 
 
 class AdminUserDetail(BaseModel):

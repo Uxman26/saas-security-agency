@@ -1,6 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { ADMIN_HOME } from '@/lib/admin-nav';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { OverviewCharts } from '@/components/dashboard/overview-charts';
@@ -41,19 +43,11 @@ import {
   Activity,
   BadgeCheck,
   TrendingUp,
-  LifeBuoy,
-  Monitor,
-  Cog,
-  BarChart3,
-  Search,
-  Flag,
-  Lock,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { can, PERMS } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 import {
-  useAdminDashboard,
   useDashboardAlerts,
   useDashboardOverview,
 } from '@/hooks/use-dashboard';
@@ -76,25 +70,6 @@ const companyTiles = [
   { href: '/settings/roles', title: 'Roles & users', desc: 'Roles, permissions, and user assignment', icon: Shield, color: 'text-primary', perm: 'roles.read' },
 ];
 
-const adminTiles = [
-  { href: '/dashboard', title: 'Dashboard', desc: 'Platform overview & billing stats', icon: Shield, color: 'text-primary' },
-  { href: '/admin/companies', title: 'Companies', desc: 'Tenants, modules & user limits', icon: Building2, color: 'text-primary' },
-  { href: '/admin/users', title: 'Users', desc: 'All platform users — activate or deactivate', icon: Users, color: 'text-blue-600 dark:text-blue-400' },
-  { href: '/admin/admins', title: 'Admins', desc: 'Tenant admin accounts & module access', icon: UserCog, color: 'text-indigo-600 dark:text-indigo-400' },
-  { href: '/admin/tickets', title: 'Tickets', desc: 'Support tickets & SLA tracking', icon: LifeBuoy, color: 'text-sky-600 dark:text-sky-400' },
-  { href: '/admin/errors', title: 'Errors', desc: 'Platform error logs & resolve', icon: AlertTriangle, color: 'text-red-600 dark:text-red-400' },
-  { href: '/admin/sessions', title: 'Sessions', desc: 'Active sessions & force logout', icon: Monitor, color: 'text-teal-600 dark:text-teal-400' },
-  { href: '/admin/jobs', title: 'Jobs', desc: 'Background jobs — retry or cancel', icon: Cog, color: 'text-slate-600 dark:text-slate-400' },
-  { href: '/admin/reports', title: 'Reports', desc: 'Platform KPI summary', icon: BarChart3, color: 'text-emerald-600 dark:text-emerald-400' },
-  { href: '/admin/search', title: 'Search', desc: 'Global search across tenants & tickets', icon: Search, color: 'text-orange-600 dark:text-orange-400' },
-  { href: '/admin/flags', title: 'Feature flags', desc: 'Toggle platform feature flags', icon: Flag, color: 'text-pink-600 dark:text-pink-400' },
-  { href: '/admin/invoices', title: 'Subscription invoices', desc: 'Auto-generated platform billing', icon: FileText, color: 'text-rose-600 dark:text-rose-400' },
-  { href: '/admin/payments', title: 'Payments', desc: 'Subscription payment records', icon: CreditCard, color: 'text-violet-600 dark:text-violet-400' },
-  { href: '/admin/receipts', title: 'Receipts', desc: 'Signup payments & mark paid', icon: Wallet, color: 'text-emerald-600 dark:text-emerald-400' },
-  { href: '/admin/packages', title: 'Packages', desc: 'Plan pricing, limits & SMS/email features', icon: Shield, color: 'text-amber-600 dark:text-amber-400' },
-  { href: '/admin/email', title: 'SMTP email', desc: 'Platform mail server for system emails', icon: Shield, color: 'text-blue-600 dark:text-blue-400' },
-  { href: '/admin/logs', title: 'Activity logs', desc: 'Login history & audit trail', icon: Activity, color: 'text-cyan-600 dark:text-cyan-400' },
-];
 
 function QuickTile({
   href,
@@ -175,7 +150,15 @@ function AlertPanel({
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
+  // Super admins have their own dashboard: Platform HQ at /admin. This route used to
+  // render a second, thinner copy of it, so the same URL meant two different pages
+  // and the admin tile grid linked /dashboard back to itself.
   const isSuperAdmin = user?.role === 'super_admin';
+
+  useEffect(() => {
+    if (isSuperAdmin) router.replace(ADMIN_HOME);
+  }, [isSuperAdmin, router]);
 
   const {
     data: overview,
@@ -188,12 +171,8 @@ export default function DashboardPage() {
     error: alertsQueryError,
   } = useDashboardAlerts(!isSuperAdmin && Boolean(user));
 
-  const { data: adminStats, isLoading: adminLoading } = useAdminDashboard(
-    isSuperAdmin && Boolean(user)
-  );
-
   // Only block UI when we have no cached data yet
-  const loading = isSuperAdmin ? adminLoading && !adminStats : overviewLoading && !overview;
+  const loading = overviewLoading && !overview;
   const alerts = alertsData?.compliance ?? [];
   const contractAlerts = alertsData?.contracts ?? [];
   const alertsError = alertsIsError
@@ -201,13 +180,12 @@ export default function DashboardPage() {
     : '';
 
   const tiles = useMemo(() => {
-    if (isSuperAdmin) return adminTiles;
     const showContractors = can(user, PERMS.contractorView);
     return companyTiles.filter((t) => {
       if (t.href === '/contractors') return showContractors;
       return can(user, t.perm);
     });
-  }, [user, isSuperAdmin]);
+  }, [user]);
 
   const stats = overview?.stats;
 
@@ -217,23 +195,11 @@ export default function DashboardPage() {
         <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_55%),linear-gradient(to_bottom,var(--background),color-mix(in_oklab,var(--muted)_70%,var(--background)))] dark:bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--primary)_14%,transparent),transparent_52%),linear-gradient(to_bottom,#0F172A,#0F172A)]">
           <div className="container mx-auto space-y-6 px-4 py-8">
             <DashboardHero
-              title={
-                isSuperAdmin
-                  ? 'Platform Admin'
-                  : `Welcome back${user?.full_name ? `, ${user.full_name}` : ''}`
-              }
-              subtitle={
-                isSuperAdmin
-                  ? 'Full platform control — companies, users, invoices, payments, and packages'
-                  : 'Operations Command Centre'
-              }
-              description={
-                isSuperAdmin
-                  ? undefined
-                  : 'Live metrics for staffing, compliance, and finance.'
-              }
+              title={`Welcome back${user?.full_name ? `, ${user.full_name}` : ''}`}
+              subtitle="Operations Command Centre"
+              description="Live metrics for staffing, compliance, and finance."
               pills={
-                !isSuperAdmin && stats
+                stats
                   ? [
                       {
                         href: '/rota?tab=active',
@@ -269,9 +235,9 @@ export default function DashboardPage() {
               }
             />
 
-            {!isSuperAdmin && loading && <InlineDashboardSkeleton />}
+            {loading && <InlineDashboardSkeleton />}
 
-            {!isSuperAdmin && !loading && stats && overview && (
+            {!loading && stats && overview && (
               <>
                 <div className="space-y-8">
                   <DashboardSection title="Workforce & compliance">
@@ -529,7 +495,7 @@ export default function DashboardPage() {
               </>
             )}
 
-            {!isSuperAdmin && !loading && !stats && (
+            {!loading && !stats && (
               <Card className="mb-8 border-destructive/30">
                 <CardContent className="pt-6 text-sm text-muted-foreground">
                   Could not load dashboard metrics. Check your connection and try refreshing.
@@ -537,69 +503,8 @@ export default function DashboardPage() {
               </Card>
             )}
 
-            {isSuperAdmin && adminStats && (
-              <DashboardSection title="Platform overview" className="mb-6">
-                <div className={KPI_GRID}>
-                  <div className={KPI_SPAN_SIXTH}>
-                    <DashboardKpi label="Companies" value={adminStats.total_companies} sub={`${adminStats.active_subscriptions} active`} icon={Building2} delay={0.05} />
-                  </div>
-                  <div className={KPI_SPAN_SIXTH}>
-                    <DashboardKpi label="Invoices" value={adminStats.total_invoices} sub={`${adminStats.unpaid_invoices} unpaid`} icon={FileText} delay={0.08} />
-                  </div>
-                  <div className={KPI_SPAN_SIXTH}>
-                    <DashboardKpi label="Overdue" value={adminStats.overdue_invoices} icon={AlertTriangle} warn={adminStats.overdue_invoices > 0} delay={0.11} />
-                  </div>
-                  <div className={KPI_SPAN_SIXTH}>
-                    <DashboardKpi label="Outstanding" value={Math.round(adminStats.outstanding_balance)} prefix="£" icon={TrendingUp} accent="text-red-600 dark:text-red-400" delay={0.14} />
-                  </div>
-                  <div className={KPI_SPAN_SIXTH}>
-                    <DashboardKpi label="Collected" value={Math.round(adminStats.total_collected)} prefix="£" icon={Wallet} accent="text-green-600 dark:text-green-400" delay={0.17} />
-                  </div>
-                  <div className={KPI_SPAN_SIXTH}>
-                    <DashboardKpi
-                      label="Active users"
-                      value={adminStats.active_users ?? adminStats.platform_usage.total_active_users}
-                      sub={`${adminStats.platform_usage.storage_mb} MB storage`}
-                      icon={Users}
-                      delay={0.2}
-                    />
-                  </div>
-                  {adminStats.locked_accounts != null && (
-                    <div className={KPI_SPAN_SIXTH}>
-                      <DashboardKpi label="Locked" value={adminStats.locked_accounts} icon={Lock} warn={adminStats.locked_accounts > 0} href="/admin/companies" delay={0.23} />
-                    </div>
-                  )}
-                  {adminStats.open_tickets != null && (
-                    <div className={KPI_SPAN_SIXTH}>
-                      <DashboardKpi label="Open tickets" value={adminStats.open_tickets} icon={LifeBuoy} warn={adminStats.open_tickets > 0} href="/admin/tickets" delay={0.26} />
-                    </div>
-                  )}
-                  {adminStats.critical_errors != null && (
-                    <div className={KPI_SPAN_SIXTH}>
-                      <DashboardKpi label="Critical errors" value={adminStats.critical_errors} icon={AlertTriangle} warn={adminStats.critical_errors > 0} href="/admin/errors" delay={0.29} />
-                    </div>
-                  )}
-                  {adminStats.expiring_subscriptions != null && (
-                    <div className={KPI_SPAN_SIXTH}>
-                      <DashboardKpi label="Expiring soon" value={adminStats.expiring_subscriptions} sub="Within 14 days" icon={Clock} warn={adminStats.expiring_subscriptions > 0} href="/admin/companies" delay={0.32} />
-                    </div>
-                  )}
-                  {adminStats.new_tenants_7d != null && (
-                    <div className={KPI_SPAN_SIXTH}>
-                      <DashboardKpi label="New (7d)" value={adminStats.new_tenants_7d} icon={Building2} href="/admin/companies" delay={0.35} />
-                    </div>
-                  )}
-                </div>
-              </DashboardSection>
-            )}
-
-            <DashboardSection title={isSuperAdmin ? 'Admin' : 'Quick access'}>
-              <div
-                className={cn(
-                  'grid gap-3',
-                  isSuperAdmin ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-                )}
-              >
+            <DashboardSection title="Quick access">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {tiles.map(({ href, title, desc, icon, color }, i) => (
                   <QuickTile
                     key={href}

@@ -91,9 +91,33 @@ ACTIONS = LEGACY_ACTIONS
 # dropped by parse_modules/dump_modules, so its checkbox saves a 200 and reads back
 # unticked forever — which is what "leads" did while the frontend was already gating
 # the Leads nav entry, the notifications provider and the list view on it.
-TENANT_MODULES = ("expenses", "whatsapp", "email", "mobile_apps", "leads")
+TENANT_MODULES = (
+    "expenses",
+    "whatsapp",
+    "email",
+    "mobile_apps",
+    "leads",
+    "lead_capture",
+    "landing_pages",
+    "barcode_generator",
+    "client_portal",
+    "api_access",
+)
 
-DEFAULT_MODULES = {m: True for m in TENANT_MODULES}
+# Defaults are per key, not blanket True: a company predating an app must not wake up
+# owning it just because the key was added to the tuple above.
+DEFAULT_MODULES = {
+    "expenses": True,
+    "whatsapp": True,
+    "email": True,
+    "mobile_apps": True,
+    "leads": True,
+    "lead_capture": False,
+    "landing_pages": False,
+    "barcode_generator": False,
+    "client_portal": True,
+    "api_access": False,
+}
 
 PATH_MODULE_MAP = {
     "/expenses": "expenses",
@@ -132,13 +156,22 @@ def is_module_enabled(company, module: str) -> bool:
 
 
 def modules_from_plan(tier: str) -> dict[str, bool]:
+    """The tenant module flags a plan dictates, keyed by enabled_modules_json key.
+
+    Driven by the package feature catalogue rather than a hardcoded pair, so granting
+    a new app (lead capture, landing pages, the barcode generator) on a package is all
+    it takes for tenants on that package to get it.
+    """
+    from app.feature_catalog import FEATURE_TO_MODULE
     from app.plan_config import limits_for_tier
 
     feats = limits_for_tier(tier).get("features", {})
-    return {
-        "whatsapp": bool(feats.get("sms", False)),
-        "email": bool(feats.get("email", True)),
-    }
+    out: dict[str, bool] = {}
+    for feature_key, module_key in FEATURE_TO_MODULE.items():
+        if module_key not in TENANT_MODULES:
+            continue
+        out[module_key] = bool(feats.get(feature_key, DEFAULT_MODULES.get(module_key, False)))
+    return out
 
 
 def apply_plan_module_flags(company, tier: str) -> None:
@@ -146,8 +179,7 @@ def apply_plan_module_flags(company, tier: str) -> None:
 
     plan_mods = modules_from_plan(normalize_tier(tier))
     mods = parse_modules(getattr(company, "enabled_modules_json", None))
-    mods["whatsapp"] = plan_mods["whatsapp"]
-    mods["email"] = plan_mods["email"]
+    mods.update(plan_mods)
     company.enabled_modules_json = dump_modules(mods)
 
 

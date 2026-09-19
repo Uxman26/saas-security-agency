@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Shield } from 'lucide-react';
+import { homePathForRole } from '@/lib/nav-modules';
 import { useAuth } from '@/contexts/auth-context';
 import { cn } from '@/lib/utils';
 
@@ -43,7 +44,7 @@ export function CompanyBrand({ className = '' }: { className?: string }) {
 
   return (
     <Link
-      href="/dashboard"
+      href={homePathForRole(user?.role)}
       className={cn('flex min-w-0 items-center gap-2 font-semibold text-sidebar-foreground', className)}
     >
       {logoSrc ? (

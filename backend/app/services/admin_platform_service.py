@@ -52,9 +52,14 @@ def list_all_users(db: Session) -> list[dict[str, Any]]:
                 "company_name": co.name if co else None,
                 "subscription_tier": co.subscription_tier if co else None,
                 "subscription_status": co.subscription_status if co else None,
+                "enabled_modules": company_modules(co),
             }
         )
     return out
+
+
+def company_modules(co: Company | None) -> dict[str, bool]:
+    return parse_modules(co.enabled_modules_json) if co else {}
 
 
 def set_user_active(db: Session, user_id: int, is_active: bool) -> User:

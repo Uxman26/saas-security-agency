@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { homePathForRole } from '@/lib/nav-modules';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -137,8 +138,7 @@ function LoginForm() {
   const rememberMe = watch('remember_me');
 
   const goAfterLogin = (role?: string | null) => {
-    const r = (role || '').toLowerCase();
-    router.push(r === 'client' || r === 'staff' ? '/my-portal' : '/dashboard');
+    router.push(homePathForRole(role));
   };
 
   const formatLockout = (total: number) => {

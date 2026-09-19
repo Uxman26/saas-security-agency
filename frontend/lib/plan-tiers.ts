@@ -78,8 +78,8 @@ export function canChangeToPlan(
 }
 
 export const DEFAULT_PLAN_TIERS: PlanTier[] = [
-  { tier: 'basic', price_gbp: 29, max_guards: 10, max_sites: 5, max_users: 5, features: { subcontractors: false, extended_reports: false, contractors: false, sub_contractors: false, sms: false, email: true } },
-  { tier: 'standard', price_gbp: 79, max_guards: 50, max_sites: 25, max_users: 15, features: { subcontractors: true, extended_reports: false, contractors: false, sub_contractors: false, sms: true, email: true } },
-  { tier: 'premium', price_gbp: 149, max_guards: null, max_sites: null, max_users: 50, features: { subcontractors: true, extended_reports: true, contractors: true, sub_contractors: false, sms: true, email: true } },
-  { tier: 'enterprise', price_gbp: 299, max_guards: null, max_sites: null, max_users: null, features: { subcontractors: true, extended_reports: true, contractors: true, sub_contractors: true, sms: true, email: true } },
+  { tier: 'basic', price_gbp: 29, max_guards: 10, max_sites: 5, max_users: 5, features: { subcontractors: false, extended_reports: false, contractors: false, sub_contractors: false, expenses: true, leads: false, lead_capture: false, landing_pages: false, barcode_generator: false, mobile_apps: true, client_portal: false, api_access: false, sms: false, email: true, priority_support: false } },
+  { tier: 'standard', price_gbp: 79, max_guards: 50, max_sites: 25, max_users: 15, features: { subcontractors: true, extended_reports: false, contractors: false, sub_contractors: false, expenses: true, leads: true, lead_capture: true, landing_pages: false, barcode_generator: true, mobile_apps: true, client_portal: true, api_access: false, sms: true, email: true, priority_support: false } },
+  { tier: 'premium', price_gbp: 149, max_guards: null, max_sites: null, max_users: 50, features: { subcontractors: true, extended_reports: true, contractors: true, sub_contractors: false, expenses: true, leads: true, lead_capture: true, landing_pages: true, barcode_generator: true, mobile_apps: true, client_portal: true, api_access: true, sms: true, email: true, priority_support: true } },
+  { tier: 'enterprise', price_gbp: 299, max_guards: null, max_sites: null, max_users: null, features: { subcontractors: true, extended_reports: true, contractors: true, sub_contractors: true, expenses: true, leads: true, lead_capture: true, landing_pages: true, barcode_generator: true, mobile_apps: true, client_portal: true, api_access: true, sms: true, email: true, priority_support: true } },
 ];

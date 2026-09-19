@@ -1,16 +1,35 @@
-import type { PlanTier } from './types';
+import type { PackageFeature, PlanTier } from './types';
 
 type TFn = (key: string, values?: Record<string, string | number>) => string;
 type TRaw = { raw: (key: string) => unknown };
 
 const HIGHLIGHTED = new Set(['standard']);
 
-export function planFeatures(tier: PlanTier, t: TFn, tr: TRaw): string[] {
+/**
+ * The lines shown on a pricing card.
+ *
+ * When the feature catalogue is available these are derived from what the package
+ * actually grants, so a super admin ticking "Landing pages" on Premium shows up on
+ * the public pricing page without a code change. `catalog` is optional and the
+ * hand-written `extras` remain the fallback for when the request has not landed yet.
+ *
+ * Labels prefer the translated `featureLabels` entry and fall back to the label the
+ * API supplies, which is what custom features added by a super admin carry.
+ */
+export function planFeatures(tier: PlanTier, t: TFn, tr: TRaw, catalog?: PackageFeature[]): string[] {
   const tierKey = tier.tier;
   const lines = [
     tier.max_guards != null ? t('workersLimited', { max: tier.max_guards }) : t('workersUnlimited'),
     tier.max_users != null ? t('usersLimited', { max: tier.max_users }) : t('usersUnlimited'),
   ];
+  if (catalog?.length) {
+    const labels = (tr.raw('featureLabels') as Record<string, string> | undefined) || {};
+    for (const f of catalog) {
+      if (!tier.features?.[f.key]) continue;
+      lines.push(labels[f.key] || f.label);
+    }
+    return lines;
+  }
   const extras = tr.raw(`${tierKey}.extras`) as string[] | undefined;
   if (extras?.length) lines.push(...extras);
   return lines;

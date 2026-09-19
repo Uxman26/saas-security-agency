@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import type { PlanTier } from '@/lib/types';
+import type { PackageFeature, PlanTier } from '@/lib/types';
 import {
   canChangeToPlan,
   formatPriceGBP,
@@ -19,6 +19,8 @@ type TRaw = { raw: (key: string) => unknown };
 
 type Props = {
   tiers: PlanTier[];
+  /** Feature catalogue; when present, cards list what the package actually grants. */
+  featureCatalog?: PackageFeature[];
   cycle: 'monthly' | 'yearly';
   yearlyDiscount: number;
   tp: TFn;
@@ -37,6 +39,7 @@ type Props = {
 
 export function PricingGrid({
   tiers,
+  featureCatalog,
   cycle,
   yearlyDiscount,
   tp,
@@ -58,7 +61,7 @@ export function PricingGrid({
     <div className={`mx-auto grid max-w-6xl gap-6 md:grid-cols-2 ${cols}`}>
       {tiers.map((tier) => {
         const { name, description, highlighted } = planDisplay(tier, tp);
-        const features = planFeatures(tier, tp, tr);
+        const features = planFeatures(tier, tp, tr, featureCatalog);
         const details = planDetails(tier, tp);
         const price = planDisplayPrice(tier, cycle, yearlyDiscount);
         const isCurrent = currentTier === tier.tier && (currentCycle || 'monthly') === cycle;

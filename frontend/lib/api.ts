@@ -1332,6 +1332,8 @@ export const api = {
   },
   packages: {
     list: (): Promise<PlanTier[]> => request<PlanTier[]>('/subscriptions/packages'),
+    features: (): Promise<import('./types').PackageFeature[]> =>
+      request<import('./types').PackageFeature[]>('/subscriptions/packages/features'),
   },
   subscriptions: {
     get: (): Promise<{

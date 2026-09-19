@@ -363,6 +363,23 @@
       "supportStandard": "دعم قياسي",
       "supportPriority": "دعم أولوية",
       "supportDedicated": "دعم مخصص",
+      "featureLabels": {
+        "extended_reports": "تقارير موسعة",
+        "contractors": "المقاولون",
+        "sub_contractors": "المقاولون الفرعيون",
+        "subcontractors": "إسناد المقاولين الفرعيين",
+        "expenses": "المصروفات",
+        "leads": "إدارة العملاء المحتملين",
+        "lead_capture": "التقاط العملاء المحتملين",
+        "landing_pages": "الصفحات المقصودة",
+        "barcode_generator": "مولد الباركود",
+        "mobile_apps": "تطبيقات الجوال",
+        "client_portal": "بوابة العملاء",
+        "api_access": "وصول API",
+        "email": "البريد الإلكتروني",
+        "sms": "الرسائل النصية / واتساب",
+        "priority_support": "دعم أولوية"
+      },
       "basic": {
         "name": "أساسي",
         "description": "للفرق الصغيرة التي تبدأ.",

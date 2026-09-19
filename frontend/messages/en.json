@@ -377,6 +377,23 @@
       "supportStandard": "Standard support",
       "supportPriority": "Priority support",
       "supportDedicated": "Dedicated support",
+      "featureLabels": {
+        "extended_reports": "Extended reports",
+        "contractors": "Contractors",
+        "sub_contractors": "Sub-contractors",
+        "subcontractors": "Sub-contractor assignment",
+        "expenses": "Expenses",
+        "leads": "Lead management",
+        "lead_capture": "Lead capture",
+        "landing_pages": "Landing pages",
+        "barcode_generator": "Barcode generator",
+        "mobile_apps": "Mobile apps",
+        "client_portal": "Client portal",
+        "api_access": "API access",
+        "email": "Email",
+        "sms": "SMS / WhatsApp",
+        "priority_support": "Priority support"
+      },
       "basic": {
         "name": "Basic",
         "description": "For small teams getting started.",

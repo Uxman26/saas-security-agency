@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { BillingCycleToggle } from '@/components/billing/billing-cycle-toggle';
 import { PricingGrid } from '@/components/billing/pricing-grid';
 import { api } from '@/lib/api';
-import type { BillingReceipt, PlanTier, SubscriptionInvoice, TrialStatus } from '@/lib/types';
+import type { BillingReceipt, PackageFeature, PlanTier, SubscriptionInvoice, TrialStatus } from '@/lib/types';
 import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
 import { CreditCard, Download, Eye, FileText, Loader2, Receipt } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -75,6 +75,7 @@ export default function BillingSettingsPage() {
   const tpayment = useTranslations('payment');
   const tb = useTranslations('billing');
   const [tiers, setTiers] = useState<PlanTier[]>([]);
+  const [featureCatalog, setFeatureCatalog] = useState<PackageFeature[]>([]);
   const [sub, setSub] = useState<Subscription | null>(null);
   const [trial, setTrial] = useState<TrialStatus | null>(null);
   const [receipts, setReceipts] = useState<BillingReceipt[]>([]);
@@ -90,8 +91,9 @@ export default function BillingSettingsPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
 
   const load = async () => {
-    const [pkg, subscription, billingReceipts, billingInvoices, stripeCfg, trialStatus] = await Promise.all([
+    const [pkg, pkgFeatures, subscription, billingReceipts, billingInvoices, stripeCfg, trialStatus] = await Promise.all([
       api.packages.list().catch(() => DEFAULT_PLAN_TIERS),
+      api.packages.features().catch((): PackageFeature[] => []),
       api.subscriptions.get().catch(() => null),
       api.billing.receipts().catch(() => []),
       api.billing.invoices().catch(() => []),
@@ -102,6 +104,7 @@ export default function BillingSettingsPage() {
       api.subscriptions.trialStatus().catch(() => null),
     ]);
     setTiers(pkg.length ? pkg : DEFAULT_PLAN_TIERS);
+    setFeatureCatalog(pkgFeatures);
     setSub(subscription);
     setTrial(trialStatus);
     setReceipts(billingReceipts);
@@ -413,6 +416,7 @@ export default function BillingSettingsPage() {
 
           <PricingGrid
             tiers={tiers}
+            featureCatalog={featureCatalog}
             cycle={cycle}
             yearlyDiscount={yearlyDiscount}
             tp={tp}

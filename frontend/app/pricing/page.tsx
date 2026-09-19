@@ -11,7 +11,7 @@ import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
 import { BillingCycleToggle } from '@/components/billing/billing-cycle-toggle';
 import { PricingGrid } from '@/components/billing/pricing-grid';
 import { api } from '@/lib/api';
-import type { PlanTier } from '@/lib/types';
+import type { PackageFeature, PlanTier } from '@/lib/types';
 import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
 
 export default function PricingPage() {
@@ -21,6 +21,7 @@ export default function PricingPage() {
   const tcommon = useTranslations('common');
   const tpayment = useTranslations('payment');
   const [tiers, setTiers] = useState<PlanTier[]>([]);
+  const [featureCatalog, setFeatureCatalog] = useState<PackageFeature[]>([]);
   const [loading, setLoading] = useState(true);
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [yearlyDiscount, setYearlyDiscount] = useState(20);
@@ -31,6 +32,12 @@ export default function PricingPage() {
       .then((rows) => setTiers(rows.length ? rows : DEFAULT_PLAN_TIERS))
       .catch(() => setTiers(DEFAULT_PLAN_TIERS))
       .finally(() => setLoading(false));
+    // Optional: without it the cards fall back to the hand-written extras rather
+    // than breaking, so a failure here only costs accuracy, not the page.
+    api.packages
+      .features()
+      .then(setFeatureCatalog)
+      .catch(() => {});
     api.stripe
       .config()
       .then((c) => {
@@ -69,6 +76,7 @@ export default function PricingPage() {
           ) : (
             <PricingGrid
               tiers={tiers}
+              featureCatalog={featureCatalog}
               cycle={cycle}
               yearlyDiscount={yearlyDiscount}
               tp={tp}

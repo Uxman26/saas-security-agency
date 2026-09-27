@@ -469,6 +469,7 @@ def preview_pay(
                 attendance_status=d.attendance_status,
                 late_minutes=d.late_minutes,
                 shift_rate=d.shift_rate,
+                rota_plan_id=d.rota_plan_id,
                 attendance_marked=not unmarked,
                 payable=payable,
                 amount=amount,

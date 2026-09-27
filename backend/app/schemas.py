@@ -843,6 +843,7 @@ class RotaDetailResponse(BaseModel):
     # reports attendance_status "absent" exactly like a marked absence, so this is the
     # only way to spot a mark that was forgotten rather than made.
     attendance_marked: bool = False
+    rota_plan_id: Optional[int] = None
     late_minutes: Optional[int] = None
     # The rate stored on the shift itself. Optional so older callers are unaffected.
     shift_rate: Optional[float] = None
@@ -871,6 +872,7 @@ class PayrollPreviewShift(BaseModel):
     attendance_marked: bool = True
     late_minutes: Optional[int] = None
     shift_rate: Optional[float] = None
+    rota_plan_id: Optional[int] = None
     payable: bool = False
     amount: float = 0
 

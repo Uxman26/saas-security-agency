@@ -1408,6 +1408,7 @@ export interface PayrollPreviewShift {
   attendance_marked: boolean;
   late_minutes: number | null;
   shift_rate: number | null;
+  rota_plan_id: number | null;
   payable: boolean;
   amount: number;
 }

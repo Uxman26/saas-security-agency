@@ -15,7 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
-import type { Payroll, Guard, PayrollPreview } from '@/lib/types';
+import type { Payroll, Guard, PayrollPreview, PayrollPreviewShift } from '@/lib/types';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
@@ -134,6 +134,66 @@ function loadStoredPreview(uid: string | number): PreviewQuery | null {
   const p = loadStored<Partial<PreviewQuery>>(storeKey(PREVIEW_STORE_KEY, uid));
   if (!p?.guard || !p.start || !p.end) return null;
   return { guard: p.guard, start: p.start, end: p.end, filters: { ...EMPTY_WORK_FILTERS, ...(p.filters ?? {}) } };
+}
+
+function rotaFixHref(sh: PayrollPreviewShift, fix: 'rate' | 'attendance') {
+  if (!sh.rota_plan_id) return '/rota';
+  const q = new URLSearchParams({
+    id: String(sh.rota_plan_id),
+    emp: String(sh.guard_id),
+    date: sh.date,
+    start: sh.shift_start ?? '',
+    fix,
+  });
+  return `/rota/calendar?${q}`;
+}
+
+function ProblemShifts({
+  shifts,
+  fix,
+  showEmployee,
+}: {
+  shifts: PayrollPreviewShift[];
+  fix: 'rate' | 'attendance';
+  showEmployee: boolean;
+}) {
+  if (!shifts.length) return null;
+  return (
+    <details open={shifts.length <= 10} className="mt-2 pl-6">
+      <summary className="cursor-pointer text-xs font-medium">
+        {shifts.length} shift{shifts.length === 1 ? '' : 's'}
+      </summary>
+      <div className="mt-2 max-h-72 overflow-y-auto rounded-md border bg-background text-foreground">
+        <Table>
+          <TableBody>
+            {shifts.map((sh) => (
+              <TableRow key={sh.assignment_id}>
+                <TableCell className="whitespace-nowrap py-1.5">{sh.date}</TableCell>
+                {showEmployee && <TableCell className="py-1.5">{sh.guard_name}</TableCell>}
+                <TableCell className="py-1.5">{sh.site_name || '\u2014'}</TableCell>
+                <TableCell className="whitespace-nowrap tabular-nums py-1.5">
+                  {sh.shift_start}&ndash;{sh.shift_end}
+                </TableCell>
+                <TableCell className="text-right tabular-nums py-1.5">{sh.hours.toFixed(2)}h</TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground py-1.5">
+                  {sh.attendance_marked ? ATT_LABELS[sh.attendance_status] ?? sh.attendance_status : 'Not marked'}
+                </TableCell>
+                <TableCell className="text-right py-1.5">
+                  <Link
+                    href={rotaFixHref(sh, fix)}
+                    target="_blank"
+                    className="whitespace-nowrap font-medium text-primary underline underline-offset-2"
+                  >
+                    {fix === 'rate' ? 'Set rate' : 'Mark attendance'}
+                  </Link>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </details>
+  );
 }
 
 /** Hands a fetched file to the browser. Blob, not a bare link: the API needs the auth header. */
@@ -1089,21 +1149,35 @@ export default function PayrollPage() {
                   )}
 
                   {preview.unattended_hours > 0 && (
-                    <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
-                      <AlertTriangle className="size-4 shrink-0 mt-0.5" />
-                      <span>
-                        {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} rota&rsquo;d hours are not
-                        being paid because they have no On time or Late mark. That is {formatMoney(preview.rota_amount - preview.amount)} held
-                        back. If those shifts were worked, mark attendance on the rota and calculate again.
-                      </span>
-                    </p>
+                    <div className="rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+                      <p className="flex items-start gap-2">
+                        <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                        <span>
+                          {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} rota&rsquo;d hours are not
+                          being paid because they have no On time or Late mark. That is {formatMoney(preview.rota_amount - preview.amount)} held
+                          back. If those shifts were worked, mark attendance on the rota and calculate again.
+                        </span>
+                      </p>
+                      <ProblemShifts
+                        shifts={preview.shifts.filter((s) => !s.payable)}
+                        fix="attendance"
+                        showEmployee={preview.guard_id === null}
+                      />
+                    </div>
                   )}
 
                   {preview.shifts_missing_rate > 0 && (
-                    <p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
-                      {preview.shifts_missing_rate} attended shift{preview.shifts_missing_rate === 1 ? ' has' : 's have'} no
-                      rate set, so {preview.shifts_missing_rate === 1 ? 'it is' : 'they are'} counting as &pound;0. Set the rate on the rota.
-                    </p>
+                    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                      <p>
+                        {preview.shifts_missing_rate} attended shift{preview.shifts_missing_rate === 1 ? ' has' : 's have'} no
+                        rate set, so {preview.shifts_missing_rate === 1 ? 'it is' : 'they are'} counting as &pound;0. Set the rate on the rota.
+                      </p>
+                      <ProblemShifts
+                        shifts={preview.shifts.filter((s) => s.payable && !(Number(s.shift_rate) > 0))}
+                        fix="rate"
+                        showEmployee={preview.guard_id === null}
+                      />
+                    </div>
                   )}
 
                   {preview.guard_id === null && (

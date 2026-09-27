@@ -128,10 +128,12 @@ def _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, s
 def _attendance_status(a: Assignment, att: Optional[Attendance], late_log: Optional[ShiftLateLog], today: date) -> str:
     if late_log:
         return "late"
-    if a.date > today:
-        return "scheduled"
+    # A mark wins over the calendar: attendance recorded ahead of the shift date, or
+    # while an overnight shift is still running, is still worked time.
     if att and att.booked_at:
         return "late" if att.status == "late" else "on_time"
+    if a.date > today:
+        return "scheduled"
     if a.date < today:
         return "absent"
     return "pending"
@@ -235,6 +237,7 @@ def list_rota_details(
                 attendance_marked=marked,
                 late_minutes=late_m,
                 shift_rate=a.shift_rate,
+                rota_plan_id=a.rota_plan_id,
             )
         )
         seen.add(_shift_fingerprint(a.guard_id, a.date, a.shift_start, a.shift_end, a.site_id))
@@ -366,6 +369,7 @@ def _planner_shift_details(
                             hours=round(hrs, 2),
                             attendance_status=status,
                             late_minutes=None,
+                            rota_plan_id=plan.id,
                         )
                     )
                     synthetic_id -= 1

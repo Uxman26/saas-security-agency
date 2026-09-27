@@ -1369,6 +1369,30 @@ export function RotaCalendarClient() {
     setAttOpen(true);
   };
 
+  /**
+   * Payroll links straight to a shift that needs fixing (?emp=&date=&start=&fix=), so
+   * the right editor opens as soon as the rota has loaded. Once per link.
+   */
+  const fixTarget = ['emp', 'date', 'start', 'fix'].map((k) => searchParams.get(k) ?? '').join('|');
+  const fixOpenedRef = useRef('');
+  useEffect(() => {
+    const [empId, dk, start, fix] = fixTarget.split('|');
+    if (!empId || !dk || planLoading || fixOpenedRef.current === fixTarget) return;
+    const list = state.shifts[empId]?.[dk];
+    if (!list?.length) {
+      if (state.days.length) {
+        fixOpenedRef.current = fixTarget;
+        toast.warning('That shift is no longer on this rota — it may have been moved or deleted');
+      }
+      return;
+    }
+    fixOpenedRef.current = fixTarget;
+    const idx = Math.max(0, list.findIndex((sh) => sh.start === start || sh.scheduledStart === start));
+    if (fix === 'attendance') startAtt(empId, dk, idx);
+    else openEditShift(empId, dk, idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixTarget, planLoading, state.shifts, state.days.length]);
+
   const saveAtt = async () => {
     if (!attCtx || !attRec) return;
     const status = normalizeAttStatus(attRec.status) || attRec.status;

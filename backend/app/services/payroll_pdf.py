@@ -301,7 +301,7 @@ def render_payroll_preview_pdf(
     )
 
     summary = [
-        ["Rota'd hours", "Attended hours", "Not attended", "Total pay"],
+        ["Total hours", "Attended hours", "Not attended", "Total pay"],
         [
             f"{pv.rota_hours:.2f}",
             f"{pv.attended_hours:.2f}",
@@ -313,7 +313,7 @@ def render_payroll_preview_pdf(
 
     if guard_id is None and pv.by_employee:
         story.append(Paragraph("By employee", styles["h2"]))
-        body = [["Employee", "Shifts", "Rota'd hrs", "Attended hrs", "Pay"]]
+        body = [["Employee", "Shifts", "Total hours", "Attended hours", "Pay"]]
         for e in pv.by_employee:
             body.append(
                 [e.guard_name, str(e.shifts), f"{e.rota_hours:.2f}", f"{e.attended_hours:.2f}", _money(e.amount)]
@@ -322,7 +322,7 @@ def render_payroll_preview_pdf(
 
     if pv.by_site:
         story.append(Paragraph("By site", styles["h2"]))
-        body = [["Site", "Shifts", "Rota'd hrs", "Attended hrs", "Pay"]]
+        body = [["Site", "Shifts", "Total hours", "Attended hours", "Pay"]]
         for r in pv.by_site:
             body.append(
                 [r.site_name or "—", str(r.shifts), f"{r.rota_hours:.2f}", f"{r.attended_hours:.2f}", _money(r.amount)]

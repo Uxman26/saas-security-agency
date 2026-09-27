@@ -884,6 +884,8 @@ class PayrollPreviewSite(BaseModel):
     rota_hours: float = 0
     attended_hours: float = 0
     unattended_hours: float = 0
+    # Not worked yet: a future shift with no mark is neither paid nor missed.
+    upcoming_hours: float = 0
     # The subset of unattended work that is unpaid only because nobody marked it.
     unmarked_shifts: int = 0
     unmarked_hours: float = 0
@@ -897,6 +899,7 @@ class PayrollPreviewEmployee(BaseModel):
     rota_hours: float = 0
     attended_hours: float = 0
     unattended_hours: float = 0
+    upcoming_hours: float = 0
     unmarked_shifts: int = 0
     unmarked_hours: float = 0
     amount: float = 0
@@ -918,6 +921,10 @@ class PayrollPreviewResponse(BaseModel):
     # difference between the two is exactly what the unattended shifts would have cost.
     amount: float = 0
     rota_amount: float = 0
+    upcoming_shifts: int = 0
+    upcoming_hours: float = 0
+    # What the missed (past, not paid) shifts would have cost; upcoming work is excluded.
+    held_back_amount: float = 0
     shifts_missing_rate: int = 0
     # Shifts that have been and gone with no attendance recorded at all. These are held
     # back from pay indistinguishably from real absences, so they are counted separately

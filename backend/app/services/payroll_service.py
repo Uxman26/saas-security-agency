@@ -490,6 +490,8 @@ def preview_pay(
             if payable:
                 bucket.attended_hours = round(bucket.attended_hours + hours, 2)
                 bucket.amount = round(bucket.amount + amount, 2)
+            elif d.attendance_status == "scheduled":
+                bucket.upcoming_hours = round(bucket.upcoming_hours + hours, 2)
             else:
                 bucket.unattended_hours = round(bucket.unattended_hours + hours, 2)
             if unmarked:
@@ -501,6 +503,9 @@ def preview_pay(
     by_employee = sorted(people.values(), key=lambda r: (-r.amount, r.guard_name.lower()))
     rota_hours = round(sum(x.hours for x in shifts), 2)
     attended_hours = round(sum(x.hours for x in shifts if x.payable), 2)
+    upcoming = [x for x in shifts if not x.payable and x.attendance_status == "scheduled"]
+    upcoming_hours = round(sum(x.hours for x in upcoming), 2)
+    missed = [x for x in shifts if not x.payable and x.attendance_status != "scheduled"]
 
     return PayrollPreviewResponse(
         guard_id=guard.id if guard else None,
@@ -511,9 +516,12 @@ def preview_pay(
         attended_shifts=sum(1 for x in shifts if x.payable),
         rota_hours=rota_hours,
         attended_hours=attended_hours,
-        unattended_hours=round(rota_hours - attended_hours, 2),
+        unattended_hours=round(rota_hours - attended_hours - upcoming_hours, 2),
         amount=round(sum(x.amount for x in shifts), 2),
         rota_amount=round(sum(x.hours * _number(x.shift_rate) for x in shifts), 2),
+        upcoming_shifts=len(upcoming),
+        upcoming_hours=upcoming_hours,
+        held_back_amount=round(sum(x.hours * _number(x.shift_rate) for x in missed), 2),
         shifts_missing_rate=missing_rate,
         unmarked_shifts=unmarked_shifts,
         unmarked_hours=round(sum(x.unmarked_hours for x in by_employee), 2),

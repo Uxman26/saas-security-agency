@@ -313,7 +313,7 @@ export default function PayrollPage() {
       s.hours, ATT_LABELS[s.attendance_status] ?? s.attendance_status,
       s.shift_rate ?? '', s.amount,
     ]);
-    const csv = [head, ...body, [], ['Rota hours', preview.rota_hours], ['Attended hours', preview.attended_hours],
+    const csv = [head, ...body, [], ['Total hours', preview.rota_hours], ['Attended hours', preview.attended_hours],
       ['Total paid', preview.amount]]
       .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
@@ -1044,7 +1044,7 @@ export default function PayrollPage() {
                 <div className="flex flex-col gap-5">
                   <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">Rota&rsquo;d hours</p>
+                      <p className="text-xs text-muted-foreground">Total hours</p>
                       <p className="text-2xl font-bold tabular-nums">{preview.rota_hours.toFixed(2)}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {preview.total_shifts} shifts
@@ -1059,7 +1059,10 @@ export default function PayrollPage() {
                     <div className="rounded-md border p-3">
                       <p className="text-xs text-muted-foreground">Not attended</p>
                       <p className="text-2xl font-bold tabular-nums">{preview.unattended_hours.toFixed(2)}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Not paid</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Not paid
+                        {preview.upcoming_hours > 0 ? ` \u00b7 ${preview.upcoming_hours.toFixed(2)} upcoming` : ''}
+                      </p>
                     </div>
                     <div className="rounded-md border border-primary/40 bg-primary/5 p-3">
                       <p className="text-xs text-muted-foreground">Total pay</p>
@@ -1104,17 +1107,28 @@ export default function PayrollPage() {
                       <p className="flex items-start gap-2">
                         <AlertTriangle className="size-4 shrink-0 mt-0.5" />
                         <span>
-                          {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} rota&rsquo;d hours are not
-                          being paid because they have no On time or Late mark. That is {formatMoney(preview.rota_amount - preview.amount)} held
+                          {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} hours from past shifts are not
+                          being paid because they have no On time or Late mark. That is {formatMoney(preview.held_back_amount)} held
                           back. If those shifts were worked, mark attendance on the rota and calculate again.
                         </span>
                       </p>
                       <ProblemShifts
-                        shifts={preview.shifts.filter((s) => !s.payable)}
+                        shifts={preview.shifts.filter((s) => !s.payable && s.attendance_status !== 'scheduled')}
                         fix="attendance"
                         showEmployee={preview.guard_id === null}
                       />
                     </div>
+                  )}
+
+                  {preview.upcoming_hours > 0 && (
+                    <p className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                      <Clock className="size-4 shrink-0 mt-0.5" />
+                      <span>
+                        {preview.upcoming_hours.toFixed(2)} hours across {preview.upcoming_shifts} upcoming shift
+                        {preview.upcoming_shifts === 1 ? '' : 's'} are not counted yet. They count as soon as attendance is
+                        marked On time or Late — including shifts marked ahead of their date.
+                      </span>
+                    </p>
                   )}
 
                   {preview.shifts_missing_rate > 0 && (
@@ -1140,8 +1154,8 @@ export default function PayrollPage() {
                             <TableRow>
                               <TableHead>Employee</TableHead>
                               <TableHead className="text-right">Shifts</TableHead>
-                              <TableHead className="text-right">Rota&rsquo;d hrs</TableHead>
-                              <TableHead className="text-right">Attended hrs</TableHead>
+                              <TableHead className="text-right">Total hours</TableHead>
+                              <TableHead className="text-right">Attended hours</TableHead>
                               <TableHead className="text-right">Pay</TableHead>
                               <TableHead />
                             </TableRow>
@@ -1173,6 +1187,9 @@ export default function PayrollPage() {
                                   {e.unattended_hours > 0 && (
                                     <span className="text-amber-700 dark:text-amber-400"> ({e.unattended_hours.toFixed(2)} missed)</span>
                                   )}
+                                  {e.upcoming_hours > 0 && (
+                                    <span className="text-muted-foreground"> ({e.upcoming_hours.toFixed(2)} upcoming)</span>
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right tabular-nums font-semibold">{formatMoney(e.amount)}</TableCell>
                                 <TableCell className="text-right">
@@ -1201,8 +1218,8 @@ export default function PayrollPage() {
                           <TableRow>
                             <TableHead>Site</TableHead>
                             <TableHead className="text-right">Shifts</TableHead>
-                            <TableHead className="text-right">Rota&rsquo;d hrs</TableHead>
-                            <TableHead className="text-right">Attended hrs</TableHead>
+                            <TableHead className="text-right">Total hours</TableHead>
+                            <TableHead className="text-right">Attended hours</TableHead>
                             <TableHead className="text-right">Pay</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1216,6 +1233,9 @@ export default function PayrollPage() {
                                 {r.attended_hours.toFixed(2)}
                                 {r.unattended_hours > 0 && (
                                   <span className="text-muted-foreground"> ({r.unattended_hours.toFixed(2)} missed)</span>
+                                )}
+                                {r.upcoming_hours > 0 && (
+                                  <span className="text-muted-foreground"> ({r.upcoming_hours.toFixed(2)} upcoming)</span>
                                 )}
                               </TableCell>
                               <TableCell className="text-right tabular-nums font-semibold">{formatMoney(r.amount)}</TableCell>

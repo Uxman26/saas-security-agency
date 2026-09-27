@@ -1420,6 +1420,7 @@ export interface PayrollPreviewSite {
   rota_hours: number;
   attended_hours: number;
   unattended_hours: number;
+  upcoming_hours: number;
   /** The subset of unattended work that is unpaid only because nobody marked it. */
   unmarked_shifts: number;
   unmarked_hours: number;
@@ -1433,6 +1434,7 @@ export interface PayrollPreviewEmployee {
   rota_hours: number;
   attended_hours: number;
   unattended_hours: number;
+  upcoming_hours: number;
   unmarked_shifts: number;
   unmarked_hours: number;
   amount: number;
@@ -1448,8 +1450,11 @@ export interface PayrollPreview {
   rota_hours: number;
   attended_hours: number;
   unattended_hours: number;
+  upcoming_hours: number;
   amount: number;
   rota_amount: number;
+  upcoming_shifts: number;
+  held_back_amount: number;
   shifts_missing_rate: number;
   /** Shifts that have been and gone with no attendance recorded at all. */
   unmarked_shifts: number;

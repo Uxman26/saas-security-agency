@@ -22,8 +22,6 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-t
 import { ModulePage } from '@/components/module-layout';
 import {
   DashboardHeader,
-  FilterBar,
-  FilterField,
   Pill,
   RecordAvatar,
   ResultsCard,
@@ -90,10 +88,8 @@ function describeQuery(q: PayrollQuery, options: Parameters<typeof describeWorkF
  * inputs are kept, per user, and the rows are fetched again on arrival, so nothing
  * about pay itself is left in the browser.
  */
-const SEARCH_STORE_KEY = 'controlops.payroll.search';
 const PREVIEW_STORE_KEY = 'controlops.payroll.preview';
 
-type StoredSearch = { query: PayrollQuery; drafts: PayrollQuery };
 type PreviewQuery = { guard: string; start: string; end: string; filters: WorkFilterValues };
 
 const storeKey = (base: string, uid: string | number) => `${base}.${uid}`;
@@ -116,18 +112,6 @@ function store(key: string, value: unknown) {
   } catch {
     /* private mode or blocked storage: the search simply does not persist */
   }
-}
-
-const mergeQuery = (q?: Partial<PayrollQuery>): PayrollQuery => ({
-  ...EMPTY_QUERY,
-  ...q,
-  filters: { ...EMPTY_WORK_FILTERS, ...(q?.filters ?? {}) },
-});
-
-function loadStoredSearch(uid: string | number): StoredSearch | null {
-  const parsed = loadStored<Partial<StoredSearch>>(storeKey(SEARCH_STORE_KEY, uid));
-  if (!parsed?.query) return null;
-  return { query: mergeQuery(parsed.query), drafts: mergeQuery(parsed.drafts || parsed.query) };
 }
 
 function loadStoredPreview(uid: string | number): PreviewQuery | null {
@@ -274,8 +258,15 @@ export default function PayrollPage() {
       // Only a fresh all-employees calculation replaces the result Back returns to.
       if (result.guard_id === null) setAllPreview(result);
       // A breakdown opened from the results is not a new search; Calculate is.
-      if (uid && guardOverride === undefined) {
-        store(storeKey(PREVIEW_STORE_KEY, uid), { guard: who, start, end, filters });
+      if (guardOverride === undefined) {
+        if (uid) store(storeKey(PREVIEW_STORE_KEY, uid), { guard: who, start, end, filters });
+        setPage(1);
+        void fetchPayrolls({
+          search: '',
+          from: start,
+          to: end,
+          filters: { ...filters, guard: who === 'all' ? '' : who },
+        });
       }
     } catch (e) {
       setPreview(null);
@@ -355,12 +346,6 @@ export default function PayrollPage() {
   };
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
-  const [searchDraft, setSearchDraft] = useState('');
-  const [dateFromDraft, setDateFromDraft] = useState('');
-  const [dateToDraft, setDateToDraft] = useState('');
-  // Client / Site / Contractor / Sub-contractor / Staff / Job title, in any combination.
-  // A client covers every site assigned to it, so ten sites is one pick.
-  const [filterDraft, setFilterDraft] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
   const filterOptions = useWorkFilterOptions();
   const [exportOpen, setExportOpen] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
@@ -393,13 +378,12 @@ export default function PayrollPage() {
       );
       setAppliedQuery(q);
       setHasSearched(true);
-      if (uid) store(storeKey(SEARCH_STORE_KEY, uid), { query: q, drafts: q });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not load payroll records');
     } finally {
       setLoading(false);
     }
-  }, [uid]);
+  }, []);
 
   /** Re-runs whatever is on screen. No-op before the first search — nothing to refresh. */
   const reloadCurrent = useCallback(() => {
@@ -407,21 +391,13 @@ export default function PayrollPage() {
     void fetchPayrolls(appliedQuery);
   }, [hasSearched, appliedQuery, fetchPayrolls]);
 
-  // The last search and calculation are re-run on arrival, so coming back to Payroll
-  // shows the same rows rather than an empty screen. Once per user: re-running on every
-  // change would fight whatever the user has since typed.
+  // The last calculation, and the records that follow it, are re-run on arrival, so coming
+  // back to Payroll shows the same rows rather than an empty screen. Once per user:
+  // re-running on every change would fight whatever the user has since typed.
   const restoredFor = useRef<string | number | null>(null);
   useEffect(() => {
     if (!uid || restoredFor.current === uid) return;
     restoredFor.current = uid;
-    const stored = loadStoredSearch(uid);
-    if (stored) {
-      setSearchDraft(stored.drafts.search);
-      setDateFromDraft(stored.drafts.from);
-      setDateToDraft(stored.drafts.to);
-      setFilterDraft(stored.drafts.filters);
-      void fetchPayrolls(stored.query);
-    }
     const pv = loadStoredPreview(uid);
     if (pv) {
       setPvGuardId(pv.guard);
@@ -579,36 +555,15 @@ export default function PayrollPage() {
     }
   };
 
-  const runSearch = () => {
-    if (dateFromDraft && dateToDraft && dateFromDraft > dateToDraft) {
-      toast.error('From date cannot be after to date');
-      return;
-    }
-    setPage(1);
-    void fetchPayrolls({
-      search: searchDraft.trim(),
-      from: dateFromDraft,
-      to: dateToDraft,
-      filters: filterDraft,
-    });
-  };
-
   /** What Clear search does: forget the search and calculation, here and in storage. */
   const clearSearch = useCallback(() => {
-    setSearchDraft('');
-    setDateFromDraft('');
-    setDateToDraft('');
-    setFilterDraft(EMPTY_WORK_FILTERS);
     setAppliedQuery(EMPTY_QUERY);
     setPayrolls([]);
     setHasSearched(false);
     setPreview(null);
     setAllPreview(null);
     setPage(1);
-    if (uid) {
-      store(storeKey(SEARCH_STORE_KEY, uid), null);
-      store(storeKey(PREVIEW_STORE_KEY, uid), null);
-    }
+    if (uid) store(storeKey(PREVIEW_STORE_KEY, uid), null);
   }, [uid]);
 
   const getSortValue = useCallback(
@@ -673,7 +628,7 @@ export default function PayrollPage() {
       value: formatMoney(totalPayable),
       icon: PoundSterling,
       tone: 'warning',
-      caption: hasSearched ? 'bank + cash, this search' : 'search to load records',
+      caption: hasSearched ? 'bank + cash, this search' : 'calculate to load records',
     },
     {
       key: 'employees',
@@ -780,7 +735,7 @@ export default function PayrollPage() {
             description={
               hasSearched
                 ? `${payrolls.length} payroll record${payrolls.length !== 1 ? 's' : ''} for this search`
-                : 'Search below to load payroll records. Import payable hours from the rota, then edit anything that needs correcting.'
+                : 'Calculate a period below to load its payroll records. Import payable hours from the rota, then edit anything that needs correcting.'
             }
             actions={
               <div className="flex flex-wrap gap-2">
@@ -1077,11 +1032,7 @@ export default function PayrollPage() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setPreview(null);
-                        setAllPreview(null);
-                        if (uid) store(storeKey(PREVIEW_STORE_KEY, uid), null);
-                      }}
+                      onClick={clearSearch}
                     >
                       Clear
                     </Button>
@@ -1341,45 +1292,6 @@ export default function PayrollPage() {
             </CardContent>
           </Card>
 
-          <FilterBar onSearch={runSearch} onClear={clearSearch} searching={loading} showClear={hasSearched}>
-            <FilterField label="Find" className="min-w-[240px] flex-1">
-              <Input
-                placeholder="Guard name or period…"
-                value={searchDraft}
-                onChange={(e) => setSearchDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') runSearch();
-                }}
-              />
-            </FilterField>
-            <FilterField label="Period from">
-              <Input
-                type="date"
-                value={dateFromDraft}
-                onChange={(e) => setDateFromDraft(e.target.value)}
-                aria-label="Filter from"
-              />
-            </FilterField>
-            <FilterField label="Period to">
-              <Input
-                type="date"
-                value={dateToDraft}
-                onChange={(e) => setDateToDraft(e.target.value)}
-                aria-label="Filter to"
-              />
-            </FilterField>
-            {/* Applied on Search with everything else, so one press answers the whole row. */}
-            <div className="w-full">
-              <WorkFilterBar
-                value={filterDraft}
-                onChange={setFilterDraft}
-                options={filterOptions}
-                disabled={loading}
-                className="flex flex-wrap items-center gap-2 w-full"
-              />
-            </div>
-          </FilterBar>
-
           <ResultsCard
             title="Payroll records"
             count={hasSearched ? total : undefined}
@@ -1399,8 +1311,8 @@ export default function PayrollPage() {
                 <InlineKpiTableSkeleton />
               ) : !hasSearched ? (
                 <div className="text-center py-12 text-muted-foreground">
-                  Enter a guard name or period above and press <strong>Search</strong> to load payroll records.
-                  Leave the boxes empty and press Search to list them all.
+                  Pick an employee and period above and press <strong>Calculate</strong> to load the saved payroll
+                  records for the same period and filters.
                 </div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">

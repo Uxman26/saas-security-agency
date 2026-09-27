@@ -1,7 +1,7 @@
 'use client';
 import { InlineKpiTableSkeleton } from '@/components/skeletons';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,10 +71,6 @@ const EMPTY_QUERY: PayrollQuery = {
   filters: EMPTY_WORK_FILTERS,
 };
 
-function queryIsEmpty(q: PayrollQuery) {
-  return !q.search && !q.from && !q.to && !hasWorkFilters(q.filters);
-}
-
 /** useTableList always takes a search accessor; the server has already filtered. */
 const NO_CLIENT_SEARCH = () => '';
 
@@ -89,41 +85,55 @@ function describeQuery(q: PayrollQuery, options: Parameters<typeof describeWorkF
 }
 
 /**
- * The payroll search survives leaving the page and coming back — a search is work, and
- * losing it on every navigation made the screen unusable for anyone cross-checking a
- * period against another tab. sessionStorage, not localStorage: it belongs to this
- * browser tab's session, not forever. Refresh is what clears it.
+ * The last payroll search and pay calculation stay on screen until the user presses
+ * Clear — across navigation, refresh, new tabs and closing the browser. Only the search
+ * inputs are kept, per user, and the rows are fetched again on arrival, so nothing
+ * about pay itself is left in the browser.
  */
 const SEARCH_STORE_KEY = 'controlops.payroll.search';
+const PREVIEW_STORE_KEY = 'controlops.payroll.preview';
 
 type StoredSearch = { query: PayrollQuery; drafts: PayrollQuery };
+type PreviewQuery = { guard: string; start: string; end: string; filters: WorkFilterValues };
 
-function loadStoredSearch(): StoredSearch | null {
+const storeKey = (base: string, uid: string | number) => `${base}.${uid}`;
+
+function loadStored<T>(key: string): T | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(SEARCH_STORE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StoredSearch>;
-    if (!parsed?.query) return null;
-    const merge = (q?: Partial<PayrollQuery>): PayrollQuery => ({
-      ...EMPTY_QUERY,
-      ...q,
-      filters: { ...EMPTY_WORK_FILTERS, ...(q?.filters ?? {}) },
-    });
-    return { query: merge(parsed.query), drafts: merge(parsed.drafts || parsed.query) };
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
   }
 }
 
-function storeSearch(value: StoredSearch | null) {
+function store(key: string, value: unknown) {
   if (typeof window === 'undefined') return;
   try {
-    if (value) sessionStorage.setItem(SEARCH_STORE_KEY, JSON.stringify(value));
-    else sessionStorage.removeItem(SEARCH_STORE_KEY);
+    if (value) localStorage.setItem(key, JSON.stringify(value));
+    else localStorage.removeItem(key);
   } catch {
     /* private mode or blocked storage: the search simply does not persist */
   }
+}
+
+const mergeQuery = (q?: Partial<PayrollQuery>): PayrollQuery => ({
+  ...EMPTY_QUERY,
+  ...q,
+  filters: { ...EMPTY_WORK_FILTERS, ...(q?.filters ?? {}) },
+});
+
+function loadStoredSearch(uid: string | number): StoredSearch | null {
+  const parsed = loadStored<Partial<StoredSearch>>(storeKey(SEARCH_STORE_KEY, uid));
+  if (!parsed?.query) return null;
+  return { query: mergeQuery(parsed.query), drafts: mergeQuery(parsed.drafts || parsed.query) };
+}
+
+function loadStoredPreview(uid: string | number): PreviewQuery | null {
+  const p = loadStored<Partial<PreviewQuery>>(storeKey(PREVIEW_STORE_KEY, uid));
+  if (!p?.guard || !p.start || !p.end) return null;
+  return { guard: p.guard, start: p.start, end: p.end, filters: { ...EMPTY_WORK_FILTERS, ...(p.filters ?? {}) } };
 }
 
 /** Hands a fetched file to the browser. Blob, not a bare link: the API needs the auth header. */
@@ -145,6 +155,7 @@ export default function PayrollPage() {
   // The API is the real boundary; these stop the UI offering actions it
   // already knows the role will be refused.
   const { user: permUser } = useAuth();
+  const uid = permUser?.id;
   const canCreateMod = canModule(permUser, 'payroll', 'create');
   const canEditMod = canModule(permUser, 'payroll', 'edit');
   const canDeleteMod = canModule(permUser, 'payroll', 'delete');
@@ -184,21 +195,28 @@ export default function PayrollPage() {
   const [allPreview, setAllPreview] = useState<PayrollPreview | null>(null);
   const inBreakdown = preview != null && preview.guard_id !== null;
 
-  const runPreview = async (guardOverride?: string) => {
-    const who = guardOverride ?? pvGuardId;
-    if (!who || !pvStart || !pvEnd) return;
+  const runPreview = async (guardOverride?: string, restore?: PreviewQuery) => {
+    const who = restore?.guard ?? guardOverride ?? pvGuardId;
+    const start = restore?.start ?? pvStart;
+    const end = restore?.end ?? pvEnd;
+    const filters = restore?.filters ?? pvFilters;
+    if (!who || !start || !end) return;
     setPvLoading(true);
     try {
       const result = await api.payroll.preview(
-        pvStart,
-        pvEnd,
+        start,
+        end,
         who === 'all' ? undefined : parseInt(who, 10),
-        toWorkFilterParams(pvFilters)
+        toWorkFilterParams(filters)
       );
-      setPvAppliedFilters(pvFilters);
+      setPvAppliedFilters(filters);
       setPreview(result);
       // Only a fresh all-employees calculation replaces the result Back returns to.
       if (result.guard_id === null) setAllPreview(result);
+      // A breakdown opened from the results is not a new search; Calculate is.
+      if (uid && guardOverride === undefined) {
+        store(storeKey(PREVIEW_STORE_KEY, uid), { guard: who, start, end, filters });
+      }
     } catch (e) {
       setPreview(null);
       toast.error(e instanceof Error ? e.message : 'Could not calculate pay for that period');
@@ -277,14 +295,12 @@ export default function PayrollPage() {
   };
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
-  const [searchDraft, setSearchDraft] = useState(() => loadStoredSearch()?.drafts.search ?? '');
-  const [dateFromDraft, setDateFromDraft] = useState(() => loadStoredSearch()?.drafts.from ?? '');
-  const [dateToDraft, setDateToDraft] = useState(() => loadStoredSearch()?.drafts.to ?? '');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [dateFromDraft, setDateFromDraft] = useState('');
+  const [dateToDraft, setDateToDraft] = useState('');
   // Client / Site / Contractor / Sub-contractor / Staff / Job title, in any combination.
   // A client covers every site assigned to it, so ten sites is one pick.
-  const [filterDraft, setFilterDraft] = useState<WorkFilterValues>(
-    () => loadStoredSearch()?.drafts.filters ?? EMPTY_WORK_FILTERS
-  );
+  const [filterDraft, setFilterDraft] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
   const filterOptions = useWorkFilterOptions();
   const [exportOpen, setExportOpen] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
@@ -317,13 +333,13 @@ export default function PayrollPage() {
       );
       setAppliedQuery(q);
       setHasSearched(true);
-      storeSearch({ query: q, drafts: q });
+      if (uid) store(storeKey(SEARCH_STORE_KEY, uid), { query: q, drafts: q });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not load payroll records');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [uid]);
 
   /** Re-runs whatever is on screen. No-op before the first search — nothing to refresh. */
   const reloadCurrent = useCallback(() => {
@@ -331,17 +347,31 @@ export default function PayrollPage() {
     void fetchPayrolls(appliedQuery);
   }, [hasSearched, appliedQuery, fetchPayrolls]);
 
-  // A search left behind earlier in this session is re-run on arrival, so coming back to
-  // Payroll shows the same rows rather than an empty screen.
+  // The last search and calculation are re-run on arrival, so coming back to Payroll
+  // shows the same rows rather than an empty screen. Once per user: re-running on every
+  // change would fight whatever the user has since typed.
+  const restoredFor = useRef<string | number | null>(null);
   useEffect(() => {
-    const stored = loadStoredSearch();
-    if (stored && !queryIsEmpty(stored.query)) {
+    if (!uid || restoredFor.current === uid) return;
+    restoredFor.current = uid;
+    const stored = loadStoredSearch(uid);
+    if (stored) {
+      setSearchDraft(stored.drafts.search);
+      setDateFromDraft(stored.drafts.from);
+      setDateToDraft(stored.drafts.to);
+      setFilterDraft(stored.drafts.filters);
       void fetchPayrolls(stored.query);
     }
-    // Mount only: fetchPayrolls is stable and re-running this on every change would
-    // fight whatever the user has since typed.
+    const pv = loadStoredPreview(uid);
+    if (pv) {
+      setPvGuardId(pv.guard);
+      setPvStart(pv.start);
+      setPvEnd(pv.end);
+      setPvFilters(pv.filters);
+      void runPreview(undefined, pv);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [uid]);
 
   useEffect(() => {
     api.guards.list().then(setGuards).catch(() => {});
@@ -503,7 +533,7 @@ export default function PayrollPage() {
     });
   };
 
-  /** What Refresh does: forget the search entirely, here and in session storage. */
+  /** What Clear search does: forget the search and calculation, here and in storage. */
   const clearSearch = useCallback(() => {
     setSearchDraft('');
     setDateFromDraft('');
@@ -515,8 +545,11 @@ export default function PayrollPage() {
     setPreview(null);
     setAllPreview(null);
     setPage(1);
-    storeSearch(null);
-  }, []);
+    if (uid) {
+      store(storeKey(SEARCH_STORE_KEY, uid), null);
+      store(storeKey(PREVIEW_STORE_KEY, uid), null);
+    }
+  }, [uid]);
 
   const getSortValue = useCallback(
     (p: Payroll, key: string) => {
@@ -695,9 +728,9 @@ export default function PayrollPage() {
                   variant="outline"
                   onClick={clearSearch}
                   disabled={loading || pvLoading}
-                  title="Clear the payroll search and start again"
+                  title="Clear the last payroll search and pay calculation"
                 >
-                  {loading || pvLoading ? 'Loading...' : 'Refresh'}
+                  {loading || pvLoading ? 'Loading...' : 'Clear search'}
                 </Button>
                 <Button variant="outline" onClick={exportCsv} disabled={!payrolls.length}>
                   <Download className="size-4 mr-2" />
@@ -987,6 +1020,7 @@ export default function PayrollPage() {
                       onClick={() => {
                         setPreview(null);
                         setAllPreview(null);
+                        if (uid) store(storeKey(PREVIEW_STORE_KEY, uid), null);
                       }}
                     >
                       Clear

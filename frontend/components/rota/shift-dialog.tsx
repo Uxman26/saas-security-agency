@@ -28,7 +28,7 @@ type Props = {
   edit?: { empId: string; dk: string; idx: number; shift: ShiftRec } | null;
   /** Current planner shifts — used to detect conflicts while editing. */
   allShifts?: Record<string, Record<string, ShiftRec[] | undefined> | undefined>;
-  onApply: (assignees: string[], dk: string, shift: ShiftRec) => void;
+  onApply: (assignees: string[], dk: string, shift: ShiftRec, rates?: Record<string, number>) => void;
 };
 
 const empty = (): ShiftRec => ({
@@ -165,7 +165,12 @@ export function ShiftDialog({
         // publish will also try to create the site.
       }
     }
-    onApply(assignees, dk, normalizeShiftForm({ ...shift, site: resolvedName, shiftRate: rateValue }));
+    onApply(
+      assignees,
+      dk,
+      normalizeShiftForm({ ...shift, site: resolvedName, shiftRate: rateValue }),
+      perStaffRates ? Object.fromEntries(assigneeStaffRates.map((r) => [r.id, r.rate])) : undefined
+    );
     onOpenChange(false);
   };
 
@@ -197,31 +202,35 @@ export function ShiftDialog({
         const emp = employees.find((e) => e.id === id);
         if (!emp) return null;
         const rate = emp.hourlyRate;
-        if (rate == null || Number.isNaN(Number(rate))) return null;
+        if (rate == null || Number.isNaN(Number(rate)) || Number(rate) <= 0) return null;
         return { id: emp.id, name: emp.name, rate: Number(rate) };
       })
       .filter((r): r is { id: string; name: string; rate: number } => !!r);
   }, [assignees, employees]);
 
-  const primaryStaffRate = assigneeStaffRates.length === 1 ? assigneeStaffRates[0] : null;
+  const primaryStaffRate = assignees.length === 1 && assigneeStaffRates.length === 1 ? assigneeStaffRates[0] : null;
 
   /**
-   * What the rate box shows: the assigned staff member's own rate, and nothing at all when
-   * they have no rate. Existing shifts show exactly what was saved, so opening one for edit
-   * never silently reprices it.
+   * Until the rate box is edited, a new shift, or one handed to someone else, takes each
+   * assignee's own profile rate. An existing shift kept by the same person shows exactly
+   * what was saved, so opening it for edit never silently reprices it.
    */
-  const rateValue =
-    edit || rateTouched
-      ? shift.shiftRate
-      : primaryStaffRate && primaryStaffRate.rate > 0
-        ? primaryStaffRate.rate
+  const reassigned = !!edit && !(assignees.length === 1 && assignees[0] === edit.empId);
+  const ownRates = !rateTouched && (!edit || reassigned);
+  const perStaffRates = ownRates && assignees.length > 1 && assigneeStaffRates.length === assignees.length;
+  const rateValue = !ownRates
+    ? shift.shiftRate
+    : primaryStaffRate
+      ? primaryStaffRate.rate
+      : assignees.length === 1 && edit
+        ? shift.shiftRate
         : null;
 
   // A site saved before the cap existed can still arrive over-length, so editing
   // an old shift surfaces the error instead of silently sending it back.
   const siteNameTooLong = (shift.site || '').trim().length > TEXT_LIMITS.siteName;
   const siteNameValid = (shift.site || '').trim().length > 0 && !siteNameTooLong;
-  const rateValid = rateValue != null && rateValue > 0;
+  const rateValid = (rateValue != null && rateValue > 0) || perStaffRates;
   const canSubmit = assignees.length > 0 && !!dk && siteNameValid && rateValid;
 
   const draftConflicts = useMemo(() => {
@@ -422,7 +431,7 @@ export function ShiftDialog({
                 step="0.01"
                 min={0.01}
                 required
-                placeholder="e.g. 12.50"
+                placeholder={perStaffRates ? 'Each staff rate' : 'e.g. 12.50'}
                 value={rateValue ?? ''}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -434,7 +443,9 @@ export function ShiftDialog({
                 }}
               />
               <p className="text-[11px] text-muted-foreground">
-                Required — enter the hourly rate, or use the staff rate above.
+                {perStaffRates
+                  ? 'Each staff member gets their own profile rate. Enter a rate to use one rate for everyone.'
+                  : 'Required — enter the hourly rate, or use the staff rate above.'}
               </p>
             </div>
             <div className="space-y-2">

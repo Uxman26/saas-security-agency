@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
+import re
 from app.models import GuardRate, SiteRate, Guard, Site, Assignment
 from app.schemas import GuardRateCreate, SiteRateCreate
 from app.services.company_service import get_company_by_user_id
@@ -15,7 +16,17 @@ def _site_staff_rate(site: Optional[Site]) -> Optional[float]:
         return site.default_hourly_rate
     return None
 
+_HOURLY = re.compile(r"hour|\bhr\b|\bp/?h\b", re.I)
+
+def profile_hourly_rate(guard: Optional[Guard]) -> Optional[float]:
+    if not guard or not guard.salary_amount or guard.salary_amount <= 0:
+        return None
+    return guard.salary_amount if _HOURLY.search(guard.salary_rate or "") else None
+
 def _guard_rate_for_date(db: Session, guard_id: int, site_id: Optional[int], shift_type: str, d: date) -> Optional[float]:
+    profile = profile_hourly_rate(db.query(Guard).filter(Guard.id == guard_id).first())
+    if profile is not None:
+        return profile
     gr = db.query(GuardRate).filter(
         GuardRate.guard_id == guard_id,
         GuardRate.effective_from <= d

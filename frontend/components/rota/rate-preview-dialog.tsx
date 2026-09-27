@@ -1,7 +1,9 @@
 'use client';
 
-import { Clock, MapPin, PoundSterling } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Clock, MapPin, Pencil, PoundSterling, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   attKey,
@@ -23,7 +25,80 @@ type Props = {
   state: RotaJsState;
   resolveShiftRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => number;
   rotaName?: string;
+  onRateChange?: (dk: string, idx: number, rate: number) => void;
 };
+
+function RateEditor({ rate, onSave }: { rate: number; onSave?: (rate: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = parseFloat(draft ?? '');
+  const valid = Number.isFinite(value) && value > 0;
+  const save = () => {
+    if (!valid || !onSave) return;
+    if (Math.abs(value - rate) >= 0.005) onSave(Math.round(value * 100) / 100);
+    setDraft(null);
+  };
+
+  if (draft === null) {
+    return (
+      <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
+        <p className="flex items-center justify-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <PoundSterling className="size-3.5" />
+          Rate
+        </p>
+        <p className="flex items-center justify-center gap-1 text-base font-bold text-primary tabular-nums break-words">
+          {`${formatMoney(rate > 0 ? rate : 0)}/hr`}
+          {onSave ? (
+            <button
+              type="button"
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              title="Amend rate"
+              aria-label="Amend rate"
+              onClick={() => setDraft(rate > 0 ? rate.toFixed(2) : '')}
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          ) : null}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg bg-muted/50 px-2 py-2 text-center space-y-1">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Rate (£/hr)</p>
+      <div className="flex items-center gap-1">
+        <Input
+          type="number"
+          step="0.01"
+          min={0.01}
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save();
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setDraft(null);
+            }
+          }}
+          className="h-8 px-2 text-sm tabular-nums"
+        />
+        <Button size="icon" className="size-8 shrink-0" disabled={!valid} onClick={save} aria-label="Save rate">
+          <Check className="size-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-8 shrink-0"
+          onClick={() => setDraft(null)}
+          aria-label="Cancel"
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 function rateSourceLabel(
   sh: ShiftRec,
@@ -82,6 +157,7 @@ export function RatePreviewDialog({
   state,
   resolveShiftRate,
   rotaName,
+  onRateChange,
 }: Props) {
   if (!employee) return null;
 
@@ -173,11 +249,10 @@ export function RatePreviewDialog({
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-t pt-3">
                           <Metric icon={<Clock className="size-3.5" />} label="Hours" value={formatHoursDecimal(hrs)} />
-                          <Metric
-                            icon={<PoundSterling className="size-3.5" />}
-                            label="Rate"
-                            value={rate > 0 ? `${formatMoney(rate)}/hr` : '£0.00/hr'}
-                            accent
+                          <RateEditor
+                            key={`${dk}:${i}:${rate}`}
+                            rate={rate}
+                            onSave={onRateChange ? (r) => onRateChange(dk, i, r) : undefined}
                           />
                           <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center">
                             <p className="text-[10px] font-medium uppercase tracking-wide text-primary/80">

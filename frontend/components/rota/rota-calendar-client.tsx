@@ -1240,13 +1240,22 @@ export function RotaCalendarClient() {
     }
   };
 
-  const onApplyShift = (assignees: string[], dk: string, sh: ShiftRec) => {
+  const onApplyShift = (assignees: string[], dk: string, sh: ShiftRec, rates?: Record<string, number>) => {
     const prev = shiftEdit ? state.shifts[shiftEdit.empId]?.[shiftEdit.dk]?.[shiftEdit.idx] : null;
     const rateChanged = !!prev && rateOf(prev) !== rateOf(sh);
     const touched = [...assignees, ...(shiftEdit ? [shiftEdit.empId] : [])].filter(Boolean);
-    applyShiftChange(shiftEdit, assignees, dk, sh);
+    applyShiftChange(shiftEdit, assignees, dk, sh, rates);
     setShiftEdit(null);
     if (rateChanged) void unpublishForRateChange(touched);
+  };
+
+  const amendPreviewRate = (dk: string, idx: number, rate: number) => {
+    const empId = ratePreviewEmpId;
+    const sh = empId ? state.shifts[empId]?.[dk]?.[idx] : null;
+    if (!empId || !sh) return;
+    updateShift(empId, dk, idx, { ...sh, shiftRate: rate });
+    toast.snack('Shift rate updated');
+    void unpublishForRateChange([empId]);
   };
 
   const startCopy = (empId: string, dk: string, idx: number) => {
@@ -4441,6 +4450,7 @@ export function RotaCalendarClient() {
         employee={ratePreviewEmployee}
         state={state}
         resolveShiftRate={resolveShiftRate}
+        onRateChange={canEditRota ? amendPreviewRate : undefined}
       />
     </div>
   );

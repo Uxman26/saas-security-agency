@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api } from '@/lib/api';
-import { guardsToEmployees } from '@/lib/rota-guards-pool';
+import { guardsToEmployees, profileHourlyRate } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
 import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
@@ -128,7 +128,8 @@ type Ctx = {
     edit: { empId: string; dk: string; idx: number } | null,
     assignees: string[],
     dk: string,
-    s: ShiftRec
+    s: ShiftRec,
+    rates?: Record<string, number>
   ) => void;
   deleteShift: (empId: string, dk: string, idx: number) => void;
   copyShiftToDates: (empId: string, dk: string, idx: number, targets: string[]) => void;
@@ -209,9 +210,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
         // Enrich staff with latest guard hourly rates (used for Payable fallback)
         const rateRows: Array<readonly [string, number] | null> = [];
+        const noProfileRate = guards.filter((g) => profileHourlyRate(g) == null);
         // Keep request concurrency below the API's database capacity.
-        for (let i = 0; i < guards.length && !cancelled; i += 3) {
-          const batch = guards.slice(i, i + 3);
+        for (let i = 0; i < noProfileRate.length && !cancelled; i += 3) {
+          const batch = noProfileRate.slice(i, i + 3);
           const rows = await Promise.all(
             batch.map(async (g) => {
               try {
@@ -232,6 +234,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         const gRates: Record<string, number> = {};
         for (const row of rateRows) {
           if (row) gRates[row[0]] = row[1];
+        }
+        for (const e of freshPool) {
+          if (e.hourlyRate) gRates[e.id] = e.hourlyRate;
         }
         setGuardRateById(gRates);
         const poolWithRates = freshPool.map((e) =>
@@ -276,12 +281,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       if (sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate)) && Number(sh.shiftRate) > 0) {
         return Number(sh.shiftRate);
       }
+      if (empId && guardRateById[empId] != null && guardRateById[empId] > 0) {
+        return guardRateById[empId];
+      }
       const key = (sh.site || '').trim().toLowerCase();
       if (key && siteRateByName[key] != null && siteRateByName[key] > 0) {
         return siteRateByName[key];
-      }
-      if (empId && guardRateById[empId] != null && guardRateById[empId] > 0) {
-        return guardRateById[empId];
       }
       return 0;
     },
@@ -524,7 +529,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const refreshPool = useCallback(async () => {
     const guards = await api.guards.list();
     const fresh = guardsToEmployees(guards).map((e) =>
-      guardRateById[e.id] != null ? { ...e, hourlyRate: guardRateById[e.id] } : e
+      e.hourlyRate == null && guardRateById[e.id] != null ? { ...e, hourlyRate: guardRateById[e.id] } : e
     );
     setPool(fresh);
     return fresh;
@@ -625,7 +630,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       edit: { empId: string; dk: string; idx: number } | null,
       assignees: string[],
       dk: string,
-      sh: ShiftRec
+      sh: ShiftRec,
+      rates?: Record<string, number>
     ) => {
       const ids = assignees.filter(Boolean);
       if (!ids.length || !dk) return;
@@ -689,7 +695,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
         // Restore attendance onto the first assignee only when reassigning/moving a single shift
         ids.forEach((id, i) => {
-          addAt(id, dk, { ...sh }, i === 0 ? preserved : undefined);
+          addAt(id, dk, { ...sh, shiftRate: rates?.[id] ?? sh.shiftRate }, i === 0 ? preserved : undefined);
         });
 
         return { ...s, shifts, attendance };
@@ -722,6 +728,19 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const staffRate = useCallback(
+    (s: RotaJsState, empId: string): number | null => {
+      const r = guardRateById[empId] ?? s.employees.find((e) => e.id === empId)?.hourlyRate;
+      return r != null && r > 0 ? r : null;
+    },
+    [guardRateById]
+  );
+
+  const withStaffRate = useCallback(
+    (s: RotaJsState, sh: ShiftRec, empId: string): ShiftRec => ({ ...sh, shiftRate: staffRate(s, empId) }),
+    [staffRate]
+  );
+
   const copyShiftToDates = useCallback((empId: string, dk: string, idx: number, targets: string[]) => {
     setState((s) => {
       const src = s.shifts[empId]?.[dk]?.[idx];
@@ -729,12 +748,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const emp = { ...s.shifts[empId] } as Record<string, ShiftRec[]>;
       for (const t of targets) {
         if (!s.days.includes(t)) continue;
-        const copy = { ...src };
-        emp[t] = [...(emp[t] || []), copy];
+        emp[t] = [...(emp[t] || []), withStaffRate(s, src, empId)];
       }
       return { ...s, shifts: { ...s.shifts, [empId]: emp } };
     });
-  }, []);
+  }, [withStaffRate]);
 
   /**
    * Copy one shift to any combination of employees and dates in a single update.
@@ -743,12 +761,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
    */
   /**
    * A copy is a new shift, not the same one twice: it must not inherit the source's
-   * rate. Rates are set per shift (or resolved from the site/staff rate) and silently
-   * carrying one across to another person or day pays the wrong amount. The recipient
-   * shift starts with no rate so it resolves normally, or asks to be set.
+   * rate. It takes the recipient's profile hourly rate, or no rate when they have none
+   * so it resolves from the site rate.
    */
-  const copyOfShift = useCallback((src: ShiftRec): ShiftRec => ({ ...src, shiftRate: null }), []);
-
   const copyShiftToTargets = useCallback(
     (fromId: string, dk: string, idx: number, empIds: string[], dates: string[]) => {
       setState((s) => {
@@ -764,14 +779,14 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           for (const day of targetDays) {
             // Copying onto the exact source slot would duplicate it in place.
             if (empId === fromId && day === dk) continue;
-            byDay[day] = [...(byDay[day] || []), copyOfShift(src)];
+            byDay[day] = [...(byDay[day] || []), withStaffRate(s, src, empId)];
           }
           shifts[empId] = byDay;
         }
         return { ...s, shifts };
       });
     },
-    [copyOfShift]
+    [withStaffRate]
   );
 
   const copyShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
@@ -780,10 +795,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const src = s.shifts[fromId]?.[dk]?.[idx];
       if (!src) return s;
       const toEmp = { ...(s.shifts[toId] || {}) } as Record<string, ShiftRec[]>;
-      toEmp[dk] = [...(toEmp[dk] || []), copyOfShift(src)];
+      toEmp[dk] = [...(toEmp[dk] || []), withStaffRate(s, src, toId)];
       return { ...s, shifts: { ...s.shifts, [toId]: toEmp } };
     });
-  }, [copyOfShift]);
+  }, [withStaffRate]);
 
   const copyAllShiftsBetweenEmployees = useCallback((fromId: string, toId: string) => {
     if (fromId === toId) return;
@@ -793,11 +808,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const toEmp = { ...(s.shifts[toId] || {}) } as Record<string, ShiftRec[]>;
       for (const dk of Object.keys(from)) {
         const blocks = from[dk] || [];
-        toEmp[dk] = [...(toEmp[dk] || []), ...blocks.map(copyOfShift)];
+        toEmp[dk] = [...(toEmp[dk] || []), ...blocks.map((b) => withStaffRate(s, b, toId))];
       }
       return { ...s, shifts: { ...s.shifts, [toId]: toEmp } };
     });
-  }, [copyOfShift]);
+  }, [withStaffRate]);
 
   const moveShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
     if (fromId === toId) return;
@@ -805,7 +820,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const fromEmp = s.shifts[fromId];
       const srcList = fromEmp?.[dk];
       if (!srcList?.[idx]) return s;
-      const shift = { ...srcList[idx] };
+      const shift = withStaffRate(s, srcList[idx], toId);
 
       const fromCopy = { ...fromEmp } as Record<string, ShiftRec[]>;
       const fromList = [...(fromCopy[dk] || [])];
@@ -842,7 +857,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         attendance,
       };
     });
-  }, []);
+  }, [withStaffRate]);
 
   /** Move a shift to another day (same employee by default), optionally to another employee. */
   const moveShiftToDay = useCallback((empId: string, fromDk: string, idx: number, toDk: string, toEmpId?: string) => {
@@ -852,7 +867,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const fromEmp = s.shifts[empId];
       const srcList = fromEmp?.[fromDk];
       if (!srcList?.[idx]) return s;
-      const shift = { ...srcList[idx] };
+      const shift = empId === destEmp ? { ...srcList[idx] } : withStaffRate(s, srcList[idx], destEmp);
 
       const fromCopy = { ...(fromEmp || {}) } as Record<string, ShiftRec[]>;
       const fromList = [...(fromCopy[fromDk] || [])];
@@ -893,7 +908,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
       return { ...s, shifts, attendance };
     });
-  }, []);
+  }, [withStaffRate]);
 
   const clearEmployeeShifts = useCallback((empId: string) => {
     setState((s) => {

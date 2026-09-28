@@ -146,10 +146,18 @@ export interface ReceiptPublic {
   created_at: string;
 }
 
+export interface SignupTrial {
+  started: boolean;
+  days?: number | null;
+  ends_at?: string | null;
+  reason?: string | null;
+}
+
 export interface SignupResponse {
   user: User;
   receipt: SubscriptionReceipt;
   email_verification_required?: boolean;
+  trial?: SignupTrial;
 }
 
 export interface PaymentPendingDetail {
@@ -236,6 +244,14 @@ export interface TrialConfig {
   reminder_days: number[];
   eligible_tiers: string[];
   enabled: boolean;
+}
+
+/** The unauthenticated slice of TrialConfig the pricing and signup pages read. */
+export interface PublicTrialConfig {
+  enabled: boolean;
+  default_days?: number | null;
+  require_card: boolean;
+  eligible_tiers: string[];
 }
 
 export interface CompanyTrialsResponse {

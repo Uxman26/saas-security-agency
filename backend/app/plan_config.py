@@ -137,6 +137,10 @@ PLAN_PRICES_GBP: dict[str, float] = {
 
 SUBSCRIPTION_PERIOD_DAYS = 30
 
+# Fallback trial length, used only when a super admin has set neither a per-package
+# override (Packages -> Trial days) nor a platform default (Trials -> Default days).
+DEFAULT_TRIAL_DAYS = 14
+
 
 def price_for_tier(tier: Optional[str]) -> float:
     from app.services.platform_plans_service import get_price

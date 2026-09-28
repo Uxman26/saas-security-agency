@@ -8,11 +8,12 @@ from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Company, SubscriptionChange, TrialExtension, TrialPeriod, User
+from app.plan_config import DEFAULT_TRIAL_DAYS
 from app.services import platform_audit_service
 from app.services.admin_platform_ext_service import get_config, set_config
 
 DEFAULT_TRIAL_CONFIG = {
-    "default_days": 30,
+    "default_days": DEFAULT_TRIAL_DAYS,
     "allowed_days": [7, 14, 30, 60],
     "allow_repeat": False,
     "require_card": True,
@@ -62,7 +63,7 @@ def update_trial_config(db: Session, payload: dict, actor: User) -> dict:
     for k, v in payload.items():
         if k in DEFAULT_TRIAL_CONFIG and v is not None:
             cfg[k] = v
-    days = int(cfg.get("default_days") or 30)
+    days = int(cfg.get("default_days") or DEFAULT_TRIAL_DAYS)
     if days < 1 or days > 365:
         raise HTTPException(status_code=400, detail="Default trial days must be between 1 and 365")
     cfg["default_days"] = days
@@ -106,10 +107,25 @@ def has_prior_trial(db: Session, company_id: int) -> bool:
     return db.query(TrialPeriod.id).filter(TrialPeriod.company_id == company_id).first() is not None
 
 
-def trial_days_for_tier(tier: str | None) -> int:
+def trial_days_for_tier(db: Session, tier: str | None) -> int:
+    """Resolve how long a trial on `tier` should run.
+
+    Precedence is most specific first: the per-package "Trial days" a super admin set
+    on Packages, then the platform-wide "Default days" on Trials, then the built-in
+    fallback. Without this the platform default was dead config — every trial used the
+    package value or a hard-coded 30.
+    """
     from app.services import platform_plans_service
 
-    return platform_plans_service.get_trial_days(tier or "basic")
+    override = platform_plans_service.get_trial_days_override(tier or "basic")
+    if override:
+        return override
+    cfg = get_trial_config(db)
+    try:
+        days = int(cfg.get("default_days") or DEFAULT_TRIAL_DAYS)
+    except (TypeError, ValueError):
+        days = DEFAULT_TRIAL_DAYS
+    return days if 1 <= days <= 365 else DEFAULT_TRIAL_DAYS
 
 
 def is_eligible_for_trial(db: Session, company: Company, *, force: bool = False, skip_card: bool = False) -> tuple[bool, str]:
@@ -188,6 +204,7 @@ def start_trial(
     notes: str | None = None,
     source: str = "admin",
     force: bool = False,
+    skip_card: bool = False,
     user_id: int | None = None,
     stripe_subscription_id: str | None = None,
     ends_at: datetime | None = None,
@@ -196,10 +213,10 @@ def start_trial(
     co = db.query(Company).filter(Company.id == company_id).first()
     if not co:
         raise HTTPException(status_code=404, detail="Company not found")
-    days = int(duration_days if duration_days is not None else trial_days_for_tier(co.subscription_tier))
+    days = int(duration_days if duration_days is not None else trial_days_for_tier(db, co.subscription_tier))
     if days < 1 or days > 365:
         raise HTTPException(status_code=400, detail="Duration must be between 1 and 365 days")
-    ok, reason = is_eligible_for_trial(db, co, force=force)
+    ok, reason = is_eligible_for_trial(db, co, force=force, skip_card=skip_card)
     if not ok:
         raise HTTPException(status_code=400, detail=reason)
     if force and not (notes and len(notes.strip()) >= 5):

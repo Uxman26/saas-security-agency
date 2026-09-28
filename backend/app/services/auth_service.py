@@ -180,6 +180,42 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     return user
 
 
+def start_signup_trial(db: Session, user: User) -> dict:
+    """Put a brand-new tenant straight onto their free trial.
+
+    Self-serve signup has no card yet, so `require_card` is skipped here — it still
+    governs trials granted from the admin console. The trial length is whatever the
+    super admin configured for the chosen package, falling back to the platform
+    default. Failure is never fatal: the tenant keeps the pending receipt and can pay
+    as before.
+    """
+    from app.services import trial_service
+
+    if not user.company_id:
+        return {"started": False, "reason": "Company signup required"}
+    company = db.query(Company).filter(Company.id == user.company_id).first()
+    if not company:
+        return {"started": False, "reason": "Company not found"}
+    cfg = trial_service.get_trial_config(db)
+    if not cfg.get("enabled", True):
+        return {"started": False, "reason": "Trials are disabled on this platform"}
+    ok, reason = trial_service.is_eligible_for_trial(db, company, skip_card=True)
+    if not ok:
+        return {"started": False, "reason": reason}
+    try:
+        out = trial_service.start_trial(
+            db,
+            company.id,
+            actor=None,
+            source="signup",
+            skip_card=True,
+            user_id=user.id,
+        )
+    except HTTPException as e:
+        return {"started": False, "reason": str(e.detail)}
+    return {"started": True, "days": out.get("duration_days"), "ends_at": out.get("ends_at")}
+
+
 def signup_with_receipt(db: Session, user_data: UserCreate):
     from app.models import SubscriptionReceipt
     user = create_user_and_company(db, user_data)
@@ -193,7 +229,10 @@ def signup_with_receipt(db: Session, user_data: UserCreate):
     )
     if not r:
         raise HTTPException(status_code=500, detail="Receipt not created")
-    return user, r, requires_email_verification(user)
+    trial = {"started": False, "reason": "Trial not requested"}
+    if user_data.start_trial is not False:
+        trial = start_signup_trial(db, user)
+    return user, r, requires_email_verification(user), trial
 
 def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None, remember_me: bool = False) -> dict:
     from app.auth import verify_password

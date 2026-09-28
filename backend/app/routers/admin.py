@@ -37,6 +37,7 @@ from app.schemas import (
 from app.services.platform_rbac_service import require_platform_perm
 from app.services import admin_platform_service as ap
 from app.services import platform_plans_service
+from app.services import trial_service
 from app.services import subscription_invoice_service as sub_inv
 from app.services import login_log_service
 from app.services import platform_audit_service
@@ -310,8 +311,12 @@ def list_payments(
 
 
 @router.get("/packages", response_model=List[PlanTierOut])
-def list_packages(_: User = Depends(require_platform_perm("billing.read", "config.read"))):
-    return [PlanTierOut(**row) for row in platform_plans_service.list_tiers()]
+def list_packages(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_perm("billing.read", "config.read")),
+):
+    default_days = trial_service.get_trial_config(db).get("default_days")
+    return [PlanTierOut(**row) for row in platform_plans_service.list_tiers(default_days)]
 
 
 @router.get("/packages/features", response_model=List[PackageFeatureOut])
@@ -372,7 +377,8 @@ def patch_package(
 ):
     payload = body.model_dump(exclude_unset=True)
     before = platform_plans_service.get_limits(tier) | {"price_gbp": platform_plans_service.get_price(tier)}
-    out = platform_plans_service.update_tier(tier, payload)
+    default_days = trial_service.get_trial_config(db).get("default_days")
+    out = platform_plans_service.update_tier(tier, payload, default_days)
     platform_audit_service.log(
         db,
         actor=current_user,

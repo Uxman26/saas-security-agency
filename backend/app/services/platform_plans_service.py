@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.feature_catalog import CATALOG_KEYS, catalog_entries
-from app.plan_config import LIMITS, PLAN_PRICES_GBP, VALID_TIERS, normalize_tier
+from app.plan_config import DEFAULT_TRIAL_DAYS, LIMITS, PLAN_PRICES_GBP, VALID_TIERS, normalize_tier
 
 # Must resolve to the persistent volume (/app/data), the same place
 # platform_smtp_service writes. Deriving it from __file__ pointed at /app/app/data —
@@ -127,7 +127,12 @@ def delete_custom_feature(key: str) -> None:
     _write_raw(raw)
 
 
-def get_trial_days(tier: str) -> int:
+def get_trial_days_override(tier: str) -> int | None:
+    """The per-package trial length a super admin set, or None if they left it unset.
+
+    Kept separate from `get_trial_days` so callers with a session can fall back to the
+    platform-wide default (Trials -> Default days) rather than the hard-coded constant.
+    """
     t = normalize_tier(tier)
     raw = _read_raw()
     days_map = raw.get("trial_days") or {}
@@ -138,10 +143,17 @@ def get_trial_days(tier: str) -> int:
                 return days
         except (TypeError, ValueError):
             pass
-    return 30
+    return None
 
 
-def list_tiers() -> list[dict[str, Any]]:
+def get_trial_days(tier: str) -> int:
+    return get_trial_days_override(tier) or DEFAULT_TRIAL_DAYS
+
+
+def list_tiers(default_trial_days: int | None = None) -> list[dict[str, Any]]:
+    """`default_trial_days` is the platform-wide Trials -> Default days, which callers
+    with a session pass so a package without its own override reports the value that
+    would actually be granted."""
     out = []
     for tier in VALID_TIERS:
         lim = get_limits(tier)
@@ -153,7 +165,7 @@ def list_tiers() -> list[dict[str, Any]]:
                 "max_sites": lim.get("max_sites"),
                 "max_users": lim.get("max_users"),
                 "features": lim.get("features") or {},
-                "trial_days": get_trial_days(tier),
+                "trial_days": get_trial_days_override(tier) or default_trial_days or DEFAULT_TRIAL_DAYS,
             }
         )
     from app.plan_config import tier_rank
@@ -162,7 +174,7 @@ def list_tiers() -> list[dict[str, Any]]:
     return out
 
 
-def update_tier(tier: str, payload: dict[str, Any]) -> dict[str, Any]:
+def update_tier(tier: str, payload: dict[str, Any], default_trial_days: int | None = None) -> dict[str, Any]:
     t = normalize_tier(tier)
     if t not in VALID_TIERS:
         raise HTTPException(status_code=400, detail="Invalid tier")
@@ -201,5 +213,5 @@ def update_tier(tier: str, payload: dict[str, Any]) -> dict[str, Any]:
         "max_sites": lim.get("max_sites"),
         "max_users": lim.get("max_users"),
         "features": lim.get("features") or {},
-        "trial_days": get_trial_days(t),
+        "trial_days": get_trial_days_override(t) or default_trial_days or DEFAULT_TRIAL_DAYS,
     }

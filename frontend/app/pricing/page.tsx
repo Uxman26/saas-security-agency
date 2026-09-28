@@ -11,7 +11,7 @@ import { Eyebrow, MarketingCta } from '@/components/marketing/marketing-cta';
 import { BillingCycleToggle } from '@/components/billing/billing-cycle-toggle';
 import { PricingGrid } from '@/components/billing/pricing-grid';
 import { api } from '@/lib/api';
-import type { PackageFeature, PlanTier } from '@/lib/types';
+import type { PackageFeature, PlanTier, PublicTrialConfig } from '@/lib/types';
 import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
 
 export default function PricingPage() {
@@ -25,6 +25,7 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   const [cycle, setCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [yearlyDiscount, setYearlyDiscount] = useState(20);
+  const [trialConfig, setTrialConfig] = useState<PublicTrialConfig | null>(null);
 
   useEffect(() => {
     api.packages
@@ -37,6 +38,11 @@ export default function PricingPage() {
     api.packages
       .features()
       .then(setFeatureCatalog)
+      .catch(() => {});
+    // A failure here just hides the trial badge; the plans still render and sign up.
+    api.packages
+      .trialConfig()
+      .then(setTrialConfig)
       .catch(() => {});
     api.stripe
       .config()
@@ -85,6 +91,14 @@ export default function PricingPage() {
               perMonthLabel={tcommon('perMonth')}
               getStartedLabel={tc('getStarted')}
               contactLabel={t('contactSales')}
+              trial={{
+                enabled: Boolean(trialConfig?.enabled),
+                defaultDays: trialConfig?.default_days,
+                requireCard: trialConfig?.require_card,
+                label: (days, requireCard) =>
+                  requireCard ? tp('freeTrial', { days }) : tp('freeTrialNoCard', { days }),
+                ctaLabel: (days) => tc('startTrial', { days }),
+              }}
             />
           )}
 

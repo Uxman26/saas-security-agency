@@ -155,13 +155,21 @@ function appendWorkFilters(q: URLSearchParams, params?: WorkFilterParams): URLSe
 
 export const api = {
   auth: {
-    signup: (data: { email: string; password: string; full_name: string; company_name: string; subscription_tier?: string }): Promise<SignupResponse> => {
+    signup: (data: {
+      email: string;
+      password: string;
+      full_name: string;
+      company_name: string;
+      subscription_tier?: string;
+      start_trial?: boolean;
+    }): Promise<SignupResponse> => {
       const sanitized = {
         email: sanitizeInput(data.email),
         password: data.password,
         full_name: sanitizeInput(data.full_name),
         company_name: sanitizeInput(data.company_name),
         ...(data.subscription_tier && { subscription_tier: sanitizeInput(data.subscription_tier) }),
+        ...(data.start_trial !== undefined && { start_trial: data.start_trial }),
       };
       return request<SignupResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
     },
@@ -1334,6 +1342,8 @@ export const api = {
     list: (): Promise<PlanTier[]> => request<PlanTier[]>('/subscriptions/packages'),
     features: (): Promise<import('./types').PackageFeature[]> =>
       request<import('./types').PackageFeature[]>('/subscriptions/packages/features'),
+    trialConfig: (): Promise<import('./types').PublicTrialConfig> =>
+      request<import('./types').PublicTrialConfig>('/subscriptions/trial-config'),
   },
   subscriptions: {
     get: (): Promise<{

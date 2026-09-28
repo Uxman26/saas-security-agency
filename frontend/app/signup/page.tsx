@@ -42,6 +42,9 @@ function SignupForm() {
   const cycleParam = searchParams.get('cycle');
   const subscription_tier = tierParam || undefined;
   const billing_cycle = cycleParam === 'yearly' ? 'yearly' : 'monthly';
+  // Set by the pricing card when the plan carries a free trial. The server still has
+  // the final say — it re-checks that trials are enabled and the tenant is eligible.
+  const wantsTrial = searchParams.get('trial') === '1';
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
@@ -80,13 +83,21 @@ function SignupForm() {
         toast.error(dup);
         return;
       }
-      const res = await api.auth.signup({ ...data, subscription_tier });
+      const res = await api.auth.signup({ ...data, subscription_tier, start_trial: wantsTrial });
       const ref = encodeURIComponent(res.receipt.ref_id);
       const email = encodeURIComponent(data.email);
       const cycleQ = `&cycle=${billing_cycle}`;
       const code = (data.verification_code || verificationCode).trim();
       const couponQ = code ? `&coupon=${encodeURIComponent(code)}` : '';
-      if (res.email_verification_required) {
+      const trialDays = res.trial?.started ? res.trial.days ?? 0 : 0;
+      if (trialDays) {
+        // On a trial there is nothing to pay yet, so skip the payment step entirely:
+        // verify the address if required, otherwise go straight to signing in.
+        toast.success(t('accountCreatedTrial', { days: trialDays }));
+        router.push(
+          res.email_verification_required ? `/verify-email?email=${email}` : '/login'
+        );
+      } else if (res.email_verification_required) {
         toast.success(t('accountCreatedVerify'));
         router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}${couponQ}`);
       } else {

@@ -65,7 +65,7 @@ export default function AdminPackagesPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PlanTier | null>(null);
   const [price, setPrice] = useState('');
-  const [trialDays, setTrialDays] = useState('30');
+  const [trialDays, setTrialDays] = useState('');
   const [maxGuards, setMaxGuards] = useState('');
   const [maxSites, setMaxSites] = useState('');
   const [maxUsers, setMaxUsers] = useState('');
@@ -98,7 +98,7 @@ export default function AdminPackagesPage() {
   const openEdit = (t: PlanTier) => {
     setSelected(t);
     setPrice(String(t.price_gbp));
-    setTrialDays(String(t.trial_days ?? 30));
+    setTrialDays(t.trial_days != null ? String(t.trial_days) : '');
     setMaxGuards(t.max_guards != null ? String(t.max_guards) : '');
     setMaxSites(t.max_sites != null ? String(t.max_sites) : '');
     setMaxUsers(t.max_users != null ? String(t.max_users) : '');
@@ -204,7 +204,7 @@ export default function AdminPackagesPage() {
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">{TIER_BLURB[t.tier] ?? 'Custom plan'}</p>
                       <p className="text-xs text-muted-foreground">
-                        per month · {t.trial_days ?? 30}-day trial · {included} of {features.length} features
+                        per month · {t.trial_days}-day trial · {included} of {features.length} features
                       </p>
                     </CardHeader>
                     <CardContent className="flex flex-1 flex-col gap-4">
@@ -292,6 +292,7 @@ export default function AdminPackagesPage() {
                   <div>
                     <Label htmlFor="trialDays">Trial days</Label>
                     <Input id="trialDays" type="number" min={1} max={365} value={trialDays} onChange={(e) => setTrialDays(e.target.value)} className="mt-1" />
+                    <p className="mt-1 text-xs text-muted-foreground">Overrides the platform default set under Trials.</p>
                   </div>
                   <div>
                     <Label htmlFor="guards">Max staff</Label>

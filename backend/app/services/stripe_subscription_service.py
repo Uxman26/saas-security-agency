@@ -267,7 +267,7 @@ def create_checkout_session(
         if use_trial and (company.subscription_status or "") == "pending":
             ok, _ = trial_service.is_eligible_for_trial(db, company, force=False, skip_card=True)
             if ok:
-                days = trial_service.trial_days_for_tier(receipt.subscription_tier)
+                days = trial_service.trial_days_for_tier(db, receipt.subscription_tier)
                 params["subscription_data"]["trial_period_days"] = days
                 params["subscription_data"]["metadata"]["trial_days"] = str(days)
                 params["payment_method_collection"] = "always"

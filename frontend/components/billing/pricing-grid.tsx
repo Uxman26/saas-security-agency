@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Check } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PackageFeature, PlanTier } from '@/lib/types';
@@ -31,6 +31,16 @@ type Props = {
   upgradeLabel?: string;
   contactLabel?: string;
   getStartedLabel: string;
+  /** Free-trial offer for signup cards. Omit (or pass enabled: false) to hide it. */
+  trial?: {
+    enabled: boolean;
+    /** Resolved per package by the API; falls back to the platform default. */
+    defaultDays?: number | null;
+    /** Renders the "no card required" wording when the platform is not asking for one. */
+    requireCard?: boolean;
+    label: (days: number, requireCard: boolean) => string;
+    ctaLabel: (days: number) => string;
+  };
   currentTier?: string | null;
   currentCycle?: string | null;
   onUpgrade?: (tier: string) => void;
@@ -50,6 +60,7 @@ export function PricingGrid({
   upgradeLabel = 'Upgrade',
   contactLabel = 'Contact sales',
   getStartedLabel,
+  trial,
   currentTier,
   currentCycle,
   onUpgrade,
@@ -67,7 +78,11 @@ export function PricingGrid({
         const isCurrent = currentTier === tier.tier && (currentCycle || 'monthly') === cycle;
         const canChange = canChangeToPlan(currentTier, currentCycle, tier.tier, cycle);
         const isEnterprise = tier.tier === 'enterprise';
-        const signupHref = `/signup?tier=${tier.tier}&cycle=${cycle}`;
+        // Enterprise goes through sales, and an existing tenant upgrading is past the
+        // trial, so the offer only applies to a fresh self-serve signup.
+        const trialDays = tier.trial_days ?? trial?.defaultDays ?? null;
+        const showTrial = Boolean(trial?.enabled && trialDays && !isEnterprise && !onUpgrade);
+        const signupHref = `/signup?tier=${tier.tier}&cycle=${cycle}${showTrial ? '&trial=1' : ''}`;
 
         return (
           <Card
@@ -98,6 +113,12 @@ export function PricingGrid({
               ) : (
                 <p className="text-xs text-muted-foreground mt-1">{details.vat}</p>
               )}
+              {showTrial && trial && trialDays ? (
+                <p className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                  <Sparkles className="size-3.5 shrink-0" />
+                  {trial.label(trialDays, Boolean(trial.requireCard))}
+                </p>
+              ) : null}
             </CardHeader>
             <CardContent className="flex-1 space-y-2.5">
               {features.map((f) => (
@@ -124,7 +145,9 @@ export function PricingGrid({
                 </Button>
               ) : (
                 <Button asChild className="w-full" variant={highlighted ? 'default' : 'outline'} size="lg">
-                  <Link href={signupHref}>{getStartedLabel}</Link>
+                  <Link href={signupHref}>
+                    {showTrial && trial && trialDays ? trial.ctaLabel(trialDays) : getStartedLabel}
+                  </Link>
                 </Button>
               )}
             </CardFooter>

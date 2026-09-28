@@ -18,6 +18,7 @@ from app.schemas import (
     ResendVerificationRequest,
     ResetPasswordRequest,
     SignupResponse,
+    TrialStartedOut,
     SubscriptionReceiptResponse,
     TokenResponse,
     UserCreate,
@@ -42,7 +43,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
-    user, receipt, needs_verify = auth_service.signup_with_receipt(db, user_data)
+    user, receipt, needs_verify, trial = auth_service.signup_with_receipt(db, user_data)
     co = db.query(Company).filter(Company.id == user.company_id).first()
     return SignupResponse(
         user=UserResponse.model_validate(user),
@@ -62,6 +63,7 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
             created_at=receipt.created_at,
         ),
         email_verification_required=needs_verify,
+        trial=TrialStartedOut(**trial),
     )
 
 

@@ -41,6 +41,9 @@ class UserCreate(StrictModel):
     password: str
     company_name: CompanyNameStr
     subscription_tier: Optional[ShortTextStr] = None
+    # Opt-in to the free trial chosen on the pricing page. Defaults on so an older
+    # client that predates the flag still lands on a trial rather than a payment wall.
+    start_trial: Optional[bool] = True
 
     @field_validator("email")
     @classmethod
@@ -174,10 +177,18 @@ class SubscriptionReceiptResponse(BaseModel):
         from_attributes = True
 
 
+class TrialStartedOut(BaseModel):
+    started: bool = False
+    days: Optional[int] = None
+    ends_at: Optional[datetime] = None
+    reason: Optional[str] = None
+
+
 class SignupResponse(BaseModel):
     user: UserResponse
     receipt: SubscriptionReceiptResponse
     email_verification_required: bool = False
+    trial: TrialStartedOut = Field(default_factory=TrialStartedOut)
 
 
 class ReceiptPublicResponse(BaseModel):
@@ -286,6 +297,15 @@ class PlanTierUpdate(BaseModel):
     features: Optional[dict[str, Any]] = None
     remove_features: Optional[list[str]] = None
     trial_days: Optional[int] = None
+
+
+class PublicTrialConfigOut(BaseModel):
+    """What the unauthenticated pricing/signup pages need to offer a trial."""
+
+    enabled: bool = True
+    default_days: Optional[int] = None
+    require_card: bool = False
+    eligible_tiers: List[str] = Field(default_factory=list)
 
 
 class PackageFeatureOut(BaseModel):

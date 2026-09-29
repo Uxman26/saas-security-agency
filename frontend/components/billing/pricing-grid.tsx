@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Sparkles } from 'lucide-react';
+import { CalendarClock, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PackageFeature, PlanTier } from '@/lib/types';
@@ -115,7 +115,7 @@ export function PricingGrid({
               )}
               {showTrial && trial && trialDays ? (
                 <p className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                  <Sparkles className="size-3.5 shrink-0" />
+                  <CalendarClock className="size-3.5 shrink-0" />
                   {trial.label(trialDays, Boolean(trial.requireCard))}
                 </p>
               ) : null}

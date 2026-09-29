@@ -59,6 +59,7 @@ from app.schemas import (
 )
 from app.services.company_service import get_company_by_user_id
 from app.services.portal_access import is_staff_portal_user, pinned_site_ids
+from app.services.recycle_bin import archive as _bin_archive
 
 # --- Event vocabulary ----------------------------------------------------------------
 
@@ -311,7 +312,7 @@ def delete_policy(db: Session, user: User, policy_id: int) -> None:
     policy = _owned_policy(db, company.id, policy_id)
     if db.query(LoneWorkerSession).filter(LoneWorkerSession.policy_id == policy.id, LoneWorkerSession.status == "active").first():
         raise HTTPException(status_code=409, detail="Policy is in use by an active session")
-    db.delete(policy)
+    _bin_archive(policy, user.id)
     db.commit()
 
 

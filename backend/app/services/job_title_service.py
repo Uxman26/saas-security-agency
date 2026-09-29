@@ -18,6 +18,8 @@ from app.models import Guard, JobTitle
 from app.schemas import JobTitleCreate, JobTitleResponse, JobTitleUpdate
 from app.services import audit_service
 from app.services.company_service import get_company_by_user_id
+from app.services.recycle_bin import archive as _bin_archive
+from app.services.recycle_bin import revive_if_binned as _bin_revive
 
 # What a company starts with, matching the list the staff form used to hard-code.
 DEFAULT_JOB_TITLES: tuple[str, ...] = (
@@ -118,8 +120,10 @@ def create_job_title(db: Session, data: JobTitleCreate, user_id: int) -> JobTitl
         raise HTTPException(status_code=422, detail="Job title cannot be empty")
     if _find_duplicate(db, company.id, name):
         raise HTTPException(status_code=409, detail="That job title already exists.")
-    row = JobTitle(company_id=company.id, name=name)
-    db.add(row)
+    row = _bin_revive(db, JobTitle, user_id, company_id=company.id, name=name)
+    if row is None:
+        row = JobTitle(company_id=company.id, name=name)
+        db.add(row)
     try:
         db.flush()
     except IntegrityError:
@@ -206,5 +210,5 @@ def delete_job_title(db: Session, job_title_id: int, user_id: int) -> None:
         entity_type="job_title",
         meta={"name": row.name},
     )
-    db.delete(row)
+    _bin_archive(row, user_id)
     db.commit()

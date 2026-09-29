@@ -77,6 +77,10 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     ("billing", "Billing", "CreditCard", "/settings/billing", 81, "sectionSettings"),
     ("sms", "SMS", "MessageSquare", "/settings/sms", 82, "sectionSettings"),
     ("email_settings", "Email", "Mail", "/settings/email", 83, "sectionSettings"),
+    # Everything deleted anywhere in the app lands here. Its own view right is what opens
+    # the bin; what a role can actually see, restore or destroy inside it is still decided
+    # per record type by that type's own module rights.
+    ("recycle_bin", "Recycle Bin", "Trash2", "/settings/recycle-bin", 84, "sectionSettings"),
 )
 
 # The coarse actions mirrored onto role_module_permissions for the legacy PERM_* bridge.
@@ -510,7 +514,7 @@ def expand_coarse_matrix_to_app_modules(coarse: dict[str, Any], modules: list[Ap
         if mod_key in keys:
             set_cell(mod_key, cell)
         elif mod_key == "settings":
-            for k in ("roles", "company", "billing", "special_days", "sms", "email_settings", "documents"):
+            for k in ("roles", "company", "billing", "special_days", "sms", "email_settings", "documents", "recycle_bin"):
                 set_cell(k, cell)
             if cell.get("view"):
                 set_cell("attendance", {"view": True, "create": False, "edit": False, "delete": False})

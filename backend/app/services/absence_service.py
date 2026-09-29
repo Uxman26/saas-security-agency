@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.models import ABSENCE_KINDS, ABSENCE_STATUSES, AbsenceRecord, Guard
 from app.services import audit_service
 from app.services.company_service import get_company_by_user_id
+from app.services.recycle_bin import archive as _bin_archive
 
 
 def _guard(db: Session, guard_id: int, company_id: int) -> Guard:
@@ -221,7 +222,7 @@ def delete_absence(db: Session, user_id: int, absence_id: int) -> None:
         entity_id=absence_id,
         meta={"guard_id": row.guard_id, "kind": row.kind},
     )
-    db.delete(row)
+    _bin_archive(row, user_id)
     db.commit()
 
 

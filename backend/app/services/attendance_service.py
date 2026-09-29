@@ -361,9 +361,10 @@ def sync_published_plan_attendance(db: Session, user_id: int, plan) -> None:
             status = _normalize_status(status_raw)
         except HTTPException:
             continue
+        # A missing note is not a reason to drop the status. The note is required at the
+        # point of entry; dropping it here instead left the shift reading as unmarked
+        # everywhere and prompting to be marked all over again.
         note = (record.get("note") or "").strip()
-        if status != "on_time" and not note:
-            continue
         scheduled_start = shift.get("scheduledStart") or shift.get("start") or ""
         assignment = find_assignment(
             db,

@@ -8,6 +8,7 @@ from app.models import Client, Payroll, Guard, Site, RotaPlan
 from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.work_filters import guard_ids_for_scope, resolve_work_scope
+from app.services.recycle_bin import archive as _bin_archive
 
 VALID_PAYMENT_MODES = {"100_bank", "100_cash", "split"}
 
@@ -538,7 +539,7 @@ def delete_payroll(db: Session, payroll_id: int, user_id: int) -> None:
     pr = db.query(Payroll).filter(Payroll.id == payroll_id, Payroll.company_id == company.id).first()
     if not pr:
         raise HTTPException(status_code=404, detail="Payroll not found")
-    db.delete(pr)
+    _bin_archive(pr, user_id)
     db.commit()
 
 def update_payroll(db: Session, payroll_id: int, data: PayrollUpdate, user_id: int) -> Payroll:

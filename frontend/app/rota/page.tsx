@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
 import {
@@ -62,6 +64,14 @@ function todayKey() {
 
 function isEnded(r: RotaPlanListItem) {
   return r.end_date < todayKey();
+}
+
+/** Calendar-day arithmetic on a YYYY-MM-DD key, kept in UTC so it never shifts a day. */
+function addDays(key: string, n: number) {
+  const d = new Date(`${key}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return key;
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 function isRunningNow(r: RotaPlanListItem) {
@@ -133,6 +143,14 @@ function RotaHubPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copySource, setCopySource] = useState<RotaPlanListItem | null>(null);
+  const [copyName, setCopyName] = useState('');
+  const [copyStart, setCopyStart] = useState('');
+  const [copyDays, setCopyDays] = useState('7');
+  const [copyIncludeAttendance, setCopyIncludeAttendance] = useState(false);
+  const [copyBusy, setCopyBusy] = useState(false);
 
   const [nameFilter, setNameFilter] = useState('');
   const [rangeFrom, setRangeFrom] = useState('');
@@ -325,23 +343,55 @@ function RotaHubPage() {
     })();
   };
 
+  /**
+   * A copy is nearly always the *next* period rather than a second rota sitting on top of
+   * the original's dates, so the dialog opens on the day after the source ends and lets the
+   * length be changed before anything is created.
+   */
   const onDuplicate = (r: RotaPlanListItem) => {
-    const name = window.prompt('Name for the copy', `${r.name} (copy)`);
-    if (name == null) return;
-    const trimmed = name.trim();
-    if (!trimmed) {
+    setCopySource(r);
+    setCopyName(`${r.name} (copy)`);
+    setCopyStart(addDays(r.end_date, 1));
+    setCopyDays(String(r.day_count));
+    setCopyIncludeAttendance(false);
+    setCopyOpen(true);
+  };
+
+  const submitCopy = () => {
+    if (!copySource) return;
+    const name = copyName.trim();
+    if (!name) {
       toast.warning('Please enter a rota name');
       return;
     }
+    if (!copyStart) {
+      toast.warning('Please choose a start date');
+      return;
+    }
+    const days = Math.round(Number(copyDays));
+    if (!Number.isFinite(days) || days < 1 || days > 90) {
+      toast.warning('Number of days must be between 1 and 90');
+      return;
+    }
+    const source = copySource;
     void (async () => {
-      setBusyId(r.id);
+      setCopyBusy(true);
+      setBusyId(source.id);
       try {
-        await api.rotaPlans.copy(r.id, { name: trimmed, start_date: r.start_date, day_count: r.day_count });
+        await api.rotaPlans.copy(source.id, {
+          name,
+          start_date: copyStart,
+          day_count: days,
+          include_attendance_and_notes: copyIncludeAttendance,
+        });
         toast.success('Rota duplicated');
+        setCopyOpen(false);
+        setCopySource(null);
         load();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Duplicate failed');
       } finally {
+        setCopyBusy(false);
         setBusyId(null);
       }
     })();
@@ -775,6 +825,79 @@ function RotaHubPage() {
                 },
               ]}
             />
+            <Dialog open={copyOpen} onOpenChange={(o) => { if (!copyBusy) setCopyOpen(o); }}>
+              <DialogContent showCloseButton className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Duplicate rota</DialogTitle>
+                  <DialogDescription>
+                    {copySource
+                      ? `Copying “${copySource.name}” (${copySource.start_date} – ${copySource.end_date}). Choose when the copy starts — the shift pattern moves with it.`
+                      : null}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="copy-name">Name</Label>
+                    <Input
+                      id="copy-name"
+                      value={copyName}
+                      onChange={(e) => setCopyName(e.target.value)}
+                      placeholder="Rota name"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="copy-start">Starts on</Label>
+                      <Input
+                        id="copy-start"
+                        type="date"
+                        value={copyStart}
+                        onChange={(e) => setCopyStart(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="copy-days">Days</Label>
+                      <Input
+                        id="copy-days"
+                        type="number"
+                        min={1}
+                        max={90}
+                        value={copyDays}
+                        onChange={(e) => setCopyDays(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {copyStart && Number(copyDays) >= 1 ? (
+                    <p className="text-xs text-muted-foreground">
+                      New period: {copyStart} – {addDays(copyStart, Math.max(0, Math.round(Number(copyDays)) - 1))}
+                    </p>
+                  ) : null}
+                  <label className="flex items-start gap-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 size-4 accent-primary"
+                      checked={copyIncludeAttendance}
+                      onChange={(e) => setCopyIncludeAttendance(e.target.checked)}
+                    />
+                    <span>
+                      Copy attendance, notes and adjustments
+                      <span className="block text-xs text-muted-foreground">
+                        Off by default — a future period starts with a clean slate.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" disabled={copyBusy} onClick={() => setCopyOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" disabled={copyBusy} onClick={submitCopy}>
+                    {copyBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Duplicate
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </ModulePage>
         </AppShell>
       </ModuleGuard>

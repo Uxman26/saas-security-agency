@@ -4,6 +4,7 @@ from typing import List
 from app.models import Allowance
 from app.schemas import AllowanceCreate
 from app.services.company_service import get_company_by_user_id
+from app.services.recycle_bin import archive as _bin_archive
 
 def create_allowance(db: Session, data: AllowanceCreate, user_id: int) -> Allowance:
     company = get_company_by_user_id(db, user_id)
@@ -41,5 +42,5 @@ def delete_allowance(db: Session, allowance_id: int, user_id: int) -> None:
     a = db.query(Allowance).filter(Allowance.id == allowance_id, Allowance.company_id == company.id).first()
     if not a:
         raise HTTPException(status_code=404, detail="Allowance not found")
-    db.delete(a)
+    _bin_archive(a, user_id)
     db.commit()

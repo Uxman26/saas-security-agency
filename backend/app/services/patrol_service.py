@@ -47,6 +47,7 @@ from app.services.portal_access import (
     pinned_site_ids,
 )
 from app.storage_paths import resolve_storage_path
+from app.services.recycle_bin import archive as _bin_archive
 
 
 def _qr_base_url() -> str:
@@ -261,7 +262,7 @@ def delete_route(db: Session, user: User, route_id: int) -> None:
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
     _assert_site_in_portal_scope(db, user, route.site_id)
-    db.delete(route)
+    _bin_archive(route, user.id)
     db.commit()
 
 

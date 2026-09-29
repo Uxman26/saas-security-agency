@@ -491,6 +491,19 @@ export const api = {
         body: JSON.stringify({ planner_data, format }),
       }),
   },
+  recycleBin: {
+    list: (params?: { resource?: string; search?: string }): Promise<import('./types').RecycleBinResponse> => {
+      const q = new URLSearchParams();
+      if (params?.resource) q.set('resource', params.resource);
+      if (params?.search) q.set('search', params.search);
+      const qs = q.toString();
+      return request<import('./types').RecycleBinResponse>(`/recycle-bin${qs ? `?${qs}` : ''}`);
+    },
+    restore: (resource: string, id: string): Promise<void> =>
+      request<void>(`/recycle-bin/${resource}/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
+    purge: (resource: string, id: string): Promise<void> =>
+      request<void>(`/recycle-bin/${resource}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  },
   staffRequests: {
     list: (status?: string): Promise<import('./types').StaffRequest[]> =>
       request<import('./types').StaffRequest[]>(status ? `/staff-requests?status=${status}` : '/staff-requests'),

@@ -5,6 +5,7 @@ from app.models import SubContractor, MainContractor, Guard, Site
 from app.schemas import SubContractorCreate
 from app.services.company_service import get_company_by_user_id
 from app.services.plan_enforcement import enforce_feature
+from app.services.recycle_bin import archive as _bin_archive
 
 
 def _subs_feature(company):
@@ -97,5 +98,5 @@ def delete_sub_contractor(db: Session, sub_contractor_id: int, user_id: int) -> 
         raise HTTPException(status_code=400, detail="Reassign or remove guards linked to this sub-contractor first.")
     if db.query(Site).filter(Site.sub_contractor_id == sub_contractor_id).first():
         raise HTTPException(status_code=400, detail="Reassign or remove sites linked to this sub-contractor first.")
-    db.delete(sub_contractor)
+    _bin_archive(sub_contractor, user_id)
     db.commit()

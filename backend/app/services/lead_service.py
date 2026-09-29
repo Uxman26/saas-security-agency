@@ -39,6 +39,7 @@ from app.services import audit_service, invoice_service
 from app.services.lead_email_service import email_for_lead_event
 from app.services.company_service import get_company_by_user_id
 from app.services.module_service import is_module_enabled
+from app.services.recycle_bin import archive as _bin_archive
 
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "uploads")
 
@@ -473,7 +474,7 @@ def delete_lead(db: Session, user_id: int, lead_id: int) -> None:
         entity_id=lead.id,
         meta={"title": lead.title},
     )
-    db.delete(lead)
+    _bin_archive(lead, user_id)
     db.commit()
 
 

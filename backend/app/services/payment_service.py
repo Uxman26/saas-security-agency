@@ -8,6 +8,7 @@ from app.schemas import PaymentCreate, PaymentUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.invoice_payment_service import sync_invoice_payment_status
 from app.services.invoice_service import log_invoice_audit
+from app.services.recycle_bin import archive as _bin_archive
 
 
 def _assert_within_balance(
@@ -82,7 +83,7 @@ def delete_payment(db: Session, payment_id: int, user_id: int) -> None:
     if not pay:
         raise HTTPException(status_code=404, detail="Payment not found")
     inv_id = pay.invoice_id
-    db.delete(pay)
+    _bin_archive(pay, user_id)
     db.flush()
     if inv_id:
         inv = db.query(Invoice).filter(Invoice.id == inv_id, Invoice.company_id == company.id).first()

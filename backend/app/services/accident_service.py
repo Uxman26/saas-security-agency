@@ -24,6 +24,7 @@ from app.services.portal_access import (
     is_staff_portal_user,
     pinned_site_ids,
 )
+from app.services.recycle_bin import archive as _bin_archive
 
 STATUSES = ("open", "under_review", "closed")
 
@@ -214,5 +215,5 @@ def update_report(
 def delete_report(db: Session, user: User, report_id: int) -> None:
     company = get_company_by_user_id(db, user.id)
     row = _row_for_write(db, user, company.id, report_id)
-    db.delete(row)
+    _bin_archive(row, user.id)
     db.commit()

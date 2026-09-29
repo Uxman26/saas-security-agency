@@ -428,6 +428,8 @@ class JobTitle(Base):
     __tablename__ = "job_titles"
     __table_args__ = (UniqueConstraint("company_id", "name", name="uq_job_title_company_name"),)
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -438,6 +440,8 @@ class JobTitle(Base):
 class Contractor(Base):
     __tablename__ = "contractors"
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     type = Column(Enum(ContractorKind, values_callable=lambda x: [e.value for e in x], native_enum=False), nullable=False)
@@ -649,6 +653,8 @@ class Guard(Base):
 class GuardDocument(Base):
     __tablename__ = "guard_documents"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
     document_type = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
@@ -697,6 +703,8 @@ class Team(Base):
     __tablename__ = "teams"
     __table_args__ = (UniqueConstraint("company_id", "name", name="uq_team_company_name"),)
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(String)
@@ -736,6 +744,8 @@ class AbsenceRecord(Base):
 
     __tablename__ = "absence_records"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
     kind = Column(String, nullable=False, index=True)
@@ -828,6 +838,8 @@ class SpecialDay(Base):
     __tablename__ = "special_days"
     __table_args__ = (UniqueConstraint("company_id", "date", name="uq_special_days_company_date"),)
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     date = Column(Date, nullable=False)
     label = Column(String, nullable=False)
@@ -879,6 +891,8 @@ class Site(Base):
 class RotaPlan(Base):
     __tablename__ = "rota_plans"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     name = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
@@ -1023,6 +1037,8 @@ class SiteRate(Base):
 class Allowance(Base):
     __tablename__ = "allowances"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     name = Column(String, nullable=False)
     allowance_type = Column(String, default="fixed")
@@ -1052,6 +1068,8 @@ class Attendance(Base):
 class Payroll(Base):
     __tablename__ = "payroll"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
     period_start = Column(Date, nullable=False)
@@ -1070,6 +1088,8 @@ class Payroll(Base):
 class Invoice(Base):
     __tablename__ = "invoices"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     # Optional: a site need not belong to a client, and an invoice can be raised straight
     # against such a site. The site name stands in for the customer wherever one is shown.
@@ -1114,6 +1134,8 @@ class InvoiceLine(Base):
 class Payment(Base):
     __tablename__ = "payments"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
     amount = Column(Float, nullable=False)
@@ -1126,6 +1148,8 @@ class Payment(Base):
 class MainContractor(Base):
     __tablename__ = "main_contractors"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     name = Column(String, nullable=False)
     contact_person = Column(String)
@@ -1148,6 +1172,8 @@ class MainContractor(Base):
 class SubContractor(Base):
     __tablename__ = "sub_contractors"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
     main_contractor_id = Column(Integer, ForeignKey("main_contractors.id"))
     name = Column(String, nullable=False)
@@ -1172,6 +1198,8 @@ class SubContractor(Base):
 class Expense(Base):
     __tablename__ = "expenses"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     expense_date = Column(Date, nullable=False)
     category = Column(String, nullable=False)
@@ -1208,6 +1236,8 @@ DEFAULT_LEAD_STATUSES = (
 class Lead(Base):
     __tablename__ = "leads"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     title = Column(String, nullable=False)
     organization = Column(String)
@@ -1523,6 +1553,8 @@ class ShiftAuditLog(Base):
 class PatrolRoute(Base):
     __tablename__ = "patrol_routes"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
@@ -1628,6 +1660,8 @@ class PatrolAlert(Base):
 class Incident(Base):
     __tablename__ = "incidents"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"))
     site_id = Column(Integer, ForeignKey("sites.id"))
@@ -1666,6 +1700,8 @@ class AccidentReport(Base):
 
     __tablename__ = "accident_reports"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), index=True)
     client_id = Column(Integer, ForeignKey("clients.id"))
@@ -1728,6 +1764,8 @@ class Task(Base):
 
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     guard_id = Column(Integer, ForeignKey("guards.id"), index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), index=True)
@@ -1754,6 +1792,8 @@ class OccurrenceSheet(Base):
 
     __tablename__ = "occurrence_sheets"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), index=True)
     client_id = Column(Integer, ForeignKey("clients.id"))
@@ -1808,6 +1848,8 @@ class LoneWorkerPolicy(Base):
 
     __tablename__ = "lone_worker_policies"
     id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), index=True)
     name = Column(String, nullable=False)

@@ -20,6 +20,7 @@ from app.services.image_avif_service import (
     encode_avif_bytes,
     is_image_filename,
 )
+from app.services.recycle_bin import archive as _bin_archive
 
 ALLOWED_EXT = {".pdf", ".doc", ".docx", AVIF_EXT} | IMAGE_INPUT_EXT
 MAX_TOTAL_BYTES = 5 * 1024 * 1024
@@ -422,11 +423,6 @@ def delete_document(db: Session, doc_id: int, user_id: int) -> None:
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    path = resolve_storage_path(doc.file_path)
-    if path and os.path.isfile(path):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-    db.delete(doc)
+    # The file stays on disk so a restore from the bin brings back a working document.
+    _bin_archive(doc, user_id)
     db.commit()

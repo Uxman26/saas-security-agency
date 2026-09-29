@@ -38,6 +38,7 @@ export const ALL_SIDEBAR_PATHS = [
   '/client-portal/request-staff',
   '/requests',
   '/settings/billing',
+  '/settings/recycle-bin',
 ] as const;
 
 export const SIDEBAR_LABELS: Record<string, string> = {
@@ -74,6 +75,7 @@ export const SIDEBAR_LABELS: Record<string, string> = {
   '/requests': 'Staff requests',
   '/my-portal': 'My portal',
   '/settings/billing': 'Billing',
+  '/settings/recycle-bin': 'Recycle Bin',
 };
 
 export function sidebarPathAllowed(modules: string[] | null | undefined, href: string): boolean {

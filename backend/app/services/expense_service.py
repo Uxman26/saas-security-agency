@@ -13,6 +13,7 @@ from app.schemas import ExpenseCreate, ExpenseUpdate
 from app.services.company_service import get_company_by_user_id
 from app.storage_paths import EXPENSES_DIR, ensure_upload_dirs, resolve_storage_path
 from app.services.image_avif_service import AVIF_EXT, AVIF_MIME, IMAGE_INPUT_EXT, is_image_filename, save_bytes_as_avif
+from app.services.recycle_bin import archive as _bin_archive
 
 VAT_RATE = 0.20
 MAX_DOC_BYTES = 300 * 1024
@@ -142,13 +143,9 @@ def update_expense(db: Session, expense_id: int, data: ExpenseUpdate, user_id: i
 
 def delete_expense(db: Session, expense_id: int, user_id: int) -> None:
     exp = _get_expense(db, expense_id, user_id)
-    path = resolve_storage_path(exp.document_path)
-    if path and os.path.isfile(path):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-    db.delete(exp)
+    # The receipt file stays put: the expense can be restored from the bin, and a
+    # restored expense with no receipt would be worse than an orphaned file.
+    _bin_archive(exp, user_id)
     db.commit()
 
 

@@ -18,6 +18,7 @@ from app.services.portal_access import (
     is_portal_role,
     is_staff_portal_user,
 )
+from app.services.recycle_bin import archive as _bin_archive
 
 PRIORITIES = ("low", "normal", "high", "urgent")
 STATUSES = ("todo", "in_progress", "done", "cancelled")
@@ -211,5 +212,5 @@ def delete_task(db: Session, user: User, task_id: int) -> None:
     if is_portal_role(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     row = _row_for_write(db, user, company.id, task_id)
-    db.delete(row)
+    _bin_archive(row, user.id)
     db.commit()

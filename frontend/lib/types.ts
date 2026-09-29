@@ -2388,3 +2388,28 @@ export interface DocumentReceipt {
   read_at?: string | null;
   accepted_at?: string | null;
 }
+
+export interface RecycleBinItem {
+  resource: string;
+  resource_label: string;
+  id: string;
+  title: string;
+  subtitle: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+}
+
+export interface RecycleBinResource {
+  key: string;
+  label: string;
+  plural: string;
+  can_restore: boolean;
+  can_purge: boolean;
+}
+
+export interface RecycleBinResponse {
+  items: RecycleBinItem[];
+  counts: Record<string, number>;
+  total: number;
+  resources: RecycleBinResource[];
+}

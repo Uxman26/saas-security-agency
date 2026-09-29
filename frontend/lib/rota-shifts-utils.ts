@@ -160,6 +160,18 @@ export function normalizeAttStatus(s: string | undefined | null): AttStatus | nu
   return null;
 }
 
+/**
+ * Whether anyone has recorded an outcome for this shift.
+ *
+ * Deliberately wider than `normalizeAttStatus`: that maps a status onto the four the rota
+ * screen can draw and returns null for anything else, so statuses recorded elsewhere (an
+ * early leave logged on the Attendance page, say) read as "never marked" and the rota goes
+ * on asking for them. A shift is marked if it carries any status at all.
+ */
+export function isAttendanceMarked(s: string | undefined | null): boolean {
+  return !!(s || '').trim();
+}
+
 export function attStatusLabel(s: AttStatus | string | null | undefined): string {
   const n = normalizeAttStatus(s ?? null);
   switch (n) {

@@ -10,6 +10,7 @@ from app.contractor_schemas import AssignmentCreate, AssignmentRead, ContractorC
 from app.services import audit_service
 from app.services.contractor_scope import assert_unified_main_sub_same_company
 from app.services.plan_enforcement import check_contractors_feature, check_sub_contractors_feature
+from app.services.recycle_bin import archive as _bin_archive
 
 
 def create_contractor(db: Session, company_id: int, data: ContractorCreate, current_user: User) -> ContractorRead:
@@ -163,7 +164,7 @@ def delete_contractor(db: Session, company_id: int, contractor_id: UUID, current
         entity_type="contractor",
         meta={"contractor_id": str(contractor_id), "name": row.name, "type": row.type.value},
     )
-    db.delete(row)
+    _bin_archive(row, current_user.id)
     db.commit()
 
 

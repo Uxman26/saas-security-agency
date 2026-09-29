@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtShortDate, formatHoursDecimal, formatMoney, initials, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, normalizeShiftType, shiftTypeOption } from '@/lib/rota-shifts-types';
@@ -873,7 +873,7 @@ export function RotaCalendarClient() {
   /** Started (or should have), and nobody has marked it on time / late / absent / no show. */
   const isAttendanceMissing = useCallback(
     (dk: string, sh: { start?: string }, att: { status?: string } | undefined) => {
-      if (normalizeAttStatus(att?.status)) return false;
+      if (isAttendanceMarked(att?.status)) return false;
       if (!sh.start) return false;
       return shiftStartTs(dk, sh.start) <= nowTs;
     },
@@ -4255,7 +4255,7 @@ export function RotaCalendarClient() {
         (() => {
           const menuSh = state.shifts[shiftMenu.empId]?.[shiftMenu.dk]?.[shiftMenu.idx];
           const menuAtt = state.attendance[attKey(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)];
-          const hasAttendance = !!normalizeAttStatus(menuAtt?.status);
+          const hasAttendance = isAttendanceMarked(menuAtt?.status);
           const menuOt = menuSh ? latestShiftAdjustment(menuSh, 'overtime') : null;
           const menuEf = menuSh ? latestShiftAdjustment(menuSh, 'early_finish') : null;
           const hasOvertime = !!(menuOt && minutesBetweenTimes(menuOt.scheduledEnd, menuOt.actualEnd) > 0);

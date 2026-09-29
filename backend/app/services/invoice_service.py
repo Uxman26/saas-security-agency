@@ -12,6 +12,7 @@ from app.services.rate_service import resolve_billing_rate
 from app.services.special_day_service import special_date_set
 from app.services.rota_service import calc_shift_hours, normalize_shift_type
 from app.services.work_filters import resolve_work_scope
+from app.services.recycle_bin import archive as _bin_archive
 
 
 DEFAULT_INVOICE_VAT_RATE = 20.0
@@ -695,7 +696,7 @@ def delete_invoice(db: Session, invoice_id: int, user_id: int) -> None:
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     log_invoice_audit(db, company.id, user_id, invoice_id, "invoice_deleted", {})
-    db.delete(inv)
+    _bin_archive(inv, user_id)
     db.commit()
 
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftAuditLog, ShiftLateLog, Site
 from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
 from app.services import shift_audit_service
+from app.services.recycle_bin import archive as _bin_archive
 from app.services.company_service import get_company_by_user_id
 from app.services.rota_service import normalize_shift_type
 from app.services.work_filters import WorkScope, resolve_work_scope
@@ -502,9 +503,34 @@ def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
     base = _to_list_item(db, plan)
     return RotaPlanDetail(
         **base.model_dump(),
-        planner_data=plan.planner_data,
+        # Not the stored planner verbatim: attendance recorded against the assignments —
+        # from Attendance, the staff portal, the by-shift API — is laid over the planner's
+        # own copy first. Without that the rota screen only ever sees what was marked on
+        # the rota screen, so a shift marked absent elsewhere still reads as unmarked and
+        # keeps asking to be marked.
+        planner_data=_planner_data_with_recorded_attendance(db, plan),
         published_guard_ids=_published_guard_ids(db, plan.id),
     )
+
+
+def _planner_data_with_recorded_attendance(db: Session, plan: RotaPlan) -> Optional[str]:
+    """The plan's planner data, reconciled with the attendance actually on record.
+
+    The merge is written back rather than just returned. Leaving the two copies to
+    disagree is what made this a data-loss bug and not only a display one: publishing
+    rebuilds attendance from the stored planner, so a stale ``on_time`` there would
+    overwrite an absence recorded on the Attendance screen the next time anyone
+    republished. Healing the stored copy on read keeps a single answer in the system.
+    """
+    payload = _parse_planner(plan.planner_data)
+    if not payload:
+        return plan.planner_data
+    merged = _overlay_recorded_attendance(db, plan, payload)
+    if merged is payload or merged.get("attendance") == payload.get("attendance"):
+        return plan.planner_data
+    plan.planner_data = json.dumps(merged)
+    db.commit()
+    return plan.planner_data
 
 
 def _portal_rota_detail(db: Session, user, plan: RotaPlan) -> RotaPlanDetail:
@@ -820,22 +846,114 @@ def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str])
     return out
 
 
+ATTENDANCE_STATUSES = {"on_time", "late", "absent", "no_show", "early_leave"}
+
+
+def _attendance_shift_key(guard_id: int, shift_date: date, start, site_id) -> tuple:
+    """Identity of a shift that survives its assignment row being rebuilt on publish."""
+    return (int(guard_id), shift_date, (start or "").strip(), site_id)
+
+
+def _recorded_attendance_by_shift(
+    db: Session, plan_id: int, guard_id: Optional[int] = None
+) -> dict[tuple, dict]:
+    q = (
+        db.query(Attendance, Assignment)
+        .join(Assignment, Attendance.assignment_id == Assignment.id)
+        .filter(Assignment.rota_plan_id == plan_id)
+    )
+    if guard_id is not None:
+        q = q.filter(Assignment.guard_id == guard_id)
+    out: dict[tuple, dict] = {}
+    for att, a in q.all():
+        status = (att.status or "").strip()
+        if status not in ATTENDANCE_STATUSES:
+            continue
+        key = _attendance_shift_key(a.guard_id, a.date, a.shift_start, a.site_id)
+        out.setdefault(key, {"status": status, "note": att.note, "booked_at": att.booked_at})
+    return out
+
+
+def _overlay_recorded_attendance(db: Session, plan: RotaPlan, payload: dict) -> dict:
+    """Let attendance recorded against assignments win over the planner's own copy.
+
+    The planner keeps a map of attendance keyed by slot so a draft can be marked before it
+    is published, but it is only ever written by the rota screen. Anything marked through
+    Attendance, the staff portal or the by-shift API lands on the assignment row instead,
+    and without this the rota would keep reporting those shifts as unmarked and keep
+    offering to mark them — then overwrite the real record on the next publish.
+
+    Only shifts that resolve to an assignment are touched, so an unpublished plan and any
+    slot the rebuild could not line up keep exactly what the planner stored.
+    """
+    slots = _slot_map_for_plan(db, plan, payload)
+    if not slots:
+        return payload
+    recorded = _attendance_for_assignments(db, slots)
+    if not recorded:
+        return payload
+    merged = dict(payload.get("attendance") or {})
+    for key, rec in recorded.items():
+        if not (rec.get("status") or "").strip():
+            continue
+        existing = merged.get(key)
+        # Keep the planner's hours/lateMinutes, which the assignment row does not carry.
+        merged[key] = {**existing, **rec} if isinstance(existing, dict) else rec
+    out = dict(payload)
+    out["attendance"] = merged
+    return out
+
+
+def _slot_map_for_plan(db: Session, plan: RotaPlan, payload: dict) -> dict[int, str]:
+    """assignment id -> "emp:day:slot", matched against the payload actually being returned."""
+    rows = (
+        db.query(Assignment)
+        .filter(Assignment.rota_plan_id == plan.id)
+        .order_by(Assignment.date, Assignment.id)
+        .all()
+    )
+    if not rows:
+        return {}
+    shifts = payload.get("shifts") or {}
+    used: set[str] = set()
+    out: dict[int, str] = {}
+    for a in rows:
+        eid = str(a.guard_id)
+        dk = a.date.isoformat()
+        blocks = (shifts.get(eid) or {}).get(dk) or []
+        for slot, block in enumerate(blocks):
+            if not isinstance(block, dict):
+                continue
+            key = f"{eid}:{dk}:{slot}"
+            if key in used:
+                continue
+            start = (block.get("scheduledStart") or block.get("start") or "").strip()
+            if start and (a.shift_start or "").strip() and start != (a.shift_start or "").strip():
+                continue
+            used.add(key)
+            out[a.id] = key
+            break
+    return out
+
+
 def _extract_payload(db: Session, plan: RotaPlan) -> dict:
     planner = _parse_planner(plan.planner_data)
     built = _payload_from_assignments(db, plan, planner)
 
     if planner and _shift_count(planner.get("shifts")) > 0:
-        return _normalize_payload(planner, plan)
+        payload = _normalize_payload(planner, plan)
+    elif _shift_count(built.get("shifts")) > 0:
+        payload = (
+            _merge_planner_with_assignments(planner, built, plan)
+            if planner
+            else _normalize_payload(built, plan)
+        )
+    elif planner:
+        payload = _normalize_payload(planner, plan)
+    else:
+        payload = _normalize_payload(built, plan)
 
-    if _shift_count(built.get("shifts")) > 0:
-        if planner:
-            return _merge_planner_with_assignments(planner, built, plan)
-        return _normalize_payload(built, plan)
-
-    if planner:
-        return _normalize_payload(planner, plan)
-
-    return _normalize_payload(built, plan)
+    return _overlay_recorded_attendance(db, plan, payload)
 
 
 def _remap_payload(
@@ -1093,11 +1211,15 @@ def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
         planner_json=plan.planner_data,
         action="shift_deleted",
     )
-    for row in db.query(ShiftAuditLog).filter(ShiftAuditLog.rota_plan_id == plan.id).all():
-        row.rota_plan_id = None
-    db.flush()
+    # The plan goes to the Recycle Bin rather than being destroyed, so its planner data —
+    # the part that took work to build — can be brought back. Its published assignments are
+    # still withdrawn, because a deleted rota must stop driving attendance, payroll and
+    # invoicing the moment it is deleted; restoring returns it as an unpublished draft.
+    # The audit trail keeps pointing at the surviving plan row.
     _delete_plan_assignments(db, plan.id)
-    db.delete(plan)
+    plan.status = "draft"
+    plan.published_at = None
+    _bin_archive(plan, user_id)
     db.commit()
 
 
@@ -1159,6 +1281,12 @@ def publish_rota_plan(
         db.flush()
         site_by_name[key] = site.id
         return site.id
+
+    # Publishing rebuilds the assignment rows from scratch, which takes their attendance
+    # with them. Anything marked outside the rota screen — Attendance, the staff portal,
+    # the by-shift API — lives only on those rows, so it is carried across by shift
+    # identity and re-applied below wherever the planner has nothing to say.
+    prior_attendance = _recorded_attendance_by_shift(db, plan.id, guard_id)
 
     _delete_plan_assignments(db, plan.id, guard_id)
 
@@ -1236,15 +1364,25 @@ def publish_rota_plan(
                     )
                 raw_status = str(att_rec.get("status") or "").strip().lower().replace(" ", "_")
                 status = "on_time" if raw_status == "present" else raw_status
-                if status in {"on_time", "late", "absent", "no_show", "early_leave"}:
+                note = (att_rec.get("note") or "").strip() or None
+                booked_at = None
+                if status not in ATTENDANCE_STATUSES:
+                    carried = prior_attendance.get(
+                        _attendance_shift_key(emp_guard_id, assignment.date, sh.get("start"), site_id)
+                    )
+                    if carried:
+                        status, note, booked_at = carried["status"], carried["note"], carried["booked_at"]
+                if status in ATTENDANCE_STATUSES:
                     marked = Attendance(
                         assignment_id=assignment.id,
                         guard_id=emp_guard_id,
                         status=status,
-                        note=(att_rec.get("note") or "").strip() or None,
+                        note=note,
                         updated_by_user_id=user_id,
                     )
-                    if status in {"on_time", "late"}:
+                    if booked_at:
+                        marked.booked_at = booked_at
+                    elif status in {"on_time", "late"}:
                         marked.booked_at = datetime.now(timezone.utc)
                     db.add(marked)
                 created += 1

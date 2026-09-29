@@ -5,6 +5,8 @@ from fastapi import HTTPException
 from app.models import SpecialDay
 from app.services.company_service import get_company_by_user_id
 from app.services.uk_bank_holidays import uk_england_wales_entries
+from app.services.recycle_bin import archive as _bin_archive
+from app.services.recycle_bin import revive_if_binned as _bin_revive
 
 
 def special_date_set(db: Session, company_id: int) -> Set[date]:
@@ -51,8 +53,12 @@ def create_day(db: Session, user_id: int, d: date, label: str) -> SpecialDay:
         db.commit()
         db.refresh(existing)
         return existing
-    row = SpecialDay(company_id=company.id, date=d, label=lab)
-    db.add(row)
+    row = _bin_revive(db, SpecialDay, user_id, company_id=company.id, date=d)
+    if row is not None:
+        row.label = lab
+    else:
+        row = SpecialDay(company_id=company.id, date=d, label=lab)
+        db.add(row)
     db.commit()
     db.refresh(row)
     return row
@@ -63,7 +69,7 @@ def delete_day(db: Session, user_id: int, day_id: int) -> None:
     row = db.query(SpecialDay).filter(SpecialDay.id == day_id, SpecialDay.company_id == company.id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Special day not found")
-    db.delete(row)
+    _bin_archive(row, user_id)
     db.commit()
 
 

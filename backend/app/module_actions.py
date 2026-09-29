@@ -70,23 +70,26 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("terminate", "Record termination", "edit"),
     ),
     "absence": CRUD
+    + ARCHIVING
     + (
         ActionDef("approve", "Approve or decline", "edit"),
         ActionDef("export", "Export", "view"),
     ),
     "documents": (VIEW, CREATE, DELETE)
+    + ARCHIVING
     + (
         ActionDef("upload", "Upload files", "create"),
         ActionDef("download", "Download files", "view"),
     ),
     "contractors": CRUD
+    + ARCHIVING
     + (
         ActionDef("deactivate", "Deactivate", "delete"),
         ActionDef("assignments_view", "View assignments", "view"),
         ActionDef("assign", "Assign to site", "edit"),
         ActionDef("unassign", "Remove assignment", "edit"),
     ),
-    "sub_contractors": CRUD,
+    "sub_contractors": CRUD + ARCHIVING,
     "attendance": CRUD
     + (
         ActionDef("book", "Book attendance", "create"),
@@ -125,6 +128,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     # Assignments screen and sidebar entry.
     "assignments": CRUD,
     "rota": CRUD
+    + ARCHIVING
     + (
         ActionDef("publish", "Publish", "edit"),
         ActionDef("unpublish", "Unpublish", "edit"),
@@ -139,6 +143,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     ),
     "rota_payable": (VIEW,),
     "patrol": CRUD
+    + ARCHIVING
     + (
         ActionDef("checkpoint_create", "Add checkpoints", "create"),
         ActionDef("checkpoint_edit", "Edit checkpoints", "edit"),
@@ -156,6 +161,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     # (session_start / check_in / sos), the controller watching the board (monitor /
     # respond / resolve) and the admin who writes the rules (policy_*).
     "lone_worker": CRUD
+    + ARCHIVING
     + (
         ActionDef("policy_view", "View check call rules", "view"),
         ActionDef("policy_manage", "Manage check call rules", "edit"),
@@ -168,6 +174,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("audit_view", "Lone worker audit log", "view"),
     ),
     "incidents": CRUD
+    + ARCHIVING
     + (
         ActionDef("create_with_images", "Report with images", "create"),
         ActionDef("status_change", "Change status", "edit"),
@@ -178,12 +185,14 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     # The accident log is HSE paperwork, not an operational incident — separate module so
     # a role can report incidents without seeing injury records, and vice versa.
     "accident_reports": CRUD
+    + ARCHIVING
     + (
         ActionDef("status_change", "Change status", "edit"),
         ActionDef("pdf_download", "Download PDF", "view"),
         ActionDef("blank_form", "Print blank form", "view"),
     ),
     "occurrence_sheets": CRUD
+    + ARCHIVING
     + (
         ActionDef("status_change", "Change status", "edit"),
         ActionDef("pdf_download", "Download PDF", "view"),
@@ -192,6 +201,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     # `complete` is separate from `edit` on purpose: the assignee ticks their own work
     # off without holding the right to rewrite or reassign what they were given.
     "tasks": CRUD
+    + ARCHIVING
     + (
         ActionDef("assign", "Assign to employee", "edit"),
         ActionDef("complete", "Mark complete", "view"),
@@ -209,6 +219,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("renewals_view", "View renewals", "view"),
     ),
     "leads": CRUD
+    + ARCHIVING
     + (
         ActionDef("assign", "Assign owner", "edit"),
         ActionDef("status_change", "Change status", "edit"),
@@ -230,11 +241,13 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     ),
     # --- Finance --------------------------------------------------------------------
     "payroll": CRUD
+    + ARCHIVING
     + (
         ActionDef("calculate", "Calculate", "edit"),
         ActionDef("calculate_batch", "Batch calculate", "edit"),
     ),
     "invoices": CRUD
+    + ARCHIVING
     + (
         ActionDef("generate", "Generate from rota", "create"),
         ActionDef("duplicate", "Duplicate", "create"),
@@ -246,8 +259,9 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("line_edit", "Edit lines", "edit"),
         ActionDef("line_delete", "Delete lines", "edit"),
     ),
-    "payments": CRUD,
+    "payments": CRUD + ARCHIVING,
     "expenses": CRUD
+    + ARCHIVING
     + (
         ActionDef("document_upload", "Attach receipts", "edit"),
         ActionDef("document_download", "Download receipts", "view"),
@@ -258,7 +272,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     ),
     # special_days.py is guarded by the allowances module, so its seeding action lives
     # here rather than on the special_days page row.
-    "allowances": CRUD + (ActionDef("seed_uk", "Seed UK bank holidays", "create"),),
+    "allowances": CRUD + ARCHIVING + (ActionDef("seed_uk", "Seed UK bank holidays", "create"),),
     # --- Reports --------------------------------------------------------------------
     "reports": (VIEW,)
     + (
@@ -298,12 +312,13 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("stripe_portal", "Open Stripe portal", "edit"),
         ActionDef("connect_account", "Connect payout account", "edit"),
     ),
-    "special_days": (VIEW, CREATE, DELETE),
+    "special_days": (VIEW, CREATE, DELETE) + ARCHIVING,
     "sms": (VIEW, EDIT)
     + (
         ActionDef("send", "Send SMS", "edit"),
         ActionDef("logs_view", "View SMS logs", "view"),
     ),
+    "recycle_bin": (VIEW,),
     "email_settings": (VIEW, EDIT)
     + (
         ActionDef("send", "Send email", "edit"),

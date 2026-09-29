@@ -2,13 +2,20 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
-from app.routers import teams, absence
+from app.routers import teams, absence, recycle_bin
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, admin_ext, admin_complete, admin_trials, admin_refunds, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.middleware.client_source import ClientSourceMiddleware
 from app.database import engine, Base
 from app.config import settings
 from app.openapi import configure_openapi
+
+# Soft delete is enforced centrally rather than query by query: once this is installed a
+# deleted row is invisible to every ORM read that has not explicitly asked for it.
+from app.services.recycle_bin import install_filter as _install_soft_delete_filter
+
+_install_soft_delete_filter()
+
 
 def _ensure_db():
     if settings.database_url.startswith("sqlite"):
@@ -147,6 +154,7 @@ app.include_router(accident_reports.router)
 app.include_router(occurrence_sheets.router)
 app.include_router(tasks.router)
 app.include_router(lone_worker.router)
+app.include_router(recycle_bin.router)
 
 # The uploads directory is deliberately NOT mounted as static files. It holds guard
 # documents, incident photos and patrol scans, so serving it publicly would let anyone

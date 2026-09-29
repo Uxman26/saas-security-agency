@@ -29,6 +29,7 @@ from app.services.portal_access import (
     is_staff_portal_user,
     pinned_site_ids,
 )
+from app.services.recycle_bin import archive as _bin_archive
 
 STATUSES = ("open", "submitted", "closed")
 MAX_ENTRIES = 60
@@ -236,5 +237,5 @@ def update_sheet(
 def delete_sheet(db: Session, user: User, sheet_id: int) -> None:
     company = get_company_by_user_id(db, user.id)
     row = _row_for_write(db, user, company.id, sheet_id)
-    db.delete(row)
+    _bin_archive(row, user.id)
     db.commit()

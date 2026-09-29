@@ -20,6 +20,7 @@ import { api } from '@/lib/api';
 import { setLocale } from '@/actions/locale';
 import { ChevronRight, Eye, EyeOff, Globe, Lock, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { LoginHeroPanel } from '@/components/auth/login-hero-panel';
 
 const ORANGE = '#F45100';
 
@@ -237,11 +238,7 @@ function LoginForm() {
 
       <div className="relative z-10 grid min-h-svh w-full lg:grid-cols-[minmax(0,1.2fr)_minmax(460px,0.8fr)]">
         <section className="relative hidden min-h-svh lg:block">
-          <img
-            src="/auth/login-left.jpg"
-            alt="ControlOps workforce operations: live shift tracking, geo-verified clock in, patrols, payroll and invoices"
-            className="absolute inset-0 h-full w-full object-contain object-left object-center pl-4 pr-2"
-          />
+          <LoginHeroPanel />
         </section>
 
         <section className="relative flex min-h-svh flex-col px-4 pb-8 sm:px-8 lg:px-8 lg:pr-14">
@@ -249,17 +246,6 @@ function LoginForm() {
             <LoginLocale />
           </div>
           <div className="flex flex-1 flex-col items-center justify-center">
-          <div className="mb-4 w-full max-w-[440px] overflow-hidden rounded-2xl lg:hidden">
-            <Image
-              src="/auth/login-left.jpg"
-              alt=""
-              width={508}
-              height={650}
-              priority
-              unoptimized
-              className="h-auto w-full object-contain"
-            />
-          </div>
           <div className="w-full max-w-[440px] rounded-[32px] border border-white bg-white px-7 py-8 shadow-[0_24px_60px_rgba(15,23,42,0.08)] sm:px-10 sm:py-10">
             <div className="mb-6 flex justify-center">
               <Image

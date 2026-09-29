@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 from app.models import Guard, Team, TeamMember
 from app.services import audit_service
 from app.services.company_service import get_company_by_user_id
+from app.services.recycle_bin import archive as _bin_archive
+from app.services.recycle_bin import revive_if_binned as _bin_revive
 
 # The bucket the hub shows for staff in no team at all. Not a row in the table: it exists
 # only in the response, so nobody can rename or delete it.
@@ -81,8 +83,12 @@ def create_team(db: Session, user_id: int, name: str, description: Optional[str]
     )
     if exists:
         raise HTTPException(status_code=409, detail="A team with that name already exists.")
-    row = Team(company_id=company.id, name=clean, description=(description or "").strip() or None)
-    db.add(row)
+    row = _bin_revive(db, Team, user_id, company_id=company.id, name=clean)
+    if row is not None:
+        row.description = (description or "").strip() or None
+    else:
+        row = Team(company_id=company.id, name=clean, description=(description or "").strip() or None)
+        db.add(row)
     try:
         db.flush()
     except IntegrityError:
@@ -151,7 +157,7 @@ def delete_team(db: Session, user_id: int, team_id: int) -> None:
         entity_id=team_id,
         meta={"name": row.name},
     )
-    db.delete(row)
+    _bin_archive(row, user_id)
     db.commit()
 
 

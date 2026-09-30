@@ -72,6 +72,8 @@ function eachDay(startStr: string, endStr: string): string[] {
 
 function shiftCellClass(d: RotaDetail) {
   if (d.attendance_status === 'absent') return 'bg-red-200/90 dark:bg-red-950/50 border-red-500/50';
+  if (d.attendance_status === 'cancelled') return 'bg-slate-300/80 dark:bg-slate-800/60 border-slate-500/50';
+  if (d.attendance_status === 'cancelled_paid') return 'bg-violet-200/90 dark:bg-violet-950/50 border-violet-500/50';
   if (d.attendance_status === 'late') return 'bg-orange-200/90 dark:bg-orange-950/50 border-orange-500/50';
   if (d.attendance_status === 'pending') return 'bg-yellow-100/90 dark:bg-yellow-950/30 border-yellow-500/40';
   if (d.attendance_status === 'scheduled') return 'bg-slate-200/80 dark:bg-slate-800/50 border-slate-400/40';

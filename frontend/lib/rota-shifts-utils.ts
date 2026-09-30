@@ -153,11 +153,27 @@ export function addMinutesToTime(t: string, mins: number) {
   return minsToTime(timeMins(t) + mins);
 }
 
+const ATT_STATUSES: readonly AttStatus[] = [
+  'on_time',
+  'late',
+  'absent',
+  'no_show',
+  'cancelled',
+  'cancelled_paid',
+];
+
 export function normalizeAttStatus(s: string | undefined | null): AttStatus | null {
   if (!s) return null;
   if (s === 'present') return 'on_time';
-  if (s === 'on_time' || s === 'late' || s === 'absent' || s === 'no_show') return s;
-  return null;
+  if (s === 'cancelled_unpaid') return 'cancelled';
+  return (ATT_STATUSES as readonly string[]).includes(s) ? (s as AttStatus) : null;
+}
+
+/** Hours agreed for payment on a paid cancellation; 0 for every other status. */
+export function agreedPaidHours(att: { status?: string; paidHours?: string } | null | undefined): number {
+  if (normalizeAttStatus(att?.status ?? null) !== 'cancelled_paid') return 0;
+  const n = Number(String(att?.paidHours ?? '').trim());
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /**
@@ -183,6 +199,10 @@ export function attStatusLabel(s: AttStatus | string | null | undefined): string
       return 'Absent';
     case 'no_show':
       return 'No show';
+    case 'cancelled':
+      return 'Cancelled (not paid)';
+    case 'cancelled_paid':
+      return 'Cancelled (paid)';
     default:
       return '—';
   }
@@ -199,6 +219,10 @@ export function attStatusBarColor(s: AttStatus | string | null | undefined): str
       return '#f97316';
     case 'no_show':
       return '#ef4444';
+    case 'cancelled':
+      return '#94a3b8';
+    case 'cancelled_paid':
+      return '#8b5cf6';
     default:
       return '#64748b';
   }
@@ -212,26 +236,36 @@ export function shiftPayable(sh: ShiftRec, inclBreaks = false, rateOverride?: nu
   return calcHours(sh, inclBreaks) * rate;
 }
 
-/** Hours that count toward totals: unmarked = scheduled; On time/Late = worked; Absent/No show = 0. */
+/**
+ * Hours that count toward totals: unmarked = scheduled; On time/Late = worked; Absent,
+ * No show and an unpaid cancellation = 0. A paid cancellation counts the hours that were
+ * agreed when it was called off — nobody worked the shift's span, so the span would
+ * overstate it — and the Incl./Excl. breaks toggle has nothing to act on there.
+ */
 export function countedHoursForAttendance(
   sh: ShiftRec,
-  att: { status?: string; hours?: string } | null | undefined,
+  att: { status?: string; hours?: string; paidHours?: string } | null | undefined,
   inclBreaks = false
 ): number {
   const status = normalizeAttStatus(att?.status ?? null);
-  if (status === 'absent' || status === 'no_show') return 0;
+  if (status === 'absent' || status === 'no_show' || status === 'cancelled') return 0;
+  if (status === 'cancelled_paid') return agreedPaidHours(att);
   // Always derive from the shift + inclBreaks so the Incl./Excl. breaks toggle works.
   // (Stored att.hours often ignored the toggle and froze totals.)
   return calcHours(sh, inclBreaks);
 }
 
-/** Payable hours for a shift: only On time / Late count; Absent / No show / unmarked = 0. */
+/**
+ * Payable hours for a shift: On time / Late pay the shift, a paid cancellation pays its
+ * agreed hours, and Absent / No show / unpaid cancellation / unmarked pay nothing.
+ */
 export function payableHoursForAttendance(
   sh: ShiftRec,
-  att: { status?: string; hours?: string } | null | undefined,
+  att: { status?: string; hours?: string; paidHours?: string } | null | undefined,
   inclBreaks = false
 ): number {
   const status = normalizeAttStatus(att?.status ?? null);
+  if (status === 'cancelled_paid') return agreedPaidHours(att);
   if (status !== 'on_time' && status !== 'late') return 0;
   return calcHours(sh, inclBreaks);
 }

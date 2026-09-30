@@ -134,7 +134,15 @@ def _attendance_breakdown(db: Session, company_id: int, days: int = 30) -> list[
         .group_by(Attendance.status)
         .all()
     )
-    labels = {"on_time": "On time", "late": "Late", "absent": "Absent", "present": "Present"}
+    labels = {
+        "on_time": "On time",
+        "late": "Late",
+        "absent": "Absent",
+        "present": "Present",
+        "no_show": "No show",
+        "cancelled": "Cancelled (not paid)",
+        "cancelled_paid": "Cancelled (paid)",
+    }
     return [
         ChartPoint(label=labels.get((r[0] or "unknown"), r[0] or "Other"), value=float(r[1]))
         for r in rows

@@ -11,6 +11,7 @@ from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanLi
 from app.services import shift_audit_service
 from app.services.recycle_bin import archive as _bin_archive
 from app.services.company_service import get_company_by_user_id
+from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID
 from app.services.rota_service import normalize_shift_type
 from app.services.work_filters import WorkScope, resolve_work_scope
 
@@ -838,6 +839,9 @@ def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str])
             # Stored already normalised at write time (on_time / late / absent / …).
             "status": (att.status or "").strip(),
             "hours": "",
+            # Only a paid cancellation carries one; blank on anything else so switching a
+            # shift back to worked does not leave a stale agreed figure on the planner.
+            "paidHours": "" if att.paid_hours is None else str(att.paid_hours),
             "note": (att.note or ""),
             "empId": emp_id,
             "dk": dk,
@@ -846,7 +850,25 @@ def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str])
     return out
 
 
-ATTENDANCE_STATUSES = {"on_time", "late", "absent", "no_show", "early_leave"}
+ATTENDANCE_STATUSES = {
+    "on_time",
+    "late",
+    "absent",
+    "no_show",
+    "early_leave",
+    CANCELLED_UNPAID,
+    CANCELLED_PAID,
+}
+
+
+def _parse_paid_hours(raw) -> Optional[float]:
+    """Agreed paid hours off a planner attendance record, or None when absent/unusable."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    try:
+        return round(float(raw), 2)
+    except (TypeError, ValueError):
+        return None
 
 
 def _attendance_shift_key(guard_id: int, shift_date: date, start, site_id) -> tuple:
@@ -870,7 +892,15 @@ def _recorded_attendance_by_shift(
         if status not in ATTENDANCE_STATUSES:
             continue
         key = _attendance_shift_key(a.guard_id, a.date, a.shift_start, a.site_id)
-        out.setdefault(key, {"status": status, "note": att.note, "booked_at": att.booked_at})
+        out.setdefault(
+            key,
+            {
+                "status": status,
+                "note": att.note,
+                "booked_at": att.booked_at,
+                "paid_hours": att.paid_hours,
+            },
+        )
     return out
 
 
@@ -1366,18 +1396,22 @@ def publish_rota_plan(
                 status = "on_time" if raw_status == "present" else raw_status
                 note = (att_rec.get("note") or "").strip() or None
                 booked_at = None
+                paid_hours = _parse_paid_hours(att_rec.get("paidHours"))
                 if status not in ATTENDANCE_STATUSES:
                     carried = prior_attendance.get(
                         _attendance_shift_key(emp_guard_id, assignment.date, sh.get("start"), site_id)
                     )
                     if carried:
                         status, note, booked_at = carried["status"], carried["note"], carried["booked_at"]
+                        paid_hours = carried.get("paid_hours")
                 if status in ATTENDANCE_STATUSES:
                     marked = Attendance(
                         assignment_id=assignment.id,
                         guard_id=emp_guard_id,
                         status=status,
                         note=note,
+                        # The agreed figure belongs to a paid cancellation and nothing else.
+                        paid_hours=paid_hours if status == CANCELLED_PAID else None,
                         updated_by_user_id=user_id,
                     )
                     if booked_at:

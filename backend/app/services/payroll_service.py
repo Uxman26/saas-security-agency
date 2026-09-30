@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import date
 from app.models import Client, Payroll, Guard, Site, RotaPlan
 from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
+from app.services.attendance_service import CANCELLED_PAID
 from app.services.company_service import get_company_by_user_id
 from app.services.work_filters import guard_ids_for_scope, resolve_work_scope
 from app.services.recycle_bin import archive as _bin_archive
@@ -60,9 +61,14 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
                 status = str(record.get("status") or "").strip().lower().replace(" ", "_")
                 if status == "present":
                     status = "on_time"
-                if status not in {"on_time", "late"}:
+                if status not in PAYABLE_STATUSES:
                     continue
-                hours = _hours_from_shift(shift)
+                # A paid cancellation is paid on the hours that were agreed when it was
+                # called off, not on a span that nobody worked.
+                if status == CANCELLED_PAID:
+                    hours = max(0.0, _number(record.get("paidHours")))
+                else:
+                    hours = _hours_from_shift(shift)
                 if hours <= 0:
                     continue
                 rate = _number(shift.get("shiftRate"))
@@ -348,7 +354,10 @@ def calculate_payroll_batch(
     if not by_guard:
         raise HTTPException(
             status_code=400,
-            detail="No payable On time or Late shifts found in published rota data for the selected period",
+            detail=(
+                "No payable shifts found in published rota data for the selected period "
+                "(On time, Late, or a paid cancellation)"
+            ),
         )
 
     created: list[Payroll] = []
@@ -372,9 +381,11 @@ def calculate_payroll_batch(
         db.refresh(pr)
     return created
 
-# Attendance marks that mean the shift was actually worked. Anything else — absent,
-# pending, or a future shift nobody has marked yet — is rota'd but not payable.
-PAYABLE_STATUSES = frozenset({"on_time", "late"})
+# Attendance marks that pay out. On time and Late were worked; a paid cancellation was
+# not worked but was agreed to be paid anyway, on its own agreed hours rather than the
+# shift's span. Anything else — absent, an unpaid cancellation, pending, or a future shift
+# nobody has marked yet — is rota'd but not payable.
+PAYABLE_STATUSES = frozenset({"on_time", "late", CANCELLED_PAID})
 
 
 def preview_pay(
@@ -437,7 +448,14 @@ def preview_pay(
     unmarked_shifts = 0
 
     for d in details:
-        hours = round(float(d.hours or 0), 2)
+        scheduled_hours = round(float(d.hours or 0), 2)
+        # Pay for a cancelled-but-paid shift follows the agreed figure, so that is what
+        # this run bills and totals; the rota'd span is kept alongside for reference.
+        hours = (
+            round(max(0.0, _number(d.paid_hours)), 2)
+            if d.attendance_status == CANCELLED_PAID
+            else scheduled_hours
+        )
         rate = _number(d.shift_rate)
         payable = d.attendance_status in PAYABLE_STATUSES
         amount = round(hours * rate, 2) if payable else 0.0
@@ -467,6 +485,8 @@ def preview_pay(
                 shift_end=d.shift_end,
                 break_minutes=d.break_minutes or 0,
                 hours=hours,
+                scheduled_hours=scheduled_hours,
+                paid_hours=d.paid_hours,
                 attendance_status=d.attendance_status,
                 late_minutes=d.late_minutes,
                 shift_rate=d.shift_rate,

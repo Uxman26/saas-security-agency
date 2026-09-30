@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/lib/api';
 import type { Attendance, Guard, Assignment } from '@/lib/types';
 import { attStatusLabel, normalizeAttStatus } from '@/lib/rota-shifts-utils';
+import { isCancelledStatus } from '@/lib/rota-shifts-types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -40,6 +41,8 @@ const STATUS_OPTIONS = [
   { value: 'late', label: 'Late' },
   { value: 'absent', label: 'Absent' },
   { value: 'no_show', label: 'No show' },
+  { value: 'cancelled', label: 'Cancelled (not paid)' },
+  { value: 'cancelled_paid', label: 'Cancelled (paid)' },
 ];
 
 function displayStatus(status?: string | null) {
@@ -97,6 +100,7 @@ export default function AttendancePage() {
   const [editRec, setEditRec] = useState<Attendance | null>(null);
   const [editStatus, setEditStatus] = useState('on_time');
   const [editNote, setEditNote] = useState('');
+  const [editPaidHours, setEditPaidHours] = useState('');
   const [editBookedAt, setEditBookedAt] = useState('');
   const [editBookedOffAt, setEditBookedOffAt] = useState('');
   const [editDateError, setEditDateError] = useState('');
@@ -150,6 +154,7 @@ export default function AttendancePage() {
     setEditRec(a);
     setEditStatus(normalizeAttStatus(a.status) ?? 'on_time');
     setEditNote(a.note ?? '');
+    setEditPaidHours(a.paid_hours == null ? '' : String(a.paid_hours));
     setEditBookedAt(toLocalInput(a.booked_at));
     setEditBookedOffAt(toLocalInput(a.booked_off_at));
     setEditDateError('');
@@ -158,8 +163,22 @@ export default function AttendancePage() {
   const handleEditSave = async () => {
     if (!editRec) return;
     if (editStatus !== 'on_time' && !editNote.trim()) {
-      toast.error('Note is required for Late, Absent, and No show');
+      toast.error(
+        isCancelledStatus(editStatus)
+          ? 'A cancellation note is required'
+          : 'Note is required for Late, Absent, and No show'
+      );
       return;
+    }
+    // A paid cancellation is paid on the agreed figure alone, so it cannot be left blank.
+    let paidHours: number | null = null;
+    if (editStatus === 'cancelled_paid') {
+      const n = Number(editPaidHours.trim());
+      if (!editPaidHours.trim() || !Number.isFinite(n) || n < 0 || n > 24) {
+        toast.error('Enter the agreed paid hours (0\u201324) for this cancellation');
+        return;
+      }
+      paidHours = Number(n.toFixed(2));
     }
     if (isFutureLocalInput(editBookedAt)) {
       setEditDateError('Booked on cannot be in the future');
@@ -175,6 +194,7 @@ export default function AttendancePage() {
       await api.attendance.update(editRec.id, {
         status: editStatus,
         note: editNote.trim() || null,
+        paid_hours: paidHours,
         booked_at: fromLocalInput(editBookedAt),
         booked_off_at: fromLocalInput(editBookedOffAt),
       });
@@ -596,14 +616,38 @@ export default function AttendancePage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {editStatus === 'cancelled_paid' ? (
+                    <div className="space-y-1">
+                      <Label>
+                        How many hours were agreed for payment?<span className="text-destructive"> *</span>
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={24}
+                        step="0.25"
+                        inputMode="decimal"
+                        value={editPaidHours}
+                        onChange={(e) => setEditPaidHours(e.target.value)}
+                        placeholder="Agreed paid hours"
+                      />
+                    </div>
+                  ) : null}
                   <div className="space-y-1">
                     <Label>
-                      Note{editStatus !== 'on_time' ? <span className="text-destructive"> *</span> : ' (optional)'}
+                      {isCancelledStatus(editStatus) ? 'Cancellation note' : 'Note'}
+                      {editStatus !== 'on_time' ? <span className="text-destructive"> *</span> : ' (optional)'}
                     </Label>
                     <Textarea
                       value={editNote}
                       onChange={(e) => setEditNote(e.target.value)}
-                      placeholder={editStatus === 'on_time' ? 'Optional note' : 'Required for Late / Absent / No show'}
+                      placeholder={
+                        isCancelledStatus(editStatus)
+                          ? 'Enter cancellation reason or notes'
+                          : editStatus === 'on_time'
+                            ? 'Optional note'
+                            : 'Required for Late / Absent / No show'
+                      }
                       rows={3}
                     />
                   </div>

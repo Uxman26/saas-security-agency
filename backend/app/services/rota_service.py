@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site, User
 from app.schemas import RotaDetailResponse, RotaSummaryRow
+from app.services.attendance_service import CANCELLED_PAID, CANCELLED_STATUSES
 from app.services.company_service import get_company_by_user_id
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
@@ -126,6 +127,12 @@ def _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, s
 
 
 def _attendance_status(a: Assignment, att: Optional[Attendance], late_log: Optional[ShiftLateLog], today: date) -> str:
+    # A cancellation is a decision about whether the shift happens at all, so it outranks
+    # the calendar, a book-on that was recorded before it was called off, and any lateness
+    # logged against the original start.
+    recorded = (att.status or "").strip() if att else ""
+    if recorded in CANCELLED_STATUSES:
+        return recorded
     if late_log:
         return "late"
     # A mark wins over the calendar: attendance recorded ahead of the shift date, or
@@ -238,6 +245,7 @@ def list_rota_details(
                 late_minutes=late_m,
                 shift_rate=a.shift_rate,
                 rota_plan_id=a.rota_plan_id,
+                paid_hours=att.paid_hours if att and status == CANCELLED_PAID else None,
             )
         )
         seen.add(_shift_fingerprint(a.guard_id, a.date, a.shift_start, a.shift_end, a.site_id))

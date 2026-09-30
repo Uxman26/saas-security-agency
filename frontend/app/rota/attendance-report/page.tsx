@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, attStatusLabel, calcHours, fmtShortDate, initials, normalizeAttStatus } from '@/lib/rota-shifts-utils';
+import { isCancelledStatus } from '@/lib/rota-shifts-types';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
@@ -65,6 +66,7 @@ export default function RotaAttendanceReportPage() {
         totalH: number;
         onTime: number;
         absent: number;
+        cancelled: number;
         late: number;
         noShow: number;
         lateMinutes: number;
@@ -75,6 +77,9 @@ export default function RotaAttendanceReportPage() {
       let totalH = 0;
       let onTime = 0;
       let absent = 0;
+      // Paid and unpaid cancellations are tallied together: the count answers "how often
+      // was this shift called off", and the paid/unpaid split belongs to payroll.
+      let cancelled = 0;
       let late = 0;
       let noShow = 0;
       let lateMinutes = 0;
@@ -94,9 +99,10 @@ export default function RotaAttendanceReportPage() {
             late++;
             lateMinutes += a?.lateMinutes || 0;
           } else if (status === 'no_show') noShow++;
+          else if (isCancelledStatus(status)) cancelled++;
         });
       }
-      m.set(e.id, { emp: e, totalH, onTime, absent, late, noShow, lateMinutes });
+      m.set(e.id, { emp: e, totalH, onTime, absent, cancelled, late, noShow, lateMinutes });
     }
     return m;
   }, [state, from, to, empId]);
@@ -148,7 +154,7 @@ export default function RotaAttendanceReportPage() {
       return;
     }
     const sections = [...byEmp.values()]
-      .map(({ emp, totalH, onTime, absent, late, noShow, lateMinutes }) => {
+      .map(({ emp, totalH, onTime, absent, cancelled, late, noShow, lateMinutes }) => {
         const empRows = rows
           .filter((r) => r.empId === emp.id)
           .map((r) => {
@@ -173,7 +179,7 @@ export default function RotaAttendanceReportPage() {
             <h2 style="margin:0 0 6px;font-size:16px">${emp.name}</h2>
             <p style="margin:0 0 10px;color:#555;font-size:12px">
               ${emp.role || 'Staff'} · ${totalH.toFixed(1)}h total ·
-              ${onTime} on time · ${absent} absent · ${late} late · ${noShow} no show
+              ${onTime} on time · ${absent} absent · ${late} late · ${noShow} no show · ${cancelled} cancelled
               ${lateMinutes > 0 ? ` · ${lateMinutes} late mins` : ''}
             </p>
             <table>
@@ -267,7 +273,7 @@ export default function RotaAttendanceReportPage() {
               </CardContent>
             </Card>
 
-            {[...byEmp.values()].map(({ emp, totalH, onTime, absent, late, noShow, lateMinutes }) => (
+            {[...byEmp.values()].map(({ emp, totalH, onTime, absent, cancelled, late, noShow, lateMinutes }) => (
               <Card key={emp.id}>
                 <CardHeader className="flex flex-row items-start gap-4 pb-2">
                   <span
@@ -285,6 +291,7 @@ export default function RotaAttendanceReportPage() {
                       <span className="text-xs rounded-full bg-red-500/15 text-red-800 dark:text-red-300 px-2 py-0.5">{absent} absent</span>
                       <span className="text-xs rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-200 px-2 py-0.5">{late} late</span>
                       <span className="text-xs rounded-full bg-red-600/15 text-red-900 dark:text-red-200 px-2 py-0.5">{noShow} no show</span>
+                      <span className="text-xs rounded-full bg-slate-500/15 text-slate-800 dark:text-slate-300 px-2 py-0.5">{cancelled} cancelled</span>
                       {lateMinutes > 0 ? (
                         <span className="text-xs rounded-full bg-amber-500/15 text-amber-900 dark:text-amber-200 px-2 py-0.5 tabular-nums">
                           {lateMinutes} late mins
@@ -327,6 +334,8 @@ export default function RotaAttendanceReportPage() {
                                     status === 'absent' && 'bg-orange-500/15',
                                     status === 'late' && 'bg-amber-500/15',
                                     status === 'no_show' && 'bg-red-500/15',
+                                    status === 'cancelled' && 'bg-slate-500/15',
+                                    status === 'cancelled_paid' && 'bg-violet-500/15',
                                     !status && 'bg-muted'
                                   )}
                                 >

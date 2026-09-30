@@ -8,8 +8,51 @@ from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, Attend
 from app.services.company_service import get_company_by_user_id
 from app.services.shift_adjustment_service import find_assignment
 
-ALLOWED_STATUS = {"on_time", "late", "absent", "early_leave", "no_show", "present"}
-STATUS_ALIASES = {"present": "on_time"}
+# A cancelled shift is recorded as one of two statuses rather than a status plus a
+# separate paid flag. Every consumer already branches on the status string alone — the
+# payable set in payroll, the planner's status map, the report tallies — so splitting
+# paid from unpaid here means none of them can read a paid cancellation as an unpaid one
+# by forgetting to check a second field.
+CANCELLED_UNPAID = "cancelled"
+CANCELLED_PAID = "cancelled_paid"
+CANCELLED_STATUSES = frozenset({CANCELLED_UNPAID, CANCELLED_PAID})
+
+ALLOWED_STATUS = {
+    "on_time",
+    "late",
+    "absent",
+    "early_leave",
+    "no_show",
+    "present",
+    CANCELLED_UNPAID,
+    CANCELLED_PAID,
+}
+STATUS_ALIASES = {"present": "on_time", "cancelled_unpaid": CANCELLED_UNPAID}
+
+NOTE_REQUIRED_DETAIL = "Note is required for Late, Absent, No show, and Cancelled"
+
+
+def validated_paid_hours(status: str, raw) -> Optional[float]:
+    """The agreed paid hours for a status, or None where the status does not carry any.
+
+    Only a paid cancellation has an agreed figure, and on that status it is mandatory:
+    the whole point of the status is that the hours were negotiated rather than worked,
+    so there is nothing to fall back on if it is missing. Any other status drops whatever
+    was sent, so a figure cannot linger after a shift is re-marked as worked.
+    """
+    if status != CANCELLED_PAID:
+        return None
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        raise HTTPException(
+            status_code=400, detail="Agreed paid hours are required for a paid cancellation"
+        )
+    try:
+        hours = float(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Agreed paid hours must be a number")
+    if hours < 0 or hours > 24:
+        raise HTTPException(status_code=400, detail="Agreed paid hours must be between 0 and 24")
+    return round(hours, 2)
 
 
 def _utc_now() -> datetime:
@@ -99,6 +142,7 @@ def create_attendance(db: Session, data: AttendanceCreate, user_id: int) -> Atte
     payload = data.model_dump() if hasattr(data, "model_dump") else data.dict()
     if payload.get("status"):
         payload["status"] = _normalize_status(payload["status"])
+    payload["paid_hours"] = validated_paid_hours(payload.get("status") or "", payload.get("paid_hours"))
     note = (payload.get("note") or "").strip()
     if payload.get("status") and payload["status"] != "on_time" and not note:
         # require note for non-default statuses when creating with status
@@ -210,7 +254,12 @@ def update_attendance(db: Session, attendance_id: int, data: AttendanceUpdate, u
         note = payload.get("note", att.note)
         status = payload.get("status", att.status)
         if status != "on_time" and not (note or "").strip():
-            raise HTTPException(status_code=400, detail="Note is required for Late, Absent, and No show")
+            raise HTTPException(status_code=400, detail=NOTE_REQUIRED_DETAIL)
+        # Re-derive the agreed hours from the status being saved, so switching a shift
+        # off "cancelled_paid" clears the figure even when the caller left it out.
+        payload["paid_hours"] = validated_paid_hours(
+            status, payload.get("paid_hours", att.paid_hours)
+        )
     now = _utc_now()
     if "booked_at" in payload and payload["booked_at"] is not None:
         if _as_utc_naive(payload["booked_at"]) > now:
@@ -237,7 +286,8 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
     status = _normalize_status(data.status)
     note = (data.note or "").strip()
     if status != "on_time" and not note:
-        raise HTTPException(status_code=400, detail="Note is required for Late, Absent, and No show")
+        raise HTTPException(status_code=400, detail=NOTE_REQUIRED_DETAIL)
+    paid_hours = validated_paid_hours(status, data.paid_hours)
     a = find_assignment(db, company.id, data.guard_id, data.date, data.shift_start, data.site_name or "")
     if not a:
         # Published staff may have new/edited shifts that are not yet mirrored to assignments.
@@ -258,8 +308,11 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
         db.flush()
     att.status = status
     att.note = note or None
+    att.paid_hours = paid_hours
     att.updated_by_user_id = user_id
-    if status in ("absent", "no_show"):
+    if status in ("absent", "no_show") or status in CANCELLED_STATUSES:
+        # Nobody turned up, so there is no book-on to record — including on a paid
+        # cancellation, where the pay is agreed rather than worked.
         pass
     elif status == "late" and not att.booked_at:
         att.booked_at = datetime.utcnow()

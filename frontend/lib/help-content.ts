@@ -234,7 +234,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
         items: [
           'Open Rotas & Shifts and create a new rota (name, date range, employees).',
           'Use Table or Timeline to place shifts with times, site, break, and rate.',
-          'Mark attendance on shifts when needed (for example On time, Late, Absent, No show — where available).',
+          'Mark attendance on shifts when needed (for example On time, Late, Absent, No show, Cancelled — where available). A cancelled shift records whether it was paid; a paid cancellation also records the hours agreed for payment.',
           'Publish the rota so shifts sync into Assignments.',
         ],
       },

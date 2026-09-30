@@ -26,6 +26,9 @@ ATT_LABELS = {
     "on_time": "On time",
     "late": "Late",
     "absent": "Absent",
+    "no_show": "No show",
+    "cancelled": "Cancelled (not paid)",
+    "cancelled_paid": "Cancelled (paid)",
     "pending": "Not marked",
     "scheduled": "Upcoming",
 }

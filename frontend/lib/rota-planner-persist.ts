@@ -1,4 +1,4 @@
-import { buildDayRange, calcHours, normalizeAttStatus } from './rota-shifts-utils';
+import { agreedPaidHours, buildDayRange, calcHours, normalizeAttStatus } from './rota-shifts-utils';
 import type { AttendanceRec, RotaJsState, ShiftRec } from './rota-shifts-types';
 import { SHIFT_COLOR_OPTS, AVATAR_PALETTE, normalizeShiftType } from './rota-shifts-types';
 
@@ -69,9 +69,11 @@ export function serializePlannerState(state: RotaJsState): string {
       (shifts || []).forEach((shift, index) => {
         const attendance = state.attendance[`${guardId}:${date}:${index}`];
         const status = normalizeAttStatus(attendance?.status ?? null);
-        if (status !== 'on_time' && status !== 'late') return;
-        // Always derive from shift + inclBreaks (ignore stored attendance.hours)
-        const hours = calcHours(shift, state.inclBreaks);
+        if (status !== 'on_time' && status !== 'late' && status !== 'cancelled_paid') return;
+        // Always derive from shift + inclBreaks (ignore stored attendance.hours), except
+        // on a paid cancellation, which is paid on the hours agreed when it was called off.
+        const hours =
+          status === 'cancelled_paid' ? agreedPaidHours(attendance) : calcHours(shift, state.inclBreaks);
         if (hours <= 0) return;
         const rate = Number(shift.shiftRate) || 0;
         payrollLines.push({

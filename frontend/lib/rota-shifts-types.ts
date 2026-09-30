@@ -41,13 +41,26 @@ export type EmployeeRec = {
   rotaPending?: boolean;
 };
 
-export type AttStatus = 'on_time' | 'late' | 'absent' | 'no_show';
+/**
+ * A cancelled shift is two statuses rather than one status plus a paid flag, so that
+ * every tally, colour and payable check that already branches on the status string keeps
+ * telling paid and unpaid cancellations apart without consulting a second field.
+ */
+export type AttStatus = 'on_time' | 'late' | 'absent' | 'no_show' | 'cancelled' | 'cancelled_paid';
+
+export const CANCELLED_STATUSES: readonly AttStatus[] = ['cancelled', 'cancelled_paid'];
+
+export function isCancelledStatus(s: AttStatus | string | null | undefined): boolean {
+  return s === 'cancelled' || s === 'cancelled_paid';
+}
 
 export type AttendanceRec = {
   status: AttStatus;
   hours: string;
   note: string;
   lateMinutes?: number;
+  /** Hours agreed for payment on a paid cancellation. Unset on every other status. */
+  paidHours?: string;
   synced?: boolean;
   empId: string;
   dk: string;

@@ -15,7 +15,7 @@ import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
-import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, normalizeShiftType, shiftTypeOption } from '@/lib/rota-shifts-types';
+import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftTypeOption } from '@/lib/rota-shifts-types';
 import type { RotaPlanListItem } from '@/lib/types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
@@ -146,12 +146,26 @@ const ROTA_STICKY_PUBLISH_BG = {
   isolation: 'isolate',
 } as const;
 
+// Cancelled appears once in the Status list. Whether it was paid is a second question,
+// asked underneath, because the two cancellations behave differently in payroll and the
+// planner stores them as separate statuses.
 const ATT_STATUS_OPTIONS: { value: AttStatus; label: string }[] = [
   { value: 'on_time', label: 'On time' },
   { value: 'late', label: 'Late' },
   { value: 'absent', label: 'Absent' },
   { value: 'no_show', label: 'No show' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
+
+const ATT_PAYMENT_OPTIONS: { value: AttStatus; label: string }[] = [
+  { value: 'cancelled', label: 'Not paid' },
+  { value: 'cancelled_paid', label: 'Paid' },
+];
+
+/** What the Status select shows: both cancellations sit under the one "Cancelled" entry. */
+function attStatusChoice(status: AttStatus | string): AttStatus {
+  return isCancelledStatus(status) ? 'cancelled' : (status as AttStatus);
+}
 
 function EmployeeAvatar({ emp, className }: { emp: EmployeeRec; className?: string }) {
   // Initials only on the rota — staff photos belong on the staff profile / add form.
@@ -1352,7 +1366,17 @@ export function RotaCalendarClient() {
         ? Math.max(0, timeMins(sh.start) - timeMins(sh.scheduledStart))
         : undefined);
     setAttCtx({ empId, dk, idx });
-    const normalized = ex ? { ...ex, status: normalizeAttStatus(ex.status) ?? 'on_time', lateMinutes } : null;
+    const exStatus = normalizeAttStatus(ex?.status) ?? 'on_time';
+    const normalized = ex
+      ? {
+          ...ex,
+          status: exStatus,
+          lateMinutes,
+          // Blank rather than undefined so the required field renders empty and editable
+          // instead of switching between controlled and uncontrolled.
+          paidHours: exStatus === 'cancelled_paid' ? ex.paidHours ?? '' : undefined,
+        }
+      : null;
     setAttRec(
       normalized
         ? normalized
@@ -1398,14 +1422,42 @@ export function RotaCalendarClient() {
     const status = normalizeAttStatus(attRec.status) || attRec.status;
     const noteTrimmed = (attRec.note || '').trim();
     if (status !== 'on_time' && !noteTrimmed) {
-      toast.error('Note is required for Late, Absent, and No show');
+      toast.error(
+        isCancelledStatus(status)
+          ? 'A cancellation note is required'
+          : 'Note is required for Late, Absent, and No show'
+      );
       return;
+    }
+    // A paid cancellation is paid on an agreed figure and nothing else, so there is no
+    // sensible fallback if it is left blank.
+    let paidHours: string | undefined;
+    if (status === 'cancelled_paid') {
+      const raw = String(attRec.paidHours ?? '').trim();
+      const n = Number(raw);
+      if (!raw || !Number.isFinite(n) || n < 0 || n > 24) {
+        toast.error('Enter the agreed paid hours (0–24) for this cancellation');
+        return;
+      }
+      paidHours = n.toFixed(2);
     }
     const sh = state.shifts[attCtx.empId]?.[attCtx.dk]?.[attCtx.idx];
     if (!sh) return;
     const k = attKey(attCtx.empId, attCtx.dk, attCtx.idx);
     const lateM = Math.max(0, parseInt(String(attRec.lateMinutes ?? ''), 10) || 0);
-    let rec: AttendanceRec = { ...attRec, status: status as AttendanceRec['status'], empId: attCtx.empId, dk: attCtx.dk, si: attCtx.idx, note: noteTrimmed };
+    let rec: AttendanceRec = {
+      ...attRec,
+      status: status as AttendanceRec['status'],
+      empId: attCtx.empId,
+      dk: attCtx.dk,
+      si: attCtx.idx,
+      note: noteTrimmed,
+      paidHours,
+    };
+    if (isCancelledStatus(status)) {
+      // Nothing was worked: the hours on the record are the agreed figure, or none.
+      rec = { ...rec, hours: paidHours ?? '0.00' };
+    }
     let nextShift = sh;
     const published = isEmployeePublished(attCtx.empId);
     const guardId = parseInt(attCtx.empId, 10);
@@ -1427,8 +1479,12 @@ export function RotaCalendarClient() {
       rec = { ...rec, lateMinutes: rec.status === 'late' ? lateM || undefined : undefined };
     }
 
-    // Persist resolved rate onto shift so Payable stays correct after save
-    if ((rec.status === 'on_time' || rec.status === 'late') && !(Number(nextShift.shiftRate) > 0)) {
+    // Persist resolved rate onto shift so Payable stays correct after save. A paid
+    // cancellation is paid at the same rate, on the agreed hours, so it needs one too.
+    if (
+      (rec.status === 'on_time' || rec.status === 'late' || rec.status === 'cancelled_paid') &&
+      !(Number(nextShift.shiftRate) > 0)
+    ) {
       const rate = resolveShiftRate(nextShift, attCtx.empId);
       if (rate > 0) {
         nextShift = { ...nextShift, shiftRate: rate };
@@ -1488,6 +1544,7 @@ export function RotaCalendarClient() {
               status: rec.status,
               note: rec.note || undefined,
               hours: rec.hours,
+              paid_hours: rec.paidHours,
             });
             attOk = true;
             break;
@@ -4133,8 +4190,17 @@ export function RotaCalendarClient() {
                 <LabelMini>Status</LabelMini>
                 <select
                   className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  value={attRec.status}
-                  onChange={(e) => setAttRec({ ...attRec, status: e.target.value as AttendanceRec['status'] })}
+                  value={attStatusChoice(attRec.status)}
+                  onChange={(e) => {
+                    const next = e.target.value as AttendanceRec['status'];
+                    // Leaving Cancelled drops the agreed figure, so a shift that goes back
+                    // to worked cannot be paid on hours nobody agreed to any more.
+                    setAttRec({
+                      ...attRec,
+                      status: next,
+                      paidHours: isCancelledStatus(next) ? attRec.paidHours : undefined,
+                    });
+                  }}
                 >
                   {ATT_STATUS_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -4143,6 +4209,55 @@ export function RotaCalendarClient() {
                   ))}
                 </select>
               </div>
+              {isCancelledStatus(attRec.status) ? (
+                <>
+                  <div className="space-y-1">
+                    <LabelMini>Payment status</LabelMini>
+                    <select
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      value={attRec.status}
+                      onChange={(e) => {
+                        const next = e.target.value as AttendanceRec['status'];
+                        setAttRec({
+                          ...attRec,
+                          status: next,
+                          paidHours: next === 'cancelled_paid' ? attRec.paidHours ?? '' : undefined,
+                        });
+                      }}
+                    >
+                      {ATT_PAYMENT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {attRec.status === 'cancelled_paid' ? (
+                    <div className="space-y-1">
+                      <LabelMini>How many hours were agreed for payment? (required)</LabelMini>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={24}
+                        step="0.25"
+                        inputMode="decimal"
+                        aria-label="Agreed paid hours"
+                        placeholder="Agreed paid hours"
+                        value={attRec.paidHours ?? ''}
+                        onChange={(e) => setAttRec({ ...attRec, paidHours: e.target.value })}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        This is what payroll pays for this shift &mdash; the rota&rsquo;d times
+                        were not worked.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      No hours or payment are recorded against this shift.
+                    </p>
+                  )}
+                </>
+              ) : null}
               {attRec.status === 'late' ? (
                 <div className="space-y-1">
                   <LabelMini>Lateness (hours + minutes)</LabelMini>
@@ -4172,19 +4287,28 @@ export function RotaCalendarClient() {
                   />
                 </div>
               ) : null}
-              <div className="space-y-1">
-                <LabelMini>Actual hours</LabelMini>
-                <Input value={attRec.hours} onChange={(e) => setAttRec({ ...attRec, hours: e.target.value })} />
-              </div>
+              {isCancelledStatus(attRec.status) ? null : (
+                <div className="space-y-1">
+                  <LabelMini>Actual hours</LabelMini>
+                  <Input value={attRec.hours} onChange={(e) => setAttRec({ ...attRec, hours: e.target.value })} />
+                </div>
+              )}
               <div className="space-y-1">
                 <LabelMini>
-                  Note{attRec.status !== 'on_time' ? ' (required)' : ' (optional)'}
+                  {isCancelledStatus(attRec.status) ? 'Cancellation note' : 'Note'}
+                  {attRec.status !== 'on_time' ? ' (required)' : ' (optional)'}
                 </LabelMini>
                 <textarea
                   className="w-full min-h-[64px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={attRec.note}
                   onChange={(e) => setAttRec({ ...attRec, note: e.target.value })}
-                  placeholder={attRec.status === 'on_time' ? 'Optional note' : 'Required for Late / Absent / No show'}
+                  placeholder={
+                    isCancelledStatus(attRec.status)
+                      ? 'Enter cancellation reason or notes'
+                      : attRec.status === 'on_time'
+                        ? 'Optional note'
+                        : 'Required for Late / Absent / No show'
+                  }
                 />
               </div>
             </div>

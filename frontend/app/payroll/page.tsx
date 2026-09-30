@@ -49,6 +49,9 @@ const ATT_LABELS: Record<string, string> = {
   on_time: 'On time',
   late: 'Late',
   absent: 'Absent',
+  no_show: 'No show',
+  cancelled: 'Cancelled (not paid)',
+  cancelled_paid: 'Cancelled (paid)',
   pending: 'Not marked',
   scheduled: 'Upcoming',
 };
@@ -158,7 +161,12 @@ function ProblemShifts({
                 <TableCell className="whitespace-nowrap tabular-nums py-1.5">
                   {sh.shift_start}&ndash;{sh.shift_end}
                 </TableCell>
-                <TableCell className="text-right tabular-nums py-1.5">{sh.hours.toFixed(2)}h</TableCell>
+                <TableCell className="text-right tabular-nums py-1.5">
+                  {sh.hours.toFixed(2)}h
+                  {sh.attendance_status === 'cancelled_paid' ? (
+                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">agreed</span>
+                  ) : null}
+                </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground py-1.5">
                   {sh.attendance_marked ? ATT_LABELS[sh.attendance_status] ?? sh.attendance_status : 'Not marked'}
                 </TableCell>
@@ -168,7 +176,11 @@ function ProblemShifts({
                     target="_blank"
                     className="whitespace-nowrap font-medium text-primary underline underline-offset-2"
                   >
-                    {fix === 'rate' ? 'Set rate' : 'Mark attendance'}
+                    {fix === 'rate'
+                      ? 'Set rate'
+                      : sh.attendance_marked
+                        ? 'Edit attendance'
+                        : 'Mark attendance'}
                   </Link>
                 </TableCell>
               </TableRow>
@@ -1102,23 +1114,36 @@ export default function PayrollPage() {
                     </div>
                   )}
 
-                  {preview.unattended_hours > 0 && (
-                    <div className="rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
-                      <p className="flex items-start gap-2">
-                        <AlertTriangle className="size-4 shrink-0 mt-0.5" />
-                        <span>
-                          {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} hours from past shifts are not
-                          being paid because they have no On time or Late mark. That is {formatMoney(preview.held_back_amount)} held
-                          back. If those shifts were worked, mark attendance on the rota and calculate again.
-                        </span>
-                      </p>
-                      <ProblemShifts
-                        shifts={preview.shifts.filter((s) => !s.payable && s.attendance_status !== 'scheduled')}
-                        fix="attendance"
-                        showEmployee={preview.guard_id === null}
-                      />
-                    </div>
-                  )}
+                  {preview.unattended_hours > 0 && (() => {
+                    // Absent / No show is an answer, not an omission: a shift somebody
+                    // deliberately marked is held back on purpose, so it is reported here
+                    // but never chased for a mark. Only genuinely unmarked shifts get the
+                    // "go and mark it" ask.
+                    const unpaidPast = preview.shifts.filter(
+                      (s) => !s.payable && s.attendance_status !== 'scheduled'
+                    );
+                    const needsMarking = unpaidPast.filter((s) => !s.attendance_marked);
+                    return (
+                      <div className="rounded-md border border-amber-500/40 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-sm text-amber-900 dark:text-amber-200">
+                        <p className="flex items-start gap-2">
+                          <AlertTriangle className="size-4 shrink-0 mt-0.5" />
+                          <span>
+                            {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} hours from past shifts are not
+                            being paid because they have no On time or Late mark. That is {formatMoney(preview.held_back_amount)} held
+                            back.{' '}
+                            {needsMarking.length > 0
+                              ? 'If those shifts were worked, mark attendance on the rota and calculate again.'
+                              : 'Every one of them is a recorded absence, no show or unpaid cancellation, so there is nothing left to mark.'}
+                          </span>
+                        </p>
+                        <ProblemShifts
+                          shifts={unpaidPast}
+                          fix="attendance"
+                          showEmployee={preview.guard_id === null}
+                        />
+                      </div>
+                    );
+                  })()}
 
                   {preview.upcoming_hours > 0 && (
                     <p className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
@@ -1274,7 +1299,16 @@ export default function PayrollPage() {
                               <TableCell className="whitespace-nowrap">{sh.date}</TableCell>
                               <TableCell>{sh.site_name || '\u2014'}</TableCell>
                               <TableCell className="whitespace-nowrap tabular-nums">{sh.shift_start}&ndash;{sh.shift_end}</TableCell>
-                              <TableCell className="text-right tabular-nums">{sh.hours.toFixed(2)}</TableCell>
+                              <TableCell
+                                className="text-right tabular-nums"
+                                title={
+                                  sh.attendance_status === 'cancelled_paid'
+                                    ? `Agreed on cancellation · ${sh.scheduled_hours.toFixed(2)} rota'd`
+                                    : undefined
+                                }
+                              >
+                                {sh.hours.toFixed(2)}
+                              </TableCell>
                               <TableCell className="whitespace-nowrap">
                                 {sh.attendance_marked ? (
                                   <span className={sh.payable ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}>

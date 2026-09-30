@@ -1425,6 +1425,10 @@ export interface PayrollPreviewShift {
   late_minutes: number | null;
   shift_rate: number | null;
   rota_plan_id: number | null;
+  /** Agreed paid hours on a paid cancellation; `hours` is then that figure, not the span. */
+  paid_hours: number | null;
+  /** The shift's own rota'd span, kept for reference when `hours` is an agreed figure. */
+  scheduled_hours: number;
   payable: boolean;
   amount: number;
 }
@@ -1734,6 +1738,8 @@ export interface Attendance {
   booked_off_at?: string;
   status?: string;
   note?: string | null;
+  /** Hours agreed for payment on a cancelled-but-paid shift; null on every other status. */
+  paid_hours?: number | null;
   updated_at?: string | null;
   updated_by_user_id?: number | null;
   updated_by_name?: string | null;

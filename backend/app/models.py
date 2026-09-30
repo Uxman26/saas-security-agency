@@ -1058,6 +1058,9 @@ class Attendance(Base):
     booked_off_at = Column(DateTime(timezone=True))
     status = Column(String, default="on_time")
     note = Column(Text)
+    # Hours agreed for payment when a shift is cancelled but still paid. Null for every
+    # other status: those are paid on the shift's own span, not on a negotiated figure.
+    paid_hours = Column(Float, nullable=True)
     updated_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

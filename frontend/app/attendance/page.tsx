@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
-import type { Attendance, Guard, Assignment } from '@/lib/types';
+import type { Attendance, Guard, Assignment, Site } from '@/lib/types';
 import { attStatusLabel, normalizeAttStatus } from '@/lib/rota-shifts-utils';
 import { isCancelledStatus } from '@/lib/rota-shifts-types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -30,23 +31,48 @@ import {
   type StatCardSpec,
 } from '@/components/module-dashboard';
 import { StatusPieChart } from '@/components/charts/status-chart';
-import { Calendar, Clock, Plus, Pencil, PoundSterling, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, Plus, Pencil, PoundSterling, Trash2, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { TimeHmField, normalizeHm } from '@/components/ui/time-hm-field';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { cn } from '@/lib/utils';
+import {
+  ATT_STATUS_FILTERS,
+  EMPTY_ATT_FILTERS,
+  bookingExceptions,
+  computeAttMetrics,
+  filterAttendance,
+  groupBySite,
+  groupByStaff,
+  hasLateHighlight,
+  lateCountFor,
+  lateCountsByGuardMonth,
+  shiftDateOf,
+  type AttFilters,
+  type AttStatusFilter,
+} from '@/lib/attendance-dashboard';
 
 const STATUS_OPTIONS = [
-  { value: 'on_time', label: 'On time' },
+  { value: 'on_time', label: 'On Time' },
   { value: 'late', label: 'Late' },
   { value: 'absent', label: 'Absent' },
-  { value: 'no_show', label: 'No show' },
-  { value: 'cancelled', label: 'Cancelled (not paid)' },
-  { value: 'cancelled_paid', label: 'Cancelled (paid)' },
+  { value: 'no_show', label: 'No Show' },
+  { value: 'cancelled', label: 'Cancelled - Not Paid' },
+  { value: 'cancelled_paid', label: 'Cancelled - Paid' },
 ];
 
 function displayStatus(status?: string | null) {
   return attStatusLabel(normalizeAttStatus(status));
+}
+
+function statusTone(status?: string | null): 'positive' | 'danger' | 'warning' | 'muted' | 'info' {
+  const s = normalizeAttStatus(status);
+  if (s === 'on_time') return 'positive';
+  if (s === 'late' || s === 'no_show') return 'danger';
+  if (s === 'cancelled_paid') return 'info';
+  if (s === 'cancelled' || s === 'absent') return 'warning';
+  return 'muted';
 }
 
 function splitLocalInput(v: string): { date: string; time: string } {
@@ -86,14 +112,13 @@ function isFutureLocalInput(v: string) {
 }
 
 export default function AttendancePage() {
-  // The API is the real boundary; these stop the UI offering actions it
-  // already knows the role will be refused.
   const { user: permUser } = useAuth();
   const canCreateMod = canModule(permUser, 'attendance', 'create');
   const canEditMod = canModule(permUser, 'attendance', 'edit');
   const canDeleteMod = canModule(permUser, 'attendance', 'delete');
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookOpen, setBookOpen] = useState(false);
@@ -104,8 +129,8 @@ export default function AttendancePage() {
   const [editBookedAt, setEditBookedAt] = useState('');
   const [editBookedOffAt, setEditBookedOffAt] = useState('');
   const [editDateError, setEditDateError] = useState('');
-  const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<'overview' | 'all' | 'late'>('all');
+  const [filters, setFilters] = useState<AttFilters>(EMPTY_ATT_FILTERS);
+  const [tab, setTab] = useState<'overview' | 'all' | 'exceptions'>('all');
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -116,15 +141,36 @@ export default function AttendancePage() {
   const [submitting, setSubmitting] = useState(false);
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
+  const guardOptions = useMemo(
+    () => guards.map((g) => ({ value: String(g.id), label: g.full_name })),
+    [guards]
+  );
+  const siteOptions = useMemo(
+    () => sites.map((s) => ({ value: String(s.id), label: s.name })),
+    [sites]
+  );
 
-  const loadAttendance = () => {
+  const loadAttendance = useCallback(() => {
     setLoading(true);
-    api.attendance.list().then(setAttendance).catch(() => {}).finally(() => setLoading(false));
-  };
+    const params: { guard_id?: number; site_id?: number; start_date?: string; end_date?: string } = {};
+    if (filters.guardId) params.guard_id = parseInt(filters.guardId, 10);
+    if (filters.siteId) params.site_id = parseInt(filters.siteId, 10);
+    if (filters.dateFrom) params.start_date = filters.dateFrom;
+    if (filters.dateTo) params.end_date = filters.dateTo;
+    api.attendance
+      .list(params)
+      .then(setAttendance)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [filters.guardId, filters.siteId, filters.dateFrom, filters.dateTo]);
 
   useEffect(() => {
     loadAttendance();
+  }, [loadAttendance]);
+
+  useEffect(() => {
     api.guards.list().then(setGuards).catch(() => {});
+    api.sites.list().then(setSites).catch(() => {});
     api.assignments.list().then(setAssignments).catch(() => {});
   }, []);
 
@@ -170,7 +216,6 @@ export default function AttendancePage() {
       );
       return;
     }
-    // A paid cancellation is paid on the agreed figure alone, so it cannot be left blank.
     let paidHours: number | null = null;
     if (editStatus === 'cancelled_paid') {
       const n = Number(editPaidHours.trim());
@@ -209,44 +254,54 @@ export default function AttendancePage() {
   };
 
   const handleDelete = (id: number) => {
-    toast.confirm('Delete this attendance record?', async () => {
-      try {
-        await api.attendance.delete(id);
-        loadAttendance();
-        toast.success('Attendance deleted');
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Delete failed');
-      }
-    }, { label: 'Delete', description: 'This cannot be undone.' });
+    toast.confirm(
+      'Delete this attendance record?',
+      async () => {
+        try {
+          await api.attendance.delete(id);
+          loadAttendance();
+          toast.success('Attendance deleted');
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Delete failed');
+        }
+      },
+      { label: 'Delete', description: 'This cannot be undone.' }
+    );
   };
 
-  const baseRows = useMemo(
-    () => (tab === 'late' ? attendance.filter((a) => normalizeAttStatus(a.status) === 'late') : attendance),
-    [attendance, tab]
+  const filtered = useMemo(() => filterAttendance(attendance, filters), [attendance, filters]);
+
+  const exceptions = useMemo(
+    () =>
+      bookingExceptions(assignments, attendance, guards, sites, {
+        siteId: filters.siteId,
+        guardId: filters.guardId,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+      }),
+    [assignments, attendance, guards, sites, filters.siteId, filters.guardId, filters.dateFrom, filters.dateTo]
   );
 
-  const getSearchText = useCallback(
-    (a: Attendance) =>
-      [
-        guardMap.get(a.guard_id),
-        String(a.assignment_id),
-        a.status,
-        a.note,
-        a.updated_by_name,
-        a.booked_at,
-        a.booked_off_at,
-        a.updated_at,
-        a.created_at,
-      ]
-        .filter(Boolean)
-        .join(' '),
-    [guardMap]
+  const metrics = useMemo(
+    () => computeAttMetrics(filtered, exceptions.notBookedOn.length, exceptions.notBookedOff.length),
+    [filtered, exceptions]
   );
+
+  const lateCounts = useMemo(() => lateCountsByGuardMonth(attendance), [attendance]);
+
+  const siteGroups = useMemo(() => groupBySite(filtered), [filtered]);
+  const staffGroups = useMemo(() => groupByStaff(filtered, guardMap), [filtered, guardMap]);
+
+  const getSearchText = useCallback(() => '', []);
   const getSortValue = useCallback(
     (a: Attendance, key: string) => {
       switch (key) {
         case 'guard':
-          return guardMap.get(a.guard_id) ?? '';
+          return a.guard_name || guardMap.get(a.guard_id) || '';
+        case 'site':
+          return a.site_name || '';
+        case 'date':
+          return shiftDateOf(a);
         case 'assignment':
           return a.assignment_id;
         case 'on':
@@ -271,8 +326,8 @@ export default function AttendancePage() {
   );
 
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
-    baseRows,
-    search,
+    filtered,
+    '',
     sortKey,
     sortDir,
     page,
@@ -283,34 +338,77 @@ export default function AttendancePage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, tab]);
+  }, [filters, tab]);
   useEffect(() => {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
 
-  const lateCount = useMemo(() => attendance.filter((a) => normalizeAttStatus(a.status) === 'late').length, [attendance]);
-  const onTimeCount = useMemo(() => attendance.filter((a) => normalizeAttStatus(a.status) === 'on_time').length, [attendance]);
+  const hasActiveFilters =
+    !!filters.siteId ||
+    !!filters.guardId ||
+    !!filters.dateFrom ||
+    !!filters.dateTo ||
+    !!filters.status ||
+    !!filters.search.trim();
 
-  /** The cards along the top, in the shape every module dashboard uses. */
+  const setFilter = <K extends keyof AttFilters>(key: K, value: AttFilters[K]) => {
+    setFilters((f) => ({ ...f, [key]: value }));
+  };
+
   const statCards: StatCardSpec[] = [
-    { key: 'total', label: 'Records', value: attendance.length, icon: Clock, tone: 'neutral' },
-    { key: 'on_time', label: 'On time', value: onTimeCount, icon: Clock, tone: 'positive' },
+    { key: 'staff', label: 'Total Staff', value: metrics.totalStaff, icon: Users, tone: 'neutral' },
+    { key: 'shifts', label: 'Total Shifts', value: metrics.totalShifts, icon: Calendar, tone: 'neutral' },
+    { key: 'on_time', label: 'On Time', value: metrics.onTime, icon: Clock, tone: 'positive' },
     {
       key: 'late',
-      label: 'Late arrivals',
-      value: lateCount,
+      label: 'Late',
+      value: metrics.late,
       icon: Clock,
-      tone: lateCount ? 'danger' : 'muted',
-      action: lateCount ? { label: 'View', onClick: () => setTab('late') } : undefined,
+      tone: metrics.late ? 'danger' : 'muted',
     },
     {
-      key: 'other',
-      label: 'Other / not marked',
-      value: attendance.length - onTimeCount - lateCount,
-      icon: Users,
-      tone: 'muted',
+      key: 'no_show',
+      label: 'No Show',
+      value: metrics.noShow,
+      icon: AlertTriangle,
+      tone: metrics.noShow ? 'danger' : 'muted',
+    },
+    { key: 'early', label: 'Finished Early', value: metrics.finishedEarly, icon: Clock, tone: 'warning' },
+    { key: 'ot', label: 'Overtime', value: metrics.overtime, icon: Clock, tone: 'info' },
+    { key: 'c_paid', label: 'Cancelled - Paid', value: metrics.cancelledPaid, icon: PoundSterling, tone: 'info' },
+    {
+      key: 'c_unpaid',
+      label: 'Cancelled - Not Paid',
+      value: metrics.cancelledNotPaid,
+      icon: AlertTriangle,
+      tone: metrics.cancelledNotPaid ? 'warning' : 'muted',
+    },
+    {
+      key: 'not_on',
+      label: 'Not Booked On',
+      value: metrics.notBookedOn,
+      icon: AlertTriangle,
+      tone: metrics.notBookedOn ? 'danger' : 'muted',
+      action: metrics.notBookedOn ? { label: 'View', onClick: () => setTab('exceptions') } : undefined,
+    },
+    {
+      key: 'not_off',
+      label: 'Not Booked Off',
+      value: metrics.notBookedOff,
+      icon: AlertTriangle,
+      tone: metrics.notBookedOff ? 'warning' : 'muted',
+      action: metrics.notBookedOff ? { label: 'View', onClick: () => setTab('exceptions') } : undefined,
     },
   ];
+
+  const assignmentOptions = useMemo(() => {
+    return assignments
+      .filter((a) => !bookGuardId || a.guard_id === parseInt(bookGuardId, 10))
+      .map((a) => ({
+        value: String(a.id),
+        label: `${guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`} — ${a.date} ${a.shift_start ?? '?'}–${a.shift_end ?? '?'}`,
+      }));
+  }, [assignments, bookGuardId, guardMap]);
 
   return (
     <ProtectedRoute>
@@ -319,7 +417,7 @@ export default function AttendancePage() {
           <DashboardHeader
             title="Attendance"
             hint="Booking on or off stamps the current time against an assignment. Late is decided against the shift's scheduled start."
-            description="Who turned up, when they booked on and off, and who was late."
+            description="Who turned up, when they booked on and off, cancellations, and attendance exceptions."
             actions={
               <div className="flex gap-2">
                 <Button variant="outline" onClick={loadAttendance} disabled={loading}>
@@ -334,74 +432,63 @@ export default function AttendancePage() {
                       </Button>
                     </DialogTrigger>
                   ) : null}
-                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Book staff attendance</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 py-2">
-                    <p className="text-sm text-muted-foreground">
-                      Records the current time as the book-on or book-off time for the selected assignment.
-                    </p>
-                    <div className="space-y-1">
-                      <Label>Filter by staff</Label>
-                      <Select value={bookGuardId || 'all'} onValueChange={(v) => setBookGuardId(v === 'all' ? '' : v)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="All guards" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All staff</SelectItem>
-                          {guards.map((g) => (
-                            <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Assignment <span className="text-destructive">*</span></Label>
-                      <Select value={bookAssignmentId} onValueChange={setBookAssignmentId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select assignment" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assignments
-                            .filter(a => !bookGuardId || a.guard_id === parseInt(bookGuardId))
-                            .map((a) => (
-                              <SelectItem key={a.id} value={a.id.toString()}>
-                                {guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`} — {a.date} {a.shift_start ?? '?'}–{a.shift_end ?? '?'}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Action</Label>
-                      <div className="flex rounded-md border overflow-hidden">
-                        <button
-                          type="button"
-                          className={`flex-1 py-2 text-sm font-medium transition-colors ${!bookOff ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
-                          onClick={() => setBookOff(false)}
-                        >
-                          Book On
-                        </button>
-                        <button
-                          type="button"
-                          className={`flex-1 py-2 text-sm font-medium transition-colors ${bookOff ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
-                          onClick={() => setBookOff(true)}
-                        >
-                          Book Off
-                        </button>
+                  <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Book staff attendance</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                      <p className="text-sm text-muted-foreground">
+                        Records the current time as the book-on or book-off time for the selected assignment.
+                      </p>
+                      <div className="space-y-1">
+                        <Label>Filter by staff</Label>
+                        <SearchableSelect
+                          value={bookGuardId || ''}
+                          onChange={(v) => setBookGuardId(v)}
+                          options={guardOptions}
+                          noneOption={{ value: '', label: 'All staff' }}
+                          placeholder="All staff"
+                          searchPlaceholder="Search staff…"
+                        />
                       </div>
+                      <div className="space-y-1">
+                        <Label>
+                          Assignment <span className="text-destructive">*</span>
+                        </Label>
+                        <SearchableSelect
+                          value={bookAssignmentId}
+                          onChange={setBookAssignmentId}
+                          options={assignmentOptions}
+                          placeholder="Select assignment"
+                          searchPlaceholder="Search assignment…"
+                          emptyText="No assignments found"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Action</Label>
+                        <div className="flex rounded-md border overflow-hidden">
+                          <button
+                            type="button"
+                            className={`flex-1 py-2 text-sm font-medium transition-colors ${!bookOff ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
+                            onClick={() => setBookOff(false)}
+                          >
+                            Book On
+                          </button>
+                          <button
+                            type="button"
+                            className={`flex-1 py-2 text-sm font-medium transition-colors ${bookOff ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-accent'}`}
+                            onClick={() => setBookOff(true)}
+                          >
+                            Book Off
+                          </button>
+                        </div>
+                      </div>
+                      <Button className="w-full" onClick={handleBook} disabled={submitting || !bookAssignmentId}>
+                        {submitting ? 'Booking...' : `Book ${bookOff ? 'Off' : 'On'} Now`}
+                      </Button>
                     </div>
-                    <Button
-                      className="w-full"
-                      onClick={handleBook}
-                      disabled={submitting || !bookAssignmentId}
-                    >
-                      {submitting ? 'Booking...' : `Book ${bookOff ? 'Off' : 'On'} Now`}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
               </div>
             }
           />
@@ -410,7 +497,10 @@ export default function AttendancePage() {
             tabs={[
               { id: 'overview', label: 'Overview' },
               { id: 'all', label: 'All records' },
-              { id: 'late', label: `Late (${lateCount})` },
+              {
+                id: 'exceptions',
+                label: `Exceptions (${exceptions.notBookedOn.length + exceptions.notBookedOff.length + metrics.noShow})`,
+              },
             ]}
             value={tab}
             onChange={setTab}
@@ -418,177 +508,539 @@ export default function AttendancePage() {
 
           <StatCards cards={statCards} />
 
-          {tab === 'overview' && attendance.length > 0 && (
-            <>
-            <StatusPieChart
-              data={[
-                { name: 'On time', value: onTimeCount },
-                { name: 'Late', value: lateCount },
-                { name: 'Other', value: attendance.length - onTimeCount - lateCount },
-              ]}
-              title="Attendance breakdown"
-            />
-            </>
-          )}
-
-          {tab !== 'overview' && (
-          <>
-          <FilterBar onClear={() => setSearch('')}>
-            <FilterField label="Search" className="min-w-[260px] flex-1">
+          <FilterBar
+            onClear={
+              hasActiveFilters
+                ? () => {
+                    setFilters(EMPTY_ATT_FILTERS);
+                  }
+                : undefined
+            }
+          >
+            <FilterField label="Site" className="min-w-[180px]">
+              <SearchableSelect
+                value={filters.siteId}
+                onChange={(v) => setFilter('siteId', v)}
+                options={siteOptions}
+                noneOption={{ value: '', label: 'All sites' }}
+                placeholder="All sites"
+                searchPlaceholder="Search sites…"
+              />
+            </FilterField>
+            <FilterField label="Staff" className="min-w-[180px]">
+              <SearchableSelect
+                value={filters.guardId}
+                onChange={(v) => setFilter('guardId', v)}
+                options={guardOptions}
+                noneOption={{ value: '', label: 'All staff' }}
+                placeholder="All staff"
+                searchPlaceholder="Search staff…"
+              />
+            </FilterField>
+            <FilterField label="From">
+              <Input type="date" value={filters.dateFrom} onChange={(e) => setFilter('dateFrom', e.target.value)} />
+            </FilterField>
+            <FilterField label="To">
+              <Input type="date" value={filters.dateTo} onChange={(e) => setFilter('dateTo', e.target.value)} />
+            </FilterField>
+            <FilterField label="Status" className="min-w-[180px]">
+              <Select
+                value={filters.status || 'all'}
+                onValueChange={(v) => setFilter('status', (v === 'all' ? '' : v) as AttStatusFilter)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ATT_STATUS_FILTERS.map((o) => (
+                    <SelectItem key={o.value || 'all'} value={o.value || 'all'}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterField>
+            <FilterField label="Search" className="min-w-[200px] flex-1">
               <Input
-                placeholder="Staff name…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Staff, site, note…"
+                value={filters.search}
+                onChange={(e) => setFilter('search', e.target.value)}
               />
             </FilterField>
           </FilterBar>
 
-          <ResultsCard
-            title="Attendance records"
-            count={total}
-            pageSize={pageSize}
-            onPageSizeChange={(n) => {
-              setPageSize(n);
-              setPage(1);
-            }}
-          >
-            <div className="p-4">
-              {loading ? (
-                <InlineKpiTableSkeleton />
-              ) : total === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  {search || tab === 'late' ? 'No records match your filter.' : 'No attendance records yet. Click "Book Attendance" to get started.'}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Note" colKey="note" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Updated by" colKey="updated_by" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Updated at" colKey="updated_at" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Assignment" colKey="assignment" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pageRows.map((a) => (
-                        <TableRow key={a.id}>
-                          <TableCell className="font-medium whitespace-nowrap">
-                            {guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`}
-                          </TableCell>
-                          <TableCell>
-                            {a.status ? (
-                              <Pill
-                                dot
-                                tone={
-                                  normalizeAttStatus(a.status) === 'on_time'
-                                    ? 'positive'
-                                    : normalizeAttStatus(a.status) === 'late'
-                                      ? 'danger'
-                                      : normalizeAttStatus(a.status) === 'absent'
-                                        ? 'warning'
-                                        : 'muted'
-                                }
-                              >
-                                {displayStatus(a.status)}
-                              </Pill>
-                            ) : (
-                              <Pill tone="muted">Pending</Pill>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-sm max-w-[200px] truncate" title={a.note ?? undefined}>
-                            {a.note?.trim() ? a.note : '—'}
-                          </TableCell>
-                          <TableCell className="text-sm whitespace-nowrap">
-                            {a.updated_by_name?.trim() ? a.updated_by_name : '—'}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {a.updated_at ? new Date(a.updated_at).toLocaleString() : '—'}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-sm">
-                            {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">#{a.assignment_id}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              {canEditMod ? (
-                                <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit">
-                                  <Pencil className="size-4" />
-                                </Button>
-                              ) : null}
-                              {canDeleteMod ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDelete(a.id)}
-                                  title="Delete"
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-              {total > 0 ? (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-                  <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="records" />
-                  <TablePaginationBar
-                    safePage={safePage}
-                    pageCount={pageCount}
-                    total={total}
-                    pageSize={pageSize}
-                    rangeStart={rangeStart}
-                    rangeEnd={rangeEnd}
-                    onPageChange={setPage}
-                  />
-                </div>
+          {tab === 'overview' && (
+            <div className="space-y-6">
+              {filtered.length > 0 ? (
+                <StatusPieChart
+                  data={[
+                    { name: 'On Time', value: metrics.onTime },
+                    { name: 'Late', value: metrics.late },
+                    { name: 'No Show', value: metrics.noShow },
+                    { name: 'Cancelled - Paid', value: metrics.cancelledPaid },
+                    { name: 'Cancelled - Not Paid', value: metrics.cancelledNotPaid },
+                    { name: 'Finished Early', value: metrics.finishedEarly },
+                    { name: 'Overtime', value: metrics.overtime },
+                  ].filter((d) => d.value > 0)}
+                  title="Attendance by status"
+                />
               ) : null}
-            </div>
-          </ResultsCard>
 
-          <QuickLinks
-            links={[
-              {
-                key: 'rota',
-                title: 'Rotas & shifts',
-                description: 'Attendance is marked against the shifts planned here.',
-                icon: Calendar,
-                tone: 'neutral',
-                action: { label: 'Open rotas', href: '/rota' },
-              },
-              {
-                key: 'payroll',
-                title: 'Payroll',
-                description: 'Only shifts marked On time or Late are payable.',
-                icon: PoundSterling,
-                tone: 'positive',
-                action: { label: 'Open payroll', href: '/payroll' },
-              },
-              {
-                key: 'staff',
-                title: 'Employee hub',
-                description: 'Absence, lateness and the rest of each person\u2019s record.',
-                icon: Users,
-                tone: 'info',
-                action: { label: 'Open employees', href: '/guards' },
-              },
-            ]}
-          />
-          </>
+              <ResultsCard title="By site" count={siteGroups.length}>
+                <div className="overflow-x-auto p-4">
+                  {siteGroups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">No attendance in this filter.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Shifts</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>On Time</TableHead>
+                          <TableHead>Late</TableHead>
+                          <TableHead>No Show</TableHead>
+                          <TableHead>Early</TableHead>
+                          <TableHead>OT</TableHead>
+                          <TableHead>Cancel Paid</TableHead>
+                          <TableHead>Cancel Not Paid</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {siteGroups.map((g) => (
+                          <TableRow key={g.key}>
+                            <TableCell className="font-medium">{g.label}</TableCell>
+                            <TableCell>{g.total}</TableCell>
+                            <TableCell>{g.staff}</TableCell>
+                            <TableCell>{g.onTime}</TableCell>
+                            <TableCell className={g.late >= 3 ? 'text-destructive font-semibold' : ''}>{g.late}</TableCell>
+                            <TableCell className={g.noShow ? 'text-destructive font-semibold' : ''}>{g.noShow}</TableCell>
+                            <TableCell>{g.finishedEarly}</TableCell>
+                            <TableCell>{g.overtime}</TableCell>
+                            <TableCell>{g.cancelledPaid}</TableCell>
+                            <TableCell>{g.cancelledNotPaid}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+
+              <ResultsCard title="By staff" count={staffGroups.length}>
+                <div className="overflow-x-auto p-4">
+                  {staffGroups.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">No attendance in this filter.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Shifts</TableHead>
+                          <TableHead>On Time</TableHead>
+                          <TableHead>Late</TableHead>
+                          <TableHead>No Show</TableHead>
+                          <TableHead>Early</TableHead>
+                          <TableHead>OT</TableHead>
+                          <TableHead>Cancel Paid</TableHead>
+                          <TableHead>Cancel Not Paid</TableHead>
+                          <TableHead>Booked On</TableHead>
+                          <TableHead>Booked Off</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {staffGroups.map((g) => {
+                          const lateHighlight = g.late >= 3;
+                          return (
+                            <TableRow
+                              key={g.key}
+                              className={cn(lateHighlight && 'bg-destructive/5', g.noShow > 0 && 'bg-amber-500/5')}
+                            >
+                              <TableCell className="font-medium">
+                                <div className="flex flex-col gap-0.5">
+                                  <span>{g.label}</span>
+                                  {lateHighlight ? (
+                                    <span className="text-xs text-destructive font-medium">
+                                      {g.late}+ lates in filtered period — review monthly pattern
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              <TableCell>{g.total}</TableCell>
+                              <TableCell>{g.onTime}</TableCell>
+                              <TableCell className={lateHighlight ? 'text-destructive font-semibold' : ''}>{g.late}</TableCell>
+                              <TableCell className={g.noShow ? 'text-destructive font-semibold' : ''}>{g.noShow}</TableCell>
+                              <TableCell>{g.finishedEarly}</TableCell>
+                              <TableCell>{g.overtime}</TableCell>
+                              <TableCell>{g.cancelledPaid}</TableCell>
+                              <TableCell>{g.cancelledNotPaid}</TableCell>
+                              <TableCell>{g.bookedOn}</TableCell>
+                              <TableCell>{g.bookedOff}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+
+              <ResultsCard title="By shift" count={filtered.length}>
+                <div className="overflow-x-auto p-4">
+                  {filtered.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">No shifts match.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Scheduled</TableHead>
+                          <TableHead>Booked on</TableHead>
+                          <TableHead>Booked off</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Flags</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered.slice(0, 50).map((a) => {
+                          const lateN = lateCountFor(a, lateCounts);
+                          const highlight = hasLateHighlight(a, lateCounts);
+                          const noShow = normalizeAttStatus(a.status) === 'no_show';
+                          return (
+                            <TableRow
+                              key={a.id}
+                              className={cn(
+                                highlight && 'bg-destructive/5',
+                                noShow && 'bg-amber-500/10',
+                                isCancelledStatus(a.status) && 'bg-slate-500/5'
+                              )}
+                            >
+                              <TableCell className="whitespace-nowrap">{shiftDateOf(a) || '—'}</TableCell>
+                              <TableCell>{a.site_name || '—'}</TableCell>
+                              <TableCell className="font-medium">
+                                {a.guard_name || guardMap.get(a.guard_id) || `#${a.guard_id}`}
+                                {highlight ? (
+                                  <span className="ml-2 text-xs text-destructive font-medium">
+                                    {lateN} lates this month
+                                  </span>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-sm">
+                                {a.shift_start || '?'}–{a.shift_end || '?'}
+                              </TableCell>
+                              <TableCell className="text-sm whitespace-nowrap">
+                                {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
+                              </TableCell>
+                              <TableCell className="text-sm whitespace-nowrap">
+                                {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
+                              </TableCell>
+                              <TableCell>
+                                <Pill dot tone={statusTone(a.status)}>
+                                  {displayStatus(a.status)}
+                                </Pill>
+                                {a.status === 'cancelled_paid' && a.paid_hours != null ? (
+                                  <span className="ml-2 text-xs text-muted-foreground">
+                                    Agreed {Number(a.paid_hours).toFixed(2)} hrs
+                                  </span>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="text-xs space-x-1">
+                                {a.has_early_finish ? <Pill tone="warning">Finished early</Pill> : null}
+                                {a.has_overtime ? <Pill tone="info">Overtime</Pill> : null}
+                                {a.late_minutes ? <Pill tone="danger">Late {a.late_minutes}m</Pill> : null}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+                  {filtered.length > 50 ? (
+                    <p className="text-xs text-muted-foreground mt-2">Showing first 50 of {filtered.length}. Use All records for the full list.</p>
+                  ) : null}
+                </div>
+              </ResultsCard>
+            </div>
+          )}
+
+          {tab === 'exceptions' && (
+            <div className="space-y-6">
+              <ResultsCard title="Not Booked On" count={exceptions.notBookedOn.length}>
+                <div className="overflow-x-auto p-4">
+                  {exceptions.notBookedOn.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">All started shifts have a book-on.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Shift</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {exceptions.notBookedOn.map((e) => (
+                          <TableRow key={`on-${e.assignment_id}`} className="bg-destructive/5">
+                            <TableCell>{e.date}</TableCell>
+                            <TableCell className="font-medium">{e.guard_name}</TableCell>
+                            <TableCell>{e.site_name}</TableCell>
+                            <TableCell>
+                              {e.shift_start || '?'}–{e.shift_end || '?'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+
+              <ResultsCard title="Not Booked Off" count={exceptions.notBookedOff.length}>
+                <div className="overflow-x-auto p-4">
+                  {exceptions.notBookedOff.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">No open book-offs for ended shifts.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Shift</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {exceptions.notBookedOff.map((e) => (
+                          <TableRow key={`off-${e.assignment_id}`} className="bg-amber-500/10">
+                            <TableCell>{e.date}</TableCell>
+                            <TableCell className="font-medium">{e.guard_name}</TableCell>
+                            <TableCell>{e.site_name}</TableCell>
+                            <TableCell>
+                              {e.shift_start || '?'}–{e.shift_end || '?'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+
+              <ResultsCard
+                title="No Show"
+                count={filtered.filter((a) => normalizeAttStatus(a.status) === 'no_show').length}
+              >
+                <div className="overflow-x-auto p-4">
+                  {filtered.filter((a) => normalizeAttStatus(a.status) === 'no_show').length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-8 text-center">No no-show records in this filter.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Note</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered
+                          .filter((a) => normalizeAttStatus(a.status) === 'no_show')
+                          .map((a) => (
+                            <TableRow key={a.id} className="bg-destructive/5">
+                              <TableCell>{shiftDateOf(a)}</TableCell>
+                              <TableCell className="font-medium">
+                                {a.guard_name || guardMap.get(a.guard_id) || `#${a.guard_id}`}
+                              </TableCell>
+                              <TableCell>{a.site_name || '—'}</TableCell>
+                              <TableCell className="max-w-[240px] truncate">{a.note || '—'}</TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+            </div>
+          )}
+
+          {tab === 'all' && (
+            <>
+              <ResultsCard
+                title="Attendance records"
+                count={total}
+                pageSize={pageSize}
+                onPageSizeChange={(n) => {
+                  setPageSize(n);
+                  setPage(1);
+                }}
+              >
+                <div className="p-4">
+                  {loading ? (
+                    <InlineKpiTableSkeleton />
+                  ) : total === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      {hasActiveFilters
+                        ? 'No records match your filter.'
+                        : 'No attendance records yet. Click "Book Attendance" to get started.'}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <TableHead>Flags</TableHead>
+                            <SortableHead label="Note" colKey="note" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                            <TableHead className="text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {pageRows.map((a) => {
+                            const lateN = lateCountFor(a, lateCounts);
+                            const highlight = hasLateHighlight(a, lateCounts);
+                            const noShow = normalizeAttStatus(a.status) === 'no_show';
+                            return (
+                              <TableRow
+                                key={a.id}
+                                className={cn(
+                                  highlight && 'bg-destructive/5',
+                                  noShow && 'bg-amber-500/10',
+                                  isCancelledStatus(a.status) && 'bg-slate-500/5'
+                                )}
+                              >
+                                <TableCell className="font-medium whitespace-nowrap">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span>{a.guard_name || guardMap.get(a.guard_id) || `Guard #${a.guard_id}`}</span>
+                                    {highlight ? (
+                                      <span className="text-xs text-destructive font-medium">
+                                        {lateN} lates in {shiftDateOf(a).slice(0, 7) || 'month'}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">{a.site_name || '—'}</TableCell>
+                                <TableCell className="whitespace-nowrap text-sm">
+                                  {shiftDateOf(a) || '—'}
+                                  {a.shift_start ? (
+                                    <span className="text-muted-foreground">
+                                      {' '}
+                                      {a.shift_start}–{a.shift_end || '?'}
+                                    </span>
+                                  ) : null}
+                                </TableCell>
+                                <TableCell>
+                                  {a.status ? (
+                                    <div className="flex flex-col gap-1">
+                                      <Pill dot tone={statusTone(a.status)}>
+                                        {displayStatus(a.status)}
+                                      </Pill>
+                                      {a.status === 'cancelled_paid' && a.paid_hours != null ? (
+                                        <span className="text-[11px] text-muted-foreground">
+                                          Agreed Paid Hours: {Number(a.paid_hours).toFixed(2)}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <Pill tone="muted">Pending</Pill>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs space-y-1">
+                                  {a.has_early_finish ? <div><Pill tone="warning">Finished early</Pill></div> : null}
+                                  {a.has_overtime ? <div><Pill tone="info">Overtime</Pill></div> : null}
+                                  {a.late_minutes ? <div><Pill tone="danger">Late {a.late_minutes}m</Pill></div> : null}
+                                  {!a.has_early_finish && !a.has_overtime && !a.late_minutes ? '—' : null}
+                                </TableCell>
+                                <TableCell className="text-sm max-w-[180px] truncate" title={a.note ?? undefined}>
+                                  {a.note?.trim() ? a.note : '—'}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap text-sm">
+                                  {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap text-sm">
+                                  {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex justify-end gap-1">
+                                    {canEditMod ? (
+                                      <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit">
+                                        <Pencil className="size-4" />
+                                      </Button>
+                                    ) : null}
+                                    {canDeleteMod ? (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                        onClick={() => handleDelete(a.id)}
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="size-4" />
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                  {total > 0 ? (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                      <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="records" />
+                      <TablePaginationBar
+                        safePage={safePage}
+                        pageCount={pageCount}
+                        total={total}
+                        pageSize={pageSize}
+                        rangeStart={rangeStart}
+                        rangeEnd={rangeEnd}
+                        onPageChange={setPage}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </ResultsCard>
+
+              <QuickLinks
+                links={[
+                  {
+                    key: 'rota',
+                    title: 'Rotas & shifts',
+                    description: 'Attendance is marked against the shifts planned here.',
+                    icon: Calendar,
+                    tone: 'neutral',
+                    action: { label: 'Open rotas', href: '/rota' },
+                  },
+                  {
+                    key: 'payroll',
+                    title: 'Payroll',
+                    description: 'On time, Late, and Cancelled - Paid shifts feed payable hours.',
+                    icon: PoundSterling,
+                    tone: 'positive',
+                    action: { label: 'Open payroll', href: '/payroll' },
+                  },
+                  {
+                    key: 'staff',
+                    title: 'Employee hub',
+                    description: 'Absence, lateness and the rest of each person’s record.',
+                    icon: Users,
+                    tone: 'info',
+                    action: { label: 'Open employees', href: '/guards' },
+                  },
+                ]}
+              />
+            </>
           )}
 
           <Dialog open={!!editRec} onOpenChange={(open) => !open && setEditRec(null)}>
@@ -599,7 +1051,9 @@ export default function AttendancePage() {
               {editRec && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    {guardMap.get(editRec.guard_id) ?? `Guard #${editRec.guard_id}`} · Assignment #{editRec.assignment_id}
+                    {editRec.guard_name || guardMap.get(editRec.guard_id) || `Guard #${editRec.guard_id}`} · Assignment #
+                    {editRec.assignment_id}
+                    {editRec.site_name ? ` · ${editRec.site_name}` : ''}
                   </p>
                   <div className="space-y-1">
                     <Label>Status</Label>
@@ -629,13 +1083,13 @@ export default function AttendancePage() {
                         inputMode="decimal"
                         value={editPaidHours}
                         onChange={(e) => setEditPaidHours(e.target.value)}
-                        placeholder="Agreed paid hours"
+                        placeholder="Agreed Paid Hours"
                       />
                     </div>
                   ) : null}
                   <div className="space-y-1">
                     <Label>
-                      {isCancelledStatus(editStatus) ? 'Cancellation note' : 'Note'}
+                      {isCancelledStatus(editStatus) ? 'Cancellation Note' : 'Note'}
                       {editStatus !== 'on_time' ? <span className="text-destructive"> *</span> : ' (optional)'}
                     </Label>
                     <Textarea
@@ -717,7 +1171,7 @@ export default function AttendancePage() {
             </DialogContent>
           </Dialog>
         </ModulePage>
-    </AppShell>
+      </AppShell>
     </ProtectedRoute>
   );
 }

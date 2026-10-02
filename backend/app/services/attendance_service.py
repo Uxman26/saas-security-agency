@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import datetime, date, timezone
-from app.models import Attendance, Assignment, Guard, Site, User
-from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest
+from app.models import Attendance, Assignment, Guard, Site, User, ShiftOvertimeLog, ShiftEarlyFinishLog, ShiftLateLog
+from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest, AttendanceResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.shift_adjustment_service import find_assignment
 
@@ -74,12 +74,89 @@ def _normalize_status(status: str) -> str:
 
 
 def _att_out(att: Attendance) -> Attendance:
-    # attach display name for response serialization via attribute
     if att.updated_by is not None:
         setattr(att, "updated_by_name", att.updated_by.full_name)
     else:
         setattr(att, "updated_by_name", None)
     return att
+
+
+def _enrich_attendance_rows(db: Session, rows: List[Attendance]) -> List[AttendanceResponse]:
+    if not rows:
+        return []
+    assignment_ids = {a.assignment_id for a in rows if a.assignment_id}
+    assignments = {
+        a.id: a
+        for a in db.query(Assignment)
+        .options(joinedload(Assignment.site), joinedload(Assignment.guard))
+        .filter(Assignment.id.in_(assignment_ids))
+        .all()
+    } if assignment_ids else {}
+
+    ot_by_a: dict[int, ShiftOvertimeLog] = {}
+    ef_by_a: dict[int, ShiftEarlyFinishLog] = {}
+    late_by_a: dict[int, ShiftLateLog] = {}
+    if assignment_ids:
+        for row in (
+            db.query(ShiftOvertimeLog)
+            .filter(ShiftOvertimeLog.assignment_id.in_(assignment_ids))
+            .order_by(ShiftOvertimeLog.id.desc())
+            .all()
+        ):
+            if row.assignment_id and row.assignment_id not in ot_by_a:
+                ot_by_a[row.assignment_id] = row
+        for row in (
+            db.query(ShiftEarlyFinishLog)
+            .filter(ShiftEarlyFinishLog.assignment_id.in_(assignment_ids))
+            .order_by(ShiftEarlyFinishLog.id.desc())
+            .all()
+        ):
+            if row.assignment_id and row.assignment_id not in ef_by_a:
+                ef_by_a[row.assignment_id] = row
+        for row in (
+            db.query(ShiftLateLog)
+            .filter(ShiftLateLog.assignment_id.in_(assignment_ids))
+            .order_by(ShiftLateLog.id.desc())
+            .all()
+        ):
+            if row.assignment_id and row.assignment_id not in late_by_a:
+                late_by_a[row.assignment_id] = row
+
+    out: List[AttendanceResponse] = []
+    for att in rows:
+        _att_out(att)
+        a = assignments.get(att.assignment_id)
+        ot = ot_by_a.get(att.assignment_id)
+        ef = ef_by_a.get(att.assignment_id)
+        late = late_by_a.get(att.assignment_id)
+        out.append(
+            AttendanceResponse(
+                id=att.id,
+                assignment_id=att.assignment_id,
+                guard_id=att.guard_id,
+                booked_at=att.booked_at,
+                booked_off_at=att.booked_off_at,
+                status=att.status,
+                note=att.note,
+                paid_hours=att.paid_hours,
+                created_at=att.created_at,
+                updated_at=att.updated_at,
+                updated_by_user_id=att.updated_by_user_id,
+                updated_by_name=getattr(att, "updated_by_name", None),
+                guard_name=(a.guard.full_name if a and a.guard else None),
+                site_id=a.site_id if a else None,
+                site_name=(a.site.name if a and a.site else None),
+                shift_date=a.date if a else None,
+                shift_start=a.shift_start if a else None,
+                shift_end=a.shift_end if a else None,
+                has_overtime=bool(ot),
+                has_early_finish=bool(ef),
+                overtime_end=ot.new_end if ot else None,
+                early_finish_end=ef.actual_end if ef else None,
+                late_minutes=late.late_minutes if late else None,
+            )
+        )
+    return out
 
 
 def _get_owned_attendance(db: Session, attendance_id: int, user_id: int) -> Attendance:
@@ -98,11 +175,6 @@ def _get_owned_attendance(db: Session, attendance_id: int, user_id: int) -> Atte
 
 
 def _scope_for_portal_user(db: Session, user_id: int, q):
-    """Attendance rows inherit the scope of the shift they belong to.
-
-    Attendance is joined through Assignment, so the same narrowing that limits a portal
-    login's rota limits which clock-ins it can read.
-    """
     from app.services.portal_access import filter_assignments_for_user, is_portal_role
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -111,7 +183,14 @@ def _scope_for_portal_user(db: Session, user_id: int, q):
     return q
 
 
-def get_all_attendance(db: Session, user_id: int, guard_id: Optional[int] = None) -> List[Attendance]:
+def get_all_attendance(
+    db: Session,
+    user_id: int,
+    guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> List[AttendanceResponse]:
     company = get_company_by_user_id(db, user_id)
     q = (
         db.query(Attendance)
@@ -124,8 +203,14 @@ def get_all_attendance(db: Session, user_id: int, guard_id: Optional[int] = None
     q = _scope_for_portal_user(db, user_id, q)
     if guard_id:
         q = q.filter(Attendance.guard_id == guard_id)
+    if site_id:
+        q = q.filter(Assignment.site_id == site_id)
+    if start_date:
+        q = q.filter(Assignment.date >= start_date)
+    if end_date:
+        q = q.filter(Assignment.date <= end_date)
     rows = q.order_by(Attendance.updated_at.desc(), Attendance.created_at.desc()).all()
-    return [_att_out(a) for a in rows]
+    return _enrich_attendance_rows(db, rows)
 
 
 def create_attendance(db: Session, data: AttendanceCreate, user_id: int) -> Attendance:

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -50,8 +51,8 @@ const ATT_LABELS: Record<string, string> = {
   late: 'Late',
   absent: 'Absent',
   no_show: 'No show',
-  cancelled: 'Cancelled (not paid)',
-  cancelled_paid: 'Cancelled (paid)',
+  cancelled: 'Cancelled - Not Paid',
+  cancelled_paid: 'Cancelled - Paid',
   pending: 'Not marked',
   scheduled: 'Upcoming',
 };
@@ -469,7 +470,7 @@ export default function PayrollPage() {
         });
       }
       if (!imported.length) {
-        toast.error('No payroll records found — check the published rota has On time or Late shifts in this period');
+        toast.error('No payroll records found — check the published rota has On Time, Late, or Cancelled - Paid shifts in this period');
       } else {
         for (const rec of imported) {
           const split = applyModeSplit(
@@ -743,7 +744,7 @@ export default function PayrollPage() {
         <ModulePage>
           <DashboardHeader
             title="Payroll"
-            hint="Records are imported from published rota hours. Only shifts marked On time or Late are payable, so the rota'd and attended totals are shown side by side."
+            hint="Records are imported from published rota hours. Payable shifts are On Time, Late, and Cancelled - Paid (agreed hours). Rota'd and attended totals are shown side by side."
             description={
               hasSearched
                 ? `${payrolls.length} payroll record${payrolls.length !== 1 ? 's' : ''} for this search`
@@ -848,44 +849,38 @@ export default function PayrollPage() {
                       {calcMode === 'employee' ? (
                         <div className="space-y-1">
                           <Label>Employee <span className="text-destructive">*</span></Label>
-                          <Select value={calcGuardId} onValueChange={setCalcGuardId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select employee" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {guards.map((g) => (
-                                <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelect
+                            value={calcGuardId}
+                            onChange={setCalcGuardId}
+                            options={guards.map((g) => ({ value: String(g.id), label: g.full_name }))}
+                            placeholder="Select employee"
+                            searchPlaceholder="Search staff…"
+                            emptyText="No staff found"
+                          />
                         </div>
                       ) : calcMode === 'site' ? (
                         <div className="space-y-1">
                           <Label>Site <span className="text-destructive">*</span></Label>
-                          <Select value={calcSiteId} onValueChange={setCalcSiteId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select site" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {sites.map((s) => (
-                                <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelect
+                            value={calcSiteId}
+                            onChange={setCalcSiteId}
+                            options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+                            placeholder="Select site"
+                            searchPlaceholder="Search sites…"
+                            emptyText="No sites found"
+                          />
                         </div>
                       ) : calcMode === 'client' ? (
                         <div className="space-y-1">
                           <Label>Client <span className="text-destructive">*</span></Label>
-                          <Select value={calcClientId} onValueChange={setCalcClientId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select client" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {filterOptions.clients.map((c) => (
-                                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelect
+                            value={calcClientId}
+                            onChange={setCalcClientId}
+                            options={filterOptions.clients}
+                            placeholder="Select client"
+                            searchPlaceholder="Search clients…"
+                            emptyText="No clients found"
+                          />
                           <p className="text-xs text-muted-foreground">
                             Covers every site assigned to this client &mdash; there is no need to import each one.
                           </p>
@@ -893,16 +888,14 @@ export default function PayrollPage() {
                       ) : (
                         <div className="space-y-1">
                           <Label>Rota <span className="text-destructive">*</span></Label>
-                          <Select value={calcRotaId} onValueChange={setCalcRotaId}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select rota" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {rotas.map((r) => (
-                                <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <SearchableSelect
+                            value={calcRotaId}
+                            onChange={setCalcRotaId}
+                            options={rotas.map((r) => ({ value: String(r.id), label: r.name }))}
+                            placeholder="Select rota"
+                            searchPlaceholder="Search rotas…"
+                            emptyText="No rotas found"
+                          />
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-4">
@@ -976,23 +969,22 @@ export default function PayrollPage() {
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 Pick a date range to see what everyone is owed, or narrow it to one person. Pay follows
-                attendance &mdash; only shifts marked On time or Late are paid, and the rota&rsquo;d total is shown
-                beside it so you can see anything that was missed. Nothing is saved.
+                attendance &mdash; On Time, Late, and Cancelled - Paid (agreed hours) are paid, and the
+                rota&rsquo;d total is shown beside it so you can see anything that was missed. Nothing is saved.
               </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1 min-w-56">
                   <Label>Employee</Label>
-                  <Select value={pvGuardId} onValueChange={setPvGuardId}>
-                    <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All employees</SelectItem>
-                      {guards.map((g) => (
-                        <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={pvGuardId}
+                    onChange={setPvGuardId}
+                    options={guards.map((g) => ({ value: String(g.id), label: g.full_name }))}
+                    noneOption={{ value: 'all', label: 'All employees' }}
+                    placeholder="Select employee"
+                    searchPlaceholder="Search staff…"
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>From</Label>
@@ -1129,7 +1121,7 @@ export default function PayrollPage() {
                           <AlertTriangle className="size-4 shrink-0 mt-0.5" />
                           <span>
                             {preview.unattended_hours.toFixed(2)} of {preview.rota_hours.toFixed(2)} hours from past shifts are not
-                            being paid because they have no On time or Late mark. That is {formatMoney(preview.held_back_amount)} held
+                            being paid because they are not On Time, Late, or Cancelled - Paid. That is {formatMoney(preview.held_back_amount)} held
                             back.{' '}
                             {needsMarking.length > 0
                               ? 'If those shifts were worked, mark attendance on the rota and calculate again.'
@@ -1151,7 +1143,7 @@ export default function PayrollPage() {
                       <span>
                         {preview.upcoming_hours.toFixed(2)} hours across {preview.upcoming_shifts} upcoming shift
                         {preview.upcoming_shifts === 1 ? '' : 's'} are not counted yet. They count as soon as attendance is
-                        marked On time or Late — including shifts marked ahead of their date.
+                        marked On Time, Late, or Cancelled - Paid — including shifts marked ahead of their date.
                       </span>
                     </p>
                   )}

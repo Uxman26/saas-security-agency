@@ -13,10 +13,15 @@ router = APIRouter(prefix="/attendance", tags=["attendance"])
 @router.get("", response_model=List[AttendanceResponse])
 def list_attendance_all(
     guard_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("attendance", "view")),
 ):
-    return attendance_service.get_all_attendance(db, current_user.id, guard_id)
+    return attendance_service.get_all_attendance(
+        db, current_user.id, guard_id, site_id=site_id, start_date=start_date, end_date=end_date
+    )
 
 @router.post("", response_model=AttendanceResponse, status_code=status.HTTP_201_CREATED)
 def create_attendance(data: AttendanceCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("attendance", "create"))):

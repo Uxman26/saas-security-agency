@@ -11,9 +11,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
-import type { PatrolComplianceRow, PatrolLog } from '@/lib/types';
+import type { PatrolComplianceRow, PatrolDashboardKpis, PatrolLog } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
+
+const emptyKpis: PatrolDashboardKpis = {
+  total_scheduled: 0,
+  completed: 0,
+  on_time: 0,
+  late: 0,
+  missed: 0,
+  pending: 0,
+  average_lateness_minutes: 0,
+  completion_rate_pct: 100,
+  missed_by_site: [],
+  missed_by_guard: [],
+  late_by_site: [],
+  late_by_guard: [],
+};
 
 export default function PatrolReportsPage() {
   const today = new Date().toISOString().slice(0, 10);
@@ -22,15 +37,18 @@ export default function PatrolReportsPage() {
   const [end, setEnd] = useState(today);
   const [compliance, setCompliance] = useState<PatrolComplianceRow[]>([]);
   const [detail, setDetail] = useState<PatrolLog[]>([]);
+  const [kpis, setKpis] = useState<PatrolDashboardKpis>(emptyKpis);
 
   const load = useCallback(async () => {
     try {
-      const [c, d] = await Promise.all([
+      const [c, d, k] = await Promise.all([
         api.patrol.compliance(start, end),
         api.patrol.detail(start, end),
+        api.patrol.dashboardKpis(start, end),
       ]);
       setCompliance(c);
       setDetail(d);
+      setKpis(k);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load reports');
     }
@@ -78,6 +96,26 @@ export default function PatrolReportsPage() {
               <Button onClick={load}>Apply</Button>
             </CardContent>
           </Card>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+            {[
+              { label: 'Scheduled', value: kpis.total_scheduled },
+              { label: 'Completed', value: kpis.completed },
+              { label: 'On time', value: kpis.on_time },
+              { label: 'Late', value: kpis.late },
+              { label: 'Missed', value: kpis.missed },
+              { label: 'Pending', value: kpis.pending },
+              { label: 'Avg lateness', value: `${kpis.average_lateness_minutes}m` },
+              { label: 'Completion', value: `${kpis.completion_rate_pct}%` },
+            ].map((c) => (
+              <Card key={c.label}>
+                <CardContent className="pt-4 pb-3">
+                  <div className="text-xs text-muted-foreground">{c.label}</div>
+                  <div className="text-xl font-semibold tabular-nums mt-1">{c.value}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
           <Card>
             <CardHeader>

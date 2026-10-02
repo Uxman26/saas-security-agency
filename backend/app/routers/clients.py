@@ -7,12 +7,16 @@ from app.schemas import (
     ClientResponse,
     ClientRenewContract,
     ClientContractRenewalResponse,
+    ClientBankAccountCreate,
+    ClientBankAccountUpdate,
+    ClientBankAccountResponse,
     CompanyUserResetPassword,
     DeleteImpactResponse,
     PortalLoginOut,
 )
 from app.rbac import require_internal_module, user_has_permission_db
 from app.services import client_service
+from app.services import client_bank_service
 from app.services.portal_login_view import portal_login_out
 
 router = APIRouter(prefix="/clients", tags=["clients"])
@@ -74,6 +78,59 @@ def set_client_portal_login_password(
         db, client_id, login_user_id, body.new_password, current_user.id
     )
     return portal_login_out(db, user)
+
+
+@router.get("/{client_id}/bank-accounts", response_model=list[ClientBankAccountResponse])
+def list_client_bank_accounts(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "view")),
+):
+    return client_bank_service.list_accounts(db, client_id, current_user.id)
+
+
+@router.post("/{client_id}/bank-accounts", response_model=ClientBankAccountResponse, status_code=status.HTTP_201_CREATED)
+def create_client_bank_account(
+    client_id: int,
+    body: ClientBankAccountCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "edit")),
+):
+    return client_bank_service.create_account(db, client_id, body.model_dump(), current_user.id)
+
+
+@router.put("/{client_id}/bank-accounts/{account_id}", response_model=ClientBankAccountResponse)
+def update_client_bank_account(
+    client_id: int,
+    account_id: int,
+    body: ClientBankAccountUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "edit")),
+):
+    return client_bank_service.update_account(
+        db, client_id, account_id, body.model_dump(exclude_unset=True), current_user.id
+    )
+
+
+@router.post("/{client_id}/bank-accounts/{account_id}/default", response_model=ClientBankAccountResponse)
+def set_default_client_bank_account(
+    client_id: int,
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "edit")),
+):
+    return client_bank_service.set_default(db, client_id, account_id, current_user.id)
+
+
+@router.delete("/{client_id}/bank-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_client_bank_account(
+    client_id: int,
+    account_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("clients", "edit")),
+):
+    client_bank_service.delete_account(db, client_id, account_id, current_user.id)
+    return None
 
 
 @router.get("/{client_id}/delete-impact", response_model=DeleteImpactResponse)

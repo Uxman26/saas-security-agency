@@ -43,7 +43,7 @@ function groupFeatures(features: PackageFeature[]) {
     .filter((g) => g.items.length > 0);
 }
 
-function FeatureLine({ label, included }: { label: string; included: boolean }) {
+function FeatureLine({ label, included, kind }: { label: string; included: boolean; kind?: string }) {
   return (
     <div className={cn('flex items-start gap-2 text-sm', included ? 'text-foreground' : 'text-muted-foreground/60')}>
       {included ? (
@@ -51,7 +51,14 @@ function FeatureLine({ label, included }: { label: string; included: boolean }) 
       ) : (
         <Minus className="mt-0.5 size-4 shrink-0" />
       )}
-      <span className={cn(!included && 'line-through decoration-muted-foreground/40')}>{label}</span>
+      <span className={cn(!included && 'line-through decoration-muted-foreground/40')}>
+        {label}
+        {kind ? (
+          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground no-underline">
+            {kind}
+          </span>
+        ) : null}
+      </span>
     </div>
   );
 }
@@ -231,7 +238,12 @@ export default function AdminPackagesPage() {
                             </p>
                             <div className="space-y-1">
                               {items.map((f) => (
-                                <FeatureLine key={f.key} label={f.label} included={!!t.features?.[f.key]} />
+                                <FeatureLine
+                                  key={f.key}
+                                  label={f.label}
+                                  included={!!t.features?.[f.key]}
+                                  kind={f.tenant_module ? 'Module' : 'Feature'}
+                                />
                               ))}
                             </div>
                           </div>
@@ -310,7 +322,12 @@ export default function AdminPackagesPage() {
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <p className="font-medium">Included features & apps</p>
+                    <div>
+                      <p className="font-medium">Modules, features & capabilities</p>
+                      <p className="text-xs text-muted-foreground">
+                        Modules unlock whole apps. Features are capabilities inside the platform. Changes sync to tenants on this package.
+                      </p>
+                    </div>
                     <Button
                       type="button"
                       size="sm"
@@ -328,7 +345,7 @@ export default function AdminPackagesPage() {
                       <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
                         {GROUP_LABELS[group] ?? group}
                       </p>
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         {items.map((f) => (
                           <label key={f.key} className="flex items-start gap-2 text-sm">
                             <input
@@ -337,10 +354,21 @@ export default function AdminPackagesPage() {
                               checked={!!draftFeatures[f.key]}
                               onChange={() => toggleFeature(f.key)}
                             />
-                            <span>
-                              {f.label}
+                            <span className="min-w-0">
+                              <span className="font-medium">
+                                {f.label}
+                                <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                  {f.tenant_module ? 'Module' : 'Feature'}
+                                </span>
+                              </span>
                               {f.description ? (
-                                <span className="block text-xs text-muted-foreground">{f.description}</span>
+                                <span className="mt-0.5 block text-xs text-muted-foreground">{f.description}</span>
+                              ) : null}
+                              {f.tenant_module ? (
+                                <span className="mt-1 block border-l-2 border-muted pl-2 text-xs text-muted-foreground">
+                                  Tenant module key: <code>{f.tenant_module}</code>
+                                  <span className="block">Includes navigation, routes, and API access for this module when enabled.</span>
+                                </span>
                               ) : null}
                             </span>
                           </label>

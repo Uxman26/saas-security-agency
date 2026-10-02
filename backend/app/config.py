@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     # Public API origin used to build default OAuth redirect URIs when unset
     api_public_url: str = "http://localhost:8000"
 
+    # In-app assistant (retrieval by default; optional local Ollama — never required)
+    assistant_rate_per_minute: int = 30
+    assistant_llm_url: str = ""  # e.g. http://127.0.0.1:11434 — leave blank to disable LLM
+    assistant_llm_model: str = "llama3.2:1b"
+    assistant_llm_timeout_seconds: float = 8
+
     @field_validator("database_url", mode="before")
     @classmethod
     def default_sqlite_if_placeholder(cls, v: str) -> str:

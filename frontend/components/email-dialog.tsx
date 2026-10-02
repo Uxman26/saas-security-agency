@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -13,12 +14,6 @@ import { api } from '@/lib/api';
 import { Mail } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-
-const emailSchema = z.object({
-  to_email: z.string().email('Invalid email address'),
-  subject: z.string().min(1, 'Subject is required').max(200),
-  body: z.string().min(1, 'Message is required'),
-});
 
 export function EmailDialog({
   defaultEmail,
@@ -30,8 +25,16 @@ export function EmailDialog({
   compact?: boolean;
 }) {
   const { user } = useAuth();
+  const t = useTranslations('app');
+  const tc = useTranslations('common');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const emailSchema = z.object({
+    to_email: z.string().email(),
+    subject: z.string().min(1).max(200),
+    body: z.string().min(1),
+  });
 
   const {
     register,
@@ -55,9 +58,9 @@ export function EmailDialog({
       await api.email.send(data);
       setOpen(false);
       reset();
-      toast.success('Email sent');
+      toast.success(t('emailSent'));
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send email');
+      toast.error(err instanceof Error ? err.message : t('emailFailed'));
     } finally {
       setLoading(false);
     }
@@ -69,48 +72,49 @@ export function EmailDialog({
         <Button
           variant={compact ? 'ghost' : 'outline'}
           size="sm"
-          title="Send email"
-          aria-label="Send email"
+          title={t('emailDialogTitle')}
+          aria-label={t('emailDialogTitle')}
           className={cn(
-            // Non-compact collapses to the icon alone on phones; the label returns at `sm`.
             compact ? 'size-8 p-0' : 'px-2.5 sm:px-3',
             'transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary'
           )}
         >
-          <Mail className={compact ? 'size-4' : 'h-4 w-4 sm:mr-2'} />
-          {!compact && <span className="sr-only sm:not-sr-only">Send Email</span>}
+          <Mail className={compact ? 'size-4' : 'h-4 w-4 sm:me-2'} />
+          {!compact && <span className="sr-only sm:not-sr-only">{tc('sendEmail')}</span>}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Send Email{defaultName ? ` to ${defaultName}` : ''}</DialogTitle>
+          <DialogTitle>
+            {defaultName ? t('emailToName', { name: defaultName }) : t('emailDialogTitle')}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label>To Email</Label>
+            <Label>{t('emailTo')}</Label>
             <Input type="email" {...register('to_email')} />
             {errors.to_email && <p className="text-sm text-destructive">{errors.to_email.message}</p>}
           </div>
           <div className="space-y-2">
-            <Label>Subject</Label>
+            <Label>{t('emailSubject')}</Label>
             <Input {...register('subject')} />
             {errors.subject && <p className="text-sm text-destructive">{errors.subject.message}</p>}
           </div>
           <div className="space-y-2">
-            <Label>Message</Label>
+            <Label>{t('emailMessage')}</Label>
             <textarea
               {...register('body')}
               className="w-full min-h-[200px] px-3 py-2 border rounded-md"
-              placeholder="Enter your message here..."
+              placeholder={t('emailPlaceholder')}
             />
             {errors.body && <p className="text-sm text-destructive">{errors.body.message}</p>}
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {tc('cancel')}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Sending...' : 'Send Email'}
+              {loading ? t('emailSending') : tc('sendEmail')}
             </Button>
           </div>
         </form>

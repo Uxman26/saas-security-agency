@@ -258,6 +258,11 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("line_create", "Add lines", "edit"),
         ActionDef("line_edit", "Edit lines", "edit"),
         ActionDef("line_delete", "Delete lines", "edit"),
+        ActionDef("credit_note_view", "View credit notes", "view"),
+        ActionDef("credit_note_create", "Create credit notes", "create"),
+        ActionDef("credit_note_edit", "Edit credit notes", "edit"),
+        ActionDef("credit_note_cancel", "Cancel credit notes", "edit"),
+        ActionDef("credit_note_delete", "Delete credit notes", "delete"),
     ),
     "payments": CRUD + ARCHIVING,
     "expenses": CRUD
@@ -324,6 +329,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("send", "Send email", "edit"),
         ActionDef("test", "Send test email", "edit"),
         ActionDef("logs_view", "View email logs", "view"),
+        ActionDef("logs_clear", "Clear email logs", "edit"),
     ),
 }
 

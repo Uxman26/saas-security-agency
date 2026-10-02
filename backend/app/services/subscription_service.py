@@ -21,10 +21,32 @@ def _company_scoped_user(db: Session, user_id: int) -> None:
 def update_subscription(db: Session, data: SubscriptionUpdate, user_id: int) -> Company:
     _company_scoped_user(db, user_id)
     company = get_company_by_user_id(db, user_id)
+    if getattr(company, "stripe_subscription_id", None):
+        raise HTTPException(
+            status_code=400,
+            detail="Plan changes for Stripe-billed tenants must use Billing → Change plan.",
+        )
     if is_plan_downgrade(company, data.subscription_tier, company.billing_cycle or "monthly"):
         raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
+    before_tier = company.subscription_tier
     company.subscription_tier = normalize_tier(data.subscription_tier)
     apply_plan_module_flags(company, company.subscription_tier)
+    from app.models import SubscriptionChange
+
+    db.add(
+        SubscriptionChange(
+            company_id=company.id,
+            actor_user_id=user_id,
+            change_type="upgrade",
+            from_tier=before_tier,
+            to_tier=company.subscription_tier,
+            from_status=company.subscription_status,
+            to_status=company.subscription_status,
+            from_cycle=company.billing_cycle,
+            to_cycle=company.billing_cycle,
+            note="Local plan update (non-Stripe)",
+        )
+    )
     db.commit()
     db.refresh(company)
     return company

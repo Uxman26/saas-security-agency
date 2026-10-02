@@ -85,36 +85,63 @@ export function sidebarPathAllowed(modules: string[] | null | undefined, href: s
 }
 
 export function parsePaymentPending(err: unknown): import('./types').PaymentPendingDetail | null {
-  if (!(err instanceof Error)) return null;
-  try {
-    const d = JSON.parse(err.message);
-    if (d?.code === 'payment_pending') return d;
-  } catch {
-    return null;
+  if (!err || typeof err !== 'object') return null;
+  const anyErr = err as { code?: string; detail?: unknown; message?: string };
+  if (anyErr.code === 'payment_pending' && anyErr.detail && typeof anyErr.detail === 'object') {
+    return anyErr.detail as import('./types').PaymentPendingDetail;
   }
-  return null;
+  const detail =
+    anyErr.detail && typeof anyErr.detail === 'object'
+      ? (anyErr.detail as Record<string, unknown>)
+      : (() => {
+          try {
+            return JSON.parse(String(anyErr.message || ''));
+          } catch {
+            return null;
+          }
+        })();
+  if (!detail || detail.code !== 'payment_pending') return null;
+  return detail as import('./types').PaymentPendingDetail;
 }
 
 export function parseSubscriptionRequired(err: unknown): import('./types').SubscriptionRequiredDetail | null {
-  if (!(err instanceof Error)) return null;
-  try {
-    const d = JSON.parse(err.message);
-    if (d?.code === 'subscription_required') return d;
-  } catch {
-    return null;
+  if (!err || typeof err !== 'object') return null;
+  const anyErr = err as { code?: string; detail?: unknown; message?: string };
+  if (anyErr.code === 'subscription_required' && anyErr.detail && typeof anyErr.detail === 'object') {
+    return anyErr.detail as import('./types').SubscriptionRequiredDetail;
   }
-  return null;
+  const detail =
+    anyErr.detail && typeof anyErr.detail === 'object'
+      ? (anyErr.detail as Record<string, unknown>)
+      : (() => {
+          try {
+            return JSON.parse(String(anyErr.message || ''));
+          } catch {
+            return null;
+          }
+        })();
+  if (!detail || detail.code !== 'subscription_required') return null;
+  return detail as import('./types').SubscriptionRequiredDetail;
 }
 
 export function parseEmailVerificationRequired(err: unknown): { email?: string; receipt_ref?: string } | null {
-  if (!(err instanceof Error)) return null;
-  try {
-    const d = JSON.parse(err.message);
-    if (d?.code === 'email_verification_required') return d;
-  } catch {
-    return null;
-  }
-  return null;
+  if (!err || typeof err !== 'object') return null;
+  const anyErr = err as { code?: string; detail?: unknown; message?: string };
+  const detail =
+    anyErr.detail && typeof anyErr.detail === 'object'
+      ? (anyErr.detail as Record<string, unknown>)
+      : (() => {
+          try {
+            return JSON.parse(String(anyErr.message || ''));
+          } catch {
+            return null;
+          }
+        })();
+  if (!detail || detail.code !== 'email_verification_required') return null;
+  return {
+    email: typeof detail.email === 'string' ? detail.email : undefined,
+    receipt_ref: typeof detail.receipt_ref === 'string' ? detail.receipt_ref : undefined,
+  };
 }
 
 export function parseAccountLocked(err: unknown): {

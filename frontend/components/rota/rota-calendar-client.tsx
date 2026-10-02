@@ -53,16 +53,19 @@ import {
   Plus,
   Search,
   Trash2,
+  Undo2,
   UserPlus,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { addDays } from 'date-fns';
+import { RotaAiPanel } from '@/components/rota/rota-ai-panel';
 
 /* Rough rendered heights, used only to decide whether a menu opens down or up.
    Keep these close to reality: overestimating makes menus flip away from the
    cursor when there was actually room below. */
-const SHIFT_MENU_H = 300;
+const SHIFT_MENU_H = 340;
 const EMP_MENU_H = 348;
 /* Desktop grid column widths. The same numbers are mirrored as CSS custom properties
    on `.rota-grid-table` in globals.css, which narrows them below `sm` so a phone can
@@ -158,7 +161,7 @@ const ATT_STATUS_OPTIONS: { value: AttStatus; label: string }[] = [
 ];
 
 const ATT_PAYMENT_OPTIONS: { value: AttStatus; label: string }[] = [
-  { value: 'cancelled', label: 'Not paid' },
+  { value: 'cancelled', label: 'Not Paid' },
   { value: 'cancelled_paid', label: 'Paid' },
 ];
 
@@ -341,6 +344,7 @@ export function RotaCalendarClient() {
   const canExportRota = canModule(user, 'rota', 'export');
   const canLogOvertime = canEditRota && canModule(user, 'rota', 'log_overtime');
   const canLogEarlyFinish = canEditRota && canModule(user, 'rota', 'log_early_finish');
+  const [showAi, setShowAi] = useState(false);
   /** Payable money is a separate permission — the column collapses entirely without it. */
   const showPayable = canModule(user, 'rota_payable', 'view');
   const payColW = showPayable ? ROTA_PAY_COL_W : 0;
@@ -402,6 +406,9 @@ export function RotaCalendarClient() {
     setDayCount,
     setAttendance,
     clearAttendance,
+    beginUndoAction,
+    undoLastAction,
+    canUndo,
     publishRota,
     unpublishGuard,
     unpublishRota,
@@ -1355,7 +1362,7 @@ export function RotaCalendarClient() {
     toast.snack(copyPlan.count === 1 ? 'Shift copied' : `${copyPlan.count} shifts created`);
   };
 
-  const startAtt = (empId: string, dk: string, idx: number) => {
+  const startAtt = (empId: string, dk: string, idx: number, presetStatus?: AttStatus) => {
     closeShiftMenu();
     const k = attKey(empId, dk, idx);
     const ex = state.attendance[k];
@@ -1367,30 +1374,35 @@ export function RotaCalendarClient() {
         : undefined);
     setAttCtx({ empId, dk, idx });
     const exStatus = normalizeAttStatus(ex?.status) ?? 'on_time';
+    const status = presetStatus ?? exStatus;
     const normalized = ex
       ? {
           ...ex,
-          status: exStatus,
+          status,
           lateMinutes,
-          // Blank rather than undefined so the required field renders empty and editable
-          // instead of switching between controlled and uncontrolled.
-          paidHours: exStatus === 'cancelled_paid' ? ex.paidHours ?? '' : undefined,
+          paidHours: status === 'cancelled_paid' ? ex.paidHours ?? '' : undefined,
+          note: isCancelledStatus(status) ? ex.note ?? '' : ex.note,
         }
       : null;
     setAttRec(
       normalized
         ? normalized
         : {
-            status: 'on_time',
+            status: status as AttendanceRec['status'],
             hours: calcHours(sh || { start: '09:00', end: '17:00', site: '', notes: '', breakH: 0, breakM: 0, color: '#3b82f6', label: '' }).toFixed(2),
             note: '',
             lateMinutes,
             empId,
             dk,
             si: idx,
+            paidHours: status === 'cancelled_paid' ? '' : undefined,
           }
     );
     setAttOpen(true);
+  };
+
+  const startCancel = (empId: string, dk: string, idx: number) => {
+    startAtt(empId, dk, idx, 'cancelled');
   };
 
   /**
@@ -1419,6 +1431,7 @@ export function RotaCalendarClient() {
 
   const saveAtt = async () => {
     if (!attCtx || !attRec) return;
+    beginUndoAction('Update attendance');
     const status = normalizeAttStatus(attRec.status) || attRec.status;
     const noteTrimmed = (attRec.note || '').trim();
     if (status !== 'on_time' && !noteTrimmed) {
@@ -1577,9 +1590,10 @@ export function RotaCalendarClient() {
       return;
     }
     toast.confirm('Remove attendance from this shift?', () => {
+      beginUndoAction('Clear attendance');
       clearAttendance(k);
       toast.snack('Attendance removed');
-    }, { label: 'Remove', description: 'This cannot be undone.' });
+    }, { label: 'Remove' });
   };
 
   const clearShiftOvertime = (empId: string, dk: string, idx: number) => {
@@ -2405,11 +2419,21 @@ export function RotaCalendarClient() {
           <p className="text-sm text-muted-foreground">{meta}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
+          <Button variant="outline" size="sm" type="button" onClick={() => setShowAi((v) => !v)}>
+            <Sparkles className="size-3.5 mr-1" />
+            {showAi ? 'Hide AI' : 'AI Rota'}
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link href="/rota/attendance-report">Attendance report</Link>
           </Button>
         </div>
       </div>
+
+      {showAi ? (
+        <div className="shrink-0">
+          <RotaAiPanel />
+        </div>
+      ) : null}
 
       {canEditRota && shiftCount === 0 && state.employees.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
@@ -2447,6 +2471,21 @@ export function RotaCalendarClient() {
               <Button variant="outline" size="sm" type="button" onClick={openDaysEditor}>
                 <CalendarPlus className="size-3.5 mr-1" />
                 Add days
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                disabled={!canUndo}
+                title={canUndo ? 'Undo last rota action' : 'Nothing to undo'}
+                onClick={() => {
+                  void undoLastAction().then((ok) => {
+                    if (ok) toast.snack('Undone');
+                  });
+                }}
+              >
+                <Undo2 className="size-3.5 mr-1" />
+                Undo
               </Button>
             </>
           )}
@@ -4212,7 +4251,7 @@ export function RotaCalendarClient() {
               {isCancelledStatus(attRec.status) ? (
                 <>
                   <div className="space-y-1">
-                    <LabelMini>Payment status</LabelMini>
+                    <LabelMini>Payment Status</LabelMini>
                     <select
                       className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                       value={attRec.status}
@@ -4234,15 +4273,15 @@ export function RotaCalendarClient() {
                   </div>
                   {attRec.status === 'cancelled_paid' ? (
                     <div className="space-y-1">
-                      <LabelMini>How many hours were agreed for payment? (required)</LabelMini>
+                      <LabelMini>How many hours were agreed for payment?</LabelMini>
                       <Input
                         type="number"
                         min={0}
                         max={24}
                         step="0.25"
                         inputMode="decimal"
-                        aria-label="Agreed paid hours"
-                        placeholder="Agreed paid hours"
+                        aria-label="Agreed Paid Hours"
+                        placeholder="Agreed Paid Hours"
                         value={attRec.paidHours ?? ''}
                         onChange={(e) => setAttRec({ ...attRec, paidHours: e.target.value })}
                       />
@@ -4295,7 +4334,7 @@ export function RotaCalendarClient() {
               )}
               <div className="space-y-1">
                 <LabelMini>
-                  {isCancelledStatus(attRec.status) ? 'Cancellation note' : 'Note'}
+                  {isCancelledStatus(attRec.status) ? 'Cancellation Note' : 'Note'}
                   {attRec.status !== 'on_time' ? ' (required)' : ' (optional)'}
                 </LabelMini>
                 <textarea
@@ -4475,6 +4514,15 @@ export function RotaCalendarClient() {
               onClick={() => clearShiftEarlyFinish(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}
             >
               Undo finished early
+            </button>
+          ) : null}
+          {canEditRota ? (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 hover:bg-muted"
+              onClick={() => startCancel(shiftMenu.empId, shiftMenu.dk, shiftMenu.idx)}
+            >
+              Cancelled
             </button>
           ) : null}
           {canDeleteShift ? (

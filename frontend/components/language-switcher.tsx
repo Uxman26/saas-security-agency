@@ -1,6 +1,6 @@
 'use client';
 
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { setLocale } from '@/actions/locale';
 import {
@@ -10,29 +10,32 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-
-const LANGUAGES = [
-  { code: 'en', label: 'English', flag: '🇺🇸' },
-  { code: 'ar', label: 'Arabic', flag: '🇸🇦' },
-] as const;
+import { isRtl } from '@/i18n/config';
 
 type Props = {
   className?: string;
-  /** Kept for existing call sites (auth / marketing). */
   variant?: 'default' | 'auth' | 'dark';
 };
 
-/**
- * Pill language selector — English & Arabic only.
- */
 export function LanguageSwitcher({ className }: Props) {
   const locale = useLocale();
   const router = useRouter();
-  const current = LANGUAGES.find((l) => l.code === locale) ?? LANGUAGES[0];
+  const t = useTranslations('common');
+
+  const languages = [
+    { code: 'en', label: t('english'), flag: '🇺🇸' },
+    { code: 'ar', label: t('arabic'), flag: '🇸🇦' },
+  ] as const;
+
+  const current = languages.find((l) => l.code === locale) ?? languages[0];
 
   const onChange = async (next: string) => {
     if (next === locale) return;
     await setLocale(next);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = next;
+      document.documentElement.dir = isRtl(next) ? 'rtl' : 'ltr';
+    }
     router.refresh();
   };
 
@@ -40,10 +43,8 @@ export function LanguageSwitcher({ className }: Props) {
     <Select value={current.code} onValueChange={(v) => void onChange(v)}>
       <SelectTrigger
         size="sm"
-        aria-label="Language"
+        aria-label={t('language')}
         className={cn(
-          // Flag-only pill on phones — the label is the widest thing in the header and
-          // the flag already identifies the language. Full label returns at `sm`.
           'h-9 w-auto shrink-0 gap-1.5 rounded-full border-border/80 bg-muted/70 px-2.5 text-sm font-medium shadow-sm',
           'sm:min-w-[8.25rem] sm:gap-2 sm:px-3.5',
           'hover:bg-muted dark:border-white/12 dark:bg-[#1a1f28] dark:hover:bg-[#222833]',
@@ -63,7 +64,7 @@ export function LanguageSwitcher({ className }: Props) {
         align="end"
         className="min-w-[12rem] rounded-2xl border-border/80 p-1.5 shadow-lg dark:border-white/10 dark:bg-[#12161d]"
       >
-        {LANGUAGES.map((lang) => {
+        {languages.map((lang) => {
           const selected = lang.code === current.code;
           return (
             <SelectItem

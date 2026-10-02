@@ -4,7 +4,7 @@ import json
 import os
 import re
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, List, Optional
 
 from fastapi import HTTPException, UploadFile
@@ -161,6 +161,21 @@ def _notify(
     lead: Optional[Lead] = None,
     actor_id: Optional[int] = None,
 ) -> None:
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    dup_q = db.query(AppNotification.id).filter(
+        AppNotification.company_id == company_id,
+        AppNotification.user_id == user_id,
+        AppNotification.kind == kind,
+        AppNotification.entity_type == entity_type,
+        AppNotification.read_at.is_(None),
+        AppNotification.created_at >= since,
+    )
+    if entity_id is None:
+        dup_q = dup_q.filter(AppNotification.entity_id.is_(None))
+    else:
+        dup_q = dup_q.filter(AppNotification.entity_id == entity_id)
+    if dup_q.first():
+        return
     db.add(
         AppNotification(
             company_id=company_id,
@@ -858,6 +873,20 @@ def unread_notification_count(db: Session, user_id: int) -> int:
         .scalar()
         or 0
     )
+
+
+def purge_old_notifications(db: Session, *, read_days: int = 90) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(1, read_days))
+    deleted = (
+        db.query(AppNotification)
+        .filter(
+            AppNotification.read_at.isnot(None),
+            AppNotification.read_at < cutoff,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return int(deleted or 0)
 
 
 def export_leads_csv(db: Session, user_id: int, **filters) -> str:

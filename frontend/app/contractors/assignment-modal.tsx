@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Input } from '@/components/ui/input';
 import { TEXT_LIMITS } from '@/lib/text-limits';
 import type { DirectoryContractorList, Site } from '@/lib/types';
@@ -82,49 +82,34 @@ export function AssignmentModal({
         <div className="space-y-3">
           <div className="space-y-1">
             <Label>Main contractor</Label>
-            <Select value={mainId} onValueChange={setMainId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select main" />
-              </SelectTrigger>
-              <SelectContent>
-                {mains.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={mainId}
+              onChange={setMainId}
+              options={mains.map((m) => ({ value: m.id, label: m.name }))}
+              placeholder="Select main"
+              searchPlaceholder="Search main contractors…"
+            />
           </div>
           <div className="space-y-1">
             <Label>Sub-contractor</Label>
-            <Select value={subId} onValueChange={setSubId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select sub" />
-              </SelectTrigger>
-              <SelectContent>
-                {subs.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={subId}
+              onChange={setSubId}
+              options={subs.map((s) => ({ value: s.id, label: s.name }))}
+              placeholder="Select sub"
+              searchPlaceholder="Search sub-contractors…"
+            />
           </div>
           <div className="space-y-1">
             <Label>Site (optional)</Label>
-            <Select value={siteId || '__none__'} onValueChange={(v) => setSiteId(v === '__none__' ? '' : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Any site" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Any site</SelectItem>
-                {sites.map((s) => (
-                  <SelectItem key={s.id} value={s.id.toString()}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={siteId}
+              onChange={setSiteId}
+              options={sites.map((s) => ({ value: s.id.toString(), label: s.name }))}
+              noneOption={{ value: '', label: 'Any site' }}
+              placeholder="Any site"
+              searchPlaceholder="Search sites…"
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">

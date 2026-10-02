@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule, isAdminBypass } from '@/lib/permissions';
 import { isCapabilityModule } from '@/lib/nav-modules';
@@ -38,6 +39,7 @@ export function ModuleGuard({
 }) {
   const { user, loading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const tc = useTranslations('common');
 
   useEffect(() => {
     if (!loading && isAuthenticated && user && !canModule(user, moduleKey, action)) {
@@ -48,7 +50,7 @@ export function ModuleGuard({
   if (loading || !user) {
     return (
       <div className="min-h-[40vh] flex items-center justify-center text-muted-foreground">
-        Loading…
+        {tc('loading')}
       </div>
     );
   }
@@ -69,14 +71,48 @@ export function useModulePathGuard(pathname: string) {
     if (user.role === 'super_admin' || isAdminBypass(user)) return;
     if (pathGuardExempt(pathname)) return;
 
-    // Capability modules carry no path — matching them would swallow every route.
     const modules = (user.module_access || []).filter((m) => !isCapabilityModule(m));
     const match = [...modules]
       .sort((a, b) => b.sidebar_path.length - a.sidebar_path.length)
       .find((m) => pathname === m.sidebar_path || pathname.startsWith(`${m.sidebar_path}/`));
 
-    if (match && !match.can_view) {
+    if (!match) return;
+    if (!match.can_view) {
       router.replace('/dashboard');
+      return;
+    }
+    const mods = user.enabled_modules;
+    if (mods) {
+      if (match.key === 'expenses' && mods.expenses === false) {
+        router.replace('/dashboard');
+        return;
+      }
+      if (match.key === 'leads' && mods.leads === false) {
+        router.replace('/dashboard');
+        return;
+      }
+      if (match.key === 'sms' && mods.whatsapp === false) {
+        router.replace('/dashboard');
+        return;
+      }
+      if (match.key === 'email_settings' && mods.email === false) {
+        router.replace('/dashboard');
+        return;
+      }
+      if (match.key === 'client_portal' && mods.client_portal === false) {
+        router.replace('/dashboard');
+        return;
+      }
+    }
+    const feats = user.plan?.features;
+    if (feats) {
+      if (match.key === 'contractors' && feats.contractors === false) {
+        router.replace('/dashboard');
+        return;
+      }
+      if (match.key === 'sub_contractors' && feats.sub_contractors === false && feats.subcontractors === false) {
+        router.replace('/dashboard');
+      }
     }
   }, [loading, user, pathname, router]);
 }

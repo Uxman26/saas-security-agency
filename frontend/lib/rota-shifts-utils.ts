@@ -200,9 +200,9 @@ export function attStatusLabel(s: AttStatus | string | null | undefined): string
     case 'no_show':
       return 'No show';
     case 'cancelled':
-      return 'Cancelled (not paid)';
+      return 'Cancelled - Not Paid';
     case 'cancelled_paid':
-      return 'Cancelled (paid)';
+      return 'Cancelled - Paid';
     default:
       return '—';
   }

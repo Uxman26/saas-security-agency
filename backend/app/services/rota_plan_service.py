@@ -463,6 +463,67 @@ def _parse_shift_rate(raw) -> Optional[float]:
         return None
 
 
+def _employee_profile_rate(db: Session, company_id: int, guard_id: int, on_date: date) -> Optional[float]:
+    from app.models import GuardRate
+    from app.services.rate_service import profile_hourly_rate
+
+    guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
+    profile = profile_hourly_rate(guard)
+    if profile is not None and profile > 0:
+        return float(profile)
+    gr = (
+        db.query(GuardRate)
+        .filter(GuardRate.guard_id == guard_id, GuardRate.effective_from <= on_date)
+        .order_by(GuardRate.effective_from.desc())
+        .first()
+    )
+    if gr and gr.hourly_rate is not None and float(gr.hourly_rate) > 0:
+        return float(gr.hourly_rate)
+    return None
+
+
+def _enforce_rates_on_reassign(db: Session, company_id: int, old_json: Optional[str], new_json: Optional[str]) -> Optional[str]:
+    if not new_json:
+        return new_json
+    try:
+        new_data = json.loads(new_json)
+    except (json.JSONDecodeError, TypeError):
+        return new_json
+    if not isinstance(new_data, dict):
+        return new_json
+    events = shift_audit_service.diff_planner(
+        shift_audit_service._parse(old_json),
+        shift_audit_service._parse(new_json),
+    )
+    changed = False
+    for ev in events:
+        if ev.get("action") != "shift_reassigned":
+            continue
+        after = ev.get("after") or {}
+        gid = after.get("guard_id")
+        dk = after.get("date")
+        slot = int(after.get("slot") or 0)
+        if gid is None or not dk:
+            continue
+        try:
+            on_date = date.fromisoformat(str(dk)[:10])
+        except ValueError:
+            continue
+        rate = _employee_profile_rate(db, company_id, int(gid), on_date)
+        by_emp = new_data.setdefault("shifts", {}).setdefault(str(int(gid)), {})
+        blocks = by_emp.get(str(dk)[:10])
+        if not isinstance(blocks, list) or slot < 0 or slot >= len(blocks):
+            continue
+        block = blocks[slot]
+        if not isinstance(block, dict):
+            continue
+        cur = _parse_shift_rate(block.get("shiftRate"))
+        if cur != rate:
+            block["shiftRate"] = rate
+            changed = True
+    return json.dumps(new_data) if changed else new_json
+
+
 def _delete_plan_assignments(db: Session, plan_id: int, guard_id: Optional[int] = None) -> None:
     q = db.query(Assignment.id).filter(Assignment.rota_plan_id == plan_id)
     if guard_id is not None:
@@ -1154,9 +1215,13 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
     if not plan:
         raise HTTPException(status_code=404, detail="Rota not found")
     payload = data.model_dump(exclude_unset=True)
+    is_undo = bool(payload.pop("is_undo", False) or False)
+    undo_of = (payload.pop("undo_of", None) or None)
+    if isinstance(undo_of, str):
+        undo_of = undo_of.strip() or None
+    else:
+        undo_of = None
     was_published = plan.status == "published"
-    # Snapshot what the rota looked like before this edit — the planner PATCHes the whole
-    # tree, so the diff against the stored copy is the only record of what the user did.
     prev_planner = plan.planner_data
     prev_rota = {"name": plan.name, "start": plan.start_date, "end": plan.end_date}
     if "name" in payload and payload["name"]:
@@ -1166,8 +1231,10 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
     if "budget" in payload and payload["budget"] is not None:
         plan.budget = float(payload["budget"])
     if "planner_data" in payload:
-        plan.planner_data = payload["planner_data"]
-        # Keep list date range in sync when days are added/removed in the planner
+        incoming = payload["planner_data"]
+        if not is_undo:
+            incoming = _enforce_rates_on_reassign(db, company.id, prev_planner, incoming)
+        plan.planner_data = incoming
         span = _span_from_planner_days(plan.planner_data)
         if span:
             _apply_plan_span(plan, span[0], span[2])
@@ -1189,6 +1256,8 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
             plan=plan,
             old_planner_json=prev_planner,
             new_planner_json=plan.planner_data,
+            is_undo=is_undo,
+            undo_of=undo_of,
         )
     _log_rota_change(db, company.id, user_id, plan, prev_rota)
     db.commit()
@@ -1200,7 +1269,6 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
                 new_data = json.loads(plan.planner_data or "{}")
             except json.JSONDecodeError:
                 new_data = {}
-            # Only touch guards who already have published assignments — do not auto-publish drafts.
             published_ids = _published_guard_ids(db, plan.id)
             structural = False
             for gid in published_ids:
@@ -1212,7 +1280,6 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
                     publish_rota_plan(db, user_id, plan.id, guard_id=gid)
                     structural = True
             if not structural:
-                # Attendance / notes / OT-only edits stay on existing assignments
                 shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
                 shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
                 attendance_service.sync_published_plan_attendance(db, user_id, plan)

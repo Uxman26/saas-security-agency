@@ -22,7 +22,39 @@ from app.services.role_service import ensure_roles_for_company, get_role_by_slug
 from app.services.receipt_service import company_login_blocked, create_receipt_for_signup, latest_pending_receipt
 from app.plan_config import normalize_tier
 from app.services import email_service
-from app.services.module_service import modules_from_plan, dump_modules
+from app.services.module_service import modules_from_plan, dump_modules, is_module_enabled
+
+
+MOBILE_APP_DENIED = {
+    "code": "mobile_app_not_included",
+    "message": "The mobile application is not included in your organisation's current package. Please contact your administrator or upgrade your subscription to enable mobile access.",
+}
+
+
+def _assert_mobile_app_entitled(
+    db: Session,
+    user: User,
+    client_source: str | None,
+    ip_address: str | None,
+    user_agent: str | None,
+) -> None:
+    if (client_source or "").strip().lower() != "mobile":
+        return
+    if getattr(user, "role", None) == SUPER_ADMIN_ROLE or not user.company_id:
+        return
+    from app.services import login_log_service
+
+    co = db.query(Company).filter(Company.id == user.company_id).first()
+    if not co:
+        return
+    from app.plan_config import feature_enabled
+
+    entitled = is_module_enabled(co, "mobile_apps") and feature_enabled(co.subscription_tier, "mobile_apps")
+    if entitled:
+        return
+    login_log_service.log_login(db, email=user.email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
+    raise HTTPException(status_code=403, detail=MOBILE_APP_DENIED)
+
 
 def send_verification_email(user: User) -> None:
     if not requires_email_verification(user):
@@ -234,7 +266,7 @@ def signup_with_receipt(db: Session, user_data: UserCreate):
         trial = start_signup_trial(db, user)
     return user, r, requires_email_verification(user), trial
 
-def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None, remember_me: bool = False) -> dict:
+def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None, remember_me: bool = False, client_source: str | None = None) -> dict:
     from app.auth import verify_password
     from app.services import login_guard_service, login_log_service, session_service
 
@@ -287,6 +319,8 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
     if block:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=402, detail=block)
+
+    _assert_mobile_app_entitled(db, user, client_source, ip_address, user_agent)
 
     login_guard_service.clear_login_failures(user)
     db.commit()

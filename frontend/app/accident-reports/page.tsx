@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleGuard } from '@/components/module-guard';
@@ -23,20 +23,21 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
 import type { AccidentReport, Site } from '@/lib/types';
-import { ClipboardCheck, Download, Plus, Printer, Trash2, Pencil, Search } from 'lucide-react';
+import { ClipboardCheck, Download, Plus, Printer, Trash2, Pencil, Search, AlertTriangle } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 
-const STATUS_LABELS: Record<string, string> = {
-  open: 'Open',
-  under_review: 'Under review',
-  closed: 'Closed',
-};
+const STATUS_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'under_review', label: 'Under review' },
+  { value: 'closed', label: 'Closed' },
+] as const;
+const STATUS_LABELS: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
 
-/** The three emergency services, each with its own informed/attended/left times. */
 const SERVICES = [
   { key: 'police', label: 'Police' },
   { key: 'fire', label: 'Fire Service' },
@@ -55,6 +56,7 @@ const EMPTY: FormState = {
   accident_location: '',
   persons_involved: '',
   comments: '',
+  status: 'open',
   police_informed: false,
   police_time_informed: '',
   police_time_attended: '',
@@ -68,6 +70,12 @@ const EMPTY: FormState = {
   ambulance_time_attended: '',
   ambulance_time_left: '',
 };
+
+function statusTone(status: string): 'muted' | 'warning' | 'positive' | 'info' {
+  if (status === 'closed') return 'positive';
+  if (status === 'under_review') return 'warning';
+  return 'muted';
+}
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -92,11 +100,13 @@ export default function AccidentReportsPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [q, setQ] = useState('');
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AccidentReport | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -111,13 +121,8 @@ export default function AccidentReportsPage() {
       .finally(() => setLoading(false));
   }, [from, to, statusFilter]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    api.sites.list().then(setSites).catch(() => {});
-  }, []);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { api.sites.list().then(setSites).catch(() => {}); }, []);
 
   const set = (key: string, value: string | boolean) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -135,6 +140,7 @@ export default function AccidentReportsPage() {
       next[k] = typeof v === 'boolean' ? v : v == null ? '' : String(v);
     });
     next.site_id = r.site_id ? String(r.site_id) : '';
+    next.status = r.status || 'open';
     setForm(next);
     setOpen(true);
   };
@@ -149,6 +155,7 @@ export default function AccidentReportsPage() {
     Object.entries(form).forEach(([k, v]) => {
       if (typeof v === 'boolean') payload[k] = v;
       else if (k === 'site_id') payload[k] = v ? parseInt(v, 10) : null;
+      else if (k === 'status' && !editing) return;
       else payload[k] = v === '' ? null : v;
     });
     try {
@@ -161,6 +168,20 @@ export default function AccidentReportsPage() {
       toast.error(e instanceof Error ? e.message : 'Could not save the report');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changeStatus = async (r: AccidentReport, next: string) => {
+    if (!canEdit || next === r.status) return;
+    setStatusBusyId(r.id);
+    try {
+      await api.accidentReports.update(r.id, { status: next });
+      toast.snack(`Status set to ${STATUS_LABELS[next] ?? next}`);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update status');
+    } finally {
+      setStatusBusyId(null);
     }
   };
 
@@ -192,26 +213,52 @@ export default function AccidentReportsPage() {
     }
   };
 
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter((r) => {
+      const hay = [
+        r.reference,
+        r.site_name,
+        r.supervisor_name,
+        r.accident_type,
+        r.accident_location,
+        r.status,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [rows, q]);
+
   const byStatus = (k: string) => rows.filter((r) => r.status === k).length;
 
-  /** The cards along the top, in the shape every module dashboard uses. */
   const statCards: StatCardSpec[] = [
     { key: 'total', label: 'Reports', value: rows.length, icon: ClipboardCheck, tone: 'neutral' },
     {
-      key: 'draft',
-      label: 'Draft',
-      value: byStatus('draft'),
-      icon: ClipboardCheck,
+      key: 'open',
+      label: 'Open',
+      value: byStatus('open'),
+      icon: AlertTriangle,
       tone: 'muted',
-      action: byStatus('draft') ? { label: 'View', onClick: () => setStatusFilter('draft') } : undefined,
+      action: byStatus('open') ? { label: 'View', onClick: () => setStatusFilter('open') } : undefined,
     },
     {
-      key: 'submitted',
-      label: 'Submitted',
-      value: byStatus('submitted'),
+      key: 'under_review',
+      label: 'Under review',
+      value: byStatus('under_review'),
       icon: Search,
       tone: 'warning',
-      action: byStatus('submitted') ? { label: 'View', onClick: () => setStatusFilter('submitted') } : undefined,
+      action: byStatus('under_review') ? { label: 'View', onClick: () => setStatusFilter('under_review') } : undefined,
+    },
+    {
+      key: 'closed',
+      label: 'Closed',
+      value: byStatus('closed'),
+      icon: ClipboardCheck,
+      tone: 'positive',
+      action: byStatus('closed') ? { label: 'View', onClick: () => setStatusFilter('closed') } : undefined,
     },
     {
       key: 'services',
@@ -229,9 +276,9 @@ export default function AccidentReportsPage() {
         <ModuleGuard moduleKey="accident_reports">
           <ModulePage>
             <DashboardHeader
-              title="Accident reports"
-              hint="X-FORM-077. Complete it here, or print a blank for sites working on paper and key it in afterwards."
-              description="The accident report log — injuries, near misses and the services called."
+              title="Accident Report Log"
+              hint="X-FORM-077. Complete digitally, or print a blank for paper sites and key it in afterwards."
+              description="Corporate accident report log for injuries, near misses, and emergency services attendance — suitable for client submission and record-keeping."
               actions={
                 <div className="flex flex-wrap gap-2">
                   {canBlank ? (
@@ -259,8 +306,16 @@ export default function AccidentReportsPage() {
                 setFrom('');
                 setTo('');
                 setStatusFilter('all');
+                setQ('');
               }}
             >
+              <FilterField label="Search">
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Reference, site, supervisor…"
+                />
+              </FilterField>
               <FilterField label="From">
                 <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
               </FilterField>
@@ -272,58 +327,83 @@ export default function AccidentReportsPage() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All statuses</SelectItem>
-                    {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FilterField>
             </FilterBar>
 
-            <ResultsCard title="Accident reports" count={loading ? undefined : rows.length}>
+            <ResultsCard title="Accident reports" count={loading ? undefined : filtered.length}>
               <div className="p-4">
-                <div className="overflow-x-auto rounded-md border">
+                <div className="overflow-x-auto rounded-md border bg-card">
                   <Table>
                     <TableHeader>
-                      <TableRow>
+                      <TableRow className="bg-muted/40">
                         <TableHead>Reference</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead>Site</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>Supervisor</TableHead>
-                        <TableHead>Services called</TableHead>
+                        <TableHead>Services</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {rows.length === 0 && !loading ? (
+                      {filtered.length === 0 && !loading ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                            No accident reports for these filters.
+                          <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                            No accident reports match these filters.
                           </TableCell>
                         </TableRow>
                       ) : null}
-                      {rows.map((r) => {
+                      {filtered.map((r) => {
                         const called = [
                           r.police_informed ? 'Police' : null,
                           r.fire_informed ? 'Fire' : null,
                           r.ambulance_informed ? 'Ambulance' : null,
                         ].filter(Boolean);
                         return (
-                          <TableRow key={r.id}>
-                            <TableCell className="font-mono text-xs">{r.reference ?? '—'}</TableCell>
-                            <TableCell className="whitespace-nowrap">{r.report_date}</TableCell>
-                            <TableCell>{r.site_name ?? '—'}</TableCell>
-                            <TableCell className="max-w-48 truncate">{r.accident_type ?? '—'}</TableCell>
-                            <TableCell>{r.supervisor_name}</TableCell>
-                            <TableCell className="text-xs">
-                              {called.length ? called.join(', ') : <span className="text-muted-foreground">None</span>}
+                          <TableRow key={r.id} className="align-middle">
+                            <TableCell className="font-mono text-xs font-medium">{r.reference ?? '—'}</TableCell>
+                            <TableCell className="whitespace-nowrap tabular-nums text-sm">{r.report_date}</TableCell>
+                            <TableCell className="max-w-[10rem] truncate">{r.site_name ?? '—'}</TableCell>
+                            <TableCell className="max-w-[12rem] truncate">{r.accident_type ?? '—'}</TableCell>
+                            <TableCell className="max-w-[10rem] truncate">{r.supervisor_name}</TableCell>
+                            <TableCell>
+                              {called.length ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {called.map((c) => (
+                                    <Pill key={String(c)} tone="danger">{c}</Pill>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">None</span>
+                              )}
                             </TableCell>
                             <TableCell>
-                              <Pill dot tone={r.status === 'submitted' ? 'warning' : r.status === 'closed' ? 'positive' : 'muted'}>
-                                {STATUS_LABELS[r.status] ?? r.status}
-                              </Pill>
+                              {canEdit ? (
+                                <Select
+                                  value={r.status}
+                                  onValueChange={(v) => void changeStatus(r, v)}
+                                  disabled={statusBusyId === r.id}
+                                >
+                                  <SelectTrigger className="h-8 w-[140px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {STATUS_OPTIONS.map((opt) => (
+                                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Pill dot tone={statusTone(r.status)}>
+                                  {STATUS_LABELS[r.status] ?? r.status}
+                                </Pill>
+                              )}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center justify-end gap-1">
@@ -356,9 +436,9 @@ export default function AccidentReportsPage() {
                     </TableBody>
                   </Table>
                 </div>
-                {rows.length > 0 ? (
+                {filtered.length > 0 ? (
                   <div className="mt-3 border-t pt-3">
-                    <ShowingCount rangeStart={1} rangeEnd={rows.length} total={rows.length} noun="reports" />
+                    <ShowingCount rangeStart={1} rangeEnd={filtered.length} total={filtered.length} noun="reports" />
                   </div>
                 ) : null}
               </div>
@@ -419,15 +499,14 @@ export default function AccidentReportsPage() {
                     </div>
                     <div className="space-y-1">
                       <Label>Site</Label>
-                      <Select value={String(form.site_id) || 'none'} onValueChange={(v) => set('site_id', v === 'none' ? '' : v)}>
-                        <SelectTrigger><SelectValue placeholder="Select site" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No site</SelectItem>
-                          {sites.map((s) => (
-                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={String(form.site_id || '')}
+                        onChange={(v) => set('site_id', v)}
+                        options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+                        noneOption={{ value: '', label: 'No site' }}
+                        placeholder="Select site"
+                        searchPlaceholder="Search sites…"
+                      />
                     </div>
                     <div className="space-y-1 sm:col-span-1">
                       <Label>Type of accident</Label>
@@ -437,6 +516,23 @@ export default function AccidentReportsPage() {
                       <Label>Accident location</Label>
                       <Input value={String(form.accident_location)} onChange={(e) => set('accident_location', e.target.value)} maxLength={300} />
                     </div>
+                    {editing ? (
+                      <div className="space-y-1">
+                        <Label>Status</Label>
+                        <Select
+                          value={String(form.status || 'open')}
+                          onValueChange={(v) => set('status', v)}
+                          disabled={!canEdit}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {STATUS_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="space-y-1">
@@ -452,7 +548,7 @@ export default function AccidentReportsPage() {
 
                   <div className="space-y-2">
                     <Label>Emergency services</Label>
-                    <div className="rounded-md border divide-y">
+                    <div className="rounded-md border divide-y bg-muted/20">
                       {SERVICES.map((svc) => {
                         const on = Boolean(form[`${svc.key}_informed`]);
                         return (

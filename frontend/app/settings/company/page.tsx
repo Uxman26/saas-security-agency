@@ -9,11 +9,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { api } from '@/lib/api';
 import type { CompanyProfile } from '@/lib/types';
 import { Building2, Upload, User as UserIcon, Wallet } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
+import { CompanyBankAccountsPanel } from '@/components/company-bank-accounts-panel';
+import { canModule } from '@/lib/permissions';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -49,14 +52,15 @@ function useLogoUrl(url?: string | null) {
 
 export default function CompanySettingsPage() {
   const [tab, setTab] = useState<Tab>('logo');
-  // Your own display name, not a company field — saved through /auth/me/profile,
-  // which every signed-in role may call, so it has its own Save button.
   const { user, refreshUser } = useAuth();
-  // Derived, not synced through an effect: the field shows the live name until the
-  // user types, so a refresh elsewhere can never leave a stale draft on screen.
+  const canEditBanking = !!user && canModule(user, 'billing', 'profile_edit');
   const [profileDraft, setProfileDraft] = useState<string | null>(null);
   const profileName = profileDraft ?? user?.full_name ?? '';
   const [savingProfile, setSavingProfile] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
 
   const saveProfile = async () => {
     const next = profileName.trim();
@@ -73,6 +77,30 @@ export default function CompanySettingsPage() {
       setSavingProfile(false);
     }
   };
+
+  const savePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error('Fill in all password fields');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('New password and confirmation do not match');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await api.auth.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      toast.success('Password updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update password');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -82,12 +110,6 @@ export default function CompanySettingsPage() {
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [vatNumber, setVatNumber] = useState('');
   const [website, setWebsite] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [sortCode, setSortCode] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
-  const [iban, setIban] = useState('');
-  const [swiftCode, setSwiftCode] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const logoSrc = useLogoUrl(profile?.logo_url);
@@ -105,12 +127,6 @@ export default function CompanySettingsPage() {
         setRegistrationNumber(p.registration_number ?? '');
         setVatNumber(p.vat_number ?? '');
         setWebsite(p.website ?? '');
-        setAccountName(p.account_name ?? '');
-        setBankName(p.bank_name ?? '');
-        setSortCode(p.sort_code ?? '');
-        setAccountNumber(p.account_number ?? '');
-        setIban(p.iban ?? '');
-        setSwiftCode(p.swift_code ?? '');
       })
       .catch(() => toast.error('Failed to load company profile'));
   };
@@ -131,12 +147,6 @@ export default function CompanySettingsPage() {
         registration_number: registrationNumber.trim() || undefined,
         vat_number: vatNumber.trim() || undefined,
         website: website.trim() || undefined,
-        account_name: accountName.trim() || undefined,
-        bank_name: bankName.trim() || undefined,
-        sort_code: sortCode.trim() || undefined,
-        account_number: accountNumber.trim() || undefined,
-        iban: iban.trim() || undefined,
-        swift_code: swiftCode.trim() || undefined,
       });
       setProfile(p);
       toast.success('Company details saved');
@@ -169,7 +179,7 @@ export default function CompanySettingsPage() {
             title={<span className="flex items-center gap-2"><Building2 className="size-7" /> Company profile</span>}
             description="Logo, contact details, and registration numbers appear on invoices. Bank details appear at the bottom for payment."
             actions={
-              tab !== 'logo' && tab !== 'profile' ? (
+              tab === 'contact' ? (
                 <div className="flex gap-2">
                   <Button onClick={() => void save()} disabled={saving || !name.trim()}>
                     {saving ? 'Saving…' : 'Save'}
@@ -187,54 +197,100 @@ export default function CompanySettingsPage() {
               { id: 'logo', label: 'Logo' },
               { id: 'contact', label: 'Contact' },
               { id: 'banking', label: 'Banking' },
-              { id: 'profile', label: 'Your profile' },
+              { id: 'profile', label: 'Profile' },
             ]}
             value={tab}
             onChange={setTab}
           />
 
           {tab === 'profile' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <UserIcon className="size-4" /> Your profile
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1 max-w-md">
-                  <Label htmlFor="profile_name">Your name</Label>
-                  <Input
-                    id="profile_name"
-                    value={profileName}
-                    onChange={(e) => setProfileDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        void saveProfile();
-                      }
-                    }}
-                    placeholder="Your full name"
-                    maxLength={100}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Shown in the dashboard greeting and wherever your account is listed.
-                  </p>
-                </div>
-                <div className="space-y-1 max-w-md">
-                  <Label>Sign-in email</Label>
-                  <Input value={user?.email ?? ''} disabled readOnly />
-                  <p className="text-xs text-muted-foreground">
-                    Your email is how you sign in and cannot be changed here.
-                  </p>
-                </div>
-                <Button
-                  onClick={() => void saveProfile()}
-                  disabled={savingProfile || !profileName.trim() || profileName.trim() === (user?.full_name ?? '')}
-                >
-                  {savingProfile ? 'Saving…' : 'Save name'}
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <UserIcon className="size-4" /> Profile
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-1 max-w-md">
+                    <Label htmlFor="profile_name">Your name</Label>
+                    <Input
+                      id="profile_name"
+                      value={profileName}
+                      onChange={(e) => setProfileDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void saveProfile();
+                        }
+                      }}
+                      placeholder="Your full name"
+                      maxLength={100}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Shown in the dashboard greeting and wherever your account is listed.
+                    </p>
+                  </div>
+                  <div className="space-y-1 max-w-md">
+                    <Label>Sign-in email</Label>
+                    <Input value={user?.email ?? ''} disabled readOnly />
+                    <p className="text-xs text-muted-foreground">
+                      Your email is how you sign in and cannot be changed here.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => void saveProfile()}
+                    disabled={savingProfile || !profileName.trim() || profileName.trim() === (user?.full_name ?? '')}
+                  >
+                    {savingProfile ? 'Saving…' : 'Save name'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Password</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 max-w-md">
+                  <div className="space-y-1">
+                    <Label htmlFor="current_password">Current password</Label>
+                    <PasswordInput
+                      id="current_password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="new_password">New password</Label>
+                    <PasswordInput
+                      id="new_password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      At least 9 characters with uppercase, lowercase, number, and special character.
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="confirm_password">Confirm new password</Label>
+                    <PasswordInput
+                      id="confirm_password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => void savePassword()}
+                    disabled={savingPassword || !currentPassword || !newPassword || !confirmPassword}
+                  >
+                    {savingPassword ? 'Updating…' : 'Update password'}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {tab === 'logo' && (
@@ -321,32 +377,8 @@ export default function CompanySettingsPage() {
                   <Wallet className="size-4" /> Account details
                 </CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <p className="text-sm text-muted-foreground sm:col-span-2 lg:col-span-3">Bank details shown at the bottom of invoices so clients know where to pay.</p>
-                <div className="space-y-1 sm:col-span-2">
-                  <Label>Account name</Label>
-                  <Input value={accountName} onChange={(e) => setAccountName(e.target.value)} placeholder="Name on the bank account" />
-                </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <Label>Bank name</Label>
-                  <Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Barclays, HSBC" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Sort code</Label>
-                  <Input value={sortCode} onChange={(e) => setSortCode(e.target.value)} placeholder="00-00-00" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Account number</Label>
-                  <Input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="12345678" />
-                </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <Label>IBAN</Label>
-                  <Input value={iban} onChange={(e) => setIban(e.target.value)} placeholder="GB00 XXXX 0000 0000 0000 00" className="font-mono" />
-                </div>
-                <div className="space-y-1">
-                  <Label>SWIFT / BIC</Label>
-                  <Input value={swiftCode} onChange={(e) => setSwiftCode(e.target.value)} placeholder="BARCGB22" className="font-mono" />
-                </div>
+              <CardContent>
+                <CompanyBankAccountsPanel canEdit={canEditBanking} />
               </CardContent>
             </Card>
           )}

@@ -10,10 +10,19 @@ export function moduleNavAllowed(user: User | null | undefined, m: ModuleAccess)
   if (!m.can_view) return false;
   if (isCapabilityModule(m)) return false;
   if (!sidebarPathAllowed(user?.sidebar_modules, m.sidebar_path)) return false;
-  if (m.key === 'expenses' && user?.enabled_modules && user.enabled_modules.expenses === false) return false;
-  if (m.key === 'leads' && user?.enabled_modules && user.enabled_modules.leads === false) return false;
-  if (m.key === 'sms' && user?.enabled_modules && user.enabled_modules.whatsapp === false) return false;
-  if (m.key === 'email_settings' && user?.enabled_modules && user.enabled_modules.email === false) return false;
+  const mods = user?.enabled_modules;
+  if (mods) {
+    if (m.key === 'expenses' && mods.expenses === false) return false;
+    if (m.key === 'leads' && mods.leads === false) return false;
+    if (m.key === 'sms' && mods.whatsapp === false) return false;
+    if (m.key === 'email_settings' && mods.email === false) return false;
+    if (m.key === 'client_portal' && mods.client_portal === false) return false;
+  }
+  const feats = user?.plan?.features;
+  if (feats) {
+    if (m.key === 'contractors' && feats.contractors === false) return false;
+    if (m.key === 'sub_contractors' && feats.sub_contractors === false && feats.subcontractors === false) return false;
+  }
   return true;
 }
 

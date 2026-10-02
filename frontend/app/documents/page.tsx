@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import type { GuardDocument, Guard } from '@/lib/types';
@@ -308,14 +309,14 @@ export default function DocumentsPage() {
                   <div className="space-y-4 py-2">
                     <div className="space-y-1">
                       <Label>Guard <span className="text-destructive">*</span></Label>
-                      <Select value={formGuardId} onValueChange={setFormGuardId}>
-                        <SelectTrigger><SelectValue placeholder="Select guard" /></SelectTrigger>
-                        <SelectContent>
-                          {guards.map((g) => (
-                            <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={formGuardId}
+                        onChange={setFormGuardId}
+                        options={guards.map((g) => ({ value: String(g.id), label: g.full_name }))}
+                        placeholder="Select guard"
+                        searchPlaceholder="Search staff…"
+                        emptyText="No staff found"
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>Document type <span className="text-destructive">*</span></Label>
@@ -411,15 +412,14 @@ export default function DocumentsPage() {
                 />
               </FilterField>
               <FilterField label="Staff member">
-                <Select value={filterGuardId || 'all'} onValueChange={handleFilterGuard}>
-                  <SelectTrigger><SelectValue placeholder="All staff" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All staff</SelectItem>
-                    {guards.map((g) => (
-                      <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={filterGuardId || 'all'}
+                  onChange={handleFilterGuard}
+                  options={guards.map((g) => ({ value: String(g.id), label: g.full_name }))}
+                  noneOption={{ value: 'all', label: 'All staff' }}
+                  placeholder="All staff"
+                  searchPlaceholder="Search staff…"
+                />
               </FilterField>
             </FilterBar>
           </div>

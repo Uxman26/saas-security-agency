@@ -23,6 +23,10 @@ import { api } from '@/lib/api';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { TrialBanner } from '@/components/trial-banner';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
+import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
+import { ControlOpsAssistant } from '@/components/assistant/controlops-assistant';
+import { QuickActionsMenu } from '@/components/quick-actions-menu';
+import { useModuleLabel } from '@/lib/module-i18n';
 
 function mActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard';
@@ -37,6 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
   const isSuperAdmin = user?.role === 'super_admin';
   const { can, loaded: permsLoaded } = usePlatformPermissions();
+  const mobileNavRef = usePersistedScroll<HTMLElement>('app-sidebar-nav-mobile');
   const adminSections = useMemo(
     () =>
       permsLoaded
@@ -47,7 +52,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   useModulePathGuard(pathname);
 
-  // Warm dashboard cache so navigating to /dashboard is near-instant
   useEffect(() => {
     if (!user) return;
     if (isSuperAdmin) {
@@ -77,6 +81,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [user, isSuperAdmin, queryClient]);
 
   const links = useMemo(() => navModulesFromUser(user), [user]);
+  const moduleLabel = useModuleLabel();
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
@@ -85,8 +90,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <ImpersonationBanner />
         <TrialBanner />
         <header className="z-40 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
-          {/* min-w-0 + truncation keeps a long company name from pushing the menu
-              button off the start of the header on narrow screens. */}
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden md:hidden">
             <Button
               type="button"
@@ -102,6 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="hidden flex-1 md:block" />
           <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
+            <QuickActionsMenu />
             <LanguageSwitcher />
             <ThemeToggle />
             <AlertsPanel />
@@ -121,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         {drawer && (
           <div className="fixed inset-0 z-50 md:hidden">
-            <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close menu" onClick={() => setDrawer(false)} />
+            <button type="button" className="absolute inset-0 bg-black/50" aria-label={tc('closeMenu')} onClick={() => setDrawer(false)} />
             <div className="absolute start-0 top-0 bottom-0 flex w-56 flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl">
               <div className="border-b border-sidebar-border p-4">
                 <CompanyBrand className="mb-2" />
@@ -131,7 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Button>
                 </div>
               </div>
-              <nav className="sidebar-nav-scroll flex-1 space-y-0.5 overflow-y-auto p-2">
+              <nav ref={mobileNavRef} className="sidebar-nav-scroll flex-1 space-y-0.5 overflow-y-auto p-2">
                 {isSuperAdmin ? (
                   adminSections.map((section) => (
                     <div key={section.titleKey} className="mb-3">
@@ -142,6 +146,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         <Link
                           key={href}
                           href={href}
+                          scroll={false}
                           className={cn(
                             'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
                             isAdminNavActive(pathname, href)
@@ -160,9 +165,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <Link
                       key={m.key}
                       href={m.sidebar_path}
+                      scroll={false}
                       className={cn(
-                        // Matches the desktop sidebar: soft orange fill, orange label and
-                        // a solid rule down the leading edge.
                         'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
                         mActive(pathname, m.sidebar_path)
                           ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
@@ -170,7 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       )}
                       onClick={() => setDrawer(false)}
                     >
-                      {m.name}
+                      {moduleLabel(m.key, m.name)}
                     </Link>
                   ))
                 )}
@@ -179,6 +183,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
         <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain">{children}</main>
+        {user ? <ControlOpsAssistant /> : null}
       </div>
     </div>
   );

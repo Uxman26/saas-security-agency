@@ -1228,6 +1228,82 @@ export interface JobTitle {
   created_at?: string;
 }
 
+export interface ClientBankAccount {
+  id: number;
+  company_id: number;
+  client_id: number;
+  label: string;
+  account_name?: string | null;
+  bank_name?: string | null;
+  sort_code?: string | null;
+  account_number?: string | null;
+  iban?: string | null;
+  swift_code?: string | null;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface CompanyBankAccount {
+  id: number;
+  company_id: number;
+  label: string;
+  account_name?: string | null;
+  bank_name?: string | null;
+  sort_code?: string | null;
+  account_number?: string | null;
+  iban?: string | null;
+  swift_code?: string | null;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface InvoiceStatementLine {
+  date: string;
+  kind: string;
+  item: string;
+  amount: number;
+  balance: number;
+  invoice_id?: number | null;
+  due_date?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  status?: string | null;
+  method?: string | null;
+}
+
+export interface InvoiceStatement {
+  company: {
+    id: number;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    postcode?: string | null;
+  };
+  client: {
+    id: number;
+    name: string;
+    contact_name?: string | null;
+    address?: string | null;
+    postcode?: string | null;
+    email?: string | null;
+  };
+  site?: { id: number; name: string } | null;
+  date_from: string;
+  date_to: string;
+  currency: string;
+  summary: {
+    opening_balance: number;
+    invoiced: number;
+    credit_balance: number;
+    paid: number;
+    refunded: number;
+    closing_balance: number;
+    total_outstanding: number;
+  };
+  lines: InvoiceStatementLine[];
+}
+
 export interface Client {
   id: number;
   company_id: number;
@@ -1491,12 +1567,16 @@ export interface Invoice {
   company_id: number;
   /** Null when the invoice was raised against a site that belongs to no client. */
   client_id: number | null;
+  client_bank_account_id?: number | null;
   period_start: string;
   period_end: string;
+  invoice_date?: string | null;
   total: number;
   status: string;
   due_date?: string | null;
+  po_number?: string | null;
   notes?: string | null;
+  rota_review?: string | null;
   tax_rate: number;
   subtotal: number;
   tax_amount: number;
@@ -1508,6 +1588,7 @@ export interface Invoice {
   company_email?: string | null;
   company_phone?: string | null;
   company_address?: string | null;
+  company_website?: string | null;
   company_registration_number?: string | null;
   company_vat_number?: string | null;
   company_logo_url?: string | null;
@@ -1517,14 +1598,44 @@ export interface Invoice {
   account_number?: string | null;
   iban?: string | null;
   swift_code?: string | null;
+  payee_account_name?: string | null;
+  payee_bank_name?: string | null;
+  payee_sort_code?: string | null;
+  payee_account_number?: string | null;
+  payee_iban?: string | null;
+  payee_swift_code?: string | null;
   client_email?: string | null;
   client_phone?: string | null;
   client_address?: string | null;
   client_contact_person?: string | null;
   lines?: InvoiceLine[];
   amount_paid?: number;
+  credit_applied?: number;
   balance_due?: number;
   payments?: Payment[];
+  credit_notes?: CreditNote[];
+}
+
+export interface CreditNote {
+  id: number;
+  company_id: number;
+  invoice_id: number;
+  client_id?: number | null;
+  site_id?: number | null;
+  number: string;
+  credit_date: string;
+  reason?: string | null;
+  description?: string | null;
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total: number;
+  status: string;
+  created_at: string;
+  updated_at?: string | null;
+  invoice_number?: string | null;
+  client_name?: string | null;
+  site_name?: string | null;
 }
 
 export interface ReportsHub {
@@ -1687,10 +1798,13 @@ export interface InvoiceLine {
   invoice_id: number;
   site_id: number;
   guard_id?: number;
-  /** The day worked. Null on allowance lines and on anything entered by hand. */
   shift_date?: string | null;
-  /** What the line is for — "Night shift", "Allowance: Meal Allowance". */
+  shift_start?: string | null;
+  shift_end?: string | null;
+  shift_timing?: string | null;
   description?: string | null;
+  service_detail?: string | null;
+  quantity?: number | null;
   hours: number;
   rate: number;
   amount: number;
@@ -1744,6 +1858,17 @@ export interface Attendance {
   updated_by_user_id?: number | null;
   updated_by_name?: string | null;
   created_at: string;
+  guard_name?: string | null;
+  site_id?: number | null;
+  site_name?: string | null;
+  shift_date?: string | null;
+  shift_start?: string | null;
+  shift_end?: string | null;
+  has_overtime?: boolean;
+  has_early_finish?: boolean;
+  overtime_end?: string | null;
+  early_finish_end?: string | null;
+  late_minutes?: number | null;
 }
 
 export interface Payment {
@@ -1915,10 +2040,49 @@ export interface PatrolRoute {
   frequency_minutes: number;
   start_time: string;
   end_time: string;
+  reminder_minutes?: number;
+  grace_minutes?: number;
   status: string;
   checkpoint_count: number;
   created_at: string;
   checkpoints?: PatrolCheckpoint[];
+}
+
+export interface PatrolOccurrence {
+  id: number;
+  company_id: number;
+  site_id: number;
+  site_name?: string | null;
+  route_id: number;
+  route_name?: string | null;
+  checkpoint_id: number;
+  checkpoint_name?: string | null;
+  checkpoint_code?: string | null;
+  guard_id: number;
+  guard_name?: string | null;
+  session_id?: number | null;
+  assignment_id?: number | null;
+  scheduled_at: string;
+  status: string;
+  reminder_sent_at?: string | null;
+  completed_at?: string | null;
+  late_minutes?: number | null;
+  log_id?: number | null;
+}
+
+export interface PatrolDashboardKpis {
+  total_scheduled: number;
+  completed: number;
+  on_time: number;
+  late: number;
+  missed: number;
+  pending: number;
+  average_lateness_minutes: number;
+  completion_rate_pct: number;
+  missed_by_site: { site_id: number; site_name?: string; missed: number; late: number; completed: number }[];
+  missed_by_guard: { guard_id: number; guard_name?: string; missed: number; late: number; completed: number }[];
+  late_by_site: { site_id: number; site_name?: string; missed: number; late: number; completed: number }[];
+  late_by_guard: { guard_id: number; guard_name?: string; missed: number; late: number; completed: number }[];
 }
 
 export interface PatrolLog {

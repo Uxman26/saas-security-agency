@@ -176,6 +176,8 @@ def ensure_renewal_invoices(db: Session) -> int:
     now = _utcnow()
     companies = db.query(Company).filter(Company.subscription_status == "active").all()
     for co in companies:
+        if getattr(co, "stripe_subscription_id", None):
+            continue
         if not co.subscription_end:
             continue
         end = co.subscription_end
@@ -439,3 +441,124 @@ def dashboard_stats(db: Session) -> dict:
         "outstanding_balance": outstanding,
         "total_collected": collected,
     }
+
+
+def send_renewal_and_overdue_notices(db: Session) -> dict:
+    from app.services.email_service import send_email, is_configured
+    from app.services.admin_billing_notify_service import ensure_templates, render_template
+    from app.models import NotificationTemplate, PlatformNotification
+
+    if not is_configured():
+        return {"renewal_reminders": 0, "overdue_notices": 0}
+    ensure_templates(db)
+    renewal_tmpl = db.query(NotificationTemplate).filter(NotificationTemplate.key == "expiry_renewal").first()
+    overdue_tmpl = db.query(NotificationTemplate).filter(NotificationTemplate.key == "billing_overdue").first()
+    now = _utcnow()
+    renewal_sent = 0
+    overdue_sent = 0
+    cutoff = now - timedelta(hours=20)
+    companies = db.query(Company).filter(Company.subscription_status == "active").all()
+    for co in companies:
+        if not co.subscription_end:
+            continue
+        end = co.subscription_end
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        days = (end.date() - now.date()).days
+        if days not in (7, 3, 1):
+            continue
+        admin = db.query(User).filter(User.id == co.admin_id).first()
+        if not admin or not admin.email:
+            continue
+        recent = (
+            db.query(PlatformNotification)
+            .filter(
+                PlatformNotification.company_id == co.id,
+                PlatformNotification.template_key == "expiry_renewal",
+                PlatformNotification.created_at >= cutoff,
+            )
+            .first()
+        )
+        if recent:
+            continue
+        variables = {
+            "full_name": admin.full_name or admin.email,
+            "company_name": co.name,
+            "ends_at": end.date().isoformat(),
+            "message": f"Your subscription renews in {days} day(s). No action is needed if a card is on file.",
+        }
+        subject = render_template(renewal_tmpl.subject if renewal_tmpl else "Renewal reminder — ControlOps", variables)
+        body = render_template(renewal_tmpl.body if renewal_tmpl else variables["message"], variables)
+        try:
+            send_email(admin.email, subject, body)
+            db.add(
+                PlatformNotification(
+                    company_id=co.id,
+                    user_id=admin.id,
+                    channel="email",
+                    template_key="expiry_renewal",
+                    subject=subject,
+                    body=body,
+                    status="sent",
+                    sent_at=now,
+                )
+            )
+            db.commit()
+            renewal_sent += 1
+        except Exception:
+            db.rollback()
+
+    overdue_rows = db.query(SubscriptionInvoice).filter(SubscriptionInvoice.status.in_(["overdue", "unpaid"])).all()
+    for inv in overdue_rows:
+        inv.status = _sync_status(inv)
+        if inv.status != "overdue":
+            continue
+        co = db.query(Company).filter(Company.id == inv.company_id).first()
+        if not co:
+            continue
+        admin = db.query(User).filter(User.id == co.admin_id).first()
+        if not admin or not admin.email:
+            continue
+        recent = (
+            db.query(PlatformNotification)
+            .filter(
+                PlatformNotification.company_id == co.id,
+                PlatformNotification.template_key == "billing_overdue",
+                PlatformNotification.subject.contains(inv.invoice_number or ""),
+                PlatformNotification.created_at >= cutoff,
+            )
+            .first()
+        )
+        if recent:
+            continue
+        due = round(float(inv.total_amount or 0) - float(inv.amount_paid or 0), 2)
+        variables = {
+            "full_name": admin.full_name or admin.email,
+            "company_name": co.name,
+            "invoice_number": inv.invoice_number,
+            "amount": f"£{due:.2f}",
+        }
+        subject = render_template(overdue_tmpl.subject if overdue_tmpl else "Invoice overdue", variables)
+        body = render_template(
+            overdue_tmpl.body if overdue_tmpl else f"Invoice {inv.invoice_number} is overdue.",
+            variables,
+        )
+        try:
+            send_email(admin.email, subject, body)
+            db.add(
+                PlatformNotification(
+                    company_id=co.id,
+                    user_id=admin.id,
+                    channel="email",
+                    template_key="billing_overdue",
+                    subject=subject,
+                    body=body,
+                    status="sent",
+                    sent_at=now,
+                )
+            )
+            db.commit()
+            overdue_sent += 1
+        except Exception:
+            db.rollback()
+    return {"renewal_reminders": renewal_sent, "overdue_notices": overdue_sent}

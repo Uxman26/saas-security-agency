@@ -22,6 +22,7 @@ import {
 } from '@/hooks/use-clients';
 import { PasswordInput } from '@/components/ui/password-input';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
+import { ClientBankAccountsPanel } from '@/components/client-bank-accounts-panel';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { clientSchema, clientRenewSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
@@ -214,7 +215,7 @@ function RenewalHistoryDialog({ clientId, clientName }: { clientId: number; clie
 }
 
 /** Read-only client details, for roles that hold clients.view without clients.edit. */
-function ClientDetailsDialog({ client }: { client: Client }) {
+function ClientDetailsDialog({ client, canEdit = false }: { client: Client; canEdit?: boolean }) {
   const { label, tone } = contractTone(client.contract_end_date);
   const rows: Array<[string, string]> = [
     ['Name', client.name],
@@ -229,7 +230,7 @@ function ClientDetailsDialog({ client }: { client: Client }) {
     ['Added', new Date(client.created_at).toLocaleString()],
   ];
   return (
-    <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+    <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Client — {client.name}</DialogTitle>
       </DialogHeader>
@@ -243,6 +244,7 @@ function ClientDetailsDialog({ client }: { client: Client }) {
         <dt className="text-muted-foreground">Contract status</dt>
         <dd className={statusClass(tone)}>{label}</dd>
       </dl>
+      <ClientBankAccountsPanel clientId={client.id} canEdit={canEdit} />
     </DialogContent>
   );
 }
@@ -793,20 +795,21 @@ export default function ClientsPage() {
             </DialogHeader>
             <ClientForm form={editForm} onSubmit={handleUpdate} isPending={updateClient.isPending} submitLabel="Save Changes" />
             {editingClient ? (
-              // Its own control, saved separately from the client fields: a password change
-              // takes effect immediately and must not ride along with an unsaved edit.
-              <PortalLoginPanel
-                kind="client"
-                recordId={editingClient.id}
-                load={api.clients.portalLogins}
-                save={api.clients.setPortalLoginPassword}
-              />
+              <>
+                <ClientBankAccountsPanel clientId={editingClient.id} canEdit={canEditMod} />
+                <PortalLoginPanel
+                  kind="client"
+                  recordId={editingClient.id}
+                  load={api.clients.portalLogins}
+                  save={api.clients.setPortalLoginPassword}
+                />
+              </>
             ) : null}
           </DialogContent>
         </Dialog>
 
         <Dialog open={!!viewClient} onOpenChange={(o) => !o && setViewClient(null)}>
-          {viewClient && <ClientDetailsDialog client={viewClient} />}
+          {viewClient && <ClientDetailsDialog client={viewClient} canEdit={canEditMod} />}
         </Dialog>
 
         <Dialog open={!!historyClient} onOpenChange={(o) => !o && setHistoryClient(null)}>

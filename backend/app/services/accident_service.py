@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models import AccidentReport, Client, Guard, Site, User
 from app.schemas import AccidentReportCreate, AccidentReportResponse, AccidentReportUpdate
+from app.services import audit_service
 from app.services.company_service import get_company_by_user_id
 from app.services.portal_access import (
     is_client_portal_user,
@@ -188,6 +189,7 @@ def update_report(
     company = get_company_by_user_id(db, user.id)
     row = _row_for_write(db, user, company.id, report_id)
     payload = data.model_dump(exclude_unset=True)
+    prev_status = row.status
 
     if "status" in payload:
         if payload["status"] not in STATUSES:
@@ -208,6 +210,16 @@ def update_report(
 
     for key, value in payload.items():
         setattr(row, key, value.strip() if isinstance(value, str) else value)
+    if "status" in payload and row.status != prev_status:
+        audit_service.log_action(
+            db,
+            company_id=company.id,
+            user_id=user.id,
+            action="status_change",
+            entity_type="accident_report",
+            entity_id=row.id,
+            meta={"from": prev_status, "to": row.status, "reference": row.reference},
+        )
     db.commit()
     return get_report(db, user, report_id)
 

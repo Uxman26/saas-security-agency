@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
 import type { Guard, Site, Task, TaskCounts } from '@/lib/types';
 import { AlertTriangle, CheckCircle2, Clock, ListChecks, Plus, Trash2, Pencil, Users } from 'lucide-react';
@@ -236,13 +237,15 @@ export default function TasksPage() {
               </FilterField>
               {guards.length > 0 ? (
                 <FilterField label="Assigned to" className="min-w-[200px]">
-                  <Select value={guardFilter} onValueChange={setGuardFilter}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Everyone</SelectItem>
-                      {guards.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={guardFilter}
+                    onChange={setGuardFilter}
+                    options={guards.map((g) => ({ value: String(g.id), label: g.full_name }))}
+                    noneOption={{ value: 'all', label: 'Everyone' }}
+                    placeholder="Everyone"
+                    searchPlaceholder="Search staff…"
+                    emptyText="No matching staff"
+                  />
                 </FilterField>
               ) : null}
             </FilterBar>
@@ -409,23 +412,27 @@ export default function TasksPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1">
                       <Label>Assign to</Label>
-                      <Select value={form.guard_id || 'none'} onValueChange={(v) => setForm((f) => ({ ...f, guard_id: v === 'none' ? '' : v }))}>
-                        <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Unassigned</SelectItem>
-                          {guards.map((g) => <SelectItem key={g.id} value={String(g.id)}>{g.full_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={form.guard_id}
+                        onChange={(v) => setForm((f) => ({ ...f, guard_id: v }))}
+                        options={guards.map((g) => ({ value: String(g.id), label: g.full_name }))}
+                        noneOption={{ value: '', label: 'Unassigned' }}
+                        placeholder="Select employee"
+                        searchPlaceholder="Search staff…"
+                        emptyText="No matching staff"
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>Site</Label>
-                      <Select value={form.site_id || 'none'} onValueChange={(v) => setForm((f) => ({ ...f, site_id: v === 'none' ? '' : v }))}>
-                        <SelectTrigger><SelectValue placeholder="Select site" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No site</SelectItem>
-                          {sites.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={form.site_id}
+                        onChange={(v) => setForm((f) => ({ ...f, site_id: v }))}
+                        options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+                        noneOption={{ value: '', label: 'No site' }}
+                        placeholder="Select site"
+                        searchPlaceholder="Search sites…"
+                        emptyText="No matching sites"
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>Due date</Label>

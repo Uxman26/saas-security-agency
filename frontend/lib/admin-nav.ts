@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   Mail,
+  MessageCircle,
   Monitor,
   RotateCcw,
   Scale,
@@ -110,7 +111,10 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
   },
   {
     titleKey: 'adminSectionSupport',
-    items: [{ href: '/admin/tickets', labelKey: 'adminTickets', icon: LifeBuoy, perms: ['support.read'] }],
+    items: [
+      { href: '/admin/tickets', labelKey: 'adminTickets', icon: LifeBuoy, perms: ['support.read'] },
+      { href: '/admin/live-support', labelKey: 'adminLiveSupport', icon: MessageCircle, perms: ['support.read'] },
+    ],
   },
 ] as const;
 

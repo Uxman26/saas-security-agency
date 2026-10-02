@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import type { LoneWorkerEvent, LoneWorkerIncident, LoneWorkerPolicy, LoneWorkerSession, Site } from '@/lib/types';
@@ -384,13 +384,14 @@ export default function LoneWorkerPage() {
                   </div>
                   <div className="min-w-[200px]">
                     <Label>Site</Label>
-                    <Select value={auditSite || 'all'} onValueChange={(v) => setAuditSite(v === 'all' ? '' : v)}>
-                      <SelectTrigger><SelectValue placeholder="All sites" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All sites</SelectItem>
-                        {sites.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={auditSite}
+                      onChange={setAuditSite}
+                      options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+                      noneOption={{ value: '', label: 'All sites' }}
+                      placeholder="All sites"
+                      searchPlaceholder="Search sites…"
+                    />
                   </div>
                   <Button variant="outline" onClick={() => void loadAudit()}>Refresh</Button>
                 </div>
@@ -450,13 +451,14 @@ export default function LoneWorkerPage() {
                   </div>
                   <div>
                     <Label>Site</Label>
-                    <Select value={policyForm.site_id || 'all'} onValueChange={(v) => setPolicyForm({ ...policyForm, site_id: v === 'all' ? '' : v })}>
-                      <SelectTrigger><SelectValue placeholder="All sites (default)" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All sites (default)</SelectItem>
-                        {sites.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={policyForm.site_id}
+                      onChange={(v) => setPolicyForm({ ...policyForm, site_id: v })}
+                      options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+                      noneOption={{ value: '', label: 'All sites (default)' }}
+                      placeholder="All sites (default)"
+                      searchPlaceholder="Search sites…"
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-3">

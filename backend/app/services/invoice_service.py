@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
 from app.authz import assert_owned_by_company
-from app.models import Allowance, AuditLog, Client, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
+from app.models import Allowance, AuditLog, Client, ClientBankAccount, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
@@ -94,20 +94,92 @@ def log_invoice_audit(
 
 
 def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
+    from datetime import date as date_cls
+    from app.services import client_bank_service
+
     company = get_company_by_user_id(db, user_id)
     client = db.query(Client).filter(Client.id == data.client_id, Client.company_id == company.id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     payload = data.model_dump() if hasattr(data, "model_dump") else data.dict()
+    lines_data = payload.pop("lines", None) or []
+    bank_account_id = payload.pop("client_bank_account_id", None)
     inv = Invoice(company_id=company.id, **payload)
+    if not inv.invoice_date:
+        inv.invoice_date = date_cls.today()
     if not inv.subtotal and inv.total:
         inv.subtotal = inv.total
+    account = None
+    if bank_account_id:
+        account = (
+            db.query(ClientBankAccount)
+            .filter(
+                ClientBankAccount.id == bank_account_id,
+                ClientBankAccount.client_id == client.id,
+                ClientBankAccount.company_id == company.id,
+            )
+            .first()
+        )
+        if not account:
+            raise HTTPException(status_code=404, detail="Bank account not found")
+    else:
+        account = client_bank_service.get_default_account(db, client.id, company.id)
+    client_bank_service.apply_account_to_invoice(db, inv, account=account, company=company if not account else None)
     db.add(inv)
     db.flush()
+    for ld in lines_data:
+        site_id = ld.get("site_id") if isinstance(ld, dict) else ld.site_id
+        site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
+        if not site:
+            raise HTTPException(status_code=404, detail=f"Site not found: {site_id}")
+        hours = float(ld.get("hours") if isinstance(ld, dict) else ld.hours or 0)
+        rate = float(ld.get("rate") if isinstance(ld, dict) else ld.rate or 0)
+        allowance = float(ld.get("allowance_amount") if isinstance(ld, dict) else getattr(ld, "allowance_amount", 0) or 0)
+        amount_override = ld.get("amount") if isinstance(ld, dict) else getattr(ld, "amount", None)
+        if hours or rate:
+            amount = round(hours * rate + allowance, 2)
+        elif amount_override not in (None,):
+            amount = round(float(amount_override) + allowance, 2)
+        else:
+            amount = round(allowance, 2)
+        if isinstance(ld, dict):
+            guard_id = ld.get("guard_id")
+            shift_date = ld.get("shift_date")
+            shift_start = ld.get("shift_start")
+            shift_end = ld.get("shift_end")
+            description = ld.get("description")
+            service_detail = ld.get("service_detail")
+            quantity = ld.get("quantity") or 1
+        else:
+            guard_id = ld.guard_id
+            shift_date = ld.shift_date
+            shift_start = ld.shift_start
+            shift_end = ld.shift_end
+            description = ld.description
+            service_detail = ld.service_detail
+            quantity = ld.quantity or 1
+        assert_owned_by_company(db, Guard, guard_id, company.id, field_name="guard_id")
+        db.add(
+            InvoiceLine(
+                invoice_id=inv.id,
+                site_id=site_id,
+                guard_id=guard_id,
+                shift_date=shift_date,
+                shift_start=shift_start,
+                shift_end=shift_end,
+                description=description,
+                service_detail=service_detail,
+                quantity=quantity,
+                hours=hours,
+                rate=rate,
+                amount=amount,
+                allowance_amount=allowance,
+            )
+        )
     recalc_invoice_totals(db, inv)
     db.commit()
     db.refresh(inv)
-    log_invoice_audit(db, company.id, user_id, inv.id, "invoice_created", {"client_id": inv.client_id})
+    log_invoice_audit(db, company.id, user_id, inv.id, "invoice_created", {"client_id": inv.client_id, "custom": bool(lines_data)})
     db.commit()
     return inv
 
@@ -234,6 +306,8 @@ def get_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
 
 
 def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: int) -> Invoice:
+    from app.services import client_bank_service
+
     inv = get_invoice(db, invoice_id, user_id)
     company = get_company_by_user_id(db, user_id)
     payload = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else {k: v for k, v in data.dict().items() if v is not None}
@@ -245,9 +319,26 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
         return v
 
     before = {k: _snap(getattr(inv, k)) for k in payload.keys() if hasattr(inv, k)}
+    bank_account_id = payload.pop("client_bank_account_id", None) if "client_bank_account_id" in payload else ...
     for k, v in payload.items():
         if hasattr(inv, k):
             setattr(inv, k, v)
+    if bank_account_id is not ...:
+        if bank_account_id is None:
+            client_bank_service.apply_account_to_invoice(db, inv, account=None, company=company)
+        else:
+            account = (
+                db.query(ClientBankAccount)
+                .filter(
+                    ClientBankAccount.id == bank_account_id,
+                    ClientBankAccount.company_id == company.id,
+                    ClientBankAccount.client_id == inv.client_id,
+                )
+                .first()
+            )
+            if not account:
+                raise HTTPException(status_code=404, detail="Bank account not found")
+            client_bank_service.apply_account_to_invoice(db, inv, account=account)
     recalc_invoice_totals(db, inv)
     db.commit()
     db.refresh(inv)
@@ -257,7 +348,7 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
         user_id,
         inv.id,
         "invoice_updated",
-        {"before": before, "fields": list(payload.keys())},
+        {"before": before, "fields": list(payload.keys()) + (["client_bank_account_id"] if bank_account_id is not ... else [])},
     )
     db.commit()
     return inv
@@ -272,15 +363,26 @@ def add_invoice_line(db: Session, invoice_id: int, data: InvoiceLineBase, user_i
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
     assert_owned_by_company(db, Guard, data.guard_id, company.id, field_name="guard_id")
-    amount = data.hours * data.rate + (data.allowance_amount or 0)
+    hours = float(data.hours or 0)
+    rate = float(data.rate or 0)
+    allowance = float(data.allowance_amount or 0)
+    amount = round(hours * rate + allowance, 2)
+    if data.amount and hours == 0 and rate == 0:
+        amount = float(data.amount)
     line = InvoiceLine(
         invoice_id=invoice_id,
         site_id=data.site_id,
         guard_id=data.guard_id,
-        hours=data.hours,
-        rate=data.rate,
+        shift_date=data.shift_date,
+        shift_start=data.shift_start,
+        shift_end=data.shift_end,
+        description=data.description,
+        service_detail=data.service_detail,
+        quantity=data.quantity if data.quantity is not None else 1,
+        hours=hours,
+        rate=rate,
         amount=amount,
-        allowance_amount=data.allowance_amount or 0,
+        allowance_amount=allowance,
     )
     db.add(line)
     recalc_invoice_totals(db, inv)
@@ -305,9 +407,13 @@ def update_invoice_line(db: Session, invoice_id: int, line_id: int, data: Invoic
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
     assert_owned_by_company(db, Guard, payload.get("guard_id"), company.id, field_name="guard_id")
+    amount_override = payload.pop("amount", None) if "amount" in payload else None
     for k, v in payload.items():
         setattr(line, k, v)
-    line.amount = (line.hours or 0) * (line.rate or 0) + (line.allowance_amount or 0)
+    if amount_override is not None and float(line.hours or 0) == 0 and float(line.rate or 0) == 0:
+        line.amount = float(amount_override)
+    else:
+        line.amount = (line.hours or 0) * (line.rate or 0) + (line.allowance_amount or 0)
     recalc_invoice_totals(db, inv)
     db.commit()
     db.refresh(line)
@@ -417,12 +523,16 @@ def _rota_invoice_shift_lines(
                     hours = calc_shift_hours(sh.get("start"), sh.get("end"), break_m)
                     if hours <= 0:
                         continue
+                    start = str(sh.get("start") or "").strip() or None
+                    end = str(sh.get("end") or "").strip() or None
                     lines.append(
                         {
                             "guard_id": guard_id,
                             "site_id": site.id,
                             "date": shift_date,
                             "hours": hours,
+                            "shift_start": start,
+                            "shift_end": end,
                             "shift_type": normalize_shift_type(sh.get("shiftType") or sh.get("shift_type") or "day"),
                         }
                     )
@@ -540,13 +650,23 @@ def generate_from_rota(
         client_id=client_id,
         period_start=period_start,
         period_end=period_end,
+        invoice_date=period_end,
         due_date=due,
         total=0,
         subtotal=0,
         tax_rate=DEFAULT_INVOICE_VAT_RATE,
         tax_amount=0,
         status="draft",
+        notes="Payment is due within 30 days of the invoice date.\nPlease quote the invoice number as your payment reference.\nThank you for your business.",
+        rota_review="Generated from published rota. Please review shift timings and hours before sending.",
     )
+    from app.services import client_bank_service
+
+    if client:
+        account = client_bank_service.get_default_account(db, client.id, company.id)
+        client_bank_service.apply_account_to_invoice(db, inv, account=account, company=company if not account else None)
+    else:
+        client_bank_service.apply_account_to_invoice(db, inv, account=None, company=company)
     db.add(inv)
     db.flush()
     anchor_site_id = sites[0].id
@@ -559,7 +679,6 @@ def generate_from_rota(
             )
             or 0
         )
-        # Guard against corrupt rate data blowing up invoice totals
         if r < 0 or r > 10_000:
             r = 0.0
         if double_client and d["date"] in special_dates:
@@ -571,13 +690,18 @@ def generate_from_rota(
         shift_label = SHIFT_TYPE_LABELS.get(d["shift_type"], "Shift")
         if double_client and d["date"] in special_dates:
             shift_label = f"{shift_label} (special day, double rate)"
+        site_row = next((s for s in sites if s.id == d["site_id"]), None)
         db.add(
             InvoiceLine(
                 invoice_id=inv.id,
                 site_id=d["site_id"],
                 guard_id=d["guard_id"],
                 shift_date=d["date"],
+                shift_start=d.get("shift_start"),
+                shift_end=d.get("shift_end"),
                 description=shift_label,
+                service_detail=site_row.name if site_row else None,
+                quantity=1,
                 hours=hours,
                 rate=r,
                 amount=amt,

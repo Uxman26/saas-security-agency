@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from datetime import date
 from app.database import get_db
-from app.models import User, Invoice, InvoiceLine, Payment
+from app.models import User, Invoice, InvoiceLine, Payment, CreditNote
 from app.schemas import (
     InvoiceCreate,
     InvoiceResponse,
@@ -16,12 +16,16 @@ from app.schemas import (
     InvoiceUpdate,
     InvoiceLineUpdate,
     InvoiceAuditEntry,
+    InvoiceStatementResponse,
     PaymentResponse,
+    CreditNoteResponse,
 )
 from app.rbac import require_module, require_internal_module, user_has_permission_db
 from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
-from app.services.invoice_payment_service import invoice_amount_paid
+from app.services.invoice_statement_service import build_statement
+from app.services.invoice_statement_pdf import render_statement_pdf
+from app.services.invoice_payment_service import invoice_amount_paid, invoice_credit_applied, invoice_balance_due
 from app.services.company_profile_service import company_logo_url
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -52,11 +56,19 @@ def _site_stand_in_name(inv: Invoice, db: Session | None = None) -> Optional[str
     return None
 
 
+def _shift_timing(ln: InvoiceLine) -> Optional[str]:
+    start = (ln.shift_start or "").strip()
+    end = (ln.shift_end or "").strip()
+    if start and end:
+        return f"{start} - {end}"
+    if start or end:
+        return start or end
+    return None
+
+
 def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = None) -> InvoiceResponse:
     lines_out: list[InvoiceLineResponse] = []
     if include_lines:
-        # Chronological, so the bill reads the way the work happened. Allowance lines
-        # carry no date and sort to the end, where a summary charge belongs.
         for ln in sorted(inv.lines, key=lambda x: (x.shift_date is None, x.shift_date or date.min, x.id)):
             site = getattr(ln, "site", None)
             g = getattr(ln, "guard", None)
@@ -66,7 +78,11 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
                     invoice_id=ln.invoice_id,
                     site_id=ln.site_id,
                     shift_date=ln.shift_date,
+                    shift_start=ln.shift_start,
+                    shift_end=ln.shift_end,
                     description=ln.description,
+                    service_detail=ln.service_detail,
+                    quantity=ln.quantity if ln.quantity is not None else 1,
                     guard_id=ln.guard_id,
                     hours=ln.hours,
                     rate=ln.rate,
@@ -75,6 +91,7 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
                     created_at=ln.created_at,
                     site_name=site.name if site else None,
                     guard_name=g.full_name if g else None,
+                    shift_timing=_shift_timing(ln),
                 )
             )
     co = inv.company
@@ -85,6 +102,7 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
     company_email = None
     company_phone = None
     company_address = None
+    company_website = None
     company_registration_number = None
     company_vat_number = None
     company_logo_url_val = None
@@ -98,17 +116,20 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         company_email = (co.email or "").strip() or (admin.email if admin else None)
         company_phone = co.phone
         company_address = co.address
+        company_website = co.website
         company_registration_number = co.registration_number
         company_vat_number = co.vat_number
         company_logo_url_val = company_logo_url(co)
-        account_name = co.account_name
-        bank_name = co.bank_name
-        sort_code = co.sort_code
-        account_number = co.account_number
-        iban = co.iban
-        swift_code = co.swift_code
+        account_name = inv.payee_account_name or co.account_name
+        bank_name = inv.payee_bank_name or co.bank_name
+        sort_code = inv.payee_sort_code or co.sort_code
+        account_number = inv.payee_account_number or co.account_number
+        iban = inv.payee_iban or co.iban
+        swift_code = inv.payee_swift_code or co.swift_code
     paid = invoice_amount_paid(db, inv.id) if db else 0
+    credited = invoice_credit_applied(db, inv.id) if db else 0
     payments_out = []
+    credit_notes_out = []
     if db and include_lines:
         for p in db.query(Payment).filter(Payment.invoice_id == inv.id).order_by(Payment.paid_at.desc()).all():
             payments_out.append(
@@ -122,30 +143,63 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
                     created_at=p.created_at,
                 )
             )
+        for cn in (
+            db.query(CreditNote)
+            .filter(CreditNote.invoice_id == inv.id)
+            .order_by(CreditNote.credit_date.desc(), CreditNote.id.desc())
+            .all()
+        ):
+            credit_notes_out.append(
+                CreditNoteResponse(
+                    id=cn.id,
+                    company_id=cn.company_id,
+                    invoice_id=cn.invoice_id,
+                    client_id=cn.client_id,
+                    site_id=cn.site_id,
+                    number=cn.number,
+                    credit_date=cn.credit_date,
+                    reason=cn.reason,
+                    description=cn.description,
+                    subtotal=cn.subtotal or 0,
+                    tax_rate=cn.tax_rate or 0,
+                    tax_amount=cn.tax_amount or 0,
+                    total=cn.total or 0,
+                    status=cn.status,
+                    created_at=cn.created_at,
+                    updated_at=cn.updated_at,
+                    invoice_number=f"INV-{cn.invoice_id}",
+                    client_name=cl.name if cl else None,
+                    site_name=cn.site.name if getattr(cn, "site", None) else None,
+                )
+            )
     total = float(inv.total or 0)
+    balance = invoice_balance_due(db, inv) if db else round(max(0, total - paid - credited), 2)
     return InvoiceResponse(
         id=inv.id,
         company_id=inv.company_id,
         client_id=inv.client_id,
         period_start=inv.period_start,
         period_end=inv.period_end,
+        invoice_date=inv.invoice_date or (inv.created_at.date() if inv.created_at else None),
         total=inv.total,
         status=inv.status,
         due_date=inv.due_date,
+        po_number=inv.po_number,
         notes=inv.notes,
+        rota_review=inv.rota_review,
+        client_bank_account_id=inv.client_bank_account_id,
         tax_rate=inv.tax_rate or 0,
         subtotal=inv.subtotal or 0,
         tax_amount=inv.tax_amount or 0,
         pdf_path=inv.pdf_path,
         created_at=inv.created_at,
         updated_at=inv.updated_at,
-        # No client means the invoice was raised against a site directly; the site name
-        # is what stands in for the customer everywhere one is shown.
         client_name=cl.name if cl else _site_stand_in_name(inv, db),
         company_name=co.name if co else None,
         company_email=company_email,
         company_phone=company_phone,
         company_address=company_address,
+        company_website=company_website,
         company_registration_number=company_registration_number,
         company_vat_number=company_vat_number,
         company_logo_url=company_logo_url_val,
@@ -161,8 +215,10 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         client_contact_person=cl.contact_person if cl else None,
         lines=lines_out,
         amount_paid=paid,
-        balance_due=round(max(0, total - paid), 2),
+        credit_applied=credited,
+        balance_due=balance,
         payments=payments_out,
+        credit_notes=credit_notes_out,
     )
 
 
@@ -208,6 +264,51 @@ def generate_invoice(
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)
+
+
+@router.get("/statement", response_model=InvoiceStatementResponse)
+def get_statement(
+    client_id: int,
+    date_from: date,
+    date_to: date,
+    site_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("invoices", "view")),
+):
+    return build_statement(
+        db,
+        current_user.id,
+        client_id=client_id,
+        site_id=site_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get("/statement/pdf")
+def statement_pdf(
+    client_id: int,
+    date_from: date,
+    date_to: date,
+    site_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("invoices", "pdf_download")),
+):
+    data = build_statement(
+        db,
+        current_user.id,
+        client_id=client_id,
+        site_id=site_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    body = render_statement_pdf(data)
+    name = f"statement-{client_id}-{date_from}-{date_to}.pdf"
+    return Response(
+        content=body,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @router.get("", response_model=List[InvoiceResponse])

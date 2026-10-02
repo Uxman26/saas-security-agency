@@ -109,8 +109,7 @@ def limits_for_tier(tier: Optional[str]) -> dict[str, Any]:
 
 
 def feature_enabled(tier: Optional[str], key: str) -> bool:
-    # return bool(limits_for_tier(tier)["features"].get(key))
-    return True
+    return bool(limits_for_tier(tier)["features"].get(key))
 
 
 def quota_guards(tier: Optional[str]) -> Optional[int]:

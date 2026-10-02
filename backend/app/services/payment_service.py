@@ -19,23 +19,24 @@ def _assert_within_balance(
     leaves the row being edited out of the existing-paid sum, so updating a payment
     is not compared against itself.
     """
+    from app.services.credit_note_service import invoice_credit_applied
+
     total = round(float(inv.total or 0), 2)
     if total <= 0:
-        # Nothing to bill against yet (e.g. a draft with no lines) — skip the check
-        # rather than block every payment on a zero-total invoice.
         return
     q = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.invoice_id == inv.id)
     if exclude_payment_id is not None:
         q = q.filter(Payment.id != exclude_payment_id)
     already = round(float(q.scalar() or 0), 2)
-    balance = round(total - already, 2)
-    # Tolerate sub-penny float drift so an exact final payment is never rejected.
+    credited = invoice_credit_applied(db, inv.id)
+    balance = round(total - already - credited, 2)
     if round(amount, 2) > balance + 0.005:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"Payment of {amount:.2f} exceeds the remaining balance of {balance:.2f} "
-                f"on invoice #{inv.id} (total {total:.2f}, already paid {already:.2f})."
+                f"on invoice #{inv.id} (total {total:.2f}, already paid {already:.2f}, "
+                f"credited {credited:.2f})."
             ),
         )
 

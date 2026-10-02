@@ -24,7 +24,10 @@ def _company_contact(company: Company, admin: Optional[User]) -> tuple[str, str,
     return email, phone, address
 
 
-ACCENT_HEX = "#c8102e"
+ACCENT_HEX = "#F45100"
+NAVY_HEX = "#0F172A"
+SOFT_HEX = "#FFF4ED"
+PANEL_HEX = "#F1F5F9"
 
 
 def _group_lines_by_day(lines, site_map) -> list:
@@ -172,276 +175,262 @@ def render_invoice_pdf(
             bill_cell.append(Paragraph(str(bit).replace("\n", "<br/>"), small))
 
     paid = invoice_amount_paid(db, inv.id)
-    balance = round(max(0, float(inv.total or 0) - paid), 2)
-    amount_due = balance if paid > 0 else float(inv.total or 0)
+    from app.services.invoice_payment_service import invoice_credit_applied, invoice_balance_due
 
+    credited = invoice_credit_applied(db, inv.id)
+    balance = invoice_balance_due(db, inv)
+    amount_due = balance if (paid > 0 or credited > 0) else float(inv.total or 0)
+
+    inv_date = inv.invoice_date or (inv.created_at.date() if inv.created_at else None)
     meta_rows = [
         ["Invoice Number:", f"#{inv.id}"],
-        ["Invoice Date:", inv.created_at.strftime("%d %B %Y") if inv.created_at else "—"],
+        ["Invoice Date:", inv_date.strftime("%d %B %Y") if inv_date else "—"],
         ["Payment Due:", inv.due_date.strftime("%d %B %Y") if inv.due_date else "—"],
-        ["Invoice Period:", f"{inv.period_start} to {inv.period_end}"],
-        ["Status:", (inv.status or "draft").title()],
+        ["Invoice Period:", f"{inv.period_start.strftime('%d %B %Y') if inv.period_start else '—'} to {inv.period_end.strftime('%d %B %Y') if inv.period_end else '—'}"],
     ]
+    if getattr(inv, "po_number", None):
+        meta_rows.append(["PO Number:", inv.po_number])
+    meta_rows.append(["Status:", (inv.status or "draft").title()])
     t_meta_inner = Table(meta_rows, colWidths=[3.4 * cm, 4.6 * cm])
-    t_meta_inner.setStyle(
-        TableStyle(
-            [
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("LINEBELOW", (0, 0), (-1, -2), 0.25, colors.HexColor("#e2e8f0")),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
+    t_meta_inner.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.25, colors.HexColor("#e2e8f0")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+    ]))
     t_due = Table([["Amount Due (GBP):", _money(amount_due)]], colWidths=[4.4 * cm, 3.6 * cm])
-    t_due.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fdf0f2")),
-                ("TEXTCOLOR", (0, 0), (0, 0), ACCENT),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (0, 0), 9),
-                ("FONTSIZE", (1, 0), (1, 0), 13),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
-    )
+    t_due.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(SOFT_HEX)),
+        ("TEXTCOLOR", (0, 0), (0, 0), ACCENT),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (0, 0), 9),
+        ("FONTSIZE", (1, 0), (1, 0), 13),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
     t_top = Table([[bill_cell, [t_meta_inner, Spacer(1, 6), t_due]]], colWidths=[9 * cm, 9 * cm])
-    t_top.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("BACKGROUND", (0, 0), (0, 0), colors.HexColor("#f8fafc")),
-                ("LEFTPADDING", (0, 0), (0, 0), 10),
-                ("RIGHTPADDING", (0, 0), (0, 0), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-            ]
-        )
-    )
+    t_top.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("BACKGROUND", (0, 0), (0, 0), colors.HexColor(PANEL_HEX)),
+        ("LEFTPADDING", (0, 0), (0, 0), 10),
+        ("RIGHTPADDING", (0, 0), (0, 0), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
     story.append(t_top)
     story.append(Spacer(1, 16))
 
-    # ── Lines, rolled up per day ────────────────────────────────────────────────
-    # The client reads the bill a day at a time — "on the 3rd, 2 operatives for 16.5
-    # hours" — not shift by shift. Mirrors groupInvoiceLines() on the screen so the PDF
-    # and the web view can never show different figures.
     site_ids = list({ln.site_id for ln in lines})
     site_map = {s.id: s for s in db.query(Site).filter(Site.id.in_(site_ids)).all()} if site_ids else {}
-    day_rows = _group_lines_by_day(lines, site_map)
-    multi_site = len({n for r in day_rows for n in r["site_names"]}) > 1
-
-    hdr = ["DATE", "OPERATIVES", "HOURS", "RATE", "AMOUNT"]
+    cell = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=7.5, leading=9)
+    cell_muted = ParagraphStyle("CellMuted", parent=styles["Normal"], fontSize=6.5, leading=8, textColor=colors.HexColor("#64748b"))
+    hdr = ["DATE", "DESCRIPTION", "SHIFT TIMING", "OPS", "HOURS", "RATE", "AMOUNT"]
     data = [hdr]
-    for r in day_rows:
-        label = r["label"]
-        if multi_site and r["site_names"]:
-            label = f"{label}<br/><font size=6 color='#64748b'>{', '.join(r['site_names'])}</font>"
-        hours = r["hours"]
-        rate = r["rate"]
-        data.append(
-            [
-                Paragraph(label, ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)),
-                str(r["operatives"]) if r["operatives"] else "—",
-                (f"{hours:g}" if hours else "—"),
-                (_money(rate) + (" avg" if r["rate_is_blended"] else "")) if rate is not None else "—",
-                _money(r["amount"]),
-            ]
-        )
-
-    tw = [6.4 * cm, 2.8 * cm, 2.4 * cm, 3.2 * cm, 3.2 * cm]
+    for ln in sorted(lines, key=lambda x: (x.shift_date is None, x.shift_date or date.min, x.id)):
+        site = site_map.get(ln.site_id)
+        title = ln.description or (site.name if site else "Service")
+        detail = ln.service_detail or (site.name if site and ln.description else "")
+        desc_bits = [Paragraph(str(title), cell)]
+        if detail:
+            desc_bits.append(Paragraph(str(detail), cell_muted))
+        start = (ln.shift_start or "").strip()
+        end = (ln.shift_end or "").strip()
+        timing = f"{start} - {end}" if start and end else (start or end or "—")
+        qty = ln.quantity if ln.quantity is not None else (1 if ln.guard_id else 0)
+        hours = float(ln.hours or 0)
+        rate = float(ln.rate or 0)
+        data.append([
+            ln.shift_date.strftime("%d %b %Y") if ln.shift_date else "—",
+            desc_bits,
+            timing,
+            f"{qty:g}" if qty else "—",
+            f"{hours:g}" if hours else "—",
+            _money(rate) if rate else "—",
+            _money(ln.amount or 0),
+        ])
+    tw = [2.6 * cm, 4.6 * cm, 2.6 * cm, 1.4 * cm, 1.8 * cm, 2.4 * cm, 2.6 * cm]
     t_lines = Table(data, colWidths=tw, repeatRows=1)
-    t_lines.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("ALIGN", (1, 0), (1, -1), "CENTER"),
-                ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-                ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
-    )
-    story.append(t_lines)
-    story.append(Spacer(1, 16))
-
-    # ── Totals ──────────────────────────────────────────────────────────────────
-    sums = [
-        ["Subtotal:", _money(inv.subtotal or 0)],
-        [f"VAT {inv.tax_rate or 0:g}%:", _money(inv.tax_amount or 0)],
+    style_cmds = [
+        ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (3, 1), (3, -1), "CENTER"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]
+    for i in range(1, len(data)):
+        if i % 2 == 0:
+            style_cmds.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor(PANEL_HEX)))
+    t_lines.setStyle(TableStyle(style_cmds))
+    story.append(t_lines)
+    story.append(Spacer(1, 14))
+
+    notes_text = (inv.notes or "Payment is due within 30 days of the invoice date.\nPlease quote the invoice number as your payment reference.\nThank you for your business.").replace("\n", "<br/>")
+    notes_cell = [Paragraph("NOTES / TERMS", label_style), Spacer(1, 4), Paragraph(notes_text, small)]
+    if getattr(inv, "rota_review", None):
+        notes_cell.extend([
+            Spacer(1, 8),
+            Paragraph("ROTA REVIEW", ParagraphStyle("Rr", parent=label_style, textColor=colors.HexColor("#64748b"))),
+            Spacer(1, 2),
+            Paragraph(str(inv.rota_review).replace("\n", "<br/>"), small),
+        ])
+    notes_box = Table([[notes_cell]], colWidths=[9 * cm])
+    notes_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(PANEL_HEX)),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    sums = [["Subtotal:", _money(inv.subtotal or 0)], [f"VAT {inv.tax_rate or 0:g}%:", _money(inv.tax_amount or 0)]]
     if paid > 0:
         sums.append(["Amount paid:", _money(paid)])
+    if credited > 0:
+        sums.append(["Credits applied:", _money(credited)])
     t_sums = Table(sums, colWidths=[4.6 * cm, 3.4 * cm])
-    t_sums.setStyle(
-        TableStyle(
-            [
-                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("LINEBELOW", (0, -1), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]
-        )
-    )
+    t_sums.setStyle(TableStyle([
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("LINEBELOW", (0, -1), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
     t_total = Table(
-        [["Balance Due (GBP):" if paid > 0 else "Total Due (GBP):", _money(amount_due)]],
+        [["Balance Due (GBP):" if (paid > 0 or credited > 0) else "Total Due (GBP):", _money(amount_due)]],
         colWidths=[4.6 * cm, 3.4 * cm],
     )
-    t_total.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#fdf0f2")),
-                ("TEXTCOLOR", (0, 0), (0, 0), ACCENT),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (0, 0), 9),
-                ("FONTSIZE", (1, 0), (1, 0), 13),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-            ]
-        )
-    )
-    st = Table([["", [t_sums, Spacer(1, 4), t_total]]], colWidths=[10 * cm, 8 * cm])
-    st.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("RIGHTPADDING", (1, 0), (1, 0), 0)]))
+    t_total.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(SOFT_HEX)),
+        ("TEXTCOLOR", (0, 0), (0, 0), ACCENT),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (0, 0), 9),
+        ("FONTSIZE", (1, 0), (1, 0), 13),
+        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    st = Table([[notes_box, [t_sums, Spacer(1, 4), t_total]]], colWidths=[9.5 * cm, 8.5 * cm])
+    st.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story.append(st)
 
-    payments = (
-        db.query(Payment)
-        .filter(Payment.invoice_id == inv.id)
-        .order_by(Payment.paid_at.desc())
-        .all()
-    )
+    payments = db.query(Payment).filter(Payment.invoice_id == inv.id).order_by(Payment.paid_at.desc()).all()
     if payments:
         story.append(Spacer(1, 14))
         story.append(Paragraph("<b>Payment history</b>", styles["Heading3"]))
         pay_data = [["Date", "Method", "Amount"]]
         for p in payments:
-            pay_data.append(
-                [
-                    str(p.paid_at) if p.paid_at else "—",
-                    (p.method or "—").title(),
-                    _money(p.amount or 0),
-                ]
-            )
+            pay_data.append([str(p.paid_at) if p.paid_at else "—", (p.method or "—").title(), _money(p.amount or 0)])
         t_pay = Table(pay_data, colWidths=[4 * cm, 4 * cm, 4 * cm])
-        t_pay.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
-                    ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                    ("ALIGN", (2, 1), (2, -1), "RIGHT"),
-                ]
-            )
-        )
+        t_pay.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("ALIGN", (2, 1), (2, -1), "RIGHT"),
+        ]))
         story.append(t_pay)
 
-    if inv.notes:
+    from app.models import CreditNote
+
+    credits = (
+        db.query(CreditNote)
+        .filter(CreditNote.invoice_id == inv.id, CreditNote.status == "issued")
+        .order_by(CreditNote.credit_date.desc())
+        .all()
+    )
+    if credits:
         story.append(Spacer(1, 14))
-        story.append(Paragraph("<b>Notes</b>", styles["Heading3"]))
-        story.append(Paragraph((inv.notes or "").replace("\n", "<br/>"), styles["Normal"]))
+        story.append(Paragraph("<b>Credit notes</b>", styles["Heading3"]))
+        cn_data = [["Date", "Number", "Reason", "Amount"]]
+        for cn in credits:
+            cn_data.append(
+                [
+                    cn.credit_date.isoformat() if cn.credit_date else "—",
+                    cn.number or f"CN-{cn.id}",
+                    (cn.reason or "—")[:40],
+                    _money(cn.total or 0),
+                ]
+            )
+        t_cn = Table(cn_data, colWidths=[3 * cm, 3 * cm, 6 * cm, 3 * cm])
+        t_cn.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("ALIGN", (3, 1), (3, -1), "RIGHT"),
+        ]))
+        story.append(t_cn)
 
-    # ── Payment details, as a dark band so it is the thing the eye lands on ─────
-    if has_account_bank_details(company):
+    payee_account_name = getattr(inv, "payee_account_name", None) or company.account_name
+    payee_bank_name = getattr(inv, "payee_bank_name", None) or company.bank_name
+    payee_sort = getattr(inv, "payee_sort_code", None) or company.sort_code
+    payee_number = getattr(inv, "payee_account_number", None) or company.account_number
+    payee_iban = getattr(inv, "payee_iban", None) or company.iban
+    payee_swift = getattr(inv, "payee_swift_code", None) or company.swift_code
+    has_payee = any([(payee_account_name or "").strip(), (payee_bank_name or "").strip(), (payee_sort or "").strip(), (payee_number or "").strip(), (payee_iban or "").strip()])
+    if has_payee:
         story.append(Spacer(1, 18))
-        pay_label = ParagraphStyle(
-            "PayLbl", parent=styles["Normal"], fontSize=9, fontName="Helvetica-Bold", textColor=colors.white
-        )
-        pay_sub = ParagraphStyle(
-            "PaySub", parent=styles["Normal"], fontSize=8, leading=11, textColor=colors.HexColor("#cbd5e1")
-        )
+        pay_label = ParagraphStyle("PayLbl", parent=styles["Normal"], fontSize=9, fontName="Helvetica-Bold", textColor=colors.white)
+        pay_sub = ParagraphStyle("PaySub", parent=styles["Normal"], fontSize=8, leading=11, textColor=colors.HexColor("#cbd5e1"))
         left_bits = [Paragraph("PAYMENT DETAILS", pay_label)]
-        if (company.bank_name or "").strip():
-            left_bits.append(Paragraph(company.bank_name.strip(), pay_label))
-        if (company.account_name or "").strip():
-            left_bits.append(Paragraph(f"Account Name: {company.account_name.strip()}", pay_sub))
-
+        if (payee_bank_name or "").strip():
+            left_bits.append(Paragraph(payee_bank_name.strip(), pay_label))
+        if (payee_account_name or "").strip():
+            left_bits.append(Paragraph(f"Account Name: {payee_account_name.strip()}", pay_sub))
         boxes = []
-        for label, value in (
-            ("Account No.", (company.account_number or "").strip()),
-            ("Sort Code", (company.sort_code or "").strip()),
-        ):
+        for label, value in (("Account Number", (payee_number or "").strip()), ("Sort Code", (payee_sort or "").strip()), ("Payment Ref", f"INV-{inv.id}")):
             if not value:
                 continue
             box = Table([[Paragraph(label.upper(), pay_sub)], [Paragraph(value, pay_label)]], colWidths=[3.8 * cm])
-            box.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1e293b")),
-                        ("TOPPADDING", (0, 0), (-1, -1), 4),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                    ]
-                )
-            )
+            box.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1e293b")),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ]))
             boxes.append(box)
-
         right_cell = Table([boxes], colWidths=[4.1 * cm] * len(boxes)) if boxes else ""
-        band = Table([[left_bits, right_cell]], colWidths=[9.5 * cm, 8.5 * cm])
-        band.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#0f172a")),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("LINEBEFORE", (0, 0), (0, 0), 3, ACCENT),
-                    ("LEFTPADDING", (0, 0), (0, 0), 12),
-                    ("TOPPADDING", (0, 0), (-1, -1), 12),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
-                    ("RIGHTPADDING", (1, 0), (1, 0), 10),
-                ]
-            )
-        )
+        band = Table([[left_bits, right_cell]], colWidths=[7.5 * cm, 10.5 * cm])
+        band.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(NAVY_HEX)),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LINEBEFORE", (0, 0), (0, 0), 3, ACCENT),
+            ("LEFTPADDING", (0, 0), (0, 0), 12),
+            ("TOPPADDING", (0, 0), (-1, -1), 12),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ]))
         story.append(band)
+        fake = type("C", (), {"iban": payee_iban, "swift_code": payee_swift})()
+        for label, value in account_bank_lines(fake):
+            story.append(Paragraph(f"<font size=7 color='#64748b'>{label}: {value}</font>", styles["Normal"]))
 
-        # IBAN / SWIFT do not fit the two-box layout but must still reach the payer.
-        extra = [
-            (label, value)
-            for label, value in account_bank_lines(company)
-            if label in ("IBAN", "SWIFT / BIC")
-        ]
-        if extra:
-            t_extra = Table([[f"{label}: {value}" for label, value in extra]], colWidths=[9 * cm] * len(extra))
-            t_extra.setStyle(
-                TableStyle([("FONTSIZE", (0, 0), (-1, -1), 8), ("TOPPADDING", (0, 0), (-1, -1), 6)])
-            )
-            story.append(t_extra)
-
-    # ── Footer: the registration details that make the bill a legal document ────
-    foot_style = ParagraphStyle(
-        "Foot", parent=styles["Normal"], fontSize=7.5, leading=10, textColor=colors.HexColor("#64748b")
-    )
+    story.append(Spacer(1, 16))
     foot_left = []
     if (company.vat_number or "").strip():
         foot_left.append(f"VAT Registration Number: {company.vat_number.strip()}")
     if (company.registration_number or "").strip():
         foot_left.append(f"Company Registration Number: {company.registration_number.strip()}")
-    story.append(Spacer(1, 14))
-    t_foot = Table(
-        [[Paragraph("<br/>".join(foot_left), foot_style), Paragraph(f"Invoice #{inv.id}", foot_style)]],
-        colWidths=[13 * cm, 5 * cm],
-    )
-    t_foot.setStyle(
-        TableStyle(
-            [
-                ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.HexColor("#e2e8f0")),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-                ("TOPPADDING", (0, 0), (-1, -1), 8),
-                ("LEFTPADDING", (0, 0), (0, 0), 0),
-            ]
-        )
-    )
+    foot_style = ParagraphStyle("Foot", parent=styles["Normal"], fontSize=7.5, leading=10, textColor=colors.HexColor("#64748b"))
+    brand_style = ParagraphStyle("Brand", parent=styles["Normal"], fontSize=9, fontName="Helvetica-Bold", alignment=1, textColor=colors.HexColor("#334155"))
+    t_foot = Table([
+        [Paragraph("<br/>".join(foot_left) or " ", foot_style), Paragraph("ControlOps", brand_style), Paragraph(f"Invoice #{inv.id}", foot_style)]
+    ], colWidths=[6.5 * cm, 5 * cm, 6.5 * cm])
+    t_foot.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 0.5, colors.HexColor("#e2e8f0")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (0, 0), 0),
+    ]))
     story.append(t_foot)
 
     doc.build(story)

@@ -84,6 +84,17 @@ def list_email_logs(db: Session, user_id: int, limit: int = 100) -> list[EmailLo
     )
 
 
+def clear_email_logs(db: Session, user_id: int) -> int:
+    company = get_company_by_user_id(db, user_id)
+    deleted = (
+        db.query(EmailLog)
+        .filter(EmailLog.company_id == company.id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return int(deleted or 0)
+
+
 def send_tenant_email(
     db: Session,
     user_id: int,

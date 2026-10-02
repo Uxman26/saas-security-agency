@@ -63,6 +63,13 @@ def _scheduled_maintenance_sync() -> dict[str, Any]:
             except Exception:
                 logger.exception("retention purge failed")
             try:
+                from app.services import lead_service
+                n_purged = lead_service.purge_old_notifications(db)
+                if n_purged:
+                    logger.info("maintenance: purged %s read notifications", n_purged)
+            except Exception:
+                logger.exception("notification retention purge failed")
+            try:
                 from app.services import suspicious_activity_service
                 suspicious_activity_service.scan_suspicious_activity(db)
             except Exception:
@@ -140,3 +147,22 @@ def _sweep_trials_sync() -> dict[str, Any]:
 
 async def sweep_trials(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_sweep_trials_sync)
+
+
+def _sweep_renewal_invoices_sync() -> dict[str, Any]:
+    def run():
+        db: Session = SessionLocal()
+        try:
+            from app.services import subscription_invoice_service as sub_inv
+
+            created = sub_inv.ensure_renewal_invoices(db)
+            notices = sub_inv.send_renewal_and_overdue_notices(db)
+            return {"renewal_invoices_created": created, **notices}
+        finally:
+            db.close()
+
+    return _track_job("sweep_renewal_invoices", run)()
+
+
+async def sweep_renewal_invoices(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_sweep_renewal_invoices_sync)

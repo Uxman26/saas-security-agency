@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
 from app.routers import teams, absence, recycle_bin
-from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, reports, admin, admin_ext, admin_complete, admin_trials, admin_refunds, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles
+from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, credit_notes, reports, admin, admin_ext, admin_complete, admin_trials, admin_refunds, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles, live_support, assistant
 from app.middleware.api_usage import ApiUsageMiddleware
 from app.middleware.client_source import ClientSourceMiddleware
 from app.database import engine, Base
@@ -128,6 +128,7 @@ app.include_router(attendance.router)
 app.include_router(payroll.router)
 app.include_router(invoices.router)
 app.include_router(payments.router)
+app.include_router(credit_notes.router)
 app.include_router(reports.router)
 app.include_router(admin.router)
 app.include_router(admin_ext.router)
@@ -154,6 +155,9 @@ app.include_router(accident_reports.router)
 app.include_router(occurrence_sheets.router)
 app.include_router(tasks.router)
 app.include_router(lone_worker.router)
+app.include_router(live_support.router)
+app.include_router(live_support.admin_router)
+app.include_router(assistant.router)
 app.include_router(recycle_bin.router)
 
 # The uploads directory is deliberately NOT mounted as static files. It holds guard

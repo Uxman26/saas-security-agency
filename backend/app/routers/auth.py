@@ -13,6 +13,7 @@ from app.schemas import (
     MessageResponse,
     MfaConfirmRequest,
     MfaVerifyRequest,
+    ChangePasswordRequest,
     ProfileUpdate,
     ThemeUpdate,
     ResendVerificationRequest,
@@ -27,7 +28,7 @@ from app.schemas import (
     UserResponse,
     VerifyEmailRequest,
 )
-from app.auth import current_session_jti, get_current_user, SUPER_ADMIN_ROLE
+from app.auth import current_session_jti, get_current_user, SUPER_ADMIN_ROLE, get_password_hash, verify_password
 from app.services import auth_service, oauth_service
 from typing import Optional
 from app.rbac import permissions_for_user_db, permission_bypass
@@ -82,8 +83,16 @@ def check_email(body: EmailAvailabilityRequest, db: Session = Depends(get_db)):
 def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
+    from app.middleware.client_source import get_client_source
+
     return auth_service.authenticate_user(
-        db, credentials.email, credentials.password, ip_address=ip, user_agent=ua, remember_me=bool(credentials.remember_me)
+        db,
+        credentials.email,
+        credentials.password,
+        ip_address=ip,
+        user_agent=ua,
+        remember_me=bool(credentials.remember_me),
+        client_source=get_client_source(),
     )
 
 
@@ -244,6 +253,8 @@ def swagger_login(
     """OAuth2 form adapter used only by Swagger UI's Authorize dialog."""
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
+    from app.middleware.client_source import get_client_source
+
     return auth_service.authenticate_user(
         db,
         credentials.username,
@@ -251,6 +262,7 @@ def swagger_login(
         ip_address=ip,
         user_agent=ua,
         remember_me=False,
+        client_source=get_client_source(),
     )
 
 
@@ -372,6 +384,27 @@ def patch_my_profile(
     db.commit()
     db.refresh(current_user)
     return _me_response(db, current_user)
+
+
+@router.post("/me/password", response_model=MessageResponse)
+def change_my_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    jti: str | None = Depends(current_session_jti),
+):
+    if (current_user.auth_provider or "local") != "local":
+        raise HTTPException(status_code=400, detail="Password change is not available for this sign-in method")
+    if not current_user.password_hash or not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if body.current_password == body.new_password:
+        raise HTTPException(status_code=400, detail="New password must be different from the current password")
+    current_user.password_hash = get_password_hash(body.new_password)
+    db.commit()
+    from app.services import session_service
+
+    session_service.revoke_all_for_user(db, current_user.id, except_jti=jti)
+    return MessageResponse(message="Password updated")
 
 
 @router.patch("/me/theme", response_model=UserMeResponse)

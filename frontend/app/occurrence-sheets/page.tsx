@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
 import type { OccurrenceEntry, OccurrenceSheet, Site } from '@/lib/types';
 import { NotebookPen, Plus, Printer, Download, Trash2, Pencil, Search } from 'lucide-react';
@@ -30,9 +31,25 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 
-const STATUS_LABELS: Record<string, string> = { open: 'Open', submitted: 'Submitted', closed: 'Closed' };
+const STATUS_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'reported', label: 'Reported' },
+  { value: 'reviewed', label: 'Reviewed' },
+  { value: 'closed', label: 'Closed' },
+] as const;
+const STATUS_LABELS: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
+STATUS_LABELS.submitted = 'Reported';
+
 const BLANK_ROW: OccurrenceEntry = { start_time: '', finish_time: '', occurrence: '', action_taken: '' };
 const STARTING_ROWS = 6;
+
+function statusTone(status: string): 'muted' | 'info' | 'warning' | 'positive' {
+  const s = status === 'submitted' ? 'reported' : status;
+  if (s === 'closed') return 'positive';
+  if (s === 'reviewed') return 'info';
+  if (s === 'reported') return 'warning';
+  return 'muted';
+}
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -56,23 +73,29 @@ export default function OccurrenceSheetsPage() {
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<OccurrenceSheet | null>(null);
   const [header, setHeader] = useState({
-    sheet_date: '', site_id: '', officer_names: '', shift_start: '', shift_end: '', signature_name: '',
+    sheet_date: '', site_id: '', officer_names: '', shift_start: '', shift_end: '', signature_name: '', status: 'open',
   });
   const [entries, setEntries] = useState<OccurrenceEntry[]>([]);
   const [saving, setSaving] = useState(false);
+  const [statusBusyId, setStatusBusyId] = useState<number | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
     api.occurrenceSheets
-      .list({ start_date: from || undefined, end_date: to || undefined })
+      .list({
+        start_date: from || undefined,
+        end_date: to || undefined,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+      })
       .then(setRows)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { api.sites.list().then(setSites).catch(() => {}); }, []);
@@ -81,7 +104,7 @@ export default function OccurrenceSheetsPage() {
     setEditing(null);
     setHeader({
       sheet_date: new Date().toISOString().slice(0, 10),
-      site_id: '', officer_names: '', shift_start: '', shift_end: '', signature_name: '',
+      site_id: '', officer_names: '', shift_start: '', shift_end: '', signature_name: '', status: 'open',
     });
     setEntries(Array.from({ length: STARTING_ROWS }, () => ({ ...BLANK_ROW })));
     setOpen(true);
@@ -91,6 +114,7 @@ export default function OccurrenceSheetsPage() {
     try {
       const full = await api.occurrenceSheets.get(s.id);
       setEditing(full);
+      const status = full.status === 'submitted' ? 'reported' : full.status;
       setHeader({
         sheet_date: full.sheet_date,
         site_id: full.site_id ? String(full.site_id) : '',
@@ -98,12 +122,12 @@ export default function OccurrenceSheetsPage() {
         shift_start: full.shift_start ?? '',
         shift_end: full.shift_end ?? '',
         signature_name: full.signature_name ?? '',
+        status: status || 'open',
       });
       const existing = full.entries.map((e) => ({
         start_time: e.start_time ?? '', finish_time: e.finish_time ?? '',
         occurrence: e.occurrence ?? '', action_taken: e.action_taken ?? '',
       }));
-      // Always leave spare lines so the guard can keep adding without hunting for a button.
       setEntries([...existing, ...Array.from({ length: 3 }, () => ({ ...BLANK_ROW }))]);
       setOpen(true);
     } catch (e) {
@@ -127,7 +151,7 @@ export default function OccurrenceSheetsPage() {
       shift_start: header.shift_start || null,
       shift_end: header.shift_end || null,
       signature_name: header.signature_name || null,
-      // Blank lines are dropped server-side, so spare rows on screen cost nothing.
+      ...(editing && canEdit ? { status: header.status } : {}),
       entries: entries.map((e, i) => ({ ...e, serial_no: i + 1 })),
     };
     try {
@@ -140,6 +164,20 @@ export default function OccurrenceSheetsPage() {
       toast.error(e instanceof Error ? e.message : 'Could not save the sheet');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changeStatus = async (s: OccurrenceSheet, next: string) => {
+    if (!canEdit || next === s.status || (s.status === 'submitted' && next === 'reported')) return;
+    setStatusBusyId(s.id);
+    try {
+      await api.occurrenceSheets.update(s.id, { status: next });
+      toast.snack(`Status set to ${STATUS_LABELS[next] ?? next}`);
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update status');
+    } finally {
+      setStatusBusyId(null);
     }
   };
 
@@ -171,23 +209,34 @@ export default function OccurrenceSheetsPage() {
     }
   };
 
-  /** The cards along the top, in the shape every module dashboard uses. */
+  const byStatus = (k: string) =>
+    rows.filter((r) => (r.status === 'submitted' ? 'reported' : r.status) === k).length;
+
   const statCards: StatCardSpec[] = [
     { key: 'total', label: 'Sheets', value: rows.length, icon: NotebookPen, tone: 'neutral' },
     {
-      key: 'sites',
-      label: 'Sites covered',
-      value: new Set(rows.map((r) => r.site_id).filter(Boolean)).size,
+      key: 'open',
+      label: 'Open',
+      value: byStatus('open'),
       icon: Search,
-      tone: 'info',
+      tone: 'muted',
+      action: byStatus('open') ? { label: 'View', onClick: () => setStatusFilter('open') } : undefined,
     },
     {
-      key: 'entries',
-      label: 'Entries logged',
-      value: rows.reduce((n, r) => n + (r.entry_count ?? 0), 0),
+      key: 'reported',
+      label: 'Reported',
+      value: byStatus('reported'),
       icon: Printer,
+      tone: 'warning',
+      action: byStatus('reported') ? { label: 'View', onClick: () => setStatusFilter('reported') } : undefined,
+    },
+    {
+      key: 'closed',
+      label: 'Closed',
+      value: byStatus('closed'),
+      icon: NotebookPen,
       tone: 'positive',
-      caption: 'across all sheets',
+      action: byStatus('closed') ? { label: 'View', onClick: () => setStatusFilter('closed') } : undefined,
     },
   ];
 
@@ -226,6 +275,7 @@ export default function OccurrenceSheetsPage() {
               onClear={() => {
                 setFrom('');
                 setTo('');
+                setStatusFilter('all');
               }}
             >
               <FilterField label="From">
@@ -233,6 +283,17 @@ export default function OccurrenceSheetsPage() {
               </FilterField>
               <FilterField label="To">
                 <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </FilterField>
+              <FilterField label="Status">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </FilterField>
             </FilterBar>
 
@@ -260,48 +321,68 @@ export default function OccurrenceSheetsPage() {
                           </TableCell>
                         </TableRow>
                       ) : null}
-                      {rows.map((s) => (
-                        <TableRow key={s.id}>
-                          <TableCell className="font-mono text-xs">{s.reference ?? '—'}</TableCell>
-                          <TableCell className="whitespace-nowrap">{s.sheet_date}</TableCell>
-                          <TableCell>{s.site_name ?? '—'}</TableCell>
-                          <TableCell className="max-w-48 truncate">{s.officer_names ?? '—'}</TableCell>
-                          <TableCell className="whitespace-nowrap tabular-nums text-xs">
-                            {s.shift_start && s.shift_end ? `${s.shift_start}–${s.shift_end}` : '—'}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">{s.entry_count}</TableCell>
-                          <TableCell>
-                            <Pill dot tone={s.status === 'submitted' ? 'warning' : s.status === 'closed' ? 'positive' : 'muted'}>
-                              {STATUS_LABELS[s.status] ?? s.status}
-                            </Pill>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-end gap-1">
-                              {canPdf ? (
-                                <Button variant="ghost" size="sm" onClick={() => void download(s)} title="Download PDF">
-                                  <Download className="size-4" />
-                                </Button>
-                              ) : null}
+                      {rows.map((s) => {
+                        const status = s.status === 'submitted' ? 'reported' : s.status;
+                        return (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-mono text-xs">{s.reference ?? '—'}</TableCell>
+                            <TableCell className="whitespace-nowrap">{s.sheet_date}</TableCell>
+                            <TableCell>{s.site_name ?? '—'}</TableCell>
+                            <TableCell className="max-w-48 truncate">{s.officer_names ?? '—'}</TableCell>
+                            <TableCell className="whitespace-nowrap tabular-nums text-xs">
+                              {s.shift_start && s.shift_end ? `${s.shift_start}–${s.shift_end}` : '—'}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">{s.entry_count}</TableCell>
+                            <TableCell>
                               {canEdit ? (
-                                <Button variant="ghost" size="sm" onClick={() => void openEdit(s)} title="Edit sheet">
-                                  <Pencil className="size-4" />
-                                </Button>
-                              ) : null}
-                              {canDelete ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => remove(s)}
-                                  title="Delete sheet"
+                                <Select
+                                  value={status}
+                                  onValueChange={(v) => void changeStatus(s, v)}
+                                  disabled={statusBusyId === s.id}
                                 >
-                                  <Trash2 className="size-4" />
-                                </Button>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                  <SelectTrigger className="h-8 w-[130px]">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {STATUS_OPTIONS.map((opt) => (
+                                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Pill dot tone={statusTone(status)}>
+                                  {STATUS_LABELS[status] ?? status}
+                                </Pill>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-end gap-1">
+                                {canPdf ? (
+                                  <Button variant="ghost" size="sm" onClick={() => void download(s)} title="Download PDF">
+                                    <Download className="size-4" />
+                                  </Button>
+                                ) : null}
+                                {canEdit ? (
+                                  <Button variant="ghost" size="sm" onClick={() => void openEdit(s)} title="Edit sheet">
+                                    <Pencil className="size-4" />
+                                  </Button>
+                                ) : null}
+                                {canDelete ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => remove(s)}
+                                    title="Delete sheet"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -356,13 +437,14 @@ export default function OccurrenceSheetsPage() {
                     </div>
                     <div className="space-y-1 sm:col-span-2">
                       <Label>Site</Label>
-                      <Select value={header.site_id || 'none'} onValueChange={(v) => setHeader((h) => ({ ...h, site_id: v === 'none' ? '' : v }))}>
-                        <SelectTrigger><SelectValue placeholder="Select site" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No site</SelectItem>
-                          {sites.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={header.site_id}
+                        onChange={(v) => setHeader((h) => ({ ...h, site_id: v }))}
+                        options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+                        noneOption={{ value: '', label: 'No site' }}
+                        placeholder="Select site"
+                        searchPlaceholder="Search sites…"
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>Start shift time</Label>
@@ -376,10 +458,23 @@ export default function OccurrenceSheetsPage() {
                       <Label>Security officer names</Label>
                       <Input value={header.officer_names} onChange={(e) => setHeader((h) => ({ ...h, officer_names: e.target.value }))} maxLength={300} />
                     </div>
-                    <div className="space-y-1 sm:col-span-2">
+                    <div className="space-y-1 sm:col-span-1">
                       <Label>Security name (signature)</Label>
                       <Input value={header.signature_name} onChange={(e) => setHeader((h) => ({ ...h, signature_name: e.target.value }))} maxLength={100} />
                     </div>
+                    {editing ? (
+                      <div className="space-y-1">
+                        <Label>Status</Label>
+                        <Select value={header.status} onValueChange={(v) => setHeader((h) => ({ ...h, status: v }))} disabled={!canEdit}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {STATUS_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="space-y-2">

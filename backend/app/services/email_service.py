@@ -92,10 +92,8 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
     except HTTPException:
         raise
     except Exception as e:
-        # Keep the concrete cause (auth vs connection vs timeout) in the message —
-        # str() alone is empty for some smtplib errors.
-        logger.error("SMTP send to %s failed: %s: %s", to_email, type(e).__name__, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {type(e).__name__}: {e}")
+        logger.error("SMTP send to %s failed: %s", to_email, type(e).__name__, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to send email ({type(e).__name__})")
 
 
 def send_company_email(company: Company, to_email: str, subject: str, body: str) -> bool:
@@ -108,10 +106,8 @@ def send_company_email(company: Company, to_email: str, subject: str, body: str)
     except HTTPException:
         raise
     except Exception as e:
-        # Keep the concrete cause (auth vs connection vs timeout) in the message —
-        # str() alone is empty for some smtplib errors.
-        logger.error("SMTP send to %s failed: %s: %s", to_email, type(e).__name__, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {type(e).__name__}: {e}")
+        logger.error("SMTP send to %s failed: %s", to_email, type(e).__name__, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to send email ({type(e).__name__})")
 
 
 def send_and_log(

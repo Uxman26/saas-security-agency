@@ -196,12 +196,14 @@ class Company(Base):
     guards = relationship("Guard", back_populates="company", cascade="all, delete-orphan")
     sites = relationship("Site", back_populates="company", cascade="all, delete-orphan")
     clients = relationship("Client", back_populates="company", cascade="all, delete-orphan")
+    bank_accounts = relationship("CompanyBankAccount", back_populates="company", cascade="all, delete-orphan")
     main_contractors = relationship("MainContractor", back_populates="company", cascade="all, delete-orphan")
     sub_contractors = relationship("SubContractor", back_populates="company", cascade="all, delete-orphan")
     allowances = relationship("Allowance", back_populates="company", cascade="all, delete-orphan")
     payrolls = relationship("Payroll", back_populates="company", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="company", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="company", cascade="all, delete-orphan")
+    credit_notes = relationship("CreditNote", back_populates="company", cascade="all, delete-orphan")
     special_days = relationship("SpecialDay", back_populates="company", cascade="all, delete-orphan")
     directory_contractors = relationship("Contractor", back_populates="company", cascade="all, delete-orphan")
     job_titles = relationship("JobTitle", back_populates="company", cascade="all, delete-orphan")
@@ -819,6 +821,44 @@ class Client(Base):
     invoices = relationship("Invoice", back_populates="client", cascade="all, delete-orphan")
     contract_renewals = relationship("ClientContractRenewal", back_populates="client", cascade="all, delete-orphan")
     staff_requests = relationship("StaffRequest", back_populates="client", cascade="all, delete-orphan")
+    bank_accounts = relationship("ClientBankAccount", back_populates="client", cascade="all, delete-orphan")
+
+
+class ClientBankAccount(Base):
+    __tablename__ = "client_bank_accounts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=False, index=True)
+    label = Column(String, nullable=False, default="Primary")
+    account_name = Column(String)
+    bank_name = Column(String)
+    sort_code = Column(String)
+    account_number = Column(String)
+    iban = Column(String)
+    swift_code = Column(String)
+    is_default = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    client = relationship("Client", back_populates="bank_accounts")
+    company = relationship("Company")
+
+
+class CompanyBankAccount(Base):
+    __tablename__ = "company_bank_accounts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    label = Column(String, nullable=False, default="Primary")
+    account_name = Column(String)
+    bank_name = Column(String)
+    sort_code = Column(String)
+    account_number = Column(String)
+    iban = Column(String)
+    swift_code = Column(String)
+    is_default = Column(Boolean, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="bank_accounts")
+
 
 class ClientContractRenewal(Base):
     __tablename__ = "client_contract_renewals"
@@ -1094,13 +1134,21 @@ class Invoice(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
-    # Optional: a site need not belong to a client, and an invoice can be raised straight
-    # against such a site. The site name stands in for the customer wherever one is shown.
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
+    client_bank_account_id = Column(Integer, ForeignKey("client_bank_accounts.id"), nullable=True, index=True)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
+    invoice_date = Column(Date, nullable=True)
     due_date = Column(Date)
+    po_number = Column(String, nullable=True)
     notes = Column(Text)
+    rota_review = Column(Text)
+    payee_account_name = Column(String, nullable=True)
+    payee_bank_name = Column(String, nullable=True)
+    payee_sort_code = Column(String, nullable=True)
+    payee_account_number = Column(String, nullable=True)
+    payee_iban = Column(String, nullable=True)
+    payee_swift_code = Column(String, nullable=True)
     subtotal = Column(Float, default=0)
     tax_rate = Column(Float, default=0)
     tax_amount = Column(Float, default=0)
@@ -1111,8 +1159,37 @@ class Invoice(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="invoices")
     client = relationship("Client", back_populates="invoices")
+    client_bank_account = relationship("ClientBankAccount", foreign_keys=[client_bank_account_id])
     lines = relationship("InvoiceLine", back_populates="invoice", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="invoice", cascade="all, delete-orphan")
+    credit_notes = relationship("CreditNote", back_populates="invoice", cascade="all, delete-orphan")
+
+
+class CreditNote(Base):
+    __tablename__ = "credit_notes"
+    id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
+    number = Column(String, nullable=False, index=True)
+    credit_date = Column(Date, nullable=False)
+    reason = Column(Text)
+    description = Column(Text)
+    subtotal = Column(Float, default=0)
+    tax_rate = Column(Float, default=0)
+    tax_amount = Column(Float, default=0)
+    total = Column(Float, default=0)
+    status = Column(String, default="issued", index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company", back_populates="credit_notes")
+    invoice = relationship("Invoice", back_populates="credit_notes")
+    client = relationship("Client")
+    site = relationship("Site")
+
 
 class InvoiceLine(Base):
     __tablename__ = "invoice_lines"
@@ -1120,11 +1197,12 @@ class InvoiceLine(Base):
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
     guard_id = Column(Integer, ForeignKey("guards.id"))
-    # What this line is for. A bill that only says site/guard/hours cannot be checked
-    # against anything: the date says which shift, the description says what kind of line
-    # it is (a shift, or an allowance that legitimately has no hours or rate).
     shift_date = Column(Date)
+    shift_start = Column(String, nullable=True)
+    shift_end = Column(String, nullable=True)
     description = Column(String)
+    service_detail = Column(String, nullable=True)
+    quantity = Column(Float, default=1)
     hours = Column(Float, default=0)
     rate = Column(Float, default=0)
     amount = Column(Float, default=0)
@@ -1564,6 +1642,8 @@ class PatrolRoute(Base):
     frequency_minutes = Column(Integer, nullable=False, default=60)
     start_time = Column(String, nullable=False, default="22:00")
     end_time = Column(String, nullable=False, default="06:00")
+    reminder_minutes = Column(Integer, nullable=False, default=10)
+    grace_minutes = Column(Integer, nullable=False, default=15)
     status = Column(String, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -1574,6 +1654,7 @@ class PatrolRoute(Base):
     )
     sessions = relationship("PatrolSession", back_populates="route", cascade="all, delete-orphan")
     logs = relationship("PatrolLog", back_populates="route")
+    occurrences = relationship("PatrolOccurrence", back_populates="route", cascade="all, delete-orphan")
 
 
 class PatrolCheckpoint(Base):
@@ -1598,6 +1679,7 @@ class PatrolCheckpoint(Base):
     site = relationship("Site", back_populates="patrol_checkpoints")
     route = relationship("PatrolRoute", back_populates="checkpoints")
     logs = relationship("PatrolLog", back_populates="checkpoint")
+    occurrences = relationship("PatrolOccurrence", back_populates="checkpoint")
 
 
 class PatrolSession(Base):
@@ -1615,6 +1697,39 @@ class PatrolSession(Base):
     guard = relationship("Guard")
     route = relationship("PatrolRoute", back_populates="sessions")
     logs = relationship("PatrolLog", back_populates="session")
+    occurrences = relationship("PatrolOccurrence", back_populates="session")
+
+
+class PatrolOccurrence(Base):
+    """One scheduled patrol slot for a checkpoint + guard (hourly / configured frequency)."""
+
+    __tablename__ = "patrol_occurrences"
+    __table_args__ = (
+        UniqueConstraint("checkpoint_id", "guard_id", "scheduled_at", name="uq_patrol_occ_cp_guard_sched"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
+    route_id = Column(Integer, ForeignKey("patrol_routes.id"), nullable=False, index=True)
+    checkpoint_id = Column(Integer, ForeignKey("patrol_checkpoints.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    session_id = Column(Integer, ForeignKey("patrol_sessions.id"))
+    assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    scheduled_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    status = Column(String, nullable=False, default="scheduled", index=True)
+    reminder_sent_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    late_minutes = Column(Float)
+    log_id = Column(Integer, ForeignKey("patrol_logs.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company")
+    site = relationship("Site")
+    route = relationship("PatrolRoute", back_populates="occurrences")
+    checkpoint = relationship("PatrolCheckpoint", back_populates="occurrences")
+    guard = relationship("Guard")
+    session = relationship("PatrolSession", back_populates="occurrences")
+    log = relationship("PatrolLog", foreign_keys=[log_id])
 
 
 class PatrolLog(Base):
@@ -1626,6 +1741,7 @@ class PatrolLog(Base):
     route_id = Column(Integer, ForeignKey("patrol_routes.id"), nullable=False, index=True)
     session_id = Column(Integer, ForeignKey("patrol_sessions.id"))
     assignment_id = Column(Integer, ForeignKey("assignments.id"))
+    occurrence_id = Column(Integer, ForeignKey("patrol_occurrences.id"))
     scan_time = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     latitude = Column(Float)
     longitude = Column(Float)
@@ -1641,6 +1757,7 @@ class PatrolLog(Base):
     checkpoint = relationship("PatrolCheckpoint", back_populates="logs")
     route = relationship("PatrolRoute", back_populates="logs")
     session = relationship("PatrolSession", back_populates="logs")
+    occurrence = relationship("PatrolOccurrence", foreign_keys=[occurrence_id])
 
 
 class PatrolAlert(Base):
@@ -1651,6 +1768,7 @@ class PatrolAlert(Base):
     checkpoint_id = Column(Integer, ForeignKey("patrol_checkpoints.id"))
     session_id = Column(Integer, ForeignKey("patrol_sessions.id"))
     guard_id = Column(Integer, ForeignKey("guards.id"))
+    occurrence_id = Column(Integer, ForeignKey("patrol_occurrences.id"))
     alert_type = Column(String, default="missed_checkpoint")
     message = Column(Text)
     window_start = Column(DateTime(timezone=True))
@@ -2316,6 +2434,7 @@ class WebhookLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
     provider = Column(String, index=True)
+    event_id = Column(String, unique=True, nullable=True, index=True)
     event_type = Column(String)
     status = Column(String, default="received")
     http_status = Column(Integer)
@@ -2425,3 +2544,54 @@ class TrialExtension(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     trial = relationship("TrialPeriod", back_populates="extensions")
     extended_by = relationship("User", foreign_keys=[extended_by_user_id])
+
+
+class LiveSupportAgent(Base):
+    __tablename__ = "live_support_agents"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    display_name = Column(String, nullable=False)
+    is_available = Column(Boolean, default=True)
+    last_assigned_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    user = relationship("User")
+
+
+class LiveChatConversation(Base):
+    __tablename__ = "live_chat_conversations"
+    id = Column(Integer, primary_key=True, index=True)
+    public_id = Column(String, unique=True, nullable=False, index=True)
+    visitor_name = Column(String, nullable=False)
+    visitor_email = Column(String, nullable=False, index=True)
+    visitor_company = Column(String, nullable=False)
+    visitor_city = Column(String, nullable=False)
+    status = Column(String, default="queued", index=True)
+    agent_id = Column(Integer, ForeignKey("live_support_agents.id"), nullable=True, index=True)
+    assigned_at = Column(DateTime(timezone=True), nullable=True)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    agent = relationship("LiveSupportAgent")
+    messages = relationship("LiveChatMessage", back_populates="conversation", cascade="all, delete-orphan")
+    events = relationship("LiveChatEvent", back_populates="conversation", cascade="all, delete-orphan")
+
+
+class LiveChatMessage(Base):
+    __tablename__ = "live_chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("live_chat_conversations.id"), nullable=False, index=True)
+    sender_type = Column(String, nullable=False)
+    sender_name = Column(String)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    conversation = relationship("LiveChatConversation", back_populates="messages")
+
+
+class LiveChatEvent(Base):
+    __tablename__ = "live_chat_events"
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("live_chat_conversations.id"), nullable=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    detail_json = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    conversation = relationship("LiveChatConversation", back_populates="events")

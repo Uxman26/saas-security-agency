@@ -37,6 +37,8 @@ import { cn } from '@/lib/utils';
 import { ADMIN_NAV_SECTIONS, filterAdminNavSections, isAdminNavActive } from '@/lib/admin-nav';
 import { moduleNavAllowed } from '@/lib/nav-modules';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
+import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
+import { useModuleLabel } from '@/lib/module-i18n';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   LayoutDashboard,
@@ -73,8 +75,6 @@ const SECTION_ORDER = [
   'sectionFinance',
   'sectionReports',
   'sectionSettings',
-  // Kept last so a module still carrying the old catch-all section — or one added
-  // through the module registry, which defaults to it — never disappears from the nav.
   'sectionOperations',
 ];
 
@@ -96,8 +96,6 @@ const asideClass =
 
 function navLinkClass(isActive: boolean) {
   return cn(
-    // border-s on every state, transparent when idle: colouring it only when active
-    // would shift the label 3px sideways as you navigate.
     'flex items-center gap-2 rounded-e-lg border-s-[3px] border-transparent px-2 py-1.5 text-sm transition-colors',
     isActive
       ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
@@ -109,8 +107,10 @@ export function AppSidebar() {
   const { user } = useAuth();
   const pathname = usePathname();
   const ts = useTranslations('sidebar');
+  const moduleLabel = useModuleLabel();
   const isSuperAdmin = user?.role === 'super_admin';
   const { can, loaded } = usePlatformPermissions();
+  const navRef = usePersistedScroll<HTMLElement>('app-sidebar-nav');
   const adminSections = useMemo(
     () => (loaded ? filterAdminNavSections(can) : ADMIN_NAV_SECTIONS.map((s) => ({ titleKey: s.titleKey, items: [...s.items] }))),
     [can, loaded]
@@ -138,7 +138,10 @@ export function AppSidebar() {
         <div className="shrink-0 border-b border-sidebar-border p-3">
           <CompanyBrand />
         </div>
-        <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
+        <nav
+          ref={navRef}
+          className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5"
+        >
           {adminSections.map((section) => (
             <div key={section.titleKey}>
               <p className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
@@ -149,6 +152,7 @@ export function AppSidebar() {
                   <Link
                     key={href}
                     href={href}
+                    scroll={false}
                     className={navLinkClass(isAdminNavActive(pathname, href))}
                   >
                     <Icon className="size-4 shrink-0" />
@@ -168,7 +172,10 @@ export function AppSidebar() {
       <div className="shrink-0 border-b border-sidebar-border p-3">
         <CompanyBrand />
       </div>
-      <nav className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5">
+      <nav
+        ref={navRef}
+        className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5"
+      >
         {grouped.map((section) => (
           <div key={section.titleKey}>
             <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
@@ -182,10 +189,11 @@ export function AppSidebar() {
                   <Link
                     key={m.key}
                     href={m.sidebar_path}
+                    scroll={false}
                     className={navLinkClass(active(pathname, m.sidebar_path))}
                   >
                     <Icon className="size-4 shrink-0 opacity-90" />
-                    <span className="truncate">{m.name}</span>
+                    <span className="truncate">{moduleLabel(m.key, m.name)}</span>
                   </Link>
                 );
               })}

@@ -17,7 +17,7 @@ const FIELDS: { key: keyof RetentionPolicy; label: string }[] = [
   { key: 'login_logs_days', label: 'Login logs (days)' },
   { key: 'audit_logs_days', label: 'Audit logs (days)' },
   { key: 'api_usage_days', label: 'API usage (days)' },
-  { key: 'email_logs_days', label: 'Email logs (days)' },
+  { key: 'email_logs_days', label: 'Email logs (days, fixed at 30)' },
   { key: 'error_logs_days', label: 'Error logs (days)' },
   { key: 'security_events_days', label: 'Security events (days)' },
 ];

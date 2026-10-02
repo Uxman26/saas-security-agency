@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useAssignments, useCreateAssignment, useUpdateAssignment, useDeleteAssignment } from '@/hooks/use-assignments';
 import { useGuards } from '@/hooks/use-guards';
 import { useSites } from '@/hooks/use-sites';
@@ -67,30 +68,26 @@ function AssignmentForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1">
           <Label>Staff <span className="text-destructive">*</span></Label>
-          <Select value={guardId?.toString() || ''} onValueChange={(v) => setValue('guard_id', parseInt(v))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select guard" />
-            </SelectTrigger>
-            <SelectContent>
-              {guards.map((g) => (
-                <SelectItem key={g.id} value={g.id.toString()}>{g.full_name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={guardId?.toString() || ''}
+            onChange={(v) => setValue('guard_id', parseInt(v))}
+            options={guards.map((g) => ({ value: String(g.id), label: g.full_name }))}
+            placeholder="Select staff"
+            searchPlaceholder="Search staff…"
+            emptyText="No matching staff"
+          />
           {errors.guard_id && <p className="text-xs text-destructive">{errors.guard_id.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Site <span className="text-destructive">*</span></Label>
-          <Select value={siteId?.toString() || ''} onValueChange={(v) => setValue('site_id', parseInt(v))}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select site" />
-            </SelectTrigger>
-            <SelectContent>
-              {sites.map((s) => (
-                <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={siteId?.toString() || ''}
+            onChange={(v) => setValue('site_id', parseInt(v))}
+            options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+            placeholder="Select site"
+            searchPlaceholder="Search sites…"
+            emptyText="No matching sites"
+          />
           {errors.site_id && <p className="text-xs text-destructive">{errors.site_id.message}</p>}
         </div>
         <div className="space-y-1">

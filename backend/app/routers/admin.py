@@ -30,6 +30,8 @@ from app.schemas import (
     AdminDashboardResponse,
     SmtpConfigResponse,
     SmtpConfigUpdate,
+    SmtpTestRequest,
+    SmtpTestResponse,
     BillingSettingsResponse,
     BillingSettingsPatch,
     AdminCouponCreate,
@@ -379,6 +381,15 @@ def patch_package(
     before = platform_plans_service.get_limits(tier) | {"price_gbp": platform_plans_service.get_price(tier)}
     default_days = trial_service.get_trial_config(db).get("default_days")
     out = platform_plans_service.update_tier(tier, payload, default_days)
+    if "features" in payload:
+        from app.models import Company
+        from app.plan_config import normalize_tier
+        from app.services.module_service import apply_plan_module_flags
+
+        t = normalize_tier(tier)
+        for co in db.query(Company).filter(Company.subscription_tier == t).all():
+            apply_plan_module_flags(co, t)
+        db.commit()
     platform_audit_service.log(
         db,
         actor=current_user,
@@ -403,6 +414,12 @@ def get_smtp(_: User = Depends(require_platform_perm("config.read", "config.writ
 def patch_smtp(body: SmtpConfigUpdate, _: User = Depends(require_platform_perm("config.write"))):
     from app.services.platform_smtp_service import update_smtp_config
     return SmtpConfigResponse(**update_smtp_config(body.model_dump(exclude_unset=True)))
+
+
+@router.post("/smtp/test", response_model=SmtpTestResponse)
+def test_smtp(body: SmtpTestRequest, _: User = Depends(require_platform_perm("config.write"))):
+    from app.services.platform_smtp_service import test_smtp_connection
+    return SmtpTestResponse(**test_smtp_connection(str(body.to_email)))
 
 
 @router.get("/settings/billing", response_model=BillingSettingsResponse)

@@ -126,6 +126,9 @@ DEFAULT_MODULES = {
 PATH_MODULE_MAP = {
     "/expenses": "expenses",
     "/leads": "leads",
+    "/settings/sms": "whatsapp",
+    "/settings/email": "email",
+    "/client-portal": "client_portal",
 }
 
 

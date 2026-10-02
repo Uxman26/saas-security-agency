@@ -6,12 +6,15 @@ import { Bell, AlertTriangle, Check, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/auth-context';
-import { formatDateUK } from '@/lib/date-format';
+import { formatDateLocale } from '@/lib/date-format';
 import { useCentralAlerts, isNotifUnread } from '@/components/lead-notifications-provider';
 import { cn } from '@/lib/utils';
+import { useLocale, useTranslations } from 'next-intl';
 
 export function AlertsPanel() {
   const { user } = useAuth();
+  const t = useTranslations('alerts');
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const {
     complianceAlerts: alerts,
@@ -41,19 +44,19 @@ export function AlertsPanel() {
           variant="ghost"
           size="icon"
           className="relative transition-colors hover:bg-primary/10 hover:text-primary"
-          title="Alerts & messages"
+          title={t('title')}
         >
           <Bell className="size-4" />
           {badgeCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 size-4 rounded-full bg-destructive text-[10px] text-white flex items-center justify-center">
+            <span className="absolute -top-0.5 -end-0.5 size-4 rounded-full bg-destructive text-[10px] text-white flex items-center justify-center">
               {badgeCount > 9 ? '9+' : badgeCount}
             </span>
           )}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pr-8">
-          <DialogTitle>Alerts & messages</DialogTitle>
+        <DialogHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pe-8">
+          <DialogTitle>{t('title')}</DialogTitle>
           {unreadCount > 0 && (
             <Button
               type="button"
@@ -63,17 +66,17 @@ export function AlertsPanel() {
               onClick={() => void markAllLeadRead()}
             >
               <CheckCheck className="size-3.5" />
-              Mark all as read
+              {t('markAllRead')}
             </Button>
           )}
         </DialogHeader>
         {!hasAny ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">No alerts right now.</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">{t('empty')}</p>
         ) : (
           <div className="space-y-4 text-sm">
             {leadAlerts.length > 0 && (
               <div>
-                <p className="font-medium mb-2">Notifications ({leadAlerts.length})</p>
+                <p className="font-medium mb-2">{t('notifications', { count: leadAlerts.length })}</p>
                 <ul className="space-y-1.5">
                   {leadAlerts.map((a) => {
                     const unread = isNotifUnread(a);
@@ -120,7 +123,7 @@ export function AlertsPanel() {
                               variant="ghost"
                               size="icon"
                               className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-                              title="Mark as read"
+                              title={t('markRead')}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void markLeadRead(a.id);
@@ -130,7 +133,7 @@ export function AlertsPanel() {
                             </Button>
                           ) : (
                             <span className="text-[10px] uppercase tracking-wide shrink-0 pt-1 opacity-60">
-                              Read
+                              {t('read')}
                             </span>
                           )}
                         </div>
@@ -144,7 +147,7 @@ export function AlertsPanel() {
               <div>
                 <p className="font-medium flex items-center gap-1.5 mb-2">
                   <AlertTriangle className="size-4 text-amber-600" />
-                  Contracts expiring ({contracts.length})
+                  {t('contracts', { count: contracts.length })}
                 </p>
                 <ul className="space-y-1.5">
                   {contracts.map((a) => (
@@ -152,7 +155,7 @@ export function AlertsPanel() {
                       <Link href="/clients" className="font-medium hover:underline" onClick={() => setOpen(false)}>
                         {a.client_name}
                       </Link>
-                      <span className="text-muted-foreground"> · ends {formatDateUK(a.contract_end_date)}</span>
+<span className="text-muted-foreground"> · {t('ends', { date: formatDateLocale(a.contract_end_date, locale) })}</span>
                     </li>
                   ))}
                 </ul>
@@ -162,7 +165,7 @@ export function AlertsPanel() {
               <div>
                 <p className="font-medium flex items-center gap-1.5 mb-2">
                   <AlertTriangle className="size-4 text-amber-600" />
-                  Compliance ({alerts.length})
+                  {t('compliance', { count: alerts.length })}
                 </p>
                 <ul className="space-y-1.5">
                   {alerts.map((a, i) => (
@@ -170,7 +173,7 @@ export function AlertsPanel() {
                       <span className="font-medium">{a.guard_name}</span>
                       <span className="text-muted-foreground">
                         {' '}
-                        · {a.document_type} · {formatDateUK(a.expiry_date)}
+                        · {a.document_type} · {formatDateLocale(a.expiry_date, locale)}
                       </span>
                     </li>
                   ))}
@@ -181,7 +184,7 @@ export function AlertsPanel() {
         )}
         <Button variant="outline" size="sm" className="w-full" asChild>
           <Link href="/dashboard" onClick={() => setOpen(false)}>
-            View dashboard
+            {t('viewDashboard')}
           </Link>
         </Button>
       </DialogContent>

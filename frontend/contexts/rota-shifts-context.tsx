@@ -141,6 +141,9 @@ type Ctx = {
   clearEmployeeShifts: (empId: string) => void;
   setAttendance: (key: string, a: AttendanceRec) => void;
   clearAttendance: (key: string) => void;
+  beginUndoAction: (label: string) => void;
+  undoLastAction: () => Promise<boolean>;
+  canUndo: boolean;
   setCtxShift: (v: RotaJsState['ctxShift']) => void;
   setCtxEmp: (id: string | null) => void;
   setCopyShift: (v: RotaJsState['copyShift']) => void;
@@ -176,10 +179,72 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const undoStackRef = useRef<
+    { label: string; shifts: RotaJsState['shifts']; attendance: RotaJsState['attendance'] }[]
+  >([]);
+  const [undoDepth, setUndoDepth] = useState(0);
+  const pendingUndoLabelRef = useRef<string | null>(null);
+
+  const pushUndoSnapshot = useCallback((label: string) => {
+    const s = stateRef.current;
+    undoStackRef.current = [
+      ...undoStackRef.current.slice(-19),
+      {
+        label,
+        shifts: structuredClone(s.shifts),
+        attendance: structuredClone(s.attendance),
+      },
+    ];
+    setUndoDepth(undoStackRef.current.length);
+  }, []);
 
   const setPublishedGuardIds = useCallback((ids: number[] | string[]) => {
     setPublishedGuardIdsState(new Set(ids.map(String)));
   }, []);
+
+  const undoLastAction = useCallback(async () => {
+    const entry = undoStackRef.current.pop();
+    setUndoDepth(undoStackRef.current.length);
+    if (!entry) return false;
+    pendingUndoLabelRef.current = entry.label;
+    const next = {
+      ...stateRef.current,
+      shifts: entry.shifts,
+      attendance: entry.attendance,
+    };
+    stateRef.current = next;
+    setState(next);
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const planId = rotaPlanId;
+    if (!planId || next.days.length === 0) return true;
+    const undoOf = pendingUndoLabelRef.current;
+    pendingUndoLabelRef.current = null;
+    try {
+      const updated = await api.rotaPlans.update(planId, {
+        name: next.rotaName,
+        view_mode: next.rotaView,
+        budget: next.budget,
+        day_count: next.days.length,
+        start_date: next.days[0],
+        planner_data: serializePlannerState(next),
+        is_undo: true,
+        undo_of: undoOf || undefined,
+      });
+      if (updated.published_guard_ids) {
+        setPublishedGuardIds(updated.published_guard_ids);
+      }
+    } catch {
+      pendingUndoLabelRef.current = undoOf;
+    }
+    return true;
+  }, [rotaPlanId, setPublishedGuardIds]);
+
+  const beginUndoAction = useCallback((label: string) => {
+    pushUndoSnapshot(label);
+  }, [pushUndoSnapshot]);
 
   const isEmployeePublished = useCallback(
     (empId: string) => publishedGuardIds.has(String(empId)),
@@ -330,6 +395,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const saveRotaPlan = useCallback(async () => {
     const s = stateRef.current;
     if (!rotaPlanId || s.days.length === 0) return;
+    const undoOf = pendingUndoLabelRef.current;
+    pendingUndoLabelRef.current = null;
     const updated = await api.rotaPlans.update(rotaPlanId, {
       name: s.rotaName,
       view_mode: s.rotaView,
@@ -337,6 +404,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       day_count: s.days.length,
       start_date: s.days[0],
       planner_data: serializePlannerState(s),
+      ...(undoOf ? { is_undo: true, undo_of: undoOf } : {}),
     });
     if (updated.published_guard_ids) {
       setPublishedGuardIds(updated.published_guard_ids);
@@ -348,6 +416,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       const s = stateRef.current;
+      const undoOf = pendingUndoLabelRef.current;
+      pendingUndoLabelRef.current = null;
       void api.rotaPlans
         .update(rotaPlanId, {
           name: s.rotaName,
@@ -356,6 +426,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           day_count: s.days.length,
           start_date: s.days[0],
           planner_data: serializePlannerState(s),
+          ...(undoOf ? { is_undo: true, undo_of: undoOf } : {}),
         })
         .then((updated) => {
           if (updated.published_guard_ids) {
@@ -635,10 +706,16 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     ) => {
       const ids = assignees.filter(Boolean);
       if (!ids.length || !dk) return;
+      pushUndoSnapshot('Assign / edit shift');
       setState((s) => {
         let shifts = { ...s.shifts };
         let attendance = { ...s.attendance };
         let preserved: AttendanceRec | undefined;
+
+        const empRate = (empId: string): number | null => {
+          const r = guardRateById[empId] ?? s.employees.find((e) => e.id === empId)?.hourlyRate;
+          return r != null && Number(r) > 0 ? Number(r) : null;
+        };
 
         const deleteAt = (empId: string, day: string, idx: number) => {
           const empShifts = { ...(shifts[empId] || {}) } as Record<string, ShiftRec[]>;
@@ -679,7 +756,6 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           }
         };
 
-        // In-place edit (same employee + day): keep attendance index stable
         if (edit && ids.length === 1 && ids[0] === edit.empId && dk === edit.dk) {
           const empShifts = { ...(shifts[edit.empId] || {}) } as Record<string, ShiftRec[]>;
           const list = [...(empShifts[edit.dk] || [])];
@@ -693,18 +769,31 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           deleteAt(edit.empId, edit.dk, edit.idx);
         }
 
-        // Restore attendance onto the first assignee only when reassigning/moving a single shift
         ids.forEach((id, i) => {
-          addAt(id, dk, { ...sh, shiftRate: rates?.[id] ?? sh.shiftRate }, i === 0 ? preserved : undefined);
+          const reassigned = !edit || id !== edit.empId;
+          let shiftRate: number | null;
+          if (rates && Object.prototype.hasOwnProperty.call(rates, id)) {
+            const r = Number(rates[id]);
+            shiftRate = r > 0 ? r : null;
+          } else if (reassigned) {
+            shiftRate = empRate(id);
+          } else {
+            shiftRate =
+              sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate)) && Number(sh.shiftRate) > 0
+                ? Number(sh.shiftRate)
+                : null;
+          }
+          addAt(id, dk, { ...sh, shiftRate }, i === 0 ? preserved : undefined);
         });
 
         return { ...s, shifts, attendance };
       });
     },
-    []
+    [guardRateById, pushUndoSnapshot]
   );
 
   const deleteShift = useCallback((empId: string, dk: string, idx: number) => {
+    pushUndoSnapshot('Delete shift');
     setState((s) => {
       const emp = { ...s.shifts[empId] } as Record<string, ShiftRec[]>;
       const list = [...(emp[dk] || [])];
@@ -726,22 +815,26 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       delete attendance[attKey(empId, dk, oldLen - 1)];
       return { ...s, shifts, attendance };
     });
-  }, []);
+  }, [pushUndoSnapshot]);
 
   const staffRate = useCallback(
     (s: RotaJsState, empId: string): number | null => {
       const r = guardRateById[empId] ?? s.employees.find((e) => e.id === empId)?.hourlyRate;
-      return r != null && r > 0 ? r : null;
+      return r != null && Number(r) > 0 ? Number(r) : null;
     },
     [guardRateById]
   );
 
   const withStaffRate = useCallback(
-    (s: RotaJsState, sh: ShiftRec, empId: string): ShiftRec => ({ ...sh, shiftRate: staffRate(s, empId) }),
+    (s: RotaJsState, sh: ShiftRec, empId: string): ShiftRec => ({
+      ...sh,
+      shiftRate: staffRate(s, empId),
+    }),
     [staffRate]
   );
 
   const copyShiftToDates = useCallback((empId: string, dk: string, idx: number, targets: string[]) => {
+    pushUndoSnapshot('Copy shift');
     setState((s) => {
       const src = s.shifts[empId]?.[dk]?.[idx];
       if (!src) return s;
@@ -752,20 +845,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       }
       return { ...s, shifts: { ...s.shifts, [empId]: emp } };
     });
-  }, [withStaffRate]);
+  }, [withStaffRate, pushUndoSnapshot]);
 
-  /**
-   * Copy one shift to any combination of employees and dates in a single update.
-   * Empty `empIds` means the source employee; empty `dates` means the source day,
-   * so this also covers the old dates-only / employee-only cases.
-   */
-  /**
-   * A copy is a new shift, not the same one twice: it must not inherit the source's
-   * rate. It takes the recipient's profile hourly rate, or no rate when they have none
-   * so it resolves from the site rate.
-   */
   const copyShiftToTargets = useCallback(
     (fromId: string, dk: string, idx: number, empIds: string[], dates: string[]) => {
+      pushUndoSnapshot('Copy shift');
       setState((s) => {
         const src = s.shifts[fromId]?.[dk]?.[idx];
         if (!src) return s;
@@ -777,7 +861,6 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         for (const empId of targetEmps) {
           const byDay = { ...(shifts[empId] || {}) } as Record<string, ShiftRec[]>;
           for (const day of targetDays) {
-            // Copying onto the exact source slot would duplicate it in place.
             if (empId === fromId && day === dk) continue;
             byDay[day] = [...(byDay[day] || []), withStaffRate(s, src, empId)];
           }
@@ -786,11 +869,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         return { ...s, shifts };
       });
     },
-    [withStaffRate]
+    [withStaffRate, pushUndoSnapshot]
   );
 
   const copyShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
     if (fromId === toId) return;
+    pushUndoSnapshot('Copy shift');
     setState((s) => {
       const src = s.shifts[fromId]?.[dk]?.[idx];
       if (!src) return s;
@@ -798,10 +882,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       toEmp[dk] = [...(toEmp[dk] || []), withStaffRate(s, src, toId)];
       return { ...s, shifts: { ...s.shifts, [toId]: toEmp } };
     });
-  }, [withStaffRate]);
+  }, [withStaffRate, pushUndoSnapshot]);
 
   const copyAllShiftsBetweenEmployees = useCallback((fromId: string, toId: string) => {
     if (fromId === toId) return;
+    pushUndoSnapshot('Copy shifts');
     setState((s) => {
       const from = s.shifts[fromId];
       if (!from) return s;
@@ -812,10 +897,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       }
       return { ...s, shifts: { ...s.shifts, [toId]: toEmp } };
     });
-  }, [withStaffRate]);
+  }, [withStaffRate, pushUndoSnapshot]);
 
   const moveShiftToEmployee = useCallback((fromId: string, dk: string, idx: number, toId: string) => {
     if (fromId === toId) return;
+    pushUndoSnapshot('Move shift');
     setState((s) => {
       const fromEmp = s.shifts[fromId];
       const srcList = fromEmp?.[dk];
@@ -857,12 +943,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         attendance,
       };
     });
-  }, [withStaffRate]);
+  }, [withStaffRate, pushUndoSnapshot]);
 
-  /** Move a shift to another day (same employee by default), optionally to another employee. */
   const moveShiftToDay = useCallback((empId: string, fromDk: string, idx: number, toDk: string, toEmpId?: string) => {
     const destEmp = toEmpId || empId;
     if (empId === destEmp && fromDk === toDk) return;
+    pushUndoSnapshot('Move shift');
     setState((s) => {
       const fromEmp = s.shifts[empId];
       const srcList = fromEmp?.[fromDk];
@@ -908,9 +994,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
       return { ...s, shifts, attendance };
     });
-  }, [withStaffRate]);
+  }, [withStaffRate, pushUndoSnapshot]);
 
   const clearEmployeeShifts = useCallback((empId: string) => {
+    pushUndoSnapshot('Clear shifts');
     setState((s) => {
       const shifts = { ...s.shifts };
       shifts[empId] = {};
@@ -920,7 +1007,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       }
       return { ...s, shifts, attendance };
     });
-  }, []);
+  }, [pushUndoSnapshot]);
 
   const setAttendance = useCallback((key: string, a: AttendanceRec) => {
     setState((s) => ({ ...s, attendance: { ...s.attendance, [key]: a } }));
@@ -1185,6 +1272,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       clearEmployeeShifts,
       setAttendance,
       clearAttendance,
+      beginUndoAction,
+      undoLastAction,
+      canUndo: undoDepth > 0,
       setCtxShift,
       setCtxEmp,
       setCopyShift,
@@ -1239,6 +1329,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       clearEmployeeShifts,
       setAttendance,
       clearAttendance,
+      beginUndoAction,
+      undoLastAction,
+      undoDepth,
       setCtxShift,
       setCtxEmp,
       setCopyShift,

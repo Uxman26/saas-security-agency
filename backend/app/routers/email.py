@@ -47,3 +47,12 @@ def test_email(body: EmailTestRequest, db: Session = Depends(get_db), current_us
 @router.get("/logs", response_model=List[EmailLogResponse])
 def email_logs(db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("email_settings", "logs_view"))):
     return [EmailLogResponse.model_validate(r) for r in email_config_service.list_email_logs(db, current_user.id)]
+
+
+@router.delete("/logs")
+def clear_email_logs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("email_settings", "logs_clear")),
+):
+    deleted = email_config_service.clear_email_logs(db, current_user.id)
+    return {"deleted": deleted}

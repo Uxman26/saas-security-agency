@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
@@ -13,7 +13,9 @@ from app.schemas import (
     PatrolCheckpointResponse,
     PatrolCheckpointUpdate,
     PatrolComplianceRow,
+    PatrolDashboardKpis,
     PatrolLogResponse,
+    PatrolOccurrenceResponse,
     PatrolRouteCreate,
     PatrolRouteResponse,
     PatrolRouteUpdate,
@@ -230,6 +232,39 @@ def detail(
     current_user: User = Depends(require_module("patrol", "reports")),
 ):
     return patrol_service.detail_report(db, current_user, start_date, end_date, route_id)
+
+
+@router.get("/dashboard/kpis", response_model=PatrolDashboardKpis)
+def dashboard_kpis(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("patrol", "view")),
+):
+    end = end_date or date.today()
+    start = start_date or (end - timedelta(days=7))
+    return patrol_service.dashboard_kpis(db, current_user, start, end)
+
+
+@router.get("/occurrences", response_model=list[PatrolOccurrenceResponse])
+def list_occurrences(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    site_id: Optional[int] = None,
+    guard_id: Optional[int] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("patrol", "view")),
+):
+    return patrol_service.list_occurrences(
+        db,
+        current_user,
+        start_date=start_date,
+        end_date=end_date,
+        site_id=site_id,
+        guard_id=guard_id,
+        status=status,
+    )
 
 
 @router.get("/today", response_model=PatrolTodayResponse)

@@ -4,12 +4,18 @@ export type AccountBankLine = { label: string; value: string };
 
 export function invoiceAccountLines(inv: Invoice): AccountBankLine[] {
   const rows: AccountBankLine[] = [];
-  if (inv.account_name?.trim()) rows.push({ label: 'Account name', value: inv.account_name.trim() });
-  if (inv.bank_name?.trim()) rows.push({ label: 'Bank', value: inv.bank_name.trim() });
-  if (inv.sort_code?.trim()) rows.push({ label: 'Sort code', value: inv.sort_code.trim() });
-  if (inv.account_number?.trim()) rows.push({ label: 'Account number', value: inv.account_number.trim() });
-  if (inv.iban?.trim()) rows.push({ label: 'IBAN', value: inv.iban.trim() });
-  if (inv.swift_code?.trim()) rows.push({ label: 'SWIFT / BIC', value: inv.swift_code.trim() });
+  const account_name = (inv.account_name || '').trim();
+  const bank_name = (inv.bank_name || '').trim();
+  const sort_code = (inv.sort_code || '').trim();
+  const account_number = (inv.account_number || '').trim();
+  const iban = (inv.iban || '').trim();
+  const swift_code = (inv.swift_code || '').trim();
+  if (account_name) rows.push({ label: 'Account name', value: account_name });
+  if (bank_name) rows.push({ label: 'Bank', value: bank_name });
+  if (sort_code) rows.push({ label: 'Sort code', value: sort_code });
+  if (account_number) rows.push({ label: 'Account number', value: account_number });
+  if (iban) rows.push({ label: 'IBAN', value: iban });
+  if (swift_code) rows.push({ label: 'SWIFT / BIC', value: swift_code });
   return rows;
 }
 

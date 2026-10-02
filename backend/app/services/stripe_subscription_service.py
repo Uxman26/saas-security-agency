@@ -88,18 +88,36 @@ def charge_trial_end(db: Session, company: Company) -> None:
         return
     cycle = company.billing_cycle or "monthly"
     tier = normalize_tier(company.subscription_tier or "basic")
+
+    def _end_or_sync(sub: Any) -> bool:
+        if sub.status == "trialing":
+            stripe.Subscription.modify(sub.id, trial_end="now")
+            sub = stripe.Subscription.retrieve(sub.id)
+            _sync_company_subscription(db, sub, company)
+            return True
+        if sub.status == "active":
+            _sync_company_subscription(db, sub, company)
+            return True
+        return False
+
     if company.stripe_subscription_id:
         try:
             sub = stripe.Subscription.retrieve(company.stripe_subscription_id)
-            if sub.status == "trialing":
-                stripe.Subscription.modify(company.stripe_subscription_id, trial_end="now")
-                sub = stripe.Subscription.retrieve(company.stripe_subscription_id)
-                _sync_company_subscription(db, sub, company)
-                return
-            if sub.status == "active":
+            if _end_or_sync(sub):
                 return
         except stripe.error.StripeError:
             pass
+
+    try:
+        existing = stripe.Subscription.list(customer=company.stripe_customer_id, status="all", limit=10)
+        for sub in existing.data or []:
+            if sub.status in ("trialing", "active", "past_due"):
+                company.stripe_subscription_id = sub.id
+                if _end_or_sync(sub):
+                    return
+    except stripe.error.StripeError as e:
+        logger.warning("List subscriptions failed for company %s: %s", company.id, e)
+
     pm_id = company.stripe_payment_method_id or _default_payment_method_id(company.stripe_customer_id)
     if not pm_id:
         return
@@ -214,6 +232,8 @@ def _sync_company_subscription(db: Session, sub: Any, company: Company, user_id:
             company.subscription_end = row.current_period_end
         if row.current_period_start:
             company.subscription_start = row.current_period_start
+    from app.services.module_service import apply_plan_module_flags
+    apply_plan_module_flags(company, company.subscription_tier or row.plan_tier)
     db.commit()
     db.refresh(row)
     return row
@@ -328,7 +348,10 @@ def _handle_checkout_completed(db: Session, session: Any) -> None:
         sub = stripe.Subscription.retrieve(sub_id)
     else:
         sub = None
-    if receipt.status != "paid":
+    is_trial_checkout = session.payment_status == "no_payment_required" or (
+        sub is not None and getattr(sub, "status", None) == "trialing"
+    )
+    if not is_trial_checkout and receipt.status != "paid":
         mark_receipt_paid(db, receipt.id)
     if sub:
         company = db.query(Company).filter(Company.id == receipt.company_id).first()
@@ -433,7 +456,25 @@ def _handle_invoice_paid(db: Session, invoice: Any) -> None:
     if amount_paid <= 0 and (sub.status == "trialing" or company.subscription_status == "trialing"):
         db.commit()
         return
+    before_status = company.subscription_status
     company.subscription_status = "active"
+    db.commit()
+    from app.models import SubscriptionChange
+
+    db.add(
+        SubscriptionChange(
+            company_id=company.id,
+            actor_user_id=None,
+            change_type="payment_succeeded",
+            from_tier=company.subscription_tier,
+            to_tier=company.subscription_tier,
+            from_status=before_status,
+            to_status="active",
+            from_cycle=company.billing_cycle,
+            to_cycle=company.billing_cycle,
+            note=f"Stripe invoice {invoice.id}",
+        )
+    )
     db.commit()
     ref = (sub.metadata or {}).get("receipt_ref")
     if ref:
@@ -462,12 +503,32 @@ def _handle_invoice_failed(db: Session, invoice: Any) -> None:
     sub_row = _company_sub(db, company.id)
     if sub_row:
         sub_row.status = "past_due"
+    before_status = "active"
     db.commit()
     retries = platform_settings_service.get_billing_settings(db)["payment_failed_lock_retries"]
     attempt = invoice.attempt_count or 0
+    to_status = "past_due"
     if attempt >= retries:
         company.subscription_status = "locked"
+        to_status = "locked"
         db.commit()
+    from app.models import SubscriptionChange
+
+    db.add(
+        SubscriptionChange(
+            company_id=company.id,
+            actor_user_id=None,
+            change_type="payment_failed",
+            from_tier=company.subscription_tier,
+            to_tier=company.subscription_tier,
+            from_status=before_status,
+            to_status=to_status,
+            from_cycle=company.billing_cycle,
+            to_cycle=company.billing_cycle,
+            note=f"Stripe invoice {invoice.id} attempt {attempt}",
+        )
+    )
+    db.commit()
     _send_payment_failed_email(db, company, invoice)
 
 
@@ -534,14 +595,24 @@ def handle_webhook(db: Session, payload: bytes, sig_header: str | None) -> None:
         raise HTTPException(status_code=400, detail="Invalid signature") from e
     from app.models import WebhookLog
 
-    log = WebhookLog(
-        provider="stripe",
-        event_type=event.type,
-        status="received",
-        http_status=200,
-        request_body=(payload[:4000].decode("utf-8", errors="ignore") if payload else None),
-    )
-    db.add(log)
+    existing = db.query(WebhookLog).filter(WebhookLog.event_id == event.id).first()
+    if existing and existing.status == "processed":
+        return
+    if existing:
+        log = existing
+        log.attempts = (log.attempts or 1) + 1
+        log.status = "received"
+        log.error_message = None
+    else:
+        log = WebhookLog(
+            provider="stripe",
+            event_id=event.id,
+            event_type=event.type,
+            status="received",
+            http_status=200,
+            request_body=(payload[:4000].decode("utf-8", errors="ignore") if payload else None),
+        )
+        db.add(log)
     db.commit()
     try:
         obj = event.data.object
@@ -618,6 +689,8 @@ def apply_admin_stripe_action(
     tier: str | None = None,
     billing_cycle: str | None = None,
 ) -> None:
+    if action == "downgrade":
+        raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
     if not _configure() or not company.stripe_subscription_id:
         return
     try:
@@ -632,8 +705,10 @@ def apply_admin_stripe_action(
             if row:
                 row.cancel_at_period_end = False
                 row.canceled_at = None
-        elif action in ("upgrade", "downgrade") and tier:
+        elif action == "upgrade" and tier:
             cycle = billing_cycle or company.billing_cycle or "monthly"
+            if is_plan_downgrade(company, tier, cycle):
+                raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
             sub = stripe.Subscription.retrieve(company.stripe_subscription_id)
             item_id = sub["items"]["data"][0]["id"]
             price_id = stripe_plan_service.resolve_price_id(db, tier, cycle)
@@ -649,6 +724,8 @@ def apply_admin_stripe_action(
                 },
             )
             _sync_company_subscription(db, updated, company)
+    except HTTPException:
+        raise
     except stripe.error.StripeError as e:
         logger.warning("Admin Stripe action %s failed for company %s: %s", action, company.id, e)
 
@@ -661,10 +738,14 @@ def create_billing_portal(db: Session, user: User) -> dict[str, str]:
     company = db.query(Company).filter(Company.id == user.company_id).first()
     if not company or not company.stripe_customer_id:
         raise HTTPException(status_code=400, detail="No billing account")
-    session = stripe.billing_portal.Session.create(
-        customer=company.stripe_customer_id,
-        return_url=f"{settings.frontend_url}/settings/billing",
-    )
+    params: dict[str, Any] = {
+        "customer": company.stripe_customer_id,
+        "return_url": f"{settings.frontend_url}/settings/billing",
+    }
+    cfg_id = getattr(settings, "stripe_billing_portal_configuration", None) or None
+    if cfg_id:
+        params["configuration"] = cfg_id
+    session = stripe.billing_portal.Session.create(**params)
     return {"url": session.url}
 
 
@@ -709,6 +790,9 @@ def change_plan(
         raise HTTPException(status_code=400, detail="No active subscription")
     if is_plan_downgrade(company, tier, billing_cycle):
         raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
+    from_tier = company.subscription_tier
+    from_status = company.subscription_status
+    from_cycle = company.billing_cycle
     sub = stripe.Subscription.retrieve(company.stripe_subscription_id)
     item_id = sub["items"]["data"][0]["id"]
     price_id = stripe_plan_service.resolve_price_id(db, tier, billing_cycle)
@@ -725,7 +809,23 @@ def change_plan(
     )
     _sync_company_subscription(db, updated, company, user.id)
     from app.services.module_service import apply_plan_module_flags
+    from app.models import SubscriptionChange
+
     apply_plan_module_flags(company, normalize_tier(tier))
+    db.add(
+        SubscriptionChange(
+            company_id=company.id,
+            actor_user_id=user.id,
+            change_type="upgrade",
+            from_tier=from_tier,
+            to_tier=normalize_tier(tier),
+            from_status=from_status,
+            to_status=updated.status,
+            from_cycle=from_cycle,
+            to_cycle=billing_cycle,
+            note="Tenant Stripe plan upgrade",
+        )
+    )
     db.commit()
     return {"status": updated.status, "tier": normalize_tier(tier), "billing_cycle": billing_cycle}
 
@@ -736,12 +836,29 @@ def cancel_subscription(db: Session, user: User) -> dict:
     company = db.query(Company).filter(Company.id == user.company_id).first()
     if not company or not company.stripe_subscription_id:
         raise HTTPException(status_code=400, detail="No active subscription")
+    before_status = company.subscription_status
     sub = stripe.Subscription.modify(company.stripe_subscription_id, cancel_at_period_end=True)
     row = _company_sub(db, company.id)
     if row:
         row.cancel_at_period_end = True
         row.canceled_at = _utcnow()
-        db.commit()
+    from app.models import SubscriptionChange
+
+    db.add(
+        SubscriptionChange(
+            company_id=company.id,
+            actor_user_id=user.id,
+            change_type="cancel",
+            from_tier=company.subscription_tier,
+            to_tier=company.subscription_tier,
+            from_status=before_status,
+            to_status=company.subscription_status,
+            from_cycle=company.billing_cycle,
+            to_cycle=company.billing_cycle,
+            note="Tenant cancelled at period end",
+        )
+    )
+    db.commit()
     return {"cancel_at_period_end": True, "current_period_end": _ts(sub.current_period_end)}
 
 

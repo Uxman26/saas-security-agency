@@ -14,6 +14,8 @@ import { api } from '@/lib/api';
 import type { EmailConfig, EmailLog } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/auth-context';
+import { canModule } from '@/lib/permissions';
 
 type Tab = 'config' | 'templates' | 'triggers' | 'test' | 'logs';
 
@@ -34,6 +36,8 @@ const TEMPLATE_VARS: Record<string, string> = {
 };
 
 export default function EmailSettingsPage() {
+  const { user } = useAuth();
+  const canClearLogs = canModule(user, 'email_settings', 'logs_clear');
   const [tab, setTab] = useState<Tab>('config');
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [logs, setLogs] = useState<EmailLog[]>([]);
@@ -49,6 +53,7 @@ export default function EmailSettingsPage() {
   const [smtpFrom, setSmtpFrom] = useState('');
   const [smtpFromName, setSmtpFromName] = useState('');
   const [savingSmtp, setSavingSmtp] = useState(false);
+  const [clearingLogs, setClearingLogs] = useState(false);
 
   const load = () => {
     api.email.config().then((c) => {
@@ -127,6 +132,33 @@ export default function EmailSettingsPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Send failed');
     }
+  };
+
+  const clearAllLogs = () => {
+    toast.confirm(
+      'Clear all email logs?',
+      async () => {
+        setClearingLogs(true);
+        try {
+          const res = await api.email.clearLogs();
+          setLogs([]);
+          toast.success(
+            res.deleted
+              ? `Cleared ${res.deleted} log${res.deleted === 1 ? '' : 's'}`
+              : 'Email logs cleared'
+          );
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Could not clear logs');
+        } finally {
+          setClearingLogs(false);
+        }
+      },
+      {
+        label: 'Clear all',
+        description:
+          'This permanently deletes all email delivery logs for your company. This cannot be undone.',
+      }
+    );
   };
 
   return (
@@ -331,7 +363,24 @@ export default function EmailSettingsPage() {
 
           {tab === 'logs' && (
             <Card>
-              <CardHeader><CardTitle>Delivery logs</CardTitle></CardHeader>
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between space-y-0">
+                <div className="space-y-1">
+                  <CardTitle>Delivery logs</CardTitle>
+                  <p className="text-sm text-muted-foreground max-w-2xl">
+                    <strong>Email Log Retention:</strong> Email logs are automatically retained for 30 days and will be permanently deleted after this period. You can also use <strong>Clear All</strong> to remove existing logs manually. Please ensure any information you may need for your records is retained separately before deletion.
+                  </p>
+                </div>
+                {canClearLogs ? (
+                  <Button
+                    variant="outline"
+                    className="shrink-0 text-destructive hover:text-destructive"
+                    onClick={clearAllLogs}
+                    disabled={clearingLogs || logs.length === 0}
+                  >
+                    {clearingLogs ? 'Clearing…' : 'Clear All'}
+                  </Button>
+                ) : null}
+              </CardHeader>
               <CardContent>
                 {logs.length === 0 ? (
                   <p className="text-muted-foreground text-sm">No emails sent yet.</p>

@@ -26,10 +26,18 @@ export default function PatrolRouteDetailPage() {
   // already knows the role will be refused.
   const { user: permUser } = useAuth();
   const canCreateMod = canModule(permUser, 'patrol', 'create');
+  const canEditMod = canModule(permUser, 'patrol', 'edit');
   const params = useParams();
   const routeId = Number(params.id);
   const [route, setRoute] = useState<PatrolRoute | null>(null);
   const [open, setOpen] = useState(false);
+  const [schedule, setSchedule] = useState({
+    frequency_minutes: '60',
+    start_time: '22:00',
+    end_time: '06:00',
+    reminder_minutes: '10',
+    grace_minutes: '15',
+  });
   const [form, setForm] = useState({
     name: '',
     floor: '',
@@ -43,7 +51,15 @@ export default function PatrolRouteDetailPage() {
   const load = useCallback(async () => {
     if (!routeId) return;
     try {
-      setRoute(await api.patrol.getRoute(routeId));
+      const r = await api.patrol.getRoute(routeId);
+      setRoute(r);
+      setSchedule({
+        frequency_minutes: String(r.frequency_minutes ?? 60),
+        start_time: r.start_time || '22:00',
+        end_time: r.end_time || '06:00',
+        reminder_minutes: String(r.reminder_minutes ?? 10),
+        grace_minutes: String(r.grace_minutes ?? 15),
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load route');
     }
@@ -52,6 +68,22 @@ export default function PatrolRouteDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const saveSchedule = async () => {
+    try {
+      const r = await api.patrol.updateRoute(routeId, {
+        frequency_minutes: Number(schedule.frequency_minutes) || 60,
+        start_time: schedule.start_time,
+        end_time: schedule.end_time,
+        reminder_minutes: Number(schedule.reminder_minutes) || 10,
+        grace_minutes: Number(schedule.grace_minutes) || 15,
+      });
+      setRoute(r);
+      toast.success('Schedule updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed');
+    }
+  };
 
   const create = async () => {
     if (!form.name.trim() || !form.latitude || !form.longitude) {
@@ -107,7 +139,7 @@ export default function PatrolRouteDetailPage() {
                 {route.name}
               </span>
             }
-            description={`${route.site_name || 'Site'} · ${route.start_time}–${route.end_time} · every ${route.frequency_minutes} mins`}
+            description={`${route.site_name || 'Site'} · ${route.start_time}–${route.end_time} · every ${route.frequency_minutes} mins · reminder ${route.reminder_minutes ?? 10}m · grace ${route.grace_minutes ?? 15}m`}
             actions={
               <div className="flex gap-2">
                 <Button variant="outline" asChild>
@@ -125,6 +157,59 @@ export default function PatrolRouteDetailPage() {
               </div>
             }
           />
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Schedule & windows</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="space-y-1">
+                <Label>Frequency (mins)</Label>
+                <Input
+                  value={schedule.frequency_minutes}
+                  onChange={(e) => setSchedule((s) => ({ ...s, frequency_minutes: e.target.value }))}
+                  disabled={!canEditMod}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Start</Label>
+                <Input
+                  value={schedule.start_time}
+                  onChange={(e) => setSchedule((s) => ({ ...s, start_time: e.target.value }))}
+                  disabled={!canEditMod}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>End</Label>
+                <Input
+                  value={schedule.end_time}
+                  onChange={(e) => setSchedule((s) => ({ ...s, end_time: e.target.value }))}
+                  disabled={!canEditMod}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Reminder (mins before)</Label>
+                <Input
+                  value={schedule.reminder_minutes}
+                  onChange={(e) => setSchedule((s) => ({ ...s, reminder_minutes: e.target.value }))}
+                  disabled={!canEditMod}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Late / grace (mins)</Label>
+                <Input
+                  value={schedule.grace_minutes}
+                  onChange={(e) => setSchedule((s) => ({ ...s, grace_minutes: e.target.value }))}
+                  disabled={!canEditMod}
+                />
+              </div>
+              {canEditMod ? (
+                <div className="sm:col-span-2 lg:col-span-5">
+                  <Button onClick={saveSchedule}>Save schedule</Button>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

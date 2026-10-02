@@ -287,7 +287,7 @@ def extend_trial(
     request: Request | None = None,
 ) -> dict:
     if extension_days < 1 or extension_days > 365:
-        raise HTTPException(status_code=400, detail="Extension must be 1–90 days")
+        raise HTTPException(status_code=400, detail="Extension must be 1–365 days")
     if not reason or len(reason.strip()) < 5:
         raise HTTPException(status_code=400, detail="Reason required (min 5 characters)")
     trial = (
@@ -612,7 +612,7 @@ def path_allowed_when_subscription_required(path: str, method: str | None = None
     m = (method or "GET").upper()
     if m in ("GET", "HEAD", "OPTIONS"):
         return True
-    if m in ("PATCH", "PUT", "DELETE"):
+    if m in ("PATCH", "PUT"):
         return True
     return False
 

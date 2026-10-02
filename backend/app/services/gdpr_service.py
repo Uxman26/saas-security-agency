@@ -99,18 +99,21 @@ def export_tenant_csv(db: Session, company_id: int) -> str:
 
 def get_retention_policy(db: Session) -> dict:
     from app.services.admin_platform_ext_service import get_config
-    return get_config(
+    policy = get_config(
         db,
         "data_retention",
         {
             "login_logs_days": 365,
             "audit_logs_days": 730,
             "api_usage_days": 90,
-            "email_logs_days": 365,
+            "email_logs_days": 30,
             "error_logs_days": 180,
             "security_events_days": 365,
         },
     )
+    # Product rule: email delivery logs are retained for 30 days.
+    policy["email_logs_days"] = 30
+    return policy
 
 
 def set_retention_policy(db: Session, policy: dict, actor: User) -> dict:
@@ -134,7 +137,7 @@ def purge_expired_logs(db: Session, actor: Optional[User] = None) -> dict:
     pairs = [
         ("login_logs", LoginLog, LoginLog.login_at, policy.get("login_logs_days", 365)),
         ("api_usage", ApiUsageLog, ApiUsageLog.logged_at, policy.get("api_usage_days", 90)),
-        ("email_logs", EmailLog, EmailLog.sent_at, policy.get("email_logs_days", 365)),
+        ("email_logs", EmailLog, EmailLog.sent_at, policy.get("email_logs_days", 30)),
         ("error_logs", ErrorLog, ErrorLog.last_seen_at, policy.get("error_logs_days", 180)),
         ("security_events", SecurityEvent, SecurityEvent.created_at, policy.get("security_events_days", 365)),
     ]

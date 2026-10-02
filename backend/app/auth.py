@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models import Company, User
 from app.config import settings
 
 SUPER_ADMIN_ROLE = "super_admin"
@@ -134,6 +134,16 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
     is_impersonating = bool(getattr(session, "impersonator_user_id", None))
     if getattr(user, "role", None) != SUPER_ADMIN_ROLE and not is_impersonating:
+        from app.middleware.client_source import get_client_source
+        from app.services.auth_service import MOBILE_APP_DENIED
+        from app.services.module_service import is_module_enabled
+        from app.plan_config import feature_enabled
+
+        if get_client_source() == "mobile" and user.company_id:
+            co = db.query(Company).filter(Company.id == user.company_id).first()
+            if co and not (is_module_enabled(co, "mobile_apps") and feature_enabled(co.subscription_tier, "mobile_apps")):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MOBILE_APP_DENIED)
+
         from app.services.receipt_service import company_subscription_blocked
         from app.services.trial_service import path_allowed_when_subscription_required
 

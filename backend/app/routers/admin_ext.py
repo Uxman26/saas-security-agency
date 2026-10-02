@@ -91,6 +91,7 @@ class SubscriptionActionBody(BaseModel):
     tier: Optional[str] = None
     billing_cycle: Optional[str] = None
     note: Optional[str] = None
+    extension_days: Optional[int] = None
 
 
 class SendResetEmailBody(BaseModel):
@@ -220,11 +221,18 @@ def subscription_action(
         "billing_cycle": co.billing_cycle,
     }
     action = body.action
+    if action == "downgrade":
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
     if action == "upgrade" and body.tier:
+        from app.plan_config import is_plan_downgrade
+        if is_plan_downgrade(co, body.tier, body.billing_cycle or co.billing_cycle or "monthly"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Plan downgrades are not allowed. You can only upgrade.")
         co.subscription_tier = body.tier
         co.subscription_status = "active"
-    elif action == "downgrade" and body.tier:
-        co.subscription_tier = body.tier
+        from app.services.module_service import apply_plan_module_flags
+        apply_plan_module_flags(co, body.tier)
     elif action == "suspend":
         co.subscription_status = "suspended"
     elif action == "cancel":
@@ -254,7 +262,7 @@ def subscription_action(
             trial = next((t for t in hist if t.status in ("expired", "extended", "active")), None)
         if not trial:
             raise HTTPException(status_code=404, detail="No trial to extend")
-        days = 14
+        days = int(body.extension_days or 14)
         reason = body.note or "Admin extension via subscription action"
         trial_service.extend_trial(
             db,
@@ -268,7 +276,7 @@ def subscription_action(
         return ap.company_admin_out(db, co)
     if body.billing_cycle:
         co.billing_cycle = body.billing_cycle
-    if action in ("upgrade", "downgrade", "cancel", "reactivate"):
+    if action in ("upgrade", "cancel", "reactivate"):
         from app.services import stripe_subscription_service as stripe_svc
 
         stripe_svc.apply_admin_stripe_action(

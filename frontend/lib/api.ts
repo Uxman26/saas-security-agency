@@ -202,6 +202,11 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ full_name: sanitizeInput(full_name) }),
       }),
+    changePassword: (current_password: string, new_password: string): Promise<{ message: string }> =>
+      request<{ message: string }>('/auth/me/password', {
+        method: 'POST',
+        body: JSON.stringify({ current_password, new_password }),
+      }),
     updateTheme: (theme: 'light' | 'dark' | 'system'): Promise<User> =>
       request<User>('/auth/me/theme', {
         method: 'PATCH',
@@ -460,6 +465,8 @@ export const api = {
         planner_data: string;
         day_count: number;
         start_date: string;
+        is_undo: boolean;
+        undo_of: string;
       }>
     ): Promise<RotaPlanDetail> =>
       request<RotaPlanDetail>(`/rotas/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -604,6 +611,19 @@ export const api = {
       const q = new URLSearchParams({ start_date, end_date });
       if (route_id) q.set('route_id', String(route_id));
       return request<import('./types').PatrolLog[]>(`/patrol/reports/detail?${q}`);
+    },
+    dashboardKpis: (start_date?: string, end_date?: string) => {
+      const q = new URLSearchParams();
+      if (start_date) q.set('start_date', start_date);
+      if (end_date) q.set('end_date', end_date);
+      const qs = q.toString();
+      return request<import('./types').PatrolDashboardKpis>(`/patrol/dashboard/kpis${qs ? `?${qs}` : ''}`);
+    },
+    occurrences: (params?: Record<string, string | number | undefined>) => {
+      const q = new URLSearchParams();
+      if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)); });
+      const qs = q.toString();
+      return request<import('./types').PatrolOccurrence[]>(`/patrol/occurrences${qs ? `?${qs}` : ''}`);
     },
     today: (): Promise<import('./types').PatrolToday> => request('/patrol/today'),
   },
@@ -767,6 +787,28 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ new_password }),
       }),
+    bankAccounts: (id: number): Promise<import('./types').ClientBankAccount[]> =>
+      request<import('./types').ClientBankAccount[]>(`/clients/${id}/bank-accounts`),
+    createBankAccount: (id: number, data: Partial<import('./types').ClientBankAccount>): Promise<import('./types').ClientBankAccount> =>
+      request<import('./types').ClientBankAccount>(`/clients/${id}/bank-accounts`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateBankAccount: (
+      id: number,
+      accountId: number,
+      data: Partial<import('./types').ClientBankAccount>
+    ): Promise<import('./types').ClientBankAccount> =>
+      request<import('./types').ClientBankAccount>(`/clients/${id}/bank-accounts/${accountId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    setDefaultBankAccount: (id: number, accountId: number): Promise<import('./types').ClientBankAccount> =>
+      request<import('./types').ClientBankAccount>(`/clients/${id}/bank-accounts/${accountId}/default`, {
+        method: 'POST',
+      }),
+    deleteBankAccount: (id: number, accountId: number): Promise<void> =>
+      request<void>(`/clients/${id}/bank-accounts/${accountId}`, { method: 'DELETE' }),
   },
   leads: {
     list: (params?: Record<string, string | number | boolean | undefined>) => {
@@ -953,6 +995,23 @@ export const api = {
     test: (data: { to_email: string; subject?: string; body?: string }) =>
       request<import('./types').EmailLog>('/email/test', { method: 'POST', body: JSON.stringify(data) }),
     logs: (): Promise<import('./types').EmailLog[]> => request<import('./types').EmailLog[]>('/email/logs'),
+    clearLogs: (): Promise<{ deleted: number }> =>
+      request<{ deleted: number }>('/email/logs', { method: 'DELETE' }),
+  },
+  assistant: {
+    chat: (data: {
+      message?: string;
+      path?: string;
+      confirm_proposal?: Record<string, unknown> | null;
+    }) =>
+      request<{
+        reply: string;
+        sources: { id: string; title: string; href?: string }[];
+        navigation: { label: string; href: string }[];
+        proposal: Record<string, unknown> | null;
+        actions: Record<string, unknown>[];
+        mode: string;
+      }>('/assistant/chat', { method: 'POST', body: JSON.stringify(data) }),
   },
   reports: {
     dashboard: (): Promise<DashboardOverview> => request<DashboardOverview>('/reports/dashboard'),
@@ -1136,11 +1195,50 @@ export const api = {
     },
     get: (id: number): Promise<Invoice> => request<Invoice>(`/invoices/${id}`),
     pdf: (id: number): Promise<Blob> => requestBlob(`/invoices/${id}/pdf`),
+    statement: (params: {
+      client_id: number;
+      site_id?: number;
+      date_from: string;
+      date_to: string;
+    }): Promise<import('./types').InvoiceStatement> => {
+      const q = new URLSearchParams({
+        client_id: String(params.client_id),
+        date_from: params.date_from,
+        date_to: params.date_to,
+      });
+      if (params.site_id) q.append('site_id', String(params.site_id));
+      return request<import('./types').InvoiceStatement>(`/invoices/statement?${q.toString()}`);
+    },
+    statementPdf: (params: {
+      client_id: number;
+      site_id?: number;
+      date_from: string;
+      date_to: string;
+    }): Promise<Blob> => {
+      const q = new URLSearchParams({
+        client_id: String(params.client_id),
+        date_from: params.date_from,
+        date_to: params.date_to,
+      });
+      if (params.site_id) q.append('site_id', String(params.site_id));
+      return requestBlob(`/invoices/statement/pdf?${q.toString()}`);
+    },
     audit: (id: number): Promise<import('./types').InvoiceAuditEntry[]> =>
       request<import('./types').InvoiceAuditEntry[]>(`/invoices/${id}/audit`),
     patch: (
       id: number,
-      data: { due_date?: string | null; notes?: string | null; tax_rate?: number; status?: string }
+      data: {
+        due_date?: string | null;
+        invoice_date?: string | null;
+        po_number?: string | null;
+        notes?: string | null;
+        rota_review?: string | null;
+        client_bank_account_id?: number | null;
+        tax_rate?: number;
+        status?: string;
+        period_start?: string;
+        period_end?: string;
+      }
     ): Promise<Invoice> => request<Invoice>(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     updateLine: (
       invoiceId: number,
@@ -1148,20 +1246,26 @@ export const api = {
       data: {
         site_id?: number;
         guard_id?: number | null;
+        shift_date?: string | null;
+        shift_start?: string | null;
+        shift_end?: string | null;
+        description?: string | null;
+        service_detail?: string | null;
+        quantity?: number;
         hours?: number;
         rate?: number;
         allowance_amount?: number;
+        amount?: number;
       }
     ): Promise<import('./types').InvoiceLine> =>
       request<import('./types').InvoiceLine>(`/invoices/${invoiceId}/lines/${lineId}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteLine: (invoiceId: number, lineId: number): Promise<void> =>
       request<void>(`/invoices/${invoiceId}/lines/${lineId}`, { method: 'DELETE' }),
-    create: (data: Partial<Invoice>): Promise<Invoice> => request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
+    create: (data: Record<string, unknown>): Promise<Invoice> =>
+      request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
     generate: (params: {
       period_start: string;
       period_end: string;
-      /** Raise a second invoice for a period already covered. The API refuses with a
-       *  409 unless this is set, so a double-click cannot quietly bill twice. */
       force?: boolean;
     } & WorkFilterParams): Promise<Invoice> => {
       const q = appendWorkFilters(
@@ -1174,7 +1278,20 @@ export const api = {
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
     addLine: (
       invoiceId: number,
-      data: { site_id: number; guard_id?: number; hours: number; rate: number; allowance_amount?: number }
+      data: {
+        site_id: number;
+        guard_id?: number;
+        shift_date?: string | null;
+        shift_start?: string | null;
+        shift_end?: string | null;
+        description?: string | null;
+        service_detail?: string | null;
+        quantity?: number;
+        hours: number;
+        rate: number;
+        allowance_amount?: number;
+        amount?: number;
+      }
     ): Promise<import('./types').InvoiceLine> =>
       request<import('./types').InvoiceLine>(`/invoices/${invoiceId}/lines`, { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/invoices/${id}`, { method: 'DELETE' }),
@@ -1306,6 +1423,27 @@ export const api = {
     profile: (): Promise<import('./types').CompanyProfile> => request<import('./types').CompanyProfile>('/company/profile'),
     updateProfile: (data: Partial<import('./types').CompanyProfile>): Promise<import('./types').CompanyProfile> =>
       request<import('./types').CompanyProfile>('/company/profile', { method: 'PATCH', body: JSON.stringify(data) }),
+    bankAccounts: (): Promise<import('./types').CompanyBankAccount[]> =>
+      request<import('./types').CompanyBankAccount[]>('/company/bank-accounts'),
+    createBankAccount: (data: Partial<import('./types').CompanyBankAccount>): Promise<import('./types').CompanyBankAccount> =>
+      request<import('./types').CompanyBankAccount>('/company/bank-accounts', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateBankAccount: (
+      accountId: number,
+      data: Partial<import('./types').CompanyBankAccount>
+    ): Promise<import('./types').CompanyBankAccount> =>
+      request<import('./types').CompanyBankAccount>(`/company/bank-accounts/${accountId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    setDefaultBankAccount: (accountId: number): Promise<import('./types').CompanyBankAccount> =>
+      request<import('./types').CompanyBankAccount>(`/company/bank-accounts/${accountId}/default`, {
+        method: 'POST',
+      }),
+    deleteBankAccount: (accountId: number): Promise<void> =>
+      request<void>(`/company/bank-accounts/${accountId}`, { method: 'DELETE' }),
     uploadLogo: async (file: File): Promise<import('./types').CompanyProfile> => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
       const form = new FormData();
@@ -1479,7 +1617,13 @@ export const api = {
       mail_password?: string;
       mail_from?: string;
       mail_from_name?: string;
+      mail_use_tls?: boolean;
     }) => request<import('./types').SmtpConfig>('/admin/smtp', { method: 'PATCH', body: JSON.stringify(data) }),
+    testSmtp: (to_email: string) =>
+      request<{ ok: boolean; code: string; message: string; mail_server?: string; mail_port?: number }>(
+        '/admin/smtp/test',
+        { method: 'POST', body: JSON.stringify({ to_email }) }
+      ),
     receipts: (): Promise<SubscriptionReceipt[]> => request<SubscriptionReceipt[]>('/admin/receipts'),
     markReceiptPaid: (id: number): Promise<SubscriptionReceipt> =>
       request<SubscriptionReceipt>(`/admin/receipts/${id}/mark-paid`, { method: 'POST' }),
@@ -1582,6 +1726,34 @@ export const api = {
       const qs = q.toString();
       return request<import('./types').SupportTicket[]>(`/admin/tickets${qs ? `?${qs}` : ''}`);
     },
+    liveSupportAvailability: () => request<Record<string, unknown>>('/admin/live-support/availability'),
+    patchLiveSupportAvailability: (data: Record<string, unknown>) =>
+      request<Record<string, unknown>>('/admin/live-support/availability', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    liveSupportAgents: () => request<Record<string, unknown>[]>('/admin/live-support/agents'),
+    upsertLiveSupportAgent: (data: { user_id: number; display_name: string; is_available?: boolean }) =>
+      request<Record<string, unknown>>('/admin/live-support/agents', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    patchLiveSupportAgent: (id: number, is_available: boolean) =>
+      request<Record<string, unknown>>(`/admin/live-support/agents/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_available }),
+      }),
+    liveSupportConversations: () => request<Record<string, unknown>[]>('/admin/live-support/conversations'),
+    liveSupportConversation: (id: number) => request<Record<string, unknown>>(`/admin/live-support/conversations/${id}`),
+    liveSupportReply: (id: number, body: string) =>
+      request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
+    liveSupportClose: (id: number) =>
+      request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/close`, { method: 'POST' }),
+    liveSupportReassign: (id: number) =>
+      request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/reassign`, { method: 'POST' }),
     createTicket: (data: {
       subject: string;
       body?: string;
@@ -2017,10 +2189,19 @@ export const api = {
     delete: (id: number): Promise<void> => request<void>(`/documents/${id}`, { method: 'DELETE' }),
   },
   attendance: {
-    list: (params?: { guard_id?: number }): Promise<Attendance[]> => {
+    list: (params?: {
+      guard_id?: number;
+      site_id?: number;
+      start_date?: string;
+      end_date?: string;
+    }): Promise<Attendance[]> => {
       const q = new URLSearchParams();
       if (params?.guard_id) q.append('guard_id', params.guard_id.toString());
-      return request<Attendance[]>(`/attendance?${q.toString()}`);
+      if (params?.site_id) q.append('site_id', params.site_id.toString());
+      if (params?.start_date) q.append('start_date', params.start_date);
+      if (params?.end_date) q.append('end_date', params.end_date);
+      const qs = q.toString();
+      return request<Attendance[]>(`/attendance${qs ? `?${qs}` : ''}`);
     },
     // Backend BookingOnOff only accepts { assignment_id, book_off }
     bookOn: (assignment_id: number): Promise<Attendance> =>
@@ -2072,6 +2253,52 @@ export const api = {
     ): Promise<Payment> =>
       request<Payment>(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/payments/${id}`, { method: 'DELETE' }),
+  },
+  creditNotes: {
+    list: (params?: {
+      invoice_id?: number;
+      client_id?: number;
+      status?: string;
+    }): Promise<import('./types').CreditNote[]> => {
+      const q = new URLSearchParams();
+      if (params?.invoice_id) q.append('invoice_id', String(params.invoice_id));
+      if (params?.client_id) q.append('client_id', String(params.client_id));
+      if (params?.status) q.append('status', params.status);
+      const qs = q.toString();
+      return request<import('./types').CreditNote[]>(`/credit-notes${qs ? `?${qs}` : ''}`);
+    },
+    get: (id: number): Promise<import('./types').CreditNote> =>
+      request<import('./types').CreditNote>(`/credit-notes/${id}`),
+    create: (data: {
+      invoice_id: number;
+      client_id?: number | null;
+      site_id?: number | null;
+      credit_date?: string;
+      reason?: string;
+      description?: string;
+      subtotal: number;
+      tax_rate?: number;
+      status?: string;
+    }): Promise<import('./types').CreditNote> =>
+      request<import('./types').CreditNote>('/credit-notes', { method: 'POST', body: JSON.stringify(data) }),
+    update: (
+      id: number,
+      data: {
+        site_id?: number | null;
+        credit_date?: string;
+        reason?: string;
+        description?: string;
+        subtotal?: number;
+        tax_rate?: number;
+        status?: string;
+      }
+    ): Promise<import('./types').CreditNote> =>
+      request<import('./types').CreditNote>(`/credit-notes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    issue: (id: number): Promise<import('./types').CreditNote> =>
+      request<import('./types').CreditNote>(`/credit-notes/${id}/issue`, { method: 'POST' }),
+    cancel: (id: number): Promise<import('./types').CreditNote> =>
+      request<import('./types').CreditNote>(`/credit-notes/${id}/cancel`, { method: 'POST' }),
+    delete: (id: number): Promise<void> => request<void>(`/credit-notes/${id}`, { method: 'DELETE' }),
   },
   rates: {
     guardRates: (guard_id: number): Promise<GuardRate[]> => request<GuardRate[]>(`/rates/guards/${guard_id}`),
@@ -2172,6 +2399,29 @@ export const api = {
       preferred_time?: string;
     }): Promise<{ ok: boolean }> =>
       request<{ ok: boolean }>('/marketing/demo', { method: 'POST', body: JSON.stringify(data) }),
+  },
+  liveSupport: {
+    status: () =>
+      request<{
+        available: boolean;
+        within_hours: boolean;
+        agents_online: number;
+        offline_message?: string;
+        contact_email?: string | null;
+      }>('/live-support/status'),
+    start: (data: {
+      full_name: string;
+      email: string;
+      company_name: string;
+      city: string;
+      initial_message?: string;
+    }) => request<Record<string, unknown>>('/live-support/conversations', { method: 'POST', body: JSON.stringify(data) }),
+    get: (publicId: string) => request<Record<string, unknown>>(`/live-support/conversations/${publicId}`),
+    send: (publicId: string, body: string) =>
+      request<Record<string, unknown>>(`/live-support/conversations/${publicId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
   },
 };
 

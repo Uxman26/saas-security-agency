@@ -1156,6 +1156,47 @@ def run():
             )
         except sqlite3.OperationalError:
             pass
+    # Hourly patrol scheduling: reminder/grace on routes + occurrence slots
+    for col, spec in (
+        ("reminder_minutes", "INTEGER NOT NULL DEFAULT 10"),
+        ("grace_minutes", "INTEGER NOT NULL DEFAULT 15"),
+    ):
+        try:
+            cur.execute(f"ALTER TABLE patrol_routes ADD COLUMN {col} {spec}")
+        except sqlite3.OperationalError:
+            pass
+    if not table_exists(cur, "patrol_occurrences"):
+        try:
+            cur.execute(
+                """CREATE TABLE patrol_occurrences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                site_id INTEGER NOT NULL REFERENCES sites(id),
+                route_id INTEGER NOT NULL REFERENCES patrol_routes(id),
+                checkpoint_id INTEGER NOT NULL REFERENCES patrol_checkpoints(id),
+                guard_id INTEGER NOT NULL REFERENCES guards(id),
+                session_id INTEGER REFERENCES patrol_sessions(id),
+                assignment_id INTEGER REFERENCES assignments(id),
+                scheduled_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'scheduled',
+                reminder_sent_at TEXT,
+                completed_at TEXT,
+                late_minutes REAL,
+                log_id INTEGER REFERENCES patrol_logs(id),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+    try:
+        cur.execute("ALTER TABLE patrol_logs ADD COLUMN occurrence_id INTEGER REFERENCES patrol_occurrences(id)")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cur.execute("ALTER TABLE patrol_alerts ADD COLUMN occurrence_id INTEGER REFERENCES patrol_occurrences(id)")
+    except sqlite3.OperationalError:
+        pass
     if not table_exists(cur, "incidents"):
         try:
             cur.execute(
@@ -1279,6 +1320,10 @@ def run():
         "CREATE INDEX IF NOT EXISTS ix_leads_company ON leads(company_id)",
         "CREATE INDEX IF NOT EXISTS ix_incidents_company_created ON incidents(company_id, created_at)",
         "CREATE INDEX IF NOT EXISTS ix_patrol_logs_company_created ON patrol_logs(company_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_patrol_occ_company_sched ON patrol_occurrences(company_id, scheduled_at)",
+        "CREATE INDEX IF NOT EXISTS ix_patrol_occ_status ON patrol_occurrences(status)",
+        "CREATE INDEX IF NOT EXISTS ix_patrol_occ_cp_guard_sched ON patrol_occurrences(checkpoint_id, guard_id, scheduled_at)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_patrol_occ_cp_guard_sched ON patrol_occurrences(checkpoint_id, guard_id, scheduled_at)",
         "CREATE INDEX IF NOT EXISTS ix_guard_documents_guard ON guard_documents(guard_id)",
         "CREATE INDEX IF NOT EXISTS ix_login_logs_company ON login_logs(company_id)",
         # Shift history is always read as "this company, this date window", then narrowed.
@@ -1790,6 +1835,7 @@ def run():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id INTEGER REFERENCES companies(id),
             provider TEXT,
+            event_id TEXT UNIQUE,
             event_type TEXT,
             status TEXT DEFAULT 'received',
             http_status INTEGER,
@@ -1955,6 +2001,120 @@ def run():
                 except sqlite3.OperationalError:
                     pass
 
+    if table_exists(cur, "webhook_logs") and not column_exists(cur, "webhook_logs", "event_id"):
+        try:
+            cur.execute("ALTER TABLE webhook_logs ADD COLUMN event_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS ix_webhook_logs_event_id ON webhook_logs(event_id)")
+        except sqlite3.OperationalError:
+            pass
+
+    if not table_exists(cur, "client_bank_accounts"):
+        try:
+            cur.execute(
+                """CREATE TABLE client_bank_accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    client_id INTEGER NOT NULL REFERENCES clients(id),
+                    label TEXT NOT NULL DEFAULT 'Primary',
+                    account_name TEXT,
+                    bank_name TEXT,
+                    sort_code TEXT,
+                    account_number TEXT,
+                    iban TEXT,
+                    swift_code TEXT,
+                    is_default INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    if not table_exists(cur, "company_bank_accounts"):
+        try:
+            cur.execute(
+                """CREATE TABLE company_bank_accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    label TEXT NOT NULL DEFAULT 'Primary',
+                    account_name TEXT,
+                    bank_name TEXT,
+                    sort_code TEXT,
+                    account_number TEXT,
+                    iban TEXT,
+                    swift_code TEXT,
+                    is_default INTEGER DEFAULT 0,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    if not table_exists(cur, "credit_notes"):
+        try:
+            cur.execute(
+                """CREATE TABLE credit_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    deleted_at TEXT,
+                    deleted_by_user_id INTEGER REFERENCES users(id),
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    invoice_id INTEGER NOT NULL REFERENCES invoices(id),
+                    client_id INTEGER REFERENCES clients(id),
+                    site_id INTEGER REFERENCES sites(id),
+                    number TEXT NOT NULL,
+                    credit_date TEXT NOT NULL,
+                    reason TEXT,
+                    description TEXT,
+                    subtotal REAL DEFAULT 0,
+                    tax_rate REAL DEFAULT 0,
+                    tax_amount REAL DEFAULT 0,
+                    total REAL DEFAULT 0,
+                    status TEXT DEFAULT 'issued',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_credit_notes_company_id ON credit_notes(company_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_credit_notes_invoice_id ON credit_notes(invoice_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_credit_notes_status ON credit_notes(status)")
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_credit_notes_number ON credit_notes(number)")
+        except sqlite3.OperationalError:
+            pass
+
+    for col, spec in (
+        ("client_bank_account_id", "INTEGER REFERENCES client_bank_accounts(id)"),
+        ("invoice_date", "TEXT"),
+        ("po_number", "TEXT"),
+        ("rota_review", "TEXT"),
+        ("payee_account_name", "TEXT"),
+        ("payee_bank_name", "TEXT"),
+        ("payee_sort_code", "TEXT"),
+        ("payee_account_number", "TEXT"),
+        ("payee_iban", "TEXT"),
+        ("payee_swift_code", "TEXT"),
+    ):
+        if table_exists(cur, "invoices") and not column_exists(cur, "invoices", col):
+            try:
+                cur.execute(f"ALTER TABLE invoices ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+
+    for col, spec in (
+        ("shift_start", "TEXT"),
+        ("shift_end", "TEXT"),
+        ("service_detail", "TEXT"),
+        ("quantity", "REAL DEFAULT 1"),
+    ):
+        if table_exists(cur, "invoice_lines") and not column_exists(cur, "invoice_lines", col):
+            try:
+                cur.execute(f"ALTER TABLE invoice_lines ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+
     conn.commit()
     conn.close()
     try:
@@ -2006,6 +2166,36 @@ def run():
         import logging
 
         logging.getLogger(__name__).warning("RBAC backfill failed: %s", e)
+
+    try:
+        if table_exists(cur, "occurrence_sheets"):
+            cur.execute(
+                "UPDATE occurrence_sheets SET status = 'reported' WHERE status = 'submitted'"
+            )
+            conn.commit()
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning("occurrence status migration failed: %s", e)
+
+    try:
+        from app.database import SessionLocal
+        from app.services import admin_platform_ext_service, gdpr_service
+
+        db = SessionLocal()
+        try:
+            policy = gdpr_service.get_retention_policy(db)
+            policy["email_logs_days"] = 30
+            admin_platform_ext_service.set_config(
+                db, "data_retention", policy, category="compliance"
+            )
+        finally:
+            db.close()
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning("email retention policy update failed: %s", e)
+
 
 if __name__ == "__main__":
     run()

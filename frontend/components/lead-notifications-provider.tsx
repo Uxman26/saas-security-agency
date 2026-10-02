@@ -21,18 +21,17 @@ type AlertsContextValue = {
   complianceAlerts: ComplianceAlert[];
   contractAlerts: ContractExpiryAlert[];
   leadAlerts: LeadNotif[];
-  /** Unread notifications still not marked read */
   unreadCount: number;
-  /** Badge shown on bell — cleared when panel opens until new unread arrive */
   badgeCount: number;
   refreshAlerts: () => Promise<void>;
   markLeadRead: (id: number) => Promise<void>;
   markAllLeadRead: () => Promise<void>;
-  /** Clear badge and refresh list; does not mark notifications read */
   markPanelOpened: () => Promise<void>;
 };
 
 const AlertsContext = createContext<AlertsContextValue | null>(null);
+const NOTIF_POLL_MS = 90_000;
+const ALERT_POLL_MS = 5 * 60_000;
 
 export function isNotifUnread(n: LeadNotif) {
   return n.read_at == null || n.read_at === '';
@@ -41,34 +40,34 @@ export function isNotifUnread(n: LeadNotif) {
 export function LeadNotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const seenBrowser = useRef<Set<number>>(new Set());
-  /** Unread ids acknowledged by opening the panel (badge cleared for these) */
   const acknowledgedUnread = useRef<Set<number>>(new Set());
+  const lastUnread = useRef(0);
   const [complianceAlerts, setComplianceAlerts] = useState<ComplianceAlert[]>([]);
   const [contractAlerts, setContractAlerts] = useState<ContractExpiryAlert[]>([]);
   const [leadAlerts, setLeadAlerts] = useState<LeadNotif[]>([]);
+  const [serverUnread, setServerUnread] = useState(0);
   const [badgeEpoch, setBadgeEpoch] = useState(0);
 
   const canReadLeads = Boolean(
     user && user.role !== 'super_admin' && user.enabled_modules?.leads !== false && can(user, 'leads.read')
   );
 
-  const refreshAlerts = useCallback(async () => {
-    if (!user || user.role === 'super_admin') {
-      setComplianceAlerts([]);
-      setContractAlerts([]);
+  const refreshLeadNotifications = useCallback(async () => {
+    if (!user || user.role === 'super_admin' || !canReadLeads) {
       setLeadAlerts([]);
+      setServerUnread(0);
+      lastUnread.current = 0;
       return;
     }
-
-    const [complianceResult, contractsResult, leadsResult] = await Promise.allSettled([
-      api.reports.compliance(30),
-      api.reports.contractsExpiring(30),
-      canReadLeads ? api.leads.notifications(false) : Promise.resolve([]),
+    const [countResult, listResult] = await Promise.allSettled([
+      api.leads.unreadNotificationCount(),
+      api.leads.notifications(false),
     ]);
-    if (complianceResult.status === 'fulfilled') setComplianceAlerts(complianceResult.value);
-    if (contractsResult.status === 'fulfilled') setContractAlerts(contractsResult.value);
-    if (leadsResult.status === 'fulfilled') {
-      const rows = (leadsResult.value as LeadNotif[]) || [];
+    if (countResult.status === 'fulfilled') {
+      setServerUnread(Number(countResult.value?.count || 0));
+    }
+    if (listResult.status === 'fulfilled') {
+      const rows = (listResult.value as LeadNotif[]) || [];
       setLeadAlerts(rows);
       for (const notification of rows) {
         if (!isNotifUnread(notification)) continue;
@@ -92,6 +91,24 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
     }
   }, [user, canReadLeads]);
 
+  const refreshReportAlerts = useCallback(async () => {
+    if (!user || user.role === 'super_admin') {
+      setComplianceAlerts([]);
+      setContractAlerts([]);
+      return;
+    }
+    const [complianceResult, contractsResult] = await Promise.allSettled([
+      api.reports.compliance(30),
+      api.reports.contractsExpiring(30),
+    ]);
+    if (complianceResult.status === 'fulfilled') setComplianceAlerts(complianceResult.value);
+    if (contractsResult.status === 'fulfilled') setContractAlerts(contractsResult.value);
+  }, [user]);
+
+  const refreshAlerts = useCallback(async () => {
+    await Promise.all([refreshLeadNotifications(), refreshReportAlerts()]);
+  }, [refreshLeadNotifications, refreshReportAlerts]);
+
   const markLeadRead = useCallback(async (id: number) => {
     await api.leads.readNotification(id);
     acknowledgedUnread.current.add(id);
@@ -100,6 +117,7 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
         alert.id === id ? { ...alert, read_at: new Date().toISOString() } : alert
       )
     );
+    setServerUnread((n) => Math.max(0, n - 1));
     setBadgeEpoch((n) => n + 1);
   }, []);
 
@@ -113,6 +131,7 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
       }
       return current.map((alert) => (isNotifUnread(alert) ? { ...alert, read_at: now } : alert));
     });
+    setServerUnread(0);
     setBadgeEpoch((n) => n + 1);
   }, [canReadLeads]);
 
@@ -121,8 +140,8 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
       if (isNotifUnread(alert)) acknowledgedUnread.current.add(alert.id);
     }
     setBadgeEpoch((n) => n + 1);
-    await refreshAlerts();
-  }, [leadAlerts, refreshAlerts]);
+    await refreshLeadNotifications();
+  }, [leadAlerts, refreshLeadNotifications]);
 
   useEffect(() => {
     if (!user || user.role === 'super_admin') return;
@@ -130,22 +149,51 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
-
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
 
     void refreshAlerts();
-    const t = setInterval(() => void refreshAlerts(), 60000);
-    return () => clearInterval(t);
-  }, [user, refreshAlerts]);
 
-  const unreadCount = useMemo(() => leadAlerts.filter(isNotifUnread).length, [leadAlerts]);
+    const tickNotifs = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      void refreshLeadNotifications();
+    };
+    const tickReports = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      void refreshReportAlerts();
+    };
+
+    const notifTimer = setInterval(tickNotifs, NOTIF_POLL_MS);
+    const reportTimer = setInterval(tickReports, ALERT_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshLeadNotifications();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(notifTimer);
+      clearInterval(reportTimer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user, refreshAlerts, refreshLeadNotifications, refreshReportAlerts]);
+
+  const unreadCount = useMemo(() => {
+    const local = leadAlerts.filter(isNotifUnread).length;
+    return Math.max(local, serverUnread);
+  }, [leadAlerts, serverUnread]);
+
+  useEffect(() => {
+    if (serverUnread > lastUnread.current) {
+      setBadgeEpoch((n) => n + 1);
+    }
+    lastUnread.current = serverUnread;
+  }, [serverUnread]);
 
   const badgeCount = useMemo(() => {
     void badgeEpoch;
-    return leadAlerts.filter((a) => isNotifUnread(a) && !acknowledgedUnread.current.has(a.id)).length;
-  }, [leadAlerts, badgeEpoch]);
+    const unacked = leadAlerts.filter((a) => isNotifUnread(a) && !acknowledgedUnread.current.has(a.id)).length;
+    return Math.max(unacked, Math.max(0, serverUnread - acknowledgedUnread.current.size));
+  }, [leadAlerts, badgeEpoch, serverUnread]);
 
   const value = useMemo(
     () => ({

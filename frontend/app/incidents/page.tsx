@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
@@ -334,18 +335,15 @@ export default function IncidentsPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Site (optional)</Label>
-                  <Select value={form.site_id || undefined} onValueChange={(v) => setForm((f) => ({ ...f, site_id: v }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select site" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sites.map((s) => (
-                        <SelectItem key={s.id} value={String(s.id)}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.site_id}
+                    onChange={(v) => setForm((f) => ({ ...f, site_id: v }))}
+                    options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+                    noneOption={{ value: '', label: 'No site' }}
+                    placeholder="Select site"
+                    searchPlaceholder="Search sites…"
+                    emptyText="No matching sites"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">

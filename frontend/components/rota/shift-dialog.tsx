@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import type { EmployeeRec, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS, SHIFT_TYPE_OPTS, normalizeShiftType } from '@/lib/rota-shifts-types';
@@ -318,28 +319,14 @@ export function ShiftDialog({
                   Add site
                 </Button>
               </div>
-              <Select
-                value={siteValue}
-                onValueChange={(v) => applySite(v)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Site" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-[250]">
-                  {siteOptions.map((name) => {
-                    const rec = siteByName.get(normalizeSiteKey(name));
-                    const c = rec?.color || DEFAULT_SITE_COLOR;
-                    return (
-                      <SelectItem key={name} value={name}>
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="size-3 rounded-full shrink-0 border border-border/50" style={{ backgroundColor: c }} />
-                          <span className="truncate">{name}</span>
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={siteValue || ''}
+                onChange={(v) => applySite(v)}
+                options={siteOptions.map((name) => ({ value: name, label: name }))}
+                placeholder="Select Site"
+                searchPlaceholder="Search sites…"
+                emptyText="No matching sites"
+              />
             </div>
             <div className="space-y-1">
               <Label>

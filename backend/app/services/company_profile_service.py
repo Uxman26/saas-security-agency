@@ -42,6 +42,9 @@ def has_account_bank_details(company: Company) -> bool:
 
 def get_company_profile(db: Session, user_id: int) -> dict:
     company = get_company_by_user_id(db, user_id)
+    from app.services import company_bank_service
+
+    company_bank_service.ensure_seeded_from_legacy(db, company)
     admin = db.query(User).filter(User.id == company.admin_id).first()
     return {
         "id": company.id,
@@ -63,14 +66,45 @@ def get_company_profile(db: Session, user_id: int) -> dict:
     }
 
 
+def get_company_entity(db: Session, user_id: int) -> Company:
+    return get_company_by_user_id(db, user_id)
+
+
 def update_company_profile(db: Session, user_id: int, data: CompanyProfileUpdate) -> dict:
     company = get_company_by_user_id(db, user_id)
     payload = data.model_dump(exclude_unset=True)
+    bank_keys = ("account_name", "bank_name", "sort_code", "account_number", "iban", "swift_code")
+    bank_touched = any(k in payload for k in bank_keys)
     for k, v in payload.items():
         if hasattr(company, k):
             setattr(company, k, v)
     db.commit()
     db.refresh(company)
+    if bank_touched:
+        from app.services import company_bank_service
+
+        company_bank_service.ensure_seeded_from_legacy(db, company)
+        default = company_bank_service.get_default_account(db, company.id)
+        if default:
+            for k in bank_keys:
+                if k in payload:
+                    setattr(default, k, getattr(company, k))
+            db.commit()
+        elif any((getattr(company, k) or "").strip() for k in bank_keys):
+            company_bank_service.create_account(
+                db,
+                {
+                    "label": "Primary",
+                    "account_name": company.account_name,
+                    "bank_name": company.bank_name,
+                    "sort_code": company.sort_code,
+                    "account_number": company.account_number,
+                    "iban": company.iban,
+                    "swift_code": company.swift_code,
+                    "is_default": True,
+                },
+                user_id,
+            )
     return get_company_profile(db, user_id)
 
 

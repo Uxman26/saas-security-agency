@@ -43,6 +43,7 @@ ACTION_LABELS: dict[str, str] = {
     "shift_deleted": "Shift deleted",
     "shift_published": "Shift published to staff",
     "shift_unpublished": "Shift unpublished",
+    "shift_undone": "Undo",
 }
 
 FIELD_LABELS: list[tuple[str, str]] = [
@@ -390,6 +391,8 @@ def log_planner_change(
     new_planner_json: Optional[str],
     created_action: str = "shift_created",
     source: Optional[str] = None,
+    is_undo: bool = False,
+    undo_of: Optional[str] = None,
 ) -> list[ShiftAuditLog]:
     """Diff a rota's planner data before/after an edit and log what changed."""
     events = diff_planner(_parse(old_planner_json), _parse(new_planner_json))
@@ -398,11 +401,18 @@ def log_planner_change(
     _fill_guard_names(db, company_id, events)
     site_ids = _site_ids_by_name(db, company_id)
     rows: list[ShiftAuditLog] = []
+    undo_note = (undo_of or "").strip()
     for event in events:
         shift = event["after"] or event["before"] or {}
         action = event["action"]
         if action == "shift_created":
             action = created_action
+        if is_undo:
+            action = "shift_undone"
+        summary = None
+        if is_undo:
+            base = _summary_for(event["action"], event["before"], event["after"], diff_fields(event["before"], event["after"]))
+            summary = f"Undo{f': {undo_note}' if undo_note else ''} — {base}" if base else f"Undo{f': {undo_note}' if undo_note else ''}"
         rows.append(
             record(
                 db,
@@ -415,6 +425,7 @@ def log_planner_change(
                 site_id=site_ids.get((shift.get("site") or "").strip().lower()),
                 slot=int(shift.get("slot") or 0),
                 source=source,
+                summary=summary,
             )
         )
     return rows

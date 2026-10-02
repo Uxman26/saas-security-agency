@@ -127,6 +127,11 @@ RESOURCES: tuple[BinResource, ...] = (
         lambda r: _dated(r, "Payment", "paid_at", "created_at"),
     ),
     BinResource(
+        "credit_notes", "Credit note", "Credit notes", models.CreditNote, "invoices",
+        lambda r: getattr(r, "number", None) or f"Credit note #{r.id}",
+        lambda r: _dated(r, "Credit", "credit_date", "created_at"),
+    ),
+    BinResource(
         "expenses", "Expense", "Expenses", models.Expense, "expenses",
         lambda r: _first(r, "description", "vendor_name", "category") or f"Expense #{r.id}",
         lambda r: _dated(r, "Expense", "expense_date", "created_at"),

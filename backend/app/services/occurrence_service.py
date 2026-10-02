@@ -22,6 +22,7 @@ from app.schemas import (
     OccurrenceSheetResponse,
     OccurrenceSheetUpdate,
 )
+from app.services import audit_service
 from app.services.company_service import get_company_by_user_id
 from app.services.portal_access import (
     filter_sites_for_user,
@@ -31,8 +32,14 @@ from app.services.portal_access import (
 )
 from app.services.recycle_bin import archive as _bin_archive
 
-STATUSES = ("open", "submitted", "closed")
+STATUSES = ("open", "reported", "reviewed", "closed")
+LEGACY_STATUS_MAP = {"submitted": "reported"}
 MAX_ENTRIES = 60
+
+
+def _normalize_status(value: Optional[str]) -> str:
+    raw = (value or "open").strip().lower()
+    return LEGACY_STATUS_MAP.get(raw, raw)
 
 
 def _reference(db: Session, company_id: int, when: date) -> str:
@@ -59,6 +66,7 @@ def _out(row: OccurrenceSheet) -> OccurrenceSheetResponse:
     data = OccurrenceSheetResponse.model_validate(row)
     return data.model_copy(
         update={
+            "status": _normalize_status(row.status),
             "site_name": row.site.name if row.site else None,
             "guard_name": row.guard.full_name if row.guard else None,
             "created_by_name": row.created_by.full_name if row.created_by else None,
@@ -180,7 +188,11 @@ def list_sheets(
     if site_id:
         q = q.filter(OccurrenceSheet.site_id == site_id)
     if status:
-        q = q.filter(OccurrenceSheet.status == status)
+        wanted = _normalize_status(status)
+        if wanted == "reported":
+            q = q.filter(OccurrenceSheet.status.in_(("reported", "submitted")))
+        else:
+            q = q.filter(OccurrenceSheet.status == wanted)
     if start_date:
         q = q.filter(OccurrenceSheet.sheet_date >= start_date)
     if end_date:
@@ -216,8 +228,10 @@ def update_sheet(
     row = _row_for_write(db, user, company.id, sheet_id)
     payload = data.model_dump(exclude_unset=True)
     entries = payload.pop("entries", None)
+    prev_status = _normalize_status(row.status)
 
     if "status" in payload:
+        payload["status"] = _normalize_status(payload["status"])
         if payload["status"] not in STATUSES:
             raise HTTPException(status_code=422, detail=f"status must be one of {', '.join(STATUSES)}")
         if is_client_portal_user(user):
@@ -230,6 +244,20 @@ def update_sheet(
         setattr(row, key, value.strip() if isinstance(value, str) else value)
     if entries is not None:
         _replace_entries(db, row, [OccurrenceEntryIn(**e) for e in entries])
+
+    new_status = _normalize_status(row.status)
+    if row.status != new_status:
+        row.status = new_status
+    if "status" in payload and new_status != prev_status:
+        audit_service.log_action(
+            db,
+            company_id=company.id,
+            user_id=user.id,
+            action="status_change",
+            entity_type="occurrence_sheet",
+            entity_id=row.id,
+            meta={"from": prev_status, "to": new_status, "reference": row.reference},
+        )
     db.commit()
     return get_sheet(db, user, sheet_id)
 

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models import Invoice, User, SmsLog, EmailLog
 from app.services.company_service import get_company_by_user_id
 from app.services.expense_service import _expense_totals, _invoice_vat_total
-from app.services.invoice_payment_service import invoice_amount_paid
+from app.services.invoice_payment_service import invoice_amount_paid, invoice_balance_due, invoice_credit_applied
 from app.services.rota_service import rota_summary
 from app.services import reports_extended_service
 
@@ -21,7 +21,7 @@ def reports_hub(db: Session, user_id: int, start_date: date, end_date: date) -> 
         paid = invoice_amount_paid(db, inv.id)
         revenue += paid
         if inv.status not in ("paid", "cancelled", "draft"):
-            outstanding += max(0, float(inv.total or 0) - paid)
+            outstanding += invoice_balance_due(db, inv)
     expense_totals = _expense_totals(db, company.id, start_date, end_date)
     invoice_vat = _invoice_vat_total(db, company.id, start_date, end_date)
     expense_vat = expense_totals["total_vat"]
@@ -58,6 +58,7 @@ def financial_invoice_rows(db: Session, user_id: int, start_date: date, end_date
     out = []
     for inv in rows:
         paid = invoice_amount_paid(db, inv.id)
+        credited = invoice_credit_applied(db, inv.id)
         out.append(
             {
                 "invoice_id": inv.id,
@@ -65,7 +66,8 @@ def financial_invoice_rows(db: Session, user_id: int, start_date: date, end_date
                 "period_end": inv.period_end.isoformat(),
                 "total": inv.total,
                 "amount_paid": paid,
-                "balance": round(max(0, float(inv.total or 0) - paid), 2),
+                "credit_applied": credited,
+                "balance": invoice_balance_due(db, inv),
                 "status": inv.status,
                 "due_date": inv.due_date.isoformat() if inv.due_date else "",
             }

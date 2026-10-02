@@ -8,6 +8,21 @@
   font-family: system-ui, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif;
 }
 
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select {
+  text-align: start;
+}
+
+[dir="rtl"] table th,
+[dir="rtl"] table td {
+  text-align: start;
+}
+
+[dir="rtl"] .tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

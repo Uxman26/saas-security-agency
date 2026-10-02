@@ -359,7 +359,8 @@ def require_module(module_key: str, action: str):
     """Check permission for module action (e.g. rota + publish -> rota.publish).
 
     Special actions fall back to the coarse action they descend from, so a role that
-    predates the granular catalogue still passes.
+    predates the granular catalogue still passes. Package entitlement is checked after
+    RBAC so a role grant cannot unlock a module the tenant's plan does not include.
     """
 
     def checker(
@@ -369,6 +370,9 @@ def require_module(module_key: str, action: str):
         code = f"{module_key}.{action}"
         if not user_has_permission_db(db, user, code):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        from app.services.plan_enforcement import enforce_module_entitlement
+
+        enforce_module_entitlement(db, user, module_key)
         return user
 
     return checker

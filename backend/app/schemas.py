@@ -141,6 +141,16 @@ class ProfileUpdate(BaseModel):
     full_name: NameStr
 
 
+class ChangePasswordRequest(StrictModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_rules(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+
 class ThemeUpdate(StrictModel):
     theme: Literal["light", "dark", "system"]
 
@@ -785,6 +795,8 @@ class RotaPlanUpdate(BaseModel):
     status: Optional[str] = None
     day_count: Optional[int] = None
     start_date: Optional[date] = None
+    is_undo: Optional[bool] = None
+    undo_of: Optional[str] = None
 
 class RotaPlanListItem(BaseModel):
     id: int
@@ -1202,6 +1214,20 @@ class SmtpConfigUpdate(BaseModel):
     mail_password: Optional[str] = None
     mail_from: Optional[str] = None
     mail_from_name: Optional[str] = None
+    mail_use_tls: Optional[bool] = None
+
+
+class SmtpTestRequest(StrictModel):
+    to_email: EmailStr
+
+
+class SmtpTestResponse(BaseModel):
+    ok: bool
+    code: str
+    message: str
+    mail_server: Optional[str] = None
+    mail_port: Optional[int] = None
+
 
 class GuardDocumentBase(BaseModel):
     document_type: str
@@ -1303,6 +1329,17 @@ class AttendanceResponse(AttendanceBase):
     updated_at: Optional[datetime] = None
     updated_by_user_id: Optional[int] = None
     updated_by_name: Optional[str] = None
+    guard_name: Optional[str] = None
+    site_id: Optional[int] = None
+    site_name: Optional[str] = None
+    shift_date: Optional[date] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    has_overtime: bool = False
+    has_early_finish: bool = False
+    overtime_end: Optional[str] = None
+    early_finish_end: Optional[str] = None
+    late_minutes: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -1373,10 +1410,12 @@ class PayrollResponse(PayrollBase):
 class InvoiceLineBase(BaseModel):
     site_id: int
     guard_id: Optional[int] = None
-    # The day worked, and what the line is for. Both optional: manual lines and every
-    # line raised before these existed carry neither.
     shift_date: Optional[date] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
     description: Optional[str] = None
+    service_detail: Optional[str] = None
+    quantity: Optional[float] = 1
     hours: float = 0
     rate: float = 0
     amount: float = 0
@@ -1388,6 +1427,7 @@ class InvoiceLineResponse(InvoiceLineBase):
     created_at: datetime
     site_name: Optional[str] = None
     guard_name: Optional[str] = None
+    shift_timing: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -1396,10 +1436,15 @@ class InvoiceLineUpdate(BaseModel):
     site_id: Optional[int] = None
     guard_id: Optional[int] = None
     shift_date: Optional[date] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
     description: Optional[str] = None
+    service_detail: Optional[str] = None
+    quantity: Optional[float] = None
     hours: Optional[float] = None
     rate: Optional[float] = None
     allowance_amount: Optional[float] = None
+    amount: Optional[float] = None
 
 class InvoiceBase(BaseModel):
     client_id: int
@@ -1408,25 +1453,33 @@ class InvoiceBase(BaseModel):
     total: Optional[float] = 0
     status: Optional[str] = "draft"
     due_date: Optional[date] = None
+    invoice_date: Optional[date] = None
+    po_number: Optional[str] = None
     notes: Optional[str] = None
+    rota_review: Optional[str] = None
+    client_bank_account_id: Optional[int] = None
     tax_rate: float = 20
     subtotal: float = 0
     tax_amount: float = 0
 
 class InvoiceCreate(InvoiceBase):
-    pass
+    lines: Optional[list[InvoiceLineBase]] = None
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
+    invoice_date: Optional[date] = None
+    po_number: Optional[str] = None
     notes: Optional[str] = None
+    rota_review: Optional[str] = None
+    client_bank_account_id: Optional[int] = None
     tax_rate: Optional[float] = None
     status: Optional[str] = None
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
 
 class InvoiceResponse(InvoiceBase):
     id: int
     company_id: int
-    # Overrides the required field on InvoiceBase: an invoice raised against a site that
-    # belongs to no client carries no customer record. Creation still demands one.
     client_id: Optional[int] = None
     pdf_path: Optional[str] = None
     created_at: datetime
@@ -1436,6 +1489,7 @@ class InvoiceResponse(InvoiceBase):
     company_email: Optional[str] = None
     company_phone: Optional[str] = None
     company_address: Optional[str] = None
+    company_website: Optional[str] = None
     company_registration_number: Optional[str] = None
     company_vat_number: Optional[str] = None
     company_logo_url: Optional[str] = None
@@ -1445,17 +1499,116 @@ class InvoiceResponse(InvoiceBase):
     account_number: Optional[str] = None
     iban: Optional[str] = None
     swift_code: Optional[str] = None
+    client_bank_account_id: Optional[int] = None
     client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_address: Optional[str] = None
     client_contact_person: Optional[str] = None
     lines: list[InvoiceLineResponse] = []
     amount_paid: float = 0
+    credit_applied: float = 0
     balance_due: float = 0
     payments: list["PaymentResponse"] = []
+    credit_notes: list["CreditNoteResponse"] = []
 
     class Config:
         from_attributes = True
+
+
+class ClientBankAccountBase(BaseModel):
+    label: str = "Primary"
+    account_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    sort_code: Optional[str] = None
+    account_number: Optional[str] = None
+    iban: Optional[str] = None
+    swift_code: Optional[str] = None
+    is_default: bool = False
+
+
+class ClientBankAccountCreate(ClientBankAccountBase):
+    pass
+
+
+class ClientBankAccountUpdate(BaseModel):
+    label: Optional[str] = None
+    account_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    sort_code: Optional[str] = None
+    account_number: Optional[str] = None
+    iban: Optional[str] = None
+    swift_code: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class ClientBankAccountResponse(ClientBankAccountBase):
+    id: int
+    company_id: int
+    client_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CompanyBankAccountBase(BaseModel):
+    label: str = "Primary"
+    account_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    sort_code: Optional[str] = None
+    account_number: Optional[str] = None
+    iban: Optional[str] = None
+    swift_code: Optional[str] = None
+    is_default: bool = False
+
+
+class CompanyBankAccountCreate(CompanyBankAccountBase):
+    pass
+
+
+class CompanyBankAccountUpdate(BaseModel):
+    label: Optional[str] = None
+    account_name: Optional[str] = None
+    bank_name: Optional[str] = None
+    sort_code: Optional[str] = None
+    account_number: Optional[str] = None
+    iban: Optional[str] = None
+    swift_code: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class CompanyBankAccountResponse(CompanyBankAccountBase):
+    id: int
+    company_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class InvoiceStatementLine(BaseModel):
+    date: str
+    kind: str
+    item: str
+    amount: float
+    balance: float
+    invoice_id: Optional[int] = None
+    due_date: Optional[str] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    status: Optional[str] = None
+    method: Optional[str] = None
+
+
+class InvoiceStatementResponse(BaseModel):
+    company: dict
+    client: dict
+    site: Optional[dict] = None
+    date_from: str
+    date_to: str
+    currency: str = "GBP"
+    summary: dict
+    lines: list[InvoiceStatementLine]
 
 
 class InvoiceAuditEntry(BaseModel):
@@ -1485,6 +1638,54 @@ class PaymentResponse(PaymentBase):
     id: int
     company_id: int
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CreditNoteCreate(BaseModel):
+    invoice_id: int
+    client_id: Optional[int] = None
+    site_id: Optional[int] = None
+    credit_date: Optional[date] = None
+    reason: Optional[str] = None
+    description: Optional[str] = None
+    subtotal: float = Field(..., gt=0, le=99_999_999.99)
+    tax_rate: Optional[float] = None
+    status: Optional[str] = "issued"
+    number: Optional[str] = None
+
+
+class CreditNoteUpdate(BaseModel):
+    site_id: Optional[int] = None
+    credit_date: Optional[date] = None
+    reason: Optional[str] = None
+    description: Optional[str] = None
+    subtotal: Optional[float] = Field(None, gt=0, le=99_999_999.99)
+    tax_rate: Optional[float] = None
+    status: Optional[str] = None
+
+
+class CreditNoteResponse(BaseModel):
+    id: int
+    company_id: int
+    invoice_id: int
+    client_id: Optional[int] = None
+    site_id: Optional[int] = None
+    number: str
+    credit_date: date
+    reason: Optional[str] = None
+    description: Optional[str] = None
+    subtotal: float
+    tax_rate: float = 0
+    tax_amount: float = 0
+    total: float
+    status: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    invoice_number: Optional[str] = None
+    client_name: Optional[str] = None
+    site_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -2323,6 +2524,8 @@ class PatrolRouteCreate(BaseModel):
     frequency_minutes: int = Field(default=60, ge=5, le=24 * 60)
     start_time: str = "22:00"
     end_time: str = "06:00"
+    reminder_minutes: int = Field(default=10, ge=0, le=120)
+    grace_minutes: int = Field(default=15, ge=0, le=120)
     status: str = "active"
 
 
@@ -2331,6 +2534,8 @@ class PatrolRouteUpdate(BaseModel):
     frequency_minutes: Optional[int] = Field(default=None, ge=5, le=24 * 60)
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    reminder_minutes: Optional[int] = Field(default=None, ge=0, le=120)
+    grace_minutes: Optional[int] = Field(default=None, ge=0, le=120)
     status: Optional[str] = None
 
 
@@ -2388,6 +2593,8 @@ class PatrolRouteResponse(BaseModel):
     frequency_minutes: int
     start_time: str
     end_time: str
+    reminder_minutes: int = 10
+    grace_minutes: int = 15
     status: str
     checkpoint_count: int = 0
     created_at: datetime
@@ -2395,6 +2602,46 @@ class PatrolRouteResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PatrolOccurrenceResponse(BaseModel):
+    id: int
+    company_id: int
+    site_id: int
+    site_name: Optional[str] = None
+    route_id: int
+    route_name: Optional[str] = None
+    checkpoint_id: int
+    checkpoint_name: Optional[str] = None
+    checkpoint_code: Optional[str] = None
+    guard_id: int
+    guard_name: Optional[str] = None
+    session_id: Optional[int] = None
+    assignment_id: Optional[int] = None
+    scheduled_at: datetime
+    status: str
+    reminder_sent_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    late_minutes: Optional[float] = None
+    log_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PatrolDashboardKpis(BaseModel):
+    total_scheduled: int = 0
+    completed: int = 0
+    on_time: int = 0
+    late: int = 0
+    missed: int = 0
+    pending: int = 0
+    average_lateness_minutes: float = 0
+    completion_rate_pct: float = 100
+    missed_by_site: list[dict] = []
+    missed_by_guard: list[dict] = []
+    late_by_site: list[dict] = []
+    late_by_guard: list[dict] = []
 
 
 class PatrolSessionStart(BaseModel):

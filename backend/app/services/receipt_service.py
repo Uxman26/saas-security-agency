@@ -179,6 +179,8 @@ def company_subscription_blocked(db: Session, user: User) -> dict | None:
     status = (co.subscription_status or "pending").lower()
     if status == "active":
         return None
+    if status == "past_due":
+        return None
     if status == "trialing":
         end = co.subscription_end
         if end is not None:

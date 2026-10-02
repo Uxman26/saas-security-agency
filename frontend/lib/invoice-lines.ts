@@ -58,7 +58,7 @@ export function groupInvoiceLines(lines: InvoiceLine[]): InvoiceDayRow[] {
       shiftDate: iso,
       label: fmtDayLabel(iso),
       siteNames,
-      operatives: guardIds.size || null,
+      operatives: guardIds.size || group.length,
       hours,
       // A single rate cell must not imply an agreed rate that does not exist, so a mixed
       // day shows the blended figure and is flagged as such.

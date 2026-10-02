@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models import Guard, User
@@ -47,13 +47,33 @@ STATUS_OPTIONS = {
 
 
 def _registered_guard_ids(db: Session, company_id: int) -> set[int]:
-    rows = (
-        db.query(User.guard_id)
+    """Guards that already have a portal login.
+
+    A login counts when ``User.guard_id`` points at the guard, or — for older rows that
+    never had guard_id set — when the user's email matches the guard's email.
+    """
+    by_id = {
+        r[0]
+        for r in db.query(User.guard_id)
         .filter(User.company_id == company_id, User.guard_id.isnot(None))
         .distinct()
         .all()
+        if r[0]
+    }
+    email_rows = (
+        db.query(User.email, Guard.id)
+        .join(Guard, func.lower(Guard.email) == func.lower(User.email))
+        .filter(
+            User.company_id == company_id,
+            Guard.company_id == company_id,
+            User.guard_id.is_(None),
+            User.email.isnot(None),
+            Guard.email.isnot(None),
+        )
+        .all()
     )
-    return {r[0] for r in rows if r[0]}
+    by_email = {gid for _, gid in email_rows if gid}
+    return by_id | by_email
 
 
 def _sort_key(sort: str):
@@ -137,6 +157,11 @@ def list_employee_hub(
         else:
             rows = [g for g in rows if any(t["id"] == team_id for t in teams_by_guard.get(g.id, []))]
 
+    # KPI counts stay on the unfiltered membership so Status / View never collapses the
+    # Not registered and Terminated cards to the size of the current result.
+    kpi_not_registered = sum(1 for g in rows if g.id not in registered)
+    scope_total = len(rows)
+
     if status == "active":
         rows = [g for g in rows if g.termination_date is None]
     elif status == "terminated":
@@ -191,7 +216,8 @@ def list_employee_hub(
 
     return {
         "total": len(employees),
-        "not_registered": sum(1 for e in employees if not e["registered"]),
+        "scope_total": scope_total,
+        "not_registered": kpi_not_registered,
         "terminated_count": terminated_count,
         "groups": groups,
         "employees": employees,

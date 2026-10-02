@@ -227,7 +227,11 @@ function EmployeeProfile() {
               </div>
 
               {tab === 'absence' ? (
-                <AbsenceTab guardId={guard.id} canEdit={canEdit} />
+                <AbsenceTab
+                  guardId={guard.id}
+                  canCreate={canModule(user, 'absence', 'create')}
+                  canDelete={canModule(user, 'absence', 'delete')}
+                />
               ) : tab === 'employment' ? (
                 <EmploymentTab
                   guard={guard}

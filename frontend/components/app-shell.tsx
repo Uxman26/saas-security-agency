@@ -26,6 +26,7 @@ import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
 import { ControlOpsAssistant } from '@/components/assistant/controlops-assistant';
 import { QuickActionsMenu } from '@/components/quick-actions-menu';
+import { GlobalSearch } from '@/components/global-search';
 import { useModuleLabel } from '@/lib/module-i18n';
 
 function mActive(pathname: string, href: string) {
@@ -103,7 +104,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
             <CompanyBrand className="min-w-0 truncate text-primary text-sm [&_span]:truncate [&_span]:text-primary" />
           </div>
-          <div className="hidden flex-1 md:block" />
+          <div className="hidden flex-1 md:flex md:justify-center md:px-4">
+            <GlobalSearch />
+          </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
             <QuickActionsMenu />
             <LanguageSwitcher />

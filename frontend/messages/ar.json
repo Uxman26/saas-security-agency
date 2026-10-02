@@ -95,7 +95,9 @@
     "compliance": "الامتثال ({count})",
     "contracts": "عقود قاربت على الانتهاء ({count})",
     "ends": "ينتهي {date}",
-    "viewDashboard": "عرض لوحة التحكم"
+    "viewDashboard": "عرض لوحة التحكم",
+    "muteNotifications": "كتم صوت الإشعارات",
+    "unmuteNotifications": "إلغاء كتم صوت الإشعارات"
   },
   "app": {
     "openStatus": "مفتوح",
@@ -348,7 +350,13 @@
     "reports": "التقارير",
     "invoices": "الفواتير",
     "expenses": "المصروفات",
-    "payments": "المدفوعات",
+    "payments": "المعاملات",
+    "statements": "الكشوفات",
+    "customInvoices": "فواتير مخصصة",
+    "vendors": "الموردون",
+    "fixedExpenses": "مصروفات ثابتة",
+    "recurringInvoices": "فواتير متكررة",
+    "chartOfAccounts": "دليل الحسابات",
     "allowances": "البدلات",
     "specialDays": "أيام خاصة",
     "company": "الشركة",

@@ -215,10 +215,17 @@ def get_all_attendance(
 
 def create_attendance(db: Session, data: AttendanceCreate, user_id: int) -> Attendance:
     company = get_company_by_user_id(db, user_id)
-    a = db.query(Assignment).join(Guard).filter(
-        Assignment.id == data.assignment_id,
-        Guard.company_id == company.id
-    ).first()
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import assert_not_portal_role, visible_assignment_or_404
+
+    if user:
+        assert_not_portal_role(user)
+    a = visible_assignment_or_404(db, user, data.assignment_id, company.id) if user else None
+    if not a:
+        a = db.query(Assignment).join(Guard).filter(
+            Assignment.id == data.assignment_id,
+            Guard.company_id == company.id
+        ).first()
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found")
     guard = db.query(Guard).filter(Guard.id == data.guard_id, Guard.company_id == company.id).first()
@@ -247,12 +254,18 @@ def create_attendance(db: Session, data: AttendanceCreate, user_id: int) -> Atte
 
 def get_attendance_for_assignment(db: Session, assignment_id: int, user_id: int) -> List[Attendance]:
     company = get_company_by_user_id(db, user_id)
-    a = db.query(Assignment).join(Guard).filter(
-        Assignment.id == assignment_id,
-        Guard.company_id == company.id
-    ).first()
-    if not a:
-        raise HTTPException(status_code=404, detail="Assignment not found")
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import visible_assignment_or_404
+
+    if user:
+        visible_assignment_or_404(db, user, assignment_id, company.id)
+    else:
+        a = db.query(Assignment).join(Guard).filter(
+            Assignment.id == assignment_id,
+            Guard.company_id == company.id
+        ).first()
+        if not a:
+            raise HTTPException(status_code=404, detail="Assignment not found")
     rows = (
         db.query(Attendance)
         .options(joinedload(Attendance.updated_by))
@@ -264,10 +277,17 @@ def get_attendance_for_assignment(db: Session, assignment_id: int, user_id: int)
 
 def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
     company = get_company_by_user_id(db, user_id)
-    a = db.query(Assignment).join(Guard).filter(
-        Assignment.id == data.assignment_id,
-        Guard.company_id == company.id
-    ).first()
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import assert_not_client_portal, visible_assignment_or_404
+
+    if user:
+        assert_not_client_portal(user)
+        a = visible_assignment_or_404(db, user, data.assignment_id, company.id)
+    else:
+        a = db.query(Assignment).join(Guard).filter(
+            Assignment.id == data.assignment_id,
+            Guard.company_id == company.id
+        ).first()
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found")
     att = db.query(Attendance).filter(
@@ -329,6 +349,11 @@ def get_late_summary(db: Session, user_id: int, start: Optional[date] = None, en
 
 
 def update_attendance(db: Session, attendance_id: int, data: AttendanceUpdate, user_id: int) -> Attendance:
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import assert_not_portal_role
+
+    if user:
+        assert_not_portal_role(user)
     att = _get_owned_attendance(db, attendance_id, user_id)
     payload = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
     if "status" in payload and payload["status"] is not None:
@@ -368,6 +393,11 @@ def update_attendance(db: Session, attendance_id: int, data: AttendanceUpdate, u
 
 def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShiftRequest) -> Attendance:
     company = get_company_by_user_id(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import assert_not_client_portal, visible_assignment_or_404
+
+    if user:
+        assert_not_client_portal(user)
     status = _normalize_status(data.status)
     note = (data.note or "").strip()
     if status != "on_time" and not note:
@@ -375,13 +405,13 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
     paid_hours = validated_paid_hours(status, data.paid_hours)
     a = find_assignment(db, company.id, data.guard_id, data.date, data.shift_start, data.site_name or "")
     if not a:
-        # Published staff may have new/edited shifts that are not yet mirrored to assignments.
-        # Re-publish that guard from any covering published rota, then retry the lookup.
         a = _ensure_assignment_from_published_rota(
             db, user_id, company.id, data.guard_id, data.date, data.shift_start, data.site_name or ""
         )
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found for this shift (publish the rota first)")
+    if user:
+        visible_assignment_or_404(db, user, a.id, company.id)
     att = (
         db.query(Attendance)
         .filter(Attendance.assignment_id == a.id, Attendance.guard_id == a.guard_id)
@@ -396,8 +426,6 @@ def upsert_attendance_by_shift(db: Session, user_id: int, data: AttendanceByShif
     att.paid_hours = paid_hours
     att.updated_by_user_id = user_id
     if status in ("absent", "no_show") or status in CANCELLED_STATUSES:
-        # Nobody turned up, so there is no book-on to record — including on a paid
-        # cancellation, where the pay is agreed rather than worked.
         pass
     elif status == "late" and not att.booked_at:
         att.booked_at = datetime.utcnow()
@@ -536,6 +564,11 @@ def sync_published_plan_attendance(db: Session, user_id: int, plan) -> None:
 
 
 def delete_attendance(db: Session, attendance_id: int, user_id: int) -> None:
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import assert_not_portal_role
+
+    if user:
+        assert_not_portal_role(user)
     att = _get_owned_attendance(db, attendance_id, user_id)
     db.delete(att)
     db.commit()

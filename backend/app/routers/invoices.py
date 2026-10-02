@@ -219,7 +219,20 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         balance_due=balance,
         payments=payments_out,
         credit_notes=credit_notes_out,
+        column_headers=_column_headers(inv),
     )
+
+
+def _column_headers(inv: Invoice) -> dict | None:
+    raw = getattr(inv, "column_headers_json", None)
+    if not raw:
+        return None
+    try:
+        import json
+        data = json.loads(raw) if isinstance(raw, str) else raw
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
 
 
 @router.post("", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
@@ -268,10 +281,11 @@ def generate_invoice(
 
 @router.get("/statement", response_model=InvoiceStatementResponse)
 def get_statement(
-    client_id: int,
     date_from: date,
     date_to: date,
+    client_id: Optional[int] = None,
     site_id: Optional[int] = None,
+    statement_type: str = "all",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("invoices", "view")),
 ):
@@ -282,15 +296,17 @@ def get_statement(
         site_id=site_id,
         date_from=date_from,
         date_to=date_to,
+        statement_type=statement_type,
     )
 
 
 @router.get("/statement/pdf")
 def statement_pdf(
-    client_id: int,
     date_from: date,
     date_to: date,
+    client_id: Optional[int] = None,
     site_id: Optional[int] = None,
+    statement_type: str = "all",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("invoices", "pdf_download")),
 ):
@@ -301,9 +317,10 @@ def statement_pdf(
         site_id=site_id,
         date_from=date_from,
         date_to=date_to,
+        statement_type=statement_type,
     )
     body = render_statement_pdf(data)
-    name = f"statement-{client_id}-{date_from}-{date_to}.pdf"
+    name = f"statement-{statement_type}-{site_id or client_id}-{date_from}-{date_to}.pdf"
     return Response(
         content=body,
         media_type="application/pdf",

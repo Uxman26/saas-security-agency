@@ -272,6 +272,8 @@ def render_subscription_invoice_pdf(inv: SubscriptionInvoice, company: Optional[
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+    from app.services.pdf_branding import branded_bottom_margin, build_branded
+
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -279,7 +281,7 @@ def render_subscription_invoice_pdf(inv: SubscriptionInvoice, company: Optional[
         leftMargin=1.6 * cm,
         rightMargin=1.6 * cm,
         topMargin=1.4 * cm,
-        bottomMargin=1.4 * cm,
+        bottomMargin=branded_bottom_margin(1.4 * cm),
     )
     styles = getSampleStyleSheet()
     title = ParagraphStyle("InvTitle", parent=styles["Heading1"], fontSize=18, spaceAfter=4)
@@ -361,7 +363,7 @@ def render_subscription_invoice_pdf(inv: SubscriptionInvoice, company: Optional[
     story.append(totals_table)
     story.append(Spacer(1, 24))
     story.append(Paragraph("Thank you for your subscription. Download this invoice for your records.", muted))
-    doc.build(story)
+    build_branded(doc, story)
     return buf.getvalue()
 
 

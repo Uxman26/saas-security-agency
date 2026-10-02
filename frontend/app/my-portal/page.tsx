@@ -22,7 +22,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import { can } from '@/lib/permissions';
+import { can, canModule } from '@/lib/permissions';
 import type {
   Incident,
   PatrolComplianceRow,
@@ -39,11 +39,23 @@ type Tab = 'sites' | 'current' | 'upcoming' | 'previous' | 'hours' | 'patrol' | 
 
 export default function MyPortalPage() {
   const { user } = useAuth();
-  const canUpcoming = can(user, 'portal.rota.upcoming');
-  const canPrevious = can(user, 'portal.rota.previous');
-  const canPatrol = can(user, 'patrol.read') || can(user, 'patrol.scan') || can(user, 'patrol.reports');
-  const canIncidentRead = can(user, 'incident.read');
-  const canIncidentWrite = can(user, 'incident.write');
+  const canUpcoming = canModule(user, 'my_portal', 'rota_upcoming') || can(user, 'portal.rota.upcoming');
+  const canPrevious = canModule(user, 'my_portal', 'rota_previous') || can(user, 'portal.rota.previous');
+  const canPatrol =
+    canModule(user, 'my_portal', 'patrol_today') ||
+    canModule(user, 'my_portal', 'patrol_compliance') ||
+    can(user, 'patrol.read') ||
+    can(user, 'patrol.scan') ||
+    can(user, 'patrol.reports');
+  const canIncidentRead =
+    canModule(user, 'my_portal', 'incidents_view') ||
+    can(user, 'incident.read') ||
+    canModule(user, 'incidents', 'view');
+  const canIncidentWrite =
+    canModule(user, 'my_portal', 'incidents_create') ||
+    can(user, 'incident.write') ||
+    canModule(user, 'incidents', 'create');
+  const canClientPortal = canModule(user, 'client_portal', 'view') || canModule(user, 'client_portal', 'create');
   const isStaff = (user?.role || '').toLowerCase() === 'staff' || canUpcoming;
 
   const tabs = useMemo(
@@ -97,7 +109,7 @@ export default function MyPortalPage() {
     api.portal
       .sites()
       .then(setSites)
-      .catch(() => {});
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to load sites'));
   }, [user]);
 
   const loadTab = useCallback(async () => {
@@ -183,12 +195,23 @@ export default function MyPortalPage() {
             title={
               <span className="flex items-center gap-2">
                 <UserCircle className="size-7 text-primary" />
-                {isStaff ? 'Staff portal' : 'Client portal'}
+                My workspace
               </span>
             }
-            description="View your sites, rotas, patrol status, and incidents."
+            description={
+              isStaff
+                ? 'Your sites, rotas, patrol status, and incidents.'
+                : 'Your sites, rotas, patrol compliance, and incidents.'
+            }
             actions={
-              <PortalSiteSwitcher sites={sites} siteId={siteId} onChange={selectSite} />
+              <div className="flex flex-wrap items-center gap-2">
+                {canClientPortal ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href="/client-portal">Request staff</a>
+                  </Button>
+                ) : null}
+                <PortalSiteSwitcher sites={sites} siteId={siteId} onChange={selectSite} />
+              </div>
             }
           />
 

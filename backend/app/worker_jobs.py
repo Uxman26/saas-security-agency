@@ -166,3 +166,23 @@ def _sweep_renewal_invoices_sync() -> dict[str, Any]:
 
 async def sweep_renewal_invoices(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_sweep_renewal_invoices_sync)
+
+
+def _sweep_finance_recurring_sync() -> dict[str, Any]:
+    def run():
+        db: Session = SessionLocal()
+        try:
+            from app.services import accounting_service
+
+            fixed = accounting_service.run_fixed_expenses(db)
+            recurring = accounting_service.run_recurring_invoices(db)
+            logger.info("finance recurring: fixed=%s recurring=%s", fixed, recurring)
+            return {"fixed_expenses": fixed, "recurring_invoices": recurring}
+        finally:
+            db.close()
+
+    return _track_job("sweep_finance_recurring", run)()
+
+
+async def sweep_finance_recurring(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_sweep_finance_recurring_sync)

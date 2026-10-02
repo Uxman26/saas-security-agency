@@ -63,6 +63,7 @@ export interface User {
   sidebar_modules?: string[] | null;
   enabled_modules?: Record<string, boolean> | null;
   theme_preference?: 'light' | 'dark' | 'system' | null;
+  notification_sound_muted?: boolean;
   client_id?: number | null;
   guard_id?: number | null;
   module_access?: ModuleAccess[];
@@ -730,6 +731,10 @@ export interface Guard {
   salary_amount?: number | null;
   salary_rate?: string | null;
   salary_frequency?: string | null;
+  employment_pay_type?: string | null;
+  pay_method?: string | null;
+  hourly_rate?: number | null;
+  per_job_rate?: number | null;
   payroll_number?: string | null;
   pension_scheme?: string | null;
   pension_contribution?: string | null;
@@ -1292,6 +1297,7 @@ export interface InvoiceStatement {
   date_from: string;
   date_to: string;
   currency: string;
+  statement_type?: 'all' | 'outstanding' | string;
   summary: {
     opening_balance: number;
     invoiced: number;
@@ -1507,6 +1513,7 @@ export interface PayrollPreviewShift {
   scheduled_hours: number;
   payable: boolean;
   amount: number;
+  note?: string | null;
 }
 
 export interface PayrollPreviewSite {
@@ -1614,6 +1621,7 @@ export interface Invoice {
   balance_due?: number;
   payments?: Payment[];
   credit_notes?: CreditNote[];
+  column_headers?: Record<string, string> | null;
 }
 
 export interface CreditNote {
@@ -1938,6 +1946,7 @@ export interface Expense {
   company_id: number;
   expense_date: string;
   category: string;
+  vendor_id?: number | null;
   vendor_name?: string | null;
   reference_number?: string | null;
   description?: string | null;
@@ -1950,6 +1959,120 @@ export interface Expense {
   has_document: boolean;
   created_at: string;
   updated_at?: string | null;
+}
+
+export interface Vendor {
+  id: number;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  status: string;
+}
+
+export interface FixedExpense {
+  id: number;
+  vendor_id?: number | null;
+  category: string;
+  description: string;
+  amount: number;
+  vat_rate: number;
+  day_of_month: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  next_run?: string | null;
+  status: string;
+  account_code?: string | null;
+}
+
+export interface RecurringInvoice {
+  id: number;
+  client_id?: number | null;
+  site_id?: number | null;
+  frequency: string;
+  day_of_month: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  next_run?: string | null;
+  tax_rate: number;
+  notes?: string | null;
+  template_json?: string | null;
+  status: string;
+  last_invoice_id?: number | null;
+}
+
+export interface Account {
+  id: number;
+  code: string;
+  name: string;
+  account_type: string;
+  parent_id?: number | null;
+  level: number;
+  is_system?: boolean;
+  status?: string;
+}
+
+export interface TrialBalanceRow {
+  code: string;
+  name: string;
+  type: string;
+  debit: number;
+  credit: number;
+}
+
+export interface ProfitLossReport {
+  income: number;
+  expenses: number;
+  net: number;
+  date_from?: string | null;
+  date_to?: string | null;
+  rows: TrialBalanceRow[];
+}
+
+export interface BalanceSheetReport {
+  assets: number;
+  liabilities: number;
+  equity: number;
+  as_of?: string | null;
+  rows: TrialBalanceRow[];
+}
+
+export interface CashFlowReport {
+  inflows: number;
+  outflows: number;
+  net: number;
+  date_from?: string | null;
+  date_to?: string | null;
+  rows: {
+    date: string;
+    reference?: string | null;
+    memo?: string | null;
+    direction: string;
+    amount: number;
+    source_type?: string | null;
+  }[];
+}
+
+export interface GeneralLedgerRow {
+  entry_id: number;
+  date: string;
+  reference?: string | null;
+  memo?: string | null;
+  source_type?: string | null;
+  source_id?: number | null;
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  debit: number;
+  credit: number;
+}
+
+export interface AgingReport {
+  as_of: string;
+  buckets: Record<string, number>;
+  total: number;
+  rows: Record<string, string | number | null>[];
 }
 
 export interface ExpenseMeta {
@@ -2524,6 +2647,7 @@ export interface EmployeeHubGroup {
 
 export interface EmployeeHub {
   total: number;
+  scope_total?: number;
   not_registered: number;
   terminated_count: number;
   groups: EmployeeHubGroup[];

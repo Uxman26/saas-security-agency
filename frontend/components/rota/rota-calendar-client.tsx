@@ -33,7 +33,7 @@ import { contractorMatcher, usedContractorOptions } from '@/lib/contractor-match
 import { guardFormDefaults, formToGuardPayload } from '@/lib/guard-form-map';
 import { guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
-import { canModule } from '@/lib/permissions';
+import { canModule, isPortalRole } from '@/lib/permissions';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -322,28 +322,24 @@ export function RotaCalendarClient() {
   const searchParams = useSearchParams();
   const planIdParam = searchParams.get('id');
   const { user } = useAuth();
-  const canCreateStaff = canModule(user, 'guards', 'create');
-  const canViewStaff = canModule(user, 'guards', 'view');
+  const portal = isPortalRole(user);
   /**
    * Portal logins reach this screen read-only: the API serves them a copy of the rota
    * rebuilt from their own sites' assignments and refuses every write. Hiding the
    * editing controls keeps the screen honest rather than offering buttons that 403.
+   * Staff may hold rota.edit for mobile OT/early-finish without unlocking the planner.
    */
-  const canEditRota = canModule(user, 'rota', 'edit');
-  /**
-   * The rest of the rota's catalogue actions, each gating the control that calls the
-   * endpoint it guards. They are genuinely independent of `edit` — a role can hold
-   * Publish without Edit, or Edit without Delete — so a single canEditRota flag would
-   * either hide controls a role is entitled to or offer ones the API will refuse.
-   */
-  const canCreateShift = canModule(user, 'rota', 'create');
-  const canDeleteShift = canModule(user, 'rota', 'delete');
-  const canPublishRota = canModule(user, 'rota', 'publish');
-  const canUnpublishRota = canModule(user, 'rota', 'unpublish');
-  const canUnpublishGuard = canModule(user, 'rota', 'unpublish_guard');
+  const canEditRota = !portal && canModule(user, 'rota', 'edit');
+  const canCreateShift = !portal && canModule(user, 'rota', 'create');
+  const canDeleteShift = !portal && canModule(user, 'rota', 'delete');
+  const canPublishRota = !portal && canModule(user, 'rota', 'publish');
+  const canUnpublishRota = !portal && canModule(user, 'rota', 'unpublish');
+  const canUnpublishGuard = !portal && canModule(user, 'rota', 'unpublish_guard');
   const canExportRota = canModule(user, 'rota', 'export');
-  const canLogOvertime = canEditRota && canModule(user, 'rota', 'log_overtime');
-  const canLogEarlyFinish = canEditRota && canModule(user, 'rota', 'log_early_finish');
+  const canLogOvertime = !portal && canEditRota && canModule(user, 'rota', 'log_overtime');
+  const canLogEarlyFinish = !portal && canEditRota && canModule(user, 'rota', 'log_early_finish');
+  const canCreateStaff = !portal && canModule(user, 'guards', 'create');
+  const canViewStaff = canModule(user, 'guards', 'view');
   const [showAi, setShowAi] = useState(false);
   /** Payable money is a separate permission — the column collapses entirely without it. */
   const showPayable = canModule(user, 'rota_payable', 'view');

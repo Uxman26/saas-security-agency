@@ -437,7 +437,7 @@ export default function GuardsPage() {
     {
       key: 'total',
       label: 'Employees',
-      value: hub?.total ?? guards.length,
+      value: hub?.scope_total ?? hub?.total ?? guards.length,
       icon: Users,
       tone: 'neutral',
       caption: listView === 'archived' ? 'archived' : 'in this view',
@@ -445,7 +445,7 @@ export default function GuardsPage() {
     {
       key: 'registered',
       label: 'With a portal login',
-      value: (hub?.total ?? 0) - (hub?.not_registered ?? 0),
+      value: Math.max(0, (hub?.scope_total ?? hub?.total ?? 0) - (hub?.not_registered ?? 0)),
       icon: BadgeCheck,
       tone: 'positive',
     },
@@ -456,7 +456,21 @@ export default function GuardsPage() {
       icon: UserPlus,
       tone: 'info',
       action: hub?.not_registered
-        ? { label: 'View', onClick: () => setHubQuery({ ...hubQuery, status: 'not_registered' }) }
+        ? {
+            label: 'View',
+            onClick: () => {
+              setTab('staff');
+              setListView('active');
+              setHubView('teams');
+              setSearch('');
+              setFilterContractor('all');
+              setFilterSubContractor('all');
+              setFilterArea('');
+              setFilterPostcode('');
+              setFilterNearby('');
+              setHubQuery({ ...EMPTY_HUB_QUERY, status: 'not_registered', includeTerminated: false });
+            },
+          }
         : undefined,
     },
     {
@@ -474,7 +488,21 @@ export default function GuardsPage() {
       icon: UserMinus,
       tone: 'muted',
       action: hub?.terminated_count
-        ? { label: 'View', onClick: () => setHubQuery({ ...hubQuery, status: 'terminated', includeTerminated: true }) }
+        ? {
+            label: 'View',
+            onClick: () => {
+              setTab('staff');
+              setListView('active');
+              setHubView('teams');
+              setSearch('');
+              setFilterContractor('all');
+              setFilterSubContractor('all');
+              setFilterArea('');
+              setFilterPostcode('');
+              setFilterNearby('');
+              setHubQuery({ ...EMPTY_HUB_QUERY, status: 'terminated', includeTerminated: true });
+            },
+          }
         : undefined,
     },
   ];
@@ -569,7 +597,7 @@ export default function GuardsPage() {
               onViewChange={setHubView}
               notRegistered={hub?.not_registered ?? 0}
               terminatedCount={hub?.terminated_count ?? 0}
-              showStatus={hubView === 'teams'}
+              showStatus
             />
           </div>
 

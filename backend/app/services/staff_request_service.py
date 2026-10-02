@@ -100,11 +100,17 @@ def _append_shift_to_plan(
     except json.JSONDecodeError:
         data = _empty_planner(plan)
     dk = shift_date.isoformat()
-    if dk not in (data.get("days") or []):
-        raise HTTPException(
-            status_code=400,
-            detail="Shift date is outside the target rota period. Extend the rota or pick another draft plan.",
-        )
+    days = list(data.get("days") or [])
+    if dk not in days:
+        days.append(dk)
+        days.sort()
+        data["days"] = days
+        try:
+            plan.start_date = min(plan.start_date, shift_date) if plan.start_date else shift_date
+            plan.end_date = max(plan.end_date, shift_date) if plan.end_date else shift_date
+            plan.day_count = len(days)
+        except Exception:
+            pass
     employees = data.get("employees") or []
     if not any(e.get("id") == OPEN_EMP_ID for e in employees):
         employees.append(dict(OPEN_EMP))
@@ -203,6 +209,9 @@ def _create_staff_request_row(
 def create_staff_request(db: Session, user: User, data: StaffRequestCreate) -> StaffRequestResponse:
     company = get_company_by_user_id(db, user.id)
     client_id = _resolve_client_id(db, user, data)
+    from app.services.portal_access import assert_site_visible
+
+    assert_site_visible(db, user, data.site_id)
     site = (
         db.query(Site)
         .filter(Site.id == data.site_id, Site.company_id == company.id)
@@ -233,6 +242,9 @@ def create_staff_request(db: Session, user: User, data: StaffRequestCreate) -> S
 def create_staff_requests_bulk(db: Session, user: User, data: StaffRequestBulkCreate) -> list[StaffRequestResponse]:
     company = get_company_by_user_id(db, user.id)
     client_id = _resolve_client_id(db, user, data)
+    from app.services.portal_access import assert_site_visible
+
+    assert_site_visible(db, user, data.site_id)
     site = (
         db.query(Site)
         .filter(Site.id == data.site_id, Site.company_id == company.id)

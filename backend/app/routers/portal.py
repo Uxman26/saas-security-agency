@@ -8,6 +8,8 @@ from app.database import get_db
 from app.models import User
 from app.rbac import require_module
 from app.schemas import (
+    ClientResponse,
+    GuardResponse,
     IncidentCreate,
     IncidentResponse,
     PatrolComplianceRow,
@@ -19,6 +21,24 @@ from app.schemas import (
 from app.services import incident_service, patrol_service, portal_service
 
 router = APIRouter(prefix="/portal", tags=["portal"])
+
+
+@router.get("/me/profile", response_model=GuardResponse)
+def portal_staff_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    """The authenticated staff member's own employee record for the mobile profile screen."""
+    return portal_service.portal_staff_profile(db, current_user)
+
+
+@router.get("/me/client-profile", response_model=ClientResponse)
+def portal_client_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    """The authenticated client login's linked client record."""
+    return portal_service.portal_client_profile(db, current_user)
 
 
 @router.get("/sites", response_model=list[SiteResponse])

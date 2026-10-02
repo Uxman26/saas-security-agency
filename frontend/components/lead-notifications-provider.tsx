@@ -4,6 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import { can } from '@/lib/permissions';
+import {
+  playNotificationSound,
+  readSoundMuted,
+  syncMuteToServiceWorker,
+  unlockNotificationAudio,
+  writeSoundMutedLocal,
+} from '@/lib/notification-sound';
 import type { ComplianceAlert, ContractExpiryAlert } from '@/lib/types';
 
 export type LeadNotif = {
@@ -23,6 +30,8 @@ type AlertsContextValue = {
   leadAlerts: LeadNotif[];
   unreadCount: number;
   badgeCount: number;
+  soundMuted: boolean;
+  setSoundMuted: (muted: boolean) => Promise<void>;
   refreshAlerts: () => Promise<void>;
   markLeadRead: (id: number) => Promise<void>;
   markAllLeadRead: () => Promise<void>;
@@ -38,18 +47,56 @@ export function isNotifUnread(n: LeadNotif) {
 }
 
 export function LeadNotificationsProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const seenBrowser = useRef<Set<number>>(new Set());
   const acknowledgedUnread = useRef<Set<number>>(new Set());
   const lastUnread = useRef(0);
+  const soundPrimed = useRef(false);
   const [complianceAlerts, setComplianceAlerts] = useState<ComplianceAlert[]>([]);
   const [contractAlerts, setContractAlerts] = useState<ContractExpiryAlert[]>([]);
   const [leadAlerts, setLeadAlerts] = useState<LeadNotif[]>([]);
   const [serverUnread, setServerUnread] = useState(0);
   const [badgeEpoch, setBadgeEpoch] = useState(0);
+  const [soundMuted, setSoundMutedState] = useState(false);
 
   const canReadLeads = Boolean(
     user && user.role !== 'super_admin' && user.enabled_modules?.leads !== false && can(user, 'leads.read')
+  );
+
+  useEffect(() => {
+    if (!user) {
+      setSoundMutedState(false);
+      return;
+    }
+    const muted = readSoundMuted(user.id, user.notification_sound_muted);
+    setSoundMutedState(muted);
+    writeSoundMutedLocal(user.id, muted);
+    syncMuteToServiceWorker(muted);
+  }, [user]);
+
+  useEffect(() => {
+    const unlock = () => unlockNotificationAudio();
+    document.addEventListener('pointerdown', unlock, { once: true, passive: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      document.removeEventListener('pointerdown', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  const setSoundMuted = useCallback(
+    async (muted: boolean) => {
+      setSoundMutedState(muted);
+      if (user?.id) writeSoundMutedLocal(user.id, muted);
+      syncMuteToServiceWorker(muted);
+      try {
+        await api.auth.updateNotificationSound(muted);
+        await refreshUser();
+      } catch {
+        /* keep local preference; next refresh will reconcile */
+      }
+    },
+    [user?.id, refreshUser]
   );
 
   const refreshLeadNotifications = useCallback(async () => {
@@ -69,6 +116,8 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
     if (listResult.status === 'fulfilled') {
       const rows = (listResult.value as LeadNotif[]) || [];
       setLeadAlerts(rows);
+      const muted = readSoundMuted(user.id, user.notification_sound_muted);
+      const isFirstPass = !soundPrimed.current;
       for (const notification of rows) {
         if (!isNotifUnread(notification)) continue;
         const id = Number(notification.id);
@@ -80,14 +129,28 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
           notification.entity_type === 'lead' && notification.entity_id
             ? `/leads/${notification.entity_id}`
             : '/leads';
+        if (!isFirstPass) {
+          playNotificationSound(id, muted);
+        }
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           if (navigator.serviceWorker?.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'SHOW_NOTIFICATION', title, body, url });
+            navigator.serviceWorker.controller.postMessage({
+              type: 'SHOW_NOTIFICATION',
+              title,
+              body,
+              url,
+              silent: muted || isFirstPass,
+            });
           } else {
-            new Notification(title, { body });
+            try {
+              new Notification(title, { body, silent: muted || isFirstPass });
+            } catch {
+              /* unsupported options */
+            }
           }
         }
       }
+      soundPrimed.current = true;
     }
   }, [user, canReadLeads]);
 
@@ -202,6 +265,8 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
       leadAlerts,
       unreadCount,
       badgeCount,
+      soundMuted,
+      setSoundMuted,
       refreshAlerts,
       markLeadRead,
       markAllLeadRead,
@@ -213,6 +278,8 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
       leadAlerts,
       unreadCount,
       badgeCount,
+      soundMuted,
+      setSoundMuted,
       refreshAlerts,
       markLeadRead,
       markAllLeadRead,

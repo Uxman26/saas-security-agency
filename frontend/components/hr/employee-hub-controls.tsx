@@ -90,7 +90,14 @@ export function EmployeeHubControls({
               variant="outline"
               size="sm"
               className="h-7"
-              onClick={() => set({ status: 'not_registered', includeTerminated: false })}
+              onClick={() => {
+                onViewChange('teams');
+                onChange({
+                  ...EMPTY_HUB_QUERY,
+                  status: 'not_registered',
+                  includeTerminated: false,
+                });
+              }}
             >
               View
             </Button>

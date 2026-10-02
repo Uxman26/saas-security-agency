@@ -276,13 +276,19 @@ def chat(
         else:
             try:
                 proposal = assistant_rota.parse_shift_request(db, user, msg)
-                warn = proposal.get("warnings") or []
-                reply = (
-                    f"Proposed: {proposal['summary']}\n"
-                    + (f"Warnings: {'; '.join(warn)}\n" if warn else "")
-                    + "Confirm to create these assignments through ControlOps validation, or cancel."
-                )
-                actions.append({"type": "rota_propose", "requires_confirm": True})
+                if proposal.get("needs_clarification"):
+                    reply = proposal.get("message") or "Please clarify which record to use."
+                    options = proposal.get("options") or []
+                    reply += "\n" + "\n".join(f"- {o.get('name')}" for o in options)
+                    actions.append({"type": "rota_clarify", "clarification_type": proposal.get("clarification_type")})
+                else:
+                    warn = proposal.get("warnings") or []
+                    reply = (
+                        f"Proposed: {proposal['summary']}\n"
+                        + (f"Warnings: {'; '.join(warn)}\n" if warn else "")
+                        + "Confirm to create these assignments through ControlOps validation, or cancel."
+                    )
+                    actions.append({"type": "rota_propose", "requires_confirm": True})
             except HTTPException as e:
                 reply = str(e.detail)
         audit_service.log_action(

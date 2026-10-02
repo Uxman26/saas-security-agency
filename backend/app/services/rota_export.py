@@ -66,6 +66,8 @@ def export_planner_rota_pdf(data: dict[str, Any]) -> bytes:
     attendance = data.get("attendance") or {}
     incl_breaks = bool(data.get("inclBreaks", False))
 
+    from app.services.pdf_branding import branded_bottom_margin, build_branded
+
     page = landscape(A4)
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -74,7 +76,7 @@ def export_planner_rota_pdf(data: dict[str, Any]) -> bytes:
         leftMargin=0.5 * cm,
         rightMargin=0.5 * cm,
         topMargin=0.7 * cm,
-        bottomMargin=0.7 * cm,
+        bottomMargin=branded_bottom_margin(0.7 * cm),
     )
     styles = getSampleStyleSheet()
     cell_style = ParagraphStyle(
@@ -178,7 +180,7 @@ def export_planner_rota_pdf(data: dict[str, Any]) -> bytes:
             # Show hours column on the last chunk only
             story.append(build_chunk(chunk, show_hours=(i == len(chunks) - 1)))
 
-    doc.build(story)
+    build_branded(doc, story)
     return buf.getvalue()
 
 
@@ -241,8 +243,17 @@ def export_rota_pdf(details: List[RotaDetailResponse], summary: List[RotaSummary
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+    from app.services.pdf_branding import branded_bottom_margin, build_branded
+
     buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), rightMargin=1 * cm, leftMargin=1 * cm, topMargin=1 * cm, bottomMargin=1 * cm)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        rightMargin=1 * cm,
+        leftMargin=1 * cm,
+        topMargin=1 * cm,
+        bottomMargin=branded_bottom_margin(1 * cm),
+    )
     styles = getSampleStyleSheet()
     story = []
     story.append(Paragraph("Rota — shifts", styles["Title"]))
@@ -300,5 +311,5 @@ def export_rota_pdf(details: List[RotaDetailResponse], summary: List[RotaSummary
             )
         )
         story.append(t2)
-    doc.build(story)
+    build_branded(doc, story)
     return buf.getvalue()

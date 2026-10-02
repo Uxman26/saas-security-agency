@@ -8,11 +8,13 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as pdfcanvas
 
 from app.models import Company, OccurrenceSheet
+from app.services.pdf_branding import BANNER_HEIGHT, draw_marketing_banner
 
 PAGE = landscape(A4)
 W, H = PAGE
 M = 14 * mm
 BLANK_ROWS = 12
+FOOTER_BASE = M + BANNER_HEIGHT + 2
 
 ACCENT = (0.957, 0.318, 0.0)  # #F45100
 NAVY = (0.059, 0.090, 0.165)  # #0F172A
@@ -116,16 +118,16 @@ def _draw_header(
 def _draw_footer(c: pdfcanvas.Canvas, *, blank: bool, sheet: Optional[OccurrenceSheet]) -> None:
     _set_stroke(c, (0.86, 0.89, 0.93))
     c.setLineWidth(0.5)
-    c.line(M, M + 6 * mm, W - M, M + 6 * mm)
+    c.line(M, FOOTER_BASE + 4 * mm, W - M, FOOTER_BASE + 4 * mm)
     c.setFont("Helvetica", 7)
     _set_fill(c, MUTED)
     if blank or sheet is None:
-        c.drawString(M, M + 2 * mm, "Blank form — complete during the shift and return to your supervisor.")
+        c.drawString(M, FOOTER_BASE, "Blank form — complete during the shift and return to your supervisor.")
     else:
         who = sheet.created_by.full_name if getattr(sheet, "created_by", None) else ""
         left = f"Produced by ControlOps{' · ' + who if who else ''}"
-        c.drawString(M, M + 2 * mm, left[:90])
-        c.drawRightString(W - M, M + 2 * mm, "Confidential — for authorised client submission")
+        c.drawString(M, FOOTER_BASE, left[:90])
+        c.drawRightString(W - M, FOOTER_BASE, "Confidential — for authorised client submission")
 
 
 def _draw_summary_strip(c: pdfcanvas.Canvas, y: float, sheet: Optional[OccurrenceSheet], blank: bool) -> float:
@@ -200,7 +202,7 @@ def render_occurrence_pdf(
         xs.append(xs[-1] + w)
 
     row_h = 9.5 * mm
-    bottom = M + 18 * mm
+    bottom = FOOTER_BASE + 16 * mm
     # Estimate rows per page after header/summary
     usable_first = H - M - 52 * mm - bottom
     usable_next = H - M - 28 * mm - bottom
@@ -276,6 +278,7 @@ def render_occurrence_pdf(
                 c.drawString(M + 144 * mm, y, sheet.signature_name[:36])
 
         _draw_footer(c, blank=blank, sheet=sheet)
+        draw_marketing_banner(c, PAGE)
         c.showPage()
 
     c.save()

@@ -175,12 +175,28 @@ def export_report(
     guard_id: Optional[int] = None,
     site_id: Optional[int] = None,
     group_by: str = "guard",
+    action: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("reports", "export")),
 ):
     fmt = format.lower()
     if fmt not in ("csv", "xlsx", "pdf"):
         raise HTTPException(status_code=400, detail="Invalid format")
+    type_perm = {
+        "attendance": "reports.attendance_reports",
+        "shift-hours": "reports.staff_reports",
+        "staff-monthly": "reports.staff_reports",
+        "shift-overtime": "reports.shift_variance_reports",
+        "shift-early-finish": "reports.shift_variance_reports",
+        "shift-lateness": "reports.shift_variance_reports",
+        "shift-history": "reports.shift_history_reports",
+        "invoices": "reports.financial_reports",
+        "subscription": "reports.subscription_reports",
+        "login-logs": "reports.usage_reports",
+        "sms": "reports.usage_reports",
+    }.get(report_type)
+    if type_perm and not user_has_permission_db(db, current_user, type_perm):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     title = f"{report_type} report"
     columns: list[tuple[str, str]] = []
     rows: list[dict] = []
@@ -263,12 +279,15 @@ def export_report(
         ]
         title = "Lateness report"
     elif report_type == "shift-history":
-        # Exporting the audit trail is still reading it, so it needs the same permission
-        # as the report itself rather than the generic export right.
-        if not user_has_permission_db(db, current_user, "reports.shift_history_reports"):
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
         rows = shift_audit_service.shift_history_rows(
-            db, current_user.id, start_date, end_date, guard_id=guard_id, site_id=site_id, limit=5000
+            db,
+            current_user.id,
+            start_date,
+            end_date,
+            guard_id=guard_id,
+            site_id=site_id,
+            action=action,
+            limit=5000,
         )
         columns = [
             ("action_date", "Date"),
@@ -297,11 +316,16 @@ def export_report(
         title = "Subscription invoices"
     elif report_type == "sms":
         from app.services import sms_service
-        logs = sms_service.list_sms_logs(db, current_user.id, 500)
+
+        logs = sms_service.list_sms_logs(db, current_user.id, 500, start_date=start_date, end_date=end_date)
         rows = [
-            {"recipient": l.recipient, "status": l.status, "sent_at": l.sent_at.isoformat() if l.sent_at else "", "body": (l.body or "")[:80]}
+            {
+                "recipient": l.recipient,
+                "status": l.status,
+                "sent_at": l.sent_at.isoformat() if l.sent_at else "",
+                "body": (l.body or "")[:80],
+            }
             for l in logs
-            if l.sent_at and start_date <= l.sent_at.date() <= end_date
         ]
         columns = [("sent_at", "Sent"), ("recipient", "Recipient"), ("status", "Status"), ("body", "Message")]
         title = "SMS logs"

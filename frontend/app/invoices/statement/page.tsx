@@ -12,6 +12,7 @@ import type { Client, InvoiceStatement, Site } from '@/lib/types';
 import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 
 function fmtDate(iso?: string | null) {
@@ -39,6 +40,7 @@ export default function InvoiceStatementPage() {
   const [siteId, setSiteId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [statementType, setStatementType] = useState<'all' | 'outstanding'>('all');
   const [statement, setStatement] = useState<InvoiceStatement | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -58,8 +60,8 @@ export default function InvoiceStatementPage() {
   );
 
   const generate = async () => {
-    if (!clientId || !dateFrom || !dateTo) {
-      toast.error('Select a client and date range');
+    if ((!clientId && !siteId) || !dateFrom || !dateTo) {
+      toast.error('Select a client or site, and a date range');
       return;
     }
     if (dateFrom > dateTo) {
@@ -69,10 +71,11 @@ export default function InvoiceStatementPage() {
     setLoading(true);
     try {
       const data = await api.invoices.statement({
-        client_id: parseInt(clientId, 10),
+        client_id: clientId ? parseInt(clientId, 10) : undefined,
         site_id: siteId ? parseInt(siteId, 10) : undefined,
         date_from: dateFrom,
         date_to: dateTo,
+        statement_type: statementType,
       });
       setStatement(data);
     } catch (e) {
@@ -84,19 +87,20 @@ export default function InvoiceStatementPage() {
   };
 
   const downloadPdf = async () => {
-    if (!clientId || !dateFrom || !dateTo) return;
+    if ((!clientId && !siteId) || !dateFrom || !dateTo) return;
     setDownloading(true);
     try {
       const blob = await api.invoices.statementPdf({
-        client_id: parseInt(clientId, 10),
+        client_id: clientId ? parseInt(clientId, 10) : undefined,
         site_id: siteId ? parseInt(siteId, 10) : undefined,
         date_from: dateFrom,
         date_to: dateTo,
+        statement_type: statementType,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `statement-${clientId}-${dateFrom}-${dateTo}.pdf`;
+      a.download = `statement-${statementType}-${siteId || clientId}-${dateFrom}-${dateTo}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -126,8 +130,8 @@ export default function InvoiceStatementPage() {
           <div className="container mx-auto px-4 py-8 max-w-5xl print:py-0 print:px-0">
             <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-6">
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/invoices">
-                  <ArrowLeft className="size-4 mr-1" /> Back to invoices
+                <Link href="/statements">
+                  <ArrowLeft className="size-4 mr-1" /> Back
                 </Link>
               </Button>
               {statement ? (
@@ -144,19 +148,20 @@ export default function InvoiceStatementPage() {
 
             <div className="no-print rounded-lg border bg-card p-4 mb-6 space-y-4">
               <h1 className="text-lg font-semibold">Statement of Account</h1>
+              <p className="text-sm text-muted-foreground">Generate by client, by site, or both.</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-1">
-                  <Label>Client</Label>
+                  <Label>Client (optional)</Label>
                   <SearchableSelect
                     value={clientId}
                     onChange={(v) => {
                       setClientId(v);
-                      setSiteId('');
                       setStatement(null);
                     }}
                     options={clients.map((c) => ({ value: String(c.id), label: c.name }))}
-                    placeholder="Select client"
+                    placeholder="All clients"
                     searchPlaceholder="Search clients…"
+                    noneOption={{ value: '', label: 'All clients' }}
                   />
                 </div>
                 <div className="space-y-1">
@@ -181,8 +186,26 @@ export default function InvoiceStatementPage() {
                   <Label>To</Label>
                   <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
                 </div>
+                <div className="space-y-1">
+                  <Label>Type</Label>
+                  <Select
+                    value={statementType}
+                    onValueChange={(v) => {
+                      setStatementType(v as 'all' | 'outstanding');
+                      setStatement(null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="outstanding">Outstanding</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <Button onClick={() => void generate()} disabled={loading || !clientId || !dateFrom || !dateTo}>
+              <Button onClick={() => void generate()} disabled={loading || (!clientId && !siteId) || !dateFrom || !dateTo}>
                 {loading ? 'Generating…' : 'Generate statement'}
               </Button>
             </div>
@@ -202,7 +225,9 @@ export default function InvoiceStatementPage() {
                     </div>
                     <div className="text-right">
                       <h2 className="text-2xl font-bold text-slate-900">Statement of Account</h2>
-                      <p className="text-sm text-slate-500">Account activity</p>
+                      <p className="text-sm text-slate-500">
+                        {statement.statement_type === 'outstanding' ? 'Outstanding balances' : 'Account activity'}
+                      </p>
                       {statement.site ? (
                         <p className="text-xs text-slate-500 mt-1">Site: {statement.site.name}</p>
                       ) : null}

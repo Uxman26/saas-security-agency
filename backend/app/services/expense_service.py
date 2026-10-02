@@ -49,6 +49,7 @@ def _to_response(exp: Expense) -> dict:
         "company_id": exp.company_id,
         "expense_date": exp.expense_date,
         "category": exp.category,
+        "vendor_id": getattr(exp, "vendor_id", None),
         "vendor_name": exp.vendor_name,
         "reference_number": exp.reference_number,
         "description": exp.description,
@@ -99,14 +100,25 @@ def get_expense(db: Session, expense_id: int, user_id: int) -> dict:
 
 
 def create_expense(db: Session, data: ExpenseCreate, user_id: int) -> dict:
+    from app.models import Vendor
+    from app.services import accounting_service
+
     company = get_company_by_user_id(db, user_id)
     exempt = bool(data.vat_exempt)
     ex, vat, total = calc_vat(data.amount_ex_vat, exempt)
+    vendor_id = getattr(data, "vendor_id", None)
+    vendor_name = data.vendor_name
+    if vendor_id:
+        v = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.company_id == company.id).first()
+        if not v:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        vendor_name = v.name
     exp = Expense(
         company_id=company.id,
         expense_date=data.expense_date,
         category=data.category,
-        vendor_name=data.vendor_name,
+        vendor_id=vendor_id,
+        vendor_name=vendor_name,
         reference_number=data.reference_number,
         description=data.description,
         amount_ex_vat=ex,
@@ -119,13 +131,25 @@ def create_expense(db: Session, data: ExpenseCreate, user_id: int) -> dict:
     db.add(exp)
     db.commit()
     db.refresh(exp)
+    try:
+        accounting_service.post_expense(db, company.id, exp)
+    except Exception:
+        pass
     return _to_response(exp)
 
 
 def update_expense(db: Session, expense_id: int, data: ExpenseUpdate, user_id: int) -> dict:
+    from app.models import Vendor
+
     exp = _get_expense(db, expense_id, user_id)
+    company = get_company_by_user_id(db, user_id)
     payload = data.model_dump(exclude_unset=True)
     exempt = payload.pop("vat_exempt", None)
+    if "vendor_id" in payload and payload["vendor_id"]:
+        v = db.query(Vendor).filter(Vendor.id == payload["vendor_id"], Vendor.company_id == company.id).first()
+        if not v:
+            raise HTTPException(status_code=404, detail="Vendor not found")
+        payload["vendor_name"] = v.name
     if "amount_ex_vat" in payload or exempt is not None:
         ex_val = payload.get("amount_ex_vat", exp.amount_ex_vat)
         is_exempt = bool(exempt) if exempt is not None else bool(exp.vat_exempt)

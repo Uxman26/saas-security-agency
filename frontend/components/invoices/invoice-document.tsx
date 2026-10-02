@@ -4,12 +4,23 @@ import { useEffect, useState } from 'react';
 import { Building2, Globe, Mail, MapPin, Phone } from 'lucide-react';
 import type { Invoice } from '@/lib/types';
 import { hasInvoiceAccountDetails } from '@/lib/invoice-account';
+import { groupInvoiceLines } from '@/lib/invoice-lines';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ACCENT = '#F45100';
 const NAVY = '#0F172A';
 const SOFT = '#FFF4ED';
 const PANEL = '#F1F5F9';
+
+const DEFAULT_HEADERS = {
+  date: 'Date',
+  description: 'Description',
+  shift_timing: 'Shift Timing',
+  operatives: 'Operatives',
+  hours: 'Hours',
+  rate: 'Rate',
+  amount: 'Amount',
+};
 
 function fmtMoney(n: number) {
   return `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -44,10 +55,17 @@ const STATUS_STYLES: Record<string, string> = {
 type Props = {
   invoice: Invoice;
   printId?: string;
+  editableHeaders?: boolean;
+  onHeadersChange?: (headers: typeof DEFAULT_HEADERS) => void;
 };
 
-export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
+export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHeaders, onHeadersChange }: Props) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  const [headers, setHeaders] = useState({ ...DEFAULT_HEADERS, ...(invoice.column_headers || {}) });
+
+  useEffect(() => {
+    setHeaders({ ...DEFAULT_HEADERS, ...(invoice.column_headers || {}) });
+  }, [invoice.column_headers]);
 
   useEffect(() => {
     if (!invoice.company_logo_url) {
@@ -73,12 +91,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
     };
   }, [invoice.company_logo_url]);
 
-  const lines = [...(invoice.lines ?? [])].sort((a, b) => {
-    const ad = a.shift_date || '';
-    const bd = b.shift_date || '';
-    if (ad !== bd) return ad < bd ? -1 : 1;
-    return a.id - b.id;
-  });
+  const dayRows = groupInvoiceLines(invoice.lines ?? []);
   const showAccountFooter = hasInvoiceAccountDetails(invoice);
   const paid = invoice.amount_paid ?? 0;
   const credited = invoice.credit_applied ?? 0;
@@ -198,46 +211,71 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr style={{ backgroundColor: ACCENT }}>
-                <th className="p-3 text-left text-xs font-bold uppercase tracking-wider text-white">Date</th>
-                <th className="p-3 text-left text-xs font-bold uppercase tracking-wider text-white">Description</th>
-                <th className="p-3 text-left text-xs font-bold uppercase tracking-wider text-white">Shift Timing</th>
-                <th className="p-3 text-center text-xs font-bold uppercase tracking-wider text-white">Operatives</th>
-                <th className="p-3 text-right text-xs font-bold uppercase tracking-wider text-white">Hours</th>
-                <th className="p-3 text-right text-xs font-bold uppercase tracking-wider text-white">Rate</th>
-                <th className="p-3 text-right text-xs font-bold uppercase tracking-wider text-white">Amount</th>
+                {(
+                  [
+                    ['date', headers.date],
+                    ['description', headers.description],
+                    ['shift_timing', headers.shift_timing],
+                    ['operatives', headers.operatives],
+                    ['hours', headers.hours],
+                    ['rate', headers.rate],
+                    ['amount', headers.amount],
+                  ] as const
+                ).map(([key, label]) => (
+                  <th
+                    key={key}
+                    className={`p-3 text-xs font-bold uppercase tracking-wider text-white ${
+                      key === 'operatives' ? 'text-center' : key === 'hours' || key === 'rate' || key === 'amount' ? 'text-right' : 'text-left'
+                    }`}
+                  >
+                    {editableHeaders && onHeadersChange ? (
+                      <input
+                        className="w-full bg-transparent text-center uppercase outline-none placeholder:text-white/70"
+                        value={label}
+                        onChange={(e) => {
+                          const next = { ...headers, [key]: e.target.value };
+                          setHeaders(next);
+                        }}
+                        onBlur={(e) => onHeadersChange({ ...headers, [key]: e.target.value })}
+                      />
+                    ) : (
+                      label
+                    )}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {lines.length === 0 ? (
+              {dayRows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="border-b border-slate-200 p-6 text-center text-slate-500">
                     No line items
                   </td>
                 </tr>
               ) : (
-                lines.map((ln, idx) => (
-                  <tr key={ln.id} className="border-b border-slate-200" style={{ backgroundColor: idx % 2 ? PANEL : '#fff' }}>
-                    <td className="p-3 whitespace-nowrap text-slate-800">
-                      {ln.shift_date ? fmtLongDate(ln.shift_date) : '—'}
-                    </td>
+                dayRows.map((row, idx) => (
+                  <tr key={row.key} className="border-b border-slate-200" style={{ backgroundColor: idx % 2 ? PANEL : '#fff' }}>
+                    <td className="p-3 whitespace-nowrap text-slate-800">{row.shiftDate ? row.label : '—'}</td>
                     <td className="p-3 text-slate-800">
-                      <span className="font-semibold">{ln.description || ln.site_name || 'Service'}</span>
-                      {ln.service_detail || ln.site_name ? (
-                        <span className="mt-0.5 block text-xs text-slate-500">{ln.service_detail || ln.site_name}</span>
+                      <span className="font-semibold">{row.shiftDate ? 'Security services' : row.label}</span>
+                      {row.siteNames.length ? (
+                        <span className="mt-0.5 block text-xs text-slate-500">{row.siteNames.join(', ')}</span>
                       ) : null}
-                      {ln.guard_name ? <span className="mt-0.5 block text-xs text-slate-400">{ln.guard_name}</span> : null}
+                      {row.rateIsBlended ? (
+                        <span className="mt-0.5 block text-xs text-slate-400">Blended rate</span>
+                      ) : null}
                     </td>
-                    <td className="p-3 whitespace-nowrap tabular-nums text-slate-800">{shiftTiming(ln)}</td>
+                    <td className="p-3 whitespace-nowrap tabular-nums text-slate-800">—</td>
                     <td className="p-3 text-center tabular-nums text-slate-800">
-                      {ln.quantity != null && ln.quantity > 0 ? ln.quantity : ln.guard_id ? 1 : '—'}
+                      {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
                     </td>
                     <td className="p-3 text-right tabular-nums text-slate-800">
-                      {ln.hours > 0 ? Number(ln.hours).toFixed(2) : '—'}
+                      {row.hours > 0 ? Number(row.hours).toFixed(2) : '—'}
                     </td>
                     <td className="p-3 text-right tabular-nums text-slate-800">
-                      {ln.rate ? fmtMoney(ln.rate) : '—'}
+                      {row.rate != null ? fmtMoney(row.rate) : '—'}
                     </td>
-                    <td className="p-3 text-right font-semibold tabular-nums text-slate-900">{fmtMoney(ln.amount)}</td>
+                    <td className="p-3 text-right font-semibold tabular-nums text-slate-900">{fmtMoney(row.amount)}</td>
                   </tr>
                 ))
               )}
@@ -329,32 +367,6 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print' }: Props) {
               <p className="text-base font-bold">INV-{invoice.id}</p>
             </div>
           </div>
-        </div>
-      ) : null}
-
-      {(invoice.payments?.length ?? 0) > 0 ? (
-        <div className="px-8 pb-6 sm:px-10">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Payment history</p>
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50">
-                <th className="border border-slate-200 p-2 text-left">Date</th>
-                <th className="border border-slate-200 p-2 text-left">Method</th>
-                <th className="border border-slate-200 p-2 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.payments!.map((p) => (
-                <tr key={p.id}>
-                  <td className="border border-slate-200 p-2">
-                    {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-GB') : '—'}
-                  </td>
-                  <td className="border border-slate-200 p-2 capitalize">{p.method || '—'}</td>
-                  <td className="border border-slate-200 p-2 text-right tabular-nums">{fmtMoney(p.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       ) : null}
 

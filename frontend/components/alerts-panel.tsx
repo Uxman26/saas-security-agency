@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Bell, AlertTriangle, Check, CheckCheck } from 'lucide-react';
+import { Bell, AlertTriangle, Check, CheckCheck, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/auth-context';
@@ -22,6 +22,8 @@ export function AlertsPanel() {
     leadAlerts,
     unreadCount,
     badgeCount,
+    soundMuted,
+    setSoundMuted,
     markLeadRead,
     markAllLeadRead,
     markPanelOpened,
@@ -57,18 +59,31 @@ export function AlertsPanel() {
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pe-8">
           <DialogTitle>{t('title')}</DialogTitle>
-          {unreadCount > 0 && (
+          <div className="flex items-center gap-1 shrink-0">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 text-xs text-muted-foreground shrink-0"
-              onClick={() => void markAllLeadRead()}
+              className="h-8 gap-1.5 text-xs text-muted-foreground"
+              title={soundMuted ? t('unmuteNotifications') : t('muteNotifications')}
+              onClick={() => void setSoundMuted(!soundMuted)}
             >
-              <CheckCheck className="size-3.5" />
-              {t('markAllRead')}
+              {soundMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+              {soundMuted ? t('unmuteNotifications') : t('muteNotifications')}
             </Button>
-          )}
+            {unreadCount > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 text-xs text-muted-foreground"
+                onClick={() => void markAllLeadRead()}
+              >
+                <CheckCheck className="size-3.5" />
+                {t('markAllRead')}
+              </Button>
+            )}
+          </div>
         </DialogHeader>
         {!hasAny ? (
           <p className="text-sm text-muted-foreground py-4 text-center">{t('empty')}</p>

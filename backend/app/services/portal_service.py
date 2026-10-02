@@ -6,19 +6,46 @@ from typing import List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models import Assignment, Site, User
-from app.schemas import PortalHoursResponse, RotaDetailResponse, SiteResponse
+from app.models import Assignment, Client, Site, User
+from app.schemas import ClientResponse, GuardResponse, PortalHoursResponse, RotaDetailResponse, SiteResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.portal_access import (
     assert_site_visible,
     filter_sites_for_user,
     get_linked_guard,
+    is_client_portal_user,
+    is_staff_portal_user,
     pinned_site_ids,
     redact_sites_for_portal,
     role_slug,
 )
 from app.services.rate_service import resolve_assignment_pay_rate
 from app.services.rota_service import list_rota_details
+
+
+def portal_staff_profile(db: Session, user: User) -> GuardResponse:
+    if not is_staff_portal_user(user):
+        raise HTTPException(status_code=403, detail="Staff profile is only available to Staff logins")
+    guard = get_linked_guard(db, user)
+    if not guard:
+        raise HTTPException(status_code=404, detail="Staff account is not linked to a staff profile")
+    return GuardResponse.model_validate(guard)
+
+
+def portal_client_profile(db: Session, user: User) -> ClientResponse:
+    if not is_client_portal_user(user):
+        raise HTTPException(status_code=403, detail="Client profile is only available to Client logins")
+    if not user.client_id:
+        raise HTTPException(status_code=404, detail="Client account is not linked to a client record")
+    company = get_company_by_user_id(db, user.id)
+    row = (
+        db.query(Client)
+        .filter(Client.id == user.client_id, Client.company_id == company.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return ClientResponse.model_validate(row)
 
 
 def _week_bounds(d: date) -> tuple[date, date]:

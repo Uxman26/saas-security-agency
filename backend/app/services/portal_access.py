@@ -175,3 +175,37 @@ def assert_site_visible(db: Session, user: User, site_id: int) -> int:
     if not allowed:
         raise HTTPException(status_code=404, detail="Site not found")
     return site_id
+
+
+def assert_not_client_portal(user: User) -> None:
+    """Clients are read-only on rota, shifts and attendance."""
+    from fastapi import HTTPException
+
+    if is_client_portal_user(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+def assert_not_portal_role(user: User) -> None:
+    """Refuse any portal login — used on admin write paths that must stay internal."""
+    from fastapi import HTTPException
+
+    if is_portal_role(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+def visible_assignment_or_404(db: Session, user: User, assignment_id: int, company_id: int):
+    """Assignment if this login may see it; 404 otherwise."""
+    from fastapi import HTTPException
+
+    q = (
+        db.query(Assignment)
+        .join(Guard)
+        .outerjoin(Site)
+        .filter(Assignment.id == assignment_id, Guard.company_id == company_id)
+    )
+    if is_portal_role(user):
+        q = filter_assignments_for_user(db, user, q)
+    a = q.first()
+    if not a:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    return a

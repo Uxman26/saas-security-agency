@@ -183,7 +183,7 @@ export default function ReportsPage() {
           rows: (data.shifts || []) as Record<string, unknown>[],
         };
       } else if (selected.id === 'sms-logs') {
-        const data = await api.sms.logs();
+        const data = await api.sms.logs({ start_date: startDate, end_date: endDate });
         view = {
           kind: 'rows',
           columns: [
@@ -320,6 +320,9 @@ export default function ReportsPage() {
         };
       } else if (selected.id === 'overtime' || selected.id === 'staff-monthly') {
         const data = await api.reports.staffMonthly(startDate, endDate, groupBy);
+        if (selected.id === 'overtime' && data.by_employee) {
+          data.by_employee = data.by_employee.filter((r: { overtime_hours?: number }) => Number(r.overtime_hours || 0) > 0);
+        }
         view = { kind: 'monthly', data };
       }
       if (view) {
@@ -344,7 +347,8 @@ export default function ReportsPage() {
         format,
         guardId ? parseInt(guardId) : undefined,
         siteId ? parseInt(siteId) : undefined,
-        selected.id === 'staff-monthly' || selected.id === 'overtime' ? groupBy : undefined
+        selected.id === 'staff-monthly' || selected.id === 'overtime' ? groupBy : undefined,
+        selected.id === 'shift-history' ? action || undefined : undefined
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import date, datetime, time
 from typing import Optional
 
 from fastapi import HTTPException
@@ -96,6 +97,17 @@ def send_sms(db: Session, user_id: int, recipient: str, body: str, template_key:
     return log
 
 
-def list_sms_logs(db: Session, user_id: int, limit: int = 200) -> list[SmsLog]:
+def list_sms_logs(
+    db: Session,
+    user_id: int,
+    limit: int = 200,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[SmsLog]:
     company = get_company_by_user_id(db, user_id)
-    return db.query(SmsLog).filter(SmsLog.company_id == company.id).order_by(SmsLog.id.desc()).limit(limit).all()
+    q = db.query(SmsLog).filter(SmsLog.company_id == company.id)
+    if start_date:
+        q = q.filter(SmsLog.sent_at >= datetime.combine(start_date, time.min))
+    if end_date:
+        q = q.filter(SmsLog.sent_at <= datetime.combine(end_date, time.max))
+    return q.order_by(SmsLog.id.desc()).limit(limit).all()

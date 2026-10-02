@@ -15,12 +15,14 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as pdfcanvas
 
 from app.models import AccidentReport, Company
+from app.services.pdf_branding import BANNER_HEIGHT, draw_marketing_banner
 
 PAGE = landscape(A4)
 W, H = PAGE
 M = 14 * mm
 LINE = 0.6
 RULE_GREY = 0.45
+FOOTER_Y = M + BANNER_HEIGHT + 2
 
 
 def _rule(c: pdfcanvas.Canvas, x: float, y: float, width: float) -> None:
@@ -199,12 +201,13 @@ def render_accident_pdf(
     c.setFont("Helvetica-Oblique", 7)
     c.setFillGray(0.4)
     if blank or report is None:
-        c.drawString(M, M - 4, "Blank form — complete and return to your supervisor.")
+        c.drawString(M, FOOTER_Y, "Blank form — complete and return to your supervisor.")
     else:
         who = report.created_by.full_name if report.created_by else ""
-        c.drawString(M, M - 4, f"Produced by: {who}".strip())
-        c.drawRightString(right, M - 4, f"Status: {(report.status or 'open').replace('_', ' ').title()}")
+        c.drawString(M, FOOTER_Y, f"Produced by: {who}".strip())
+        c.drawRightString(right, FOOTER_Y, f"Status: {(report.status or 'open').replace('_', ' ').title()}")
 
+    draw_marketing_banner(c, PAGE)
     c.showPage()
     c.save()
     return buf.getvalue()

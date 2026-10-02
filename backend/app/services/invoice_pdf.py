@@ -52,17 +52,23 @@ def _group_lines_by_day(lines, site_map) -> list:
         amount = sum(float(l.amount or 0) for l in group)
         rates = {round(float(l.rate or 0), 4) for l in group}
         uniform = next(iter(rates)) if len(rates) == 1 else None
+        starts = {(l.shift_start or "").strip() for l in group if (l.shift_start or "").strip()}
+        ends = {(l.shift_end or "").strip() for l in group if (l.shift_end or "").strip()}
+        timing = "—"
+        if len(starts) == 1 and len(ends) == 1:
+            timing = f"{next(iter(starts))} - {next(iter(ends))}"
         rows.append(
             {
+                "shift_date": day,
                 "label": day.strftime("%d %B %Y"),
                 "site_names": sorted({site_map[l.site_id].name for l in group if l.site_id in site_map}),
-                "operatives": len({l.guard_id for l in group if l.guard_id}),
+                "operatives": len({l.guard_id for l in group if l.guard_id}) or len(group),
                 "hours": round(hours, 2),
-                # A single rate cell must never imply an agreed rate that does not exist,
-                # so a mixed day reports the blended figure and says so.
                 "rate": uniform if uniform is not None else (amount / hours if hours else None),
                 "rate_is_blended": uniform is None,
                 "amount": round(amount, 2),
+                "timing": timing,
+                "description": "Security services",
             }
         )
 
@@ -70,13 +76,16 @@ def _group_lines_by_day(lines, site_map) -> list:
         label = ln.description or ("Allowance" if float(ln.allowance_amount or 0) > 0 else "Charge")
         rows.append(
             {
+                "shift_date": None,
                 "label": label,
-                "site_names": [],
+                "site_names": [site_map[ln.site_id].name] if ln.site_id in site_map else [],
                 "operatives": 0,
                 "hours": round(float(ln.hours or 0), 2),
                 "rate": float(ln.rate) if ln.rate else None,
                 "rate_is_blended": False,
                 "amount": round(float(ln.amount or 0), 2),
+                "timing": "—",
+                "description": label,
             }
         )
     return rows
@@ -96,6 +105,8 @@ def render_invoice_pdf(
     from reportlab.lib.units import cm
     from reportlab.platypus import Image as RLImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+    from app.services.pdf_branding import branded_bottom_margin, build_branded
+
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -103,7 +114,7 @@ def render_invoice_pdf(
         rightMargin=1.5 * cm,
         leftMargin=1.5 * cm,
         topMargin=1.2 * cm,
-        bottomMargin=1.2 * cm,
+        bottomMargin=branded_bottom_margin(1.2 * cm),
     )
     styles = getSampleStyleSheet()
     # The single brand colour the document is built from. One constant, so a tenant's own
@@ -224,33 +235,49 @@ def render_invoice_pdf(
     story.append(t_top)
     story.append(Spacer(1, 16))
 
-    site_ids = list({ln.site_id for ln in lines})
+    site_ids = list({ln.site_id for ln in lines if ln.site_id})
     site_map = {s.id: s for s in db.query(Site).filter(Site.id.in_(site_ids)).all()} if site_ids else {}
     cell = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=7.5, leading=9)
     cell_muted = ParagraphStyle("CellMuted", parent=styles["Normal"], fontSize=6.5, leading=8, textColor=colors.HexColor("#64748b"))
     hdr = ["DATE", "DESCRIPTION", "SHIFT TIMING", "OPS", "HOURS", "RATE", "AMOUNT"]
+    headers_json = getattr(inv, "column_headers_json", None)
+    if headers_json:
+        try:
+            import json as _json
+            custom = _json.loads(headers_json) if isinstance(headers_json, str) else headers_json
+            if isinstance(custom, dict):
+                hdr = [
+                    str(custom.get("date") or hdr[0]).upper(),
+                    str(custom.get("description") or hdr[1]).upper(),
+                    str(custom.get("shift_timing") or hdr[2]).upper(),
+                    str(custom.get("operatives") or hdr[3]).upper(),
+                    str(custom.get("hours") or hdr[4]).upper(),
+                    str(custom.get("rate") or hdr[5]).upper(),
+                    str(custom.get("amount") or hdr[6]).upper(),
+                ]
+        except Exception:
+            pass
+    from reportlab.platypus import KeepTogether
+
     data = [hdr]
-    for ln in sorted(lines, key=lambda x: (x.shift_date is None, x.shift_date or date.min, x.id)):
-        site = site_map.get(ln.site_id)
-        title = ln.description or (site.name if site else "Service")
-        detail = ln.service_detail or (site.name if site and ln.description else "")
-        desc_bits = [Paragraph(str(title), cell)]
-        if detail:
-            desc_bits.append(Paragraph(str(detail), cell_muted))
-        start = (ln.shift_start or "").strip()
-        end = (ln.shift_end or "").strip()
-        timing = f"{start} - {end}" if start and end else (start or end or "—")
-        qty = ln.quantity if ln.quantity is not None else (1 if ln.guard_id else 0)
-        hours = float(ln.hours or 0)
-        rate = float(ln.rate or 0)
+    for row in _group_lines_by_day(lines, site_map):
+        site_txt = ", ".join(row["site_names"]) if row["site_names"] else ""
+        desc_bits = [Paragraph(str(row.get("description") or row["label"]), cell)]
+        if site_txt:
+            desc_bits.append(Paragraph(site_txt, cell_muted))
+        if row.get("rate_is_blended"):
+            desc_bits.append(Paragraph("Blended rate", cell_muted))
+        hours = float(row["hours"] or 0)
+        rate = row["rate"]
+        ops = int(row["operatives"] or 0)
         data.append([
-            ln.shift_date.strftime("%d %b %Y") if ln.shift_date else "—",
-            desc_bits,
-            timing,
-            f"{qty:g}" if qty else "—",
+            row["label"] if row.get("shift_date") is not None else "—",
+            KeepTogether(desc_bits),
+            row.get("timing") or "—",
+            str(ops) if ops else "—",
             f"{hours:g}" if hours else "—",
-            _money(rate) if rate else "—",
-            _money(ln.amount or 0),
+            (_money(float(rate)) + (" *" if row.get("rate_is_blended") else "")) if rate is not None else "—",
+            _money(row["amount"] or 0),
         ])
     tw = [2.6 * cm, 4.6 * cm, 2.6 * cm, 1.4 * cm, 1.8 * cm, 2.4 * cm, 2.6 * cm]
     t_lines = Table(data, colWidths=tw, repeatRows=1)
@@ -319,23 +346,6 @@ def render_invoice_pdf(
     st = Table([[notes_box, [t_sums, Spacer(1, 4), t_total]]], colWidths=[9.5 * cm, 8.5 * cm])
     st.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story.append(st)
-
-    payments = db.query(Payment).filter(Payment.invoice_id == inv.id).order_by(Payment.paid_at.desc()).all()
-    if payments:
-        story.append(Spacer(1, 14))
-        story.append(Paragraph("<b>Payment history</b>", styles["Heading3"]))
-        pay_data = [["Date", "Method", "Amount"]]
-        for p in payments:
-            pay_data.append([str(p.paid_at) if p.paid_at else "—", (p.method or "—").title(), _money(p.amount or 0)])
-        t_pay = Table(pay_data, colWidths=[4 * cm, 4 * cm, 4 * cm])
-        t_pay.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-            ("ALIGN", (2, 1), (2, -1), "RIGHT"),
-        ]))
-        story.append(t_pay)
 
     from app.models import CreditNote
 
@@ -433,5 +443,5 @@ def render_invoice_pdf(
     ]))
     story.append(t_foot)
 
-    doc.build(story)
+    build_branded(doc, story)
     return buf.getvalue()

@@ -206,6 +206,20 @@ export const guardSchema = z.object({
   driving_licence_expiry_date: optDate,
   holiday_jurisdiction: optStr,
   employee_type: optStr,
+  employment_pay_type: z.enum(['salaried', 'non_salaried']).optional().or(z.literal('')),
+  pay_method: z.enum(['per_hour', 'per_job']).optional().or(z.literal('')),
+  hourly_rate: z.preprocess(
+    (v) => (v === '' || v == null ? undefined : Number(v)),
+    z.number().min(0).optional()
+  ),
+  per_job_rate: z.preprocess(
+    (v) => (v === '' || v == null ? undefined : Number(v)),
+    z.number().min(0).optional()
+  ),
+  salary_amount: z.preprocess(
+    (v) => (v === '' || v == null ? undefined : Number(v)),
+    z.number().min(0).optional()
+  ),
   working_time_pattern: optStr,
   company_full_time_week_hrs: optInt,
   company_full_time_week_mins: optInt,
@@ -267,6 +281,33 @@ export const guardSubmitSchema = guardSchema
         path: ['login_password'],
         message: pw.error.issues[0]?.message ?? PASSWORD_REQUIREMENTS_MSG,
       });
+    }
+  })
+  .superRefine((v, ctx) => {
+    const payType = v.employment_pay_type;
+    if (!payType) return;
+    if (payType === 'salaried') {
+      if (v.salary_amount == null || Number.isNaN(Number(v.salary_amount))) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['salary_amount'], message: 'Salary is required' });
+      }
+      const hrs =
+        v.weekly_contracted_hours ?? ((Number(v.contracted_week_hrs) || 0) + (Number(v.contracted_week_mins) || 0) / 60);
+      if (hrs == null || Number(hrs) <= 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['contracted_week_hrs'],
+          message: 'Weekly hours are required for salaried staff',
+        });
+      }
+    }
+    if (payType === 'non_salaried') {
+      if (!v.pay_method) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['pay_method'], message: 'Payment method is required' });
+      } else if (v.pay_method === 'per_hour' && (v.hourly_rate == null || Number.isNaN(Number(v.hourly_rate)))) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['hourly_rate'], message: 'Hourly rate is required' });
+      } else if (v.pay_method === 'per_job' && (v.per_job_rate == null || Number.isNaN(Number(v.per_job_rate)))) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['per_job_rate'], message: 'Per job rate is required' });
+      }
     }
   });
 

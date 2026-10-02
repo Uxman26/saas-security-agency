@@ -289,10 +289,13 @@ def default_matrix_guard() -> Dict[str, Any]:
 
 def default_matrix_client_portal() -> Dict[str, Any]:
     base = {k: {"view": False, "create": False, "edit": False, "delete": False} for k in MODULE_KEYS}
-    base["portal"] = {"view": True, "create": False, "edit": False, "delete": False}
+    # create unlocks my_portal.incidents_create (and upcoming rota) — clients need both.
+    base["portal"] = {"view": True, "create": True, "edit": False, "delete": False}
     base["staff_requests"] = {"view": True, "create": True, "edit": False, "delete": False}
     base["patrol"] = {"view": True, "create": False, "edit": False, "delete": False}
     base["incidents"] = {"view": True, "create": True, "edit": False, "delete": False}
+    # Linked sites / published shifts only — mutations are blocked in the services.
+    base["rota"] = {"view": True, "create": False, "edit": False, "delete": False}
     return base
 
 
@@ -302,6 +305,11 @@ def default_matrix_staff_portal() -> Dict[str, Any]:
     base["patrol"] = {"view": True, "create": False, "edit": True, "delete": False}
     base["incidents"] = {"view": True, "create": True, "edit": False, "delete": False}
     base["lone_worker"] = {"view": False, "create": True, "edit": False, "delete": False}
+    # Own assigned shifts. edit unlocks log_overtime / log_early_finish for the mobile app;
+    # plan writes and assignment CRUD stay blocked in the services for portal roles.
+    base["rota"] = {"view": True, "create": False, "edit": True, "delete": False}
+    # create unlocks attendance.book / book_by_shift used by mobile book on/off.
+    base["attendance"] = {"view": True, "create": True, "edit": False, "delete": False}
     return base
 
 

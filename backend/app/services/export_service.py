@@ -6,7 +6,10 @@ from openpyxl import Workbook
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+from app.services.pdf_branding import branded_bottom_margin, build_branded
 
 
 def to_csv(rows: list[dict[str, Any]], columns: list[tuple[str, str]]) -> bytes:
@@ -32,7 +35,11 @@ def to_xlsx(rows: list[dict[str, Any]], columns: list[tuple[str, str]], sheet_na
 
 def to_pdf_table(title: str, rows: list[dict[str, Any]], columns: list[tuple[str, str]]) -> bytes:
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4)
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        bottomMargin=branded_bottom_margin(1.5 * cm),
+    )
     styles = getSampleStyleSheet()
     data = [[c[1] for c in columns]]
     for row in rows:
@@ -50,5 +57,5 @@ def to_pdf_table(title: str, rows: list[dict[str, Any]], columns: list[tuple[str
         )
     )
     story = [Paragraph(title, styles["Title"]), Spacer(1, 12), table]
-    doc.build(story)
+    build_branded(doc, story)
     return buf.getvalue()

@@ -238,6 +238,8 @@ def create_lead(db: Session, user_id: int, data: dict, force_duplicate: bool = F
     db.add(LeadStatusHistory(lead_id=lead.id, from_status=None, to_status=lead.status, user_id=user_id))
     if lead.comments and lead.comments.strip():
         db.add(LeadNote(lead_id=lead.id, user_id=user_id, body=lead.comments.strip()))
+    if lead.next_follow_up_at:
+        _sync_follow_up_from_lead(db, lead, user_id, lead.next_follow_up_at)
     audit_service.log_action(db, company_id=company.id, user_id=user_id, action="create", entity_type="lead", entity_id=lead.id)
     if lead.assigned_user_id:
         _notify(db, company.id, lead.assigned_user_id, "lead_assigned", f"Lead assigned: {lead.title}", entity_id=lead.id, lead=lead, actor_id=user_id)
@@ -411,6 +413,8 @@ def update_lead(db: Session, user_id: int, lead_id: int, data: dict, force_dupli
                 user_id=user_id,
             )
         )
+    if "next_follow_up_at" in data and lead.next_follow_up_at:
+        _sync_follow_up_from_lead(db, lead, user_id, lead.next_follow_up_at)
     if lead.assigned_user_id and lead.assigned_user_id != prev_assignee:
         _notify(
             db,
@@ -507,6 +511,44 @@ def add_note(db: Session, user_id: int, lead_id: int, body: str) -> LeadNote:
     return note
 
 
+def _sync_follow_up_from_lead(db: Session, lead: Lead, user_id: int, due) -> None:
+    """Keep LeadFollowUp in step with Lead.next_follow_up_at so calendar and list agree."""
+    if not due:
+        return
+    open_fu = (
+        db.query(LeadFollowUp)
+        .filter(
+            LeadFollowUp.lead_id == lead.id,
+            LeadFollowUp.completed_at.is_(None),
+            LeadFollowUp.due_at == due,
+        )
+        .first()
+    )
+    if open_fu:
+        return
+    db.add(
+        LeadFollowUp(
+            lead_id=lead.id,
+            company_id=lead.company_id,
+            activity_type="call",
+            title="Follow-up",
+            due_at=due,
+            assigned_user_id=lead.assigned_user_id,
+            created_by=user_id,
+        )
+    )
+
+
+def _refresh_next_follow_up(db: Session, lead: Lead) -> None:
+    nxt = (
+        db.query(LeadFollowUp)
+        .filter(LeadFollowUp.lead_id == lead.id, LeadFollowUp.completed_at.is_(None))
+        .order_by(LeadFollowUp.due_at.asc())
+        .first()
+    )
+    lead.next_follow_up_at = nxt.due_at if nxt else None
+
+
 def add_follow_up(db: Session, user_id: int, lead_id: int, data: dict) -> LeadFollowUp:
     company = require_leads_module(db, user_id)
     lead = db.query(Lead).filter(Lead.id == lead_id, Lead.company_id == company.id).first()
@@ -541,6 +583,9 @@ def complete_follow_up(db: Session, user_id: int, follow_up_id: int) -> LeadFoll
     if not fu:
         raise HTTPException(status_code=404, detail="Follow-up not found")
     fu.completed_at = datetime.now(timezone.utc)
+    lead = db.query(Lead).filter(Lead.id == fu.lead_id, Lead.company_id == company.id).first()
+    if lead:
+        _refresh_next_follow_up(db, lead)
     db.commit()
     db.refresh(fu)
     return fu
@@ -589,10 +634,25 @@ def add_communication(db: Session, user_id: int, lead_id: int, data: dict) -> Le
 
 
 def _client_from_lead(db: Session, company_id: int, lead: Lead) -> Client:
+    """Resolve the Client for this lead without creating duplicates.
+
+    Prefer an existing conversion link, then an email match in the same company, then
+    create. Callers that need the lead marked converted to customer should do that
+    themselves — this only returns the Client row.
+    """
     if lead.converted_to_type == "customer" and lead.converted_to_id:
         existing = db.query(Client).filter(Client.id == lead.converted_to_id, Client.company_id == company_id).first()
         if existing:
             return existing
+    email = (lead.email or "").strip().lower()
+    if email:
+        by_email = (
+            db.query(Client)
+            .filter(Client.company_id == company_id, func.lower(Client.email) == email)
+            .first()
+        )
+        if by_email:
+            return by_email
     client = Client(
         company_id=company_id,
         name=lead.title,
@@ -604,6 +664,13 @@ def _client_from_lead(db: Session, company_id: int, lead: Lead) -> Client:
     db.add(client)
     db.flush()
     return client
+
+
+def _mark_lead_customer(lead: Lead, client_id: int) -> None:
+    lead.converted = True
+    lead.converted_to_type = "customer"
+    lead.converted_to_id = client_id
+    lead.converted_at = datetime.now(timezone.utc)
 
 
 def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note: Optional[str] = None) -> LeadConversion:
@@ -622,10 +689,7 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
         else:
             client = _client_from_lead(db, company.id, lead)
             target_id = client.id
-            lead.converted = True
-            lead.converted_to_type = "customer"
-            lead.converted_to_id = target_id
-            lead.converted_at = datetime.now(timezone.utc)
+            _mark_lead_customer(lead, target_id)
     elif target_type == "opportunity":
         client_id = lead.converted_to_id if lead.converted_to_type == "customer" else None
         opp = SalesOpportunity(
@@ -658,6 +722,7 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
         target_id = proj.id
     elif target_type == "contract":
         client = _client_from_lead(db, company.id, lead)
+        _mark_lead_customer(lead, client.id)
         contract = SalesContract(
             company_id=company.id,
             lead_id=lead.id,
@@ -673,6 +738,7 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
         target_id = contract.id
     elif target_type == "invoice":
         client = _client_from_lead(db, company.id, lead)
+        _mark_lead_customer(lead, client.id)
         inv = invoice_service.create_invoice(
             db,
             InvoiceCreate(
@@ -687,10 +753,6 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
             user_id,
         )
         target_id = inv.id
-        lead.converted = True
-        lead.converted_to_type = "invoice"
-        lead.converted_to_id = target_id
-        lead.converted_at = datetime.now(timezone.utc)
     else:
         raise HTTPException(status_code=400, detail=f"Unknown conversion type: {target_type}")
 
@@ -702,7 +764,7 @@ def convert_lead(db: Session, user_id: int, lead_id: int, target_type: str, note
         user_id=user_id,
         note=note,
     )
-    if lead.status != "won" and target_type in ("customer", "invoice"):
+    if lead.status != "won" and target_type in ("customer", "invoice", "contract"):
         prev = lead.status
         lead.status = "won"
         db.add(LeadStatusHistory(lead_id=lead.id, from_status=prev, to_status="won", user_id=user_id, note=f"Converted to {target_type}"))

@@ -7,7 +7,7 @@ import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleGuard } from '@/components/module-guard';
 import { InlineTableSkeleton } from '@/components/skeletons';
 import { useAuth } from '@/contexts/auth-context';
-import { canModule } from '@/lib/permissions';
+import { canModule, isPortalRole } from '@/lib/permissions';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -129,10 +129,11 @@ function overlapsRange(r: RotaPlanListItem, from: string, to: string) {
 
 function RotaHubPage() {
   const { user } = useAuth();
-  const canCreateRota = canModule(user, 'rota', 'create');
-  const canEditRota = canModule(user, 'rota', 'edit');
-  const canDeleteRota = canModule(user, 'rota', 'delete');
-  const canPublishRota = canModule(user, 'rota', 'publish') || canEditRota;
+  const portal = isPortalRole(user);
+  const canCreateRota = !portal && canModule(user, 'rota', 'create');
+  const canEditRota = !portal && canModule(user, 'rota', 'edit');
+  const canDeleteRota = !portal && canModule(user, 'rota', 'delete');
+  const canPublishRota = !portal && (canModule(user, 'rota', 'publish') || canEditRota);
   const searchParams = useSearchParams();
   const urlTab = searchParams.get('tab');
   const initialTab: Tab = urlTab === 'old' ? 'old' : urlTab === 'draft' ? 'draft' : 'active';

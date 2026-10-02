@@ -317,3 +317,82 @@ export function bookingExceptions(
   notBookedOff.sort((a, b) => b.date.localeCompare(a.date));
   return { notBookedOn, notBookedOff };
 }
+
+export type DueUpcomingItem = {
+  assignment_id: number;
+  guard_id: number;
+  guard_name: string;
+  site_id: number;
+  site_name: string;
+  date: string;
+  shift_start?: string | null;
+  shift_end?: string | null;
+  kind: 'due' | 'upcoming';
+  status: string;
+  booked_on: boolean;
+  booked_off: boolean;
+};
+
+function isoToday(d = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function dueAndUpcoming(
+  assignments: Assignment[],
+  attendance: Attendance[],
+  guards: Guard[],
+  sites: Site[],
+  filters: Pick<AttFilters, 'siteId' | 'guardId'> = { siteId: '', guardId: '' },
+  horizonDays = 3
+): { due: DueUpcomingItem[]; upcoming: DueUpcomingItem[] } {
+  const byAssignment = new Map(attendance.map((a) => [a.assignment_id, a]));
+  const guardName = new Map(guards.map((g) => [g.id, g.full_name]));
+  const siteName = new Map(sites.map((s) => [s.id, s.name]));
+  const now = new Date();
+  const today = isoToday(now);
+  const end = new Date(now);
+  end.setDate(end.getDate() + horizonDays);
+  const endIso = isoToday(end);
+  const due: DueUpcomingItem[] = [];
+  const upcoming: DueUpcomingItem[] = [];
+
+  for (const asg of assignments) {
+    if (filters.siteId && String(asg.site_id) !== filters.siteId) continue;
+    if (filters.guardId && String(asg.guard_id) !== filters.guardId) continue;
+    if (asg.date < today || asg.date > endIso) continue;
+    const att = byAssignment.get(asg.id);
+    const status = normalizeAttStatus(att?.status) || (asg.date > today ? 'scheduled' : 'pending');
+    if (['cancelled', 'cancelled_paid', 'absent', 'no_show'].includes(status)) continue;
+    if (att?.booked_at && att?.booked_off_at) continue;
+    if (assignmentEnded(asg, now) && att?.booked_at && att?.booked_off_at) continue;
+    if (assignmentEnded(asg, now) && !att?.booked_at) {
+      // past unmarked today still due until marked/exception handled
+    }
+    const item: DueUpcomingItem = {
+      assignment_id: asg.id,
+      guard_id: asg.guard_id,
+      guard_name: guardName.get(asg.guard_id) || `Staff #${asg.guard_id}`,
+      site_id: asg.site_id,
+      site_name: siteName.get(asg.site_id) || `Site #${asg.site_id}`,
+      date: asg.date,
+      shift_start: asg.shift_start,
+      shift_end: asg.shift_end,
+      kind: asg.date === today && (assignmentStarted(asg, now) || !att?.booked_at) ? 'due' : 'upcoming',
+      status: att?.booked_at && !att.booked_off_at ? 'on_shift' : status || (assignmentStarted(asg, now) ? 'due' : 'upcoming'),
+      booked_on: !!att?.booked_at,
+      booked_off: !!att?.booked_off_at,
+    };
+    if (asg.date === today && !assignmentEnded(asg, now)) {
+      if (!att?.booked_off_at) due.push({ ...item, kind: 'due' });
+    } else if (asg.date > today) {
+      upcoming.push({ ...item, kind: 'upcoming' });
+    } else if (asg.date === today && assignmentEnded(asg, now) && !att?.booked_at) {
+      due.push({ ...item, kind: 'due', status: 'not_booked_on' });
+    }
+  }
+
+  due.sort((a, b) => (a.shift_start || '').localeCompare(b.shift_start || '') || a.guard_name.localeCompare(b.guard_name));
+  upcoming.sort((a, b) => a.date.localeCompare(b.date) || (a.shift_start || '').localeCompare(b.shift_start || ''));
+  return { due, upcoming };
+}

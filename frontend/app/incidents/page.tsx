@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
+import { ModuleGuard } from '@/components/module-guard';
 import { ModulePage } from '@/components/module-layout';
 import {
   DashboardHeader,
@@ -32,6 +33,26 @@ import { AlertTriangle, BarChart3, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 
+const STATUS_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'reviewing', label: 'Reviewing' },
+  { value: 'reported', label: 'Reported' },
+  { value: 'closed', label: 'Closed' },
+] as const;
+
+function statusLabel(status: string) {
+  const hit = STATUS_OPTIONS.find((s) => s.value === status);
+  return hit?.label || (status ? status.charAt(0).toUpperCase() + status.slice(1) : '—');
+}
+
+function statusTone(status: string): 'danger' | 'warning' | 'info' | 'positive' | 'muted' {
+  if (status === 'closed') return 'positive';
+  if (status === 'reported') return 'info';
+  if (status === 'reviewing') return 'warning';
+  if (status === 'open') return 'danger';
+  return 'muted';
+}
+
 /** Attachments are served from an authenticated endpoint, so a plain link cannot load them. */
 async function openAttachment(url: string) {
   if (!(await openAuthFile(url))) toast.error('Could not open attachment');
@@ -43,8 +64,9 @@ export default function IncidentsPage() {
   const { user: permUser } = useAuth();
   const canCreateMod = canModule(permUser, 'incidents', 'create');
   const canEditMod = canModule(permUser, 'incidents', 'edit');
-  const canDeleteMod = canModule(permUser, 'incidents', 'delete');
+  const canStatusMod = canModule(permUser, 'incidents', 'status_change') || canEditMod;
   const [items, setItems] = useState<Incident[]>([]);
+  const [allItems, setAllItems] = useState<Incident[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [open, setOpen] = useState(false);
@@ -53,8 +75,6 @@ export default function IncidentsPage() {
     notes: '', site_id: '', latitude: '', longitude: '',
     category: 'other', police_called: false, ambulance_called: false, fire_brigade_called: false,
   });
-  // Category list comes from the API so the incident form and the summary report can
-  // never drift apart; a static copy here would be a second source of truth.
   const [catalogue, setCatalogue] = useState<IncidentCatalogue | null>(null);
   useEffect(() => {
     api.incidents.catalogue().then(setCatalogue).catch(() => {});
@@ -62,11 +82,13 @@ export default function IncidentsPage() {
 
   const load = useCallback(async () => {
     try {
-      const [list, s] = await Promise.all([
+      const [list, all, s] = await Promise.all([
         api.incidents.list(statusFilter === 'all' ? undefined : { status: statusFilter }),
+        api.incidents.list(),
         api.sites.list(),
       ]);
       setItems(list);
+      setAllItems(all);
       setSites(s);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load incidents');
@@ -107,20 +129,22 @@ export default function IncidentsPage() {
 
   const setStatus = async (id: number, status: string) => {
     try {
-      await api.incidents.update(id, { status });
+      const updated = await api.incidents.update(id, { status });
       toast.success('Status updated');
-      setDetail(null);
-      load();
+      setDetail(updated);
+      setItems((prev) => prev.map((row) => (row.id === id ? { ...row, status: updated.status } : row)));
+      setAllItems((prev) => prev.map((row) => (row.id === id ? { ...row, status: updated.status } : row)));
+      await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Update failed');
     }
   };
 
-  const countBy = (status: string) => items.filter((i) => i.status === status).length;
+  const countBy = (status: string) => allItems.filter((i) => i.status === status).length;
 
   /** The cards along the top, in the shape every module dashboard uses. */
   const statCards: StatCardSpec[] = [
-    { key: 'total', label: 'Incidents', value: items.length, icon: AlertTriangle, tone: 'neutral' },
+    { key: 'total', label: 'Incidents', value: allItems.length, icon: AlertTriangle, tone: 'neutral' },
     {
       key: 'open',
       label: 'Open',
@@ -138,6 +162,14 @@ export default function IncidentsPage() {
       action: countBy('reviewing') ? { label: 'View', onClick: () => setStatusFilter('reviewing') } : undefined,
     },
     {
+      key: 'reported',
+      label: 'Reported',
+      value: countBy('reported'),
+      icon: BarChart3,
+      tone: 'info',
+      action: countBy('reported') ? { label: 'View', onClick: () => setStatusFilter('reported') } : undefined,
+    },
+    {
       key: 'closed',
       label: 'Closed',
       value: countBy('closed'),
@@ -150,6 +182,7 @@ export default function IncidentsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
+        <ModuleGuard moduleKey="incidents">
         <ModulePage>
           <DashboardHeader
             title="Incidents"
@@ -183,9 +216,11 @@ export default function IncidentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="reviewing">Reviewing</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </FilterField>
@@ -221,13 +256,8 @@ export default function IncidentsPage() {
                           .filter(Boolean).join(', ') || <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell>
-                        <Pill
-                          dot
-                          tone={
-                            inc.status === 'closed' ? 'positive' : inc.status === 'reviewing' ? 'warning' : 'danger'
-                          }
-                        >
-                          {inc.status.charAt(0).toUpperCase() + inc.status.slice(1)}
+                        <Pill dot tone={statusTone(inc.status)}>
+                          {statusLabel(inc.status)}
                         </Pill>
                       </TableCell>
                       <TableCell>
@@ -249,7 +279,7 @@ export default function IncidentsPage() {
                   ))}
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                         No incidents found.
                       </TableCell>
                     </TableRow>
@@ -376,7 +406,7 @@ export default function IncidentsPage() {
                 <div className="space-y-3 text-sm">
                   <p>
                     <span className="text-muted-foreground">Status:</span>{' '}
-                    <span className="capitalize font-medium">{detail.status}</span>
+                    <span className="font-medium">{statusLabel(detail.status)}</span>
                   </p>
                   <p>
                     <span className="text-muted-foreground">Occurred:</span>{' '}
@@ -408,28 +438,39 @@ export default function IncidentsPage() {
                       </ul>
                     </div>
                   ) : null}
-                  <div className="flex flex-wrap gap-2 pt-2">
-                    {detail.status !== 'reviewing' ? (
-                      <Button size="sm" variant="outline" onClick={() => setStatus(detail.id, 'reviewing')}>
-                        Mark reviewing
-                      </Button>
+                  <div className="flex flex-wrap items-center gap-2 pt-2">
+                    {canStatusMod ? (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-muted-foreground whitespace-nowrap">Change status</Label>
+                        <Select
+                          value={detail.status}
+                          onValueChange={(v) => {
+                            if (v !== detail.status) void setStatus(detail.id, v);
+                          }}
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STATUS_OPTIONS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     ) : null}
-                    {detail.status !== 'closed' ? (
-                      <Button size="sm" onClick={() => setStatus(detail.id, 'closed')}>
-                        Close
-                      </Button>
-                    ) : null}
-                    {detail.status === 'closed' ? (
-                      <Button size="sm" variant="outline" onClick={() => setStatus(detail.id, 'open')}>
-                        Reopen
-                      </Button>
-                    ) : null}
+                    <Pill dot tone={statusTone(detail.status)}>
+                      {statusLabel(detail.status)}
+                    </Pill>
                   </div>
                 </div>
               ) : null}
             </DialogContent>
           </Dialog>
         </ModulePage>
+        </ModuleGuard>
       </AppShell>
     </ProtectedRoute>
   );

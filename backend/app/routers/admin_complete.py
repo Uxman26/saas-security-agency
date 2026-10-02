@@ -508,6 +508,9 @@ def sync_worker_jobs(db: Session = Depends(get_db), _: User = Depends(require_pl
         ("scheduled_maintenance", "cron"),
         ("check_missed_patrols", "cron"),
         ("sweep_lone_worker", "cron"),
+        ("sweep_trials", "cron"),
+        ("sweep_renewal_invoices", "cron"),
+        ("sweep_finance_recurring", "cron"),
     ]
     created = 0
     for name, queue in known:

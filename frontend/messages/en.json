@@ -95,7 +95,9 @@
     "compliance": "Compliance ({count})",
     "contracts": "Contracts expiring ({count})",
     "ends": "ends {date}",
-    "viewDashboard": "View dashboard"
+    "viewDashboard": "View dashboard",
+    "muteNotifications": "Mute Notifications",
+    "unmuteNotifications": "Unmute Notifications"
   },
   "app": {
     "openStatus": "Open",
@@ -358,7 +360,13 @@
     "reports": "Reports",
     "invoices": "Invoices",
     "expenses": "Expenses",
-    "payments": "Payments",
+    "payments": "Transactions",
+    "statements": "Statements",
+    "customInvoices": "Custom Invoices",
+    "vendors": "Vendors",
+    "fixedExpenses": "Fixed Expenses",
+    "recurringInvoices": "Recurring Invoices",
+    "chartOfAccounts": "Chart of Accounts",
     "allowances": "Allowances",
     "specialDays": "Special days",
     "company": "Company",

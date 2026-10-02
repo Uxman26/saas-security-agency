@@ -212,6 +212,12 @@ def list_rota_details(
     out: List[RotaDetailResponse] = []
     # Fingerprints to avoid double-counting draft planner rows already published as assignments
     seen = set()
+    from app.models import User as _User
+    from app.services.portal_access import is_client_portal_user, is_portal_role
+
+    caller = db.query(_User).filter(_User.id == user_id).first()
+    redact_rates = bool(caller and is_client_portal_user(caller))
+    skip_drafts = bool(caller and is_portal_role(caller))
     for a in rows:
         att = att_map.get(a.id)
         late_log = late_map.get(a.id)
@@ -243,15 +249,18 @@ def list_rota_details(
                 attendance_status=status,
                 attendance_marked=marked,
                 late_minutes=late_m,
-                shift_rate=a.shift_rate,
+                shift_rate=None if redact_rates else a.shift_rate,
                 rota_plan_id=a.rota_plan_id,
                 paid_hours=att.paid_hours if att and status == CANCELLED_PAID else None,
+                note=(att.note if att and att.note else None),
             )
         )
         seen.add(_shift_fingerprint(a.guard_id, a.date, a.shift_start, a.shift_end, a.site_id))
 
-    # Include draft / unpublished rota planner shifts so reports match the on-screen rota
-    if start_date and end_date:
+    # Draft planner shifts are for internal controllers only. Portal logins see published
+    # assignments (and open slots already mirrored as assignments), matching the rota-plan
+    # portal path that hides unpublished trees.
+    if start_date and end_date and not skip_drafts:
         out.extend(
             _planner_shift_details(
                 db,
@@ -322,13 +331,19 @@ def _planner_shift_details(
         data = _parse_planner_json(plan.planner_data)
         shifts = data.get("shifts") or {}
         for emp_id, by_d in shifts.items():
-            try:
-                gid = int(emp_id)
-            except (TypeError, ValueError):
-                continue
-            guard = guards.get(gid)
-            if not guard:
-                continue
+            is_open = str(emp_id) == "__open__"
+            if is_open:
+                gid = 0
+                guard_name = "Open shifts"
+            else:
+                try:
+                    gid = int(emp_id)
+                except (TypeError, ValueError):
+                    continue
+                guard = guards.get(gid)
+                if not guard:
+                    continue
+                guard_name = guard.full_name or ""
             for dk, day_shifts in (by_d or {}).items():
                 try:
                     d = date.fromisoformat(str(dk)[:10])
@@ -342,12 +357,11 @@ def _planner_shift_details(
                     site_name = (sh.get("site") or "").strip()
                     site = site_by_name.get(site_name.lower()) if site_name else None
                     sid = site.id if site else None
-                    # A draft shift names its site as free text. When it does not
-                    # resolve to a site record there is nothing to test a site-side
-                    # filter against, so it is left out rather than let through.
-                    if not scope.matches(sid, gid):
+                    # Open shifts have no assigned guard; only site-side filters apply.
+                    match_gid = None if is_open else gid
+                    if not scope.matches(sid, match_gid):
                         continue
-                    fp = _shift_fingerprint(gid, d, start_t, end_t, sid)
+                    fp = ("open", d, start_t, end_t, sid) if is_open else _shift_fingerprint(gid, d, start_t, end_t, sid)
                     if fp in seen:
                         continue
                     seen.add(fp)
@@ -355,8 +369,6 @@ def _planner_shift_details(
                     hrs = calc_shift_hours(start_t, end_t, break_m)
                     if d > today:
                         status = "scheduled"
-                    elif d < today:
-                        status = "pending"
                     else:
                         status = "pending"
                     cli = site.client if site else None
@@ -364,7 +376,7 @@ def _planner_shift_details(
                         RotaDetailResponse(
                             id=synthetic_id,
                             guard_id=gid,
-                            guard_name=guard.full_name or "",
+                            guard_name=guard_name,
                             site_id=sid or 0,
                             site_name=site.name if site else site_name,
                             client_id=site.client_id if site else None,

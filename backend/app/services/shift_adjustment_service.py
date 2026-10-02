@@ -82,13 +82,14 @@ def _mins_to_time(m: int) -> str:
 def _assignment_for_company(db: Session, company_id: int, assignment_id: int, user_id: int) -> Assignment:
     """The assignment, if this caller may adjust it.
 
-    Company scope alone is not enough. Overtime, early finish and lateness are the four
-    write paths a portal login can hold without holding rota.edit, and every one of them
-    resolves the shift through here — so without the portal filter a guard granted
-    rota.log_overtime could rewrite the end time of any colleague's shift in the tenant.
-    404 rather than 403, matching authz.owned_or_404.
+    Clients are read-only. Staff may adjust only their own assigned shifts (mobile book
+    OT / early-finish). Internal users keep company scope.
     """
-    from app.services.portal_access import filter_assignments_for_user, is_portal_role
+    from app.services.portal_access import assert_not_client_portal, filter_assignments_for_user, is_portal_role
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        assert_not_client_portal(user)
 
     q = (
         db.query(Assignment)
@@ -97,7 +98,6 @@ def _assignment_for_company(db: Session, company_id: int, assignment_id: int, us
         .options(joinedload(Assignment.guard), joinedload(Assignment.site))
         .filter(Assignment.id == assignment_id, Guard.company_id == company_id)
     )
-    user = db.query(User).filter(User.id == user_id).first()
     if user and is_portal_role(user):
         q = filter_assignments_for_user(db, user, q)
     a = q.first()

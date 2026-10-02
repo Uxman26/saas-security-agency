@@ -155,6 +155,10 @@ class ThemeUpdate(StrictModel):
     theme: Literal["light", "dark", "system"]
 
 
+class NotificationSoundUpdate(StrictModel):
+    muted: bool
+
+
 class UserMeResponse(UserResponse):
     permissions: List[str] = Field(default_factory=list)
     module_access: List[dict[str, Any]] = Field(default_factory=list)
@@ -166,6 +170,7 @@ class UserMeResponse(UserResponse):
     sidebar_modules: Optional[List[str]] = None
     enabled_modules: Optional[dict[str, bool]] = None
     theme_preference: Optional[str] = None
+    notification_sound_muted: bool = False
 
 
 class SubscriptionReceiptResponse(BaseModel):
@@ -550,6 +555,11 @@ class GuardBase(BaseModel):
     salary_amount: Optional[float] = None
     salary_rate: Optional[str] = None
     salary_frequency: Optional[str] = None
+    # Salaried vs non-salaried pay structure (separate from employee_type fixed/variable).
+    employment_pay_type: Optional[str] = None
+    pay_method: Optional[str] = None
+    hourly_rate: Optional[float] = None
+    per_job_rate: Optional[float] = None
     payroll_number: Optional[str] = None
     pension_scheme: Optional[str] = None
     pension_contribution: Optional[str] = None
@@ -662,6 +672,26 @@ class GuardBase(BaseModel):
         if not (self.full_name or "").strip():
             if not ((self.first_name or "").strip() and (self.last_name or "").strip()):
                 raise ValueError("First name and last name are required")
+        return self
+
+    @model_validator(mode="after")
+    def validate_employment_pay(self) -> "GuardBase":
+        pay_type = (self.employment_pay_type or "").strip().lower() or None
+        if pay_type and pay_type not in ("salaried", "non_salaried"):
+            raise ValueError("Employment type must be salaried or non_salaried")
+        method = (self.pay_method or "").strip().lower() or None
+        if method and method not in ("per_hour", "per_job"):
+            raise ValueError("Payment method must be per_hour or per_job")
+        if pay_type == "salaried":
+            if self.salary_amount is not None and self.salary_amount < 0:
+                raise ValueError("Salary cannot be negative")
+            if self.weekly_contracted_hours is not None and self.weekly_contracted_hours < 0:
+                raise ValueError("Weekly hours cannot be negative")
+        if pay_type == "non_salaried":
+            if method == "per_hour" and self.hourly_rate is not None and self.hourly_rate < 0:
+                raise ValueError("Hourly rate cannot be negative")
+            if method == "per_job" and self.per_job_rate is not None and self.per_job_rate < 0:
+                raise ValueError("Per job rate cannot be negative")
         return self
 
 class GuardCreate(GuardBase):
@@ -882,6 +912,7 @@ class RotaDetailResponse(BaseModel):
     # Hours agreed for payment on a paid cancellation. ``hours`` stays the shift's own
     # span so rota and staff reports keep reporting what was rota'd.
     paid_hours: Optional[float] = None
+    note: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -914,6 +945,7 @@ class PayrollPreviewShift(BaseModel):
     scheduled_hours: float = 0
     payable: bool = False
     amount: float = 0
+    note: Optional[str] = None
 
 
 class PayrollPreviewSite(BaseModel):
@@ -1476,6 +1508,7 @@ class InvoiceUpdate(BaseModel):
     status: Optional[str] = None
     period_start: Optional[date] = None
     period_end: Optional[date] = None
+    column_headers: Optional[dict] = None
 
 class InvoiceResponse(InvoiceBase):
     id: int
@@ -1510,6 +1543,7 @@ class InvoiceResponse(InvoiceBase):
     balance_due: float = 0
     payments: list["PaymentResponse"] = []
     credit_notes: list["CreditNoteResponse"] = []
+    column_headers: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -1607,6 +1641,7 @@ class InvoiceStatementResponse(BaseModel):
     date_from: str
     date_to: str
     currency: str = "GBP"
+    statement_type: str = "all"
     summary: dict
     lines: list[InvoiceStatementLine]
 
@@ -1984,6 +2019,7 @@ class StaffRequestResponse(BaseModel):
 class ExpenseBase(BaseModel):
     expense_date: date
     category: str
+    vendor_id: Optional[int] = None
     vendor_name: Optional[str] = None
     reference_number: Optional[str] = None
     description: Optional[str] = None
@@ -2001,6 +2037,7 @@ class ExpenseCreate(ExpenseBase):
 class ExpenseUpdate(BaseModel):
     expense_date: Optional[date] = None
     category: Optional[str] = None
+    vendor_id: Optional[int] = None
     vendor_name: Optional[str] = None
     reference_number: Optional[str] = None
     description: Optional[str] = None
@@ -2015,6 +2052,7 @@ class ExpenseResponse(BaseModel):
     company_id: int
     expense_date: date
     category: str
+    vendor_id: Optional[int] = None
     vendor_name: Optional[str] = None
     reference_number: Optional[str] = None
     description: Optional[str] = None
@@ -2756,6 +2794,20 @@ class IncidentUpdate(BaseModel):
     ambulance_called: Optional[bool] = None
     fire_brigade_called: Optional[bool] = None
 
+    @field_validator("status")
+    @classmethod
+    def _status_ok(cls, v):
+        if v is None:
+            return v
+        s = str(v).strip().lower().replace(" ", "_")
+        if s == "under_review":
+            s = "reviewing"
+        if s in ("submit", "submitted"):
+            s = "reported"
+        if s not in ("open", "reviewing", "reported", "closed"):
+            raise ValueError("status must be open, reviewing, reported, or closed")
+        return s
+
 
 class IncidentAttachmentResponse(BaseModel):
     id: int
@@ -3423,7 +3475,9 @@ class EmployeeHubGroup(BaseModel):
 
 class EmployeeHubResponse(BaseModel):
     total: int
-    #: How many of the returned employees have no portal login yet.
+    #: Membership before the Status filter — keeps the KPI cards stable when View is used.
+    scope_total: int = 0
+    #: How many of the scope have no portal login yet (independent of Status).
     not_registered: int
     terminated_count: int
     groups: List[EmployeeHubGroup] = []

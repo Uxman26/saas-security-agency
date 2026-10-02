@@ -69,10 +69,16 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     ("leads", "Leads", "Target", "/leads", 52, "sectionSales"),
     ("payroll", "Payroll", "PoundSterling", "/payroll", 60, "sectionFinance"),
     ("invoices", "Invoices", "FileText", "/invoices", 61, "sectionFinance"),
-    ("payments", "Payments", "CreditCard", "/payments", 62, "sectionFinance"),
-    ("expenses", "Expenses", "Receipt", "/expenses", 63, "sectionFinance"),
-    ("allowances", "Allowances", "Gift", "/allowances", 64, "sectionFinance"),
-    ("reports", "Reports", "ClipboardList", "/reports", 70, "sectionReports"),
+    ("statements", "Statements", "ScrollText", "/statements", 62, "sectionFinance"),
+    ("custom_invoices", "Custom Invoices", "FilePlus", "/custom-invoices", 63, "sectionFinance"),
+    ("payments", "Transactions", "CreditCard", "/payments", 64, "sectionFinance"),
+    ("expenses", "Expenses", "Receipt", "/expenses", 65, "sectionFinance"),
+    ("allowances", "Allowances", "Gift", "/allowances", 66, "sectionFinance"),
+    ("vendors", "Vendors", "Store", "/vendors", 67, "sectionFinance"),
+    ("fixed_expenses", "Fixed Expenses", "CalendarClock", "/fixed-expenses", 68, "sectionFinance"),
+    ("recurring_invoices", "Recurring Invoices", "Repeat", "/recurring-invoices", 69, "sectionFinance"),
+    ("chart_of_accounts", "Chart of Accounts", "BookOpen", "/accounts", 70, "sectionFinance"),
+    ("reports", "Reports", "ClipboardList", "/reports", 80, "sectionReports"),
     ("company", "Company", "Building2", "/settings/company", 80, "sectionSettings"),
     ("billing", "Billing", "CreditCard", "/settings/billing", 81, "sectionSettings"),
     ("sms", "SMS", "MessageSquare", "/settings/sms", 82, "sectionSettings"),
@@ -527,7 +533,19 @@ def expand_coarse_matrix_to_app_modules(coarse: dict[str, Any], modules: list[Ap
             for k in ("rota", "assignments", "attendance"):
                 set_cell(k, cell)
         elif mod_key == "invoices":
-            for k in ("invoices", "payments", "payroll", "expenses"):
+            for k in (
+                "invoices",
+                "payments",
+                "payroll",
+                "expenses",
+                "statements",
+                "custom_invoices",
+                "vendors",
+                "fixed_expenses",
+                "recurring_invoices",
+                "chart_of_accounts",
+                "allowances",
+            ):
                 set_cell(k, cell)
         elif mod_key == "contractors":
             set_cell("contractors", cell)

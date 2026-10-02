@@ -55,7 +55,19 @@ function endOfYear(d = new Date()) {
   return isoOf(new Date(d.getFullYear(), 11, 31));
 }
 
-export function AbsenceTab({ guardId, canEdit }: { guardId: number; canEdit: boolean }) {
+export function AbsenceTab({
+  guardId,
+  canCreate,
+  canDelete,
+  canEdit,
+}: {
+  guardId: number;
+  canCreate?: boolean;
+  canDelete?: boolean;
+  canEdit?: boolean;
+}) {
+  const allowCreate = canCreate ?? canEdit ?? false;
+  const allowDelete = canDelete ?? canEdit ?? false;
   const [from, setFrom] = useState(startOfYear());
   const [to, setTo] = useState(endOfYear());
   const [filter, setFilter] = useState<'all' | AbsenceKind>('all');
@@ -210,7 +222,7 @@ export function AbsenceTab({ guardId, canEdit }: { guardId: number; canEdit: boo
                     {hrs(cell.pending_hours)} pending approval
                   </p>
                 ) : null}
-                {canEdit ? (
+                {allowCreate ? (
                   <Button variant="outline" size="sm" className="w-full" onClick={() => setAddKind(k.key)}>
                     <Plus className="mr-1.5 size-3.5" />
                     {k.add}
@@ -248,7 +260,7 @@ export function AbsenceTab({ guardId, canEdit }: { guardId: number; canEdit: boo
               <Loader2 className="size-4 animate-spin" /> Loading absence…
             </p>
           ) : historyView === 'list' ? (
-            <AbsenceList rows={visible} canEdit={canEdit} onDelete={remove} />
+            <AbsenceList rows={visible} canDelete={allowDelete} onDelete={remove} />
           ) : historyView === 'month' ? (
             <MonthGrid
               rows={visible}
@@ -293,11 +305,11 @@ function StatusPill({ status }: { status: string }) {
 
 function AbsenceList({
   rows,
-  canEdit,
+  canDelete,
   onDelete,
 }: {
   rows: AbsenceRecord[];
-  canEdit: boolean;
+  canDelete: boolean;
   onDelete: (r: AbsenceRecord) => void;
 }) {
   if (!rows.length) {
@@ -315,18 +327,14 @@ function AbsenceList({
           </span>
           <span className="text-sm tabular-nums">{hrs(r.hours)}</span>
           <StatusPill status={r.status} />
-          {r.reason ? <span className="truncate text-xs text-muted-foreground">{r.reason}</span> : null}
-          {canEdit ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-auto size-8 text-destructive hover:text-destructive"
-              onClick={() => onDelete(r)}
-              title="Delete"
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          ) : null}
+          {r.reason ? <span className="text-xs text-muted-foreground truncate max-w-[200px]">{r.reason}</span> : null}
+          <div className="ml-auto">
+            {canDelete ? (
+              <Button variant="ghost" size="sm" onClick={() => onDelete(r)} title="Delete">
+                <Trash2 className="size-4 text-destructive" />
+              </Button>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>

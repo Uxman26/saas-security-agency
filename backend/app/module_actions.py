@@ -278,6 +278,12 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     # special_days.py is guarded by the allowances module, so its seeding action lives
     # here rather than on the special_days page row.
     "allowances": CRUD + ARCHIVING + (ActionDef("seed_uk", "Seed UK bank holidays", "create"),),
+    "statements": (VIEW, CREATE, EDIT),
+    "custom_invoices": CRUD,
+    "vendors": CRUD + ARCHIVING,
+    "fixed_expenses": CRUD,
+    "recurring_invoices": CRUD,
+    "chart_of_accounts": (VIEW, CREATE, EDIT),
     # --- Reports --------------------------------------------------------------------
     "reports": (VIEW,)
     + (

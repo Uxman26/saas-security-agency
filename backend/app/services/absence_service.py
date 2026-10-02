@@ -19,7 +19,7 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import ABSENCE_KINDS, ABSENCE_STATUSES, AbsenceRecord, Guard
 from app.services import audit_service
@@ -99,7 +99,11 @@ def sickness_entitlement_hours(guard: Guard) -> float:
 
 
 def _query(db: Session, company_id: int, guard_id: Optional[int] = None):
-    q = db.query(AbsenceRecord).filter(AbsenceRecord.company_id == company_id)
+    q = (
+        db.query(AbsenceRecord)
+        .options(joinedload(AbsenceRecord.guard))
+        .filter(AbsenceRecord.company_id == company_id)
+    )
     if guard_id:
         q = q.filter(AbsenceRecord.guard_id == guard_id)
     return q
@@ -174,6 +178,7 @@ def get_absence(db: Session, user_id: int, absence_id: int) -> AbsenceRecord:
     company = get_company_by_user_id(db, user_id)
     row = (
         db.query(AbsenceRecord)
+        .options(joinedload(AbsenceRecord.guard))
         .filter(AbsenceRecord.id == absence_id, AbsenceRecord.company_id == company.id)
         .first()
     )

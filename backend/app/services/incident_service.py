@@ -30,7 +30,21 @@ from app.services.portal_access import (
     is_staff_portal_user,
     pinned_site_ids,
 )
+from app.services import audit_service
 from app.storage_paths import resolve_storage_path
+
+STATUSES = ("open", "reviewing", "reported", "closed")
+
+
+def _normalize_status(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    s = str(raw).strip().lower().replace(" ", "_")
+    if s == "under_review":
+        s = "reviewing"
+    if s == "submit" or s == "submitted":
+        s = "reported"
+    return s if s in STATUSES else None
 
 
 def _att_out(a: IncidentAttachment) -> IncidentAttachmentResponse:
@@ -91,7 +105,7 @@ def _out(inc: Incident) -> IncidentResponse:
         longitude=inc.longitude,
         accuracy=inc.accuracy,
         occurred_at=inc.occurred_at,
-        status=inc.status,
+        status=_normalize_status(inc.status) or (inc.status or "open"),
         created_at=inc.created_at,
         attachments=[_att_out(a) for a in (inc.attachments or [])],
     )
@@ -181,7 +195,10 @@ def list_incidents(
         .filter(Incident.company_id == company.id)
     )
     if status:
-        q = q.filter(Incident.status == status)
+        wanted = _normalize_status(status)
+        if not wanted:
+            raise HTTPException(status_code=422, detail=f"status must be one of {', '.join(STATUSES)}")
+        q = q.filter(Incident.status == wanted)
     if site_id:
         q = q.filter(Incident.site_id == site_id)
     if is_client_portal_user(user) and user.client_id:
@@ -236,16 +253,31 @@ def update_incident(db: Session, user: User, incident_id: int, data: IncidentUpd
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
     if is_client_portal_user(user) or is_staff_portal_user(user):
-        # portal users can only append notes / cannot close others' incidents freely
         if is_staff_portal_user(user) and inc.reported_by_user_id != user.id:
             raise HTTPException(status_code=403, detail="Access denied")
-        if data.status and data.status not in ("open",):
+        if data.status is not None:
             raise HTTPException(status_code=403, detail="Insufficient permissions to change status")
     payload = data.model_dump(exclude_unset=True)
+    prev_status = (inc.status or "open").strip().lower()
     if "category" in payload:
         payload["category"] = normalize_category(payload["category"])
+    if "status" in payload:
+        wanted = _normalize_status(payload.get("status"))
+        if not wanted:
+            raise HTTPException(status_code=422, detail=f"status must be one of {', '.join(STATUSES)}")
+        payload["status"] = wanted
     for k, v in payload.items():
         setattr(inc, k, v.strip() if isinstance(v, str) else v)
+    if "status" in payload and payload["status"] != prev_status:
+        audit_service.log_action(
+            db,
+            company_id=company.id,
+            user_id=user.id,
+            action="status_change",
+            entity_type="incident",
+            entity_id=inc.id,
+            meta={"from": prev_status, "to": payload["status"]},
+        )
     db.commit()
     return get_incident(db, user, incident_id)
 

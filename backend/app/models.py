@@ -103,6 +103,7 @@ class User(Base):
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=True)
     sidebar_modules_json = Column(Text, nullable=True)
     theme_preference = Column(String, nullable=True)
+    notification_sound_muted = Column(Boolean, default=False)
     mfa_enabled = Column(Boolean, default=False)
     mfa_secret = Column(String, nullable=True)
     mfa_backup_codes_json = Column(Text, nullable=True)
@@ -606,6 +607,10 @@ class Guard(Base):
     salary_amount = Column(Float)
     salary_rate = Column(String)
     salary_frequency = Column(String)
+    employment_pay_type = Column(String)
+    pay_method = Column(String)
+    hourly_rate = Column(Float)
+    per_job_rate = Column(Float)
     payroll_number = Column(String)
     pension_scheme = Column(String)
     pension_contribution = Column(String)
@@ -1149,6 +1154,7 @@ class Invoice(Base):
     payee_account_number = Column(String, nullable=True)
     payee_iban = Column(String, nullable=True)
     payee_swift_code = Column(String, nullable=True)
+    column_headers_json = Column(Text, nullable=True)
     subtotal = Column(Float, default=0)
     tax_rate = Column(Float, default=0)
     tax_amount = Column(Float, default=0)
@@ -1284,6 +1290,7 @@ class Expense(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     expense_date = Column(Date, nullable=False)
     category = Column(String, nullable=False)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True, index=True)
     vendor_name = Column(String)
     reference_number = Column(String)
     description = Column(Text)
@@ -1298,6 +1305,100 @@ class Expense(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="expenses")
+    vendor = relationship("Vendor", foreign_keys=[vendor_id])
+
+
+class Vendor(Base):
+    __tablename__ = "vendors"
+    id = Column(Integer, primary_key=True, index=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String)
+    phone = Column(String)
+    address = Column(Text)
+    notes = Column(Text)
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class FixedExpense(Base):
+    __tablename__ = "fixed_expenses"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=True)
+    category = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0)
+    vat_rate = Column(Float, default=20)
+    day_of_month = Column(Integer, default=1)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)
+    next_run = Column(Date, nullable=True)
+    account_code = Column(String, nullable=True)
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    vendor = relationship("Vendor", foreign_keys=[vendor_id])
+
+
+class RecurringInvoice(Base):
+    __tablename__ = "recurring_invoices"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=True)
+    frequency = Column(String, default="monthly")
+    day_of_month = Column(Integer, default=1)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)
+    next_run = Column(Date, nullable=True)
+    tax_rate = Column(Float, default=20)
+    notes = Column(Text)
+    template_json = Column(Text)
+    status = Column(String, default="active")
+    last_invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Account(Base):
+    __tablename__ = "accounts"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    code = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    account_type = Column(String, nullable=False)
+    parent_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    level = Column(Integer, default=1)
+    is_system = Column(Boolean, default=False)
+    status = Column(String, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    parent = relationship("Account", remote_side=[id])
+
+
+class JournalEntry(Base):
+    __tablename__ = "journal_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    entry_date = Column(Date, nullable=False)
+    reference = Column(String)
+    memo = Column(Text)
+    source_type = Column(String)
+    source_id = Column(Integer)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    lines = relationship("JournalLine", back_populates="entry", cascade="all, delete-orphan")
+
+
+class JournalLine(Base):
+    __tablename__ = "journal_lines"
+    id = Column(Integer, primary_key=True, index=True)
+    entry_id = Column(Integer, ForeignKey("journal_entries.id"), nullable=False, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False, index=True)
+    debit = Column(Float, default=0)
+    credit = Column(Float, default=0)
+    entry = relationship("JournalEntry", back_populates="lines")
+    account = relationship("Account")
 
 
 DEFAULT_LEAD_STATUSES = (

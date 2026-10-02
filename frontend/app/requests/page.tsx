@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import { can } from '@/lib/permissions';
+import { can, canModule } from '@/lib/permissions';
 import type { StaffRequest } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { Check, Loader2, X } from 'lucide-react';
@@ -35,6 +35,14 @@ function statusBadge(status: string) {
 
 export default function StaffRequestsReviewPage() {
   const { user } = useAuth();
+  const canView =
+    can(user, 'staff_req.read') ||
+    canModule(user, 'staff_requests', 'view') ||
+    canModule(user, 'client_portal', 'view');
+  const canReview =
+    can(user, 'staff_req.review') ||
+    canModule(user, 'staff_requests', 'approve') ||
+    canModule(user, 'staff_requests', 'reject');
   const [tab, setTab] = useState<Tab>('pending');
   const [requests, setRequests] = useState<StaffRequest[]>([]);
   const [allRequests, setAllRequests] = useState<StaffRequest[]>([]);
@@ -100,7 +108,7 @@ export default function StaffRequestsReviewPage() {
     }
   };
 
-  if (!can(user, 'staff_req.review') && !can(user, 'staff_req.read')) {
+  if (!canView) {
     return (
       <ProtectedRoute>
         <AppShell>
@@ -111,8 +119,6 @@ export default function StaffRequestsReviewPage() {
       </ProtectedRoute>
     );
   }
-
-  const canReview = can(user, 'staff_req.review');
 
   return (
     <ProtectedRoute>

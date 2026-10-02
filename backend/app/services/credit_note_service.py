@@ -348,6 +348,12 @@ def issue_credit_note(db: Session, credit_note_id: int, user_id: int) -> dict:
         {"credit_note_id": row.id, "number": row.number, "total": row.total},
     )
     db.commit()
+    try:
+        from app.services import accounting_service
+
+        accounting_service.post_credit_note(db, company.id, row)
+    except Exception:
+        pass
     return _serialize(_load(db, row.id, company.id))
 
 

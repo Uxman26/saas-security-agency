@@ -31,6 +31,8 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
     from reportlab.lib.units import cm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+    from app.services.pdf_branding import branded_bottom_margin, build_branded
+
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -38,7 +40,7 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
         rightMargin=1.5 * cm,
         leftMargin=1.5 * cm,
         topMargin=1.2 * cm,
-        bottomMargin=1.2 * cm,
+        bottomMargin=branded_bottom_margin(1.2 * cm),
     )
     styles = getSampleStyleSheet()
     accent = colors.HexColor(ACCENT_HEX)
@@ -186,5 +188,5 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
     ]))
     story.append(closing)
 
-    doc.build(story)
+    build_branded(doc, story)
     return buf.getvalue()

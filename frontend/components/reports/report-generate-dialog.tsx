@@ -12,7 +12,14 @@ import { FileSpreadsheet, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const WIDE_REPORTS = new Set(['shift-overtime', 'shift-early-finish', 'login-logs', 'attendance', 'sms-logs', 'shifts', 'shift-history']);
-const STAFF_FILTER_REPORTS = new Set(['shifts', 'attendance', 'shift-overtime', 'shift-early-finish', 'shift-history']);
+const STAFF_FILTER_REPORTS = new Set([
+  'shifts',
+  'attendance',
+  'shift-overtime',
+  'shift-early-finish',
+  'shift-lateness',
+  'shift-history',
+]);
 const SITE_FILTER_REPORTS = new Set(['shifts', 'shift-history']);
 const GROUP_BY_REPORTS = new Set(['staff-monthly', 'overtime']);
 const ACTION_FILTER_REPORTS = new Set(['shift-history']);

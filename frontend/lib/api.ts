@@ -212,6 +212,11 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ theme }),
       }),
+    updateNotificationSound: (muted: boolean): Promise<User> =>
+      request<User>('/auth/me/notification-sound', {
+        method: 'PATCH',
+        body: JSON.stringify({ muted }),
+      }),
     logout: (): Promise<{ message: string }> =>
       request<{ message: string }>('/auth/logout', { method: 'POST' }),
     logoutAll: (): Promise<{ message: string }> =>
@@ -1013,6 +1018,15 @@ export const api = {
         mode: string;
       }>('/assistant/chat', { method: 'POST', body: JSON.stringify(data) }),
   },
+  search: {
+    query: (q: string) =>
+      request<{
+        guards: { id: number; name: string; href: string }[];
+        sites: { id: number; name: string; href: string }[];
+        clients: { id: number; name: string; href: string }[];
+        invoices: { id: number; name: string; href: string }[];
+      }>(`/search?q=${encodeURIComponent(q)}`),
+  },
   reports: {
     dashboard: (): Promise<DashboardOverview> => request<DashboardOverview>('/reports/dashboard'),
     compliance: (days?: number): Promise<ComplianceAlert[]> => request<ComplianceAlert[]>(`/reports/compliance${days != null ? `?days=${days}` : ''}`),
@@ -1090,12 +1104,14 @@ export const api = {
       format: string,
       guard_id?: number,
       site_id?: number,
-      group_by?: string
+      group_by?: string,
+      action?: string
     ) => {
       const q = new URLSearchParams({ start_date, end_date, format });
       if (guard_id) q.append('guard_id', String(guard_id));
       if (site_id) q.append('site_id', String(site_id));
       if (group_by) q.append('group_by', group_by);
+      if (action) q.append('action', action);
       return requestBlob(`/reports/export/${report_type}?${q}`);
     },
   },
@@ -1105,7 +1121,13 @@ export const api = {
       request<import('./types').SmsConfig>('/sms/config', { method: 'PATCH', body: JSON.stringify(data) }),
     send: (recipient: string, body: string, template_key?: string) =>
       request<import('./types').SmsLog>('/sms/send', { method: 'POST', body: JSON.stringify({ recipient, body, template_key }) }),
-    logs: (): Promise<import('./types').SmsLog[]> => request<import('./types').SmsLog[]>('/sms/logs'),
+    logs: (params?: { start_date?: string; end_date?: string }): Promise<import('./types').SmsLog[]> => {
+      const q = new URLSearchParams();
+      if (params?.start_date) q.set('start_date', params.start_date);
+      if (params?.end_date) q.set('end_date', params.end_date);
+      const s = q.toString();
+      return request<import('./types').SmsLog[]>(`/sms/logs${s ? `?${s}` : ''}`);
+    },
   },
   payroll: {
     list: (params?: {
@@ -1196,31 +1218,35 @@ export const api = {
     get: (id: number): Promise<Invoice> => request<Invoice>(`/invoices/${id}`),
     pdf: (id: number): Promise<Blob> => requestBlob(`/invoices/${id}/pdf`),
     statement: (params: {
-      client_id: number;
+      client_id?: number;
       site_id?: number;
       date_from: string;
       date_to: string;
+      statement_type?: 'all' | 'outstanding';
     }): Promise<import('./types').InvoiceStatement> => {
       const q = new URLSearchParams({
-        client_id: String(params.client_id),
         date_from: params.date_from,
         date_to: params.date_to,
       });
+      if (params.client_id) q.append('client_id', String(params.client_id));
       if (params.site_id) q.append('site_id', String(params.site_id));
+      if (params.statement_type) q.append('statement_type', params.statement_type);
       return request<import('./types').InvoiceStatement>(`/invoices/statement?${q.toString()}`);
     },
     statementPdf: (params: {
-      client_id: number;
+      client_id?: number;
       site_id?: number;
       date_from: string;
       date_to: string;
+      statement_type?: 'all' | 'outstanding';
     }): Promise<Blob> => {
       const q = new URLSearchParams({
-        client_id: String(params.client_id),
         date_from: params.date_from,
         date_to: params.date_to,
       });
+      if (params.client_id) q.append('client_id', String(params.client_id));
       if (params.site_id) q.append('site_id', String(params.site_id));
+      if (params.statement_type) q.append('statement_type', params.statement_type);
       return requestBlob(`/invoices/statement/pdf?${q.toString()}`);
     },
     audit: (id: number): Promise<import('./types').InvoiceAuditEntry[]> =>
@@ -1238,6 +1264,7 @@ export const api = {
         status?: string;
         period_start?: string;
         period_end?: string;
+        column_headers?: Record<string, string> | null;
       }
     ): Promise<Invoice> => request<Invoice>(`/invoices/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     updateLine: (
@@ -1371,10 +1398,12 @@ export const api = {
     create: (data: {
       expense_date: string;
       category: string;
+      vendor_id?: number;
       vendor_name?: string;
       reference_number?: string;
       description?: string;
       amount_ex_vat: number;
+      vat_exempt?: boolean;
       payment_method?: string;
       payment_status?: string;
     }): Promise<Expense> => request<Expense>('/expenses', { method: 'POST', body: JSON.stringify(data) }),
@@ -1383,10 +1412,12 @@ export const api = {
       data: Partial<{
         expense_date: string;
         category: string;
+        vendor_id: number | null;
         vendor_name: string;
         reference_number: string;
         description: string;
         amount_ex_vat: number;
+        vat_exempt: boolean;
         payment_method: string;
         payment_status: string;
       }>
@@ -1418,6 +1449,102 @@ export const api = {
     documentUrl: (id: number) => `${API_URL}/expenses/${id}/document`,
     deleteDocument: (id: number): Promise<Expense> =>
       request<Expense>(`/expenses/${id}/document`, { method: 'DELETE' }),
+  },
+  vendors: {
+    list: (): Promise<import('./types').Vendor[]> => request<import('./types').Vendor[]>('/vendors'),
+    create: (data: Partial<import('./types').Vendor>): Promise<import('./types').Vendor> =>
+      request<import('./types').Vendor>('/vendors', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: Partial<import('./types').Vendor>): Promise<import('./types').Vendor> =>
+      request<import('./types').Vendor>(`/vendors/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/vendors/${id}`, { method: 'DELETE' }),
+  },
+  fixedExpenses: {
+    list: (): Promise<import('./types').FixedExpense[]> =>
+      request<import('./types').FixedExpense[]>('/fixed-expenses'),
+    create: (data: Partial<import('./types').FixedExpense>): Promise<{ id: number }> =>
+      request<{ id: number }>('/fixed-expenses', { method: 'POST', body: JSON.stringify(data) }),
+    setStatus: (id: number, status: string): Promise<{ id: number; status: string }> =>
+      request<{ id: number; status: string }>(`/fixed-expenses/${id}/status?status=${encodeURIComponent(status)}`, {
+        method: 'PATCH',
+      }),
+  },
+  recurringInvoices: {
+    list: (): Promise<import('./types').RecurringInvoice[]> =>
+      request<import('./types').RecurringInvoice[]>('/recurring-invoices'),
+    create: (data: Partial<import('./types').RecurringInvoice> & { template_json?: string }): Promise<{ id: number }> =>
+      request<{ id: number }>('/recurring-invoices', { method: 'POST', body: JSON.stringify(data) }),
+    setStatus: (id: number, status: string): Promise<{ id: number; status: string }> =>
+      request<{ id: number; status: string }>(
+        `/recurring-invoices/${id}/status?status=${encodeURIComponent(status)}`,
+        { method: 'PATCH' }
+      ),
+  },
+  accounts: {
+    list: (): Promise<import('./types').Account[]> => request<import('./types').Account[]>('/accounts'),
+    create: (data: {
+      code: string;
+      name: string;
+      account_type: string;
+      parent_id?: number | null;
+      status?: string;
+    }): Promise<import('./types').Account> =>
+      request<import('./types').Account>('/accounts', { method: 'POST', body: JSON.stringify(data) }),
+    update: (
+      id: number,
+      data: Partial<{ code: string; name: string; account_type: string; status: string }>
+    ): Promise<import('./types').Account> =>
+      request<import('./types').Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    trialBalance: (params?: { date_from?: string; date_to?: string }): Promise<import('./types').TrialBalanceRow[]> => {
+      const q = new URLSearchParams();
+      if (params?.date_from) q.set('date_from', params.date_from);
+      if (params?.date_to) q.set('date_to', params.date_to);
+      const s = q.toString();
+      return request<import('./types').TrialBalanceRow[]>(`/accounts/reports/trial-balance${s ? `?${s}` : ''}`);
+    },
+    profitLoss: (params?: { date_from?: string; date_to?: string }): Promise<import('./types').ProfitLossReport> => {
+      const q = new URLSearchParams();
+      if (params?.date_from) q.set('date_from', params.date_from);
+      if (params?.date_to) q.set('date_to', params.date_to);
+      const s = q.toString();
+      return request<import('./types').ProfitLossReport>(`/accounts/reports/profit-loss${s ? `?${s}` : ''}`);
+    },
+    balanceSheet: (params?: { as_of?: string }): Promise<import('./types').BalanceSheetReport> => {
+      const q = new URLSearchParams();
+      if (params?.as_of) q.set('as_of', params.as_of);
+      const s = q.toString();
+      return request<import('./types').BalanceSheetReport>(`/accounts/reports/balance-sheet${s ? `?${s}` : ''}`);
+    },
+    cashFlow: (params?: { date_from?: string; date_to?: string }): Promise<import('./types').CashFlowReport> => {
+      const q = new URLSearchParams();
+      if (params?.date_from) q.set('date_from', params.date_from);
+      if (params?.date_to) q.set('date_to', params.date_to);
+      const s = q.toString();
+      return request<import('./types').CashFlowReport>(`/accounts/reports/cash-flow${s ? `?${s}` : ''}`);
+    },
+    generalLedger: (params?: {
+      account_id?: number;
+      date_from?: string;
+      date_to?: string;
+    }): Promise<import('./types').GeneralLedgerRow[]> => {
+      const q = new URLSearchParams();
+      if (params?.account_id) q.set('account_id', String(params.account_id));
+      if (params?.date_from) q.set('date_from', params.date_from);
+      if (params?.date_to) q.set('date_to', params.date_to);
+      const s = q.toString();
+      return request<import('./types').GeneralLedgerRow[]>(`/accounts/reports/general-ledger${s ? `?${s}` : ''}`);
+    },
+    arAging: (params?: { as_of?: string }): Promise<import('./types').AgingReport> => {
+      const q = new URLSearchParams();
+      if (params?.as_of) q.set('as_of', params.as_of);
+      const s = q.toString();
+      return request<import('./types').AgingReport>(`/accounts/reports/ar-aging${s ? `?${s}` : ''}`);
+    },
+    apAging: (params?: { as_of?: string }): Promise<import('./types').AgingReport> => {
+      const q = new URLSearchParams();
+      if (params?.as_of) q.set('as_of', params.as_of);
+      const s = q.toString();
+      return request<import('./types').AgingReport>(`/accounts/reports/ap-aging${s ? `?${s}` : ''}`);
+    },
   },
   company: {
     profile: (): Promise<import('./types').CompanyProfile> => request<import('./types').CompanyProfile>('/company/profile'),

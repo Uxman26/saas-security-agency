@@ -43,13 +43,15 @@ def _doc(buf: BytesIO, title: str, landscape_page: bool = True):
     from reportlab.lib.units import cm
     from reportlab.platypus import SimpleDocTemplate
 
+    from app.services.pdf_branding import branded_bottom_margin
+
     return SimpleDocTemplate(
         buf,
         pagesize=landscape(A4) if landscape_page else A4,
         leftMargin=1.2 * cm,
         rightMargin=1.2 * cm,
         topMargin=1.2 * cm,
-        bottomMargin=1.2 * cm,
+        bottomMargin=branded_bottom_margin(1.2 * cm),
         title=title,
     )
 
@@ -248,7 +250,9 @@ def render_payroll_records_pdf(
         story.append(Paragraph("No payroll records matched this search.", styles["cell"]))
 
     story.append(Spacer(1, 8))
-    doc.build(story)
+    from app.services.pdf_branding import build_branded
+
+    build_branded(doc, story)
     return buf.getvalue()
 
 
@@ -356,5 +360,7 @@ def render_payroll_preview_pdf(
         story.append(_table(body, align_right=(len(head) - 4, len(head) - 3, len(head) - 1)))
 
     story.append(Spacer(1, 8))
-    doc.build(story)
+    from app.services.pdf_branding import build_branded
+
+    build_branded(doc, story)
     return buf.getvalue()

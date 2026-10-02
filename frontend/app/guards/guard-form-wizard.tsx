@@ -46,6 +46,12 @@ const STEP0_KEYS: (keyof GuardFormData)[] = [
 const STEP1_KEYS: (keyof GuardFormData)[] = [
   'holiday_jurisdiction',
   'employee_type',
+  'employment_pay_type',
+  'pay_method',
+  'salary_amount',
+  'weekly_contracted_hours',
+  'hourly_rate',
+  'per_job_rate',
   'entitlement_unit',
   'working_time_pattern',
 ];
@@ -607,7 +613,7 @@ export function GuardFormWizard({
 
           <Section title="Employment details">
             <div className="space-y-3">
-              <Label>Employee type</Label>
+              <Label>Hours pattern</Label>
               <RadioCards
                 value={employeeType}
                 onChange={(v) => setValue('employee_type', v as 'fixed' | 'variable')}
@@ -627,6 +633,65 @@ export function GuardFormWizard({
                   </SelectContent>
                 </Select>
                 {errors.working_time_pattern && <p className="text-xs text-destructive">{errors.working_time_pattern.message}</p>}
+              </div>
+            )}
+            <div className="mt-6 space-y-3">
+              <Label>Employment type</Label>
+              <RadioCards
+                value={watch('employment_pay_type') || ''}
+                onChange={(v) => {
+                  setValue('employment_pay_type', v as 'salaried' | 'non_salaried');
+                  if (v === 'salaried') setValue('pay_method', '');
+                }}
+                options={[
+                  { value: 'salaried', label: 'Salaried', description: 'Fixed salary with contracted weekly hours' },
+                  { value: 'non_salaried', label: 'Non-salaried', description: 'Paid per hour or per job' },
+                ]}
+              />
+              {errors.employment_pay_type && <p className="text-xs text-destructive">{errors.employment_pay_type.message}</p>}
+            </div>
+            {watch('employment_pay_type') === 'salaried' && (
+              <div className="grid sm:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-1">
+                  <Label>Salary</Label>
+                  <Input type="number" min={0} step="0.01" {...register('salary_amount', { valueAsNumber: true })} />
+                  {errors.salary_amount && <p className="text-xs text-destructive">{errors.salary_amount.message}</p>}
+                </div>
+                <div className="space-y-1">
+                  <Label>Weekly hours</Label>
+                  <Input type="number" min={0} step="0.25" {...register('weekly_contracted_hours', { valueAsNumber: true })} />
+                  {errors.weekly_contracted_hours && (
+                    <p className="text-xs text-destructive">{errors.weekly_contracted_hours.message}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {watch('employment_pay_type') === 'non_salaried' && (
+              <div className="mt-4 space-y-3">
+                <Label>Payment method</Label>
+                <RadioCards
+                  value={watch('pay_method') || ''}
+                  onChange={(v) => setValue('pay_method', v as 'per_hour' | 'per_job')}
+                  options={[
+                    { value: 'per_hour', label: 'Per hour', description: 'Hourly rate for rota and payroll' },
+                    { value: 'per_job', label: 'Per job', description: 'Flat rate per job/shift' },
+                  ]}
+                />
+                {errors.pay_method && <p className="text-xs text-destructive">{errors.pay_method.message}</p>}
+                {watch('pay_method') === 'per_hour' && (
+                  <div className="space-y-1 max-w-xs mt-3">
+                    <Label>Per hour rate</Label>
+                    <Input type="number" min={0} step="0.01" {...register('hourly_rate', { valueAsNumber: true })} />
+                    {errors.hourly_rate && <p className="text-xs text-destructive">{errors.hourly_rate.message}</p>}
+                  </div>
+                )}
+                {watch('pay_method') === 'per_job' && (
+                  <div className="space-y-1 max-w-xs mt-3">
+                    <Label>Per job rate</Label>
+                    <Input type="number" min={0} step="0.01" {...register('per_job_rate', { valueAsNumber: true })} />
+                    {errors.per_job_rate && <p className="text-xs text-destructive">{errors.per_job_rate.message}</p>}
+                  </div>
+                )}
               </div>
             )}
             <div className="mt-4 max-w-xs">

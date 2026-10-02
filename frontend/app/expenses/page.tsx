@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { Expense, ExpenseDashboard, ExpenseMeta, ExpenseReport, VatReport } from '@/lib/types';
+import type { Expense, ExpenseDashboard, ExpenseMeta, ExpenseReport, VatReport, Vendor } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -103,6 +103,7 @@ type Tab = 'expenses' | 'reports' | 'vat';
 const emptyForm = () => ({
   expense_date: new Date().toISOString().split('T')[0],
   category: 'other',
+  vendor_id: '',
   vendor_name: '',
   reference_number: '',
   description: '',
@@ -138,6 +139,7 @@ export default function ExpensesPage() {
   const [formErrors, setFormErrors] = useState<{ expense_date?: string; category?: string; amount_ex_vat?: string }>({});
   const [docFile, setDocFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
 
   const vatPreview = useMemo(() => {
     const n = parseFloat(form.amount_ex_vat);
@@ -148,16 +150,18 @@ export default function ExpensesPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, dash, rep, vat] = await Promise.all([
+      const [list, dash, rep, vat, vend] = await Promise.all([
         api.expenses.list({ start_date: startDate, end_date: endDate }),
         api.expenses.dashboard(startDate, endDate),
         api.expenses.expenseReport(startDate, endDate, groupBy),
         api.expenses.vatReport(startDate, endDate),
+        api.vendors.list().catch(() => [] as Vendor[]),
       ]);
       setExpenses(list);
       setDashboard(dash);
       setReport(rep);
       setVatReport(vat);
+      setVendors(vend);
     } catch {
       toast.error('Failed to load expenses');
     } finally {
@@ -191,6 +195,7 @@ export default function ExpensesPage() {
     setForm({
       expense_date: e.expense_date,
       category: e.category,
+      vendor_id: e.vendor_id ? String(e.vendor_id) : '',
       vendor_name: e.vendor_name || '',
       reference_number: e.reference_number || '',
       description: e.description || '',
@@ -248,7 +253,10 @@ export default function ExpensesPage() {
       const payload = {
         expense_date: form.expense_date,
         category: form.category,
-        vendor_name: form.vendor_name || undefined,
+        vendor_id: form.vendor_id ? Number(form.vendor_id) : undefined,
+        vendor_name: form.vendor_id
+          ? vendors.find((v) => String(v.id) === form.vendor_id)?.name
+          : form.vendor_name || undefined,
         reference_number: form.reference_number || undefined,
         description: form.description || undefined,
         amount_ex_vat: amount,
@@ -398,7 +406,37 @@ export default function ExpensesPage() {
       </div>
       <div>
         <Label>Vendor / supplier</Label>
-        <Input value={form.vendor_name} onChange={(ev) => setForm((f) => ({ ...f, vendor_name: ev.target.value }))} />
+        <Select
+          value={form.vendor_id || 'none'}
+          onValueChange={(v) => {
+            if (v === 'none') {
+              setForm((f) => ({ ...f, vendor_id: '', vendor_name: '' }));
+              return;
+            }
+            const vend = vendors.find((x) => String(x.id) === v);
+            setForm((f) => ({ ...f, vendor_id: v, vendor_name: vend?.name || '' }));
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select vendor" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None / free text</SelectItem>
+            {vendors.map((v) => (
+              <SelectItem key={v.id} value={String(v.id)}>
+                {v.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {!form.vendor_id ? (
+          <Input
+            className="mt-2"
+            placeholder="Or type a vendor name"
+            value={form.vendor_name}
+            onChange={(ev) => setForm((f) => ({ ...f, vendor_name: ev.target.value }))}
+          />
+        ) : null}
       </div>
       <div>
         <Label>Reference / invoice no.</Label>

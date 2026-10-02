@@ -62,6 +62,11 @@ def create_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
         log_invoice_audit(db, company.id, user_id, inv.id, "payment_recorded", {"amount": pay.amount, "payment_id": pay.id})
     db.commit()
     db.refresh(pay)
+    try:
+        from app.services import accounting_service
+        accounting_service.post_payment(db, company.id, pay)
+    except Exception:
+        pass
     return pay
 
 def get_payments(db: Session, user_id: int, invoice_id: Optional[int] = None) -> List[Payment]:

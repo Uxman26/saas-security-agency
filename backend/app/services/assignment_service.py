@@ -6,7 +6,6 @@ from app.models import Assignment, Guard, ShiftAuditLog, Site, User
 from app.schemas import AssignmentCreate, RotaResponse
 from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
-from app.services.contractor_scope import guard_has_contractor, site_has_contractor
 from app.services.rota_service import normalize_shift_type
 from app.services.work_filters import resolve_work_scope
 
@@ -47,11 +46,6 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
         raise HTTPException(
             status_code=409,
             detail=f"“{site.name}” is archived. Restore it before scheduling shifts.",
-        )
-    if not guard_has_contractor(guard) or not site_has_contractor(site):
-        raise HTTPException(
-            status_code=400,
-            detail="Assignments require both the guard and the site to have a main or sub contractor linked.",
         )
 
     data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
@@ -215,6 +209,12 @@ def get_assignment_by_id(db: Session, assignment_id: int, user_id: int) -> Assig
 
 def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCreate, user_id: int) -> Assignment:
     company = get_company_by_user_id(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import is_portal_role
+
+    if user and is_portal_role(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     db_assignment = _assignment_for_user(db, company.id, assignment_id, user_id)
     
     guard = db.query(Guard).filter(Guard.id == assignment.guard_id, Guard.company_id == company.id).first()
@@ -224,11 +224,6 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
     site = db.query(Site).filter(Site.id == assignment.site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
-    if not guard_has_contractor(guard) or not site_has_contractor(site):
-        raise HTTPException(
-            status_code=400,
-            detail="Assignments require both the guard and the site to have a main or sub contractor linked.",
-        )
 
     data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
     data["shift_type"] = normalize_shift_type(data.get("shift_type"))
@@ -254,6 +249,12 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
 
 def delete_assignment(db: Session, assignment_id: int, user_id: int) -> None:
     company = get_company_by_user_id(db, user_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    from app.services.portal_access import is_portal_role
+
+    if user and is_portal_role(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     assignment = _assignment_for_user(db, company.id, assignment_id, user_id)
 
     shift_audit_service.log_assignment_event(

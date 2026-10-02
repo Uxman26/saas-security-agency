@@ -1277,6 +1277,8 @@ export default function PayrollPage() {
                             <TableHead>Attendance</TableHead>
                             <TableHead className="text-right">Rate</TableHead>
                             <TableHead className="text-right">Pay</TableHead>
+                            <TableHead>Notes</TableHead>
+                            <TableHead className="w-20">Rota</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1319,6 +1321,18 @@ export default function PayrollPage() {
                               </TableCell>
                               <TableCell className="text-right tabular-nums">{sh.shift_rate ? formatMoney(sh.shift_rate) : '\u2014'}</TableCell>
                               <TableCell className="text-right tabular-nums font-medium">{formatMoney(sh.amount)}</TableCell>
+                              <TableCell className="max-w-[12rem] truncate text-muted-foreground" title={sh.note || undefined}>
+                                {sh.note?.trim() || '\u2014'}
+                              </TableCell>
+                              <TableCell>
+                                {canModule(permUser, 'rota', 'view') ? (
+                                  <Button asChild size="sm" variant="outline" className="h-7 px-2">
+                                    <Link href={rotaFixHref(sh, !sh.attendance_marked ? 'attendance' : 'rate')}>Rota</Link>
+                                  </Button>
+                                ) : (
+                                  '\u2014'
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>

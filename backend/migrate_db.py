@@ -44,8 +44,26 @@ def _ensure_user_theme_preference():
         pass
 
 
+def _ensure_user_notification_sound_muted():
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("users"):
+            return
+        cols = {c["name"] for c in insp.get_columns("users")}
+        if "notification_sound_muted" in cols:
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN notification_sound_muted BOOLEAN DEFAULT 0"))
+    except Exception:
+        pass
+
+
 def run():
     _ensure_user_theme_preference()
+    _ensure_user_notification_sound_muted()
     path = get_db_path()
     if not path:
         return
@@ -211,6 +229,10 @@ def run():
         ("guards", "salary_amount", "REAL"),
         ("guards", "salary_rate", "TEXT"),
         ("guards", "salary_frequency", "TEXT"),
+        ("guards", "employment_pay_type", "TEXT"),
+        ("guards", "pay_method", "TEXT"),
+        ("guards", "hourly_rate", "REAL"),
+        ("guards", "per_job_rate", "REAL"),
         ("guards", "payroll_number", "TEXT"),
         ("guards", "pension_scheme", "TEXT"),
         ("guards", "pension_contribution", "TEXT"),
@@ -516,6 +538,7 @@ def run():
         ("post_lockout_watch", "INTEGER DEFAULT 0"),
         ("must_reset_password", "INTEGER DEFAULT 0"),
         ("theme_preference", "TEXT"),
+        ("notification_sound_muted", "INTEGER DEFAULT 0"),
     ):
         if table_exists(cur, "users") and not column_exists(cur, "users", col):
             try:
@@ -2096,6 +2119,7 @@ def run():
         ("payee_account_number", "TEXT"),
         ("payee_iban", "TEXT"),
         ("payee_swift_code", "TEXT"),
+        ("column_headers_json", "TEXT"),
     ):
         if table_exists(cur, "invoices") and not column_exists(cur, "invoices", col):
             try:
@@ -2114,6 +2138,118 @@ def run():
                 cur.execute(f"ALTER TABLE invoice_lines ADD COLUMN {col} {spec}")
             except sqlite3.OperationalError:
                 pass
+
+    for name, ddl in (
+        (
+            "vendors",
+            """CREATE TABLE IF NOT EXISTS vendors (
+                id INTEGER PRIMARY KEY,
+                deleted_at TEXT,
+                deleted_by_user_id INTEGER REFERENCES users(id),
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                name TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                address TEXT,
+                notes TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )""",
+        ),
+        (
+            "fixed_expenses",
+            """CREATE TABLE IF NOT EXISTS fixed_expenses (
+                id INTEGER PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                vendor_id INTEGER REFERENCES vendors(id),
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL DEFAULT 0,
+                vat_rate REAL DEFAULT 20,
+                day_of_month INTEGER DEFAULT 1,
+                start_date TEXT NOT NULL,
+                end_date TEXT,
+                next_run TEXT,
+                account_code TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )""",
+        ),
+        (
+            "recurring_invoices",
+            """CREATE TABLE IF NOT EXISTS recurring_invoices (
+                id INTEGER PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                client_id INTEGER REFERENCES clients(id),
+                site_id INTEGER REFERENCES sites(id),
+                frequency TEXT DEFAULT 'monthly',
+                day_of_month INTEGER DEFAULT 1,
+                start_date TEXT NOT NULL,
+                end_date TEXT,
+                next_run TEXT,
+                tax_rate REAL DEFAULT 20,
+                notes TEXT,
+                template_json TEXT,
+                status TEXT DEFAULT 'active',
+                last_invoice_id INTEGER REFERENCES invoices(id),
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )""",
+        ),
+        (
+            "accounts",
+            """CREATE TABLE IF NOT EXISTS accounts (
+                id INTEGER PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                code TEXT NOT NULL,
+                name TEXT NOT NULL,
+                account_type TEXT NOT NULL,
+                parent_id INTEGER REFERENCES accounts(id),
+                level INTEGER DEFAULT 1,
+                is_system INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )""",
+        ),
+        (
+            "journal_entries",
+            """CREATE TABLE IF NOT EXISTS journal_entries (
+                id INTEGER PRIMARY KEY,
+                company_id INTEGER NOT NULL REFERENCES companies(id),
+                entry_date TEXT NOT NULL,
+                reference TEXT,
+                memo TEXT,
+                source_type TEXT,
+                source_id INTEGER,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )""",
+        ),
+        (
+            "journal_lines",
+            """CREATE TABLE IF NOT EXISTS journal_lines (
+                id INTEGER PRIMARY KEY,
+                entry_id INTEGER NOT NULL REFERENCES journal_entries(id),
+                account_id INTEGER NOT NULL REFERENCES accounts(id),
+                debit REAL DEFAULT 0,
+                credit REAL DEFAULT 0
+            )""",
+        ),
+    ):
+        try:
+            cur.execute(ddl)
+        except sqlite3.OperationalError:
+            pass
+        if name in ("vendors", "fixed_expenses", "recurring_invoices", "accounts", "journal_entries"):
+            try:
+                cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{name}_company_id ON {name}(company_id)")
+            except sqlite3.OperationalError:
+                pass
+
+    if table_exists(cur, "expenses") and not column_exists(cur, "expenses", "vendor_id"):
+        try:
+            cur.execute("ALTER TABLE expenses ADD COLUMN vendor_id INTEGER REFERENCES vendors(id)")
+        except sqlite3.OperationalError:
+            pass
 
     conn.commit()
     conn.close()

@@ -42,6 +42,7 @@ import {
   EMPTY_ATT_FILTERS,
   bookingExceptions,
   computeAttMetrics,
+  dueAndUpcoming,
   filterAttendance,
   groupBySite,
   groupByStaff,
@@ -130,7 +131,7 @@ export default function AttendancePage() {
   const [editBookedOffAt, setEditBookedOffAt] = useState('');
   const [editDateError, setEditDateError] = useState('');
   const [filters, setFilters] = useState<AttFilters>(EMPTY_ATT_FILTERS);
-  const [tab, setTab] = useState<'overview' | 'all' | 'exceptions'>('all');
+  const [tab, setTab] = useState<'overview' | 'all' | 'exceptions'>('overview');
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -171,8 +172,21 @@ export default function AttendancePage() {
   useEffect(() => {
     api.guards.list().then(setGuards).catch(() => {});
     api.sites.list().then(setSites).catch(() => {});
-    api.assignments.list().then(setAssignments).catch(() => {});
+    const today = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 14);
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 3);
+    const start = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
+    const end = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}`;
+    api.assignments.list({ start_date: start, end_date: end }).then(setAssignments).catch(() => {});
   }, []);
+
+  const dueUpcoming = useMemo(
+    () => dueAndUpcoming(assignments, attendance, guards, sites, { siteId: filters.siteId, guardId: filters.guardId }),
+    [assignments, attendance, guards, sites, filters.siteId, filters.guardId]
+  );
 
   const handleBook = async () => {
     if (!bookAssignmentId) return;
@@ -505,6 +519,99 @@ export default function AttendancePage() {
             value={tab}
             onChange={setTab}
           />
+
+          {(dueUpcoming.due.length > 0 || dueUpcoming.upcoming.length > 0) && (
+            <div className="rounded-xl border bg-card p-4 space-y-4 shadow-sm">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-semibold tracking-tight">Today&apos;s due / upcoming</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Live from today&apos;s rota — who needs booking on, and who is coming up.
+                  </p>
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    Due {dueUpcoming.due.length}
+                  </span>
+                  <span className="rounded-full bg-sky-100 px-2.5 py-1 font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
+                    Upcoming {dueUpcoming.upcoming.length}
+                  </span>
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>Staff</TableHead>
+                      <TableHead>Site</TableHead>
+                      <TableHead>Shift</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-28" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...dueUpcoming.due, ...dueUpcoming.upcoming.slice(0, 8)].map((row) => (
+                      <TableRow key={`${row.kind}-${row.assignment_id}`}>
+                        <TableCell>
+                          <Pill tone={row.kind === 'due' ? 'warning' : 'info'}>
+                            {row.kind === 'due' ? 'Due' : 'Upcoming'}
+                          </Pill>
+                        </TableCell>
+                        <TableCell className="font-medium">{row.guard_name}</TableCell>
+                        <TableCell>{row.site_name}</TableCell>
+                        <TableCell className="whitespace-nowrap tabular-nums">
+                          {row.date} · {row.shift_start || '—'}–{row.shift_end || '—'}
+                        </TableCell>
+                        <TableCell>
+                          {row.booked_on && !row.booked_off
+                            ? 'Clocked in'
+                            : row.booked_on && row.booked_off
+                              ? 'Completed'
+                              : row.status === 'not_booked_on'
+                                ? 'Not booked on'
+                                : displayStatus(row.status) || 'Scheduled'}
+                        </TableCell>
+                        <TableCell>
+                          {canCreateMod && !row.booked_on ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7"
+                              onClick={() => {
+                                setBookAssignmentId(String(row.assignment_id));
+                                setBookGuardId(String(row.guard_id));
+                                setBookOff(false);
+                                setBookOpen(true);
+                              }}
+                            >
+                              Book on
+                            </Button>
+                          ) : canCreateMod && row.booked_on && !row.booked_off ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7"
+                              onClick={() => {
+                                setBookAssignmentId(String(row.assignment_id));
+                                setBookGuardId(String(row.guard_id));
+                                setBookOff(true);
+                                setBookOpen(true);
+                              }}
+                            >
+                              Book off
+                            </Button>
+                          ) : (
+                            '—'
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
 
           <StatCards cards={statCards} />
 

@@ -19,9 +19,91 @@ def _site_staff_rate(site: Optional[Site]) -> Optional[float]:
 _HOURLY = re.compile(r"hour|\bhr\b|\bp/?h\b", re.I)
 
 def profile_hourly_rate(guard: Optional[Guard]) -> Optional[float]:
-    if not guard or not guard.salary_amount or guard.salary_amount <= 0:
+    if not guard:
+        return None
+    pay_type = (getattr(guard, "employment_pay_type", None) or "").strip().lower()
+    method = (getattr(guard, "pay_method", None) or "").strip().lower()
+    if pay_type == "salaried":
+        return salaried_hourly_rate(guard)
+    if method == "per_job":
+        return None
+    hr = getattr(guard, "hourly_rate", None)
+    if hr is not None and float(hr) > 0:
+        return float(hr)
+    if not guard.salary_amount or guard.salary_amount <= 0:
         return None
     return guard.salary_amount if _HOURLY.search(guard.salary_rate or "") else None
+
+
+def salaried_hourly_rate(guard: Guard) -> Optional[float]:
+    salary = float(getattr(guard, "salary_amount", None) or 0)
+    if salary <= 0:
+        return None
+    weekly = float(getattr(guard, "weekly_contracted_hours", None) or 0)
+    if weekly <= 0:
+        hrs = float(getattr(guard, "contracted_week_hrs", None) or 0)
+        mins = float(getattr(guard, "contracted_week_mins", None) or 0)
+        weekly = hrs + mins / 60.0
+    if weekly <= 0:
+        return None
+    freq = (getattr(guard, "salary_frequency", None) or getattr(guard, "pay_frequency", None) or "annual").lower()
+    if "week" in freq:
+        annual = salary * 52
+    elif "month" in freq:
+        annual = salary * 12
+    else:
+        annual = salary
+    return round(annual / (weekly * 52), 4)
+
+
+def profile_per_job_rate(guard: Optional[Guard]) -> Optional[float]:
+    if not guard:
+        return None
+    if (getattr(guard, "employment_pay_type", None) or "").strip().lower() != "non_salaried":
+        return None
+    if (getattr(guard, "pay_method", None) or "").strip().lower() != "per_job":
+        return None
+    rate = getattr(guard, "per_job_rate", None)
+    if rate is None or float(rate) < 0:
+        return None
+    return float(rate)
+
+
+def resolve_shift_pay(
+    db: Session,
+    company_id: int,
+    *,
+    guard_id: int,
+    site_id: Optional[int],
+    shift_type: str,
+    shift_date: date,
+    hours: float,
+    locked_shift_rate: Optional[float] = None,
+) -> dict:
+    guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
+    job = profile_per_job_rate(guard)
+    if job is not None:
+        rate = float(locked_shift_rate) if locked_shift_rate is not None and float(locked_shift_rate) > 0 else job
+        return {"rate": rate, "amount": round(rate, 2), "basis": "per_job", "hours": hours}
+    if locked_shift_rate is not None and float(locked_shift_rate) > 0:
+        rate = float(locked_shift_rate)
+        return {
+            "rate": rate,
+            "amount": round(max(0.0, hours) * rate, 2),
+            "basis": "shift_rate",
+            "hours": hours,
+        }
+    hourly = profile_hourly_rate(guard)
+    if hourly is not None and hourly > 0:
+        basis = "salaried" if (getattr(guard, "employment_pay_type", None) or "").lower() == "salaried" else "hourly"
+        return {"rate": hourly, "amount": round(max(0.0, hours) * hourly, 2), "basis": basis, "hours": hours}
+    rate = resolve_pay_rate(db, company_id, guard_id, site_id or 0, shift_type or "day", shift_date)
+    return {
+        "rate": float(rate or 0),
+        "amount": round(max(0.0, hours) * float(rate or 0), 2),
+        "basis": "fallback",
+        "hours": hours,
+    }
 
 def _guard_rate_for_date(db: Session, guard_id: int, site_id: Optional[int], shift_type: str, d: date) -> Optional[float]:
     profile = profile_hourly_rate(db.query(Guard).filter(Guard.id == guard_id).first())

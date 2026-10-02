@@ -181,7 +181,7 @@ export function ControlOpsAssistant({
                 ))}
               </div>
             ) : null}
-            {m.proposal ? (
+            {m.proposal && !(m.proposal as { needs_clarification?: boolean }).needs_clarification ? (
               <div className="mt-2 flex gap-2">
                 <Button
                   size="sm"
@@ -205,6 +205,30 @@ export function ControlOpsAssistant({
                 >
                   {tc('cancel')}
                 </Button>
+              </div>
+            ) : null}
+            {m.proposal && (m.proposal as { needs_clarification?: boolean }).needs_clarification ? (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {((m.proposal as { options?: { id: number; name: string }[] }).options || []).map((o) => (
+                  <Button
+                    key={o.id}
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={busy}
+                    onClick={() => {
+                      const ctype = (m.proposal as { clarification_type?: string }).clarification_type;
+                      const partial = (m.proposal as { partial?: Record<string, unknown> }).partial || {};
+                      const msg =
+                        ctype === 'site'
+                          ? `Create shift at ${o.name} on ${partial.date || ''} ${partial.shift_start || ''}-${partial.shift_end || ''}`
+                          : `Create ${o.name} shift at ${partial.site_name || ''} ${partial.shift_start || ''}-${partial.shift_end || ''} on ${partial.date || ''}`;
+                      void send(msg);
+                    }}
+                  >
+                    {o.name}
+                  </Button>
+                ))}
               </div>
             ) : null}
           </div>

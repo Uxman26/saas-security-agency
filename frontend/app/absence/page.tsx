@@ -8,8 +8,10 @@ import { InlineTableSkeleton } from '@/components/skeletons';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import {
   DashboardHeader,
@@ -31,7 +33,7 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { useGuards } from '@/hooks/use-guards';
-import { CalendarOff, CheckCircle2, Clock, HeartPulse, Plane, Trash2, Users, X } from 'lucide-react';
+import { CalendarOff, CheckCircle2, Clock, HeartPulse, Loader2, Plane, Plus, Trash2, Users, X } from 'lucide-react';
 
 /** Kept in step with the Absence tab on the employee profile, so the two read alike. */
 const KINDS: { key: AbsenceKind; label: string }[] = [
@@ -83,12 +85,14 @@ export default function AbsencePage() {
   // The API is the real boundary; these stop the UI offering actions it already knows
   // the role will be refused.
   const { user: permUser } = useAuth();
+  const canCreate = canModule(permUser, 'absence', 'create');
   const canEdit = canModule(permUser, 'absence', 'edit');
   const canDelete = canModule(permUser, 'absence', 'delete');
 
   const [rows, setRows] = useState<AbsenceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   const [guardId, setGuardId] = useState('all');
@@ -206,7 +210,7 @@ export default function AbsencePage() {
   }, [pageCount]);
 
   const hoursFor = (k: AbsenceKind) =>
-    rows.filter((r) => r.kind === k && r.status !== 'declined').reduce((sum, r) => sum + (r.hours || 0), 0);
+    rows.filter((r) => r.kind === k && r.status === 'approved').reduce((sum, r) => sum + (r.hours || 0), 0);
   const pendingCount = rows.filter((r) => r.status === 'pending').length;
 
   const statCards: StatCardSpec[] = [
@@ -238,6 +242,21 @@ export default function AbsencePage() {
               title="Absence"
               hint="Absences are recorded against an employee, where their entitlement and balance are shown. This register is every employee's absence in one place."
               description="Annual leave, sickness and lateness across the company. Review, approve and keep the record straight."
+              actions={
+                canCreate ? (
+                  <Button onClick={() => setAddOpen(true)}>
+                    <Plus className="mr-1.5 size-4" />
+                    Record absence
+                  </Button>
+                ) : null
+              }
+            />
+
+            <RecordAbsenceDialog
+              open={addOpen}
+              onOpenChange={setAddOpen}
+              guardOptions={guardOptions}
+              onSaved={load}
             />
 
             <div className="mb-6 mt-6">
@@ -324,8 +343,8 @@ export default function AbsencePage() {
                   <InlineTableSkeleton />
                 ) : rows.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
-                    No absences recorded for these filters. Absences are added on an employee’s profile, under the
-                    Absence tab.
+                    No absences recorded for these filters.
+                    {canCreate ? ' Use Record absence to add one.' : ' Absences are added on an employee’s profile.'}
                   </div>
                 ) : total === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">No absences match your search.</div>
@@ -464,5 +483,155 @@ export default function AbsencePage() {
         </div>
       </AppShell>
     </ProtectedRoute>
+  );
+}
+
+function RecordAbsenceDialog({
+  open,
+  onOpenChange,
+  guardOptions,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  guardOptions: { value: string; label: string }[];
+  onSaved: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [guardId, setGuardId] = useState('');
+  const [kind, setKind] = useState<AbsenceKind>('annual_leave');
+  const [start, setStart] = useState(today);
+  const [end, setEnd] = useState(today);
+  const [hours, setHours] = useState('');
+  const [status, setStatus] = useState<AbsenceStatus>('approved');
+  const [reason, setReason] = useState('');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setGuardId('');
+    setKind('annual_leave');
+    setStart(today);
+    setEnd(today);
+    setHours('');
+    setStatus('approved');
+    setReason('');
+    setNotes('');
+  }, [open, today]);
+
+  const save = async () => {
+    const gid = parseInt(guardId, 10);
+    if (!gid || !start) return;
+    setBusy(true);
+    try {
+      await api.absence.create({
+        guard_id: gid,
+        kind,
+        start_date: start,
+        end_date: end || start,
+        hours: hours.trim() ? parseFloat(hours) : undefined,
+        status,
+        reason: reason.trim() || undefined,
+        notes: notes.trim() || undefined,
+      });
+      toast.success(`${KIND_LABEL[kind] ?? 'Absence'} recorded`);
+      onOpenChange(false);
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not record that');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => (!busy ? onOpenChange(v) : undefined)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record absence</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>Employee</Label>
+            <SearchableSelect
+              value={guardId || 'none'}
+              options={guardOptions}
+              noneOption={{ value: 'none', label: 'Select employee…' }}
+              placeholder="Select employee…"
+              searchPlaceholder="Search employees…"
+              emptyText="No matching employees"
+              onChange={(v) => setGuardId(v === 'none' ? '' : v)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Type</Label>
+            <Select value={kind} onValueChange={(v) => setKind(v as AbsenceKind)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {KINDS.map((k) => (
+                  <SelectItem key={k.key} value={k.key}>
+                    {k.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>From</Label>
+              <Input type="date" value={start} max={end || undefined} onChange={(e) => setStart(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>To</Label>
+              <Input type="date" value={end} min={start || undefined} onChange={(e) => setEnd(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Hours</Label>
+            <Input
+              type="number"
+              step="0.25"
+              min="0"
+              placeholder="Blank = average working day × days"
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as AbsenceStatus)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="declined">Declined</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>Reason</Label>
+            <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} />
+          </div>
+          <div className="space-y-1">
+            <Label>Notes</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={1000} />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 border-t pt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button onClick={() => void save()} disabled={busy || !guardId || !start}>
+            {busy ? <Loader2 className="mr-1.5 size-4 animate-spin" /> : null}
+            Save
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

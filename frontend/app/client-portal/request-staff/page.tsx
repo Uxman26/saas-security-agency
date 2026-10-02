@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
-import { can } from '@/lib/permissions';
+import { can, canModule } from '@/lib/permissions';
 import type { Client, Site, StaffRequest } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
@@ -57,6 +57,15 @@ function RequestStaffPage() {
   const searchParams = useSearchParams();
   const tab = searchParams.get('tab') === 'history' ? 'history' : 'new';
   const { user } = useAuth();
+  const canWrite =
+    can(user, 'staff_req.write') ||
+    canModule(user, 'client_portal', 'create') ||
+    canModule(user, 'client_portal', 'bulk_create');
+  const canViewHistory =
+    canWrite ||
+    can(user, 'staff_req.read') ||
+    canModule(user, 'staff_requests', 'view') ||
+    canModule(user, 'client_portal', 'view');
 
   const [clients, setClients] = useState<Client[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -77,11 +86,13 @@ function RequestStaffPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      can(user, 'clients.read') ? api.clients.list() : Promise.resolve([]),
-      can(user, 'sites.read') ? api.sites.list() : Promise.resolve([]),
-      api.staffRequests.list(),
-    ])
+    const loadSites = can(user, 'sites.read') || canModule(user, 'sites', 'view')
+      ? api.sites.list()
+      : api.portal.sites();
+    const loadClients = can(user, 'clients.read') || canModule(user, 'clients', 'view')
+      ? api.clients.list()
+      : Promise.resolve([]);
+    Promise.all([loadClients, loadSites, api.staffRequests.list()])
       .then(([c, s, r]) => {
         setClients(c);
         setSites(s);
@@ -96,7 +107,12 @@ function RequestStaffPage() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  const clientSites = useMemo(() => sites, [sites]);
+  const clientSites = useMemo(() => {
+    if (!clientId) return sites;
+    const cid = Number(clientId);
+    const filtered = sites.filter((s) => s.client_id === cid);
+    return filtered.length ? filtered : sites;
+  }, [sites, clientId]);
 
   const updateRow = (key: string, patch: Partial<ShiftRow>) => {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -160,12 +176,27 @@ function RequestStaffPage() {
     }
   };
 
-  if (!can(user, 'staff_req.write')) {
+  if (!canWrite && !canViewHistory) {
     return (
       <ProtectedRoute>
         <AppShell>
           <div className="container mx-auto px-4 py-12 text-center text-muted-foreground">
-            You do not have permission to submit staff requests.
+            You do not have permission to view staff requests.
+          </div>
+        </AppShell>
+      </ProtectedRoute>
+    );
+  }
+
+  if (!canWrite && tab === 'new') {
+    return (
+      <ProtectedRoute>
+        <AppShell>
+          <div className="container mx-auto px-4 py-12 text-center space-y-3">
+            <p className="text-muted-foreground">You do not have permission to submit staff requests.</p>
+            <Button variant="outline" asChild>
+              <Link href="/client-portal/request-staff?tab=history">View my requests</Link>
+            </Button>
           </div>
         </AppShell>
       </ProtectedRoute>
@@ -243,8 +274,8 @@ function RequestStaffPage() {
                         </p>
                       ) : null}
                       {r.status === 'approved' && r.rota_plan_id ? (
-                        <Link href={`/rota/calendar?id=${r.rota_plan_id}`} className="text-xs text-sky-600 hover:underline">
-                          View on rota
+                        <Link href="/my-portal" className="text-xs text-sky-600 hover:underline">
+                          View in My workspace
                         </Link>
                       ) : null}
                     </div>

@@ -320,9 +320,13 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
 
     before = {k: _snap(getattr(inv, k)) for k in payload.keys() if hasattr(inv, k)}
     bank_account_id = payload.pop("client_bank_account_id", None) if "client_bank_account_id" in payload else ...
+    headers = payload.pop("column_headers", None) if "column_headers" in payload else ...
     for k, v in payload.items():
         if hasattr(inv, k):
             setattr(inv, k, v)
+    if headers is not ...:
+        import json
+        inv.column_headers_json = json.dumps(headers) if headers is not None else None
     if bank_account_id is not ...:
         if bank_account_id is None:
             client_bank_service.apply_account_to_invoice(db, inv, account=None, company=company)
@@ -769,6 +773,12 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
     db.refresh(inv)
     log_invoice_audit(db, company.id, user_id, inv.id, "status_changed", {"from": prev, "to": status})
     db.commit()
+    if status in ("issued", "sent") and prev not in ("issued", "sent"):
+        try:
+            from app.services import accounting_service
+            accounting_service.post_invoice_issued(db, company.id, inv)
+        except Exception:
+            pass
     if status == "sent" and prev != "sent":
         from app.services import sms_trigger_service, email_trigger_service
         sms_trigger_service.notify_invoice_sent(db, user_id, inv)

@@ -160,7 +160,22 @@ export default function InvoiceViewPage() {
 
             {err && <p className="text-destructive mb-4 print:hidden">{err}</p>}
 
-            {inv && <InvoiceDocument invoice={inv} printId="invoice-print" />}
+            {inv && (
+              <InvoiceDocument
+                invoice={inv}
+                printId="invoice-print"
+                editableHeaders={canEdit}
+                onHeadersChange={async (headers) => {
+                  try {
+                    const updated = await api.invoices.patch(inv.id, { column_headers: headers });
+                    setInv(updated);
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : 'Failed to save column headers');
+                    reload();
+                  }
+                }}
+              />
+            )}
 
             {inv && canViewCn ? (
               <Card className="border-border/60 mt-8 print:hidden">

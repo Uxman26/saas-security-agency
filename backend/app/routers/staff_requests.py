@@ -1,22 +1,37 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.database import get_db
 from app.models import User
-from app.rbac import require_module
+from app.rbac import require_module, user_has_permission_db
 from app.schemas import StaffRequestBulkCreate, StaffRequestCreate, StaffRequestResponse, StaffRequestReview
 from app.services import staff_request_service
 
 router = APIRouter(prefix="/staff-requests", tags=["staff-requests"])
 
 
+def _require_list_or_portal(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> User:
+    can_staff = user_has_permission_db(db, user, "staff_requests.view")
+    can_portal = user_has_permission_db(db, user, "client_portal.view")
+    if not can_staff and not can_portal:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    from app.services.plan_enforcement import enforce_module_entitlement
+
+    enforce_module_entitlement(db, user, "staff_requests" if can_staff else "client_portal")
+    return user
+
+
 @router.get("", response_model=list[StaffRequestResponse])
 def list_requests(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("staff_requests", "view")),
+    current_user: User = Depends(_require_list_or_portal),
 ):
     return staff_request_service.list_staff_requests(db, current_user, status)
 
@@ -43,7 +58,7 @@ def create_requests_bulk(
 def get_request(
     request_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("staff_requests", "view")),
+    current_user: User = Depends(_require_list_or_portal),
 ):
     return staff_request_service.get_staff_request(db, current_user, request_id)
 

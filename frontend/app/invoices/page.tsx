@@ -2,6 +2,7 @@
 import { InlineKpiTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -82,6 +83,7 @@ function formatGbp(n: unknown): string {
 export default function InvoicesPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,6 +95,10 @@ export default function InvoicesPage() {
   const [genEnd, setGenEnd] = useState('');
   const [genLoading, setGenLoading] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('custom') === '1') setCustomOpen(true);
+  }, [searchParams]);
   const [customLoading, setCustomLoading] = useState(false);
   const [customClientId, setCustomClientId] = useState('');
   const [customInvoiceDate, setCustomInvoiceDate] = useState('');

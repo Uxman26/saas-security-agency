@@ -16,6 +16,7 @@ from app.schemas import (
     ChangePasswordRequest,
     ProfileUpdate,
     ThemeUpdate,
+    NotificationSoundUpdate,
     ResendVerificationRequest,
     ResetPasswordRequest,
     SignupResponse,
@@ -359,6 +360,7 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
         sidebar_modules=sidebar_modules,
         enabled_modules=enabled_modules,
         theme_preference=theme_preference,
+        notification_sound_muted=bool(getattr(current_user, "notification_sound_muted", False)),
     )
 
 
@@ -414,6 +416,18 @@ def patch_my_theme(
     current_user: User = Depends(get_current_user),
 ):
     current_user.theme_preference = body.theme
+    db.commit()
+    db.refresh(current_user)
+    return _me_response(db, current_user)
+
+
+@router.patch("/me/notification-sound", response_model=UserMeResponse)
+def patch_my_notification_sound(
+    body: NotificationSoundUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.notification_sound_muted = bool(body.muted)
     db.commit()
     db.refresh(current_user)
     return _me_response(db, current_user)

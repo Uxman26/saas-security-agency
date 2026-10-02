@@ -21,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { formatDateUK } from '@/lib/date-format';
 import { toast } from '@/lib/toast';
@@ -87,12 +88,17 @@ type FieldDef = { key: keyof Guard; label: string; type?: string };
 
 const SECTIONS: Record<string, { title: string; subtitle: string; fields: FieldDef[] }> = {
   salary: {
-    title: 'Salary information',
-    subtitle: 'Salary amount, rate and payment frequency',
+    title: 'Salary & pay structure',
+    subtitle: 'Salaried or non-salaried rates used by rota and payroll',
     fields: [
+      { key: 'employment_pay_type', label: 'Employment type (salaried / non_salaried)' },
+      { key: 'pay_method', label: 'Payment method (per_hour / per_job)' },
       { key: 'salary_amount', label: 'Salary amount', type: 'number' },
-      { key: 'salary_rate', label: 'Rate (e.g. per year, per hour)' },
-      { key: 'salary_frequency', label: 'Payment frequency' },
+      { key: 'salary_rate', label: 'Salary rate label (e.g. per year)' },
+      { key: 'salary_frequency', label: 'Salary payment frequency' },
+      { key: 'weekly_contracted_hours', label: 'Weekly contracted hours', type: 'number' },
+      { key: 'hourly_rate', label: 'Per hour rate', type: 'number' },
+      { key: 'per_job_rate', label: 'Per job rate', type: 'number' },
       { key: 'pay_frequency', label: 'Pay run frequency' },
     ],
   },
@@ -193,6 +199,33 @@ export function EmploymentTab({
 
   const save = async () => {
     if (!section) return;
+    if (section === 'salary') {
+      const payType = (values.employment_pay_type || '').trim();
+      if (payType === 'salaried') {
+        if (!values.salary_amount || Number(values.salary_amount) < 0) {
+          toast.error('Salary is required for salaried staff');
+          return;
+        }
+        if (!values.weekly_contracted_hours || Number(values.weekly_contracted_hours) <= 0) {
+          toast.error('Weekly hours are required for salaried staff');
+          return;
+        }
+      }
+      if (payType === 'non_salaried') {
+        if (!values.pay_method) {
+          toast.error('Payment method is required');
+          return;
+        }
+        if (values.pay_method === 'per_hour' && (values.hourly_rate === '' || Number(values.hourly_rate) < 0)) {
+          toast.error('Hourly rate is required');
+          return;
+        }
+        if (values.pay_method === 'per_job' && (values.per_job_rate === '' || Number(values.per_job_rate) < 0)) {
+          toast.error('Per job rate is required');
+          return;
+        }
+      }
+    }
     setBusy(true);
     try {
       const def = SECTIONS[section];
@@ -255,7 +288,17 @@ export function EmploymentTab({
               ) : null}
             </div>
             <div className="grid gap-3 p-3 sm:grid-cols-2">
-              <Field label="Employment type" value={guard.employee_type} />
+              <Field
+                label="Employment pay type"
+                value={
+                  guard.employment_pay_type === 'salaried'
+                    ? 'Salaried'
+                    : guard.employment_pay_type === 'non_salaried'
+                      ? 'Non-salaried'
+                      : guard.employment_pay_type
+                }
+              />
+              <Field label="Hours pattern" value={guard.employee_type} />
               <Field label="Entitlement unit" value={guard.entitlement_unit || 'Hours'} />
               <Field
                 label="Contract start date"
@@ -263,8 +306,56 @@ export function EmploymentTab({
               />
               <Field
                 label="Contracted hours per week"
-                value={hoursLabel(guard.contracted_week_hrs, guard.contracted_week_mins)}
+                value={
+                  guard.weekly_contracted_hours != null
+                    ? `${guard.weekly_contracted_hours} hrs`
+                    : hoursLabel(guard.contracted_week_hrs, guard.contracted_week_mins)
+                }
               />
+              {guard.employment_pay_type === 'salaried' ? (
+                <>
+                  <Field
+                    label="Salary"
+                    value={
+                      guard.salary_amount != null
+                        ? `£${Number(guard.salary_amount).toFixed(2)}${guard.salary_frequency ? ` / ${guard.salary_frequency}` : ''}`
+                        : null
+                    }
+                  />
+                  <Field
+                    label="Effective hourly (for rota/payroll)"
+                    value={
+                      guard.salary_amount != null && Number(guard.weekly_contracted_hours || 0) > 0
+                        ? `£${(
+                            (() => {
+                              const salary = Number(guard.salary_amount);
+                              const weekly = Number(guard.weekly_contracted_hours);
+                              const freq = (guard.salary_frequency || 'annual').toLowerCase();
+                              const annual = freq.includes('week')
+                                ? salary * 52
+                                : freq.includes('month')
+                                  ? salary * 12
+                                  : salary;
+                              return annual / (weekly * 52);
+                            })()
+                          ).toFixed(2)}`
+                        : null
+                    }
+                  />
+                </>
+              ) : null}
+              {guard.employment_pay_type === 'non_salaried' && guard.pay_method === 'per_hour' ? (
+                <Field
+                  label="Hourly rate"
+                  value={guard.hourly_rate != null ? `£${Number(guard.hourly_rate).toFixed(2)}` : null}
+                />
+              ) : null}
+              {guard.employment_pay_type === 'non_salaried' && guard.pay_method === 'per_job' ? (
+                <Field
+                  label="Per job rate"
+                  value={guard.per_job_rate != null ? `£${Number(guard.per_job_rate).toFixed(2)}` : null}
+                />
+              ) : null}
             </div>
           </div>
 
@@ -430,16 +521,133 @@ export function EmploymentTab({
           {section ? (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
-                {SECTIONS[section].fields.map((f) => (
-                  <div key={String(f.key)} className="space-y-1">
-                    <Label>{f.label}</Label>
-                    <Input
-                      type={f.type ?? 'text'}
-                      value={values[f.key as string] ?? ''}
-                      onChange={(e) => setValues((p) => ({ ...p, [f.key as string]: e.target.value }))}
-                    />
-                  </div>
-                ))}
+                {section === 'salary' ? (
+                  <>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label>Employment type</Label>
+                      <Select
+                        value={values.employment_pay_type || 'none'}
+                        onValueChange={(v) =>
+                          setValues((p) => ({
+                            ...p,
+                            employment_pay_type: v === 'none' ? '' : v,
+                            pay_method: v === 'salaried' ? '' : p.pay_method,
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Not set</SelectItem>
+                          <SelectItem value="salaried">Salaried</SelectItem>
+                          <SelectItem value="non_salaried">Non-salaried</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {values.employment_pay_type === 'salaried' ? (
+                      <>
+                        <div className="space-y-1">
+                          <Label>Salary</Label>
+                          <Input
+                            type="number"
+                            value={values.salary_amount ?? ''}
+                            onChange={(e) => setValues((p) => ({ ...p, salary_amount: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Weekly hours</Label>
+                          <Input
+                            type="number"
+                            value={values.weekly_contracted_hours ?? ''}
+                            onChange={(e) => setValues((p) => ({ ...p, weekly_contracted_hours: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Salary rate label</Label>
+                          <Input
+                            value={values.salary_rate ?? ''}
+                            onChange={(e) => setValues((p) => ({ ...p, salary_rate: e.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Salary frequency</Label>
+                          <Select
+                            value={values.salary_frequency || 'annual'}
+                            onValueChange={(v) => setValues((p) => ({ ...p, salary_frequency: v }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="annual">Annual</SelectItem>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                              <SelectItem value="weekly">Weekly</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </>
+                    ) : null}
+                    {values.employment_pay_type === 'non_salaried' ? (
+                      <>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>Payment method</Label>
+                          <Select
+                            value={values.pay_method || 'none'}
+                            onValueChange={(v) => setValues((p) => ({ ...p, pay_method: v === 'none' ? '' : v }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Select…</SelectItem>
+                              <SelectItem value="per_hour">Per hour</SelectItem>
+                              <SelectItem value="per_job">Per job</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {values.pay_method === 'per_hour' ? (
+                          <div className="space-y-1">
+                            <Label>Per hour rate</Label>
+                            <Input
+                              type="number"
+                              value={values.hourly_rate ?? ''}
+                              onChange={(e) => setValues((p) => ({ ...p, hourly_rate: e.target.value }))}
+                            />
+                          </div>
+                        ) : null}
+                        {values.pay_method === 'per_job' ? (
+                          <div className="space-y-1">
+                            <Label>Per job rate</Label>
+                            <Input
+                              type="number"
+                              value={values.per_job_rate ?? ''}
+                              onChange={(e) => setValues((p) => ({ ...p, per_job_rate: e.target.value }))}
+                            />
+                          </div>
+                        ) : null}
+                      </>
+                    ) : null}
+                    <div className="space-y-1">
+                      <Label>Pay run frequency</Label>
+                      <Input
+                        value={values.pay_frequency ?? ''}
+                        onChange={(e) => setValues((p) => ({ ...p, pay_frequency: e.target.value }))}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  SECTIONS[section].fields.map((f) => (
+                    <div key={String(f.key)} className="space-y-1">
+                      <Label>{f.label}</Label>
+                      <Input
+                        type={f.type ?? 'text'}
+                        value={values[f.key as string] ?? ''}
+                        onChange={(e) => setValues((p) => ({ ...p, [f.key as string]: e.target.value }))}
+                      />
+                    </div>
+                  ))
+                )}
               </div>
               {section === 'termination' ? (
                 <p className="rounded-md border bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">

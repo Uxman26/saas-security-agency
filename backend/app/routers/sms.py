@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Optional
+from datetime import date
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -29,5 +30,11 @@ def send_sms(body: SmsSendRequest, db: Session = Depends(get_db), current_user: 
 
 
 @router.get("/logs", response_model=List[SmsLogResponse])
-def sms_logs(db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("sms", "logs_view"))):
-    return [SmsLogResponse.model_validate(r) for r in sms_service.list_sms_logs(db, current_user.id)]
+def sms_logs(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("sms", "logs_view")),
+):
+    rows = sms_service.list_sms_logs(db, current_user.id, start_date=start_date, end_date=end_date)
+    return [SmsLogResponse.model_validate(r) for r in rows]

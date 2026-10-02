@@ -42,14 +42,22 @@ def _hours_from_shift(shift: dict) -> float:
     return max(0.0, duration / 60)
 
 
-def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
+def _planner_payroll_lines(plan: RotaPlan, db: Session = None, company_id: int = None) -> list[dict]:
     try:
         payload = json.loads(plan.planner_data or "{}")
     except (json.JSONDecodeError, TypeError):
         return []
 
-    # Always derive from live shifts + attendance status rather than the frozen
-    # attendance.hours / payrollLines snapshots.
+    from app.services.rate_service import resolve_shift_pay
+
+    site_id_by_name = {}
+    if db is not None and company_id is not None:
+        site_id_by_name = {
+            (name or "").strip().lower(): sid
+            for sid, name in db.query(Site.id, Site.name).filter(Site.company_id == company_id).all()
+            if name
+        }
+
     lines: list[dict] = []
     attendance = payload.get("attendance") or {}
     for guard_id, by_date in (payload.get("shifts") or {}).items():
@@ -63,15 +71,34 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
                     status = "on_time"
                 if status not in PAYABLE_STATUSES:
                     continue
-                # A paid cancellation is paid on the hours that were agreed when it was
-                # called off, not on a span that nobody worked.
                 if status == CANCELLED_PAID:
                     hours = max(0.0, _number(record.get("paidHours")))
                 else:
                     hours = _hours_from_shift(shift)
                 if hours <= 0:
                     continue
-                rate = _number(shift.get("shiftRate"))
+                locked = _number(shift.get("shiftRate"))
+                site_name = str(shift.get("site") or "").strip().lower()
+                site_id = site_id_by_name.get(site_name)
+                rate = locked
+                amount = hours * rate
+                if db is not None and company_id is not None:
+                    try:
+                        on_date = date.fromisoformat(str(day)[:10])
+                        pay = resolve_shift_pay(
+                            db,
+                            company_id,
+                            guard_id=int(guard_id),
+                            site_id=site_id,
+                            shift_type=str(shift.get("shiftType") or "day"),
+                            shift_date=on_date,
+                            hours=hours,
+                            locked_shift_rate=locked if locked > 0 else None,
+                        )
+                        rate = float(pay.get("rate") or 0)
+                        amount = float(pay.get("amount") or 0)
+                    except (TypeError, ValueError):
+                        pass
                 lines.append(
                     {
                         "guardId": str(guard_id),
@@ -79,7 +106,7 @@ def _planner_payroll_lines(plan: RotaPlan) -> list[dict]:
                         "site": shift.get("site") or "",
                         "hours": hours,
                         "rate": rate,
-                        "amount": hours * rate,
+                        "amount": amount,
                         "status": status,
                     }
                 )
@@ -166,6 +193,12 @@ def create_payroll(db: Session, data: PayrollCreate, user_id: int) -> Payroll:
     db.add(pr)
     db.commit()
     db.refresh(pr)
+    try:
+        from app.services import accounting_service
+
+        accounting_service.post_payroll(db, company.id, pr)
+    except Exception:
+        pass
     return pr
 
 def get_payrolls(
@@ -334,7 +367,7 @@ def calculate_payroll_batch(
 
     by_guard: dict[int, list[dict]] = {}
     for plan in plans_query.all():
-        for line in _planner_payroll_lines(plan):
+        for line in _planner_payroll_lines(plan, db, company.id):
             try:
                 line_date = date.fromisoformat(str(line.get("date")))
                 line_guard_id = int(line.get("guardId"))
@@ -379,6 +412,12 @@ def calculate_payroll_batch(
     db.commit()
     for pr in created:
         db.refresh(pr)
+        try:
+            from app.services import accounting_service
+
+            accounting_service.post_payroll(db, company.id, pr)
+        except Exception:
+            pass
     return created
 
 # Attendance marks that pay out. On time and Late were worked; a paid cancellation was
@@ -446,25 +485,34 @@ def preview_pay(
     people: dict[int, PayrollPreviewEmployee] = {}
     missing_rate = 0
     unmarked_shifts = 0
+    gross_by_key: dict[tuple, float] = {}
+
+    from app.services.rate_service import resolve_shift_pay
 
     for d in details:
         scheduled_hours = round(float(d.hours or 0), 2)
-        # Pay for a cancelled-but-paid shift follows the agreed figure, so that is what
-        # this run bills and totals; the rota'd span is kept alongside for reference.
         hours = (
             round(max(0.0, _number(d.paid_hours)), 2)
             if d.attendance_status == CANCELLED_PAID
             else scheduled_hours
         )
-        rate = _number(d.shift_rate)
+        locked = _number(d.shift_rate)
+        pay = resolve_shift_pay(
+            db,
+            company.id,
+            guard_id=d.guard_id,
+            site_id=d.site_id,
+            shift_type=getattr(d, "shift_type", None) or "day",
+            shift_date=d.date,
+            hours=hours,
+            locked_shift_rate=locked if locked > 0 else None,
+        )
+        rate = float(pay.get("rate") or 0)
+        gross = float(pay.get("amount") or 0)
         payable = d.attendance_status in PAYABLE_STATUSES
-        amount = round(hours * rate, 2) if payable else 0.0
+        amount = gross if payable else 0.0
         if payable and rate <= 0:
             missing_rate += 1
-        # A shift that has been and gone with nobody marking it is held back from pay in
-        # exactly the same way as a recorded absence, so it has to be called out before
-        # payroll is generated. Future shifts are not late yet; unpublished planner rows
-        # (synthetic negative ids) have no attendance to mark.
         unmarked = (
             not getattr(d, "attendance_marked", False)
             and d.attendance_status != "scheduled"
@@ -473,6 +521,8 @@ def preview_pay(
         if unmarked:
             unmarked_shifts += 1
 
+        key = (d.id, d.guard_id, str(d.date), d.site_id)
+        gross_by_key[key] = gross
         shifts.append(
             PayrollPreviewShift(
                 assignment_id=d.id,
@@ -489,11 +539,12 @@ def preview_pay(
                 paid_hours=d.paid_hours,
                 attendance_status=d.attendance_status,
                 late_minutes=d.late_minutes,
-                shift_rate=d.shift_rate,
+                shift_rate=rate if rate > 0 else d.shift_rate,
                 rota_plan_id=d.rota_plan_id,
                 attendance_marked=not unmarked,
                 payable=payable,
                 amount=amount,
+                note=getattr(d, "note", None),
             )
         )
 
@@ -539,10 +590,16 @@ def preview_pay(
         attended_hours=attended_hours,
         unattended_hours=round(rota_hours - attended_hours - upcoming_hours, 2),
         amount=round(sum(x.amount for x in shifts), 2),
-        rota_amount=round(sum(x.hours * _number(x.shift_rate) for x in shifts), 2),
+        rota_amount=round(sum(gross_by_key.values()), 2),
         upcoming_shifts=len(upcoming),
         upcoming_hours=upcoming_hours,
-        held_back_amount=round(sum(x.hours * _number(x.shift_rate) for x in missed), 2),
+        held_back_amount=round(
+            sum(
+                gross_by_key.get((x.assignment_id, x.guard_id, str(x.date), x.site_id), 0.0)
+                for x in missed
+            ),
+            2,
+        ),
         shifts_missing_rate=missing_rate,
         unmarked_shifts=unmarked_shifts,
         unmarked_hours=round(sum(x.unmarked_hours for x in by_employee), 2),

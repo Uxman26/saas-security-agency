@@ -266,7 +266,7 @@ export default function PaymentsPage() {
       <div>
         <div className="container mx-auto px-4 py-8">
           <DashboardHeader
-            title="Payments"
+            title="Transactions"
             hint="A payment is recorded against an invoice, so an invoice moves to Partial or Paid as payments land."
             description="Record and reconcile the money received against your invoices."
             actions={

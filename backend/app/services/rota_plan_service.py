@@ -407,7 +407,31 @@ def list_rota_plans(
             or 0
         )
         item = _to_list_item(db, plan)
-        out.append(item.model_copy(update={"shift_count": shift_count, "staff_count": int(staff_count)}))
+        # Metadata must match what this login can see — never the whole shared plan.
+        site_q = (
+            db.query(Site.name, Client.name)
+            .select_from(Assignment)
+            .join(Site, Site.id == Assignment.site_id)
+            .outerjoin(Client, Client.id == Site.client_id)
+            .filter(Assignment.rota_plan_id == plan.id, *scope)
+            .distinct()
+            .all()
+        )
+        s_names = sorted({(n or "").strip() for n, _ in site_q if n})
+        c_names = sorted({(n or "").strip() for _, n in site_q if n})
+        out.append(
+            item.model_copy(
+                update={
+                    "shift_count": shift_count,
+                    "staff_count": int(staff_count),
+                    "site_names": s_names,
+                    "client_names": c_names,
+                    "budget": 0.0,
+                    "unmarked_attendance_count": 0,
+                    "unpublished_staff_count": 0,
+                }
+            )
+        )
     return out
 
 
@@ -465,9 +489,12 @@ def _parse_shift_rate(raw) -> Optional[float]:
 
 def _employee_profile_rate(db: Session, company_id: int, guard_id: int, on_date: date) -> Optional[float]:
     from app.models import GuardRate
-    from app.services.rate_service import profile_hourly_rate
+    from app.services.rate_service import profile_hourly_rate, profile_per_job_rate
 
     guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
+    job = profile_per_job_rate(guard)
+    if job is not None:
+        return float(job)
     profile = profile_hourly_rate(guard)
     if profile is not None and profile > 0:
         return float(profile)
@@ -613,9 +640,38 @@ def _portal_rota_detail(db: Session, user, plan: RotaPlan) -> RotaPlanDetail:
     )
     if not payload["shifts"]:
         raise HTTPException(status_code=404, detail="Rota not found")
+    from app.services.portal_access import is_client_portal_user
+
+    if is_client_portal_user(user):
+        payload["budget"] = 0.0
+        for by_day in payload["shifts"].values():
+            for blocks in by_day.values():
+                for sh in blocks or []:
+                    if isinstance(sh, dict):
+                        sh["shiftRate"] = None
     shift_count = sum(len(v) for by_day in payload["shifts"].values() for v in by_day.values())
+    site_q = (
+        db.query(Site.name, Client.name)
+        .select_from(Assignment)
+        .join(Site, Site.id == Assignment.site_id)
+        .outerjoin(Client, Client.id == Site.client_id)
+        .filter(Assignment.rota_plan_id == plan.id, Assignment.site_id.in_(site_ids))
+    )
+    if guard_id is not None:
+        site_q = site_q.filter(Assignment.guard_id == guard_id)
+    site_rows = site_q.distinct().all()
+    s_names = sorted({(n or "").strip() for n, _ in site_rows if n})
+    c_names = sorted({(n or "").strip() for _, n in site_rows if n})
     base = _to_list_item(db, plan).model_copy(
-        update={"shift_count": shift_count, "staff_count": len(payload["employees"])}
+        update={
+            "shift_count": shift_count,
+            "staff_count": len(payload["employees"]),
+            "site_names": s_names,
+            "client_names": c_names,
+            "budget": 0.0,
+            "unmarked_attendance_count": 0,
+            "unpublished_staff_count": 0,
+        }
     )
     return RotaPlanDetail(
         **base.model_dump(),
@@ -1424,16 +1480,20 @@ def publish_rota_plan(
                     )
                     continue
                 break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
+                on_date = date.fromisoformat(dk)
+                locked_rate = _parse_shift_rate(sh.get("shiftRate"))
+                if locked_rate is None:
+                    locked_rate = _employee_profile_rate(db, company.id, emp_guard_id, on_date)
                 assignment = Assignment(
                         guard_id=emp_guard_id,
                         site_id=site_id,
                         rota_plan_id=plan.id,
-                        date=date.fromisoformat(dk),
+                        date=on_date,
                         shift_start=sh.get("start"),
                         shift_end=sh.get("end"),
                         break_minutes=break_m,
                         shift_type=normalize_shift_type("day"),
-                        shift_rate=_parse_shift_rate(sh.get("shiftRate")),
+                        shift_rate=locked_rate,
                     )
                 db.add(assignment)
                 db.flush()

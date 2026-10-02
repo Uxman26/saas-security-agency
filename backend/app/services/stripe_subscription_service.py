@@ -938,6 +938,8 @@ def render_billing_receipt_pdf(r: BillingReceipt, company: Company | None = None
     out = billing_receipt_out(r)
     currency = (r.currency or "gbp").upper()
     money = f"{'£' if currency == 'GBP' else currency + ' '}{paid:,.2f}"
+    from app.services.pdf_branding import branded_bottom_margin, build_branded
+
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
@@ -945,7 +947,7 @@ def render_billing_receipt_pdf(r: BillingReceipt, company: Company | None = None
         leftMargin=1.6 * cm,
         rightMargin=1.6 * cm,
         topMargin=1.4 * cm,
-        bottomMargin=1.4 * cm,
+        bottomMargin=branded_bottom_margin(1.4 * cm),
     )
     styles = getSampleStyleSheet()
     title = ParagraphStyle("RcptTitle", parent=styles["Heading1"], fontSize=18, spaceAfter=4)
@@ -985,7 +987,7 @@ def render_billing_receipt_pdf(r: BillingReceipt, company: Company | None = None
     story.append(table)
     story.append(Spacer(1, 24))
     story.append(Paragraph("This receipt confirms a subscription charge on your ControlOps account.", muted))
-    doc.build(story)
+    build_branded(doc, story)
     return buf.getvalue()
 
 

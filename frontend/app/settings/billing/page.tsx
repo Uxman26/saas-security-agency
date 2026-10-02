@@ -19,6 +19,7 @@ import { CreditCard, Download, Eye, FileText, Loader2, Package, Receipt } from '
 import { toast } from '@/lib/toast';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
+import { analytics } from '@/lib/analytics';
 
 type Subscription = {
   subscription_tier?: string | null;
@@ -138,6 +139,7 @@ export default function BillingSettingsPage() {
 
   const openPortal = async () => {
     try {
+      analytics.openBillingPortal();
       const { url } = await api.stripe.portal();
       window.location.href = url;
     } catch (e) {

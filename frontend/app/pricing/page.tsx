@@ -13,6 +13,7 @@ import { PricingGrid } from '@/components/billing/pricing-grid';
 import { api } from '@/lib/api';
 import type { PackageFeature, PlanTier, PublicTrialConfig } from '@/lib/types';
 import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
+import { analytics } from '@/lib/analytics';
 
 export default function PricingPage() {
   const t = useTranslations('marketing.pricing');
@@ -28,18 +29,16 @@ export default function PricingPage() {
   const [trialConfig, setTrialConfig] = useState<PublicTrialConfig | null>(null);
 
   useEffect(() => {
+    analytics.viewPricing();
     api.packages
       .list()
       .then((rows) => setTiers(rows.length ? rows : DEFAULT_PLAN_TIERS))
       .catch(() => setTiers(DEFAULT_PLAN_TIERS))
       .finally(() => setLoading(false));
-    // Optional: without it the cards fall back to the hand-written extras rather
-    // than breaking, so a failure here only costs accuracy, not the page.
     api.packages
       .features()
       .then(setFeatureCatalog)
       .catch(() => {});
-    // A failure here just hides the trial badge; the plans still render and sign up.
     api.packages
       .trialConfig()
       .then(setTrialConfig)

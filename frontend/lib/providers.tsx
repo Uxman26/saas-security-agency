@@ -7,6 +7,10 @@ import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { LeadNotificationsProvider } from '@/components/lead-notifications-provider';
 import { HelpAssistant } from '@/components/help/help-assistant';
 import { Toaster } from '@/components/ui/sonner';
+import { GaBootstrap } from '@/components/analytics/ga-bootstrap';
+import { CookieConsentBanner } from '@/components/analytics/cookie-consent-banner';
+import { GaPageViews } from '@/components/analytics/ga-page-views';
+import { Suspense } from 'react';
 import { api } from '@/lib/api';
 import {
   THEME_GUEST_KEY,
@@ -113,6 +117,11 @@ export function Providers({ children }: { children: ReactNode }) {
           <LeadNotificationsProvider>{children}</LeadNotificationsProvider>
           <HelpAssistant />
           <Toaster />
+          <GaBootstrap />
+          <Suspense fallback={null}>
+            <GaPageViews />
+          </Suspense>
+          <CookieConsentBanner />
         </UserThemeProvider>
       </AuthProvider>
     </QueryClientProvider>

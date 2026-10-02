@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import type { ReceiptPublic } from '@/lib/types';
 import { CreditCard, Loader2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { analytics } from '@/lib/analytics';
 
 function PaymentPendingContent() {
   const t = useTranslations('payment');
@@ -31,6 +32,7 @@ function PaymentPendingContent() {
   );
   const [paying, setPaying] = useState(false);
   const [verified, setVerified] = useState(false);
+  const purchasedRef = useRef(false);
 
   useEffect(() => {
     api.stripe
@@ -52,6 +54,12 @@ function PaymentPendingContent() {
   }, [ref]);
 
   useEffect(() => {
+    if (canceled && !success) {
+      analytics.checkoutAbandoned(receipt?.subscription_tier);
+    }
+  }, [canceled, success, receipt?.subscription_tier]);
+
+  useEffect(() => {
     if (!success || !sessionId || verified) return;
     api.stripe
       .sessionStatus(sessionId)
@@ -59,16 +67,35 @@ function PaymentPendingContent() {
         setVerified(true);
         if (ref) return api.receipts.public(ref).then(setReceipt);
       })
-      .catch(() => toast.error(t('verifyFailed')));
-  }, [success, sessionId, verified, ref, t]);
+      .catch(() => {
+        analytics.paymentFailed(receipt?.subscription_tier, 'session_verify');
+        toast.error(t('verifyFailed'));
+      });
+  }, [success, sessionId, verified, ref, t, receipt?.subscription_tier]);
+
+  useEffect(() => {
+    if (purchasedRef.current) return;
+    const isPaid = receipt?.status === 'paid' || verified;
+    if (!isPaid || !receipt) return;
+    purchasedRef.current = true;
+    analytics.purchase({
+      tier: receipt.subscription_tier,
+      value: receipt.amount,
+      transaction_id: receipt.ref_id,
+      cycle: billingCycle,
+    });
+    analytics.subscriptionActivated(receipt.subscription_tier);
+  }, [receipt, verified, billingCycle]);
 
   const payWithStripe = async () => {
     if (!ref) return;
     setPaying(true);
     try {
+      analytics.beginCheckout(receipt?.subscription_tier, receipt?.amount, billingCycle);
       const { url } = await api.stripe.checkoutSession(ref, billingCycle, couponParam || undefined);
       window.location.href = url;
     } catch (e) {
+      analytics.paymentFailed(receipt?.subscription_tier, 'checkout_session');
       toast.error(e instanceof Error ? e.message : t('stripeUnavailable'));
       setPaying(false);
     }

@@ -16,6 +16,7 @@ export const viewport: Viewport = {
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('meta');
   return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://controlops.co.uk'),
     title: {
       default: t('title'),
       template: '%s | ControlOps',
@@ -31,6 +32,13 @@ export async function generateMetadata(): Promise<Metadata> {
       shortcut: '/ControlOps-Logos/favicon_io/favicon.ico',
     },
     manifest: '/ControlOps-Logos/favicon_io/site.webmanifest',
+    openGraph: {
+      type: 'website',
+      locale: 'en_GB',
+      siteName: 'ControlOps',
+      title: t('title'),
+      description: t('description'),
+    },
   };
 }
 

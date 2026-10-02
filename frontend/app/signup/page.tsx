@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense, useEffect } from 'react';
+import { useState, Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -28,6 +28,7 @@ import {
 } from '@/lib/auth-styles';
 import { INDUSTRY_VALUES, WORKFORCE_VALUES } from '@/lib/industry-options';
 import { cn } from '@/lib/utils';
+import { analytics } from '@/lib/analytics';
 
 const INDUSTRIES = INDUSTRY_VALUES;
 const WORKFORCE = WORKFORCE_VALUES;
@@ -42,12 +43,11 @@ function SignupForm() {
   const cycleParam = searchParams.get('cycle');
   const subscription_tier = tierParam || undefined;
   const billing_cycle = cycleParam === 'yearly' ? 'yearly' : 'monthly';
-  // Set by the pricing card when the plan carries a free trial. The server still has
-  // the final say — it re-checks that trials are enabled and the tenant is eligible.
   const wantsTrial = searchParams.get('trial') === '1';
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
+  const completedRef = useRef(false);
 
   const industryLabels = tb.raw('industries') as string[];
   const workforceLabels = tb.raw('workforce') as string[];
@@ -55,6 +55,18 @@ function SignupForm() {
   useEffect(() => {
     if (!tierParam) router.replace('/pricing');
   }, [tierParam, router]);
+
+  useEffect(() => {
+    if (!tierParam) return;
+    analytics.signUpStart(tierParam);
+    analytics.viewPlan(tierParam, billing_cycle);
+    completedRef.current = false;
+    const onLeave = () => {
+      if (!completedRef.current) analytics.registrationAbandoned(tierParam);
+    };
+    window.addEventListener('pagehide', onLeave);
+    return () => window.removeEventListener('pagehide', onLeave);
+  }, [tierParam, billing_cycle]);
 
   const {
     register,
@@ -84,15 +96,16 @@ function SignupForm() {
         return;
       }
       const res = await api.auth.signup({ ...data, subscription_tier, start_trial: wantsTrial });
+      completedRef.current = true;
+      const trialDays = res.trial?.started ? res.trial.days ?? 0 : 0;
+      analytics.signUp({ tier: subscription_tier, trial: Boolean(trialDays) });
+      if (trialDays) analytics.trialStarted(subscription_tier, trialDays);
       const ref = encodeURIComponent(res.receipt.ref_id);
       const email = encodeURIComponent(data.email);
       const cycleQ = `&cycle=${billing_cycle}`;
       const code = (data.verification_code || verificationCode).trim();
       const couponQ = code ? `&coupon=${encodeURIComponent(code)}` : '';
-      const trialDays = res.trial?.started ? res.trial.days ?? 0 : 0;
       if (trialDays) {
-        // On a trial there is nothing to pay yet, so skip the payment step entirely:
-        // verify the address if required, otherwise go straight to signing in.
         toast.success(t('accountCreatedTrial', { days: trialDays }));
         router.push(
           res.email_verification_required ? `/verify-email?email=${email}` : '/login'

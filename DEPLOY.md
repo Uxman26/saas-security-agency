@@ -13,23 +13,17 @@ In the project root, create or edit `.env` (and keep `backend/.env` for backend-
 
 ```env
 NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+NEXT_PUBLIC_SITE_URL=https://controlops.co.uk
+NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
-
-**Backend `backend/.env`** (copy from `backend/.env`, then set production values):
-
-- `DATABASE_URL` – e.g. keep SQLite `sqlite:///./data/security.db` or use PostgreSQL
-- `SECRET_KEY` – strong random secret
-- `CORS_ORIGINS` – comma-separated frontend origins, e.g. `https://yourdomain.com,https://www.yourdomain.com`
-- Mail settings if you use email
-- **Stripe** (subscription checkout):
-  - `STRIPE_SECRET_KEY` – secret key from [Stripe Dashboard](https://dashboard.stripe.com/apikeys)
-  - `STRIPE_PUBLISHABLE_KEY` – publishable key
-  - `STRIPE_WEBHOOK_SECRET` – from `stripe listen --forward-to localhost:8000/stripe/webhook` or Dashboard webhooks
-  - `FRONTEND_URL` – e.g. `https://yourdomain.com` (used for Checkout return URLs)
 
 **Frontend `.env`:**
 
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` – same publishable key (optional; backend `/stripe/config` also serves it)
+- `NEXT_PUBLIC_SITE_URL` – canonical public site URL (sitemap, robots, Open Graph)
+- `NEXT_PUBLIC_GA_MEASUREMENT_ID` – GA4 Measurement ID (optional; analytics loads only after cookie consent)
+
+After deploy, submit `https://yourdomain.com/sitemap.xml` in Google Search Console and confirm `robots.txt` references that sitemap.
 
 ## 3. Run with Docker in Plesk
 

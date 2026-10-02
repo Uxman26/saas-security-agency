@@ -295,7 +295,9 @@ export function PrivacyNoticeContent() {
         We use cookies and similar technologies as described in our <a href="/cookies">Cookie Policy</a>. Essential
         cookies support language preference and operation of the site. Session credentials for the signed-in Service are
         typically stored in browser local storage rather than as a cookie. Theme preference may be stored locally in your
-        browser.
+        browser. Optional Google Analytics (GA4) cookies load only if you accept analytics via the consent banner, and
+        are used to measure public website usage and subscription funnel performance without collecting passwords,
+        payment card details, authentication tokens or confidential tenant data.
       </p>
 
       <h2>13. Children</h2>

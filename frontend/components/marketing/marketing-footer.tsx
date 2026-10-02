@@ -30,6 +30,8 @@ const legalLinks = [
   { href: '/terms', key: 'terms' as const },
   { href: '/cookies', key: 'cookies' as const },
   { href: '/security', key: 'security' as const },
+  { href: '/dpa', key: 'dpa' as const },
+  { href: '/accessibility', key: 'accessibility' as const },
 ];
 
 function SocialIcon({

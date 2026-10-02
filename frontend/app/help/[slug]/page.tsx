@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { HelpShell } from '@/components/help/help-shell';
 import { HelpArticleRenderer } from '@/components/help/help-article-renderer';
 import { getAllHelpSlugs, getHelpArticle } from '@/lib/help-content';
+import { SITE_URL } from '@/lib/site';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -14,9 +15,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const article = getHelpArticle(slug);
   if (!article) return { title: { absolute: 'Help | ControlOps' } };
+  const url = `${SITE_URL}/help/${slug}`;
   return {
     title: { absolute: `${article.title} | Help | ControlOps` },
     description: article.description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: 'article',
+      url,
+      title: article.title,
+      description: article.description,
+      siteName: 'ControlOps',
+    },
   };
 }
 

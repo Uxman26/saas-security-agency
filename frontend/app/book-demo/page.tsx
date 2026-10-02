@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast';
 import { INDUSTRY_VALUES, WORKFORCE_VALUES } from '@/lib/industry-options';
 import { authFieldClass, authSelectClass } from '@/lib/auth-styles';
 import { Loader2 } from 'lucide-react';
+import { analytics } from '@/lib/analytics';
 
 /** Theme-aware labels for marketing pages (auth labels stay navy for white AuthShell). */
 const fieldLabelClass = 'text-foreground font-medium';
@@ -48,6 +49,7 @@ export default function BookDemoPage() {
     setLoading(true);
     try {
       await api.marketing.requestDemo(data);
+      analytics.generateLead('book_demo');
       setDone(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : ta('requestFailed'));

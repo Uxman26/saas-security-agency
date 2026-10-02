@@ -63,6 +63,8 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://controlops.co.uk/api
+        NEXT_PUBLIC_SITE_URL: https://controlops.co.uk
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
     expose:
       - "3000"
     depends_on:

@@ -13,6 +13,7 @@ import {
   planDisplayPrice,
   planFeatures,
 } from '@/lib/plan-tiers';
+import { analytics } from '@/lib/analytics';
 
 type TFn = (key: string, values?: Record<string, string | number>) => string;
 type TRaw = { raw: (key: string) => unknown };
@@ -141,11 +142,19 @@ export function PricingGrid({
                 </Button>
               ) : isEnterprise ? (
                 <Button asChild className="w-full" variant="outline" size="lg">
-                  <Link href="/book-demo">{contactLabel}</Link>
+                  <Link
+                    href="/book-demo"
+                    onClick={() => analytics.ctaClick('enterprise_contact', 'pricing_grid')}
+                  >
+                    {contactLabel}
+                  </Link>
                 </Button>
               ) : (
                 <Button asChild className="w-full" variant={highlighted ? 'default' : 'outline'} size="lg">
-                  <Link href={signupHref}>
+                  <Link
+                    href={signupHref}
+                    onClick={() => analytics.selectPlan(tier.tier, cycle, showTrial)}
+                  >
                     {showTrial && trial && trialDays ? trial.ctaLabel(trialDays) : getStartedLabel}
                   </Link>
                 </Button>

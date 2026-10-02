@@ -35,7 +35,7 @@ export function CookiePolicyContent() {
               <td className="py-3 pr-3">Keeps Authorised Users signed in to the Service after login</td>
               <td className="py-3">Browser local storage (not a first-party cookie)</td>
             </tr>
-            <tr>
+            <tr className="border-b">
               <td className="py-3 pr-3 text-foreground">Theme preference</td>
               <td className="py-3 pr-3">
                 Remembers light / dark / system appearance. Signed-in users store this on their own account; it does not
@@ -43,13 +43,27 @@ export function CookiePolicyContent() {
               </td>
               <td className="py-3">Account record for signed-in users; browser local storage otherwise</td>
             </tr>
+            <tr className="border-b">
+              <td className="py-3 pr-3 text-foreground">controlops_cookie_consent</td>
+              <td className="py-3 pr-3">Stores whether you accepted or rejected optional analytics cookies</td>
+              <td className="py-3">Browser local storage</td>
+            </tr>
+            <tr>
+              <td className="py-3 pr-3 text-foreground">Google Analytics (GA4)</td>
+              <td className="py-3 pr-3">
+                Optional measurement of public website traffic, engagement, and subscription funnel events (for example
+                plan selection, sign-up, checkout, and payment outcomes). Loaded only after you accept analytics. We do
+                not send passwords, payment card details, auth tokens, or confidential tenant data to Google.
+              </td>
+              <td className="py-3">Third-party cookies / similar technologies when analytics is accepted</td>
+            </tr>
           </tbody>
         </table>
       </div>
       <p>
-        These technologies are used for essential operation and preferences. We do not currently operate a separate
-        advertising cookie programme on the public website. If we introduce analytics or marketing cookies later, we will
-        update this policy and, where required, seek consent.
+        Essential technologies support language, sign-in, and security. Analytics cookies are optional and require your
+        consent via the cookie banner. You can change your choice later by clearing site data for controlops.co.uk and
+        revisiting the site, or by contacting us.
       </p>
       <p>
         Third-party services you choose to use (for example Google, Microsoft or Apple sign-in, or Stripe Checkout) may
@@ -58,8 +72,9 @@ export function CookiePolicyContent() {
 
       <h2>3. Managing cookies</h2>
       <p>
-        You can control cookies through your browser settings. Blocking essential cookies or clearing local storage may
-        prevent language preference or sign-in from working correctly.
+        You can control cookies through your browser settings and through our analytics consent banner. Blocking
+        essential cookies or clearing local storage may prevent language preference or sign-in from working correctly.
+        Rejecting analytics does not affect use of the Service.
       </p>
 
       <h2>4. Contact</h2>

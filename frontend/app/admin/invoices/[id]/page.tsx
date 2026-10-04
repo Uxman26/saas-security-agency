@@ -18,12 +18,12 @@ import { cn } from '@/lib/utils';
 const fmt = (n: number) => `£${n.toFixed(2)}`;
 
 const STATUS_STYLES: Record<string, string> = {
-  paid: 'text-green-600',
-  unpaid: 'text-blue-600',
-  overdue: 'text-red-600',
-  partial: 'text-amber-600',
-  cancelled: 'text-gray-500',
-  disputed: 'text-orange-600',
+  paid: 'text-green-600 dark:text-green-400',
+  unpaid: 'text-blue-600 dark:text-blue-400',
+  overdue: 'text-red-600 dark:text-red-400',
+  partial: 'text-amber-600 dark:text-amber-400',
+  cancelled: 'text-muted-foreground',
+  disputed: 'text-orange-600 dark:text-orange-400',
 };
 
 export default function AdminSubscriptionInvoicePage() {

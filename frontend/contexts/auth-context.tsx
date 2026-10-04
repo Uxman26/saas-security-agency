@@ -6,6 +6,7 @@ import type { User } from '@/lib/types';
 import { api } from '@/lib/api';
 import { broadcastLogout, onRemoteLogout, TOKEN_KEY } from '@/lib/session-sync';
 import { bindUserTheme, clearActiveThemeUser } from '@/lib/user-theme';
+import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
 
 export type LoginResult =
   | { user: User }
@@ -30,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = storageGet(TOKEN_KEY);
     let cancelled = false;
 
     void (token ? api.auth.me() : Promise.resolve(null))
@@ -42,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (cancelled) return;
-        localStorage.removeItem(TOKEN_KEY);
+        storageRemove(TOKEN_KEY);
         clearActiveThemeUser();
         setUser(null);
       })
@@ -56,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearSession = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    storageRemove(TOKEN_KEY);
     clearActiveThemeUser();
     setUser(null);
     router.replace('/login');
@@ -65,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => onRemoteLogout(() => clearSession()), [clearSession]);
 
   const finishLogin = async (token: string) => {
-    localStorage.setItem(TOKEN_KEY, token.trim());
+    storageSet(TOKEN_KEY, token.trim());
     const userData = await api.auth.me();
     bindUserTheme(userData);
     setUser(userData);

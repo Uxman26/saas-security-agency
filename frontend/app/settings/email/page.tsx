@@ -195,7 +195,7 @@ export default function EmailSettingsPage() {
                 <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="rounded-lg border p-4">
                     <p className="text-xs text-muted-foreground">Status</p>
-                    <p className={cn('font-medium mt-1', config?.smtp_configured ? 'text-green-600' : 'text-amber-600')}>
+                    <p className={cn('font-medium mt-1', config?.smtp_configured ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
                       {config?.smtp_configured ? 'Configured' : 'Not configured'}
                     </p>
                   </div>
@@ -278,7 +278,7 @@ export default function EmailSettingsPage() {
                     />
                   </div>
                   <Button
-                    className="bg-[#FD6203] hover:bg-[#DF3C01] text-white"
+                    className="bg-primary hover:bg-primary-hover text-primary-foreground"
                     onClick={() => void saveSmtp()}
                     disabled={savingSmtp || !config?.enabled}
                   >
@@ -402,7 +402,7 @@ export default function EmailSettingsPage() {
                           <TableCell className="text-xs max-w-[160px] truncate">{l.subject || '—'}</TableCell>
                           <TableCell className="text-xs capitalize">{l.template_key?.replace(/_/g, ' ') || '—'}</TableCell>
                           <TableCell>
-                            <span className={cn('text-xs capitalize', l.status === 'sent' ? 'text-green-600' : 'text-red-600')}>{l.status}</span>
+                            <span className={cn('text-xs capitalize', l.status === 'sent' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>{l.status}</span>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{new Date(l.sent_at).toLocaleString()}</TableCell>
                         </TableRow>

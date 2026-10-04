@@ -30,6 +30,7 @@ import { ClipboardCheck, Download, Plus, Printer, Trash2, Pencil, Search, AlertT
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey } from '@/lib/date-format';
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -128,7 +129,7 @@ export default function AccidentReportsPage() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ ...EMPTY, report_date: new Date().toISOString().slice(0, 10) });
+    setForm({ ...EMPTY, report_date: localDateKey() });
     setOpen(true);
   };
 

@@ -16,13 +16,14 @@ import { Plus } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey } from '@/lib/date-format';
 
 const empty = () => ({
   client_id: '',
   site_id: '',
   frequency: 'monthly',
   day_of_month: '1',
-  start_date: new Date().toISOString().slice(0, 10),
+  start_date: localDateKey(),
   tax_rate: '20',
   notes: '',
   description: 'Recurring service',

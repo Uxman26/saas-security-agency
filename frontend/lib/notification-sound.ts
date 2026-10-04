@@ -1,3 +1,5 @@
+import { storageGet, storageSet } from '@/lib/safe-storage';
+
 const MUTE_KEY = (userId: number) => `co_notif_sound_muted_${userId}`;
 
 let audioCtx: AudioContext | null = null;
@@ -27,19 +29,11 @@ export function unlockNotificationAudio() {
 export function readSoundMuted(userId: number | null | undefined, serverMuted?: boolean | null): boolean {
   if (serverMuted != null) return Boolean(serverMuted);
   if (!userId || typeof window === 'undefined') return false;
-  try {
-    return localStorage.getItem(MUTE_KEY(userId)) === '1';
-  } catch {
-    return false;
-  }
+  return storageGet(MUTE_KEY(userId)) === '1';
 }
 
 export function writeSoundMutedLocal(userId: number, muted: boolean) {
-  try {
-    localStorage.setItem(MUTE_KEY(userId), muted ? '1' : '0');
-  } catch {
-    /* ignore */
-  }
+  storageSet(MUTE_KEY(userId), muted ? '1' : '0');
   syncMuteToServiceWorker(muted);
 }
 

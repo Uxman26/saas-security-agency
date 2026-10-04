@@ -126,7 +126,7 @@ export function ControlOpsAssistant({
     <div
       className={cn(
         'flex flex-col bg-background border shadow-lg',
-        embedded ? 'h-full min-h-[320px] rounded-lg' : 'fixed bottom-20 right-4 z-50 h-[min(560px,70vh)] w-[min(400px,calc(100vw-2rem))] rounded-xl',
+        embedded ? 'h-full min-h-[320px] rounded-lg' : 'fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-[max(1rem,env(safe-area-inset-right))] z-50 h-[min(560px,70dvh)] w-[min(400px,calc(100vw-2rem))] rounded-xl',
         className
       )}
     >
@@ -289,7 +289,7 @@ export function ControlOpsAssistant({
       <Button
         type="button"
         size="icon"
-        className="fixed bottom-4 right-4 z-50 size-12 rounded-full shadow-lg bg-orange-600 hover:bg-orange-700 text-white"
+        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-50 size-12 rounded-full shadow-lg bg-primary hover:bg-primary-hover text-primary-foreground"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? t('assistantTitle') : t('assistantTitle')}
       >

@@ -14,10 +14,11 @@ import { api } from '@/lib/api';
 import type { PatrolLog } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, List } from 'lucide-react';
+import { localDateKey, localDateOffset } from '@/lib/date-format';
 
 export default function PatrolLogsPage() {
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const today = localDateKey();
+  const weekAgo = localDateOffset(-7);
   const [start, setStart] = useState(weekAgo);
   const [end, setEnd] = useState(today);
   const [logs, setLogs] = useState<PatrolLog[]>([]);

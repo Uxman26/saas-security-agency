@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import type { CreditNote, Invoice, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { formatMoney } from '@/lib/rota-shifts-utils';
+import { localDateKey } from '@/lib/date-format';
 
 type Props = {
   open: boolean;
@@ -49,7 +50,7 @@ export function CreditNoteDialog({ open, onOpenChange, invoice, editing, onSaved
       setTaxRate(String(editing.tax_rate ?? invoice.tax_rate ?? 0));
       setStatus(editing.status === 'draft' ? 'draft' : 'issued');
     } else {
-      setCreditDate(new Date().toISOString().slice(0, 10));
+      setCreditDate(localDateKey());
       setSiteId('');
       setReason('');
       setDescription('');

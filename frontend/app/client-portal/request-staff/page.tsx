@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast';
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TimeHmField } from '@/components/ui/time-hm-field';
+import { localDateKey } from '@/lib/date-format';
 
 type EntryMode = 'same' | 'different';
 
@@ -76,12 +77,12 @@ function RequestStaffPage() {
   const [clientId, setClientId] = useState<string>('');
   const [siteId, setSiteId] = useState<string>('');
   const [entryMode, setEntryMode] = useState<EntryMode>('same');
-  const [dates, setDates] = useState<string[]>([new Date().toISOString().slice(0, 10)]);
+  const [dates, setDates] = useState<string[]>([localDateKey()]);
   const [shiftStart, setShiftStart] = useState('09:00');
   const [shiftEnd, setShiftEnd] = useState('17:00');
   const [breakMinutes, setBreakMinutes] = useState(30);
   const [staffCount, setStaffCount] = useState(1);
-  const [rows, setRows] = useState<ShiftRow[]>([newRow(new Date().toISOString().slice(0, 10))]);
+  const [rows, setRows] = useState<ShiftRow[]>([newRow(localDateKey())]);
   const [notes, setNotes] = useState('');
 
   useEffect(() => {

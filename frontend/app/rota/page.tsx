@@ -8,6 +8,7 @@ import { ModuleGuard } from '@/components/module-guard';
 import { InlineTableSkeleton } from '@/components/skeletons';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule, isPortalRole } from '@/lib/permissions';
+import { localDateKey } from '@/lib/date-format';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,7 +60,7 @@ import {
 type Tab = 'active' | 'draft' | 'old';
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey();
 }
 
 function isEnded(r: RotaPlanListItem) {

@@ -87,7 +87,7 @@ export function priorityLabel(p: string) {
 export function statusClass(s: string) {
   if (s === 'won') return 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300';
   if (s === 'lost') return 'bg-red-500/15 text-red-800 dark:text-red-300';
-  if (s === 'on_hold') return 'bg-slate-500/15';
+  if (s === 'on_hold') return 'bg-slate-500/15 text-slate-800 dark:text-slate-300';
   if (s === 'follow_up') return 'bg-violet-500/15 text-violet-800 dark:text-violet-300';
   if (s === 'meeting') return 'bg-sky-500/15 text-sky-800 dark:text-sky-300';
   if (['qualified', 'proposal_sent', 'negotiation'].includes(s)) return 'bg-blue-500/15 text-blue-800 dark:text-blue-300';
@@ -95,9 +95,9 @@ export function statusClass(s: string) {
 }
 
 export function priorityClass(p: string) {
-  if (p === 'immediate') return 'text-red-600 font-medium';
-  if (p === 'hot' || p === 'high') return 'text-orange-600';
-  if (p === 'cold' || p === 'low') return 'text-slate-500';
+  if (p === 'immediate') return 'text-red-600 dark:text-red-400 font-medium';
+  if (p === 'hot' || p === 'high') return 'text-orange-600 dark:text-orange-400';
+  if (p === 'cold' || p === 'low') return 'text-muted-foreground';
   return '';
 }
 

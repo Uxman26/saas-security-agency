@@ -32,6 +32,7 @@ import type { AbsenceKind, AbsenceRecord, AbsenceStatus } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey } from '@/lib/date-format';
 import { useGuards } from '@/hooks/use-guards';
 import { CalendarOff, CheckCircle2, Clock, HeartPulse, Loader2, Plane, Plus, Trash2, Users, X } from 'lucide-react';
 
@@ -497,7 +498,7 @@ function RecordAbsenceDialog({
   guardOptions: { value: string; label: string }[];
   onSaved: () => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateKey();
   const [guardId, setGuardId] = useState('');
   const [kind, setKind] = useState<AbsenceKind>('annual_leave');
   const [start, setStart] = useState(today);

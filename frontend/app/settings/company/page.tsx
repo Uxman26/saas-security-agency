@@ -17,6 +17,7 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { CompanyBankAccountsPanel } from '@/components/company-bank-accounts-panel';
 import { canModule } from '@/lib/permissions';
+import { storageGet } from '@/lib/safe-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -31,7 +32,7 @@ function useLogoUrl(url?: string | null) {
     }
     let cancelled = false;
     let blobUrl: string | null = null;
-    const token = localStorage.getItem('token')?.trim();
+    const token = storageGet('token')?.trim();
     void fetch(`${API_URL}${url}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -300,7 +301,7 @@ export default function CompanySettingsPage() {
               </CardHeader>
               <CardContent className="flex flex-wrap items-center gap-6">
                 {logoSrc ? (
-                  <img src={logoSrc} alt="" className="h-28 max-w-[320px] object-contain rounded border bg-white p-3" />
+                  <img src={logoSrc} alt="" className="h-28 max-w-[320px] object-contain rounded border bg-card p-3" />
                 ) : (
                   <div className="h-28 w-56 rounded border border-dashed flex items-center justify-center text-sm text-muted-foreground">No logo</div>
                 )}

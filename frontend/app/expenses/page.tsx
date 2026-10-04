@@ -33,6 +33,8 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import { localDateKey } from '@/lib/date-format';
+import { storageGet } from '@/lib/safe-storage';
 
 const VAT_RATE = 0.2;
 const MAX_DOC_BYTES = 300 * 1024;
@@ -101,7 +103,7 @@ function currentQuarter() {
 type Tab = 'expenses' | 'reports' | 'vat';
 
 const emptyForm = () => ({
-  expense_date: new Date().toISOString().split('T')[0],
+  expense_date: localDateKey(),
   category: 'other',
   vendor_id: '',
   vendor_name: '',
@@ -298,7 +300,7 @@ export default function ExpensesPage() {
 
   const downloadDoc = async (id: number) => {
     try {
-      const token = localStorage.getItem('token')?.trim();
+      const token = storageGet('token')?.trim();
       const res = await fetch(api.expenses.documentUrl(id), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -908,7 +910,7 @@ export default function ExpensesPage() {
                 <Card>
                   <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Net VAT summary</CardTitle></CardHeader>
                   <CardContent>
-                    <p className={cn('text-2xl font-bold', vatReport.net_vat_summary >= 0 ? 'text-red-600' : 'text-green-600')}>
+                    <p className={cn('text-2xl font-bold', vatReport.net_vat_summary >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')}>
                       {fmt(vatReport.net_vat_summary)}
                     </p>
                   </CardContent>
@@ -934,7 +936,7 @@ export default function ExpensesPage() {
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-semibold">Net payable / refundable</TableCell>
-                        <TableCell className={cn('text-right font-bold', vatReport.net_vat_summary >= 0 ? 'text-red-600' : 'text-green-600')}>
+                        <TableCell className={cn('text-right font-bold', vatReport.net_vat_summary >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')}>
                           {fmt(vatReport.total_vat_report.net_payable_or_refundable)}
                         </TableCell>
                       </TableRow>
@@ -962,7 +964,7 @@ export default function ExpensesPage() {
                             <TableCell>{q.quarter}</TableCell>
                             <TableCell>{fmt(q.expense_vat)}</TableCell>
                             <TableCell>{fmt(q.invoice_vat)}</TableCell>
-                            <TableCell className={cn('font-medium', q.net_vat >= 0 ? 'text-red-600' : 'text-green-600')}>{fmt(q.net_vat)}</TableCell>
+                            <TableCell className={cn('font-medium', q.net_vat >= 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400')}>{fmt(q.net_vat)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

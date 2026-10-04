@@ -104,7 +104,7 @@ function moduleNavAllowedLocal(user: ReturnType<typeof useAuth>['user'], m: Modu
 }
 
 const asideClass =
-  'hidden h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex';
+  'hidden h-[100vh] h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex';
 
 function navLinkClass(isActive: boolean) {
   return cn(

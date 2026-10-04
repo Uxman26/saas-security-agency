@@ -1,4 +1,5 @@
 import { TOKEN_KEY } from '@/lib/session-sync';
+import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
 
 export const THEME_GUEST_KEY = 'theme-guest';
 export const THEME_USER_PREFIX = 'theme-user-';
@@ -17,30 +18,30 @@ export function themeStorageKey(userId?: number | string | null): string {
 
 export function readActiveThemeUserId(): string | null {
   if (typeof window === 'undefined') return null;
-  if (!localStorage.getItem(TOKEN_KEY)) return null;
-  return localStorage.getItem(THEME_ACTIVE_USER_KEY);
+  if (!storageGet(TOKEN_KEY)) return null;
+  return storageGet(THEME_ACTIVE_USER_KEY);
 }
 
 export function persistUserThemeLocal(userId: number, theme: ThemePreference) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(themeStorageKey(userId), theme);
+  storageSet(themeStorageKey(userId), theme);
 }
 
 export function bindUserTheme(user: { id: number; theme_preference?: string | null }) {
   if (typeof window === 'undefined') return;
   const userKey = themeStorageKey(user.id);
-  if (!localStorage.getItem(userKey)) {
-    const legacy = localStorage.getItem(LEGACY_THEME_KEY);
-    if (isThemePreference(legacy)) localStorage.setItem(userKey, legacy);
+  if (!storageGet(userKey)) {
+    const legacy = storageGet(LEGACY_THEME_KEY);
+    if (isThemePreference(legacy)) storageSet(userKey, legacy);
   }
-  localStorage.removeItem(LEGACY_THEME_KEY);
+  storageRemove(LEGACY_THEME_KEY);
   if (isThemePreference(user.theme_preference)) {
-    localStorage.setItem(userKey, user.theme_preference);
+    storageSet(userKey, user.theme_preference);
   }
-  localStorage.setItem(THEME_ACTIVE_USER_KEY, String(user.id));
+  storageSet(THEME_ACTIVE_USER_KEY, String(user.id));
 }
 
 export function clearActiveThemeUser() {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(THEME_ACTIVE_USER_KEY);
+  storageRemove(THEME_ACTIVE_USER_KEY);
 }

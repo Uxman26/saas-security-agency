@@ -1,6 +1,7 @@
 'use client';
 
 import { GA_MEASUREMENT_ID } from '@/lib/site';
+import { storageGet, storageSet } from '@/lib/safe-storage';
 
 export const CONSENT_STORAGE_KEY = 'controlops_cookie_consent';
 
@@ -32,21 +33,13 @@ function sanitizeParams(params?: Record<string, unknown>): Record<string, unknow
 
 export function readConsent(): CookieConsent {
   if (typeof window === 'undefined') return 'unset';
-  try {
-    const v = localStorage.getItem(CONSENT_STORAGE_KEY);
-    if (v === 'accepted' || v === 'rejected') return v;
-  } catch {
-    /* ignore */
-  }
+  const v = storageGet(CONSENT_STORAGE_KEY);
+  if (v === 'accepted' || v === 'rejected') return v;
   return 'unset';
 }
 
 export function writeConsent(value: 'accepted' | 'rejected') {
-  try {
-    localStorage.setItem(CONSENT_STORAGE_KEY, value);
-  } catch {
-    /* ignore */
-  }
+  storageSet(CONSENT_STORAGE_KEY, value);
   window.dispatchEvent(new CustomEvent('controlops-consent', { detail: value }));
 }
 

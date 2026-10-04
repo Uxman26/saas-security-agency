@@ -28,6 +28,7 @@ const CONVERT_TYPES = [
 ];
 
 import { designationLabel, leadLabel, priorityLabel } from '@/lib/leads';
+import { storageGet } from '@/lib/safe-storage';
 
 const statusLabel = leadLabel;
 
@@ -485,7 +486,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                           variant="link"
                           className="text-sm h-auto p-0"
                           onClick={async () => {
-                            const token = localStorage.getItem('token');
+                            const token = storageGet('token');
                             const res = await fetch(api.leads.documentUrl(id, d.id), {
                               headers: token ? { Authorization: `Bearer ${token}` } : {},
                             });

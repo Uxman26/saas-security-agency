@@ -37,7 +37,7 @@ export function ShiftTypeBadge({
   return (
     <span
       className={cn(
-        'shrink-0 rounded font-bold uppercase leading-none border border-black/10',
+        'shrink-0 rounded font-bold uppercase leading-none border border-border/60',
         compact ? 'px-1 py-0.5 text-[8px]' : 'px-1.5 py-1 text-[10px] tracking-wide',
         className
       )}

@@ -578,6 +578,38 @@ export interface GlobalSearchResult {
   errors: { id: number; message: string; severity?: string; status?: string }[];
 }
 
+export type TenantSearchHit = {
+  id: number | string;
+  name: string;
+  href: string;
+  subtitle?: string | null;
+};
+
+export type TenantSearchResults = {
+  guards: TenantSearchHit[];
+  sites: TenantSearchHit[];
+  clients: TenantSearchHit[];
+  invoices: TenantSearchHit[];
+  leads?: TenantSearchHit[];
+  rota_plans?: TenantSearchHit[];
+  incidents?: TenantSearchHit[];
+  tasks?: TenantSearchHit[];
+  contractors?: TenantSearchHit[];
+  documents?: TenantSearchHit[];
+  patrol_routes?: TenantSearchHit[];
+  accident_reports?: TenantSearchHit[];
+  occurrence_sheets?: TenantSearchHit[];
+  expenses?: TenantSearchHit[];
+  vendors?: TenantSearchHit[];
+  allowances?: TenantSearchHit[];
+  payrolls?: TenantSearchHit[];
+  payments?: TenantSearchHit[];
+  staff_requests?: TenantSearchHit[];
+  credit_notes?: TenantSearchHit[];
+  accounts?: TenantSearchHit[];
+  pages?: TenantSearchHit[];
+};
+
 export type TenantSupportView = Company & {
   address?: string | null;
   postcode?: string | null;

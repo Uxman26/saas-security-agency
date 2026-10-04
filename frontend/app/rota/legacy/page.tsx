@@ -33,9 +33,10 @@ import { toast } from '@/lib/toast';
 import { TimeHmField } from '@/components/ui/time-hm-field';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey } from '@/lib/date-format';
 
 function fmt(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return localDateKey(d);
 }
 
 function mondayOf(d: Date) {

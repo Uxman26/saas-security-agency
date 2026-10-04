@@ -24,10 +24,10 @@ import { cn } from '@/lib/utils';
 import { MODULE_DESCRIPTIONS, MODULE_LABELS, TENANT_MODULE_KEYS } from '@/lib/plan-company-defaults';
 
 const STATUS_STYLES: Record<string, string> = {
-  active: 'bg-green-100 text-green-800',
-  pending: 'bg-amber-100 text-amber-800',
-  expired: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-600',
+  active: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300',
+  pending: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  expired: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300',
+  cancelled: 'bg-muted text-muted-foreground',
 };
 
 export default function AdminAdminsPage() {

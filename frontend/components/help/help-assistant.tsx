@@ -280,7 +280,7 @@ export function HelpAssistant() {
   }
 
   return (
-    <div className="fixed bottom-4 end-4 z-[60] flex flex-col items-end gap-3 pointer-events-none">
+    <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] end-[max(1rem,env(safe-area-inset-right))] z-[60] flex flex-col items-end gap-3 pointer-events-none">
       {open ? (
         <div
           className="pointer-events-auto w-[min(100vw-2rem,24rem)] overflow-hidden rounded-2xl border bg-card shadow-2xl shadow-black/20"

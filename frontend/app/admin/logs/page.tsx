@@ -140,7 +140,7 @@ export default function AdminLogsPage() {
                           <TableCell className="font-mono text-xs">{l.ip_address || '—'}</TableCell>
                           <TableCell className="text-xs max-w-[200px] truncate" title={l.user_agent || ''}>{l.user_agent || '—'}</TableCell>
                           <TableCell>
-                            <span className={cn('px-2 py-0.5 rounded text-xs capitalize', l.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')}>
+                            <span className={cn('px-2 py-0.5 rounded text-xs capitalize', l.status === 'success' ? 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300')}>
                               {l.status}
                             </span>
                           </TableCell>

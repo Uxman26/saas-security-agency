@@ -119,14 +119,38 @@ export const SHIFT_TYPE_OPTS: ReadonlyArray<{
   bg: string;
   text: string;
 }> = [
-  { value: 'morning', label: 'MORNING', bar: '#06B6D4', bg: '#CFFAFE', text: '#0E7490' },
-  { value: 'afternoon', label: 'AFTERNOON', bar: '#6366F1', bg: '#E0E7FF', text: '#3730A3' },
-  { value: 'evening', label: 'EVENING', bar: '#F59E0B', bg: '#FEF3C7', text: '#B45309' },
-  { value: 'night', label: 'NIGHT', bar: '#64748B', bg: '#E2E8F0', text: '#334155' },
+  {
+    value: 'morning',
+    label: 'MORNING',
+    bar: 'var(--shift-morning)',
+    bg: 'color-mix(in srgb, var(--shift-morning) 18%, var(--card))',
+    text: 'var(--shift-morning)',
+  },
+  {
+    value: 'afternoon',
+    label: 'AFTERNOON',
+    bar: 'var(--shift-afternoon)',
+    bg: 'color-mix(in srgb, var(--shift-afternoon) 18%, var(--card))',
+    text: 'var(--shift-afternoon)',
+  },
+  {
+    value: 'evening',
+    label: 'EVENING',
+    bar: 'var(--shift-evening)',
+    bg: 'color-mix(in srgb, var(--shift-evening) 18%, var(--card))',
+    text: 'var(--shift-evening)',
+  },
+  {
+    value: 'night',
+    label: 'NIGHT',
+    bar: 'var(--shift-night)',
+    bg: 'color-mix(in srgb, var(--shift-night) 18%, var(--card))',
+    text: 'var(--shift-night)',
+  },
 ];
 
 /** A shift that needs attention (a clash, an unresolved conflict) — palette red. */
-export const SHIFT_URGENT_COLOR = '#EF4444';
+export const SHIFT_URGENT_COLOR = 'var(--shift-urgent)';
 
 export function shiftTypeOption(value: ShiftType | null | undefined) {
   if (!value) return null;

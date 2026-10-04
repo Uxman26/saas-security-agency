@@ -6,6 +6,7 @@ import { Shield } from 'lucide-react';
 import { homePathForRole } from '@/lib/nav-modules';
 import { useAuth } from '@/contexts/auth-context';
 import { cn } from '@/lib/utils';
+import { storageGet } from '@/lib/safe-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -21,7 +22,7 @@ export function CompanyBrand({ className = '' }: { className?: string }) {
     }
     let cancelled = false;
     let objectUrl: string | null = null;
-    const token = localStorage.getItem('token')?.trim();
+    const token = storageGet('token')?.trim();
     void (async () => {
       try {
         const res = await fetch(`${API_URL}${user.logo_url}`, {

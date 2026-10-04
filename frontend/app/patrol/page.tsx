@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast';
 import { MapPinned, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey, localDateOffset } from '@/lib/date-format';
 
 const emptyKpis: PatrolDashboardKpis = {
   total_scheduled: 0,
@@ -59,8 +60,8 @@ export default function PatrolPage() {
     reminder_minutes: '10',
     grace_minutes: '15',
   });
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const today = localDateKey();
+  const weekAgo = localDateOffset(-7);
 
   const load = useCallback(async () => {
     try {

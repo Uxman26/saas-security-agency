@@ -22,6 +22,7 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
 import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
+import { localDateKey } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
 import {
@@ -458,7 +459,7 @@ export default function InvoicesPage() {
         invoice_id: payInvoice.id,
         amount: parseFloat(payAmount),
         method: 'bank_transfer',
-        paid_at: new Date().toISOString().slice(0, 10),
+        paid_at: localDateKey(),
       });
       setPayInvoice(null);
       setPayAmount('');

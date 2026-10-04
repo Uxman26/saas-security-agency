@@ -1,4 +1,5 @@
 import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries, AbsenceKind, AbsenceRecord, AbsenceSummary, DeleteImpact, DocumentDetail, DocumentReceipt, EmergencyContact, EmployeeHub, RecordView, Team, SubscriptionInvoice, BillingReceipt } from './types';
+import { storageGet, storageRemove } from '@/lib/safe-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -30,7 +31,7 @@ function detailMessage(d: unknown): string {
 }
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const raw = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const raw = typeof window !== 'undefined' ? storageGet('token') : null;
   const token = raw ? raw.trim() : null;
   
   const response = await fetch(`${API_URL}${endpoint}`, {
@@ -49,7 +50,7 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const d = error.detail;
     const msg = typeof d === 'string' ? d : 'Unauthorized';
     if (token && typeof window !== 'undefined') {
-      localStorage.removeItem('token');
+      storageRemove('token');
       window.location.href = '/login';
     }
     throw new ApiError(401, msg, d);
@@ -95,7 +96,7 @@ async function requestBlob(
   endpoint: string,
   options?: { method?: string; body?: string }
 ): Promise<Blob> {
-  const raw = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const raw = typeof window !== 'undefined' ? storageGet('token') : null;
   const token = raw ? raw.trim() : null;
   const response = await fetch(`${API_URL}${endpoint}`, {
     method: options?.method || 'GET',
@@ -110,7 +111,7 @@ async function requestBlob(
     const d = error.detail;
     const msg = typeof d === 'string' ? d : 'Unauthorized';
     if (token && typeof window !== 'undefined') {
-      localStorage.removeItem('token');
+      storageRemove('token');
       window.location.href = '/login';
     }
     throw new ApiError(401, msg);
@@ -349,7 +350,7 @@ export const api = {
         body: JSON.stringify({ new_password }),
       }),
     uploadPhoto: async (id: number, file: File): Promise<Guard> => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
       const form = new FormData();
       form.append('file', file);
       const response = await fetch(`${API_URL}/guards/${id}/photo`, {
@@ -872,7 +873,7 @@ export const api = {
     uploadDocument: async (id: number, file: File) => {
       const fd = new FormData();
       fd.append('file', file);
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const token = typeof window !== 'undefined' ? storageGet('token') : null;
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const res = await fetch(`${API_URL}/leads/${id}/documents`, {
         method: 'POST',
@@ -1019,13 +1020,10 @@ export const api = {
       }>('/assistant/chat', { method: 'POST', body: JSON.stringify(data) }),
   },
   search: {
-    query: (q: string) =>
-      request<{
-        guards: { id: number; name: string; href: string }[];
-        sites: { id: number; name: string; href: string }[];
-        clients: { id: number; name: string; href: string }[];
-        invoices: { id: number; name: string; href: string }[];
-      }>(`/search?q=${encodeURIComponent(q)}`),
+    query: (q: string, limit = 8) =>
+      request<import('./types').TenantSearchResults>(
+        `/search?q=${encodeURIComponent(q)}&limit=${limit}`
+      ),
   },
   reports: {
     dashboard: (): Promise<DashboardOverview> => request<DashboardOverview>('/reports/dashboard'),
@@ -1430,7 +1428,7 @@ export const api = {
     vatReport: (start_date: string, end_date: string): Promise<VatReport> =>
       request<VatReport>(`/expenses/reports/vat?start_date=${start_date}&end_date=${end_date}`),
     uploadDocument: async (id: number, file: File): Promise<Expense> => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
       const form = new FormData();
       form.append('file', file);
       const response = await fetch(`${API_URL}/expenses/${id}/document`, {
@@ -1572,7 +1570,7 @@ export const api = {
     deleteBankAccount: (accountId: number): Promise<void> =>
       request<void>(`/company/bank-accounts/${accountId}`, { method: 'DELETE' }),
     uploadLogo: async (file: File): Promise<import('./types').CompanyProfile> => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
       const form = new FormData();
       form.append('file', file);
       const response = await fetch(`${API_URL}/company/logo`, {
@@ -2107,7 +2105,7 @@ export const api = {
     notificationLogs: (): Promise<NotificationLogItem[]> =>
       request<NotificationLogItem[]>('/admin/notification-logs'),
     uploadTicketAttachment: async (id: number, file: File) => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
       const form = new FormData();
       form.append('file', file);
       const response = await fetch(`${API_URL}/admin/tickets/${id}/attachments`, {
@@ -2263,7 +2261,7 @@ export const api = {
       expiry_date?: string,
       opts?: { folder?: string; follow_up_date?: string }
     ): Promise<GuardDocument[]> => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
       const form = new FormData();
       form.append('guard_id', String(guard_id));
       form.append('document_type', document_type);
@@ -2278,7 +2276,7 @@ export const api = {
       });
       if (response.status === 401) {
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
+          storageRemove('token');
           window.location.href = '/login';
         }
         throw new ApiError(401, 'Unauthorized');

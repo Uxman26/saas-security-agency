@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
 import type { Payroll, Guard, PayrollPreview, PayrollPreviewShift } from '@/lib/types';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -101,7 +102,7 @@ const storeKey = (base: string, uid: string | number) => `${base}.${uid}`;
 function loadStored<T>(key: string): T | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(key);
+    const raw = storageGet(key);
     return raw ? (JSON.parse(raw) as T) : null;
   } catch {
     return null;
@@ -110,12 +111,8 @@ function loadStored<T>(key: string): T | null {
 
 function store(key: string, value: unknown) {
   if (typeof window === 'undefined') return;
-  try {
-    if (value) localStorage.setItem(key, JSON.stringify(value));
-    else localStorage.removeItem(key);
-  } catch {
-    /* private mode or blocked storage: the search simply does not persist */
-  }
+  if (value) storageSet(key, JSON.stringify(value));
+  else storageRemove(key);
 }
 
 function loadStoredPreview(uid: string | number): PreviewQuery | null {
@@ -988,11 +985,11 @@ export default function PayrollPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>From</Label>
-                  <Input type="date" value={pvStart} onChange={(e) => setPvStart(e.target.value)} className="w-auto" />
+                  <Input type="date" value={pvStart} onChange={(e) => setPvStart(e.target.value)} className="min-w-0 w-full sm:w-auto" />
                 </div>
                 <div className="space-y-1">
                   <Label>To</Label>
-                  <Input type="date" value={pvEnd} onChange={(e) => setPvEnd(e.target.value)} className="w-auto" />
+                  <Input type="date" value={pvEnd} onChange={(e) => setPvEnd(e.target.value)} className="min-w-0 w-full sm:w-auto" />
                 </div>
                 {inBreakdown && allPreview && (
                   <Button type="button" onClick={backToAllEmployees}>

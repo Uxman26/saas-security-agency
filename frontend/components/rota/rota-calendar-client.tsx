@@ -3367,7 +3367,8 @@ export function RotaCalendarClient() {
         }}
         employees={state.employees.map((e) => {
           const fromPool = pool.find((p) => p.id === e.id);
-          return fromPool?.hourlyRate != null ? { ...e, hourlyRate: fromPool.hourlyRate } : e;
+          const rate = fromPool?.hourlyRate ?? e.hourlyRate;
+          return rate != null && Number(rate) > 0 ? { ...e, hourlyRate: Number(rate) } : e;
         })}
         defaultDk={shiftEdit?.dk ?? shiftPref.dk}
         defaultEmpId={shiftPref.empId}

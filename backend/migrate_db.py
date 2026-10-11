@@ -1652,6 +1652,42 @@ def run():
             uploaded_by_user_id INTEGER REFERENCES users(id),
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )""",
+        "feedback_submissions": """CREATE TABLE feedback_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reference TEXT UNIQUE NOT NULL,
+            company_id INTEGER NOT NULL REFERENCES companies(id),
+            created_by_user_id INTEGER NOT NULL REFERENCES users(id),
+            category TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            description TEXT NOT NULL,
+            status TEXT DEFAULT 'open',
+            diagnostic_json TEXT,
+            closed_at TEXT,
+            closed_by_user_id INTEGER REFERENCES users(id),
+            deleted_at TEXT,
+            deleted_by_user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "feedback_messages": """CREATE TABLE feedback_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            submission_id INTEGER NOT NULL REFERENCES feedback_submissions(id),
+            author_user_id INTEGER NOT NULL REFERENCES users(id),
+            body TEXT NOT NULL,
+            is_staff INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "feedback_attachments": """CREATE TABLE feedback_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            submission_id INTEGER NOT NULL REFERENCES feedback_submissions(id),
+            message_id INTEGER REFERENCES feedback_messages(id),
+            file_name TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            content_type TEXT,
+            size_bytes INTEGER,
+            uploaded_by_user_id INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""",
         "temporary_access_sessions": """CREATE TABLE temporary_access_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             company_id INTEGER NOT NULL REFERENCES companies(id),

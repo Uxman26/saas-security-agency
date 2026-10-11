@@ -1879,6 +1879,29 @@ export const api = {
       request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/close`, { method: 'POST' }),
     liveSupportReassign: (id: number) =>
       request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/reassign`, { method: 'POST' }),
+    feedbackList: (params?: { status?: string; category?: string; company_id?: number; q?: string }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.append('status', params.status);
+      if (params?.category) q.append('category', params.category);
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      if (params?.q) q.append('q', params.q);
+      const qs = q.toString();
+      return request<import('./types').FeedbackSubmission[]>(`/admin/feedback${qs ? `?${qs}` : ''}`);
+    },
+    feedbackGet: (id: number) => request<import('./types').FeedbackSubmission>(`/admin/feedback/${id}`),
+    feedbackReply: (id: number, body: string) =>
+      request<import('./types').FeedbackSubmission>(`/admin/feedback/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
+    feedbackStatus: (id: number, status: string) =>
+      request<import('./types').FeedbackSubmission>(`/admin/feedback/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    feedbackDelete: (id: number) =>
+      request<{ id: number; deleted: boolean }>(`/admin/feedback/${id}`, { method: 'DELETE' }),
+    feedbackAttachmentUrl: (attachmentId: number) => `${API_URL}/admin/feedback/attachments/${attachmentId}/file`,
     createTicket: (data: {
       subject: string;
       body?: string;
@@ -2547,6 +2570,45 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ body }),
       }),
+  },
+  feedback: {
+    list: (status?: string) => {
+      const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+      return request<import('./types').FeedbackSubmission[]>(`/feedback${qs}`);
+    },
+    get: (id: number) => request<import('./types').FeedbackSubmission>(`/feedback/${id}`),
+    reply: (id: number, body: string) =>
+      request<import('./types').FeedbackSubmission>(`/feedback/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
+    create: async (data: {
+      category: string;
+      subject: string;
+      description: string;
+      diagnostic?: Record<string, unknown> | null;
+      files?: File[];
+    }) => {
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
+      const form = new FormData();
+      form.append('category', data.category);
+      form.append('subject', data.subject);
+      form.append('description', data.description);
+      if (data.diagnostic) form.append('diagnostic_json', JSON.stringify(data.diagnostic));
+      for (const f of data.files || []) form.append('files', f);
+      const response = await fetch(`${API_URL}/feedback`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+        const d = error.detail;
+        throw new ApiError(response.status, typeof d === 'string' ? d : detailMessage(d));
+      }
+      return response.json() as Promise<import('./types').FeedbackSubmission>;
+    },
+    attachmentUrl: (attachmentId: number) => `${API_URL}/feedback/attachments/${attachmentId}/file`,
   },
 };
 

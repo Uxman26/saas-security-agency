@@ -517,6 +517,53 @@ export interface SupportTicket {
   attachments?: { id: number; file_name: string; content_type?: string; size_bytes?: number; created_at?: string }[];
 }
 
+export interface FeedbackMessage {
+  id: number;
+  author_user_id?: number | null;
+  author_name?: string | null;
+  author_email?: string | null;
+  body: string;
+  is_staff: boolean;
+  created_at: string;
+}
+
+export interface FeedbackAttachment {
+  id: number;
+  file_name: string;
+  content_type?: string | null;
+  size_bytes?: number | null;
+  created_at?: string;
+}
+
+export interface FeedbackSubmission {
+  id: number;
+  reference: string;
+  company_id: number;
+  company_name?: string | null;
+  created_by_user_id: number;
+  submitted_by?: string | null;
+  submitted_by_email?: string | null;
+  category: string;
+  subject: string;
+  description?: string;
+  status: string;
+  created_at: string;
+  updated_at?: string | null;
+  closed_at?: string | null;
+  message_count?: number;
+  attachment_count?: number;
+  diagnostic?: Record<string, unknown> | null;
+  tenant?: {
+    company_id: number;
+    company_name?: string | null;
+    contact_person?: string | null;
+    contact_email?: string | null;
+    contact_phone?: string | null;
+  };
+  messages?: FeedbackMessage[];
+  attachments?: FeedbackAttachment[];
+}
+
 export interface ErrorLogItem {
   id: number;
   company_id?: number | null;

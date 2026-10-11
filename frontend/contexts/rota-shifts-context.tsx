@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api } from '@/lib/api';
-import { guardsToEmployees, profileHourlyRate } from '@/lib/rota-guards-pool';
+import { guardsToEmployees, profileShiftRate } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
 import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
@@ -275,7 +275,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
         // Enrich staff with latest guard hourly rates (used for Payable fallback)
         const rateRows: Array<readonly [string, number] | null> = [];
-        const noProfileRate = guards.filter((g) => profileHourlyRate(g) == null);
+        const noProfileRate = guards.filter((g) => profileShiftRate(g) == null);
         // Keep request concurrency below the API's database capacity.
         for (let i = 0; i < noProfileRate.length && !cancelled; i += 3) {
           const batch = noProfileRate.slice(i, i + 3);
@@ -826,10 +826,13 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   );
 
   const withStaffRate = useCallback(
-    (s: RotaJsState, sh: ShiftRec, empId: string): ShiftRec => ({
-      ...sh,
-      shiftRate: staffRate(s, empId),
-    }),
+    (s: RotaJsState, sh: ShiftRec, empId: string): ShiftRec => {
+      const rate = staffRate(s, empId);
+      return {
+        ...sh,
+        shiftRate: rate != null && rate > 0 ? rate : null,
+      };
+    },
     [staffRate]
   );
 

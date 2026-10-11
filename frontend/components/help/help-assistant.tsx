@@ -407,6 +407,26 @@ export function HelpAssistant() {
                   </div>
                 ) : null}
 
+                <div className="border-t px-3 pt-2">
+                  <Link href="/settings/feedback" className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                    Suggestions & Complaints
+                  </Link>
+                  {' · '}
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    onClick={() => {
+                      window.dispatchEvent(
+                        new CustomEvent('controlops-report-issue', {
+                          detail: { error_category: 'technical_issue', subject: 'Help centre issue report', module_or_page: pathname },
+                        })
+                      );
+                      setOpen(false);
+                    }}
+                  >
+                    Report an issue
+                  </button>
+                </div>
                 <form
                   className="flex items-center gap-2 border-t p-3"
                   onSubmit={(e) => {

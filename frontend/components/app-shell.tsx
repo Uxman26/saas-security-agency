@@ -25,6 +25,7 @@ import { TrialBanner } from '@/components/trial-banner';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
 import { ControlOpsAssistant } from '@/components/assistant/controlops-assistant';
+import { ReportIssueDialog } from '@/components/feedback/report-issue-dialog';
 import { QuickActionsMenu } from '@/components/quick-actions-menu';
 import { GlobalSearch } from '@/components/global-search';
 import { useModuleLabel } from '@/lib/module-i18n';
@@ -40,9 +41,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const ts = useTranslations('sidebar');
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportExtras, setReportExtras] = useState<Record<string, unknown> | null>(null);
   const isSuperAdmin = user?.role === 'super_admin';
   const { can, loaded: permsLoaded } = usePlatformPermissions();
   const mobileNavRef = usePersistedScroll<HTMLElement>('app-sidebar-nav-mobile');
+
+  useEffect(() => {
+    const onReport = (ev: Event) => {
+      const detail = (ev as CustomEvent<Record<string, unknown>>).detail || null;
+      setReportExtras(detail);
+      setReportOpen(true);
+    };
+    window.addEventListener('controlops-report-issue', onReport as EventListener);
+    return () => window.removeEventListener('controlops-report-issue', onReport as EventListener);
+  }, []);
+
   const adminSections = useMemo(
     () =>
       permsLoaded
@@ -187,6 +201,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
         <main className="app-main-safe flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">{children}</main>
         {user ? <ControlOpsAssistant /> : null}
+        {user && !isSuperAdmin ? (
+          <ReportIssueDialog
+            open={reportOpen}
+            onOpenChange={setReportOpen}
+            defaultCategory={String(reportExtras?.error_category || 'technical_issue')}
+            defaultSubject={String(reportExtras?.subject || 'Application issue')}
+            defaultDescription={String(reportExtras?.description || '')}
+            diagnosticExtras={reportExtras}
+          />
+        ) : null}
       </div>
     </div>
   );

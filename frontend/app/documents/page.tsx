@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { storageGet } from '@/lib/safe-storage';
 import type { GuardDocument, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import {
@@ -70,7 +71,7 @@ function displayName(doc: GuardDocument) {
 }
 
 async function downloadDoc(doc: GuardDocument) {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token')?.trim() : null;
+  const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
   const res = await fetch(api.documents.downloadUrl(doc.id), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });

@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { TOKEN_KEY } from '@/lib/session-sync';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
+import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
 
 const ADMIN_TOKEN_BACKUP = 'admin_token_backup';
 
@@ -17,7 +18,7 @@ export function ImpersonationBanner() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    setActive(Boolean(localStorage.getItem(ADMIN_TOKEN_BACKUP)) && user?.role !== 'super_admin');
+    setActive(Boolean(storageGet(ADMIN_TOKEN_BACKUP)) && user?.role !== 'super_admin');
   }, [user]);
 
   if (!active) return null;
@@ -28,10 +29,10 @@ export function ImpersonationBanner() {
     } catch {
       /* session may already be revoked */
     }
-    const backup = localStorage.getItem(ADMIN_TOKEN_BACKUP);
+    const backup = storageGet(ADMIN_TOKEN_BACKUP);
     if (backup) {
-      localStorage.setItem(TOKEN_KEY, backup);
-      localStorage.removeItem(ADMIN_TOKEN_BACKUP);
+      storageSet(TOKEN_KEY, backup);
+      storageRemove(ADMIN_TOKEN_BACKUP);
     }
     try {
       await refreshUser();

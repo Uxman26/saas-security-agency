@@ -29,6 +29,7 @@ import { BarChart3, Building2, CreditCard, FileText, Plus, Trash2, Pencil } from
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey } from '@/lib/date-format';
 
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'card', 'direct_debit', 'other'];
 const METHOD_LABELS: Record<string, string> = {
@@ -61,7 +62,7 @@ export default function PaymentsPage() {
   const [formInvoiceId, setFormInvoiceId] = useState('');
   const [formAmount, setFormAmount] = useState('');
   const [formMethod, setFormMethod] = useState('bank_transfer');
-  const [formPaidAt, setFormPaidAt] = useState(new Date().toISOString().split('T')[0]);
+  const [formPaidAt, setFormPaidAt] = useState(localDateKey());
   const [submitting, setSubmitting] = useState(false);
   const [editRec, setEditRec] = useState<Payment | null>(null);
 
@@ -115,7 +116,7 @@ export default function PaymentsPage() {
       setFormInvoiceId('');
       setFormAmount('');
       setFormMethod('bank_transfer');
-      setFormPaidAt(new Date().toISOString().split('T')[0]);
+      setFormPaidAt(localDateKey());
       loadPayments();
       toast.success('Payment recorded');
     } catch (err) {
@@ -143,7 +144,7 @@ export default function PaymentsPage() {
     setFormInvoiceId(p.invoice_id ? String(p.invoice_id) : '');
     setFormAmount(String(p.amount));
     setFormMethod(p.method || 'bank_transfer');
-    setFormPaidAt(p.paid_at ? p.paid_at.slice(0, 10) : new Date().toISOString().split('T')[0]);
+    setFormPaidAt(p.paid_at ? p.paid_at.slice(0, 10) : localDateKey());
   };
 
   const handleEditSave = async () => {
@@ -166,7 +167,7 @@ export default function PaymentsPage() {
       setFormInvoiceId('');
       setFormAmount('');
       setFormMethod('bank_transfer');
-      setFormPaidAt(new Date().toISOString().split('T')[0]);
+      setFormPaidAt(localDateKey());
       loadPayments();
       toast.success('Payment updated');
     } catch (e) {
@@ -531,7 +532,7 @@ export default function PaymentsPage() {
             setFormInvoiceId('');
             setFormAmount('');
             setFormMethod('bank_transfer');
-            setFormPaidAt(new Date().toISOString().split('T')[0]);
+            setFormPaidAt(localDateKey());
           }
         }}
       >

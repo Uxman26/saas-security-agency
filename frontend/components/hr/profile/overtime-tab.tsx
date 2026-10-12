@@ -15,12 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { formatDateUK } from '@/lib/date-format';
+import { formatDateUK, localDateKey } from '@/lib/date-format';
 
 type Row = Record<string, unknown>;
 
 function iso(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return localDateKey(d);
 }
 
 function str(row: Row, key: string): string {

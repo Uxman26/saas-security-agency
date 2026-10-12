@@ -17,26 +17,27 @@ import { toast } from '@/lib/toast';
 import { ShieldAlert, Plus, Phone } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey, localDateOffset } from '@/lib/date-format';
 
 /** The board refreshes on a timer because a missed check is created by the backend
  *  sweep, not by anything the operator did in this tab. */
 const REFRESH_MS = 20000;
 
 const STATUS_TONE: Record<string, string> = {
-  SAFE: 'bg-emerald-100 text-emerald-800',
-  'SESSION ACTIVE': 'bg-emerald-100 text-emerald-800',
-  'CHECK DUE': 'bg-amber-100 text-amber-900',
-  'GRACE PERIOD': 'bg-orange-100 text-orange-900',
-  'MISSED CHECK': 'bg-red-100 text-red-800',
-  ESCALATING: 'bg-red-100 text-red-800',
-  EMERGENCY: 'bg-red-600 text-white',
-  'ASSISTANCE REQUESTED': 'bg-orange-100 text-orange-900',
-  'RESPONDER INVESTIGATING': 'bg-blue-100 text-blue-800',
-  'SESSION COMPLETED': 'bg-slate-100 text-slate-700',
+  SAFE: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
+  'SESSION ACTIVE': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
+  'CHECK DUE': 'bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+  'GRACE PERIOD': 'bg-orange-100 text-orange-900 dark:bg-orange-950/40 dark:text-orange-300',
+  'MISSED CHECK': 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300',
+  ESCALATING: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300',
+  EMERGENCY: 'bg-red-600 text-white dark:bg-red-500',
+  'ASSISTANCE REQUESTED': 'bg-orange-100 text-orange-900 dark:bg-orange-950/40 dark:text-orange-300',
+  'RESPONDER INVESTIGATING': 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+  'SESSION COMPLETED': 'bg-muted text-muted-foreground',
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const tone = STATUS_TONE[status] || 'bg-slate-100 text-slate-700';
+  const tone = STATUS_TONE[status] || 'bg-muted text-muted-foreground';
   return <span className={`inline-block rounded px-2 py-0.5 text-xs font-semibold ${tone}`}>{status}</span>;
 }
 
@@ -70,8 +71,8 @@ export default function LoneWorkerPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [events, setEvents] = useState<LoneWorkerEvent[]>([]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const today = localDateKey();
+  const weekAgo = localDateOffset(-7);
   const [startDate, setStartDate] = useState(weekAgo);
   const [endDate, setEndDate] = useState(today);
   const [auditSite, setAuditSite] = useState('');

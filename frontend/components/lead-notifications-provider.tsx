@@ -126,9 +126,11 @@ export function LeadNotificationsProvider({ children }: { children: React.ReactN
         const title = String(notification.title || 'Lead notification');
         const body = String(notification.body || '');
         const url =
-          notification.entity_type === 'lead' && notification.entity_id
-            ? `/leads/${notification.entity_id}`
-            : '/leads';
+          notification.entity_type === 'feedback'
+            ? '/settings/feedback'
+            : notification.entity_type === 'lead' && notification.entity_id
+              ? `/leads/${notification.entity_id}`
+              : '/leads';
         if (!isFirstPass) {
           playNotificationSound(id, muted);
         }

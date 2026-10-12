@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { storageGet } from '@/lib/safe-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -24,7 +25,7 @@ export function useAuthBlobUrl(path?: string | null): string | null {
     if (!path) return;
     let cancelled = false;
     let blobUrl: string | null = null;
-    const token = localStorage.getItem('token')?.trim();
+    const token = storageGet('token')?.trim();
 
     void fetch(`${API_URL}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -55,7 +56,7 @@ export function useAuthBlobUrl(path?: string | null): string | null {
  * object URL is released once the new tab has had a chance to load it.
  */
 export async function openAuthFile(path: string): Promise<boolean> {
-  const token = localStorage.getItem('token')?.trim();
+  const token = storageGet('token')?.trim();
   try {
     const res = await fetch(`${API_URL}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},

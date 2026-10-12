@@ -18,7 +18,10 @@ export function Toaster({ ...props }: ToasterProps) {
     <Sonner
       theme={theme as ToasterProps['theme']}
       position="bottom-left"
-      offset={20}
+      offset={{
+        bottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+        left: 'max(1.25rem, env(safe-area-inset-left))',
+      }}
       gap={10}
       visibleToasts={4}
       closeButton

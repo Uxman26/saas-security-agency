@@ -12,7 +12,8 @@ router = APIRouter(prefix="/search", tags=["search"])
 @router.get("")
 def search(
     q: str = Query("", min_length=0),
+    limit: int = Query(8, ge=1, le=20),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return search_service.tenant_search(db, current_user, q)
+    return search_service.tenant_search(db, current_user, q, limit=limit)

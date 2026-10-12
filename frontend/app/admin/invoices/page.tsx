@@ -20,12 +20,12 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
-  paid: 'bg-green-100 text-green-800',
-  unpaid: 'bg-blue-100 text-blue-800',
-  overdue: 'bg-red-100 text-red-800',
-  partial: 'bg-amber-100 text-amber-800',
-  cancelled: 'bg-gray-100 text-gray-600',
-  voided: 'bg-gray-100 text-gray-600',
+  paid: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300',
+  unpaid: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
+  overdue: 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300',
+  partial: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  cancelled: 'bg-muted text-muted-foreground',
+  voided: 'bg-muted text-muted-foreground',
 };
 
 const STATUS_OPTIONS = ['', 'unpaid', 'paid', 'overdue', 'partial', 'cancelled', 'voided'];

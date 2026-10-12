@@ -43,6 +43,7 @@ export const MODULE_MESSAGE_KEYS: Record<string, string> = {
   sms: 'sms',
   email_settings: 'email',
   recycle_bin: 'recycleBin',
+  feedback: 'feedback',
 };
 
 export function useModuleLabel() {

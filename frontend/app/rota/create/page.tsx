@@ -16,6 +16,7 @@ import { Calendar, Check, Copy, LayoutGrid, Loader2, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { ModuleGuard } from '@/components/module-guard';
+import { localDateKey } from '@/lib/date-format';
 
 function fmtPeriod(r: RotaPlanListItem) {
   const a = new Date(`${r.start_date}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -36,7 +37,7 @@ function CreateRotaPage() {
   const [name, setName] = useState('');
   const [duration, setDuration] = useState<string>('7');
   const [customDays, setCustomDays] = useState(14);
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => localDateKey());
   const [budget, setBudget] = useState('');
   const [view, setView] = useState<RotaViewMode>('table');
   const [saving, setSaving] = useState(false);

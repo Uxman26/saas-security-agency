@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Site } from '@/lib/types';
 import { MapPin } from 'lucide-react';
+import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
 
 const STORAGE_KEY = 'controlops-portal-site';
 const ALL = 'all';
@@ -22,28 +23,20 @@ export function usePortalSiteScope(sites: Site[]) {
   useEffect(() => {
     if (restored || sites.length === 0) return;
     setRestored(true);
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = Number(raw);
-      if (Number.isFinite(parsed) && sites.some((s) => s.id === parsed)) {
-        setSiteId(parsed);
-      } else {
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
-    } catch {
-      // Private-browsing or blocked storage: fall back to "all sites".
+    const raw = storageGet(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && sites.some((s) => s.id === parsed)) {
+      setSiteId(parsed);
+    } else {
+      storageRemove(STORAGE_KEY);
     }
   }, [sites, restored]);
 
   const select = useCallback((next: number | null) => {
     setSiteId(next);
-    try {
-      if (next == null) window.localStorage.removeItem(STORAGE_KEY);
-      else window.localStorage.setItem(STORAGE_KEY, String(next));
-    } catch {
-      // Non-fatal: the scope just will not persist across reloads.
-    }
+    if (next == null) storageRemove(STORAGE_KEY);
+    else storageSet(STORAGE_KEY, String(next));
   }, []);
 
   return { siteId, select };
@@ -62,13 +55,13 @@ export function PortalSiteSwitcher({
   if (sites.length < 2) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       <MapPin className="size-4 text-muted-foreground shrink-0" />
       <Select
         value={siteId == null ? ALL : String(siteId)}
         onValueChange={(v) => onChange(v === ALL ? null : Number(v))}
       >
-        <SelectTrigger className="w-[220px]">
+        <SelectTrigger className="w-full max-w-[220px]">
           <SelectValue placeholder="All sites" />
         </SelectTrigger>
         <SelectContent>

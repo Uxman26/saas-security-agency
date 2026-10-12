@@ -517,6 +517,53 @@ export interface SupportTicket {
   attachments?: { id: number; file_name: string; content_type?: string; size_bytes?: number; created_at?: string }[];
 }
 
+export interface FeedbackMessage {
+  id: number;
+  author_user_id?: number | null;
+  author_name?: string | null;
+  author_email?: string | null;
+  body: string;
+  is_staff: boolean;
+  created_at: string;
+}
+
+export interface FeedbackAttachment {
+  id: number;
+  file_name: string;
+  content_type?: string | null;
+  size_bytes?: number | null;
+  created_at?: string;
+}
+
+export interface FeedbackSubmission {
+  id: number;
+  reference: string;
+  company_id: number;
+  company_name?: string | null;
+  created_by_user_id: number;
+  submitted_by?: string | null;
+  submitted_by_email?: string | null;
+  category: string;
+  subject: string;
+  description?: string;
+  status: string;
+  created_at: string;
+  updated_at?: string | null;
+  closed_at?: string | null;
+  message_count?: number;
+  attachment_count?: number;
+  diagnostic?: Record<string, unknown> | null;
+  tenant?: {
+    company_id: number;
+    company_name?: string | null;
+    contact_person?: string | null;
+    contact_email?: string | null;
+    contact_phone?: string | null;
+  };
+  messages?: FeedbackMessage[];
+  attachments?: FeedbackAttachment[];
+}
+
 export interface ErrorLogItem {
   id: number;
   company_id?: number | null;
@@ -577,6 +624,38 @@ export interface GlobalSearchResult {
   invoices: { id: number; invoice_number: string; status?: string; company_id?: number | null; total_amount?: number }[];
   errors: { id: number; message: string; severity?: string; status?: string }[];
 }
+
+export type TenantSearchHit = {
+  id: number | string;
+  name: string;
+  href: string;
+  subtitle?: string | null;
+};
+
+export type TenantSearchResults = {
+  guards: TenantSearchHit[];
+  sites: TenantSearchHit[];
+  clients: TenantSearchHit[];
+  invoices: TenantSearchHit[];
+  leads?: TenantSearchHit[];
+  rota_plans?: TenantSearchHit[];
+  incidents?: TenantSearchHit[];
+  tasks?: TenantSearchHit[];
+  contractors?: TenantSearchHit[];
+  documents?: TenantSearchHit[];
+  patrol_routes?: TenantSearchHit[];
+  accident_reports?: TenantSearchHit[];
+  occurrence_sheets?: TenantSearchHit[];
+  expenses?: TenantSearchHit[];
+  vendors?: TenantSearchHit[];
+  allowances?: TenantSearchHit[];
+  payrolls?: TenantSearchHit[];
+  payments?: TenantSearchHit[];
+  staff_requests?: TenantSearchHit[];
+  credit_notes?: TenantSearchHit[];
+  accounts?: TenantSearchHit[];
+  pages?: TenantSearchHit[];
+};
 
 export type TenantSupportView = Company & {
   address?: string | null;

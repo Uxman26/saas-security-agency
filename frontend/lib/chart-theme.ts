@@ -16,31 +16,31 @@ export type ChartThemeColors = {
   muted: string;
 };
 
-/** Amber Mono / ControlOps fallbacks when CSS vars are unavailable. */
+/** Hex fallbacks for Safari < 15.4 / canvas where oklch may be unavailable. */
 const FALLBACK_LIGHT: ChartThemeColors = {
-  axis: 'oklch(0.48 0.02 55)',
-  foreground: 'oklch(0.22 0.02 55)',
-  grid: 'oklch(0.91 0.01 75)',
-  card: 'oklch(1 0 0)',
-  border: 'oklch(0.91 0.01 75)',
-  primary: 'oklch(0.65 0.18 48)',
-  accent: 'oklch(0.72 0.16 70)',
-  warn: 'oklch(0.55 0.12 66)',
-  danger: 'oklch(0.5 0.18 27)',
-  muted: 'oklch(0.58 0.14 38)',
+  axis: '#64748B',
+  foreground: '#172033',
+  grid: '#E2E8F0',
+  card: '#FFFFFF',
+  border: '#E2E8F0',
+  primary: '#F45100',
+  accent: '#06B6D4',
+  warn: '#F59E0B',
+  danger: '#EF4444',
+  muted: '#64748B',
 };
 
 const FALLBACK_DARK: ChartThemeColors = {
-  axis: 'oklch(0.72 0.01 60)',
-  foreground: 'oklch(0.985 0 0)',
-  grid: 'oklch(0.374 0.01 67.558)',
-  card: 'oklch(0.185 0.008 55)',
-  border: 'oklch(0.374 0.01 67.558)',
-  primary: 'oklch(0.556 0.163 48.998)',
-  accent: 'oklch(0.563 0.195 38.402)',
-  warn: 'oklch(0.554 0.115 66.442)',
-  danger: 'oklch(0.506 0.213 27.518)',
-  muted: 'oklch(0.525 0.223 3.958)',
+  axis: '#94A3B8',
+  foreground: '#F1F5F9',
+  grid: '#334155',
+  card: '#1E293B',
+  border: '#334155',
+  primary: '#FF6A1F',
+  accent: '#22D3EE',
+  warn: '#FBBF24',
+  danger: '#F87171',
+  muted: '#94A3B8',
 };
 
 function readColors(): ChartThemeColors {
@@ -60,8 +60,8 @@ function readColors(): ChartThemeColors {
     primary: v('--chart-1', fb.primary),
     accent: v('--chart-2', fb.accent),
     warn: v('--chart-3', fb.warn),
-    danger: v('--chart-4', fb.danger),
-    muted: v('--chart-5', fb.muted),
+    danger: v('--chart-5', fb.danger),
+    muted: v('--chart-4', fb.muted),
   };
 }
 

@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useCreateLead, useDeleteLead, useLeadStatuses, useLeads, useUpdateLead } from '@/hooks/use-leads';
 import { api } from '@/lib/api';
 import { can } from '@/lib/permissions';
+import { storageGet } from '@/lib/safe-storage';
 import {
   LEAD_PRIORITIES,
   LEAD_SOURCES,
@@ -157,7 +158,7 @@ export function LeadsListView({ title, description, fixedFilters = {}, showDates
     Object.entries(filters).forEach(([k, v]) => {
       if (v !== undefined) q.append(k, String(v));
     });
-    const token = localStorage.getItem('token');
+    const token = storageGet('token');
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/leads/export?${q}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });

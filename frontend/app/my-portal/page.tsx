@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
+import { localDateKey, localDateOffset } from '@/lib/date-format';
 import type {
   Incident,
   PatrolComplianceRow,
@@ -86,8 +87,8 @@ export default function MyPortalPage() {
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [incForm, setIncForm] = useState({ notes: '', site_id: '', latitude: '', longitude: '' });
 
-  const today = new Date().toISOString().slice(0, 10);
-  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  const today = localDateKey();
+  const weekAgo = localDateOffset(-7);
 
   const { siteId, select: selectSite } = usePortalSiteScope(sites);
 

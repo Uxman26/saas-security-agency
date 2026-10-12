@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import type { CompanyTrialsResponse, TenantSupportView, TrialPeriod } from '@/lib/types';
 import { TOKEN_KEY } from '@/lib/session-sync';
+import { storageGet, storageSet } from '@/lib/safe-storage';
 import { toast } from '@/lib/toast';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -183,9 +184,9 @@ export default function AdminCompanySupportPage() {
 
   const acceptImpersonate = async () => {
     if (!confirmImpersonate) return;
-    const current = localStorage.getItem(TOKEN_KEY);
-    if (current) localStorage.setItem(ADMIN_TOKEN_BACKUP, current);
-    localStorage.setItem(TOKEN_KEY, confirmImpersonate.access_token.trim());
+    const current = storageGet(TOKEN_KEY);
+    if (current) storageSet(ADMIN_TOKEN_BACKUP, current);
+    storageSet(TOKEN_KEY, confirmImpersonate.access_token.trim());
     setConfirmImpersonate(null);
     try {
       await refreshUser();

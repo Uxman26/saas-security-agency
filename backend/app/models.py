@@ -2295,6 +2295,56 @@ class SupportTicketAttachment(Base):
     ticket = relationship("SupportTicket", back_populates="attachments")
 
 
+class FeedbackSubmission(Base):
+    __tablename__ = "feedback_submissions"
+    id = Column(Integer, primary_key=True, index=True)
+    reference = Column(String, unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    category = Column(String, nullable=False, index=True)
+    subject = Column(String, nullable=False)
+    description = Column(Text, nullable=False)
+    status = Column(String, default="open", index=True)
+    diagnostic_json = Column(Text)
+    closed_at = Column(DateTime(timezone=True), nullable=True)
+    closed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    company = relationship("Company")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+    closed_by = relationship("User", foreign_keys=[closed_by_user_id])
+    messages = relationship("FeedbackMessage", back_populates="submission", cascade="all, delete-orphan")
+    attachments = relationship("FeedbackAttachment", back_populates="submission", cascade="all, delete-orphan")
+
+
+class FeedbackMessage(Base):
+    __tablename__ = "feedback_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    submission_id = Column(Integer, ForeignKey("feedback_submissions.id"), nullable=False, index=True)
+    author_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body = Column(Text, nullable=False)
+    is_staff = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    submission = relationship("FeedbackSubmission", back_populates="messages")
+    author = relationship("User")
+
+
+class FeedbackAttachment(Base):
+    __tablename__ = "feedback_attachments"
+    id = Column(Integer, primary_key=True, index=True)
+    submission_id = Column(Integer, ForeignKey("feedback_submissions.id"), nullable=False, index=True)
+    message_id = Column(Integer, ForeignKey("feedback_messages.id"), nullable=True)
+    file_name = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    content_type = Column(String)
+    size_bytes = Column(Integer)
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    submission = relationship("FeedbackSubmission", back_populates="attachments")
+
+
 class TemporaryAccessSession(Base):
     __tablename__ = "temporary_access_sessions"
     id = Column(Integer, primary_key=True, index=True)

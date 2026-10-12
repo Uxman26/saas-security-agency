@@ -35,6 +35,7 @@ import {
   History,
 } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { localDateKey } from '@/lib/date-format';
 
 const gbp = (n: number) => `£${n.toFixed(2)}`;
 
@@ -91,7 +92,7 @@ function monthRange() {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
+  return { start: localDateKey(start), end: localDateKey(end) };
 }
 
 export default function ReportsPage() {

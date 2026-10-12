@@ -330,6 +330,7 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("logs_view", "View SMS logs", "view"),
     ),
     "recycle_bin": (VIEW,),
+    "feedback": (VIEW, CREATE),
     "email_settings": (VIEW, EDIT)
     + (
         ActionDef("send", "Send email", "edit"),

@@ -25,6 +25,7 @@ import { TrialBanner } from '@/components/trial-banner';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
 import { ControlOpsAssistant } from '@/components/assistant/controlops-assistant';
+import { ReportIssueDialog } from '@/components/feedback/report-issue-dialog';
 import { QuickActionsMenu } from '@/components/quick-actions-menu';
 import { GlobalSearch } from '@/components/global-search';
 import { useModuleLabel } from '@/lib/module-i18n';
@@ -40,9 +41,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const ts = useTranslations('sidebar');
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportExtras, setReportExtras] = useState<Record<string, unknown> | null>(null);
   const isSuperAdmin = user?.role === 'super_admin';
   const { can, loaded: permsLoaded } = usePlatformPermissions();
   const mobileNavRef = usePersistedScroll<HTMLElement>('app-sidebar-nav-mobile');
+
+  useEffect(() => {
+    const onReport = (ev: Event) => {
+      const detail = (ev as CustomEvent<Record<string, unknown>>).detail || null;
+      setReportExtras(detail);
+      setReportOpen(true);
+    };
+    window.addEventListener('controlops-report-issue', onReport as EventListener);
+    return () => window.removeEventListener('controlops-report-issue', onReport as EventListener);
+  }, []);
+
   const adminSections = useMemo(
     () =>
       permsLoaded
@@ -85,12 +99,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const moduleLabel = useModuleLabel();
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div className="flex h-[100vh] h-dvh overflow-hidden bg-background">
       <AppSidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ImpersonationBanner />
         <TrialBanner />
-        <header className="z-40 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
+        <header className="app-header-safe z-40 flex min-h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden md:hidden">
             <Button
               type="button"
@@ -104,8 +118,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
             <CompanyBrand className="min-w-0 truncate text-primary text-sm [&_span]:truncate [&_span]:text-primary" />
           </div>
-          <div className="hidden flex-1 md:flex md:justify-center md:px-4">
-            <GlobalSearch />
+          <div className="flex shrink-0 items-center md:flex-1 md:justify-center md:px-4">
+            <GlobalSearch className="w-auto md:w-full md:max-w-sm" />
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
             <QuickActionsMenu />
@@ -129,7 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {drawer && (
           <div className="fixed inset-0 z-50 md:hidden">
             <button type="button" className="absolute inset-0 bg-black/50" aria-label={tc('closeMenu')} onClick={() => setDrawer(false)} />
-            <div className="absolute start-0 top-0 bottom-0 flex w-56 flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl">
+            <div className="app-drawer-safe absolute start-0 top-0 bottom-0 flex w-[min(18rem,85vw)] flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl">
               <div className="border-b border-sidebar-border p-4">
                 <CompanyBrand className="mb-2" />
                 <div className="flex justify-end">
@@ -138,7 +152,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Button>
                 </div>
               </div>
-              <nav ref={mobileNavRef} className="sidebar-nav-scroll flex-1 space-y-0.5 overflow-y-auto p-2">
+              <nav ref={mobileNavRef} className="sidebar-nav-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2 [-webkit-overflow-scrolling:touch]">
                 {isSuperAdmin ? (
                   adminSections.map((section) => (
                     <div key={section.titleKey} className="mb-3">
@@ -185,8 +199,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         )}
-        <main className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain">{children}</main>
+        <main className="app-main-safe flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">{children}</main>
         {user ? <ControlOpsAssistant /> : null}
+        {user && !isSuperAdmin ? (
+          <ReportIssueDialog
+            open={reportOpen}
+            onOpenChange={setReportOpen}
+            defaultCategory={String(reportExtras?.error_category || 'technical_issue')}
+            defaultSubject={String(reportExtras?.subject || 'Application issue')}
+            defaultDescription={String(reportExtras?.description || '')}
+            diagnosticExtras={reportExtras}
+          />
+        ) : null}
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   Mail,
   MessageCircle,
+  MessageSquare,
   Monitor,
   RotateCcw,
   Scale,
@@ -113,6 +114,7 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
     titleKey: 'adminSectionSupport',
     items: [
       { href: '/admin/tickets', labelKey: 'adminTickets', icon: LifeBuoy, perms: ['support.read'] },
+      { href: '/admin/feedback', labelKey: 'adminFeedback', icon: MessageSquare, perms: ['support.read'] },
       { href: '/admin/live-support', labelKey: 'adminLiveSupport', icon: MessageCircle, perms: ['support.read'] },
     ],
   },

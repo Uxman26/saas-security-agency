@@ -241,8 +241,20 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: clip;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground transition-colors duration-200;
+    min-height: 100dvh;
+    overflow-x: clip;
+    -webkit-tap-highlight-color: transparent;
   }
   /* viewportFit:cover lets the page paint under the notch/home indicator. These insets
      are 0px on every non-notched device and on desktop, so the web layout is untouched. */
@@ -258,6 +270,24 @@
     textarea {
       font-size: max(16px, 1em);
     }
+  }
+  /* Safari date/time controls need stable size or the native picker clips / overflows. */
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="week"] {
+    min-height: 2.25rem;
+    min-width: 0;
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    text-align: start;
+    min-height: 1.25rem;
   }
 }
 
@@ -342,6 +372,25 @@
   -webkit-text-fill-color: #161e2c;
   caret-color: #161e2c;
   transition: background-color 9999s ease-out 0s;
+}
+
+/* App-wide autofill: keep contrast in both themes (Safari/Chrome). */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--background) inset;
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  transition: background-color 9999s ease-out 0s;
+}
+.auth-form input:-webkit-autofill,
+.auth-form input:-webkit-autofill:hover,
+.auth-form input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: #161e2c;
+  caret-color: #161e2c;
 }
 
 .marketing-hero-bg {
@@ -533,10 +582,10 @@
   }
 }
 
-/* Sidebar nav scrollbar — light orange */
+/* Sidebar nav scrollbar — brand-tinted; avoid hard white so dark mode stays consistent */
 .sidebar-nav-scroll {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--sidebar-primary) 40%, white)
+  scrollbar-color: color-mix(in oklab, var(--sidebar-primary) 45%, var(--sidebar-accent))
     color-mix(in oklab, var(--sidebar-accent) 60%, transparent);
 }
 .sidebar-nav-scroll::-webkit-scrollbar {
@@ -547,13 +596,13 @@
   border-radius: 999px;
 }
 .sidebar-nav-scroll::-webkit-scrollbar-thumb {
-  background: color-mix(in oklab, var(--sidebar-primary) 45%, white);
+  background: color-mix(in oklab, var(--sidebar-primary) 50%, var(--sidebar-accent));
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in oklab, var(--sidebar-primary) 60%, white);
+  background: color-mix(in oklab, var(--sidebar-primary) 70%, var(--sidebar-accent));
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -569,7 +618,7 @@
   50% {
     transform: translateZ(80px);
     opacity: 0.4;
-    border-color: color-mix(in oklab, var(--primary) 80%, white);
+    border-color: color-mix(in oklab, var(--primary) 80%, var(--background));
   }
 }
 
@@ -637,6 +686,24 @@
   50% {
     transform: translateZ(52px);
     opacity: 0.4;
-    border-color: color-mix(in oklab, var(--primary) 80%, white);
+    border-color: color-mix(in oklab, var(--primary) 80%, var(--background));
   }
+}
+
+/* Shared app chrome helpers */
+.app-header-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.app-main-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.app-drawer-safe {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Touch-friendly horizontal scroll regions (tables, filter bars) */
+.touch-pan-x {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }

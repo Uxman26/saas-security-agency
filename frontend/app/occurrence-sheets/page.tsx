@@ -30,6 +30,7 @@ import { NotebookPen, Plus, Printer, Download, Trash2, Pencil, Search } from 'lu
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { localDateKey } from '@/lib/date-format';
 
 const STATUS_OPTIONS = [
   { value: 'open', label: 'Open' },
@@ -103,7 +104,7 @@ export default function OccurrenceSheetsPage() {
   const openNew = () => {
     setEditing(null);
     setHeader({
-      sheet_date: new Date().toISOString().slice(0, 10),
+      sheet_date: localDateKey(),
       site_id: '', officer_names: '', shift_start: '', shift_end: '', signature_name: '', status: 'open',
     });
     setEntries(Array.from({ length: STARTING_ROWS }, () => ({ ...BLANK_ROW })));

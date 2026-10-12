@@ -49,7 +49,7 @@ function OAuthCallbackInner() {
   }, [searchParams, loginWithToken, router]);
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-[#F7F6F3] text-sm text-neutral-600">
+    <div className="flex min-h-svh items-center justify-center bg-background text-sm text-muted-foreground">
       {message}
     </div>
   );
@@ -57,7 +57,7 @@ function OAuthCallbackInner() {
 
 export default function OAuthCallbackPage() {
   return (
-    <Suspense fallback={<div className="min-h-svh bg-[#F7F6F3]" />}>
+    <Suspense fallback={<div className="min-h-svh bg-background" />}>
       <OAuthCallbackInner />
     </Suspense>
   );

@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { formatDateUK } from '@/lib/date-format';
+import { formatDateUK, localDateKey } from '@/lib/date-format';
 import { toast } from '@/lib/toast';
 import type { AbsenceKind, AbsenceRecord, AbsenceSummary } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -44,7 +44,7 @@ function hrs(n?: number | null) {
 }
 
 function isoOf(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return localDateKey(d);
 }
 
 function startOfYear(d = new Date()) {

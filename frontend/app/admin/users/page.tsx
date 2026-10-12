@@ -150,7 +150,7 @@ export default function AdminUsersPage() {
                           <TableCell className="capitalize">{u.role ?? '-'}</TableCell>
                           <TableCell>{u.company_name ?? '-'}</TableCell>
                           <TableCell>
-                            <span className={u.is_active ? 'text-green-600' : 'text-red-600'}>
+                            <span className={u.is_active ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               {u.is_active ? 'Active' : 'Inactive'}
                             </span>
                           </TableCell>
@@ -168,7 +168,7 @@ export default function AdminUsersPage() {
                               >
                                 {u.enabled_modules?.lead_capture ? (
                                   <>
-                                    <Check className="size-3.5 text-green-600" /> On
+                                    <Check className="size-3.5 text-green-600 dark:text-green-400" /> On
                                   </>
                                 ) : (
                                   <>
@@ -177,7 +177,7 @@ export default function AdminUsersPage() {
                                 )}
                               </Button>
                             ) : (
-                              <span className={u.enabled_modules?.lead_capture ? 'text-green-600' : 'text-muted-foreground'}>
+                              <span className={u.enabled_modules?.lead_capture ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}>
                                 {u.enabled_modules?.lead_capture ? 'On' : 'Off'}
                               </span>
                             )}

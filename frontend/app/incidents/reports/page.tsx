@@ -14,10 +14,11 @@ import { api } from '@/lib/api';
 import type { IncidentMatrixReport, IncidentSummaryRow } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { ArrowLeft, BarChart3, Download } from 'lucide-react';
+import { localDateKey, localDateOffset } from '@/lib/date-format';
 
 export default function IncidentReportsPage() {
-  const today = new Date().toISOString().slice(0, 10);
-  const monthAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const today = localDateKey();
+  const monthAgo = localDateOffset(-30);
   const [start, setStart] = useState(monthAgo);
   const [end, setEnd] = useState(today);
   const [rows, setRows] = useState<IncidentSummaryRow[]>([]);

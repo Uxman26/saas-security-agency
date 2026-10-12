@@ -432,7 +432,7 @@ export function ShiftDialog({
               <p className="text-[11px] text-muted-foreground">
                 {perStaffRates
                   ? 'Each staff member gets their own profile rate. Enter a rate to use one rate for everyone.'
-                  : 'Required — enter the hourly rate, or use the staff rate above.'}
+                  : 'Auto-filled from Staff → Employment Details when available. You can override it.'}
               </p>
             </div>
             <div className="space-y-2">

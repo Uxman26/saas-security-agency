@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import require_platform_perm
+from app.services.platform_rbac_service import require_platform_perm
 from app.services import live_support_service as svc
 
 router = APIRouter(prefix="/live-support", tags=["live-support"])

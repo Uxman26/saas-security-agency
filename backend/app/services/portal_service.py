@@ -29,7 +29,26 @@ def portal_staff_profile(db: Session, user: User) -> GuardResponse:
     guard = get_linked_guard(db, user)
     if not guard:
         raise HTTPException(status_code=404, detail="Staff account is not linked to a staff profile")
-    return GuardResponse.model_validate(guard)
+    resp = GuardResponse.model_validate(guard)
+    # /guards/{id}/photo is internal-only; mobile must fetch through the portal route.
+    if guard.photo_path:
+        return resp.model_copy(update={"photo_url": "/portal/me/photo"})
+    return resp.model_copy(update={"photo_url": None})
+
+
+def portal_staff_photo_path(db: Session, user: User) -> str:
+    if not is_staff_portal_user(user):
+        raise HTTPException(status_code=403, detail="Staff photo is only available to Staff logins")
+    guard = get_linked_guard(db, user)
+    if not guard or not guard.photo_path:
+        raise HTTPException(status_code=404, detail="No photo")
+    from app.storage_paths import resolve_storage_path
+    import os
+
+    path = resolve_storage_path(guard.photo_path)
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="No photo")
+    return path
 
 
 def portal_client_profile(db: Session, user: User) -> ClientResponse:
@@ -139,7 +158,21 @@ def _total_pay(db: Session, company_id: int, rows: List[RotaDetailResponse]) -> 
     ids = [r.id for r in rows]
     if not ids:
         return 0.0
-    assignments = {a.id: a for a in db.query(Assignment).filter(Assignment.id.in_(ids)).all()}
+    assignments = {
+        a.id: a
+        for a in db.query(Assignment)
+        .filter(Assignment.id.in_(ids))
+        .all()
+    }
+    # Fast path: when every assignment already carries a locked shift_rate, skip the
+    # per-row rate lookup tree entirely.
+    if assignments and all(a.shift_rate is not None for a in assignments.values()):
+        total = 0.0
+        for r in rows:
+            a = assignments.get(r.id)
+            if a:
+                total += r.hours * float(a.shift_rate)
+        return round(total, 2)
     total = 0.0
     for r in rows:
         assignment = assignments.get(r.id)

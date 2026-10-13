@@ -118,18 +118,23 @@ def _guard_phone(guard: Optional[Guard]) -> Optional[str]:
 
 def _resolve_guard(db: Session, user: User, company_id: int, guard_id: Optional[int]) -> Guard:
     """Staff-portal logins are always pinned to their own guard record."""
-    if is_staff_portal_user(user) or not guard_id:
-        if getattr(user, "guard_id", None):
-            g = db.query(Guard).filter(Guard.id == user.guard_id, Guard.company_id == company_id).first()
-            if g:
-                return g
-        if is_staff_portal_user(user):
+    from app.services.portal_access import get_linked_guard
+
+    if is_staff_portal_user(user):
+        linked = get_linked_guard(db, user)
+        if not linked:
             raise HTTPException(status_code=400, detail="This login is not linked to a staff record")
+        if guard_id is not None and int(guard_id) != linked.id:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return linked
     if guard_id:
         g = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
         if not g:
             raise HTTPException(status_code=404, detail="Guard not found")
         return g
+    linked = get_linked_guard(db, user)
+    if linked:
+        return linked
     raise HTTPException(status_code=400, detail="guard_id is required")
 
 
@@ -252,14 +257,21 @@ def _apply_contacts(db: Session, policy: LoneWorkerPolicy, contacts: Iterable) -
         )
 
 
-def _assert_site(db: Session, company_id: int, site_id: Optional[int]) -> None:
-    if site_id and not db.query(Site).filter(Site.id == site_id, Site.company_id == company_id).first():
+def _assert_site(db: Session, company_id: int, site_id: Optional[int], user: Optional[User] = None) -> None:
+    if not site_id:
+        return
+    if not db.query(Site).filter(Site.id == site_id, Site.company_id == company_id).first():
         raise HTTPException(status_code=422, detail="Invalid site_id")
+    if user is not None:
+        from app.services.portal_access import assert_site_visible, is_portal_role
+
+        if is_portal_role(user):
+            assert_site_visible(db, user, site_id)
 
 
 def create_policy(db: Session, user: User, data: LoneWorkerPolicyCreate) -> LoneWorkerPolicyResponse:
     company = get_company_by_user_id(db, user.id)
-    _assert_site(db, company.id, data.site_id)
+    _assert_site(db, company.id, data.site_id, user)
     policy = LoneWorkerPolicy(
         company_id=company.id,
         site_id=data.site_id,
@@ -297,7 +309,7 @@ def update_policy(db: Session, user: User, policy_id: int, data: LoneWorkerPolic
     payload = data.model_dump(exclude_unset=True)
     contacts = payload.pop("contacts", None)
     if "site_id" in payload:
-        _assert_site(db, company.id, payload["site_id"])
+        _assert_site(db, company.id, payload["site_id"], user)
     for k, v in payload.items():
         setattr(policy, k, v)
     if contacts is not None:
@@ -639,7 +651,7 @@ def current_session(db: Session, user: User, guard_id: Optional[int] = None) -> 
 def start_session(db: Session, user: User, data: LoneWorkerSessionStart) -> LoneWorkerSessionResponse:
     company = get_company_by_user_id(db, user.id)
     guard = _resolve_guard(db, user, company.id, data.guard_id)
-    _assert_site(db, company.id, data.site_id)
+    _assert_site(db, company.id, data.site_id, user)
 
     existing = (
         db.query(LoneWorkerSession)

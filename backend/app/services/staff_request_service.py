@@ -298,6 +298,11 @@ def list_staff_requests(
             q = q.filter(StaffRequest.client_id == user.client_id)
         else:
             q = q.filter(StaffRequest.requested_by_user_id == user.id)
+        from app.services.portal_access import pinned_site_ids
+
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(StaffRequest.site_id.in_(pinned or {0}))
     rows = q.order_by(StaffRequest.created_at.desc()).all()
     return [_to_response(r) for r in rows]
 
@@ -339,6 +344,11 @@ def get_staff_request(db: Session, user: User, req_id: int) -> StaffRequestRespo
             raise HTTPException(status_code=403, detail="Access denied")
         if not user.client_id and req.requested_by_user_id != user.id:
             raise HTTPException(status_code=403, detail="Access denied")
+        from app.services.portal_access import pinned_site_ids
+
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None and req.site_id not in pinned:
+            raise HTTPException(status_code=404, detail="Request not found")
     return _to_response(req)
 
 

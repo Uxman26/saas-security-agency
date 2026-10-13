@@ -16,11 +16,18 @@ def list_attendance_all(
     site_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    limit: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("attendance", "view")),
 ):
     return attendance_service.get_all_attendance(
-        db, current_user.id, guard_id, site_id=site_id, start_date=start_date, end_date=end_date
+        db,
+        current_user.id,
+        guard_id,
+        site_id=site_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
     )
 
 @router.post("", response_model=AttendanceResponse, status_code=status.HTTP_201_CREATED)

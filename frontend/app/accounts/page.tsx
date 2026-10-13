@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,8 @@ const emptyForm = () => ({
   status: 'active',
 });
 
+const REPORT_TABS: Tab[] = ['trial', 'pl', 'bs', 'cf', 'gl', 'ar', 'ap'];
+
 export default function AccountsPage() {
   const { user } = useAuth();
   const canCreate = canModule(user, 'chart_of_accounts', 'create');
@@ -49,7 +51,8 @@ export default function AccountsPage() {
   const [gl, setGl] = useState<GeneralLedgerRow[]>([]);
   const [ar, setAr] = useState<AgingReport | null>(null);
   const [ap, setAp] = useState<AgingReport | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingCoa, setLoadingCoa] = useState(true);
+  const [loadingTab, setLoadingTab] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [asOf, setAsOf] = useState('');
@@ -57,52 +60,93 @@ export default function AccountsPage() {
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(emptyForm());
+  const reportCacheKey = useRef('');
+  const loadedReports = useRef<Set<Tab>>(new Set());
 
   const parents = useMemo(() => accounts.filter((a) => a.level < 3), [accounts]);
+  const filterKey = `${dateFrom}|${dateTo}|${asOf}|${glAccountId}`;
+  const loading = tab === 'coa' ? loadingCoa : loadingTab;
+  const showReportFilters = tab !== 'coa';
 
   const loadCoa = useCallback(async () => {
-    setAccounts(await api.accounts.list());
-  }, []);
-
-  const loadReports = useCallback(async () => {
-    const range = { date_from: dateFrom || undefined, date_to: dateTo || undefined };
-    const asOfParam = { as_of: asOf || undefined };
-    const [t, p, b, c, g, arR, apR] = await Promise.all([
-      api.accounts.trialBalance(range),
-      api.accounts.profitLoss(range),
-      api.accounts.balanceSheet(asOfParam),
-      api.accounts.cashFlow(range),
-      api.accounts.generalLedger({
-        ...range,
-        account_id: glAccountId !== 'all' ? Number(glAccountId) : undefined,
-      }),
-      api.accounts.arAging(asOfParam),
-      api.accounts.apAging(asOfParam),
-    ]);
-    setTrial(t);
-    setPl(p);
-    setBs(b);
-    setCf(c);
-    setGl(g);
-    setAr(arR);
-    setAp(apR);
-  }, [asOf, dateFrom, dateTo, glAccountId]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
+    setLoadingCoa(true);
     try {
-      await loadCoa();
-      await loadReports();
+      setAccounts(await api.accounts.list());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load accounts');
     } finally {
-      setLoading(false);
+      setLoadingCoa(false);
     }
-  }, [loadCoa, loadReports]);
+  }, []);
+
+  const loadReportTab = useCallback(
+    async (target: Tab, force = false) => {
+      if (target === 'coa') return;
+      if (reportCacheKey.current !== filterKey) {
+        reportCacheKey.current = filterKey;
+        loadedReports.current = new Set();
+      }
+      if (!force && loadedReports.current.has(target)) return;
+
+      setLoadingTab(true);
+      try {
+        const range = { date_from: dateFrom || undefined, date_to: dateTo || undefined };
+        const asOfParam = { as_of: asOf || undefined };
+        switch (target) {
+          case 'trial':
+            setTrial(await api.accounts.trialBalance(range));
+            break;
+          case 'pl':
+            setPl(await api.accounts.profitLoss(range));
+            break;
+          case 'bs':
+            setBs(await api.accounts.balanceSheet(asOfParam));
+            break;
+          case 'cf':
+            setCf(await api.accounts.cashFlow(range));
+            break;
+          case 'gl':
+            setGl(
+              await api.accounts.generalLedger({
+                ...range,
+                account_id: glAccountId !== 'all' ? Number(glAccountId) : undefined,
+              })
+            );
+            break;
+          case 'ar':
+            setAr(await api.accounts.arAging(asOfParam));
+            break;
+          case 'ap':
+            setAp(await api.accounts.apAging(asOfParam));
+            break;
+        }
+        loadedReports.current.add(target);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to load report');
+      } finally {
+        setLoadingTab(false);
+      }
+    },
+    [asOf, dateFrom, dateTo, filterKey, glAccountId]
+  );
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadCoa();
+  }, [loadCoa]);
+
+  useEffect(() => {
+    if (tab === 'coa') return;
+    void loadReportTab(tab);
+  }, [tab, loadReportTab]);
+
+  const refresh = async () => {
+    if (tab === 'coa') {
+      await loadCoa();
+      return;
+    }
+    loadedReports.current.delete(tab);
+    await loadReportTab(tab, true);
+  };
 
   const money = (n: number) => `£${Number(n || 0).toFixed(2)}`;
 
@@ -133,6 +177,7 @@ export default function AccountsPage() {
       setEditId(null);
       setForm(emptyForm());
       await loadCoa();
+      loadedReports.current = new Set();
       toast.success(editId ? 'Account updated' : 'Account created');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed');
@@ -294,41 +339,56 @@ export default function AccountsPage() {
             }
           />
 
-          <div className="flex flex-wrap gap-3 items-end mt-2 mb-2">
-            <div>
-              <Label className="text-xs">From</Label>
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+          {showReportFilters ? (
+            <div className="mt-2 mb-2 flex flex-wrap items-end gap-3">
+              {tab === 'bs' || tab === 'ar' || tab === 'ap' ? (
+                <div>
+                  <Label className="text-xs">As of</Label>
+                  <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-40" />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <Label className="text-xs">From</Label>
+                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-40" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">To</Label>
+                    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+                  </div>
+                </>
+              )}
+              {tab === 'gl' ? (
+                <div>
+                  <Label className="text-xs">GL account</Label>
+                  <Select value={glAccountId} onValueChange={setGlAccountId}>
+                    <SelectTrigger className="w-56">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All accounts</SelectItem>
+                      {accounts
+                        .filter((a) => a.level === 3)
+                        .map((a) => (
+                          <SelectItem key={a.id} value={String(a.id)}>
+                            {a.code} — {a.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+                Refresh
+              </Button>
             </div>
-            <div>
-              <Label className="text-xs">To</Label>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-40" />
+          ) : (
+            <div className="mt-2 mb-2">
+              <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+                Refresh
+              </Button>
             </div>
-            <div>
-              <Label className="text-xs">As of</Label>
-              <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} className="w-40" />
-            </div>
-            <div>
-              <Label className="text-xs">GL account</Label>
-              <Select value={glAccountId} onValueChange={setGlAccountId}>
-                <SelectTrigger className="w-56">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All accounts</SelectItem>
-                  {accounts
-                    .filter((a) => a.level === 3)
-                    .map((a) => (
-                      <SelectItem key={a.id} value={String(a.id)}>
-                        {a.code} — {a.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" onClick={() => load()} disabled={loading}>
-              Refresh
-            </Button>
-          </div>
+          )}
 
           <ModuleTabs
             tabs={[
@@ -348,7 +408,7 @@ export default function AccountsPage() {
           {loading ? (
             <p className="text-sm text-muted-foreground mt-4">Loading…</p>
           ) : tab === 'coa' ? (
-            <div className="rounded-lg border overflow-x-auto mt-4">
+            <div className="mt-4 overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -361,44 +421,50 @@ export default function AccountsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {accounts.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="font-mono">{a.code}</TableCell>
-                      <TableCell style={{ paddingInlineStart: `${(a.level - 1) * 12}px` }}>
-                        {a.name}
-                        {a.is_system ? <span className="ms-2 text-xs text-muted-foreground">system</span> : null}
-                      </TableCell>
-                      <TableCell className="capitalize">{a.account_type}</TableCell>
-                      <TableCell>{a.level}</TableCell>
-                      <TableCell>{a.status || 'active'}</TableCell>
-                      <TableCell>
-                        {canEdit ? (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditId(a.id);
-                              setForm({
-                                code: a.code,
-                                name: a.name,
-                                account_type: a.account_type,
-                                parent_id: a.parent_id ?? '',
-                                status: a.status || 'active',
-                              });
-                              setOpen(true);
-                            }}
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                        ) : null}
-                      </TableCell>
+                  {accounts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>No accounts yet.</TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    accounts.map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell className="font-mono">{a.code}</TableCell>
+                        <TableCell style={{ paddingInlineStart: `${(a.level - 1) * 12}px` }}>
+                          {a.name}
+                          {a.is_system ? <span className="ms-2 text-xs text-muted-foreground">system</span> : null}
+                        </TableCell>
+                        <TableCell className="capitalize">{a.account_type}</TableCell>
+                        <TableCell>{a.level}</TableCell>
+                        <TableCell>{a.status || 'active'}</TableCell>
+                        <TableCell>
+                          {canEdit ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                setEditId(a.id);
+                                setForm({
+                                  code: a.code,
+                                  name: a.name,
+                                  account_type: a.account_type,
+                                  parent_id: a.parent_id ?? '',
+                                  status: a.status || 'active',
+                                });
+                                setOpen(true);
+                              }}
+                            >
+                              <Pencil className="size-4" />
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </div>
           ) : tab === 'trial' ? (
-            <div className="rounded-lg border overflow-x-auto mt-4">
+            <div className="mt-4 overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -422,7 +488,7 @@ export default function AccountsPage() {
             </div>
           ) : tab === 'pl' && pl ? (
             <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border p-4">
                   <p className="text-xs text-muted-foreground">Income</p>
                   <p className="text-xl font-semibold">{money(pl.income)}</p>
@@ -436,7 +502,7 @@ export default function AccountsPage() {
                   <p className="text-xl font-semibold">{money(pl.net)}</p>
                 </div>
               </div>
-              <div className="rounded-lg border overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -463,7 +529,7 @@ export default function AccountsPage() {
             </div>
           ) : tab === 'bs' && bs ? (
             <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border p-4">
                   <p className="text-xs text-muted-foreground">Assets</p>
                   <p className="text-xl font-semibold">{money(bs.assets)}</p>
@@ -477,7 +543,7 @@ export default function AccountsPage() {
                   <p className="text-xl font-semibold">{money(bs.equity)}</p>
                 </div>
               </div>
-              <div className="rounded-lg border overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -504,7 +570,7 @@ export default function AccountsPage() {
             </div>
           ) : tab === 'cf' && cf ? (
             <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-lg border p-4">
                   <p className="text-xs text-muted-foreground">Inflows</p>
                   <p className="text-xl font-semibold">{money(cf.inflows)}</p>
@@ -518,7 +584,7 @@ export default function AccountsPage() {
                   <p className="text-xl font-semibold">{money(cf.net)}</p>
                 </div>
               </div>
-              <div className="rounded-lg border overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -550,7 +616,7 @@ export default function AccountsPage() {
               </div>
             </div>
           ) : tab === 'gl' ? (
-            <div className="rounded-lg border overflow-x-auto mt-4">
+            <div className="mt-4 overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -589,6 +655,8 @@ export default function AccountsPage() {
             agingTable(ar, 'client', 'days_overdue')
           ) : tab === 'ap' ? (
             agingTable(ap, 'vendor', 'days_outstanding')
+          ) : REPORT_TABS.includes(tab) ? (
+            <p className="mt-4 text-sm text-muted-foreground">No data for this report yet.</p>
           ) : null}
         </ModulePage>
       </AppShell>

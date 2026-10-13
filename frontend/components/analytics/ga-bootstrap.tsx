@@ -36,10 +36,14 @@ export function GaBootstrap() {
     const sync = () => {
       const accepted = readConsent() === 'accepted';
       updateConsent(accepted);
-      if (accepted && !booted.current) {
-        loadGtagScript(GA_MEASUREMENT_ID);
-        booted.current = true;
-        trackPageView(window.location.pathname);
+      if (accepted) {
+        if (!booted.current) {
+          loadGtagScript(GA_MEASUREMENT_ID);
+          booted.current = true;
+          trackPageView(window.location.pathname);
+        }
+      } else {
+        booted.current = false;
       }
     };
     sync();

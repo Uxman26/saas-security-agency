@@ -1,7 +1,7 @@
 import enum
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Float, Text, UniqueConstraint, Enum, Uuid
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Float, Text, UniqueConstraint, Enum, Uuid, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -1364,6 +1364,7 @@ class RecurringInvoice(Base):
 
 class Account(Base):
     __tablename__ = "accounts"
+    __table_args__ = (UniqueConstraint("company_id", "code", name="uq_accounts_company_code"),)
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     code = Column(String, nullable=False, index=True)
@@ -1379,6 +1380,10 @@ class Account(Base):
 
 class JournalEntry(Base):
     __tablename__ = "journal_entries"
+    __table_args__ = (
+        Index("ix_journal_entries_company_date", "company_id", "entry_date"),
+        Index("ix_journal_entries_company_source", "company_id", "source_type", "source_id"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     entry_date = Column(Date, nullable=False)

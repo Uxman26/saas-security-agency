@@ -1,7 +1,7 @@
 'use client';
 
 import { GA_MEASUREMENT_ID } from '@/lib/site';
-import { storageGet, storageSet } from '@/lib/safe-storage';
+import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
 
 export const CONSENT_STORAGE_KEY = 'controlops_cookie_consent';
 
@@ -31,16 +31,40 @@ function sanitizeParams(params?: Record<string, unknown>): Record<string, unknow
   return out;
 }
 
-export function readConsent(): CookieConsent {
-  if (typeof window === 'undefined') return 'unset';
-  const v = storageGet(CONSENT_STORAGE_KEY);
+function readConsentCookie(): CookieConsent {
+  if (typeof document === 'undefined') return 'unset';
+  const match = document.cookie.match(/(?:^|;\s*)controlops_cookie_consent=([^;]+)/);
+  const v = match?.[1] ? decodeURIComponent(match[1]) : '';
   if (v === 'accepted' || v === 'rejected') return v;
   return 'unset';
 }
 
+function writeConsentCookie(value: 'accepted' | 'rejected') {
+  if (typeof document === 'undefined') return;
+  const maxAge = 60 * 60 * 24 * 365;
+  const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `controlops_cookie_consent=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+}
+
+export function readConsent(): CookieConsent {
+  if (typeof window === 'undefined') return 'unset';
+  const stored = storageGet(CONSENT_STORAGE_KEY);
+  if (stored === 'accepted' || stored === 'rejected') return stored;
+  return readConsentCookie();
+}
+
 export function writeConsent(value: 'accepted' | 'rejected') {
   storageSet(CONSENT_STORAGE_KEY, value);
+  writeConsentCookie(value);
   window.dispatchEvent(new CustomEvent('controlops-consent', { detail: value }));
+}
+
+export function clearConsent() {
+  storageRemove(CONSENT_STORAGE_KEY);
+  if (typeof document !== 'undefined') {
+    document.cookie = 'controlops_cookie_consent=; Path=/; Max-Age=0; SameSite=Lax';
+  }
+  window.dispatchEvent(new CustomEvent('controlops-consent', { detail: 'unset' }));
 }
 
 export function hasAnalyticsConsent(): boolean {

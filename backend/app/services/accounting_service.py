@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import (
@@ -64,6 +65,15 @@ DEFAULT_COA = [
 
 
 def ensure_default_coa(db: Session, company_id: int) -> None:
+    needed = [code for code, *_ in DEFAULT_COA]
+    present = {
+        row[0]
+        for row in db.query(Account.code)
+        .filter(Account.company_id == company_id, Account.code.in_(needed))
+        .all()
+    }
+    if len(present) >= len(needed):
+        return
     existing = {a.code: a for a in db.query(Account).filter(Account.company_id == company_id).all()}
     code_to_id = {code: a.id for code, a in existing.items()}
     added = False
@@ -294,31 +304,45 @@ def trial_balance(
     date_to: Optional[date] = None,
 ) -> list[dict]:
     ensure_default_coa(db, company_id)
-    q = (
-        db.query(Account, JournalLine, JournalEntry)
-        .outerjoin(JournalLine, JournalLine.account_id == Account.id)
-        .outerjoin(JournalEntry, JournalEntry.id == JournalLine.entry_id)
+    accounts = (
+        db.query(Account)
         .filter(Account.company_id == company_id, Account.level == 3)
+        .order_by(Account.code.asc())
+        .all()
     )
-    rows = q.all()
-    totals: dict[int, dict] = {}
-    for acct, line, entry in rows:
-        t = totals.setdefault(
-            acct.id,
-            {"id": acct.id, "code": acct.code, "name": acct.name, "type": acct.account_type, "debit": 0.0, "credit": 0.0},
+    if not accounts:
+        return []
+    sum_q = (
+        db.query(
+            JournalLine.account_id,
+            func.coalesce(func.sum(JournalLine.debit), 0),
+            func.coalesce(func.sum(JournalLine.credit), 0),
         )
-        if not line or not entry:
-            continue
-        if date_from and entry.entry_date < date_from:
-            continue
-        if date_to and entry.entry_date > date_to:
-            continue
-        t["debit"] += float(line.debit or 0)
-        t["credit"] += float(line.credit or 0)
-    return sorted(
-        [{**v, "debit": round(v["debit"], 2), "credit": round(v["credit"], 2)} for v in totals.values()],
-        key=lambda x: x["code"],
+        .join(JournalEntry, JournalEntry.id == JournalLine.entry_id)
+        .filter(
+            JournalEntry.company_id == company_id,
+            JournalLine.account_id.in_([a.id for a in accounts]),
+        )
     )
+    if date_from:
+        sum_q = sum_q.filter(JournalEntry.entry_date >= date_from)
+    if date_to:
+        sum_q = sum_q.filter(JournalEntry.entry_date <= date_to)
+    sums = {
+        int(aid): (float(debit or 0), float(credit or 0))
+        for aid, debit, credit in sum_q.group_by(JournalLine.account_id).all()
+    }
+    return [
+        {
+            "id": acct.id,
+            "code": acct.code,
+            "name": acct.name,
+            "type": acct.account_type,
+            "debit": round(sums.get(acct.id, (0.0, 0.0))[0], 2),
+            "credit": round(sums.get(acct.id, (0.0, 0.0))[1], 2),
+        }
+        for acct in accounts
+    ]
 
 
 def profit_and_loss(db: Session, company_id: int, date_from: Optional[date] = None, date_to: Optional[date] = None) -> dict:
@@ -340,8 +364,9 @@ def balance_sheet(db: Session, company_id: int, as_of: Optional[date] = None) ->
     assets = sum(r["debit"] - r["credit"] for r in tb if r["type"] == "asset")
     liabilities = sum(r["credit"] - r["debit"] for r in tb if r["type"] == "liability")
     equity = sum(r["credit"] - r["debit"] for r in tb if r["type"] == "equity")
-    pl = profit_and_loss(db, company_id, None, as_of)
-    equity_with_pl = equity + pl["net"]
+    income = sum(r["credit"] - r["debit"] for r in tb if r["type"] == "income")
+    expenses = sum(r["debit"] - r["credit"] for r in tb if r["type"] == "expense")
+    equity_with_pl = equity + (income - expenses)
     return {
         "assets": round(assets, 2),
         "liabilities": round(liabilities, 2),
@@ -354,14 +379,23 @@ def balance_sheet(db: Session, company_id: int, as_of: Optional[date] = None) ->
 def cash_flow(db: Session, company_id: int, date_from: Optional[date] = None, date_to: Optional[date] = None) -> dict:
     ensure_default_coa(db, company_id)
     bank_codes = {"1110", "1120"}
-    bank_ids = {
-        a.id
-        for a in db.query(Account).filter(Account.company_id == company_id, Account.code.in_(bank_codes)).all()
-    }
+    bank_ids = [
+        row[0]
+        for row in db.query(Account.id).filter(Account.company_id == company_id, Account.code.in_(bank_codes)).all()
+    ]
+    if not bank_ids:
+        return {
+            "inflows": 0.0,
+            "outflows": 0.0,
+            "net": 0.0,
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
+            "rows": [],
+        }
     q = (
-        db.query(JournalEntry)
-        .options(joinedload(JournalEntry.lines).joinedload(JournalLine.account))
-        .filter(JournalEntry.company_id == company_id)
+        db.query(JournalLine, JournalEntry)
+        .join(JournalEntry, JournalEntry.id == JournalLine.entry_id)
+        .filter(JournalEntry.company_id == company_id, JournalLine.account_id.in_(bank_ids))
     )
     if date_from:
         q = q.filter(JournalEntry.entry_date >= date_from)
@@ -370,36 +404,33 @@ def cash_flow(db: Session, company_id: int, date_from: Optional[date] = None, da
     operating_in = 0.0
     operating_out = 0.0
     rows = []
-    for entry in q.order_by(JournalEntry.entry_date.asc(), JournalEntry.id.asc()).all():
-        for line in entry.lines or []:
-            if line.account_id not in bank_ids:
-                continue
-            debit = float(line.debit or 0)
-            credit = float(line.credit or 0)
-            if debit > 0:
-                operating_in += debit
-                rows.append(
-                    {
-                        "date": entry.entry_date.isoformat(),
-                        "reference": entry.reference,
-                        "memo": entry.memo,
-                        "direction": "in",
-                        "amount": round(debit, 2),
-                        "source_type": entry.source_type,
-                    }
-                )
-            if credit > 0:
-                operating_out += credit
-                rows.append(
-                    {
-                        "date": entry.entry_date.isoformat(),
-                        "reference": entry.reference,
-                        "memo": entry.memo,
-                        "direction": "out",
-                        "amount": round(credit, 2),
-                        "source_type": entry.source_type,
-                    }
-                )
+    for line, entry in q.order_by(JournalEntry.entry_date.asc(), JournalEntry.id.asc()).all():
+        debit = float(line.debit or 0)
+        credit = float(line.credit or 0)
+        if debit > 0:
+            operating_in += debit
+            rows.append(
+                {
+                    "date": entry.entry_date.isoformat(),
+                    "reference": entry.reference,
+                    "memo": entry.memo,
+                    "direction": "in",
+                    "amount": round(debit, 2),
+                    "source_type": entry.source_type,
+                }
+            )
+        if credit > 0:
+            operating_out += credit
+            rows.append(
+                {
+                    "date": entry.entry_date.isoformat(),
+                    "reference": entry.reference,
+                    "memo": entry.memo,
+                    "direction": "out",
+                    "amount": round(credit, 2),
+                    "source_type": entry.source_type,
+                }
+            )
     return {
         "inflows": round(operating_in, 2),
         "outflows": round(operating_out, 2),

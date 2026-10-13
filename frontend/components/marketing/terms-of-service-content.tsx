@@ -192,7 +192,7 @@ export function TermsOfServiceContent() {
           website enquiries) as described in the <a href="/privacy">Privacy Notice</a>.
         </li>
         <li>
-          Business Customers may request our Data Processing Agreement via <a href="/dpa">/dpa</a> or{' '}
+          Business Customers may request our Data Processing Agreement via <a href="/dpa">our DPA page</a> or{' '}
           <a href="mailto:info@controlops.co.uk">info@controlops.co.uk</a>.
         </li>
         <li>Each party will comply with UK data protection law applicable to its role.</li>

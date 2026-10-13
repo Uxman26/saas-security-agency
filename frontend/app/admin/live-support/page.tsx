@@ -37,7 +37,7 @@ export default function AdminLiveSupportPage() {
   const [agentName, setAgentName] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (quiet = false) => {
     try {
       const [a, ag, c] = await Promise.all([
         api.admin.liveSupportAvailability(),
@@ -46,15 +46,22 @@ export default function AdminLiveSupportPage() {
       ]);
       setAvailability(a);
       setAgents(ag);
-      setConversations(c);
+      setConversations((prev) => {
+        if (quiet && prev.length && c.length > prev.length) {
+          toast.success('New live chat waiting');
+        }
+        return c;
+      });
     } catch {
-      toast.error('Failed to load live support settings');
+      if (!quiet) toast.error('Failed to load live support settings');
     }
   }, []);
 
   useEffect(() => {
     if (!user) return;
     void load();
+    const t = setInterval(() => void load(true), 5000);
+    return () => clearInterval(t);
   }, [user, load]);
 
   useEffect(() => {

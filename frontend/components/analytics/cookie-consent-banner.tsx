@@ -11,7 +11,10 @@ export function CookieConsentBanner() {
 
   useEffect(() => {
     if (!GA_MEASUREMENT_ID) return;
-    if (readConsent() === 'unset') setVisible(true);
+    const sync = () => setVisible(readConsent() === 'unset');
+    sync();
+    window.addEventListener('controlops-consent', sync);
+    return () => window.removeEventListener('controlops-consent', sync);
   }, []);
 
   if (!visible) return null;

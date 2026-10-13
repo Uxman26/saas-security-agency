@@ -116,10 +116,15 @@ def portal_patrol_compliance(
 @router.get("/incidents", response_model=list[IncidentResponse])
 def portal_incidents(
     status: Optional[str] = None,
+    site_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("my_portal", "incidents_view")),
 ):
-    return incident_service.list_incidents(db, current_user, status=status)
+    if site_id is not None:
+        from app.services.portal_access import assert_site_visible
+
+        assert_site_visible(db, current_user, site_id)
+    return incident_service.list_incidents(db, current_user, status=status, site_id=site_id)
 
 
 @router.post("/incidents", response_model=IncidentResponse, status_code=201)

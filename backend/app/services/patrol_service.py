@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models import (
+    Assignment,
     Client,
     Guard,
     PatrolAlert,
@@ -42,6 +43,7 @@ from app.schemas import (
 from app.services.company_service import get_company_by_user_id
 from app.services.geo_utils import haversine_m
 from app.services.portal_access import (
+    get_linked_guard,
     is_client_portal_user,
     is_staff_portal_user,
     pinned_site_ids,
@@ -613,6 +615,8 @@ def compliance_report(
     end_date: date,
     site_id: Optional[int] = None,
 ) -> list[PatrolComplianceRow]:
+    from collections import defaultdict
+
     from app.models import PatrolOccurrence
 
     company = get_company_by_user_id(db, user.id)
@@ -627,43 +631,70 @@ def compliance_report(
     if allowed is not None:
         q = q.filter(PatrolRoute.site_id.in_(allowed or {0}))
     routes = q.all()
+    if not routes:
+        return []
+
+    range_start = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+    range_end = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+    route_ids = [r.id for r in routes]
+
+    occ_by_route_day: dict[tuple[int, date], list] = defaultdict(list)
+    for occ in (
+        db.query(PatrolOccurrence)
+        .filter(
+            PatrolOccurrence.route_id.in_(route_ids),
+            PatrolOccurrence.scheduled_at >= range_start,
+            PatrolOccurrence.scheduled_at <= range_end,
+        )
+        .all()
+    ):
+        d = occ.scheduled_at.date() if occ.scheduled_at else None
+        if d is not None:
+            occ_by_route_day[(occ.route_id, d)].append(occ)
+
+    # Only pull scan logs for days/routes that still need the schedule fallback.
+    need_log_routes: set[int] = set()
+    day = start_date
+    while day <= end_date:
+        for route in routes:
+            cps = [c for c in (route.checkpoints or []) if c.status == "active"]
+            if cps and (route.id, day) not in occ_by_route_day:
+                need_log_routes.add(route.id)
+        day += timedelta(days=1)
+
+    log_by_route_day: dict[tuple[int, date], list] = defaultdict(list)
+    if need_log_routes:
+        for log in (
+            db.query(PatrolLog)
+            .filter(
+                PatrolLog.route_id.in_(need_log_routes),
+                PatrolLog.scan_time >= range_start,
+                PatrolLog.scan_time <= range_end,
+            )
+            .all()
+        ):
+            d = log.scan_time.date() if log.scan_time else None
+            if d is not None:
+                log_by_route_day[(log.route_id, d)].append(log)
+
     out: list[PatrolComplianceRow] = []
     day = start_date
     while day <= end_date:
-        day_start = datetime.combine(day, time.min, tzinfo=timezone.utc)
-        day_end = datetime.combine(day, time.max, tzinfo=timezone.utc)
         for route in routes:
             cps = [c for c in (route.checkpoints or []) if c.status == "active"]
             if not cps:
                 continue
-            rows = (
-                db.query(PatrolOccurrence)
-                .filter(
-                    PatrolOccurrence.route_id == route.id,
-                    PatrolOccurrence.scheduled_at >= day_start,
-                    PatrolOccurrence.scheduled_at <= day_end,
-                )
-                .all()
-            )
+            rows = occ_by_route_day.get((route.id, day), [])
             if rows:
                 required = len(rows)
                 completed = sum(1 for r in rows if r.status in ("completed", "completed_late"))
                 late = sum(1 for r in rows if r.status == "completed_late")
                 missed = sum(1 for r in rows if r.status == "missed")
             else:
-                # Fallback when occurrences not yet generated: estimate from schedule + scans
                 freq = max(route.frequency_minutes or 60, 5)
                 loops = max(1, int((8 * 60) / freq))
                 required = len(cps) * loops
-                logs = (
-                    db.query(PatrolLog)
-                    .filter(
-                        PatrolLog.route_id == route.id,
-                        PatrolLog.scan_time >= day_start,
-                        PatrolLog.scan_time <= day_end,
-                    )
-                    .all()
-                )
+                logs = log_by_route_day.get((route.id, day), [])
                 completed = sum(1 for l in logs if l.status in ("completed", "completed_late"))
                 late = sum(1 for l in logs if l.status == "completed_late")
                 missed = max(0, required - completed)
@@ -701,11 +732,12 @@ def detail_report(
 
 def today_for_guard(db: Session, user: User) -> PatrolTodayResponse:
     company = get_company_by_user_id(db, user.id)
-    guard = _resolve_guard(db, user, company.id, None) if getattr(user, "guard_id", None) else None
+    # Same linker as the rest of the portal (guard_id, then email) so a staff login
+    # without guard_id set is not locked out of Today patrol.
+    guard = get_linked_guard(db, user)
     if not guard and is_staff_portal_user(user):
         raise HTTPException(status_code=400, detail="Staff user is not linked to a guard profile")
     if not guard:
-        # admin preview: empty
         return PatrolTodayResponse()
     sess = (
         db.query(PatrolSession)
@@ -719,19 +751,49 @@ def today_for_guard(db: Session, user: User) -> PatrolTodayResponse:
         .first()
     )
     recent = list_logs(db, user, guard_id=guard.id, start_date=date.today(), end_date=date.today())[:10]
-    if not sess:
-        return PatrolTodayResponse(recent_logs=recent)
-    route = sess.route
+    route = sess.route if sess else None
+    if not route:
+        # Without an open session, suggest today's route from the guard's shift site(s)
+        # so Start session on My workspace has a route_id to call.
+        today = date.today()
+        site_ids = {
+            r[0]
+            for r in db.query(Assignment.site_id)
+            .filter(Assignment.guard_id == guard.id, Assignment.date == today)
+            .distinct()
+            .all()
+            if r[0]
+        }
+        if site_ids:
+            route = (
+                db.query(PatrolRoute)
+                .options(
+                    joinedload(PatrolRoute.site),
+                    joinedload(PatrolRoute.checkpoints).joinedload(PatrolCheckpoint.site),
+                )
+                .filter(
+                    PatrolRoute.company_id == company.id,
+                    PatrolRoute.status == "active",
+                    PatrolRoute.site_id.in_(site_ids),
+                )
+                .order_by(PatrolRoute.id.asc())
+                .first()
+            )
+    if not route:
+        return PatrolTodayResponse(
+            session=PatrolSessionResponse.model_validate(sess) if sess else None,
+            recent_logs=recent,
+        )
     cps = sorted([c for c in (route.checkpoints or []) if c.status == "active"], key=lambda x: x.sort_order or 0)
     scanned_ids = {l.checkpoint_id for l in recent if l.status in ("completed", "completed_late")}
     nxt = next((c for c in cps if c.id not in scanned_ids), cps[0] if cps else None)
     return PatrolTodayResponse(
-        session=PatrolSessionResponse.model_validate(sess),
-        route_id=route.id if route else None,
-        route_name=route.name if route else None,
-        site_name=route.site.name if route and route.site else None,
+        session=PatrolSessionResponse.model_validate(sess) if sess else None,
+        route_id=route.id,
+        route_name=route.name,
+        site_name=route.site.name if route.site else None,
         next_checkpoint=_checkpoint_out(nxt) if nxt else None,
-        due_at=route.start_time if route else None,
+        due_at=route.start_time,
         recent_logs=recent,
     )
 

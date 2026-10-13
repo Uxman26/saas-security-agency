@@ -2281,6 +2281,17 @@ def run():
             except sqlite3.OperationalError:
                 pass
 
+    for idx_sql in (
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_accounts_company_code ON accounts(company_id, code)",
+        "CREATE INDEX IF NOT EXISTS ix_accounts_company_level ON accounts(company_id, level)",
+        "CREATE INDEX IF NOT EXISTS ix_journal_entries_company_date ON journal_entries(company_id, entry_date)",
+        "CREATE INDEX IF NOT EXISTS ix_journal_entries_company_source ON journal_entries(company_id, source_type, source_id)",
+    ):
+        try:
+            cur.execute(idx_sql)
+        except sqlite3.OperationalError:
+            pass
+
     if table_exists(cur, "expenses") and not column_exists(cur, "expenses", "vendor_id"):
         try:
             cur.execute("ALTER TABLE expenses ADD COLUMN vendor_id INTEGER REFERENCES vendors(id)")

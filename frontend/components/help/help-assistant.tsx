@@ -19,6 +19,8 @@ type ChatMsg = {
 
 type Mode = 'ai' | 'intake' | 'live';
 
+const LIVE_CHAT_KEY = 'controlops_live_chat_id';
+
 const APP_PREFIXES = [
   '/dashboard',
   '/guards',
@@ -95,11 +97,39 @@ export function HelpAssistant() {
   }, [open, messages, busy, mode]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = sessionStorage.getItem(LIVE_CHAT_KEY);
+    if (!saved) return;
+    api.liveSupport
+      .get(saved)
+      .then((conv) => {
+        if (String(conv.status || '') === 'closed' || String(conv.status || '') === 'resolved') {
+          sessionStorage.removeItem(LIVE_CHAT_KEY);
+          return;
+        }
+        setPublicId(saved);
+        setMode('live');
+        const msgs = Array.isArray(conv.messages) ? (conv.messages as Record<string, unknown>[]) : [];
+        setMessages(
+          msgs.map((m) => ({
+            id: String(m.id),
+            role: m.sender_type === 'visitor' ? 'user' : m.sender_type === 'agent' ? 'agent' : 'system',
+            text: String(m.body || ''),
+          }))
+        );
+      })
+      .catch(() => sessionStorage.removeItem(LIVE_CHAT_KEY));
+  }, []);
+
+  useEffect(() => {
     if (mode !== 'live' || !publicId) return;
-    const t = setInterval(() => {
+    const pull = () => {
       api.liveSupport
         .get(publicId)
         .then((conv) => {
+          if (String(conv.status || '') === 'closed' || String(conv.status || '') === 'resolved') {
+            sessionStorage.removeItem(LIVE_CHAT_KEY);
+          }
           const msgs = Array.isArray(conv.messages) ? (conv.messages as Record<string, unknown>[]) : [];
           setMessages(
             msgs.map((m) => ({
@@ -110,8 +140,17 @@ export function HelpAssistant() {
           );
         })
         .catch(() => {});
-    }, 3500);
-    return () => clearInterval(t);
+    };
+    pull();
+    const t = setInterval(pull, 3500);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') pull();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', onVis);
+    };
   }, [mode, publicId]);
 
   if (isAppRoute(pathname) || isAuthRoute(pathname)) return null;
@@ -176,6 +215,7 @@ export function HelpAssistant() {
       });
       const id = String(conv.public_id || '');
       setPublicId(id);
+      if (id) sessionStorage.setItem(LIVE_CHAT_KEY, id);
       setMode('live');
       const msgs = Array.isArray(conv.messages) ? (conv.messages as Record<string, unknown>[]) : [];
       setMessages(
@@ -186,12 +226,7 @@ export function HelpAssistant() {
         }))
       );
     } catch (e) {
-      const msg =
-        e instanceof ApiError && e.detail && typeof e.detail === 'object' && 'message' in e.detail
-          ? String((e.detail as { message?: string }).message)
-          : e instanceof Error
-            ? e.message
-            : 'Could not start live chat';
+      const msg = e instanceof ApiError || e instanceof Error ? e.message : 'Could not start live chat';
       setMessages((prev) => [...prev, { id: uid(), role: 'assistant', text: msg }]);
       setMode('ai');
     } finally {
@@ -408,24 +443,17 @@ export function HelpAssistant() {
                 ) : null}
 
                 <div className="border-t px-3 pt-2">
-                  <Link href="/settings/feedback" className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
-                    Suggestions & Complaints
+                  <Link href="/help" className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                    Help Centre
                   </Link>
                   {' · '}
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                    onClick={() => {
-                      window.dispatchEvent(
-                        new CustomEvent('controlops-report-issue', {
-                          detail: { error_category: 'technical_issue', subject: 'Help centre issue report', module_or_page: pathname },
-                        })
-                      );
-                      setOpen(false);
-                    }}
-                  >
-                    Report an issue
-                  </button>
+                  <Link href="/contact" className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                    Contact
+                  </Link>
+                  {' · '}
+                  <Link href="/book-demo" className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                    Book a demo
+                  </Link>
                 </div>
                 <form
                   className="flex items-center gap-2 border-t p-3"

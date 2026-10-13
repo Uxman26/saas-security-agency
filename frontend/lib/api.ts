@@ -26,7 +26,12 @@ function detailMessage(d: unknown): string {
     return d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed';
   }
   if (typeof d === 'string') return d;
-  if (d && typeof d === 'object' && 'message' in d) return JSON.stringify(d);
+  if (d && typeof d === 'object') {
+    const obj = d as { message?: unknown; detail?: unknown; msg?: unknown };
+    if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
+    if (typeof obj.msg === 'string' && obj.msg.trim()) return obj.msg;
+    if (obj.detail !== undefined) return detailMessage(obj.detail);
+  }
   return 'Request failed';
 }
 
@@ -575,8 +580,13 @@ export const api = {
       if (site_id) q.set('site_id', String(site_id));
       return request<import('./types').PatrolComplianceRow[]>(`/portal/patrol/compliance?${q}`);
     },
-    incidents: (status?: string) =>
-      request<import('./types').Incident[]>(`/portal/incidents${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+    incidents: (params?: { status?: string; site_id?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set('status', params.status);
+      if (params?.site_id) q.set('site_id', String(params.site_id));
+      const qs = q.toString();
+      return request<import('./types').Incident[]>(`/portal/incidents${qs ? `?${qs}` : ''}`);
+    },
     createIncident: (data: Partial<import('./types').Incident> & { notes: string }) =>
       request<import('./types').Incident>('/portal/incidents', { method: 'POST', body: JSON.stringify(data) }),
   },

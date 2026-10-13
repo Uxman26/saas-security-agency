@@ -273,7 +273,6 @@ def trial_balance(
     user: User = Depends(require_module("chart_of_accounts", "view")),
 ):
     company = get_company_by_user_id(db, user.id)
-    accounting_service.ensure_default_coa(db, company.id)
     return accounting_service.trial_balance(db, company.id, date_from, date_to)
 
 

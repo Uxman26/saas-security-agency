@@ -42,7 +42,12 @@ def _hours_from_shift(shift: dict) -> float:
     return max(0.0, duration / 60)
 
 
-def _planner_payroll_lines(plan: RotaPlan, db: Session = None, company_id: int = None) -> list[dict]:
+def _planner_payroll_lines(
+    plan: RotaPlan,
+    db: Session = None,
+    company_id: int = None,
+    site_id_by_name: dict | None = None,
+) -> list[dict]:
     try:
         payload = json.loads(plan.planner_data or "{}")
     except (json.JSONDecodeError, TypeError):
@@ -50,13 +55,14 @@ def _planner_payroll_lines(plan: RotaPlan, db: Session = None, company_id: int =
 
     from app.services.rate_service import resolve_shift_pay
 
-    site_id_by_name = {}
-    if db is not None and company_id is not None:
-        site_id_by_name = {
-            (name or "").strip().lower(): sid
-            for sid, name in db.query(Site.id, Site.name).filter(Site.company_id == company_id).all()
-            if name
-        }
+    if site_id_by_name is None:
+        site_id_by_name = {}
+        if db is not None and company_id is not None:
+            site_id_by_name = {
+                (name or "").strip().lower(): sid
+                for sid, name in db.query(Site.id, Site.name).filter(Site.company_id == company_id).all()
+                if name
+            }
 
     lines: list[dict] = []
     attendance = payload.get("attendance") or {}
@@ -367,7 +373,7 @@ def calculate_payroll_batch(
 
     by_guard: dict[int, list[dict]] = {}
     for plan in plans_query.all():
-        for line in _planner_payroll_lines(plan, db, company.id):
+        for line in _planner_payroll_lines(plan, db, company.id, site_id_by_name=site_id_by_name):
             try:
                 line_date = date.fromisoformat(str(line.get("date")))
                 line_guard_id = int(line.get("guardId"))

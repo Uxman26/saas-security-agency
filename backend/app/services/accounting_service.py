@@ -454,7 +454,7 @@ def general_ledger(
 
 
 def ar_aging(db: Session, company_id: int, as_of: Optional[date] = None) -> dict:
-    from app.services.invoice_payment_service import invoice_balance_due
+    from app.services.invoice_payment_service import batch_invoice_settlements, invoice_balance_due
 
     as_of = as_of or date.today()
     invoices = (
@@ -463,10 +463,12 @@ def ar_aging(db: Session, company_id: int, as_of: Optional[date] = None) -> dict
         .filter(Invoice.company_id == company_id, Invoice.status.notin_(["draft", "cancelled", "paid"]))
         .all()
     )
+    settlements = batch_invoice_settlements(db, [inv.id for inv in invoices])
     buckets = {"current": 0.0, "1_30": 0.0, "31_60": 0.0, "61_90": 0.0, "90_plus": 0.0}
     rows = []
     for inv in invoices:
-        bal = invoice_balance_due(db, inv)
+        paid, credited = settlements.get(inv.id, (0.0, 0.0))
+        bal = invoice_balance_due(db, inv, paid=paid, credited=credited)
         if bal <= 0:
             continue
         due = inv.due_date or inv.invoice_date or as_of

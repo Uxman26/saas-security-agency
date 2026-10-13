@@ -4,13 +4,13 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Invoice, Payment
+from app.models import CreditNote, Invoice, Payment
 
 
 def invoice_amount_paid(db: Session, invoice_id: int) -> float:
     val = (
         db.query(func.coalesce(func.sum(Payment.amount), 0))
-        .filter(Payment.invoice_id == invoice_id)
+        .filter(Payment.invoice_id == invoice_id, Payment.deleted_at.is_(None))
         .scalar()
     )
     return round(float(val or 0), 2)
@@ -22,13 +22,49 @@ def invoice_credit_applied(db: Session, invoice_id: int) -> float:
     return _credits(db, invoice_id)
 
 
+def batch_invoice_settlements(db: Session, invoice_ids: list[int]) -> dict[int, tuple[float, float]]:
+    if not invoice_ids:
+        return {}
+    from app.services.credit_note_service import ACTIVE_STATUSES
+
+    paid_rows = (
+        db.query(Payment.invoice_id, func.coalesce(func.sum(Payment.amount), 0))
+        .filter(Payment.invoice_id.in_(invoice_ids), Payment.deleted_at.is_(None))
+        .group_by(Payment.invoice_id)
+        .all()
+    )
+    credit_rows = (
+        db.query(CreditNote.invoice_id, func.coalesce(func.sum(CreditNote.total), 0))
+        .filter(
+            CreditNote.invoice_id.in_(invoice_ids),
+            CreditNote.status.in_(ACTIVE_STATUSES),
+            CreditNote.deleted_at.is_(None),
+        )
+        .group_by(CreditNote.invoice_id)
+        .all()
+    )
+    paid_map = {int(i): round(float(v or 0), 2) for i, v in paid_rows}
+    cred_map = {int(i): round(float(v or 0), 2) for i, v in credit_rows}
+    return {i: (paid_map.get(i, 0.0), cred_map.get(i, 0.0)) for i in invoice_ids}
+
+
 def invoice_settled_amount(db: Session, invoice_id: int) -> float:
     return round(invoice_amount_paid(db, invoice_id) + invoice_credit_applied(db, invoice_id), 2)
 
 
-def invoice_balance_due(db: Session, inv: Invoice) -> float:
+def invoice_balance_due(
+    db: Session,
+    inv: Invoice,
+    *,
+    paid: Optional[float] = None,
+    credited: Optional[float] = None,
+) -> float:
     total = round(float(inv.total or 0), 2)
-    return round(max(0, total - invoice_settled_amount(db, inv.id)), 2)
+    if paid is None or credited is None:
+        settled = invoice_settled_amount(db, inv.id)
+    else:
+        settled = round(float(paid) + float(credited), 2)
+    return round(max(0, total - settled), 2)
 
 
 def sync_invoice_payment_status(db: Session, inv: Invoice, user_id: Optional[int] = None) -> str:

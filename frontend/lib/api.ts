@@ -2595,7 +2595,9 @@ export const api = {
       form.append('subject', data.subject);
       form.append('description', data.description);
       if (data.diagnostic) form.append('diagnostic_json', JSON.stringify(data.diagnostic));
-      for (const f of data.files || []) form.append('files', f);
+      for (const f of data.files || []) {
+        if (f instanceof File && f.size > 0) form.append('files', f, f.name);
+      }
       const response = await fetch(`${API_URL}/feedback`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},

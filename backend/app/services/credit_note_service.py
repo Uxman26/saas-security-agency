@@ -38,6 +38,7 @@ def invoice_credit_applied(
     q = db.query(func.coalesce(func.sum(CreditNote.total), 0)).filter(
         CreditNote.invoice_id == invoice_id,
         CreditNote.status.in_(ACTIVE_STATUSES),
+        CreditNote.deleted_at.is_(None),
     )
     if exclude_id is not None:
         q = q.filter(CreditNote.id != exclude_id)

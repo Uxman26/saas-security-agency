@@ -215,22 +215,29 @@ def notify_shift_changes(
     if not by_guard:
         return
 
+    guard_ids = list(by_guard.keys())
     guards = {
         g.id: g
         for g in db.query(Guard)
         .filter(
             Guard.company_id == company.id,
             Guard.deleted_at.is_(None),
-            Guard.id.in_(list(by_guard.keys())),
+            Guard.id.in_(guard_ids),
         )
         .all()
+    }
+    portal_users = {
+        int(u.guard_id): u.id
+        for u in db.query(User)
+        .filter(User.company_id == company.id, User.guard_id.in_(guard_ids))
+        .all()
+        if u.guard_id is not None
     }
 
     for gid, items in by_guard.items():
         guard = guards.get(gid)
         if not guard:
             continue
-        # Summarise for this staff member
         lines = []
         for c in items[:8]:
             title = _KIND_TITLES.get(c.kind, "Rota updated")
@@ -242,8 +249,7 @@ def notify_shift_changes(
         if len(items) == 1:
             title = f"{_KIND_TITLES.get(items[0].kind, 'Rota updated')} — {plan.name}"
 
-        # In-app notification for linked portal user
-        uid = _guard_user_id(db, company.id, gid)
+        uid = portal_users.get(gid)
         if uid:
             db.add(
                 AppNotification(
@@ -257,10 +263,7 @@ def notify_shift_changes(
                 )
             )
 
-        # Mobile-reaching channels
         first = items[0]
-        site_guess = ""
-        shift_guess = first.detail
         _send_channels(
             db,
             actor_user_id,
@@ -268,8 +271,8 @@ def notify_shift_changes(
             title,
             body,
             first.date,
-            site_guess,
-            shift_guess,
+            "",
+            first.detail,
         )
 
     try:

@@ -24,7 +24,10 @@ def _assert_within_balance(
     total = round(float(inv.total or 0), 2)
     if total <= 0:
         return
-    q = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.invoice_id == inv.id)
+    q = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
+        Payment.invoice_id == inv.id,
+        Payment.deleted_at.is_(None),
+    )
     if exclude_payment_id is not None:
         q = q.filter(Payment.id != exclude_payment_id)
     already = round(float(q.scalar() or 0), 2)

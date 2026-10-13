@@ -2287,6 +2287,17 @@ def run():
         except sqlite3.OperationalError:
             pass
 
+    try:
+        if table_exists(cur, "occurrence_sheets"):
+            cur.execute(
+                "UPDATE occurrence_sheets SET status = 'reported' WHERE status = 'submitted'"
+            )
+            conn.commit()
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning("occurrence status migration failed: %s", e)
+
     conn.commit()
     conn.close()
     try:
@@ -2338,17 +2349,6 @@ def run():
         import logging
 
         logging.getLogger(__name__).warning("RBAC backfill failed: %s", e)
-
-    try:
-        if table_exists(cur, "occurrence_sheets"):
-            cur.execute(
-                "UPDATE occurrence_sheets SET status = 'reported' WHERE status = 'submitted'"
-            )
-            conn.commit()
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning("occurrence status migration failed: %s", e)
 
     try:
         from app.database import SessionLocal

@@ -254,7 +254,7 @@ export default function AdminLiveSupportPage() {
                           onClick={() =>
                             void api.admin
                               .patchLiveSupportAgent(Number(a.id), !a.is_available)
-                              .then(load)
+                              .then(() => load())
                               .catch((e) => toast.error(e instanceof Error ? e.message : 'Update failed'))
                           }
                         >

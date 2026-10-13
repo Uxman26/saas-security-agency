@@ -1,14 +1,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { EmailDialog } from '@/components/email-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AppSidebar } from '@/components/app-sidebar';
-import { ADMIN_NAV_SECTIONS, filterAdminNavSections, isAdminNavActive } from '@/lib/admin-nav';
-import { LogOut, Menu } from 'lucide-react';
+import { ADMIN_NAV_SECTIONS, filterAdminNavSections } from '@/lib/admin-nav';
+import { LogOut, Menu, X } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { AlertsPanel } from '@/components/alerts-panel';
 import { usePathname } from 'next/navigation';
@@ -16,8 +15,6 @@ import { useMemo, useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { LanguageSwitcher } from '@/components/language-switcher';
-import { cn } from '@/lib/utils';
-import { navModulesFromUser } from '@/lib/nav-modules';
 import { useModulePathGuard } from '@/components/module-guard';
 import { api } from '@/lib/api';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
@@ -28,17 +25,12 @@ import { ControlOpsAssistant } from '@/components/assistant/controlops-assistant
 import { ReportIssueDialog } from '@/components/feedback/report-issue-dialog';
 import { QuickActionsMenu } from '@/components/quick-actions-menu';
 import { GlobalSearch } from '@/components/global-search';
-import { useModuleLabel } from '@/lib/module-i18n';
-
-function mActive(pathname: string, href: string) {
-  if (href === '/dashboard') return pathname === '/dashboard';
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
+import { AdminSidebarNav, TenantSidebarNav } from '@/components/sidebar-nav';
+import { groupTenantNavSections } from '@/lib/sidebar-sections';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const tc = useTranslations('common');
-  const ts = useTranslations('sidebar');
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -57,6 +49,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('controlops-report-issue', onReport as EventListener);
   }, []);
 
+  useEffect(() => {
+    if (!drawer) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawer(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [drawer]);
+
+  useEffect(() => {
+    setDrawer(false);
+  }, [pathname]);
+
   const adminSections = useMemo(
     () =>
       permsLoaded
@@ -64,6 +74,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         : ADMIN_NAV_SECTIONS.map((s) => ({ titleKey: s.titleKey, items: [...s.items] })),
     [can, permsLoaded]
   );
+  const tenantSections = useMemo(() => groupTenantNavSections(user), [user]);
   const queryClient = useQueryClient();
   useModulePathGuard(pathname);
 
@@ -95,9 +106,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     });
   }, [user, isSuperAdmin, queryClient]);
 
-  const links = useMemo(() => navModulesFromUser(user), [user]);
-  const moduleLabel = useModuleLabel();
-
   return (
     <div className="flex h-[100vh] h-dvh overflow-hidden bg-background">
       <AppSidebar />
@@ -111,6 +119,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               variant="ghost"
               size="icon"
               aria-label={tc('menu')}
+              aria-expanded={drawer}
+              aria-controls="app-mobile-nav"
               className="shrink-0 transition-colors hover:bg-primary/10 hover:text-primary"
               onClick={() => setDrawer(true)}
             >
@@ -140,66 +150,48 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
           </div>
         </header>
-        {drawer && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <button type="button" className="absolute inset-0 bg-black/50" aria-label={tc('closeMenu')} onClick={() => setDrawer(false)} />
-            <div className="app-drawer-safe absolute start-0 top-0 bottom-0 flex w-[min(18rem,85vw)] flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl">
-              <div className="border-b border-sidebar-border p-4">
-                <CompanyBrand className="mb-2" />
-                <div className="flex justify-end">
-                  <Button type="button" variant="ghost" size="sm" className="text-sidebar-foreground/70" onClick={() => setDrawer(false)}>
-                    ✕
-                  </Button>
-                </div>
+        {drawer ? (
+          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label={tc('menu')}>
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/50 backdrop-blur-[1px]"
+              aria-label={tc('closeMenu')}
+              onClick={() => setDrawer(false)}
+            />
+            <div
+              id="app-mobile-nav"
+              className="app-drawer-safe absolute start-0 top-0 bottom-0 flex w-[min(20rem,88vw)] max-w-full flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl"
+            >
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3">
+                <CompanyBrand className="min-w-0 truncate" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                  aria-label={tc('closeMenu')}
+                  onClick={() => setDrawer(false)}
+                >
+                  <X className="size-5" />
+                </Button>
               </div>
-              <nav ref={mobileNavRef} className="sidebar-nav-scroll min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2 [-webkit-overflow-scrolling:touch]">
+              <nav
+                ref={mobileNavRef}
+                aria-label="Main"
+                className="sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 [-webkit-overflow-scrolling:touch]"
+              >
                 {isSuperAdmin ? (
-                  adminSections.map((section) => (
-                    <div key={section.titleKey} className="mb-3">
-                      <p className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
-                        {ts(section.titleKey)}
-                      </p>
-                      {section.items.map(({ href, labelKey }) => (
-                        <Link
-                          key={href}
-                          href={href}
-                          scroll={false}
-                          className={cn(
-                            'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
-                            isAdminNavActive(pathname, href)
-                              ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
-                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
-                          )}
-                          onClick={() => setDrawer(false)}
-                        >
-                          {ts(labelKey)}
-                        </Link>
-                      ))}
-                    </div>
-                  ))
+                  <AdminSidebarNav sections={adminSections} onNavigate={() => setDrawer(false)} compact={false} />
                 ) : (
-                  links.map((m) => (
-                    <Link
-                      key={m.key}
-                      href={m.sidebar_path}
-                      scroll={false}
-                      className={cn(
-                        'block rounded-e-lg border-s-[3px] border-transparent px-3 py-2 text-sm transition-colors',
-                        mActive(pathname, m.sidebar_path)
-                          ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
-                      )}
-                      onClick={() => setDrawer(false)}
-                    >
-                      {moduleLabel(m.key, m.name)}
-                    </Link>
-                  ))
+                  <TenantSidebarNav sections={tenantSections} onNavigate={() => setDrawer(false)} compact={false} />
                 )}
               </nav>
             </div>
           </div>
-        )}
-        <main className="app-main-safe flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">{children}</main>
+        ) : null}
+        <main className="app-main-safe flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          {children}
+        </main>
         {user ? <ControlOpsAssistant /> : null}
         {user && !isSuperAdmin ? (
           <ReportIssueDialog

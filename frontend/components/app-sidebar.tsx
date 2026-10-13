@@ -1,125 +1,19 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
-import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/auth-context';
-import type { ModuleAccess } from '@/lib/types';
-import {
-  AlertTriangle,
-  ShieldAlert,
-  BookOpen,
-  Building2,
-  Calendar,
-  CalendarClock,
-  ClipboardList,
-  Clock,
-  CreditCard,
-  FilePlus,
-  FileText,
-  FolderOpen,
-  Gift,
-  LayoutDashboard,
-  LucideIcon,
-  Mail,
-  MapPin,
-  MapPinned,
-  MessageSquare,
-  PoundSterling,
-  Receipt,
-  Repeat,
-  ScrollText,
-  Settings,
-  Shield,
-  Store,
-  Target,
-  UserCircle,
-  UserCog,
-  Users,
-} from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
-import { cn } from '@/lib/utils';
-import { ADMIN_NAV_SECTIONS, filterAdminNavSections, isAdminNavActive } from '@/lib/admin-nav';
-import { moduleNavAllowed } from '@/lib/nav-modules';
+import { AdminSidebarNav, TenantSidebarNav } from '@/components/sidebar-nav';
+import { ADMIN_NAV_SECTIONS, filterAdminNavSections } from '@/lib/admin-nav';
+import { groupTenantNavSections } from '@/lib/sidebar-sections';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
-import { useModuleLabel } from '@/lib/module-i18n';
-
-const ICON_MAP: Record<string, LucideIcon> = {
-  LayoutDashboard,
-  Users,
-  FolderOpen,
-  UserCog,
-  Clock,
-  Shield,
-  UserCircle,
-  MapPin,
-  ClipboardList,
-  Calendar,
-  CalendarClock,
-  MapPinned,
-  AlertTriangle,
-  ShieldAlert,
-  Building2,
-  Target,
-  PoundSterling,
-  FileText,
-  FilePlus,
-  ScrollText,
-  CreditCard,
-  Receipt,
-  Gift,
-  MessageSquare,
-  Mail,
-  Store,
-  Repeat,
-  BookOpen,
-};
-
-const SECTION_ORDER = [
-  'sectionOverview',
-  'sectionHr',
-  'sectionScheduling',
-  'sectionField',
-  'sectionSafety',
-  'sectionSales',
-  'sectionFinance',
-  'sectionReports',
-  'sectionSettings',
-  'sectionOperations',
-];
-
-function moduleIcon(name: string): LucideIcon {
-  return ICON_MAP[name] || LayoutDashboard;
-}
-
-function active(pathname: string, href: string) {
-  if (href === '/dashboard') return pathname === '/dashboard';
-  return pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function moduleNavAllowedLocal(user: ReturnType<typeof useAuth>['user'], m: ModuleAccess) {
-  return moduleNavAllowed(user, m);
-}
 
 const asideClass =
-  'hidden h-[100vh] h-dvh min-h-0 w-48 shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex';
-
-function navLinkClass(isActive: boolean) {
-  return cn(
-    'flex items-center gap-2 rounded-e-lg border-s-[3px] border-transparent px-2 py-1.5 text-sm transition-colors',
-    isActive
-      ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary'
-      : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-primary'
-  );
-}
+  'hidden h-[100vh] h-dvh min-h-0 w-56 shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex';
 
 export function AppSidebar() {
   const { user } = useAuth();
-  const pathname = usePathname();
-  const ts = useTranslations('sidebar');
-  const moduleLabel = useModuleLabel();
   const isSuperAdmin = user?.role === 'super_admin';
   const { can, loaded } = usePlatformPermissions();
   const navRef = usePersistedScroll<HTMLElement>('app-sidebar-nav');
@@ -127,91 +21,23 @@ export function AppSidebar() {
     () => (loaded ? filterAdminNavSections(can) : ADMIN_NAV_SECTIONS.map((s) => ({ titleKey: s.titleKey, items: [...s.items] }))),
     [can, loaded]
   );
-
-  const grouped = useMemo(() => {
-    const access = user?.module_access;
-    if (!access?.length) return [];
-    const bySection: Record<string, ModuleAccess[]> = {};
-    for (const m of access) {
-      if (!moduleNavAllowedLocal(user, m)) continue;
-      const sec = m.section_key || 'sectionOperations';
-      if (!bySection[sec]) bySection[sec] = [];
-      bySection[sec].push(m);
-    }
-    return SECTION_ORDER.filter((sec) => bySection[sec]?.length).map((sec) => ({
-      titleKey: sec,
-      items: bySection[sec].sort((a, b) => a.sidebar_order - b.sidebar_order),
-    }));
-  }, [user]);
-
-  if (isSuperAdmin) {
-    return (
-      <aside className={asideClass}>
-        <div className="shrink-0 border-b border-sidebar-border p-3">
-          <CompanyBrand />
-        </div>
-        <nav
-          ref={navRef}
-          className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5"
-        >
-          {adminSections.map((section) => (
-            <div key={section.titleKey}>
-              <p className="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
-                {ts(section.titleKey)}
-              </p>
-              <div className="mt-1 space-y-0.5">
-                {section.items.map(({ href, labelKey, icon: Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    scroll={false}
-                    className={navLinkClass(isAdminNavActive(pathname, href))}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    <span className="truncate">{ts(labelKey)}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-      </aside>
-    );
-  }
+  const tenantSections = useMemo(() => groupTenantNavSections(user), [user]);
 
   return (
     <aside className={asideClass}>
-      <div className="shrink-0 border-b border-sidebar-border p-3">
+      <div className="shrink-0 border-b border-sidebar-border px-3 py-3.5">
         <CompanyBrand />
       </div>
       <nav
         ref={navRef}
-        className="sidebar-nav-scroll min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-1.5"
+        aria-label="Main"
+        className="sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
       >
-        {grouped.map((section) => (
-          <div key={section.titleKey}>
-            <p className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
-              {section.titleKey === 'sectionSettings' ? <Settings className="size-3" /> : null}
-              {ts(section.titleKey)}
-            </p>
-            <div className="mt-1 space-y-0.5">
-              {section.items.map((m) => {
-                const Icon = moduleIcon(m.icon);
-                return (
-                  <Link
-                    key={m.key}
-                    href={m.sidebar_path}
-                    scroll={false}
-                    className={navLinkClass(active(pathname, m.sidebar_path))}
-                  >
-                    <Icon className="size-4 shrink-0 opacity-90" />
-                    <span className="truncate">{moduleLabel(m.key, m.name)}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        {isSuperAdmin ? (
+          <AdminSidebarNav sections={adminSections} compact />
+        ) : (
+          <TenantSidebarNav sections={tenantSections} compact />
+        )}
       </nav>
     </aside>
   );

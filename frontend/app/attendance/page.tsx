@@ -131,7 +131,9 @@ export default function AttendancePage() {
   const [editBookedOffAt, setEditBookedOffAt] = useState('');
   const [editDateError, setEditDateError] = useState('');
   const [filters, setFilters] = useState<AttFilters>(EMPTY_ATT_FILTERS);
-  const [tab, setTab] = useState<'overview' | 'all' | 'exceptions'>('overview');
+  const [tab, setTab] = useState<'overview' | 'today' | 'records' | 'exceptions' | 'breakdown' | 'history'>(
+    'overview'
+  );
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -306,6 +308,19 @@ export default function AttendancePage() {
   const siteGroups = useMemo(() => groupBySite(filtered), [filtered]);
   const staffGroups = useMemo(() => groupByStaff(filtered, guardMap), [filtered, guardMap]);
 
+  const todayIso = useMemo(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }, []);
+
+  const historyRows = useMemo(
+    () => filtered.filter((a) => shiftDateOf(a) && shiftDateOf(a) < todayIso),
+    [filtered, todayIso]
+  );
+
+  const listSource = tab === 'history' ? historyRows : filtered;
+
   const getSearchText = useCallback(() => '', []);
   const getSortValue = useCallback(
     (a: Attendance, key: string) => {
@@ -340,7 +355,7 @@ export default function AttendancePage() {
   );
 
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
-    filtered,
+    listSource,
     '',
     sortKey,
     sortDir,
@@ -349,6 +364,20 @@ export default function AttendancePage() {
     getSearchText,
     getSortValue
   );
+
+  const openBookOn = (assignmentId: number, guardId: number) => {
+    setBookAssignmentId(String(assignmentId));
+    setBookGuardId(String(guardId));
+    setBookOff(false);
+    setBookOpen(true);
+  };
+
+  const openBookOff = (assignmentId: number, guardId: number) => {
+    setBookAssignmentId(String(assignmentId));
+    setBookGuardId(String(guardId));
+    setBookOff(true);
+    setBookOpen(true);
+  };
 
   useEffect(() => {
     setPage(1);
@@ -369,24 +398,59 @@ export default function AttendancePage() {
     setFilters((f) => ({ ...f, [key]: value }));
   };
 
-  const statCards: StatCardSpec[] = [
-    { key: 'staff', label: 'Total Staff', value: metrics.totalStaff, icon: Users, tone: 'neutral' },
-    { key: 'shifts', label: 'Total Shifts', value: metrics.totalShifts, icon: Calendar, tone: 'neutral' },
-    { key: 'on_time', label: 'On Time', value: metrics.onTime, icon: Clock, tone: 'positive' },
+  const exceptionTotal =
+    exceptions.notBookedOn.length + exceptions.notBookedOff.length + metrics.noShow + metrics.late;
+
+  const primaryStats: StatCardSpec[] = [
+    {
+      key: 'due',
+      label: 'Due now',
+      value: dueUpcoming.due.length,
+      icon: Clock,
+      tone: dueUpcoming.due.length ? 'warning' : 'muted',
+      action: { label: 'Open', onClick: () => setTab('today') },
+    },
+    {
+      key: 'clocked',
+      label: 'On Time',
+      value: metrics.onTime,
+      icon: Users,
+      tone: 'positive',
+    },
     {
       key: 'late',
       label: 'Late',
       value: metrics.late,
       icon: Clock,
       tone: metrics.late ? 'danger' : 'muted',
+      action: metrics.late ? { label: 'View', onClick: () => { setFilter('status', 'late'); setTab('records'); } } : undefined,
     },
     {
-      key: 'no_show',
-      label: 'No Show',
-      value: metrics.noShow,
+      key: 'exceptions',
+      label: 'Needs action',
+      value: exceptionTotal,
       icon: AlertTriangle,
-      tone: metrics.noShow ? 'danger' : 'muted',
+      tone: exceptionTotal ? 'danger' : 'muted',
+      action: exceptionTotal ? { label: 'View', onClick: () => setTab('exceptions') } : undefined,
     },
+    {
+      key: 'shifts',
+      label: 'Shifts in filter',
+      value: metrics.totalShifts,
+      icon: Calendar,
+      tone: 'neutral',
+    },
+    {
+      key: 'staff',
+      label: 'Staff in filter',
+      value: metrics.totalStaff,
+      icon: Users,
+      tone: 'neutral',
+    },
+  ];
+
+  const secondaryStats: StatCardSpec[] = [
+    { key: 'no_show', label: 'No Show', value: metrics.noShow, icon: AlertTriangle, tone: metrics.noShow ? 'danger' : 'muted' },
     { key: 'early', label: 'Finished Early', value: metrics.finishedEarly, icon: Clock, tone: 'warning' },
     { key: 'ot', label: 'Overtime', value: metrics.overtime, icon: Clock, tone: 'info' },
     { key: 'c_paid', label: 'Cancelled - Paid', value: metrics.cancelledPaid, icon: PoundSterling, tone: 'info' },
@@ -430,8 +494,8 @@ export default function AttendancePage() {
         <ModulePage>
           <DashboardHeader
             title="Attendance"
-            hint="Booking on or off stamps the current time against an assignment. Late is decided against the shift's scheduled start."
-            description="Who turned up, when they booked on and off, cancellations, and attendance exceptions."
+            hint="Book on/off stamps the current time. Late is measured against the shift start."
+            description="Due → clocked in → late → missing → completed. Use the tabs to focus on what needs action."
             actions={
               <div className="flex gap-2">
                 <Button variant="outline" onClick={loadAttendance} disabled={loading}>
@@ -510,175 +574,128 @@ export default function AttendancePage() {
           <ModuleTabs
             tabs={[
               { id: 'overview', label: 'Overview' },
-              { id: 'all', label: 'All records' },
+              {
+                id: 'today',
+                label: `Today (${dueUpcoming.due.length + dueUpcoming.upcoming.length})`,
+              },
+              { id: 'records', label: 'Records' },
               {
                 id: 'exceptions',
                 label: `Exceptions (${exceptions.notBookedOn.length + exceptions.notBookedOff.length + metrics.noShow})`,
               },
+              { id: 'breakdown', label: 'By site / staff' },
+              { id: 'history', label: 'History' },
             ]}
             value={tab}
             onChange={setTab}
           />
 
-          {(dueUpcoming.due.length > 0 || dueUpcoming.upcoming.length > 0) && (
-            <div className="rounded-xl border bg-card p-4 space-y-4 shadow-sm">
-              <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-semibold tracking-tight">Today&apos;s due / upcoming</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Live from today&apos;s rota — who needs booking on, and who is coming up.
-                  </p>
-                </div>
-                <div className="flex gap-2 text-xs">
-                  <span className="rounded-full bg-amber-100 px-2.5 py-1 font-medium text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                    Due {dueUpcoming.due.length}
-                  </span>
-                  <span className="rounded-full bg-sky-100 px-2.5 py-1 font-medium text-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
-                    Upcoming {dueUpcoming.upcoming.length}
-                  </span>
-                </div>
-              </div>
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>When</TableHead>
-                      <TableHead>Staff</TableHead>
-                      <TableHead>Site</TableHead>
-                      <TableHead>Shift</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-28" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[...dueUpcoming.due, ...dueUpcoming.upcoming.slice(0, 8)].map((row) => (
-                      <TableRow key={`${row.kind}-${row.assignment_id}`}>
-                        <TableCell>
-                          <Pill tone={row.kind === 'due' ? 'warning' : 'info'}>
-                            {row.kind === 'due' ? 'Due' : 'Upcoming'}
-                          </Pill>
-                        </TableCell>
-                        <TableCell className="font-medium">{row.guard_name}</TableCell>
-                        <TableCell>{row.site_name}</TableCell>
-                        <TableCell className="whitespace-nowrap tabular-nums">
-                          {row.date} · {row.shift_start || '—'}–{row.shift_end || '—'}
-                        </TableCell>
-                        <TableCell>
-                          {row.booked_on && !row.booked_off
-                            ? 'Clocked in'
-                            : row.booked_on && row.booked_off
-                              ? 'Completed'
-                              : row.status === 'not_booked_on'
-                                ? 'Not booked on'
-                                : displayStatus(row.status) || 'Scheduled'}
-                        </TableCell>
-                        <TableCell>
-                          {canCreateMod && !row.booked_on ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7"
-                              onClick={() => {
-                                setBookAssignmentId(String(row.assignment_id));
-                                setBookGuardId(String(row.guard_id));
-                                setBookOff(false);
-                                setBookOpen(true);
-                              }}
-                            >
-                              Book on
-                            </Button>
-                          ) : canCreateMod && row.booked_on && !row.booked_off ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7"
-                              onClick={() => {
-                                setBookAssignmentId(String(row.assignment_id));
-                                setBookGuardId(String(row.guard_id));
-                                setBookOff(true);
-                                setBookOpen(true);
-                              }}
-                            >
-                              Book off
-                            </Button>
-                          ) : (
-                            '—'
-                          )}
-                        </TableCell>
-                      </TableRow>
+          <StatCards cards={primaryStats} />
+
+          {(tab === 'records' || tab === 'history' || tab === 'breakdown' || tab === 'exceptions') && (
+            <FilterBar
+              onClear={hasActiveFilters ? () => setFilters(EMPTY_ATT_FILTERS) : undefined}
+            >
+              <FilterField label="Site" className="min-w-[180px]">
+                <SearchableSelect
+                  value={filters.siteId}
+                  onChange={(v) => setFilter('siteId', v)}
+                  options={siteOptions}
+                  noneOption={{ value: '', label: 'All sites' }}
+                  placeholder="All sites"
+                  searchPlaceholder="Search sites…"
+                />
+              </FilterField>
+              <FilterField label="Staff" className="min-w-[180px]">
+                <SearchableSelect
+                  value={filters.guardId}
+                  onChange={(v) => setFilter('guardId', v)}
+                  options={guardOptions}
+                  noneOption={{ value: '', label: 'All staff' }}
+                  placeholder="All staff"
+                  searchPlaceholder="Search staff…"
+                />
+              </FilterField>
+              <FilterField label="From">
+                <Input type="date" value={filters.dateFrom} onChange={(e) => setFilter('dateFrom', e.target.value)} />
+              </FilterField>
+              <FilterField label="To">
+                <Input type="date" value={filters.dateTo} onChange={(e) => setFilter('dateTo', e.target.value)} />
+              </FilterField>
+              <FilterField label="Status" className="min-w-[180px]">
+                <Select
+                  value={filters.status || 'all'}
+                  onValueChange={(v) => setFilter('status', (v === 'all' ? '' : v) as AttStatusFilter)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ATT_STATUS_FILTERS.map((o) => (
+                      <SelectItem key={o.value || 'all'} value={o.value || 'all'}>
+                        {o.label}
+                      </SelectItem>
                     ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
+                  </SelectContent>
+                </Select>
+              </FilterField>
+              <FilterField label="Search" className="min-w-[200px] flex-1">
+                <Input
+                  placeholder="Staff, site, note…"
+                  value={filters.search}
+                  onChange={(e) => setFilter('search', e.target.value)}
+                />
+              </FilterField>
+            </FilterBar>
           )}
-
-          <StatCards cards={statCards} />
-
-          <FilterBar
-            onClear={
-              hasActiveFilters
-                ? () => {
-                    setFilters(EMPTY_ATT_FILTERS);
-                  }
-                : undefined
-            }
-          >
-            <FilterField label="Site" className="min-w-[180px]">
-              <SearchableSelect
-                value={filters.siteId}
-                onChange={(v) => setFilter('siteId', v)}
-                options={siteOptions}
-                noneOption={{ value: '', label: 'All sites' }}
-                placeholder="All sites"
-                searchPlaceholder="Search sites…"
-              />
-            </FilterField>
-            <FilterField label="Staff" className="min-w-[180px]">
-              <SearchableSelect
-                value={filters.guardId}
-                onChange={(v) => setFilter('guardId', v)}
-                options={guardOptions}
-                noneOption={{ value: '', label: 'All staff' }}
-                placeholder="All staff"
-                searchPlaceholder="Search staff…"
-              />
-            </FilterField>
-            <FilterField label="From">
-              <Input type="date" value={filters.dateFrom} onChange={(e) => setFilter('dateFrom', e.target.value)} />
-            </FilterField>
-            <FilterField label="To">
-              <Input type="date" value={filters.dateTo} onChange={(e) => setFilter('dateTo', e.target.value)} />
-            </FilterField>
-            <FilterField label="Status" className="min-w-[180px]">
-              <Select
-                value={filters.status || 'all'}
-                onValueChange={(v) => setFilter('status', (v === 'all' ? '' : v) as AttStatusFilter)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ATT_STATUS_FILTERS.map((o) => (
-                    <SelectItem key={o.value || 'all'} value={o.value || 'all'}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FilterField>
-            <FilterField label="Search" className="min-w-[200px] flex-1">
-              <Input
-                placeholder="Staff, site, note…"
-                value={filters.search}
-                onChange={(e) => setFilter('search', e.target.value)}
-              />
-            </FilterField>
-          </FilterBar>
 
           {tab === 'overview' && (
             <div className="space-y-6">
-              {filtered.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    title: 'Due / upcoming',
+                    count: dueUpcoming.due.length + dueUpcoming.upcoming.length,
+                    hint: `${dueUpcoming.due.length} due · ${dueUpcoming.upcoming.length} upcoming`,
+                    tab: 'today' as const,
+                  },
+                  {
+                    title: 'Missing book-on',
+                    count: metrics.notBookedOn,
+                    hint: 'Started shifts without clock-in',
+                    tab: 'exceptions' as const,
+                  },
+                  {
+                    title: 'Missing book-off',
+                    count: metrics.notBookedOff,
+                    hint: 'Ended shifts still open',
+                    tab: 'exceptions' as const,
+                  },
+                  {
+                    title: 'Late this filter',
+                    count: metrics.late,
+                    hint: 'Review patterns by staff',
+                    tab: 'breakdown' as const,
+                  },
+                ].map((card) => (
+                  <button
+                    key={card.title}
+                    type="button"
+                    onClick={() => setTab(card.tab)}
+                    className="rounded-xl border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 hover:bg-accent/30"
+                  >
+                    <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{card.title}</div>
+                    <div className="mt-1 text-2xl font-semibold tabular-nums">{card.count}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{card.hint}</div>
+                  </button>
+                ))}
+              </div>
+
+              <StatCards cards={secondaryStats} />
+
+              {loading ? (
+                <InlineKpiTableSkeleton />
+              ) : filtered.length > 0 ? (
                 <StatusPieChart
                   data={[
                     { name: 'On Time', value: metrics.onTime },
@@ -691,12 +708,277 @@ export default function AttendancePage() {
                   ].filter((d) => d.value > 0)}
                   title="Attendance by status"
                 />
-              ) : null}
+              ) : (
+                <ResultsCard title="Attendance overview" count={0}>
+                  <p className="p-8 text-center text-sm text-muted-foreground">
+                    No attendance in the current filter. Book a shift or widen the date range.
+                  </p>
+                </ResultsCard>
+              )}
 
+              <QuickLinks
+                links={[
+                  {
+                    key: 'rota',
+                    title: 'Rotas & shifts',
+                    description: 'Attendance is marked against published shifts.',
+                    icon: Calendar,
+                    tone: 'neutral',
+                    action: { label: 'Open rotas', href: '/rota' },
+                  },
+                  {
+                    key: 'payroll',
+                    title: 'Payroll',
+                    description: 'On time, Late, and Cancelled - Paid feed payable hours.',
+                    icon: PoundSterling,
+                    tone: 'positive',
+                    action: { label: 'Open payroll', href: '/payroll' },
+                  },
+                  {
+                    key: 'staff',
+                    title: 'Employee hub',
+                    description: 'Absence, lateness and employment records.',
+                    icon: Users,
+                    tone: 'info',
+                    action: { label: 'Open employees', href: '/guards' },
+                  },
+                ]}
+              />
+            </div>
+          )}
+
+          {tab === 'today' && (
+            <div className="space-y-6">
+              <ResultsCard title="Due now" count={dueUpcoming.due.length}>
+                <div className="overflow-x-auto p-4">
+                  {dueUpcoming.due.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">Nothing due right now.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Shift</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="w-28" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dueUpcoming.due.map((row) => (
+                          <TableRow key={`due-${row.assignment_id}`} className="bg-amber-500/5">
+                            <TableCell className="font-medium">{row.guard_name}</TableCell>
+                            <TableCell>{row.site_name}</TableCell>
+                            <TableCell className="whitespace-nowrap tabular-nums">
+                              {row.shift_start || '—'}–{row.shift_end || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Pill tone={row.booked_on ? 'info' : 'warning'}>
+                                {row.booked_on && !row.booked_off
+                                  ? 'Clocked in'
+                                  : row.status === 'not_booked_on'
+                                    ? 'Not booked on'
+                                    : 'Due'}
+                              </Pill>
+                            </TableCell>
+                            <TableCell>
+                              {canCreateMod && !row.booked_on ? (
+                                <Button size="sm" variant="outline" className="h-7" onClick={() => openBookOn(row.assignment_id, row.guard_id)}>
+                                  Book on
+                                </Button>
+                              ) : canCreateMod && row.booked_on && !row.booked_off ? (
+                                <Button size="sm" variant="outline" className="h-7" onClick={() => openBookOff(row.assignment_id, row.guard_id)}>
+                                  Book off
+                                </Button>
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+
+              <ResultsCard title="Upcoming (next 3 days)" count={dueUpcoming.upcoming.length}>
+                <div className="overflow-x-auto p-4">
+                  {dueUpcoming.upcoming.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No upcoming shifts in the next 3 days.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Shift</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dueUpcoming.upcoming.map((row) => (
+                          <TableRow key={`up-${row.assignment_id}`}>
+                            <TableCell className="whitespace-nowrap">{row.date}</TableCell>
+                            <TableCell className="font-medium">{row.guard_name}</TableCell>
+                            <TableCell>{row.site_name}</TableCell>
+                            <TableCell className="whitespace-nowrap tabular-nums">
+                              {row.shift_start || '—'}–{row.shift_end || '—'}
+                            </TableCell>
+                            <TableCell>
+                              <Pill tone="info">Scheduled</Pill>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+            </div>
+          )}
+
+          {tab === 'exceptions' && (
+            <div className="space-y-6">
+              <ResultsCard title="Not Booked On" count={exceptions.notBookedOn.length}>
+                <div className="overflow-x-auto p-4">
+                  {exceptions.notBookedOn.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">All started shifts have a book-on.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Shift</TableHead>
+                          <TableHead className="w-28" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {exceptions.notBookedOn.map((e) => (
+                          <TableRow key={`on-${e.assignment_id}`} className="bg-destructive/5">
+                            <TableCell>{e.date}</TableCell>
+                            <TableCell className="font-medium">{e.guard_name}</TableCell>
+                            <TableCell>{e.site_name}</TableCell>
+                            <TableCell>
+                              {e.shift_start || '?'}–{e.shift_end || '?'}
+                            </TableCell>
+                            <TableCell>
+                              {canCreateMod ? (
+                                <Button size="sm" variant="outline" className="h-7" onClick={() => openBookOn(e.assignment_id, e.guard_id)}>
+                                  Book on
+                                </Button>
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+
+              <ResultsCard title="Not Booked Off" count={exceptions.notBookedOff.length}>
+                <div className="overflow-x-auto p-4">
+                  {exceptions.notBookedOff.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No open book-offs for ended shifts.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Shift</TableHead>
+                          <TableHead className="w-28" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {exceptions.notBookedOff.map((e) => (
+                          <TableRow key={`off-${e.assignment_id}`} className="bg-amber-500/10">
+                            <TableCell>{e.date}</TableCell>
+                            <TableCell className="font-medium">{e.guard_name}</TableCell>
+                            <TableCell>{e.site_name}</TableCell>
+                            <TableCell>
+                              {e.shift_start || '?'}–{e.shift_end || '?'}
+                            </TableCell>
+                            <TableCell>
+                              {canCreateMod ? (
+                                <Button size="sm" variant="outline" className="h-7" onClick={() => openBookOff(e.assignment_id, e.guard_id)}>
+                                  Book off
+                                </Button>
+                              ) : (
+                                '—'
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+
+              <ResultsCard
+                title="Late / No Show"
+                count={filtered.filter((a) => ['late', 'no_show'].includes(normalizeAttStatus(a.status) || '')).length}
+              >
+                <div className="overflow-x-auto p-4">
+                  {filtered.filter((a) => ['late', 'no_show'].includes(normalizeAttStatus(a.status) || '')).length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No late or no-show records in this filter.</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Staff</TableHead>
+                          <TableHead>Site</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Note</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filtered
+                          .filter((a) => ['late', 'no_show'].includes(normalizeAttStatus(a.status) || ''))
+                          .map((a) => (
+                            <TableRow key={a.id} className="bg-destructive/5">
+                              <TableCell>{shiftDateOf(a)}</TableCell>
+                              <TableCell className="font-medium">
+                                {a.guard_name || guardMap.get(a.guard_id) || `#${a.guard_id}`}
+                              </TableCell>
+                              <TableCell>{a.site_name || '—'}</TableCell>
+                              <TableCell>
+                                <Pill tone={statusTone(a.status)}>{displayStatus(a.status)}</Pill>
+                              </TableCell>
+                              <TableCell className="max-w-[240px] truncate">{a.note || '—'}</TableCell>
+                              <TableCell className="text-right">
+                                {canEditMod ? (
+                                  <Button variant="ghost" size="sm" onClick={() => openEdit(a)}>
+                                    <Pencil className="size-4" />
+                                  </Button>
+                                ) : null}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </ResultsCard>
+            </div>
+          )}
+
+          {tab === 'breakdown' && (
+            <div className="space-y-6">
               <ResultsCard title="By site" count={siteGroups.length}>
                 <div className="overflow-x-auto p-4">
                   {siteGroups.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">No attendance in this filter.</p>
+                    <p className="py-8 text-center text-sm text-muted-foreground">No attendance in this filter.</p>
                   ) : (
                     <Table>
                       <TableHeader>
@@ -737,7 +1019,7 @@ export default function AttendancePage() {
               <ResultsCard title="By staff" count={staffGroups.length}>
                 <div className="overflow-x-auto p-4">
                   {staffGroups.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">No attendance in this filter.</p>
+                    <p className="py-8 text-center text-sm text-muted-foreground">No attendance in this filter.</p>
                   ) : (
                     <Table>
                       <TableHeader>
@@ -767,8 +1049,8 @@ export default function AttendancePage() {
                                 <div className="flex flex-col gap-0.5">
                                   <span>{g.label}</span>
                                   {lateHighlight ? (
-                                    <span className="text-xs text-destructive font-medium">
-                                      {g.late}+ lates in filtered period — review monthly pattern
+                                    <span className="text-xs font-medium text-destructive">
+                                      {g.late}+ lates in filtered period
                                     </span>
                                   ) : null}
                                 </div>
@@ -791,27 +1073,53 @@ export default function AttendancePage() {
                   )}
                 </div>
               </ResultsCard>
+            </div>
+          )}
 
-              <ResultsCard title="By shift" count={filtered.length}>
-                <div className="overflow-x-auto p-4">
-                  {filtered.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">No shifts match.</p>
-                  ) : (
+          {(tab === 'records' || tab === 'history') && (
+            <ResultsCard
+              title={tab === 'history' ? 'Attendance history' : 'Attendance records'}
+              count={total}
+              pageSize={pageSize}
+              onPageSizeChange={(n) => {
+                setPageSize(n);
+                setPage(1);
+              }}
+            >
+              <div className="p-4">
+                {tab === 'history' ? (
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Past shifts before today. Use date filters to narrow the period.
+                  </p>
+                ) : null}
+                {loading ? (
+                  <InlineKpiTableSkeleton />
+                ) : total === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground">
+                    {hasActiveFilters
+                      ? 'No records match your filter.'
+                      : tab === 'history'
+                        ? 'No historical attendance in this filter.'
+                        : 'No attendance records yet. Click "Book Attendance" to get started.'}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Site</TableHead>
-                          <TableHead>Staff</TableHead>
-                          <TableHead>Scheduled</TableHead>
-                          <TableHead>Booked on</TableHead>
-                          <TableHead>Booked off</TableHead>
-                          <TableHead>Status</TableHead>
+                          <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <TableHead>Flags</TableHead>
+                          <SortableHead label="Note" colKey="note" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filtered.slice(0, 50).map((a) => {
+                        {pageRows.map((a) => {
                           const lateN = lateCountFor(a, lateCounts);
                           const highlight = hasLateHighlight(a, lateCounts);
                           const noShow = normalizeAttStatus(a.status) === 'no_show';
@@ -824,330 +1132,100 @@ export default function AttendancePage() {
                                 isCancelledStatus(a.status) && 'bg-slate-500/5'
                               )}
                             >
-                              <TableCell className="whitespace-nowrap">{shiftDateOf(a) || '—'}</TableCell>
-                              <TableCell>{a.site_name || '—'}</TableCell>
-                              <TableCell className="font-medium">
-                                {a.guard_name || guardMap.get(a.guard_id) || `#${a.guard_id}`}
-                                {highlight ? (
-                                  <span className="ml-2 text-xs text-destructive font-medium">
-                                    {lateN} lates this month
+                              <TableCell className="whitespace-nowrap font-medium">
+                                <div className="flex flex-col gap-0.5">
+                                  <span>{a.guard_name || guardMap.get(a.guard_id) || `Guard #${a.guard_id}`}</span>
+                                  {highlight ? (
+                                    <span className="text-xs font-medium text-destructive">
+                                      {lateN} lates in {shiftDateOf(a).slice(0, 7) || 'month'}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">{a.site_name || '—'}</TableCell>
+                              <TableCell className="whitespace-nowrap text-sm">
+                                {shiftDateOf(a) || '—'}
+                                {a.shift_start ? (
+                                  <span className="text-muted-foreground">
+                                    {' '}
+                                    {a.shift_start}–{a.shift_end || '?'}
                                   </span>
                                 ) : null}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap text-sm">
-                                {a.shift_start || '?'}–{a.shift_end || '?'}
-                              </TableCell>
-                              <TableCell className="text-sm whitespace-nowrap">
-                                {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
-                              </TableCell>
-                              <TableCell className="text-sm whitespace-nowrap">
-                                {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
                               </TableCell>
                               <TableCell>
-                                <Pill dot tone={statusTone(a.status)}>
-                                  {displayStatus(a.status)}
-                                </Pill>
-                                {a.status === 'cancelled_paid' && a.paid_hours != null ? (
-                                  <span className="ml-2 text-xs text-muted-foreground">
-                                    Agreed {Number(a.paid_hours).toFixed(2)} hrs
-                                  </span>
-                                ) : null}
+                                {a.status ? (
+                                  <div className="flex flex-col gap-1">
+                                    <Pill dot tone={statusTone(a.status)}>
+                                      {displayStatus(a.status)}
+                                    </Pill>
+                                    {a.status === 'cancelled_paid' && a.paid_hours != null ? (
+                                      <span className="text-[11px] text-muted-foreground">
+                                        Agreed Paid Hours: {Number(a.paid_hours).toFixed(2)}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <Pill tone="muted">Pending</Pill>
+                                )}
                               </TableCell>
-                              <TableCell className="text-xs space-x-1">
-                                {a.has_early_finish ? <Pill tone="warning">Finished early</Pill> : null}
-                                {a.has_overtime ? <Pill tone="info">Overtime</Pill> : null}
-                                {a.late_minutes ? <Pill tone="danger">Late {a.late_minutes}m</Pill> : null}
+                              <TableCell className="space-y-1 text-xs">
+                                {a.has_early_finish ? <div><Pill tone="warning">Finished early</Pill></div> : null}
+                                {a.has_overtime ? <div><Pill tone="info">Overtime</Pill></div> : null}
+                                {a.late_minutes ? <div><Pill tone="danger">Late {a.late_minutes}m</Pill></div> : null}
+                                {!a.has_early_finish && !a.has_overtime && !a.late_minutes ? '—' : null}
+                              </TableCell>
+                              <TableCell className="max-w-[180px] truncate text-sm" title={a.note ?? undefined}>
+                                {a.note?.trim() ? a.note : '—'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-sm">
+                                {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-sm">
+                                {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  {canEditMod ? (
+                                    <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit">
+                                      <Pencil className="size-4" />
+                                    </Button>
+                                  ) : null}
+                                  {canDeleteMod ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={() => handleDelete(a.id)}
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="size-4" />
+                                    </Button>
+                                  ) : null}
+                                </div>
                               </TableCell>
                             </TableRow>
                           );
                         })}
                       </TableBody>
                     </Table>
-                  )}
-                  {filtered.length > 50 ? (
-                    <p className="text-xs text-muted-foreground mt-2">Showing first 50 of {filtered.length}. Use All records for the full list.</p>
-                  ) : null}
-                </div>
-              </ResultsCard>
-            </div>
-          )}
-
-          {tab === 'exceptions' && (
-            <div className="space-y-6">
-              <ResultsCard title="Not Booked On" count={exceptions.notBookedOn.length}>
-                <div className="overflow-x-auto p-4">
-                  {exceptions.notBookedOn.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">All started shifts have a book-on.</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Staff</TableHead>
-                          <TableHead>Site</TableHead>
-                          <TableHead>Shift</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {exceptions.notBookedOn.map((e) => (
-                          <TableRow key={`on-${e.assignment_id}`} className="bg-destructive/5">
-                            <TableCell>{e.date}</TableCell>
-                            <TableCell className="font-medium">{e.guard_name}</TableCell>
-                            <TableCell>{e.site_name}</TableCell>
-                            <TableCell>
-                              {e.shift_start || '?'}–{e.shift_end || '?'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              </ResultsCard>
-
-              <ResultsCard title="Not Booked Off" count={exceptions.notBookedOff.length}>
-                <div className="overflow-x-auto p-4">
-                  {exceptions.notBookedOff.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">No open book-offs for ended shifts.</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Staff</TableHead>
-                          <TableHead>Site</TableHead>
-                          <TableHead>Shift</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {exceptions.notBookedOff.map((e) => (
-                          <TableRow key={`off-${e.assignment_id}`} className="bg-amber-500/10">
-                            <TableCell>{e.date}</TableCell>
-                            <TableCell className="font-medium">{e.guard_name}</TableCell>
-                            <TableCell>{e.site_name}</TableCell>
-                            <TableCell>
-                              {e.shift_start || '?'}–{e.shift_end || '?'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              </ResultsCard>
-
-              <ResultsCard
-                title="No Show"
-                count={filtered.filter((a) => normalizeAttStatus(a.status) === 'no_show').length}
-              >
-                <div className="overflow-x-auto p-4">
-                  {filtered.filter((a) => normalizeAttStatus(a.status) === 'no_show').length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-8 text-center">No no-show records in this filter.</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Staff</TableHead>
-                          <TableHead>Site</TableHead>
-                          <TableHead>Note</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filtered
-                          .filter((a) => normalizeAttStatus(a.status) === 'no_show')
-                          .map((a) => (
-                            <TableRow key={a.id} className="bg-destructive/5">
-                              <TableCell>{shiftDateOf(a)}</TableCell>
-                              <TableCell className="font-medium">
-                                {a.guard_name || guardMap.get(a.guard_id) || `#${a.guard_id}`}
-                              </TableCell>
-                              <TableCell>{a.site_name || '—'}</TableCell>
-                              <TableCell className="max-w-[240px] truncate">{a.note || '—'}</TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
-              </ResultsCard>
-            </div>
-          )}
-
-          {tab === 'all' && (
-            <>
-              <ResultsCard
-                title="Attendance records"
-                count={total}
-                pageSize={pageSize}
-                onPageSizeChange={(n) => {
-                  setPageSize(n);
-                  setPage(1);
-                }}
-              >
-                <div className="p-4">
-                  {loading ? (
-                    <InlineKpiTableSkeleton />
-                  ) : total === 0 ? (
-                    <div className="text-center py-12 text-muted-foreground">
-                      {hasActiveFilters
-                        ? 'No records match your filter.'
-                        : 'No attendance records yet. Click "Book Attendance" to get started.'}
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <TableHead>Flags</TableHead>
-                            <SortableHead label="Note" colKey="note" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {pageRows.map((a) => {
-                            const lateN = lateCountFor(a, lateCounts);
-                            const highlight = hasLateHighlight(a, lateCounts);
-                            const noShow = normalizeAttStatus(a.status) === 'no_show';
-                            return (
-                              <TableRow
-                                key={a.id}
-                                className={cn(
-                                  highlight && 'bg-destructive/5',
-                                  noShow && 'bg-amber-500/10',
-                                  isCancelledStatus(a.status) && 'bg-slate-500/5'
-                                )}
-                              >
-                                <TableCell className="font-medium whitespace-nowrap">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span>{a.guard_name || guardMap.get(a.guard_id) || `Guard #${a.guard_id}`}</span>
-                                    {highlight ? (
-                                      <span className="text-xs text-destructive font-medium">
-                                        {lateN} lates in {shiftDateOf(a).slice(0, 7) || 'month'}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">{a.site_name || '—'}</TableCell>
-                                <TableCell className="whitespace-nowrap text-sm">
-                                  {shiftDateOf(a) || '—'}
-                                  {a.shift_start ? (
-                                    <span className="text-muted-foreground">
-                                      {' '}
-                                      {a.shift_start}–{a.shift_end || '?'}
-                                    </span>
-                                  ) : null}
-                                </TableCell>
-                                <TableCell>
-                                  {a.status ? (
-                                    <div className="flex flex-col gap-1">
-                                      <Pill dot tone={statusTone(a.status)}>
-                                        {displayStatus(a.status)}
-                                      </Pill>
-                                      {a.status === 'cancelled_paid' && a.paid_hours != null ? (
-                                        <span className="text-[11px] text-muted-foreground">
-                                          Agreed Paid Hours: {Number(a.paid_hours).toFixed(2)}
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                  ) : (
-                                    <Pill tone="muted">Pending</Pill>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-xs space-y-1">
-                                  {a.has_early_finish ? <div><Pill tone="warning">Finished early</Pill></div> : null}
-                                  {a.has_overtime ? <div><Pill tone="info">Overtime</Pill></div> : null}
-                                  {a.late_minutes ? <div><Pill tone="danger">Late {a.late_minutes}m</Pill></div> : null}
-                                  {!a.has_early_finish && !a.has_overtime && !a.late_minutes ? '—' : null}
-                                </TableCell>
-                                <TableCell className="text-sm max-w-[180px] truncate" title={a.note ?? undefined}>
-                                  {a.note?.trim() ? a.note : '—'}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap text-sm">
-                                  {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap text-sm">
-                                  {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex justify-end gap-1">
-                                    {canEditMod ? (
-                                      <Button variant="ghost" size="sm" onClick={() => openEdit(a)} title="Edit">
-                                        <Pencil className="size-4" />
-                                      </Button>
-                                    ) : null}
-                                    {canDeleteMod ? (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                        onClick={() => handleDelete(a.id)}
-                                        title="Delete"
-                                      >
-                                        <Trash2 className="size-4" />
-                                      </Button>
-                                    ) : null}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                  {total > 0 ? (
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-                      <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="records" />
-                      <TablePaginationBar
-                        safePage={safePage}
-                        pageCount={pageCount}
-                        total={total}
-                        pageSize={pageSize}
-                        rangeStart={rangeStart}
-                        rangeEnd={rangeEnd}
-                        onPageChange={setPage}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </ResultsCard>
-
-              <QuickLinks
-                links={[
-                  {
-                    key: 'rota',
-                    title: 'Rotas & shifts',
-                    description: 'Attendance is marked against the shifts planned here.',
-                    icon: Calendar,
-                    tone: 'neutral',
-                    action: { label: 'Open rotas', href: '/rota' },
-                  },
-                  {
-                    key: 'payroll',
-                    title: 'Payroll',
-                    description: 'On time, Late, and Cancelled - Paid shifts feed payable hours.',
-                    icon: PoundSterling,
-                    tone: 'positive',
-                    action: { label: 'Open payroll', href: '/payroll' },
-                  },
-                  {
-                    key: 'staff',
-                    title: 'Employee hub',
-                    description: 'Absence, lateness and the rest of each person’s record.',
-                    icon: Users,
-                    tone: 'info',
-                    action: { label: 'Open employees', href: '/guards' },
-                  },
-                ]}
-              />
-            </>
+                  </div>
+                )}
+                {total > 0 ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                    <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="records" />
+                    <TablePaginationBar
+                      safePage={safePage}
+                      pageCount={pageCount}
+                      total={total}
+                      pageSize={pageSize}
+                      rangeStart={rangeStart}
+                      rangeEnd={rangeEnd}
+                      onPageChange={setPage}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </ResultsCard>
           )}
 
           <Dialog open={!!editRec} onOpenChange={(open) => !open && setEditRec(null)}>

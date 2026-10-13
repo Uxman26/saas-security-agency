@@ -487,17 +487,34 @@ def _parse_shift_rate(raw) -> Optional[float]:
         return None
 
 
-def _employee_profile_rate(db: Session, company_id: int, guard_id: int, on_date: date) -> Optional[float]:
+def _employee_profile_rate(
+    db: Session,
+    company_id: int,
+    guard_id: int,
+    on_date: date,
+    *,
+    guards_by_id: Optional[dict] = None,
+    rates_by_guard: Optional[dict] = None,
+) -> Optional[float]:
     from app.models import GuardRate
     from app.services.rate_service import profile_hourly_rate, profile_per_job_rate
 
-    guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
+    guard = (guards_by_id or {}).get(guard_id)
+    if guard is None:
+        guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
     job = profile_per_job_rate(guard)
     if job is not None:
         return float(job)
     profile = profile_hourly_rate(guard)
     if profile is not None and profile > 0:
         return float(profile)
+    if rates_by_guard is not None:
+        for gr in rates_by_guard.get(guard_id) or []:
+            if gr.effective_from and gr.effective_from <= on_date:
+                if gr.hourly_rate is not None and float(gr.hourly_rate) > 0:
+                    return float(gr.hourly_rate)
+                break
+        return None
     gr = (
         db.query(GuardRate)
         .filter(GuardRate.guard_id == guard_id, GuardRate.effective_from <= on_date)
@@ -507,6 +524,23 @@ def _employee_profile_rate(db: Session, company_id: int, guard_id: int, on_date:
     if gr and gr.hourly_rate is not None and float(gr.hourly_rate) > 0:
         return float(gr.hourly_rate)
     return None
+
+
+def _load_rate_lookups(db: Session, company_id: int) -> tuple[dict, dict]:
+    from app.models import GuardRate
+
+    guards = db.query(Guard).filter(Guard.company_id == company_id).all()
+    guards_by_id = {g.id: g for g in guards}
+    rates = (
+        db.query(GuardRate)
+        .filter(GuardRate.guard_id.in_(list(guards_by_id.keys()) or [-1]))
+        .order_by(GuardRate.guard_id, GuardRate.effective_from.desc())
+        .all()
+    )
+    rates_by_guard: dict = {}
+    for gr in rates:
+        rates_by_guard.setdefault(gr.guard_id, []).append(gr)
+    return guards_by_id, rates_by_guard
 
 
 def _enforce_rates_on_reassign(db: Session, company_id: int, old_json: Optional[str], new_json: Optional[str]) -> Optional[str]:
@@ -1448,12 +1482,10 @@ def publish_rota_plan(
     errors: list[str] = []
     shifts = data.get("shifts") or {}
 
-    # One query for the company's staff instead of one per employee in the plan. The
-    # membership test is the same — the id must belong to this company — it just reads
-    # from a dict rather than a round trip per row.
-    guard_ids_in_company = {
-        row[0] for row in db.query(Guard.id).filter(Guard.company_id == company.id).all()
-    }
+    guards_by_id, rates_by_guard = _load_rate_lookups(db, company.id)
+    guard_ids_in_company = set(guards_by_id.keys())
+    rate_cache: dict[tuple[int, date], Optional[float]] = {}
+    from app.services import shift_adjustment_service
 
     for emp_id, by_d in shifts.items():
         try:
@@ -1483,7 +1515,17 @@ def publish_rota_plan(
                 on_date = date.fromisoformat(dk)
                 locked_rate = _parse_shift_rate(sh.get("shiftRate"))
                 if locked_rate is None:
-                    locked_rate = _employee_profile_rate(db, company.id, emp_guard_id, on_date)
+                    cache_key = (emp_guard_id, on_date)
+                    if cache_key not in rate_cache:
+                        rate_cache[cache_key] = _employee_profile_rate(
+                            db,
+                            company.id,
+                            emp_guard_id,
+                            on_date,
+                            guards_by_id=guards_by_id,
+                            rates_by_guard=rates_by_guard,
+                        )
+                    locked_rate = rate_cache[cache_key]
                 assignment = Assignment(
                         guard_id=emp_guard_id,
                         site_id=site_id,
@@ -1497,7 +1539,6 @@ def publish_rota_plan(
                     )
                 db.add(assignment)
                 db.flush()
-                from app.services import shift_adjustment_service
                 shift_adjustment_service.apply_planner_adjustments(
                     db, user_id, company.id, assignment, sh.get("adjustments") or []
                 )
@@ -1537,7 +1578,6 @@ def publish_rota_plan(
                         guard_id=emp_guard_id,
                         status=status,
                         note=note,
-                        # The agreed figure belongs to a paid cancellation and nothing else.
                         paid_hours=paid_hours if status == CANCELLED_PAID else None,
                         updated_by_user_id=user_id,
                     )

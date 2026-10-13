@@ -4,24 +4,43 @@ from typing import Any, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models import Invoice, User, SmsLog, EmailLog
+from app.models import Invoice, Payment, User, SmsLog, EmailLog
 from app.services.company_service import get_company_by_user_id
 from app.services.expense_service import _expense_totals, _invoice_vat_total
-from app.services.invoice_payment_service import invoice_amount_paid, invoice_balance_due, invoice_credit_applied
+from app.services.invoice_payment_service import (
+    batch_invoice_settlements,
+    invoice_balance_due,
+)
 from app.services.rota_service import rota_summary
 from app.services import reports_extended_service
 
 
 def reports_hub(db: Session, user_id: int, start_date: date, end_date: date) -> dict[str, Any]:
     company = get_company_by_user_id(db, user_id)
-    invoices = db.query(Invoice).filter(Invoice.company_id == company.id).all()
-    revenue = 0.0
+    revenue_val = (
+        db.query(func.coalesce(func.sum(Payment.amount), 0))
+        .filter(
+            Payment.company_id == company.id,
+            Payment.deleted_at.is_(None),
+            func.date(Payment.paid_at) >= start_date,
+            func.date(Payment.paid_at) <= end_date,
+        )
+        .scalar()
+    )
+    revenue = round(float(revenue_val or 0), 2)
+    open_invoices = (
+        db.query(Invoice)
+        .filter(
+            Invoice.company_id == company.id,
+            Invoice.status.notin_(("paid", "cancelled", "draft")),
+        )
+        .all()
+    )
+    settlements = batch_invoice_settlements(db, [inv.id for inv in open_invoices])
     outstanding = 0.0
-    for inv in invoices:
-        paid = invoice_amount_paid(db, inv.id)
-        revenue += paid
-        if inv.status not in ("paid", "cancelled", "draft"):
-            outstanding += invoice_balance_due(db, inv)
+    for inv in open_invoices:
+        paid, credited = settlements.get(inv.id, (0.0, 0.0))
+        outstanding += invoice_balance_due(db, inv, paid=paid, credited=credited)
     expense_totals = _expense_totals(db, company.id, start_date, end_date)
     invoice_vat = _invoice_vat_total(db, company.id, start_date, end_date)
     expense_vat = expense_totals["total_vat"]
@@ -32,7 +51,7 @@ def reports_hub(db: Session, user_id: int, start_date: date, end_date: date) -> 
     return {
         "period_start": start_date,
         "period_end": end_date,
-        "total_revenue": round(revenue, 2),
+        "total_revenue": revenue,
         "outstanding_invoices": round(outstanding, 2),
         "total_expenses": expense_totals["total_inc_vat"],
         "expense_vat": expense_vat,
@@ -55,10 +74,10 @@ def financial_invoice_rows(db: Session, user_id: int, start_date: date, end_date
         .order_by(Invoice.id.desc())
         .all()
     )
+    settlements = batch_invoice_settlements(db, [inv.id for inv in rows])
     out = []
     for inv in rows:
-        paid = invoice_amount_paid(db, inv.id)
-        credited = invoice_credit_applied(db, inv.id)
+        paid, credited = settlements.get(inv.id, (0.0, 0.0))
         out.append(
             {
                 "invoice_id": inv.id,
@@ -67,7 +86,7 @@ def financial_invoice_rows(db: Session, user_id: int, start_date: date, end_date
                 "total": inv.total,
                 "amount_paid": paid,
                 "credit_applied": credited,
-                "balance": invoice_balance_due(db, inv),
+                "balance": invoice_balance_due(db, inv, paid=paid, credited=credited),
                 "status": inv.status,
                 "due_date": inv.due_date.isoformat() if inv.due_date else "",
             }

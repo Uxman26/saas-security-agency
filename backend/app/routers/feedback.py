@@ -1,10 +1,11 @@
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.database import get_db
 from app.models import User
@@ -23,6 +24,14 @@ class ReplyIn(BaseModel):
 
 class StatusIn(BaseModel):
     status: str
+
+
+def _form_files(form) -> list[UploadFile]:
+    out: list[UploadFile] = []
+    for item in form.getlist("files"):
+        if isinstance(item, (UploadFile, StarletteUploadFile)) and getattr(item, "filename", None):
+            out.append(item)
+    return out
 
 
 @router.get("")
@@ -56,18 +65,19 @@ def tenant_get(
 
 @router.post("")
 async def tenant_create(
-    category: str = Form(...),
-    subject: str = Form(...),
-    description: str = Form(...),
-    diagnostic_json: Optional[str] = Form(None),
-    files: Optional[list[UploadFile]] = File(None),
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_internal_module("feedback", "create")),
 ):
+    form = await request.form()
+    category = str(form.get("category") or "")
+    subject = str(form.get("subject") or "")
+    description = str(form.get("description") or "")
+    diagnostic_json = form.get("diagnostic_json")
     diagnostic = None
     if diagnostic_json:
         try:
-            diagnostic = json.loads(diagnostic_json)
+            diagnostic = json.loads(str(diagnostic_json))
         except (TypeError, json.JSONDecodeError):
             diagnostic = None
     return await svc.create_tenant(
@@ -77,7 +87,7 @@ async def tenant_create(
         subject=subject,
         description=description,
         diagnostic=diagnostic if isinstance(diagnostic, dict) else None,
-        files=files,
+        files=_form_files(form) or None,
     )
 
 

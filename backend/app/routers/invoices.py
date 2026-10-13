@@ -25,7 +25,12 @@ from app.services import invoice_service
 from app.services.invoice_pdf import render_invoice_pdf
 from app.services.invoice_statement_service import build_statement
 from app.services.invoice_statement_pdf import render_statement_pdf
-from app.services.invoice_payment_service import invoice_amount_paid, invoice_credit_applied, invoice_balance_due
+from app.services.invoice_payment_service import (
+    batch_invoice_settlements,
+    invoice_amount_paid,
+    invoice_credit_applied,
+    invoice_balance_due,
+)
 from app.services.company_profile_service import company_logo_url
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -66,7 +71,12 @@ def _shift_timing(ln: InvoiceLine) -> Optional[str]:
     return None
 
 
-def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = None) -> InvoiceResponse:
+def _serialize_invoice(
+    inv: Invoice,
+    include_lines: bool,
+    db: Session | None = None,
+    settlements: tuple[float, float] | None = None,
+) -> InvoiceResponse:
     lines_out: list[InvoiceLineResponse] = []
     if include_lines:
         for ln in sorted(inv.lines, key=lambda x: (x.shift_date is None, x.shift_date or date.min, x.id)):
@@ -126,12 +136,22 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
         account_number = inv.payee_account_number or co.account_number
         iban = inv.payee_iban or co.iban
         swift_code = inv.payee_swift_code or co.swift_code
-    paid = invoice_amount_paid(db, inv.id) if db else 0
-    credited = invoice_credit_applied(db, inv.id) if db else 0
+    if settlements is not None:
+        paid, credited = settlements
+    elif db:
+        paid = invoice_amount_paid(db, inv.id)
+        credited = invoice_credit_applied(db, inv.id)
+    else:
+        paid, credited = 0.0, 0.0
     payments_out = []
     credit_notes_out = []
     if db and include_lines:
-        for p in db.query(Payment).filter(Payment.invoice_id == inv.id).order_by(Payment.paid_at.desc()).all():
+        for p in (
+            db.query(Payment)
+            .filter(Payment.invoice_id == inv.id, Payment.deleted_at.is_(None))
+            .order_by(Payment.paid_at.desc())
+            .all()
+        ):
             payments_out.append(
                 PaymentResponse(
                     id=p.id,
@@ -145,7 +165,7 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
             )
         for cn in (
             db.query(CreditNote)
-            .filter(CreditNote.invoice_id == inv.id)
+            .filter(CreditNote.invoice_id == inv.id, CreditNote.deleted_at.is_(None))
             .order_by(CreditNote.credit_date.desc(), CreditNote.id.desc())
             .all()
         ):
@@ -173,7 +193,11 @@ def _serialize_invoice(inv: Invoice, include_lines: bool, db: Session | None = N
                 )
             )
     total = float(inv.total or 0)
-    balance = invoice_balance_due(db, inv) if db else round(max(0, total - paid - credited), 2)
+    balance = (
+        invoice_balance_due(db, inv, paid=paid, credited=credited)
+        if db
+        else round(max(0, total - paid - credited), 2)
+    )
     return InvoiceResponse(
         id=inv.id,
         company_id=inv.company_id,
@@ -361,7 +385,11 @@ def list_invoices(
         guard_id=guard_id,
         job_title=job_title,
     )
-    return [_serialize_invoice(inv, False, db) for inv in rows]
+    settlements = batch_invoice_settlements(db, [inv.id for inv in rows])
+    return [
+        _serialize_invoice(inv, False, db, settlements=settlements.get(inv.id))
+        for inv in rows
+    ]
 
 
 @router.get("/{invoice_id}/audit", response_model=List[InvoiceAuditEntry])

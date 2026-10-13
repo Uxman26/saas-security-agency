@@ -38,14 +38,15 @@ def _invoice_amount_for_site(inv: Invoice, site_id: Optional[int]) -> float:
     total = float(inv.total or 0)
     if not site_id:
         return total
-    lines = [ln for ln in (inv.lines or []) if ln.site_id == site_id]
-    if not lines:
+    lines = inv.lines or []
+    site_lines = [ln for ln in lines if ln.site_id == site_id]
+    if not site_lines:
         return 0.0
-    line_sum = sum(float(ln.amount or 0) + float(ln.allowance_amount or 0) for ln in lines)
-    all_sum = sum(float(ln.amount or 0) + float(ln.allowance_amount or 0) for ln in (inv.lines or []))
-    if all_sum <= 0:
-        return total if any(ln.site_id == site_id for ln in (inv.lines or [])) else 0.0
-    return round(total * (line_sum / all_sum), 2)
+    inv_sub = round(float(inv.subtotal or 0), 2)
+    site_sub = round(sum(float(ln.amount or 0) for ln in site_lines), 2)
+    if inv_sub <= 0:
+        return total
+    return round(total * (site_sub / inv_sub), 2)
 
 
 def _share_for_site(inv: Invoice, amount: float, site_id: Optional[int]) -> float:

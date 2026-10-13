@@ -8,6 +8,7 @@ const abs = (title: string, description: string, path = '/'): Metadata => {
     description,
     metadataBase: new URL(SITE_URL),
     alternates: { canonical: url },
+    robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
     openGraph: {
       type: 'website',
       locale: 'en_GB',
@@ -134,4 +135,8 @@ export const accessibilityMetadata = abs(
 
 export const noIndexFollow: Metadata = {
   robots: { index: false, follow: true },
+};
+
+export const indexFollow: Metadata = {
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
 };

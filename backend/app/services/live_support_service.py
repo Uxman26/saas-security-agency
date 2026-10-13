@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import LiveChatConversation, LiveChatEvent, LiveChatMessage, LiveSupportAgent, User
+from app.models import AppNotification, LiveChatConversation, LiveChatEvent, LiveChatMessage, LiveSupportAgent, User
 from app.services.admin_platform_ext_service import get_config, set_config
 
 DEFAULT_AVAILABILITY = {
@@ -197,6 +197,13 @@ def start_conversation(
             body=f"Connected with {agent.display_name}. How can we help?",
         )
     )
+    _notify_agent_assigned(
+        db,
+        agent,
+        conv_id=conv.id,
+        title="New live chat",
+        body=f"{full_name.strip()} ({company_name.strip()}) started a live chat from {city.strip()}.",
+    )
     db.commit()
     db.refresh(conv)
     _log_event(
@@ -238,6 +245,16 @@ def post_visitor_message(db: Session, public_id: str, body: str) -> dict[str, An
             body=text[:4000],
         )
     )
+    if conv.agent_id:
+        agent = db.query(LiveSupportAgent).filter(LiveSupportAgent.id == conv.agent_id).first()
+        if agent:
+            _notify_agent_assigned(
+                db,
+                agent,
+                conv_id=conv.id,
+                title="Live chat reply",
+                body=f"{conv.visitor_name}: {text[:180]}",
+            )
     db.commit()
     return get_conversation(db, public_id)
 
@@ -316,6 +333,41 @@ def reassign_round_robin(db: Session, conversation_id: int, actor: User) -> dict
     db.commit()
     _log_event(db, conv.id, "conversation.reassigned", actor.id, {"from": prev, "to": agent.id})
     return get_conversation(db, conv.public_id)
+
+
+def _notify_agent_assigned(
+    db: Session,
+    agent: LiveSupportAgent,
+    *,
+    conv_id: int,
+    title: str,
+    body: str,
+) -> None:
+    user = agent.user or db.query(User).filter(User.id == agent.user_id).first()
+    if not user:
+        return
+    if user.company_id:
+        db.add(
+            AppNotification(
+                company_id=user.company_id,
+                user_id=user.id,
+                kind="live_support",
+                title=title,
+                body=body,
+                entity_type="live_chat",
+                entity_id=conv_id,
+            )
+        )
+        return
+    to = (user.email or "").strip()
+    if not to:
+        return
+    try:
+        from app.services import email_service
+
+        email_service.send_email_async(to, title, body)
+    except Exception:
+        pass
 
 
 def _agent_out(a: LiveSupportAgent) -> dict[str, Any]:

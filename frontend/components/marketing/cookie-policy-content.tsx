@@ -1,3 +1,5 @@
+import { CookiePreferences } from '@/components/analytics/cookie-preferences';
+
 export function CookiePolicyContent() {
   return (
     <>
@@ -6,6 +8,8 @@ export function CookiePolicyContent() {
         <a href="https://controlops.co.uk">https://controlops.co.uk</a> and related Service pages. It should be read
         with our <a href="/privacy">Privacy Notice</a>.
       </p>
+
+      <CookiePreferences />
 
       <h2>1. What cookies are</h2>
       <p>
@@ -46,7 +50,7 @@ export function CookiePolicyContent() {
             <tr className="border-b">
               <td className="py-3 pr-3 text-foreground">controlops_cookie_consent</td>
               <td className="py-3 pr-3">Stores whether you accepted or rejected optional analytics cookies</td>
-              <td className="py-3">Browser local storage</td>
+              <td className="py-3">First-party cookie (1 year) and mirrored in browser local storage</td>
             </tr>
             <tr>
               <td className="py-3 pr-3 text-foreground">Google Analytics (GA4)</td>

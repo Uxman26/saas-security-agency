@@ -4,6 +4,7 @@ import './globals.css';
 import { Providers } from '@/lib/providers';
 import { NextIntlClientProvider } from 'next-intl';
 import { isRtl } from '@/i18n/config';
+import { SiteJsonLd } from '@/components/marketing/site-json-ld';
 
 /** Without this, mobile browsers assume a ~980px canvas and shrink every page to fit.
  *  User scaling stays enabled deliberately — capping zoom locks out low-vision users. */
@@ -58,6 +59,7 @@ export default async function RootLayout({
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
       <body className="min-h-dvh antialiased">
+        <SiteJsonLd />
         <NextIntlClientProvider messages={messages}>
           <Providers>{children}</Providers>
         </NextIntlClientProvider>

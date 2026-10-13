@@ -12,6 +12,7 @@ import { Mail } from 'lucide-react';
 export function ContactContent() {
   const t = useTranslations('marketing.contact');
   const tc = useTranslations('marketing.cta');
+  const tn = useTranslations('marketing.nav');
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,7 +35,7 @@ export function ContactContent() {
             {t('newPrefix')}{' '}
             <Link href="/pricing" className="text-primary font-medium hover:underline">{tc('viewPricing')}</Link>
             {' · '}
-            <Link href="/help" className="text-primary font-medium hover:underline">Help Centre</Link>
+            <Link href="/help" className="text-primary font-medium hover:underline">{tn('help')}</Link>
           </p>
         </div>
       </MarketingSection>

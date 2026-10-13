@@ -20,6 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: { absolute: `${article.title} | Help | ControlOps` },
     description: article.description,
     alternates: { canonical: url },
+    robots: { index: true, follow: true },
     openGraph: {
       type: 'article',
       url,

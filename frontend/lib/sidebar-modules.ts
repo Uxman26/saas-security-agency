@@ -86,7 +86,7 @@ export const SIDEBAR_LABELS: Record<string, string> = {
   '/client-portal': 'Client portal',
   '/client-portal/request-staff': 'Request staff',
   '/requests': 'Staff requests',
-  '/my-portal': 'My portal',
+  '/my-portal': 'My workspace',
   '/settings/billing': 'Billing',
   '/settings/recycle-bin': 'Recycle Bin',
   '/settings/feedback': 'Suggestions & Complaints',

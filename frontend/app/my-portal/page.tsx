@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -40,14 +41,25 @@ type Tab = 'sites' | 'current' | 'upcoming' | 'previous' | 'hours' | 'patrol' | 
 
 export default function MyPortalPage() {
   const { user } = useAuth();
+  const role = (user?.role || '').toLowerCase();
+  // Role only — canUpcoming used to flip clients into the staff patrol UI.
+  const isStaff = role === 'staff';
+
+  const canRotaCurrent = canModule(user, 'my_portal', 'rota_current') || can(user, 'portal.rota.current');
   const canUpcoming = canModule(user, 'my_portal', 'rota_upcoming') || can(user, 'portal.rota.upcoming');
   const canPrevious = canModule(user, 'my_portal', 'rota_previous') || can(user, 'portal.rota.previous');
-  const canPatrol =
-    canModule(user, 'my_portal', 'patrol_today') ||
-    canModule(user, 'my_portal', 'patrol_compliance') ||
-    can(user, 'patrol.read') ||
-    can(user, 'patrol.scan') ||
-    can(user, 'patrol.reports');
+  const canHours = canModule(user, 'my_portal', 'hours_view') || can(user, 'portal.hours.read');
+  const canPatrolToday =
+    isStaff &&
+    (canModule(user, 'my_portal', 'patrol_today') || can(user, 'patrol.read') || can(user, 'patrol.scan'));
+  const canPatrolCompliance =
+    !isStaff &&
+    (canModule(user, 'my_portal', 'patrol_compliance') ||
+      can(user, 'patrol.reports') ||
+      can(user, 'patrol.read'));
+  const canPatrol = canPatrolToday || canPatrolCompliance;
+  const canStartPatrol =
+    canModule(user, 'patrol', 'session_start') || canModule(user, 'patrol', 'edit');
   const canIncidentRead =
     canModule(user, 'my_portal', 'incidents_view') ||
     can(user, 'incident.read') ||
@@ -57,20 +69,30 @@ export default function MyPortalPage() {
     can(user, 'incident.write') ||
     canModule(user, 'incidents', 'create');
   const canClientPortal = canModule(user, 'client_portal', 'view') || canModule(user, 'client_portal', 'create');
-  const isStaff = (user?.role || '').toLowerCase() === 'staff' || canUpcoming;
 
   const tabs = useMemo(
     () =>
       [
         { id: 'sites' as const, label: 'My sites' },
-        { id: 'current' as const, label: 'Current rota' },
+        ...(canRotaCurrent ? [{ id: 'current' as const, label: 'Current rota' }] : []),
         ...(canUpcoming ? [{ id: 'upcoming' as const, label: 'Upcoming rota' }] : []),
         ...(canPrevious ? [{ id: 'previous' as const, label: 'Previous rota' }] : []),
-        { id: 'hours' as const, label: 'Working hours' },
-        ...(canPatrol ? [{ id: 'patrol' as const, label: isStaff ? 'Today patrol' : 'Patrol compliance' }] : []),
+        ...(canHours ? [{ id: 'hours' as const, label: 'Working hours' }] : []),
+        ...(canPatrol
+          ? [{ id: 'patrol' as const, label: canPatrolToday ? 'Today patrol' : 'Patrol compliance' }]
+          : []),
         ...(canIncidentRead || canIncidentWrite ? [{ id: 'incidents' as const, label: 'Incidents' }] : []),
       ],
-    [canUpcoming, canPrevious, canPatrol, canIncidentRead, canIncidentWrite, isStaff]
+    [
+      canRotaCurrent,
+      canUpcoming,
+      canPrevious,
+      canHours,
+      canPatrol,
+      canPatrolToday,
+      canIncidentRead,
+      canIncidentWrite,
+    ]
   );
 
   const [tab, setTab] = useState<Tab>('sites');
@@ -92,8 +114,6 @@ export default function MyPortalPage() {
 
   const { siteId, select: selectSite } = usePortalSiteScope(sites);
 
-  // The switcher itself always lists every site the login can reach; the tabs render the
-  // scoped subset. Incidents have no server-side site filter, so they narrow here.
   const visibleSites = useMemo(
     () => (siteId == null ? sites : sites.filter((s) => s.id === siteId)),
     [sites, siteId]
@@ -103,8 +123,10 @@ export default function MyPortalPage() {
     [incidents, siteId]
   );
 
-  // The switcher lives in the page header, so the site list has to be present on every
-  // tab, not just the one that renders it.
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) setTab((tabs[0]?.id as Tab) ?? 'sites');
+  }, [tabs, tab]);
+
   useEffect(() => {
     if (!user) return;
     api.portal
@@ -118,7 +140,7 @@ export default function MyPortalPage() {
     setLoading(true);
     try {
       if (tab === 'sites') {
-        setSites(await api.portal.sites());
+        // Header switcher loads sites once on mount; no second round-trip here.
       } else if (tab === 'current') {
         setRota(await api.portal.rotaCurrent(siteId ?? undefined));
       } else if (tab === 'upcoming') {
@@ -126,28 +148,48 @@ export default function MyPortalPage() {
       } else if (tab === 'previous') {
         setRota(await api.portal.rotaPrevious(siteId ?? undefined));
       } else if (tab === 'hours') {
-        setHours(
-          await api.portal.hours(
-            period === 'custom'
-              ? { period: 'custom', start_date: customStart, end_date: customEnd, site_id: siteId ?? undefined }
-              : { period, site_id: siteId ?? undefined }
-          )
-        );
-      } else if (tab === 'patrol') {
-        if (isStaff) {
-          setPatrolToday(await api.portal.patrolToday());
+        if (period === 'custom' && (!customStart || !customEnd)) {
+          setHours(null);
         } else {
+          setHours(
+            await api.portal.hours(
+              period === 'custom'
+                ? {
+                    period: 'custom',
+                    start_date: customStart,
+                    end_date: customEnd,
+                    site_id: siteId ?? undefined,
+                  }
+                : { period, site_id: siteId ?? undefined }
+            )
+          );
+        }
+      } else if (tab === 'patrol') {
+        if (canPatrolToday) {
+          setPatrolToday(await api.portal.patrolToday());
+        } else if (canPatrolCompliance) {
           setCompliance(await api.portal.patrolCompliance(weekAgo, today, siteId ?? undefined));
         }
       } else if (tab === 'incidents') {
-        setIncidents(await api.portal.incidents());
+        setIncidents(await api.portal.incidents({ site_id: siteId ?? undefined }));
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to load data');
     } finally {
       setLoading(false);
     }
-  }, [tab, user, period, customStart, customEnd, isStaff, weekAgo, today, siteId]);
+  }, [
+    tab,
+    user,
+    period,
+    customStart,
+    customEnd,
+    canPatrolToday,
+    canPatrolCompliance,
+    weekAgo,
+    today,
+    siteId,
+  ]);
 
   useEffect(() => {
     loadTab();
@@ -168,7 +210,7 @@ export default function MyPortalPage() {
       toast.success('Incident submitted');
       setRaiseOpen(false);
       setIncForm({ notes: '', site_id: '', latitude: '', longitude: '' });
-      setIncidents(await api.portal.incidents());
+      setIncidents(await api.portal.incidents({ site_id: siteId ?? undefined }));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to raise incident');
     }
@@ -186,6 +228,14 @@ export default function MyPortalPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not start session');
     }
+  };
+
+  const openRaise = () => {
+    setIncForm((f) => ({
+      ...f,
+      site_id: siteId != null ? String(siteId) : f.site_id || (visibleSites[0] ? String(visibleSites[0].id) : ''),
+    }));
+    setRaiseOpen(true);
   };
 
   return (
@@ -208,7 +258,7 @@ export default function MyPortalPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {canClientPortal ? (
                   <Button variant="outline" size="sm" asChild>
-                    <a href="/client-portal">Request staff</a>
+                    <Link href="/client-portal">Request staff</Link>
                   </Button>
                 ) : null}
                 <PortalSiteSwitcher sites={sites} siteId={siteId} onChange={selectSite} />
@@ -216,7 +266,7 @@ export default function MyPortalPage() {
             }
           />
 
-          <ModuleTabs tabs={tabs} value={tab} onChange={setTab} />
+          <ModuleTabs tabs={tabs} value={tab} onChange={(id) => setTab(id as Tab)} />
 
           {loading ? <InlineFormSkeleton /> : null}
 
@@ -339,7 +389,6 @@ export default function MyPortalPage() {
                   <div className="rounded-lg border bg-muted/30 p-4">
                     <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
                       <p className="text-2xl font-semibold tabular-nums">{hours.total_hours.toFixed(2)} hrs</p>
-                      {/* Staff only — the API returns null for client logins. */}
                       {hours.total_pay != null ? (
                         <p className="text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                           £{hours.total_pay.toFixed(2)}
@@ -355,19 +404,21 @@ export default function MyPortalPage() {
                       </p>
                     ) : null}
                   </div>
+                ) : period === 'custom' && (!customStart || !customEnd) ? (
+                  <p className="text-sm text-muted-foreground">Choose a start and end date, then apply.</p>
                 ) : null}
               </CardContent>
             </Card>
           )}
 
-          {tab === 'patrol' && isStaff && (
+          {tab === 'patrol' && canPatrolToday && (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between gap-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <MapPinned className="size-5 text-primary" />
                   Today&apos;s patrol
                 </CardTitle>
-                {patrolToday?.route_id && !patrolToday.session ? (
+                {canStartPatrol && patrolToday?.route_id && !patrolToday.session ? (
                   <Button size="sm" onClick={startPatrol}>
                     Start session
                   </Button>
@@ -392,7 +443,7 @@ export default function MyPortalPage() {
                       </p>
                     ) : null}
                     {patrolToday.due_at ? (
-                      <p className="text-xs text-muted-foreground">Due: {new Date(patrolToday.due_at).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Due: {patrolToday.due_at}</p>
                     ) : null}
                     <p className="text-xs text-muted-foreground pt-2">
                       Use the mobile app to scan checkpoint QR codes with GPS validation.
@@ -425,7 +476,7 @@ export default function MyPortalPage() {
             </Card>
           )}
 
-          {tab === 'patrol' && !isStaff && (
+          {tab === 'patrol' && canPatrolCompliance && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -477,7 +528,7 @@ export default function MyPortalPage() {
                   Incidents
                 </CardTitle>
                 {canIncidentWrite ? (
-                  <Button size="sm" onClick={() => setRaiseOpen(true)}>
+                  <Button size="sm" onClick={openRaise}>
                     Raise incident
                   </Button>
                 ) : null}

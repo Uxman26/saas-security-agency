@@ -152,15 +152,23 @@ def _in_window(now: datetime, start_hm: str, end_hm: str) -> bool:
 
 
 def _resolve_guard(db: Session, user: User, company_id: int, guard_id: Optional[int]) -> Guard:
+    # Staff portal logins may only act as their linked guard. An explicit guard_id in
+    # the body must not let them start sessions or scan as a colleague.
+    if is_staff_portal_user(user):
+        linked = get_linked_guard(db, user)
+        if not linked:
+            raise HTTPException(status_code=400, detail="Staff user is not linked to a guard profile")
+        if guard_id is not None and int(guard_id) != linked.id:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return linked
     if guard_id:
         g = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
         if not g:
             raise HTTPException(status_code=404, detail="Guard not found")
         return g
-    if getattr(user, "guard_id", None):
-        g = db.query(Guard).filter(Guard.id == user.guard_id, Guard.company_id == company_id).first()
-        if g:
-            return g
+    linked = get_linked_guard(db, user)
+    if linked:
+        return linked
     raise HTTPException(status_code=400, detail="guard_id is required")
 
 
@@ -339,6 +347,7 @@ def get_checkpoint(db: Session, user: User, checkpoint_id: int) -> PatrolCheckpo
     cp = db.query(PatrolCheckpoint).filter(PatrolCheckpoint.id == checkpoint_id, PatrolCheckpoint.company_id == company.id).first()
     if not cp:
         raise HTTPException(status_code=404, detail="Checkpoint not found")
+    _assert_site_in_portal_scope(db, user, cp.site_id)
     return cp
 
 
@@ -375,6 +384,7 @@ def start_session(db: Session, user: User, data: PatrolSessionStart) -> PatrolSe
     route = db.query(PatrolRoute).filter(PatrolRoute.id == data.route_id, PatrolRoute.company_id == company.id).first()
     if not route or route.status != "active":
         raise HTTPException(status_code=404, detail="Active route not found")
+    _assert_site_in_portal_scope(db, user, route.site_id)
     guard = _resolve_guard(db, user, company.id, data.guard_id)
     # end any open session for this guard+route
     open_s = (
@@ -567,19 +577,33 @@ def list_logs(
         q = q.filter(PatrolLog.guard_id == guard_id)
     if site_id:
         q = q.join(PatrolCheckpoint).filter(PatrolCheckpoint.site_id == site_id)
-    if is_client_portal_user(user) and user.client_id:
-        q = q.join(PatrolRoute).join(Site).filter(Site.client_id == user.client_id)
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None:
-            q = q.filter(PatrolRoute.site_id.in_(pinned))
-    if is_staff_portal_user(user) and user.guard_id:
-        q = q.filter(PatrolLog.guard_id == user.guard_id)
+    q = _apply_portal_log_scope(db, user, q)
     if start_date:
         q = q.filter(PatrolLog.scan_time >= datetime.combine(start_date, time.min))
     if end_date:
         q = q.filter(PatrolLog.scan_time <= datetime.combine(end_date, time.max))
     rows = q.order_by(PatrolLog.scan_time.desc()).limit(500).all()
     return [_log_out(r) for r in rows]
+
+
+def _apply_portal_log_scope(db: Session, user: User, q):
+    if is_client_portal_user(user):
+        if user.client_id:
+            q = q.join(PatrolRoute).join(Site).filter(Site.client_id == user.client_id)
+            pinned = pinned_site_ids(db, user)
+            if pinned is not None:
+                q = q.filter(PatrolRoute.site_id.in_(pinned))
+            return q
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            return q.join(PatrolRoute).filter(PatrolRoute.site_id.in_(pinned or {0}))
+        return q.filter(PatrolLog.id < 0)
+    if is_staff_portal_user(user):
+        linked = get_linked_guard(db, user)
+        if linked:
+            return q.filter(PatrolLog.guard_id == linked.id)
+        return q.filter(PatrolLog.id < 0)
+    return q
 
 
 def log_photo_file(db: Session, user: User, log_id: int) -> tuple[str, str]:
@@ -591,13 +615,7 @@ def log_photo_file(db: Session, user: User, log_id: int) -> tuple[str, str]:
     """
     company = get_company_by_user_id(db, user.id)
     q = db.query(PatrolLog).filter(PatrolLog.id == log_id, PatrolLog.company_id == company.id)
-    if is_client_portal_user(user) and user.client_id:
-        q = q.join(PatrolRoute).join(Site).filter(Site.client_id == user.client_id)
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None:
-            q = q.filter(PatrolRoute.site_id.in_(pinned))
-    if is_staff_portal_user(user) and user.guard_id:
-        q = q.filter(PatrolLog.guard_id == user.guard_id)
+    q = _apply_portal_log_scope(db, user, q)
     log = q.first()
     if not log or not log.photo_path:
         raise HTTPException(status_code=404, detail="Photo not found")

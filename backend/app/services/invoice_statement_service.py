@@ -77,6 +77,21 @@ def build_statement(
     if kind not in ("all", "outstanding"):
         raise HTTPException(status_code=400, detail="Type must be All or Outstanding")
     company = get_company_by_user_id(db, user_id)
+    from app.models import User
+    from app.services.portal_access import assert_site_visible, is_client_portal_user, is_portal_role
+
+    user = db.query(User).filter(User.id == user_id).first()
+    # Same fail-closed scoping as invoice list/get: a portal login only sees its own
+    # client's statements, and staff portal has no billing documents.
+    if user and is_portal_role(user):
+        if not is_client_portal_user(user) or not user.client_id:
+            raise HTTPException(status_code=404, detail="Client not found")
+        if client_id is not None and int(client_id) != int(user.client_id):
+            raise HTTPException(status_code=404, detail="Client not found")
+        client_id = user.client_id
+        if site_id is not None:
+            assert_site_visible(db, user, site_id)
+
     site = None
     if site_id:
         site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()

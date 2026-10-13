@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "a8f3c2e1-mobile-controlops-2026",
-    "name": "ControlOps Mobile — Staff / Client / Admin",
-    "description": "Mobile app API collection for Staff, Client, and Admin modules.\\n\\n**Base URL:** `{{baseUrl}}` (default `https://controlops.co.uk/api`)\\n\\n**Auth:** Bearer JWT from Auth → Login (token auto-saved).\\n\\nStatus tags:\\n- *(live)* — implemented on current backend\\n- *(planned)* — required by mobile spec; contract for app/backend\\n\\n### Permission codes\\n| Code | Used by |\\n|------|--------|\\n| `portal.sites.read` | Staff, Client |\\n| `portal.rota.current` | Staff, Client |\\n| `portal.rota.upcoming` | Staff |\\n| `portal.rota.previous` | Staff |\\n| `portal.hours.read` | Staff, Client |\\n| `attend.read` / `attend.write` | Staff clock / attendance |\\n| `assign.read` / `assign.write` | OT / early finish |\\n| `staff_req.read` / `staff_req.write` | Client staff requests |\\n| `staff_req.review` | Admin/Controller approve/decline |\\n| `inv.read` | Client invoices |\\n| `incident.write` *(live)* | Staff/Client incidents |\\n| `portal.attendance.clock` *(planned)* | GPS clock in/out |\\n| `portal.invoice.query` *(planned)* | Client invoice comments |\\n| `staff_req.standdown` *(planned)* | Client cancel before approval |\\n",
+    "name": "ControlOps Mobile \u2014 Staff / Client / Admin",
+    "description": "Mobile app API collection for Staff, Client, and Admin modules.\\n\\n**Base URL:** `{{baseUrl}}` (default `https://controlops.co.uk/api`)\\n\\n**Auth:** Bearer JWT from Auth \u2192 Login (token auto-saved).\\n\\nStatus tags:\\n- *(live)* \u2014 implemented on current backend\\n- *(planned)* \u2014 required by mobile spec; contract for app/backend\\n\\n### Permission codes\\n| Code | Used by |\\n|------|--------|\\n| `portal.sites.read` | Staff, Client |\\n| `portal.rota.current` | Staff, Client |\\n| `portal.rota.upcoming` | Staff |\\n| `portal.rota.previous` | Staff |\\n| `portal.hours.read` | Staff, Client |\\n| `attend.read` / `attend.write` | Staff clock / attendance |\\n| `assign.read` / `assign.write` | OT / early finish |\\n| `staff_req.read` / `staff_req.write` | Client staff requests |\\n| `staff_req.review` | Admin/Controller approve/decline |\\n| `inv.read` | Client invoices |\\n| `incident.write` *(live)* | Staff/Client incidents |\\n| `portal.attendance.clock` *(planned)* | GPS clock in/out |\\n| `portal.invoice.query` *(planned)* | Client invoice comments |\\n| `staff_req.standdown` *(planned)* | Client cancel before approval |\\n",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -371,7 +371,7 @@
                   "raw": "{{baseUrl}}/guards/{{guard_id}}/photo",
                   "query": []
                 },
-                "description": "Profile photo binary. Requires guards permissions."
+                "description": "**LIVE (internal roles only)** \u2014 Portal Staff must use `GET /portal/me/photo` (returned as photo_url from `/portal/me/profile`)."
               },
               "response": []
             },
@@ -391,12 +391,12 @@
                   "raw": "{{baseUrl}}/guards/{{guard_id}}",
                   "query": []
                 },
-                "description": "Full name, designation, SIA number, expiry, email, phone, address, photo. *(live)*"
+                "description": "**LIVE (internal roles only)** \u2014 Portal Staff/Client logins receive 403 (`require_internal_module`). Use `GET /portal/me/profile` instead."
               },
               "response": []
             },
             {
-              "name": "Staff Profile *(planned)*",
+              "name": "Staff Profile *(live)*",
               "request": {
                 "method": "GET",
                 "header": [],
@@ -412,9 +412,33 @@
                   "raw": "{{baseUrl}}/portal/me/profile",
                   "query": []
                 },
-                "description": "**PLANNED** — Aggregated staff profile for mobile (photo, full_name, designation, sia_badge_number, sia_expiry, email, phone, address).\\nPermission: `portal.profile.read`"
+                "description": "**LIVE** \u2014 Authenticated staff member's own employee record (photo_url points at GET /portal/me/photo). Permission: `my_portal.view`."
               },
               "response": []
+            },
+            {
+              "name": "Staff photo *(live)*",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/portal/me/photo",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "portal",
+                    "me",
+                    "photo"
+                  ]
+                },
+                "description": "**LIVE** \u2014 Own staff photo for the mobile profile screen. Permission: `my_portal.view`."
+              }
             }
           ],
           "description": ""
@@ -443,7 +467,7 @@
                   "raw": "{{baseUrl}}/attendance/book",
                   "query": []
                 },
-                "description": "Clock in against assignment. Permission: `attend.write`.\\n\\nCurrent API has no GPS — see planned GPS clock endpoints.",
+                "description": "Clock in against assignment. Permission: `attend.write`.\\n\\nCurrent API has no GPS \u2014 see planned GPS clock endpoints.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assignment_id\": 1,\n  \"book_off\": false\n}",
@@ -571,7 +595,7 @@
                   "raw": "{{baseUrl}}/portal/attendance/clock-in",
                   "query": []
                 },
-                "description": "**PLANNED** — Clock in + store GPS.\\nPermission: `portal.attendance.clock`",
+                "description": "**PLANNED** \u2014 Clock in + store GPS.\\nPermission: `portal.attendance.clock`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assignment_id\": 1,\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 12.5,\n  \"captured_at\": \"2026-07-28T17:00:00Z\"\n}",
@@ -606,7 +630,7 @@
                   "raw": "{{baseUrl}}/portal/attendance/clock-out",
                   "query": []
                 },
-                "description": "**PLANNED** — Clock out + store GPS.\\nPermission: `portal.attendance.clock`",
+                "description": "**PLANNED** \u2014 Clock out + store GPS.\\nPermission: `portal.attendance.clock`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assignment_id\": 1,\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy_m\": 10.0,\n  \"captured_at\": \"2026-07-28T22:00:00Z\"\n}",
@@ -691,7 +715,7 @@
                     }
                   ]
                 },
-                "description": "Permission: `rep.read`. *(live)*"
+                "description": "Permission: `rep.read`. *(live)*\n\n**Note:** These report routes use `require_internal_module` and are not available to Staff/Client portal logins. Staff should use `GET /portal/hours`."
               },
               "response": []
             },
@@ -724,7 +748,7 @@
                     }
                   ]
                 },
-                "description": "Permission: `rep.read`. *(live)*"
+                "description": "Permission: `rep.read`. *(live)*\n\n**Note:** These report routes use `require_internal_module` and are not available to Staff/Client portal logins. Staff should use `GET /portal/hours`."
               },
               "response": []
             },
@@ -754,7 +778,7 @@
                     }
                   ]
                 },
-                "description": "**PLANNED** — total_hours, overtime_hours, early_finish counts.\\nPermission: `portal.hours.read`"
+                "description": "**PLANNED** \u2014 total_hours, overtime_hours, early_finish counts.\\nPermission: `portal.hours.read`"
               },
               "response": []
             }
@@ -1022,7 +1046,7 @@
                   "raw": "{{baseUrl}}/portal/shift-adjustments/summary",
                   "query": []
                 },
-                "description": "**PLANNED** — counts for logged-in user.\\nPermission: `portal.hours.read`"
+                "description": "**PLANNED** \u2014 counts for logged-in user.\\nPermission: `portal.hours.read`"
               },
               "response": []
             }
@@ -1731,7 +1755,7 @@
                   "raw": "{{baseUrl}}/lone-worker/session/alarm",
                   "query": []
                 },
-                "description": "Permission: `lone_worker.sos`. Bypasses the check call window and grace period entirely — the incident opens at escalation level 1 straight away.",
+                "description": "Permission: `lone_worker.sos`. Bypasses the check call window and grace period entirely \u2014 the incident opens at escalation level 1 straight away.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"kind\": \"sos\",\n  \"notes\": \"Intruder on site\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278,\n  \"accuracy\": 6.0\n}",
@@ -1766,7 +1790,7 @@
                   "raw": "{{baseUrl}}/lone-worker/session/end",
                   "query": []
                 },
-                "description": "Permission: `lone_worker.session_start`. 409 while an incident is still open — a responder must resolve it first.",
+                "description": "Permission: `lone_worker.session_start`. 409 while an incident is still open \u2014 a responder must resolve it first.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"confirm_safe\": true,\n  \"note\": \"Finished safely\",\n  \"latitude\": 51.5074,\n  \"longitude\": -0.1278\n}",
@@ -1831,7 +1855,7 @@
               "response": []
             },
             {
-              "name": "Client Profile *(planned)*",
+              "name": "Client Profile *(live)*",
               "request": {
                 "method": "GET",
                 "header": [],
@@ -1847,7 +1871,7 @@
                   "raw": "{{baseUrl}}/portal/me/client-profile",
                   "query": []
                 },
-                "description": "**PLANNED** — company_name, email, phone, address.\\nPermission: `portal.profile.read`"
+                "description": "**LIVE** \u2014 Authenticated client login's linked client record. Permission: `my_portal.view`."
               },
               "response": []
             }
@@ -1945,7 +1969,7 @@
                   "raw": "{{baseUrl}}/portal/staff-requests",
                   "query": []
                 },
-                "description": "**PLANNED** — Matches mobile staff-request form.\\nsite_type: Construction | Corporate | Hotels | Hospitals | Event | Other\\nstaff_category: Static Guard | K9 Unit/Dog Handler | Housekeeping | Cleaners | Porters | Frontdesk/Receptionist | Mobile Patrol | Other\\npriority: urgent | normal\\nPermission: `staff_req.write`",
+                "description": "**PLANNED** \u2014 Matches mobile staff-request form.\\nsite_type: Construction | Corporate | Hotels | Hospitals | Event | Other\\nstaff_category: Static Guard | K9 Unit/Dog Handler | Housekeeping | Cleaners | Porters | Frontdesk/Receptionist | Mobile Patrol | Other\\npriority: urgent | normal\\nPermission: `staff_req.write`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"staff_count\": 3,\n  \"site_type\": \"Construction\",\n  \"staff_category\": \"Static Guard\",\n  \"shift_type\": \"adhoc\",\n  \"days\": [\n    \"2026-07-29\",\n    \"2026-07-30\"\n  ],\n  \"shift_start\": \"08:00\",\n  \"shift_end\": \"18:00\",\n  \"location\": \"Canary Wharf site entrance\",\n  \"postcode\": \"E14 5AB\",\n  \"site_id\": 1,\n  \"notes\": \"High-vis required\",\n  \"priority\": \"urgent\"\n}",
@@ -2025,7 +2049,7 @@
                   "raw": "{{baseUrl}}/staff-requests/{{request_id}}/stand-down",
                   "query": []
                 },
-                "description": "**PLANNED** — Cancel before approval only.\\nPermission: `staff_req.standdown`",
+                "description": "**PLANNED** \u2014 Cancel before approval only.\\nPermission: `staff_req.standdown`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"reason\": \"No longer required\"\n}",
@@ -2316,7 +2340,7 @@
                   "raw": "{{baseUrl}}/portal/invoices/{{invoice_id}}/queries",
                   "query": []
                 },
-                "description": "**PLANNED** — Permission: `portal.invoice.query`",
+                "description": "**PLANNED** \u2014 Permission: `portal.invoice.query`",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"comment\": \"Please clarify overtime line for 28 Jul\"\n}",
@@ -2379,7 +2403,7 @@
                   "raw": "{{baseUrl}}/assignments/{{assignment_id}}/overtime",
                   "query": []
                 },
-                "description": "Permission: `assign.write`",
+                "description": "Permission: `assign.write`\n\n**Note:** Client portal logins are refused by `assert_not_client_portal` on shift adjustments. Staff logins only.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"new_end\": \"00:00\",\n  \"reason\": \"Client OT request\"\n}",
@@ -2414,7 +2438,7 @@
                   "raw": "{{baseUrl}}/assignments/{{assignment_id}}/early-finish",
                   "query": []
                 },
-                "description": "Permission: `assign.write`",
+                "description": "Permission: `assign.write`\n\n**Note:** Client portal logins are refused by `assert_not_client_portal` on shift adjustments. Staff logins only.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"actual_end\": \"19:00\",\n  \"reason\": \"Client released staff\"\n}",
@@ -2701,7 +2725,7 @@
               "raw": "{{baseUrl}}/roles",
               "query": []
             },
-            "description": "Admin — manage role permissions."
+            "description": "Admin \u2014 manage role permissions."
           },
           "response": []
         },
@@ -2720,7 +2744,7 @@
               "raw": "{{baseUrl}}/users",
               "query": []
             },
-            "description": "Admin — assign staff/client roles."
+            "description": "Admin \u2014 assign staff/client roles."
           },
           "response": []
         },
@@ -2842,7 +2866,7 @@
                 }
               ]
             },
-            "description": "**PLANNED** — verify stored GPS clock events."
+            "description": "**PLANNED** \u2014 verify stored GPS clock events."
           },
           "response": []
         },
@@ -3257,7 +3281,7 @@
         },
         {
           "name": "Lone Worker Monitoring *(live)*",
-          "description": "Controller / supervisor side. Internal roles only — portal logins are refused.",
+          "description": "Controller / supervisor side. Internal roles only \u2014 portal logins are refused.",
           "item": [
             {
               "name": "Live board (active sessions)",

@@ -2,6 +2,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -30,6 +31,15 @@ def portal_staff_profile(
 ):
     """The authenticated staff member's own employee record for the mobile profile screen."""
     return portal_service.portal_staff_profile(db, current_user)
+
+
+@router.get("/me/photo")
+def portal_staff_photo(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    path = portal_service.portal_staff_photo_path(db, current_user)
+    return FileResponse(path)
 
 
 @router.get("/me/client-profile", response_model=ClientResponse)

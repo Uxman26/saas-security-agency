@@ -190,6 +190,7 @@ def get_all_attendance(
     site_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    limit: Optional[int] = None,
 ) -> List[AttendanceResponse]:
     company = get_company_by_user_id(db, user_id)
     q = (
@@ -209,7 +210,12 @@ def get_all_attendance(
         q = q.filter(Assignment.date >= start_date)
     if end_date:
         q = q.filter(Assignment.date <= end_date)
-    rows = q.order_by(Attendance.updated_at.desc(), Attendance.created_at.desc()).all()
+    q = q.order_by(Attendance.updated_at.desc(), Attendance.created_at.desc())
+    # Optional cap for mobile pulls; omitted keeps the previous unbounded behaviour.
+    if limit is not None:
+        lim = max(1, min(int(limit), 1000))
+        q = q.limit(lim)
+    rows = q.all()
     return _enrich_attendance_rows(db, rows)
 
 

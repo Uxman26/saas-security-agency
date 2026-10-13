@@ -26,9 +26,13 @@ from app.incident_catalog import (
     normalize_category,
 )
 from app.services.portal_access import (
+    assert_site_visible,
+    get_linked_guard,
     is_client_portal_user,
+    is_portal_role,
     is_staff_portal_user,
     pinned_site_ids,
+    visible_assignment_or_404,
 )
 from app.services import audit_service
 from app.storage_paths import resolve_storage_path
@@ -45,6 +49,53 @@ def _normalize_status(raw: Optional[str]) -> Optional[str]:
     if s == "submit" or s == "submitted":
         s = "reported"
     return s if s in STATUSES else None
+
+
+def _apply_client_portal_scope(db: Session, user: User, q):
+    """Narrow incidents for client portal logins, including site-only (no client_id) pins."""
+    if not is_client_portal_user(user):
+        return q
+    if user.client_id:
+        q = q.filter(Incident.client_id == user.client_id)
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None:
+            q = q.filter(Incident.site_id.in_(pinned))
+        return q
+    pinned = pinned_site_ids(db, user)
+    if pinned is not None:
+        return q.filter(Incident.site_id.in_(pinned or {0}))
+    return q.filter(Incident.id < 0)
+
+
+def _apply_staff_portal_scope(db: Session, user: User, q):
+    if not is_staff_portal_user(user):
+        return q
+    linked = get_linked_guard(db, user)
+    if linked:
+        return q.filter(
+            (Incident.reported_by_user_id == user.id) | (Incident.guard_id == linked.id)
+        )
+    return q.filter(Incident.reported_by_user_id == user.id)
+
+
+def _assert_portal_can_access_incident(db: Session, user: User, inc: Incident) -> None:
+    if is_client_portal_user(user):
+        if user.client_id:
+            if inc.client_id != user.client_id:
+                raise HTTPException(status_code=404, detail="Incident not found")
+            pinned = pinned_site_ids(db, user)
+            if pinned is not None and inc.site_id not in pinned:
+                raise HTTPException(status_code=404, detail="Incident not found")
+            return
+        pinned = pinned_site_ids(db, user)
+        if pinned is None or inc.site_id not in pinned:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        return
+    if is_staff_portal_user(user):
+        linked = get_linked_guard(db, user)
+        linked_id = linked.id if linked else None
+        if inc.reported_by_user_id != user.id and (not linked_id or inc.guard_id != linked_id):
+            raise HTTPException(status_code=404, detail="Incident not found")
 
 
 def _att_out(a: IncidentAttachment) -> IncidentAttachmentResponse:
@@ -125,28 +176,30 @@ def create_incident(
         site = db.query(Site).filter(Site.id == data.site_id, Site.company_id == company.id).first()
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
-        if is_client_portal_user(user) and user.client_id and site.client_id != user.client_id:
-            raise HTTPException(status_code=403, detail="Site not assigned to your client")
-        if is_client_portal_user(user):
-            pinned = pinned_site_ids(db, user)
-            if pinned is not None and site.id not in pinned:
-                raise HTTPException(status_code=403, detail="Site not assigned to your login")
+        if is_portal_role(user):
+            assert_site_visible(db, user, site.id)
         if client_id is None:
             client_id = site.client_id
     guard_id = data.guard_id
-    if is_staff_portal_user(user) and user.guard_id:
-        guard_id = user.guard_id
+    if is_staff_portal_user(user):
+        linked = get_linked_guard(db, user)
+        if not linked:
+            raise HTTPException(status_code=400, detail="Staff account is not linked to a staff profile")
+        guard_id = linked.id
     assert_owned_by_company(db, Guard, guard_id, company.id, field_name="guard_id")
     assert_owned_by_company(db, Client, client_id, company.id, field_name="client_id")
     if data.assignment_id is not None:
-        owns_assignment = (
-            db.query(Assignment.id)
-            .join(Guard, Assignment.guard_id == Guard.id)
-            .filter(Assignment.id == data.assignment_id, Guard.company_id == company.id)
-            .first()
-        )
-        if not owns_assignment:
-            raise HTTPException(status_code=422, detail="Invalid assignment_id")
+        if is_portal_role(user):
+            visible_assignment_or_404(db, user, data.assignment_id, company.id)
+        else:
+            owns_assignment = (
+                db.query(Assignment.id)
+                .join(Guard, Assignment.guard_id == Guard.id)
+                .filter(Assignment.id == data.assignment_id, Guard.company_id == company.id)
+                .first()
+            )
+            if not owns_assignment:
+                raise HTTPException(status_code=422, detail="Invalid assignment_id")
     occurred = data.occurred_at or datetime.now(timezone.utc)
     inc = Incident(
         company_id=company.id,
@@ -201,18 +254,8 @@ def list_incidents(
         q = q.filter(Incident.status == wanted)
     if site_id:
         q = q.filter(Incident.site_id == site_id)
-    if is_client_portal_user(user) and user.client_id:
-        q = q.filter(Incident.client_id == user.client_id)
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None:
-            q = q.filter(Incident.site_id.in_(pinned))
-    if is_staff_portal_user(user):
-        if user.guard_id:
-            q = q.filter(
-                (Incident.reported_by_user_id == user.id) | (Incident.guard_id == user.guard_id)
-            )
-        else:
-            q = q.filter(Incident.reported_by_user_id == user.id)
+    q = _apply_client_portal_scope(db, user, q)
+    q = _apply_staff_portal_scope(db, user, q)
     if start_date:
         q = q.filter(Incident.occurred_at >= datetime.combine(start_date, time.min))
     if end_date:
@@ -236,14 +279,7 @@ def get_incident(db: Session, user: User, incident_id: int) -> IncidentResponse:
     )
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
-    if is_client_portal_user(user) and user.client_id and inc.client_id != user.client_id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    if is_client_portal_user(user):
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None and inc.site_id not in pinned:
-            raise HTTPException(status_code=403, detail="Access denied")
-    if is_staff_portal_user(user) and inc.reported_by_user_id != user.id and inc.guard_id != user.guard_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    _assert_portal_can_access_incident(db, user, inc)
     return _out(inc)
 
 
@@ -252,9 +288,10 @@ def update_incident(db: Session, user: User, incident_id: int, data: IncidentUpd
     inc = db.query(Incident).filter(Incident.id == incident_id, Incident.company_id == company.id).first()
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
+    _assert_portal_can_access_incident(db, user, inc)
     if is_client_portal_user(user) or is_staff_portal_user(user):
         if is_staff_portal_user(user) and inc.reported_by_user_id != user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=404, detail="Incident not found")
         if data.status is not None:
             raise HTTPException(status_code=403, detail="Insufficient permissions to change status")
     payload = data.model_dump(exclude_unset=True)
@@ -305,19 +342,8 @@ def matrix_report(
     )
     if site_id:
         q = q.filter(Incident.site_id == site_id)
-    # Same portal narrowing the list uses, so a client's copy only shows their sites.
-    if is_client_portal_user(user) and user.client_id:
-        q = q.filter(Incident.client_id == user.client_id)
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None:
-            q = q.filter(Incident.site_id.in_(pinned))
-    if is_staff_portal_user(user):
-        if user.guard_id:
-            q = q.filter(
-                (Incident.reported_by_user_id == user.id) | (Incident.guard_id == user.guard_id)
-            )
-        else:
-            q = q.filter(Incident.reported_by_user_id == user.id)
+    q = _apply_client_portal_scope(db, user, q)
+    q = _apply_staff_portal_scope(db, user, q)
     if start_date:
         q = q.filter(Incident.occurred_at >= datetime.combine(start_date, time.min))
     if end_date:
@@ -393,11 +419,8 @@ def summary_report(
         .filter(Incident.company_id == company.id)
         .group_by(Incident.status, Incident.site_id)
     )
-    if is_client_portal_user(user) and user.client_id:
-        q = q.filter(Incident.client_id == user.client_id)
-        pinned = pinned_site_ids(db, user)
-        if pinned is not None:
-            q = q.filter(Incident.site_id.in_(pinned))
+    q = _apply_client_portal_scope(db, user, q)
+    q = _apply_staff_portal_scope(db, user, q)
     if start_date:
         q = q.filter(Incident.occurred_at >= datetime.combine(start_date, time.min))
     if end_date:

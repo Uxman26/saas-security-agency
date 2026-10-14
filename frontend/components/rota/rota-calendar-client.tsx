@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftTypeOption } from '@/lib/rota-shifts-types';
@@ -204,13 +204,13 @@ function EmployeePublishCell({
   onPublish: () => void;
   onUnpublish: () => void;
 }) {
-  const btn = 'w-full rounded px-1.5 py-1 text-xs font-semibold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+  const btn = 'w-full rounded px-1.5 py-1 text-[10px] font-semibold border transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
   return (
     <div className="flex flex-col items-stretch gap-1">
       {/* Brand orange + check reads as "done" at a glance; draft stays deliberately quiet. */}
       <span
         className={cn(
-          'flex items-center justify-center gap-0.5 rounded-full px-1.5 py-0.5 text-center text-xs font-bold leading-tight ring-1',
+          'flex items-center justify-center gap-0.5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-bold leading-tight ring-1',
           busy
             ? 'bg-muted text-muted-foreground ring-transparent'
             : published
@@ -2358,7 +2358,7 @@ export function RotaCalendarClient() {
   }
 
   return (
-    <div className="flex min-h-0 w-full max-w-none flex-1 flex-col gap-3 overflow-hidden px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 lg:px-5 lg:py-5 xl:px-6">
+    <div className="rota-density flex min-h-0 w-full max-w-none flex-1 flex-col gap-3 overflow-hidden px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 lg:px-5 lg:py-5 xl:px-6">
       <div className="flex shrink-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1">
           <Button variant="ghost" size="sm" className="-ml-2 h-8" type="button" onClick={() => router.push('/rota')}>
@@ -2684,7 +2684,7 @@ export function RotaCalendarClient() {
             <>
               {/* Totals are a property of the rota, not of the filter, so they keep
                   counting every shift — say so rather than let the numbers look wrong. */}
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 {rows.length} of {state.employees.length} staff · totals cover the whole rota
               </span>
               <Button size="sm" variant="ghost" type="button" onClick={clearFilters} className="h-8 text-xs">
@@ -2801,17 +2801,18 @@ export function RotaCalendarClient() {
                   >
                     ⇅ Employee custom order
                   </button>
-                  <p className="text-xs text-muted-foreground mt-1">Publish each staff in the Status column</p>
-                  <p className="text-xs text-muted-foreground">Or drag the ⋮⋮ handle on a row</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Publish each staff in the Status column</p>
+                  <p className="text-[10px] text-muted-foreground">Or drag the ⋮⋮ handle on a row</p>
                 </th>
                 {tableDays.map((dk, dayIdx) => {
                   const mark = dayEditMark(dayIdx);
+                  const dayParts = fmtRotaDayParts(dk);
                   return (
                   <th
                     key={dk}
                     data-rota-day-idx={dayIdx}
                     className={cn(
-                      'sticky top-0 z-30 p-1.5 text-center text-sm font-extrabold border-l border-b whitespace-nowrap overflow-hidden text-ellipsis shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
+                      'sticky top-0 z-30 p-1.5 text-center text-[13px] font-extrabold border-l border-b overflow-hidden shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1)]',
                       mark === 'adding' && 'bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100',
                       mark === 'removing' && 'bg-red-100 text-red-900 line-through dark:bg-red-950 dark:text-red-100',
                       !mark && 'rota-day-header'
@@ -2822,13 +2823,16 @@ export function RotaCalendarClient() {
                         ? 'Will be added'
                         : mark === 'removing'
                           ? 'Will be removed'
-                          : undefined
+                          : `${dayParts.weekday} ${dayParts.date}`
                     }
                   >
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span>{fmtShortDate(dk)}</span>
-                      {mark === 'adding' ? <span className="text-xs font-semibold no-underline tracking-wide">ADD</span> : null}
-                      {mark === 'removing' ? <span className="text-xs font-semibold no-underline tracking-wide">REMOVE</span> : null}
+                    <div className="flex flex-col items-center gap-0.5 leading-tight">
+                      <span className="block whitespace-nowrap">{dayParts.weekday}</span>
+                      <span className="block whitespace-nowrap text-[11px] font-bold tabular-nums tracking-tight">
+                        {dayParts.date}
+                      </span>
+                      {mark === 'adding' ? <span className="text-[9px] font-semibold no-underline tracking-wide">ADD</span> : null}
+                      {mark === 'removing' ? <span className="text-[9px] font-semibold no-underline tracking-wide">REMOVE</span> : null}
                       {!mark && dayHasConflict.has(dk) ? (
                         <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400" aria-label="Shift conflicts on this day" />
                       ) : null}
@@ -2837,31 +2841,31 @@ export function RotaCalendarClient() {
                   );
                 })}
                 <th
-                  className="rota-sticky-hours sticky top-0 z-[60] p-1.5 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                  className="rota-sticky-hours sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
                   style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   <div className="font-semibold leading-tight">Total hours</div>
                   {/* No toggle: an unpaid break comes off the shift, it never adds to it. */}
-                  <div className="mt-1 font-normal text-xs leading-tight text-muted-foreground">
+                  <div className="mt-1 font-normal text-[9px] leading-tight text-muted-foreground">
                     Breaks deducted
                   </div>
                 </th>
                 {showPayable ? (
                   <th
-                    className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
                     style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                   >
                     <div className="font-semibold leading-tight">Payable</div>
                   </th>
                 ) : null}
                 <th
-                  className="rota-sticky-publish sticky top-0 right-0 z-[60] p-1.5 text-center text-xs border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                  className="rota-sticky-publish sticky top-0 right-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
                   style={{ ...ROTA_STICKY_PUBLISH_BG }}
                 >
                   <div className="font-semibold leading-tight">Status</div>
                   <p
                     className={cn(
-                      'mt-1 font-semibold text-xs leading-tight tabular-nums',
+                      'mt-1 font-semibold text-[9px] leading-tight tabular-nums',
                       publishedRowCount > 0 && publishedRowCount === rows.length
                         ? 'text-emerald-700 dark:text-emerald-400'
                         : 'text-muted-foreground'
@@ -2938,11 +2942,11 @@ export function RotaCalendarClient() {
                           )}
                           onClick={(e) => toggleEmpMenu(e, emp.id)}
                         >
-                          <EmployeeAvatar emp={emp} className="size-9 text-xs shrink-0" />
+                          <EmployeeAvatar emp={emp} className="size-9 text-[11px] shrink-0" />
                           <span className="min-w-0 flex-1">
                             {/* Block (not flex) so a long name wraps across lines and the
                                 warning icon flows inline after it rather than squashing it. */}
-                            <span className="text-sm font-bold block break-words whitespace-normal leading-snug">
+                            <span className="text-[13px] font-bold block break-words whitespace-normal leading-snug">
                               {emp.name}
                               {empHasConflict(emp.id) || emp.rotaPending ? (
                                 <AlertTriangle
@@ -2951,9 +2955,9 @@ export function RotaCalendarClient() {
                                 />
                               ) : null}
                             </span>
-                            <span className="text-xs text-muted-foreground block break-words leading-tight">{emp.role}</span>
+                            <span className="text-[11px] text-muted-foreground block break-words leading-tight">{emp.role}</span>
                             {emp.rotaPending ? (
-                              <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Pending</span>
+                              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Pending</span>
                             ) : null}
                           </span>
                           <MoreHorizontal className="size-3.5 shrink-0 text-muted-foreground mt-0.5" />
@@ -3034,7 +3038,7 @@ export function RotaCalendarClient() {
                                 onDragStart={mark || !canEditRota ? undefined : (e) => onShiftDragStart(e, emp.id, dk, idx)}
                                 onDragEnd={mark || !canEditRota ? undefined : onDragEnd}
                                 className={cn(
-                                  'w-full max-w-full min-w-0 overflow-hidden rounded border border-border bg-card px-1 py-1 text-left text-xs leading-tight shadow-sm relative',
+                                  'w-full max-w-full min-w-0 overflow-hidden rounded border border-border bg-card px-1 py-1 text-left text-[10px] leading-tight shadow-sm relative',
                                   mark ? 'pointer-events-none' : 'hover:bg-muted',
                                   !mark && canEditRota && 'cursor-grab active:cursor-grabbing',
                                   !mark && !canEditRota && 'cursor-default',
@@ -3081,12 +3085,12 @@ export function RotaCalendarClient() {
                                 ) : null}
                                 <ShiftRotaSections shift={sh} attendance={att} compact />
                                 {conflicts.length === 0 && attMissing ? (
-                                  <div className="mt-0.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                                  <div className="mt-0.5 text-[8px] font-semibold text-rose-700 dark:text-rose-300">
                                     Attendance not marked
                                   </div>
                                 ) : null}
                                 {conflicts.length > 0 ? (
-                                  <div className="mt-0.5 flex items-center gap-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                                  <div className="mt-0.5 flex items-center gap-0.5 text-[8px] font-semibold text-amber-700 dark:text-amber-300">
                                     <span>
                                       {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'}
                                     </span>
@@ -3097,9 +3101,9 @@ export function RotaCalendarClient() {
                             );
                           })}
                           {mark === 'removing' ? (
-                            <span className="text-xs text-center text-red-700 dark:text-red-300 py-2">Removing</span>
+                            <span className="text-[9px] text-center text-red-700 dark:text-red-300 py-2">Removing</span>
                           ) : mark === 'adding' ? (
-                            <span className="text-xs text-center text-emerald-700 dark:text-emerald-300 py-2">New day</span>
+                            <span className="text-[9px] text-center text-emerald-700 dark:text-emerald-300 py-2">New day</span>
                           ) : canCreateShift ? (
                           <Button
                             type="button"
@@ -3117,14 +3121,14 @@ export function RotaCalendarClient() {
                     );
                   })}
                   <td
-                    className="rota-sticky-hours sticky z-50 text-center align-top p-1.5 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    className="rota-sticky-hours sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
                     style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                   >
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
                   {showPayable ? (
                     <td
-                      className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-xs tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                      className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
                       style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                     >
                       {formatMoney(empTotalPayable(emp.id))}
@@ -3188,7 +3192,7 @@ export function RotaCalendarClient() {
                   </td>
                 ) : null}
                 <td
-                  className="rota-sticky-publish sticky right-0 bottom-0 z-[55] text-center p-1.5 border-l border-t text-xs font-normal text-muted-foreground shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                  className="rota-sticky-publish sticky right-0 bottom-0 z-[55] text-center p-1.5 border-l border-t text-[10px] font-normal text-muted-foreground shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
                   style={{ ...ROTA_STICKY_PUBLISH_BG }}
                 >
                   {publishedRowCount}/{rows.length} published
@@ -3209,6 +3213,7 @@ export function RotaCalendarClient() {
             {state.days.map((dk, dayIdx) => {
               const tone = TIMELINE_DAY_TONES[dayIdx % TIMELINE_DAY_TONES.length];
               const isToday = dk === todayKey;
+              const dayParts = fmtRotaDayParts(dk);
               // `rows`, not state.employees: the toolbar filters have to mean the same
               // thing in this view as they do in the table.
               const dayShifts = rows
@@ -3242,15 +3247,20 @@ export function RotaCalendarClient() {
                   onDrop={(e) => onDropDay(e, dk)}
                 >
                   <div className={cn('flex items-center justify-between px-3 py-2 border-b', tone.header)}>
-                    <span className="font-medium text-sm flex items-center gap-2">
+                    <span className="font-medium text-sm flex items-center gap-2 min-w-0">
                       <span
                         className="size-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: tone.accent }}
                         aria-hidden
                       />
-                      {fmtShortDate(dk)}
+                      <span className="flex min-w-0 flex-col leading-tight">
+                        <span className="truncate">{dayParts.weekday}</span>
+                        <span className="truncate text-xs font-semibold tabular-nums text-muted-foreground">
+                          {dayParts.date}
+                        </span>
+                      </span>
                       {isToday ? (
-                        <span className="text-xs font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-primary text-primary-foreground">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 bg-primary text-primary-foreground">
                           Today
                         </span>
                       ) : null}
@@ -3280,7 +3290,7 @@ export function RotaCalendarClient() {
                             className="absolute top-0 bottom-0 border-l border-border/50"
                             style={{ left: (h / 24) * TIMELINE_WIDTH_PX }}
                           >
-                            <span className="absolute top-0 left-1 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                            <span className="absolute top-0 left-1 text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
                               {String(h).padStart(2, '0')}:00
                             </span>
                           </div>
@@ -3291,7 +3301,7 @@ export function RotaCalendarClient() {
                             style={{ left: nowLeftPx }}
                             title="Current time"
                           >
-                            <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 rounded bg-primary px-1 text-xs font-semibold text-primary-foreground whitespace-nowrap">
+                            <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 rounded bg-primary px-1 text-[9px] font-semibold text-primary-foreground whitespace-nowrap">
                               Now
                             </span>
                           </div>
@@ -3311,7 +3321,7 @@ export function RotaCalendarClient() {
                                   draggable
                                   onDragStart={(e) => onShiftDragStart(e, emp.id, dk, idx)}
                                   onDragEnd={onDragEnd}
-                                  className="absolute top-0 h-full rounded-md border bg-card/95 text-left px-2 py-1 text-xs hover:bg-muted/50 cursor-grab active:cursor-grabbing overflow-hidden shadow-sm"
+                                  className="absolute top-0 h-full rounded-md border bg-card/95 text-left px-2 py-1 text-[10px] hover:bg-muted/50 cursor-grab active:cursor-grabbing overflow-hidden shadow-sm"
                                   style={{
                                     left,
                                     width,
@@ -3395,7 +3405,7 @@ export function RotaCalendarClient() {
           if (!v) setDescCtx(null);
         }}
       >
-        <DialogContent showCloseButton className="sm:max-w-sm">
+        <DialogContent showCloseButton className="rota-density sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Description</DialogTitle>
             <DialogDescription>
@@ -3465,7 +3475,7 @@ export function RotaCalendarClient() {
           }
         }}
       >
-        <DialogContent showCloseButton className="sm:max-w-md">
+        <DialogContent showCloseButton className="rota-density sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Copy shift</DialogTitle>
           </DialogHeader>
@@ -3520,7 +3530,7 @@ export function RotaCalendarClient() {
             {copyToEmployeeIds.size > 0 ? (
               <button
                 type="button"
-                className="text-xs text-muted-foreground hover:text-foreground underline"
+                className="text-[11px] text-muted-foreground hover:text-foreground underline"
                 onClick={() => setCopyToEmployeeIds(new Set())}
               >
                 Clear {copyToEmployeeIds.size}
@@ -3580,17 +3590,17 @@ export function RotaCalendarClient() {
                       tabIndex={-1}
                       className="size-3.5 shrink-0 rounded border-input pointer-events-none"
                     />
-                    <EmployeeAvatar emp={e} className="size-7 text-xs shrink-0" />
+                    <EmployeeAvatar emp={e} className="size-7 text-[10px] shrink-0" />
                     <span className="min-w-0 flex-1">
                       <span className="truncate block">{e.name}</span>
-                      {e.role ? <span className="truncate block text-xs text-muted-foreground">{e.role}</span> : null}
+                      {e.role ? <span className="truncate block text-[10px] text-muted-foreground">{e.role}</span> : null}
                     </span>
                   </button>
                 );
               })
             )}
           </div>
-          <p className="text-xs text-muted-foreground">{copySummary}</p>
+          <p className="text-[11px] text-muted-foreground">{copySummary}</p>
           <DialogFooter>
             <Button
               type="button"
@@ -3610,7 +3620,7 @@ export function RotaCalendarClient() {
       </Dialog>
 
       <Dialog open={reorderOpen} onOpenChange={setReorderOpen}>
-        <DialogContent showCloseButton className="sm:max-w-md max-h-[min(90vh,720px)] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogContent showCloseButton className="rota-density sm:max-w-md max-h-[min(90vh,720px)] flex flex-col gap-0 p-0 overflow-hidden">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>Employee custom order</DialogTitle>
             <DialogDescription>
@@ -3665,13 +3675,13 @@ export function RotaCalendarClient() {
                   )}
                 >
                   <GripVertical className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="size-8 rounded-full flex items-center justify-center text-xs text-white font-semibold shrink-0" style={{ backgroundColor: emp.avatarColor }}>
+                  <span className="size-8 rounded-full flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: emp.avatarColor }}>
                     {initials(emp.name)}
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="block truncate font-medium">{emp.name}</span>
                     {emp.role ? (
-                      <span className="block truncate text-xs text-muted-foreground">{emp.role}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{emp.role}</span>
                     ) : null}
                   </span>
                   <div className="flex gap-1 shrink-0">
@@ -3737,7 +3747,7 @@ export function RotaCalendarClient() {
           showCloseButton
           overlayClassName="pointer-events-none bg-transparent"
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="sm:max-w-md"
+          className="rota-density sm:max-w-md"
           style={
             daysPanelPos
               ? { top: daysPanelPos.top, left: daysPanelPos.left, right: 'auto', bottom: 'auto', transform: 'none' }
@@ -3842,7 +3852,7 @@ export function RotaCalendarClient() {
           }
         }}
       >
-        <DialogContent showCloseButton className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent showCloseButton className="rota-density sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Choose staff to add in rota</DialogTitle>
           </DialogHeader>
@@ -3866,7 +3876,7 @@ export function RotaCalendarClient() {
                 )}
               >
                 <span className="font-medium leading-tight block">{p.name}</span>
-                <span className="text-xs text-muted-foreground">{p.role}</span>
+                <span className="text-[11px] text-muted-foreground">{p.role}</span>
               </button>
             ))}
           </div>
@@ -3908,7 +3918,7 @@ export function RotaCalendarClient() {
           if (!o) addStaffForm.reset(guardFormDefaults);
         }}
       >
-        <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0 z-[110]">
+        <DialogContent className="rota-density sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0 z-[110]">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>Add New Staff</DialogTitle>
             <DialogDescription className="sr-only">
@@ -3956,7 +3966,7 @@ export function RotaCalendarClient() {
           if (!v) setViewShiftsEmpId(null);
         }}
       >
-        <DialogContent showCloseButton className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent showCloseButton className="rota-density sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit/view employee shifts</DialogTitle>
           </DialogHeader>
@@ -3993,14 +4003,14 @@ export function RotaCalendarClient() {
                       {sh.site ? ` · ${sh.site}` : !sh.notes ? ' · One-off' : ''}
                       {sh.label ? ` · ${sh.label}` : ''}
                     </div>
-                    {sh.notes ? <div className="text-xs text-muted-foreground italic line-clamp-2 break-all">{sh.notes}</div> : null}
-                    <div className="text-xs text-muted-foreground">
+                    {sh.notes ? <div className="text-[11px] text-muted-foreground italic line-clamp-2 break-all">{sh.notes}</div> : null}
+                    <div className="text-[11px] text-muted-foreground">
                       Break {(sh.breakH || 0) > 0 || (sh.breakM || 0) > 0 ? `${sh.breakH}h ${sh.breakM}m` : 'none'} ·{' '}
                       {formatHoursDecimal(calcHours(sh, state.inclBreaks))}
                       {sh.shiftRate != null ? ` · £${Number(sh.shiftRate).toFixed(2)}/hr` : ''}
                     </div>
                     {conflicts.length > 0 ? (
-                      <div className="mt-1 text-xs font-medium text-amber-800 dark:text-amber-200">
+                      <div className="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">
                         Conflicts with: {conflicts.map((c) => c.label).join('; ')}
                       </div>
                     ) : null}
@@ -4091,7 +4101,7 @@ export function RotaCalendarClient() {
       />
 
       <Dialog open={xferOpen} onOpenChange={setXferOpen}>
-        <DialogContent showCloseButton className="sm:max-w-sm">
+        <DialogContent showCloseButton className="rota-density sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Copy shifts to another employee</DialogTitle>
           </DialogHeader>
@@ -4111,7 +4121,7 @@ export function RotaCalendarClient() {
                         setXferFrom(null);
                       }}
                     >
-                      <span className="size-8 rounded-full mr-2 flex items-center justify-center text-xs text-white font-semibold shrink-0" style={{ backgroundColor: e.avatarColor }}>
+                      <span className="size-8 rounded-full mr-2 flex items-center justify-center text-[10px] text-white font-semibold shrink-0" style={{ backgroundColor: e.avatarColor }}>
                         {initials(e.name)}
                       </span>
                       <span className="text-left">
@@ -4137,7 +4147,7 @@ export function RotaCalendarClient() {
           }
         }}
       >
-        <DialogContent showCloseButton className="sm:max-w-md">
+        <DialogContent showCloseButton className="rota-density sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Move shift to another employee</DialogTitle>
           </DialogHeader>
@@ -4198,10 +4208,10 @@ export function RotaCalendarClient() {
                         : 'hover:bg-muted'
                     )}
                   >
-                    <EmployeeAvatar emp={e} className="size-8 text-xs shrink-0" />
+                    <EmployeeAvatar emp={e} className="size-8 text-[10px] shrink-0" />
                     <span className="min-w-0 flex-1">
                       <span className="font-medium truncate block">{e.name}</span>
-                      {e.role ? <span className="truncate block text-xs text-muted-foreground">{e.role}</span> : null}
+                      {e.role ? <span className="truncate block text-[10px] text-muted-foreground">{e.role}</span> : null}
                     </span>
                   </button>
                 ))
@@ -4228,7 +4238,7 @@ export function RotaCalendarClient() {
       </Dialog>
 
       <Dialog open={attOpen} onOpenChange={setAttOpen}>
-        <DialogContent showCloseButton className="sm:max-w-sm">
+        <DialogContent showCloseButton className="rota-density sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Attendance</DialogTitle>
           </DialogHeader>
@@ -4297,7 +4307,7 @@ export function RotaCalendarClient() {
                           value={attRec.paidHours ?? ''}
                           onChange={(e) => setAttRec({ ...attRec, paidHours: e.target.value })}
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                           This is what payroll pays for this shift &mdash; the rota&rsquo;d times
                           were not worked.
                         </p>
@@ -4315,13 +4325,13 @@ export function RotaCalendarClient() {
                           value={attRec.clientHours ?? ''}
                           onChange={(e) => setAttRec({ ...attRec, clientHours: e.target.value })}
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground">
                           This is what the client invoice bills for this shift.
                         </p>
                       </div>
                     </>
                   ) : (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground">
                       No hours, payment, or client billing are recorded against this shift.
                     </p>
                   )}
@@ -4391,7 +4401,7 @@ export function RotaCalendarClient() {
       </Dialog>
 
       <Dialog open={otOpen} onOpenChange={setOtOpen}>
-        <DialogContent showCloseButton className="sm:max-w-sm">
+        <DialogContent showCloseButton className="rota-density sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Overtime</DialogTitle>
           </DialogHeader>
@@ -4418,7 +4428,7 @@ export function RotaCalendarClient() {
       </Dialog>
 
       <Dialog open={efOpen} onOpenChange={setEfOpen}>
-        <DialogContent showCloseButton className="sm:max-w-sm">
+        <DialogContent showCloseButton className="rota-density sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Finished early</DialogTitle>
           </DialogHeader>
@@ -4683,5 +4693,5 @@ export function RotaCalendarClient() {
 }
 
 function LabelMini({ children }: { children: React.ReactNode }) {
-  return <label className="text-sm font-medium text-muted-foreground">{children}</label>;
+  return <label className="text-xs font-medium text-muted-foreground">{children}</label>;
 }

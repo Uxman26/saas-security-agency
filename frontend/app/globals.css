@@ -444,12 +444,29 @@ select:-webkit-autofill {
   opacity: 0;
 }
 
+/* Rota / shift views keep the denser pre-bump type scale so the grid stays compact
+   while the rest of the app uses the larger system typography. */
+.rota-density {
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
 /* Rota grid column widths. The component reads these through var() for both the
    <col> widths and the table's min-width, so changing them here rescales the whole
    grid and the horizontal scroll extent together. */
 .rota-grid-table {
   --rota-emp-w: 210px;
-  --rota-day-w: 160px;
+  --rota-day-w: 168px;
   --rota-hours-w: 68px;
   --rota-pay-w: 62px;
   --rota-publish-w: 92px;

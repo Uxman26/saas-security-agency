@@ -286,7 +286,7 @@ export function ShiftDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" showCloseButton>
+        <DialogContent className="rota-density sm:max-w-md max-h-[90vh] overflow-y-auto" showCloseButton>
           <DialogHeader>
             <DialogTitle>{edit ? 'Edit shift' : 'Add shift'}</DialogTitle>
           </DialogHeader>
@@ -377,7 +377,7 @@ export function ShiftDialog({
                   }));
                 }}
               />
-              <p className={cn('text-xs', siteNameTooLong ? 'text-destructive' : 'text-muted-foreground')}>
+              <p className={cn('text-[11px]', siteNameTooLong ? 'text-destructive' : 'text-muted-foreground')}>
                 {siteNameTooLong
                   ? tooLongMessage('Site name', TEXT_LIMITS.siteName)
                   : `Required — select a site, use Add site, or type a new name (it will be created automatically). ${charsRemaining(
@@ -407,7 +407,7 @@ export function ShiftDialog({
                     <SelectItem key={o.value} value={o.value}>
                       <span className="flex min-w-0 items-center gap-2">
                         <span
-                          className="rounded px-1.5 py-0.5 text-xs font-bold leading-none border border-border/50"
+                          className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none border border-border/50"
                           style={{ backgroundColor: o.bg, color: o.text }}
                         >
                           {o.label}
@@ -417,7 +417,7 @@ export function ShiftDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 Auto-selected from start/end times — change manually to override.
               </p>
             </div>
@@ -460,7 +460,7 @@ export function ShiftDialog({
                   }));
                 }}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 {perStaffRates
                   ? 'Each staff member gets their own profile rate. Enter a rate to use one rate for everyone.'
                   : 'Auto-filled from Staff → Employment Details when available. You can override it.'}
@@ -494,7 +494,7 @@ export function ShiftDialog({
                 maxLength={500}
                 className="min-h-[72px] resize-y"
               />
-              <p className="text-xs text-muted-foreground tabular-nums">
+              <p className="text-[11px] text-muted-foreground tabular-nums">
                 {shift.notes.length}/500 — appears on the shift tile in the rota
               </p>
             </div>
@@ -516,7 +516,7 @@ export function ShiftDialog({
       </Dialog>
 
       <Dialog open={addSiteOpen} onOpenChange={setAddSiteOpen}>
-        <DialogContent className="sm:max-w-sm" showCloseButton>
+        <DialogContent className="rota-density sm:max-w-sm" showCloseButton>
           <DialogHeader>
             <DialogTitle>Add site</DialogTitle>
           </DialogHeader>
@@ -529,7 +529,7 @@ export function ShiftDialog({
                 onChange={(e) => setNewSiteName(clampText(e.target.value, TEXT_LIMITS.siteName))}
                 placeholder="e.g. Chiswick Hotel"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground">
                 {charsRemaining(newSiteName, TEXT_LIMITS.siteName)} of {TEXT_LIMITS.siteName} characters left.
               </p>
             </div>

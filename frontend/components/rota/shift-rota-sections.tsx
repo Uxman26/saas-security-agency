@@ -39,7 +39,7 @@ export function ShiftTypeBadge({
     <span
       className={cn(
         'shrink-0 rounded font-bold uppercase leading-none border border-border/60',
-        compact ? 'px-1 py-0.5 text-xs' : 'px-1.5 py-1 text-xs tracking-wide',
+        compact ? 'px-1 py-0.5 text-[8px]' : 'px-1.5 py-1 text-[10px] tracking-wide',
         className
       )}
       style={{ backgroundColor: opt.bg, color: opt.text }}
@@ -67,14 +67,14 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
   const hasExtras = showAtt || showOt || showEarly;
 
   const labelCls = compact
-    ? 'text-xs font-semibold leading-tight normal-case'
+    ? 'text-[10px] font-semibold leading-tight normal-case'
     : 'text-xs font-semibold uppercase tracking-wide';
-  const bodyCls = compact ? 'text-xs leading-tight' : 'text-sm leading-snug';
+  const bodyCls = compact ? 'text-[12px] leading-tight' : 'text-sm leading-snug';
   const timeCls = compact
-    ? 'text-sm font-semibold leading-tight tabular-nums'
+    ? 'text-[13px] font-semibold leading-tight tabular-nums'
     : 'text-sm leading-snug font-medium tabular-nums';
   const noteCls = compact
-    ? 'text-xs text-muted-foreground italic line-clamp-2 break-all'
+    ? 'text-[9px] text-muted-foreground italic line-clamp-2 break-all'
     : 'text-xs text-muted-foreground italic break-words';
 
   return (

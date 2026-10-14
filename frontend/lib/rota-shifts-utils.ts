@@ -26,11 +26,25 @@ export function calcHours(s: ShiftRec, inclBreaks = false) {
   return Math.max(0, span - deduct) / 60;
 }
 
+/** Compact single-line label for lists/dialogs (e.g. Tue 13/10/2026). */
 export function fmtShortDate(dk: string) {
   try {
     return format(parseDateKey(dk), 'EEE dd/MM/yyyy');
   } catch {
     return dk;
+  }
+}
+
+/** Two-line rota column heading: full weekday + DD/MM/YYYY. */
+export function fmtRotaDayParts(dk: string): { weekday: string; date: string } {
+  try {
+    const d = parseDateKey(dk);
+    return {
+      weekday: format(d, 'EEEE'),
+      date: format(d, 'dd/MM/yyyy'),
+    };
+  } catch {
+    return { weekday: dk, date: '' };
   }
 }
 

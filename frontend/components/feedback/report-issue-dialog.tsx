@@ -162,7 +162,7 @@ export function ReportIssueDialog({
             </span>
           </label>
           {includeDiag && (
-            <pre className="text-[11px] rounded-md border bg-muted/40 p-2 overflow-x-auto whitespace-pre-wrap">
+            <pre className="text-xs rounded-md border bg-muted/40 p-2 overflow-x-auto whitespace-pre-wrap">
               {JSON.stringify(diagnostic, null, 2)}
             </pre>
           )}

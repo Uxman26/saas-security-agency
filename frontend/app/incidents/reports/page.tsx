@@ -128,16 +128,16 @@ export default function IncidentReportsPage() {
                         {matrix.category_columns.map((c) => (
                           <TableHead key={c.key} className="text-center align-bottom">
                             {/* Vertical headers keep 16 category columns readable, as on the paper sheet. */}
-                            <span className="inline-block whitespace-nowrap text-[11px] font-medium"
+                            <span className="inline-block whitespace-nowrap text-xs font-medium"
                                   style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
                               {c.label}
                             </span>
                           </TableHead>
                         ))}
-                        <TableHead className="text-center text-[11px]">TotalInc</TableHead>
+                        <TableHead className="text-center text-xs">TotalInc</TableHead>
                         {matrix.service_columns.map((c) => (
                           <TableHead key={c.key} className="text-center align-bottom">
-                            <span className="inline-block whitespace-nowrap text-[11px] font-medium"
+                            <span className="inline-block whitespace-nowrap text-xs font-medium"
                                   style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
                               {c.label}
                             </span>

@@ -17,6 +17,7 @@ import { toast } from '@/lib/toast';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { MODULE_LABELS } from '@/lib/plan-company-defaults';
 import { Check, X } from 'lucide-react';
+import { formatDateUK } from '@/lib/date-format';
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
@@ -182,7 +183,7 @@ export default function AdminUsersPage() {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell>{new Date(u.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell>{formatDateUK(u.created_at)}</TableCell>
                           <TableCell>
                             {u.role !== 'super_admin' && can('tenants.write') && (
                               <div className="flex flex-wrap gap-1">

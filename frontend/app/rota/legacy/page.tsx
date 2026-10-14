@@ -469,7 +469,7 @@ export default function RotaPage() {
                             }`}
                           >
                             {d.slice(5)}
-                            {sp ? <span className="block text-[9px] font-normal opacity-90 truncate max-w-[92px]">{sp}</span> : null}
+                            {sp ? <span className="block text-xs font-normal opacity-90 truncate max-w-[92px]">{sp}</span> : null}
                           </TableHead>
                         );
                       })}
@@ -495,7 +495,7 @@ export default function RotaPage() {
                                 {list.map((row) => (
                                   <div
                                     key={row.id}
-                                    className={`relative group text-[10px] sm:text-xs rounded border px-1 py-0.5 leading-tight ${shiftCellClass(row)}`}
+                                    className={`relative group text-xs sm:text-xs rounded border px-1 py-0.5 leading-tight ${shiftCellClass(row)}`}
                                   >
                                     <button type="button" className="text-left w-full" onClick={() => openEdit(row)}>
                                       <div className="font-medium truncate">{siteMap.get(row.site_id) || row.site_name}</div>
@@ -503,7 +503,7 @@ export default function RotaPage() {
                                         {row.shift_start && row.shift_end ? `${row.shift_start}–${row.shift_end}` : '—'}
                                         {' · '}{row.hours}h
                                       </div>
-                                      <div className="opacity-75 text-[9px]">{row.attendance_status}</div>
+                                      <div className="opacity-75 text-xs">{row.attendance_status}</div>
                                     </button>
                                     {canDeleteMod ? (
                                     <button
@@ -521,7 +521,7 @@ export default function RotaPage() {
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="h-6 text-[10px] text-muted-foreground"
+                                  className="h-6 text-xs text-muted-foreground"
                                   onClick={() => openCreate(g.id, d)}
                                 >
                                   +

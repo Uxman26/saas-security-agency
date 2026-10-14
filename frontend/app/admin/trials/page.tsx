@@ -17,6 +17,7 @@ import { api } from '@/lib/api';
 import type { TrialConfig, TrialPeriod } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
+import { formatDateUK } from '@/lib/date-format';
 
 const STATUSES = ['active', 'extended', 'expired', 'converted'] as const;
 const DAY_OPTIONS = [7, 14, 30, 60];
@@ -219,7 +220,7 @@ export default function AdminTrialsPage() {
                           if (!Number.isNaN(n)) setConfig({ ...config, default_days: n });
                         }}
                       />
-                      <p className="text-[11px] text-muted-foreground mt-1">1–365. Quick set:</p>
+                      <p className="text-xs text-muted-foreground mt-1">1–365. Quick set:</p>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {DAY_OPTIONS.map((d) => (
                           <Button
@@ -334,7 +335,7 @@ export default function AdminTrialsPage() {
                         <TableCell className="capitalize">{t.status}</TableCell>
                         <TableCell className="capitalize">{t.plan_tier || '—'}</TableCell>
                         <TableCell>
-                          {t.started_at ? new Date(t.started_at).toLocaleDateString() : '—'}
+                          {t.started_at ? formatDateUK(t.started_at) : '—'}
                         </TableCell>
                         <TableCell>
                           {t.status === 'active' || t.status === 'extended'
@@ -342,7 +343,7 @@ export default function AdminTrialsPage() {
                             : '—'}
                         </TableCell>
                         <TableCell>
-                          {t.ends_at ? new Date(t.ends_at).toLocaleDateString() : '—'}
+                          {t.ends_at ? formatDateUK(t.ends_at) : '—'}
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">

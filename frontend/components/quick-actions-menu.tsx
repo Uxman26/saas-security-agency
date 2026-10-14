@@ -228,7 +228,7 @@ export function QuickActionsMenu() {
         >
           <div className="border-b bg-muted/40 px-3 py-2">
             <p className="text-xs font-semibold">{t('title')}</p>
-            <p className="text-[10px] text-muted-foreground">{t('subtitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('subtitle')}</p>
           </div>
           <ul className="max-h-[min(24rem,60vh)] overflow-y-auto py-1">
             {items.map((a) => {
@@ -248,7 +248,7 @@ export function QuickActionsMenu() {
               );
             })}
           </ul>
-          <div className="border-t px-3 py-1.5 text-[10px] text-muted-foreground">{tc('rbacScoped')}</div>
+          <div className="border-t px-3 py-1.5 text-xs text-muted-foreground">{tc('rbacScoped')}</div>
         </div>
       ) : null}
     </div>

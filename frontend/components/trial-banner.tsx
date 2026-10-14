@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import type { TrialStatus } from '@/lib/types';
+import { formatDateUK } from '@/lib/date-format';
 
 export function TrialBanner() {
   const { user } = useAuth();
@@ -33,8 +34,8 @@ export function TrialBanner() {
 
   const plan = status.plan_tier ? status.plan_tier.replace(/_/g, ' ') : null;
   const cycle = status.billing_cycle;
-  const start = status.trial_starts_on ? new Date(status.trial_starts_on).toLocaleDateString() : null;
-  const ends = status.trial_ends_on ? new Date(status.trial_ends_on).toLocaleDateString() : null;
+  const start = status.trial_starts_on ? formatDateUK(status.trial_starts_on) : null;
+  const ends = status.trial_ends_on ? formatDateUK(status.trial_ends_on) : null;
 
   if (status.trial_active) {
     const days = status.days_remaining ?? 0;

@@ -22,7 +22,7 @@ import { InlineDetailSkeleton } from '@/components/skeletons';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import { canModule } from '@/lib/permissions';
-import { formatDateUK } from '@/lib/date-format';
+import { formatDateUK, formatDateTimeUK } from '@/lib/date-format';
 import { toast } from '@/lib/toast';
 import type { DocumentDetail, DocumentReceipt } from '@/lib/types';
 import { useAuthBlobUrl } from '@/lib/use-auth-blob-url';
@@ -44,9 +44,7 @@ function fileSize(bytes?: number | null) {
 
 function stamp(iso?: string | null) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return `${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })}, ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  return formatDateTimeUK(iso) || '—';
 }
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -402,12 +400,12 @@ export default function DocumentDetailPage() {
                             </span>
                             {doc.requires_acceptance ? (
                               r.accepted_at ? (
-                                <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
                                   <Check className="size-3" />
                                   Accepted {stamp(r.accepted_at)}
                                 </span>
                               ) : (
-                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
                                   Not accepted
                                 </span>
                               )

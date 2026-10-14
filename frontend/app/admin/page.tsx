@@ -31,6 +31,7 @@ import {
   Webhook,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { formatDateUK } from '@/lib/date-format';
 
 function Kpi({
   label,
@@ -174,7 +175,7 @@ export default function AdminHqPage() {
                               {r.company_name}
                             </Link>
                             <span className="text-muted-foreground whitespace-nowrap">
-                              {r.subscription_end ? new Date(r.subscription_end).toLocaleDateString() : '—'} · {r.tier}
+                              {r.subscription_end ? formatDateUK(r.subscription_end) : '—'} · {r.tier}
                             </span>
                           </div>
                         ))

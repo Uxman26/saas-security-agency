@@ -22,7 +22,7 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
 import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
-import { localDateKey } from '@/lib/date-format';
+import { formatDateUK, localDateKey } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
 import {
@@ -478,7 +478,7 @@ export default function InvoicesPage() {
   const formatInvoiceDate = (inv: Invoice) => {
     const raw = inv.created_at ?? inv.period_end;
     if (!raw) return '—';
-    return String(raw).slice(0, 10);
+    return formatDateUK(raw) || '—';
   };
 
   const formatDueLabel = (inv: Invoice) => {

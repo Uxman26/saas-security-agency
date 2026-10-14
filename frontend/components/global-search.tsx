@@ -198,7 +198,7 @@ export function GlobalSearch({ className }: { className?: string }) {
         >
           <Search className="size-4 shrink-0" />
           <span className="flex-1 truncate text-start">Search anything…</span>
-          <kbd className="pointer-events-none hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+          <kbd className="pointer-events-none hidden rounded border bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground sm:inline-block">
             {shortcut}
           </kbd>
         </button>
@@ -261,7 +261,7 @@ export function GlobalSearch({ className }: { className?: string }) {
                 if (!items.length) return null;
                 return (
                   <div key={g.key} className="mb-1">
-                    <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       {g.label}
                     </p>
                     {items.map((item) => {

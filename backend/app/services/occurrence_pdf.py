@@ -133,7 +133,7 @@ def _draw_footer(c: pdfcanvas.Canvas, *, blank: bool, sheet: Optional[Occurrence
 def _draw_summary_strip(c: pdfcanvas.Canvas, y: float, sheet: Optional[OccurrenceSheet], blank: bool) -> float:
     strip_h = 12 * mm
     cells = (
-        ("Date", (sheet.sheet_date.strftime("%d %B %Y") if sheet and not blank else ""), 38 * mm),
+        ("Date", (sheet.sheet_date.strftime("%d/%m/%Y") if sheet and not blank else ""), 38 * mm),
         ("Day", (sheet.sheet_date.strftime("%A") if sheet and not blank else ""), 28 * mm),
         ("Security Officers", (sheet.officer_names if sheet and not blank else "") or "", 78 * mm),
         ("Shift start", (sheet.shift_start if sheet and not blank else "") or "", 28 * mm),

@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { Pill } from '@/components/module-dashboard';
+import { formatDateUK } from '@/lib/date-format';
 
 export default function InvoiceViewPage() {
   const params = useParams();
@@ -221,7 +222,7 @@ export default function InvoiceViewPage() {
                             <span className="font-semibold tabular-nums">{formatMoney(cn.total)}</span>
                           </div>
                           <div className="text-xs text-muted-foreground space-y-0.5">
-                            <p>Date: {String(cn.credit_date).slice(0, 10)}</p>
+                            <p>Date: {formatDateUK(cn.credit_date)}</p>
                             {cn.reason ? <p>Reason: {cn.reason}</p> : null}
                             {cn.site_name ? <p>Site: {cn.site_name}</p> : null}
                             <p>

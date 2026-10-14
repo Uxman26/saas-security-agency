@@ -259,7 +259,7 @@ def _pdf_date(v) -> str:
     if not v:
         return "—"
     if hasattr(v, "strftime"):
-        return v.strftime("%d %b %Y")
+        return v.strftime("%d/%m/%Y")
     return str(v)[:10]
 
 

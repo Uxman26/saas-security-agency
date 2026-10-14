@@ -142,7 +142,7 @@ export function EmergenciesTab({ guardId, canEdit }: { guardId: number; canEdit:
                     </p>
                   </div>
                   {c.is_primary ? (
-                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                       <Star className="size-3" />
                       Primary
                     </span>

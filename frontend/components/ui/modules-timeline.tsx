@@ -122,7 +122,7 @@ function TimelineCard({
               />
             ) : null}
             <span
-              className="absolute end-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+              className="absolute end-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
               style={{ backgroundColor: '#F45100' }}
             >
               {event.category}
@@ -143,7 +143,7 @@ function TimelineCard({
               <Icon className="size-8" />
             </div>
             <span
-              className="absolute end-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+              className="absolute end-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white"
               style={{ backgroundColor: '#11161D' }}
             >
               {event.category}

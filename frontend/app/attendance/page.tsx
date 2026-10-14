@@ -1169,7 +1169,7 @@ export default function AttendancePage() {
                                       {displayStatus(a.status)}
                                     </Pill>
                                     {a.status === 'cancelled_paid' && a.paid_hours != null ? (
-                                      <span className="text-[11px] text-muted-foreground">
+                                      <span className="text-xs text-muted-foreground">
                                         Paid: {Number(a.paid_hours).toFixed(2)}h
                                         {a.client_hours != null
                                           ? ` · Client: ${Number(a.client_hours).toFixed(2)}h`

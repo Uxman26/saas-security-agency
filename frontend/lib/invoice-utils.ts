@@ -1,4 +1,4 @@
-import { localDateKey } from './date-format';
+import { formatDateUK, localDateKey } from './date-format';
 import type { Invoice } from './types';
 
 export function isInvoicePastDue(inv: Invoice): boolean {
@@ -8,5 +8,5 @@ export function isInvoicePastDue(inv: Invoice): boolean {
 
 export function formatDueDate(due?: string | null): string {
   if (!due) return '—';
-  return due.slice(0, 10);
+  return formatDateUK(due) || '—';
 }

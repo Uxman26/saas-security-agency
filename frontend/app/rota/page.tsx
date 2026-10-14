@@ -8,7 +8,7 @@ import { ModuleGuard } from '@/components/module-guard';
 import { InlineTableSkeleton } from '@/components/skeletons';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule, isPortalRole } from '@/lib/permissions';
-import { localDateKey } from '@/lib/date-format';
+import { formatDateUK, formatDateTimeUK, localDateKey } from '@/lib/date-format';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,23 +81,12 @@ function isRunningNow(r: RotaPlanListItem) {
 }
 
 function fmtRange(start: string, end: string) {
-  const s = new Date(`${start}T12:00:00`);
-  const e = new Date(`${end}T12:00:00`);
-  const b = e.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()} – ${b}`;
-  }
-  return `${s.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} – ${b}`;
+  return `${formatDateUK(start)} – ${formatDateUK(end)}`;
 }
 
 function fmtStamp(iso?: string | null) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString(
-    'en-GB',
-    { hour: '2-digit', minute: '2-digit' }
-  )}`;
+  return formatDateTimeUK(iso) || '—';
 }
 
 /** The shape of the rota, read off its length — there is no stored "type". */
@@ -688,7 +677,7 @@ function RotaHubPage() {
                                 {unpublished > 0 ? (
                                   <Link
                                     href={`/rota/calendar?id=${r.id}`}
-                                    className="mt-1 mr-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:underline dark:bg-amber-900/40 dark:text-amber-300"
+                                    className="mt-1 mr-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:underline dark:bg-amber-900/40 dark:text-amber-300"
                                     title={`${unpublished} ${unpublished === 1 ? 'person has' : 'people have'} shifts on this rota that were never published. Their shifts do not reach attendance, payroll or invoicing until they are.`}
                                   >
                                     <Send className="size-3" />
@@ -698,7 +687,7 @@ function RotaHubPage() {
                                 {unmarked > 0 ? (
                                   <Link
                                     href={`/rota/calendar?id=${r.id}`}
-                                    className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-800 hover:underline dark:bg-rose-900/40 dark:text-rose-300"
+                                    className="mt-1 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 hover:underline dark:bg-rose-900/40 dark:text-rose-300"
                                     title={`${unmarked} shift${unmarked === 1 ? '' : 's'} in this rota have been and gone with no attendance marked. They count as unworked until they are marked.`}
                                   >
                                     <Clock className="size-3" />

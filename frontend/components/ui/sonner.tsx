@@ -39,7 +39,7 @@ export function Toaster({ ...props }: ToasterProps) {
         classNames: {
           toast: 'group toast !rounded-lg !shadow-lg',
           title: 'group-[.toast]:text-sm group-[.toast]:font-semibold',
-          description: 'group-[.toast]:text-xs group-[.toast]:opacity-80',
+          description: 'group-[.toast]:text-sm group-[.toast]:opacity-90',
           actionButton:
             'group-[.toast]:!bg-primary group-[.toast]:!text-primary-foreground group-[.toast]:!rounded-md',
           cancelButton:

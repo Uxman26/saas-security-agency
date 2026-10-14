@@ -31,6 +31,7 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import { formatDateUK } from '@/lib/date-format';
 
 const PRIORITIES = [
   { key: 'low', label: 'Low' },
@@ -297,7 +298,7 @@ export default function TasksPage() {
                           <TableCell className="whitespace-nowrap">
                             {t.due_date ? (
                               <span className={cn(t.is_overdue && 'text-destructive font-medium')}>
-                                {t.due_date}{t.is_overdue ? ' · overdue' : ''}
+                                {formatDateUK(t.due_date)}{t.is_overdue ? ' · overdue' : ''}
                               </span>
                             ) : '—'}
                           </TableCell>

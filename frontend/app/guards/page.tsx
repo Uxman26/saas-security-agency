@@ -775,7 +775,7 @@ export default function GuardsPage() {
                           <TableRow key={guard.id}>
                             <TableCell className="font-medium whitespace-nowrap">
                               <Link href={`/guards/${guard.id}`} className="flex items-center gap-2 hover:underline">
-                                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                                   {initialsOf(guard.full_name)}
                                 </span>
                                 {guard.full_name}

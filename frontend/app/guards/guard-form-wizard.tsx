@@ -370,7 +370,7 @@ export function GuardFormWizard({
                   value={watch('phone') || ''}
                   onChange={(v) => setValue('phone', v, { shouldValidate: true })}
                 />
-                <p className="text-[11px] text-muted-foreground">Digits only after country code (e.g. UK +44).</p>
+                <p className="text-xs text-muted-foreground">Digits only after country code (e.g. UK +44).</p>
                 {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
               </div>
               <div className="space-y-1 min-w-0 sm:col-span-2">

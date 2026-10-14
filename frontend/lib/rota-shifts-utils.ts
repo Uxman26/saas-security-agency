@@ -28,7 +28,7 @@ export function calcHours(s: ShiftRec, inclBreaks = false) {
 
 export function fmtShortDate(dk: string) {
   try {
-    return format(parseDateKey(dk), 'EEE d MMM');
+    return format(parseDateKey(dk), 'EEE dd/MM/yyyy');
   } catch {
     return dk;
   }
@@ -36,7 +36,7 @@ export function fmtShortDate(dk: string) {
 
 export function fmtRotaDeleteDate(dk: string) {
   try {
-    return format(parseDateKey(dk), 'do MMM yy');
+    return format(parseDateKey(dk), 'dd/MM/yyyy');
   } catch {
     return dk;
   }

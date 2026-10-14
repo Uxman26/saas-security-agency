@@ -54,7 +54,7 @@ function FeatureLine({ label, included, kind }: { label: string; included: boole
       <span className={cn(!included && 'line-through decoration-muted-foreground/40')}>
         {label}
         {kind ? (
-          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground no-underline">
+          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground no-underline">
             {kind}
           </span>
         ) : null}
@@ -233,7 +233,7 @@ export default function AdminPackagesPage() {
                       <div className="flex-1 space-y-3">
                         {grouped.map(({ group, items }) => (
                           <div key={group}>
-                            <p className="mb-1 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                            <p className="mb-1 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
                               {GROUP_LABELS[group] ?? group}
                             </p>
                             <div className="space-y-1">
@@ -342,7 +342,7 @@ export default function AdminPackagesPage() {
                   </div>
                   {grouped.map(({ group, items }) => (
                     <div key={group} className="rounded-md border p-3">
-                      <p className="mb-2 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
+                      <p className="mb-2 text-xs font-extrabold uppercase tracking-wider text-muted-foreground">
                         {GROUP_LABELS[group] ?? group}
                       </p>
                       <div className="space-y-3">
@@ -357,7 +357,7 @@ export default function AdminPackagesPage() {
                             <span className="min-w-0">
                               <span className="font-medium">
                                 {f.label}
-                                <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                   {f.tenant_module ? 'Module' : 'Feature'}
                                 </span>
                               </span>

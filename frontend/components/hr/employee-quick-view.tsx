@@ -83,22 +83,22 @@ export function EmployeeQuickView({
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {employee.teams.length ? (
                 employee.teams.map((t) => (
-                  <span key={t.id} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+                  <span key={t.id} className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">
                     {t.name}
                   </span>
                 ))
               ) : (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   No team
                 </span>
               )}
               {employee.terminated ? (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
                   Terminated{employee.termination_date ? ` · ${formatDateUK(employee.termination_date)}` : ''}
                 </span>
               ) : null}
               {!employee.registered ? (
-                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-900 dark:bg-sky-900/40 dark:text-sky-200">
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-900 dark:bg-sky-900/40 dark:text-sky-200">
                   No portal login
                 </span>
               ) : null}
@@ -198,13 +198,13 @@ export function EmployeeCard({
           View full profile
         </Link>
         {employee.terminated ? (
-          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">Terminated</p>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Terminated</p>
         ) : null}
       </div>
       <button
         type="button"
         onClick={() => onQuickView(employee)}
-        className="flex shrink-0 flex-col items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="flex shrink-0 flex-col items-center gap-0.5 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
         title={`Quick view — ${employee.full_name}`}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">

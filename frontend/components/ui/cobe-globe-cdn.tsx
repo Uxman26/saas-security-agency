@@ -244,7 +244,7 @@ export function GlobeCdn({
             className="block size-0 border-x-[3.5px] border-b-[6px] border-x-transparent border-b-[#F45100]"
             aria-hidden
           />
-          <span className="whitespace-nowrap font-mono text-[9px] font-medium lowercase tracking-tight text-[#F45100]">
+          <span className="whitespace-nowrap font-mono text-xs font-medium lowercase tracking-tight text-[#F45100]">
             {m.label}
           </span>
         </div>
@@ -268,7 +268,7 @@ export function GlobeCdn({
         >
           <span
             className={cn(
-              'inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 text-[10px] font-medium tracking-tight shadow-sm',
+              'inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-medium tracking-tight shadow-sm',
               dark ? 'bg-[#F45100] text-white' : 'bg-zinc-900 text-white',
             )}
           >

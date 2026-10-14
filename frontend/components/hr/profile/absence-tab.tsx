@@ -297,7 +297,7 @@ function StatusPill({ status }: { status: string }) {
     declined: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   };
   return (
-    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium capitalize', styles[status])}>
+    <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium capitalize', styles[status])}>
       {status}
     </span>
   );
@@ -467,7 +467,7 @@ function MonthGrid({
                           <span
                             key={`${r.id}-${key}`}
                             className={cn(
-                              'block truncate rounded px-1 py-0.5 text-[10px] text-white',
+                              'block truncate rounded px-1 py-0.5 text-xs text-white',
                               kind?.dot ?? 'bg-slate-400',
                               r.status === 'declined' && 'opacity-50 line-through'
                             )}

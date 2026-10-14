@@ -57,7 +57,7 @@ function ShiftTypeCell({ shift }: { shift: ShiftRec }) {
   if (!opt) return null;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded px-2 py-1.5 text-[10px] font-bold uppercase leading-tight tracking-wide"
+      className="inline-flex items-center gap-1.5 rounded px-2 py-1.5 text-xs font-bold uppercase leading-tight tracking-wide"
       style={{ backgroundColor: opt.bg, color: opt.text }}
     >
       <Icon className="size-3.5 shrink-0" aria-hidden />
@@ -79,7 +79,7 @@ function SummaryTile({
     <div className="flex items-center gap-2.5 px-3 py-2 min-w-0">
       <Icon className="size-5 shrink-0 text-primary" aria-hidden />
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
         <p className="text-sm font-bold tabular-nums break-words">{value}</p>
       </div>
     </div>
@@ -199,7 +199,7 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
                     {['Date', 'Shift time', 'Shift type', 'Site', 'Site address', 'Hours'].map((h) => (
                       <th
                         key={h}
-                        className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wide whitespace-nowrap"
+                        className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide whitespace-nowrap"
                       >
                         {h}
                       </th>
@@ -216,9 +216,9 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
                     return (
                       <tr key={`${dk}-${i}`} className="border-t align-top even:bg-muted/40">
                         <td className="px-3 py-3 text-center whitespace-nowrap">
-                          <div className="text-[10px] font-semibold uppercase text-muted-foreground">{weekday}</div>
+                          <div className="text-xs font-semibold uppercase text-muted-foreground">{weekday}</div>
                           <div className="text-xl font-bold leading-tight tabular-nums">{day}</div>
-                          <div className="text-[10px] font-semibold uppercase text-muted-foreground">{month}</div>
+                          <div className="text-xs font-semibold uppercase text-muted-foreground">{month}</div>
                         </td>
                         <td className="px-3 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-2 font-semibold tabular-nums">

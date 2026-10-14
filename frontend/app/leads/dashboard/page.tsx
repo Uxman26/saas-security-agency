@@ -116,7 +116,7 @@ export default function LeadsDashboardPage() {
                         return (
                           <div key={t.date} className="flex-1 flex flex-col items-center gap-1 min-w-0">
                             <div className="w-full bg-primary/80 rounded-t" style={{ height: `${(t.count / max) * 100}%`, minHeight: t.count ? 4 : 0 }} />
-                            <span className="text-[10px] text-muted-foreground truncate w-full text-center">{t.date.slice(5)}</span>
+                            <span className="text-xs text-muted-foreground truncate w-full text-center">{t.date.slice(5)}</span>
                           </div>
                         );
                       })}

@@ -135,7 +135,7 @@ export function ControlOpsAssistant({
           <Sparkles className="size-4 text-orange-600 shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">{title === 'ControlOps Assistant' ? t('assistantTitle') : title}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{t('assistantHint')}</p>
+            <p className="text-xs text-muted-foreground truncate">{t('assistantHint')}</p>
           </div>
         </div>
         {!embedded ? (
@@ -159,11 +159,11 @@ export function ControlOpsAssistant({
               <div className="mt-2 flex flex-wrap gap-1">
                 {m.sources.map((s) =>
                   s.href ? (
-                    <Link key={s.id} href={s.href} className="text-[11px] underline text-orange-700 dark:text-orange-300">
+                    <Link key={s.id} href={s.href} className="text-xs underline text-orange-700 dark:text-orange-300">
                       {s.title}
                     </Link>
                   ) : (
-                    <span key={s.id} className="text-[11px] opacity-70">{s.title}</span>
+                    <span key={s.id} className="text-xs opacity-70">{s.title}</span>
                   )
                 )}
               </div>
@@ -174,7 +174,7 @@ export function ControlOpsAssistant({
                   <Link
                     key={n.href}
                     href={n.href}
-                    className="inline-flex rounded-md border bg-background px-2 py-0.5 text-[11px] hover:bg-muted"
+                    className="inline-flex rounded-md border bg-background px-2 py-0.5 text-xs hover:bg-muted"
                   >
                     {n.label}
                   </Link>
@@ -247,7 +247,7 @@ export function ControlOpsAssistant({
             <button
               key={t}
               type="button"
-              className="text-[11px] rounded-full border px-2 py-1 hover:bg-muted text-left"
+              className="text-xs rounded-full border px-2 py-1 hover:bg-muted text-left"
               onClick={() => void send(t)}
             >
               {t}
@@ -276,7 +276,7 @@ export function ControlOpsAssistant({
         </Button>
       </form>
       {pendingProposal ? (
-        <p className="px-3 pb-2 text-[10px] text-muted-foreground">{t('proposalWaiting')}</p>
+        <p className="px-3 pb-2 text-xs text-muted-foreground">{t('proposalWaiting')}</p>
       ) : null}
     </div>
   );

@@ -50,7 +50,7 @@ export function AlertsPanel() {
         >
           <Bell className="size-4" />
           {badgeCount > 0 && (
-            <span className="absolute -top-0.5 -end-0.5 size-4 rounded-full bg-destructive text-[10px] text-white flex items-center justify-center">
+            <span className="absolute -top-0.5 -end-0.5 size-4 rounded-full bg-destructive text-xs text-white flex items-center justify-center">
               {badgeCount > 9 ? '9+' : badgeCount}
             </span>
           )}
@@ -147,7 +147,7 @@ export function AlertsPanel() {
                               <Check className="size-3.5" />
                             </Button>
                           ) : (
-                            <span className="text-[10px] uppercase tracking-wide shrink-0 pt-1 opacity-60">
+                            <span className="text-xs uppercase tracking-wide shrink-0 pt-1 opacity-60">
                               {t('read')}
                             </span>
                           )}

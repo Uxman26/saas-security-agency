@@ -38,7 +38,7 @@ export function DashboardHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
           {title}
           {hint ? (
             <Tooltip.Provider delayDuration={200}>
@@ -67,7 +67,7 @@ export function DashboardHeader({
             </Tooltip.Provider>
           ) : null}
         </h1>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+        {description ? <p className="mt-1.5 text-base text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
@@ -127,9 +127,9 @@ export function StatCards({ cards, className }: { cards: StatCardSpec[]; classNa
                 <Icon className="size-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs text-muted-foreground">{c.label}</p>
+                <p className="truncate text-sm text-muted-foreground">{c.label}</p>
                 <p className={cn('truncate text-2xl font-bold tabular-nums', tone.value)}>{c.value}</p>
-                {c.caption ? <p className="truncate text-[11px] text-muted-foreground">{c.caption}</p> : null}
+                {c.caption ? <p className="truncate text-xs text-muted-foreground">{c.caption}</p> : null}
               </div>
               {c.action ? (
                 <button
@@ -205,7 +205,7 @@ export function FilterField({
     // control stayed at its intrinsic size, leaving a gap after every dropdown. Filter
     // controls always fill their field.
     <div className={cn('min-w-[160px] space-y-1 [&>button]:w-full', className)}>
-      <label className="block text-xs font-medium text-muted-foreground">{label}</label>
+      <label className="block text-sm font-medium text-muted-foreground">{label}</label>
       {children}
     </div>
   );

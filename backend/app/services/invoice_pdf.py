@@ -60,7 +60,7 @@ def _group_lines_by_day(lines, site_map) -> list:
         rows.append(
             {
                 "shift_date": day,
-                "label": day.strftime("%d %B %Y"),
+                "label": day.strftime("%d/%m/%Y"),
                 "site_names": sorted({site_map[l.site_id].name for l in group if l.site_id in site_map}),
                 "operatives": len({l.guard_id for l in group if l.guard_id}) or len(group),
                 "hours": round(hours, 2),
@@ -195,9 +195,9 @@ def render_invoice_pdf(
     inv_date = inv.invoice_date or (inv.created_at.date() if inv.created_at else None)
     meta_rows = [
         ["Invoice Number:", f"#{inv.id}"],
-        ["Invoice Date:", inv_date.strftime("%d %B %Y") if inv_date else "—"],
-        ["Payment Due:", inv.due_date.strftime("%d %B %Y") if inv.due_date else "—"],
-        ["Invoice Period:", f"{inv.period_start.strftime('%d %B %Y') if inv.period_start else '—'} to {inv.period_end.strftime('%d %B %Y') if inv.period_end else '—'}"],
+        ["Invoice Date:", inv_date.strftime("%d/%m/%Y") if inv_date else "—"],
+        ["Payment Due:", inv.due_date.strftime("%d/%m/%Y") if inv.due_date else "—"],
+        ["Invoice Period:", f"{inv.period_start.strftime('%d/%m/%Y') if inv.period_start else '—'} to {inv.period_end.strftime('%d/%m/%Y') if inv.period_end else '—'}"],
     ]
     if getattr(inv, "po_number", None):
         meta_rows.append(["PO Number:", inv.po_number])

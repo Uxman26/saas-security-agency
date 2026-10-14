@@ -19,6 +19,7 @@ import type { StaffRequest } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { Check, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatDateUK } from '@/lib/date-format';
 
 type Tab = 'pending' | 'approved' | 'rejected' | 'all';
 
@@ -169,7 +170,7 @@ export default function StaffRequestsReviewPage() {
                     <div>
                       <CardTitle className="text-base">{r.client_name} · {r.site_name}</CardTitle>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        {r.shift_date} · {r.shift_start} – {r.shift_end}
+                        {formatDateUK(r.shift_date)} · {r.shift_start} – {r.shift_end}
                         {r.staff_count > 1 ? ` · ${r.staff_count} staff` : ''}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">

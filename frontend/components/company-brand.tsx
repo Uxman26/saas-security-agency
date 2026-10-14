@@ -27,6 +27,7 @@ export function CompanyBrand({ className = '' }: { className?: string }) {
       try {
         const res = await fetch(`${API_URL}${user.logo_url}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: 'no-store',
         });
         if (!res.ok) return;
         const blob = await res.blob();

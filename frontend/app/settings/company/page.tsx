@@ -35,14 +35,21 @@ function useLogoUrl(url?: string | null) {
     const token = storageGet('token')?.trim();
     void fetch(`${API_URL}${url}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
     })
       .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {
-        if (cancelled || !blob) return;
+        if (cancelled) return;
+        if (!blob) {
+          setSrc(null);
+          return;
+        }
         blobUrl = URL.createObjectURL(blob);
         setSrc(blobUrl);
       })
-      .catch(() => setSrc(null));
+      .catch(() => {
+        if (!cancelled) setSrc(null);
+      });
     return () => {
       cancelled = true;
       if (blobUrl) URL.revokeObjectURL(blobUrl);
@@ -158,17 +165,19 @@ export default function CompanySettingsPage() {
     }
   };
 
-  const onLogo = async (file: File | null) => {
+  const onLogo = async (file: File | null, input?: HTMLInputElement | null) => {
     if (!file) return;
     setUploading(true);
     try {
       const p = await api.company.uploadLogo(file);
       setProfile(p);
+      await refreshUser();
       toast.success('Logo uploaded');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Upload failed');
     } finally {
       setUploading(false);
+      if (input) input.value = '';
     }
   };
 
@@ -312,7 +321,7 @@ export default function CompanySettingsPage() {
                       type="file"
                       accept="image/avif,image/*,.avif"
                       className="hidden"
-                      onChange={(e) => void onLogo(e.target.files?.[0] ?? null)}
+                      onChange={(e) => void onLogo(e.target.files?.[0] ?? null, e.target)}
                     />
                     <span className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 h-9 text-sm font-medium hover:bg-muted cursor-pointer">
                       <Upload className="size-4 mr-2" />

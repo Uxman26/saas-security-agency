@@ -993,6 +993,7 @@ def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str])
             # Only a paid cancellation carries one; blank on anything else so switching a
             # shift back to worked does not leave a stale agreed figure on the planner.
             "paidHours": "" if att.paid_hours is None else str(att.paid_hours),
+            "clientHours": "" if att.client_hours is None else str(att.client_hours),
             "note": (att.note or ""),
             "empId": emp_id,
             "dk": dk,
@@ -1014,6 +1015,15 @@ ATTENDANCE_STATUSES = {
 
 def _parse_paid_hours(raw) -> Optional[float]:
     """Agreed paid hours off a planner attendance record, or None when absent/unusable."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    try:
+        return round(float(raw), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_client_hours(raw) -> Optional[float]:
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         return None
     try:
@@ -1050,6 +1060,7 @@ def _recorded_attendance_by_shift(
                 "note": att.note,
                 "booked_at": att.booked_at,
                 "paid_hours": att.paid_hours,
+                "client_hours": att.client_hours,
             },
         )
     return out
@@ -1565,6 +1576,7 @@ def publish_rota_plan(
                 note = (att_rec.get("note") or "").strip() or None
                 booked_at = None
                 paid_hours = _parse_paid_hours(att_rec.get("paidHours"))
+                client_hours = _parse_client_hours(att_rec.get("clientHours"))
                 if status not in ATTENDANCE_STATUSES:
                     carried = prior_attendance.get(
                         _attendance_shift_key(emp_guard_id, assignment.date, sh.get("start"), site_id)
@@ -1572,6 +1584,7 @@ def publish_rota_plan(
                     if carried:
                         status, note, booked_at = carried["status"], carried["note"], carried["booked_at"]
                         paid_hours = carried.get("paid_hours")
+                        client_hours = carried.get("client_hours")
                 if status in ATTENDANCE_STATUSES:
                     marked = Attendance(
                         assignment_id=assignment.id,
@@ -1579,6 +1592,7 @@ def publish_rota_plan(
                         status=status,
                         note=note,
                         paid_hours=paid_hours if status == CANCELLED_PAID else None,
+                        client_hours=client_hours if status == CANCELLED_PAID else None,
                         updated_by_user_id=user_id,
                     )
                     if booked_at:

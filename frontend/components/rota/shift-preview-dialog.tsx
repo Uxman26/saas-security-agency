@@ -8,13 +8,12 @@ import {
   calcHours,
   formatHoursDecimal,
   formatSiteAddress,
-  isOvernightShift,
   normalizeSiteKey,
   parseDateKey,
   shiftSiteLine,
   shiftsInTimeOrder,
 } from '@/lib/rota-shifts-utils';
-import { SHIFT_TYPE_OPTS, normalizeShiftType } from '@/lib/rota-shifts-types';
+import { SHIFT_TYPE_OPTS, classifyShiftType, normalizeShiftType } from '@/lib/rota-shifts-types';
 import type { EmployeeRec, RotaJsState, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import type { Site } from '@/lib/types';
 import { useSites } from '@/hooks/use-sites';
@@ -41,11 +40,7 @@ type Props = {
 function periodOf(sh: ShiftRec): ShiftType {
   const explicit = normalizeShiftType(sh.shiftType);
   if (explicit) return explicit;
-  if (isOvernightShift(sh)) return 'night';
-  const hour = parseInt((sh.start || '00:00').split(':')[0], 10) || 0;
-  if (hour < 11) return 'morning';
-  if (hour < 17) return 'afternoon';
-  return 'evening';
+  return classifyShiftType(sh.start, sh.end) || 'evening';
 }
 
 const PERIOD_ICON = {

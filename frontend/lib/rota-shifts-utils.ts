@@ -176,6 +176,15 @@ export function agreedPaidHours(att: { status?: string; paidHours?: string } | n
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+/** Hours agreed with the client for billing on a paid cancellation; 0 otherwise. */
+export function agreedClientHours(
+  att: { status?: string; clientHours?: string } | null | undefined
+): number {
+  if (normalizeAttStatus(att?.status ?? null) !== 'cancelled_paid') return 0;
+  const n = Number(String(att?.clientHours ?? '').trim());
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 /**
  * Whether anyone has recorded an outcome for this shift.
  *

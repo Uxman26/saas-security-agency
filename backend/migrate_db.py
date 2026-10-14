@@ -974,6 +974,7 @@ def run():
         ("attendance", "note", "TEXT"),
         ("attendance", "updated_by_user_id", "INTEGER"),
         ("attendance", "paid_hours", "REAL"),
+        ("attendance", "client_hours", "REAL"),
         ("guards", "photo_path", "TEXT"),
         ("subscription_receipts", "billing_cycle", "TEXT DEFAULT 'monthly'"),
     ]:

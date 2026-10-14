@@ -61,6 +61,8 @@ export type AttendanceRec = {
   lateMinutes?: number;
   /** Hours agreed for payment on a paid cancellation. Unset on every other status. */
   paidHours?: string;
+  /** Hours agreed with the client for billing on a paid cancellation. */
+  clientHours?: string;
   synced?: boolean;
   empId: string;
   dk: string;
@@ -161,6 +163,27 @@ export function shiftTypeOption(value: ShiftType | null | undefined) {
 export function normalizeShiftType(value: unknown): ShiftType | null {
   const v = String(value ?? '').trim().toLowerCase();
   return SHIFT_TYPE_OPTS.some((o) => o.value === v) ? (v as ShiftType) : null;
+}
+
+/**
+ * Classify a shift as Morning / Afternoon / Evening / Night from its clock times.
+ *
+ * Overnight (end at or before start) is Night. Same start and end is treated as unset
+ * so a blank new-shift form does not jump to Night before times are chosen.
+ */
+export function classifyShiftType(start: string, end: string): ShiftType | null {
+  const s = String(start || '').trim();
+  const e = String(end || '').trim();
+  if (!s || !e || s === e) return null;
+  const startMins =
+    (parseInt(s.split(':')[0] || '0', 10) || 0) * 60 + (parseInt(s.split(':')[1] || '0', 10) || 0);
+  const endMins =
+    (parseInt(e.split(':')[0] || '0', 10) || 0) * 60 + (parseInt(e.split(':')[1] || '0', 10) || 0);
+  if (endMins <= startMins) return 'night';
+  const hour = Math.floor(startMins / 60);
+  if (hour < 11) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
 }
 
 export const AVATAR_PALETTE = [

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import type { EmployeeRec, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
-import { SHIFT_COLOR_OPTS, SHIFT_TYPE_OPTS, normalizeShiftType } from '@/lib/rota-shifts-types';
+import {
+  SHIFT_COLOR_OPTS,
+  SHIFT_TYPE_OPTS,
+  classifyShiftType,
+  normalizeShiftType,
+} from '@/lib/rota-shifts-types';
 import { buildSiteIndex, findConflictsForDraft, normalizeSiteKey } from '@/lib/rota-shifts-utils';
 import { useCreateSite, useSites } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
@@ -92,6 +97,9 @@ export function ShiftDialog({
   const [assignees, setAssignees] = useState<string[]>([defaultEmpId]);
   /** Once the rate box is edited we show it verbatim, so it can be cleared back to empty. */
   const [rateTouched, setRateTouched] = useState(false);
+  /** Manual shift-type picks stick until times change away from the last auto value. */
+  const [shiftTypeTouched, setShiftTypeTouched] = useState(false);
+  const lastAutoShiftType = useRef<ShiftType | null>(null);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteContractor, setNewSiteContractor] = useState('');
@@ -113,9 +121,15 @@ export function ShiftDialog({
     setDk(defaultDk);
     setRateTouched(false);
     if (edit) {
-      setShift(normalizeShiftForm({ ...edit.shift }));
+      const form = normalizeShiftForm({ ...edit.shift });
+      const auto = classifyShiftType(form.start, form.end);
+      lastAutoShiftType.current = auto;
+      setShiftTypeTouched(!!form.shiftType && form.shiftType !== auto);
+      setShift(form.shiftType ? form : { ...form, shiftType: auto });
       setAssignees([edit.empId]);
     } else {
+      lastAutoShiftType.current = null;
+      setShiftTypeTouched(false);
       setShift(empty());
       setAssignees(defaultEmpId ? [defaultEmpId] : employees[0] ? [employees[0].id] : []);
     }
@@ -123,18 +137,33 @@ export function ShiftDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultDk, defaultEmpId, edit?.empId, edit?.dk, edit?.idx]);
 
+  const applyTimes = (patch: Partial<Pick<ShiftRec, 'start' | 'end'>>) => {
+    setShift((s) => {
+      const prevAuto = classifyShiftType(s.start, s.end);
+      const next = { ...s, ...patch };
+      const auto = classifyShiftType(next.start, next.end);
+      lastAutoShiftType.current = auto;
+      const followAuto = !shiftTypeTouched || s.shiftType == null || s.shiftType === prevAuto;
+      return { ...next, shiftType: followAuto ? auto : s.shiftType };
+    });
+  };
+
   const toggleAsg = (id: string) => {
     setAssignees((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const reset = () =>
+  const reset = () => {
+    setShiftTypeTouched(false);
+    lastAutoShiftType.current = null;
     setShift((s) => ({
       ...s,
       start: '00:00',
       end: '00:00',
       breakH: 0,
       breakM: 0,
+      shiftType: null,
     }));
+  };
 
   const submit = async () => {
     if (assignees.length === 0 || !dk) return;
@@ -272,7 +301,7 @@ export function ShiftDialog({
                 <TimeHmField
                   aria-label="Start time"
                   value={shift.start}
-                  onChange={(start) => setShift((s) => ({ ...s, start }))}
+                  onChange={(start) => applyTimes({ start })}
                 />
               </div>
               <div className="space-y-1">
@@ -280,7 +309,7 @@ export function ShiftDialog({
                 <TimeHmField
                   aria-label="End time"
                   value={shift.end}
-                  onChange={(end) => setShift((s) => ({ ...s, end }))}
+                  onChange={(end) => applyTimes({ end })}
                 />
               </div>
             </div>
@@ -361,9 +390,11 @@ export function ShiftDialog({
               <Label>Shift type</Label>
               <Select
                 value={shift.shiftType || NO_SHIFT_TYPE}
-                onValueChange={(v) =>
-                  setShift((s) => ({ ...s, shiftType: v === NO_SHIFT_TYPE ? null : (v as ShiftType) }))
-                }
+                onValueChange={(v) => {
+                  const next = v === NO_SHIFT_TYPE ? null : (v as ShiftType);
+                  setShiftTypeTouched(true);
+                  setShift((s) => ({ ...s, shiftType: next }));
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select shift type" />
@@ -387,7 +418,7 @@ export function ShiftDialog({
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                Optional — shown as a coloured badge on the rota shift.
+                Auto-selected from start/end times — change manually to override.
               </p>
             </div>
             <div className="space-y-1">

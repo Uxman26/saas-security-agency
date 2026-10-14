@@ -3,6 +3,7 @@
 import type { AttendanceRec, ShiftRec } from '@/lib/rota-shifts-types';
 import { isCancelledStatus, shiftTypeOption } from '@/lib/rota-shifts-types';
 import {
+  agreedClientHours,
   agreedPaidHours,
   attStatusBarColor,
   attStatusLabel,
@@ -115,7 +116,11 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
               </div>
               {attStatus === 'cancelled_paid' ? (
                 <div className={cn(bodyCls, 'text-muted-foreground')}>
-                  Agreed paid hours: {agreedPaidHours(attendance).toFixed(2)}
+                  Paid: {agreedPaidHours(attendance).toFixed(2)}h
+                  {agreedClientHours(attendance) > 0 ||
+                  (attendance?.clientHours != null && String(attendance.clientHours).trim() !== '')
+                    ? ` · Client: ${Number(String(attendance?.clientHours ?? '0')).toFixed(2)}h`
+                    : ''}
                 </div>
               ) : null}
               {attNote ? (

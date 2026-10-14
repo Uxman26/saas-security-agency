@@ -252,6 +252,7 @@ def list_rota_details(
                 shift_rate=None if redact_rates else a.shift_rate,
                 rota_plan_id=a.rota_plan_id,
                 paid_hours=att.paid_hours if att and status == CANCELLED_PAID else None,
+                client_hours=att.client_hours if att and status == CANCELLED_PAID else None,
                 note=(att.note if att and att.note else None),
             )
         )

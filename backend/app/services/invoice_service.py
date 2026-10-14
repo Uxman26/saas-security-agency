@@ -11,11 +11,46 @@ from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_billing_rate
 from app.services.special_day_service import special_date_set
 from app.services.rota_service import calc_shift_hours, normalize_shift_type
+from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID
 from app.services.work_filters import resolve_work_scope
 from app.services.recycle_bin import archive as _bin_archive
 
 
 DEFAULT_INVOICE_VAT_RATE = 20.0
+
+
+def _parse_att_hours(raw) -> Optional[float]:
+    if raw is None or (isinstance(raw, str) and not str(raw).strip()):
+        return None
+    try:
+        return round(float(raw), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _billable_hours_for_shift(scheduled_hours: float, att: Optional[dict]) -> Optional[float]:
+    """Hours to bill for one planner shift, or None when the shift must not be invoiced.
+
+    Unpaid cancellations are never billed. Paid cancellations bill the agreed client
+    hours (which may differ from staff paid hours). Everything else keeps the scheduled span.
+    """
+    if not isinstance(att, dict):
+        return scheduled_hours
+    status = str(att.get("status") or "").strip().lower().replace(" ", "_")
+    if status == "cancelled_unpaid":
+        status = CANCELLED_UNPAID
+    if status == CANCELLED_UNPAID:
+        return None
+    if status == CANCELLED_PAID:
+        client = _parse_att_hours(att.get("clientHours") if "clientHours" in att else att.get("client_hours"))
+        if client is None:
+            # Legacy paid cancellations only stored staff hours — use those rather than
+            # dropping the line or silently billing the full rota span.
+            client = _parse_att_hours(att.get("paidHours") if "paidHours" in att else att.get("paid_hours"))
+        if client is None:
+            return scheduled_hours
+        return max(0.0, client)
+    return scheduled_hours
 
 # How a shift line describes itself on the bill.
 SHIFT_TYPE_LABELS = {
@@ -499,9 +534,11 @@ def _rota_invoice_shift_lines(
     )
 
     lines: list[dict] = []
+    seen: set[tuple] = set()
     for plan in plans:
         data = _parse_planner_json(plan.planner_data)
         shifts = data.get("shifts") or {}
+        attendance = data.get("attendance") or {}
         for emp_id, by_day in shifts.items():
             try:
                 guard_id = int(emp_id)
@@ -514,7 +551,7 @@ def _rota_invoice_shift_lines(
                     continue
                 if shift_date < period_start or shift_date > period_end:
                     continue
-                for sh in day_shifts or []:
+                for idx, sh in enumerate(day_shifts or []):
                     if not isinstance(sh, dict):
                         continue
                     site_name = str(sh.get("site") or "").strip()
@@ -524,11 +561,18 @@ def _rota_invoice_shift_lines(
                     if scope is not None and scope.active and not scope.matches(site.id, guard_id):
                         continue
                     break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
-                    hours = calc_shift_hours(sh.get("start"), sh.get("end"), break_m)
-                    if hours <= 0:
+                    scheduled = calc_shift_hours(sh.get("start"), sh.get("end"), break_m)
+                    att_key = f"{emp_id}:{day_key}:{idx}"
+                    att = attendance.get(att_key) if isinstance(attendance, dict) else None
+                    hours = _billable_hours_for_shift(scheduled, att if isinstance(att, dict) else None)
+                    if hours is None or hours <= 0:
                         continue
                     start = str(sh.get("start") or "").strip() or None
                     end = str(sh.get("end") or "").strip() or None
+                    fingerprint = (guard_id, site.id, shift_date, start or "", end or "")
+                    if fingerprint in seen:
+                        continue
+                    seen.add(fingerprint)
                     lines.append(
                         {
                             "guard_id": guard_id,

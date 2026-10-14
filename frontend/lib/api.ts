@@ -2374,6 +2374,7 @@ export const api = {
         status?: string;
         note?: string | null;
         paid_hours?: number | null;
+        client_hours?: number | null;
       }
     ): Promise<Attendance> =>
       request<Attendance>(`/attendance/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -2387,6 +2388,8 @@ export const api = {
       hours?: string | number;
       /** Agreed paid hours; required when status is 'cancelled_paid', ignored otherwise. */
       paid_hours?: string | number;
+      /** Agreed client billable hours; required when status is 'cancelled_paid'. */
+      client_hours?: string | number;
     }): Promise<Attendance> =>
       request<Attendance>('/attendance/by-shift', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/attendance/${id}`, { method: 'DELETE' }),

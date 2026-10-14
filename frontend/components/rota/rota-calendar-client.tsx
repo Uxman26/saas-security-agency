@@ -1377,6 +1377,7 @@ export function RotaCalendarClient() {
           status,
           lateMinutes,
           paidHours: status === 'cancelled_paid' ? ex.paidHours ?? '' : undefined,
+          clientHours: status === 'cancelled_paid' ? ex.clientHours ?? '' : undefined,
           note: isCancelledStatus(status) ? ex.note ?? '' : ex.note,
         }
       : null;
@@ -1392,6 +1393,7 @@ export function RotaCalendarClient() {
             dk,
             si: idx,
             paidHours: status === 'cancelled_paid' ? '' : undefined,
+            clientHours: status === 'cancelled_paid' ? '' : undefined,
           }
     );
     setAttOpen(true);
@@ -1438,17 +1440,25 @@ export function RotaCalendarClient() {
       );
       return;
     }
-    // A paid cancellation is paid on an agreed figure and nothing else, so there is no
-    // sensible fallback if it is left blank.
+    // A paid cancellation needs separate staff-pay and client-bill figures; neither
+    // has a sensible fallback if left blank.
     let paidHours: string | undefined;
+    let clientHours: string | undefined;
     if (status === 'cancelled_paid') {
-      const raw = String(attRec.paidHours ?? '').trim();
-      const n = Number(raw);
-      if (!raw || !Number.isFinite(n) || n < 0 || n > 24) {
+      const rawPaid = String(attRec.paidHours ?? '').trim();
+      const nPaid = Number(rawPaid);
+      if (!rawPaid || !Number.isFinite(nPaid) || nPaid < 0 || nPaid > 24) {
         toast.error('Enter the agreed paid hours (0–24) for this cancellation');
         return;
       }
-      paidHours = n.toFixed(2);
+      paidHours = nPaid.toFixed(2);
+      const rawClient = String(attRec.clientHours ?? '').trim();
+      const nClient = Number(rawClient);
+      if (!rawClient || !Number.isFinite(nClient) || nClient < 0 || nClient > 24) {
+        toast.error('Enter the agreed client hours (0–24) for this cancellation');
+        return;
+      }
+      clientHours = nClient.toFixed(2);
     }
     const sh = state.shifts[attCtx.empId]?.[attCtx.dk]?.[attCtx.idx];
     if (!sh) return;
@@ -1462,9 +1472,10 @@ export function RotaCalendarClient() {
       si: attCtx.idx,
       note: noteTrimmed,
       paidHours,
+      clientHours,
     };
     if (isCancelledStatus(status)) {
-      // Nothing was worked: the hours on the record are the agreed figure, or none.
+      // Nothing was worked: the hours on the record are the staff agreed figure, or none.
       rec = { ...rec, hours: paidHours ?? '0.00' };
     }
     let nextShift = sh;
@@ -1554,6 +1565,7 @@ export function RotaCalendarClient() {
               note: rec.note || undefined,
               hours: rec.hours,
               paid_hours: rec.paidHours,
+              client_hours: rec.clientHours,
             });
             attOk = true;
             break;
@@ -4235,6 +4247,7 @@ export function RotaCalendarClient() {
                       ...attRec,
                       status: next,
                       paidHours: isCancelledStatus(next) ? attRec.paidHours : undefined,
+                      clientHours: isCancelledStatus(next) ? attRec.clientHours : undefined,
                     });
                   }}
                 >
@@ -4258,6 +4271,7 @@ export function RotaCalendarClient() {
                           ...attRec,
                           status: next,
                           paidHours: next === 'cancelled_paid' ? attRec.paidHours ?? '' : undefined,
+                          clientHours: next === 'cancelled_paid' ? attRec.clientHours ?? '' : undefined,
                         });
                       }}
                     >
@@ -4269,27 +4283,46 @@ export function RotaCalendarClient() {
                     </select>
                   </div>
                   {attRec.status === 'cancelled_paid' ? (
-                    <div className="space-y-1">
-                      <LabelMini>How many hours were agreed for payment?</LabelMini>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={24}
-                        step="0.25"
-                        inputMode="decimal"
-                        aria-label="Agreed Paid Hours"
-                        placeholder="Agreed Paid Hours"
-                        value={attRec.paidHours ?? ''}
-                        onChange={(e) => setAttRec({ ...attRec, paidHours: e.target.value })}
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        This is what payroll pays for this shift &mdash; the rota&rsquo;d times
-                        were not worked.
-                      </p>
-                    </div>
+                    <>
+                      <div className="space-y-1">
+                        <LabelMini>How many hours were agreed for payment?</LabelMini>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={24}
+                          step="0.25"
+                          inputMode="decimal"
+                          aria-label="Agreed Paid Hours"
+                          placeholder="Agreed Paid Hours"
+                          value={attRec.paidHours ?? ''}
+                          onChange={(e) => setAttRec({ ...attRec, paidHours: e.target.value })}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          This is what payroll pays for this shift &mdash; the rota&rsquo;d times
+                          were not worked.
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <LabelMini>How many hours were agreed with the client?</LabelMini>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={24}
+                          step="0.25"
+                          inputMode="decimal"
+                          aria-label="Agreed Client Hours"
+                          placeholder="Agreed Client Hours"
+                          value={attRec.clientHours ?? ''}
+                          onChange={(e) => setAttRec({ ...attRec, clientHours: e.target.value })}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          This is what the client invoice bills for this shift.
+                        </p>
+                      </div>
+                    </>
                   ) : (
                     <p className="text-[11px] text-muted-foreground">
-                      No hours or payment are recorded against this shift.
+                      No hours, payment, or client billing are recorded against this shift.
                     </p>
                   )}
                 </>

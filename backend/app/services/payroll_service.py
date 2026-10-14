@@ -543,6 +543,7 @@ def preview_pay(
                 hours=hours,
                 scheduled_hours=scheduled_hours,
                 paid_hours=d.paid_hours,
+                client_hours=getattr(d, "client_hours", None),
                 attendance_status=d.attendance_status,
                 late_minutes=d.late_minutes,
                 shift_rate=rate if rate > 0 else d.shift_rate,

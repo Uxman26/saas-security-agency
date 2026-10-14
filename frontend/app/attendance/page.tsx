@@ -127,6 +127,7 @@ export default function AttendancePage() {
   const [editStatus, setEditStatus] = useState('on_time');
   const [editNote, setEditNote] = useState('');
   const [editPaidHours, setEditPaidHours] = useState('');
+  const [editClientHours, setEditClientHours] = useState('');
   const [editBookedAt, setEditBookedAt] = useState('');
   const [editBookedOffAt, setEditBookedOffAt] = useState('');
   const [editDateError, setEditDateError] = useState('');
@@ -217,6 +218,7 @@ export default function AttendancePage() {
     setEditStatus(normalizeAttStatus(a.status) ?? 'on_time');
     setEditNote(a.note ?? '');
     setEditPaidHours(a.paid_hours == null ? '' : String(a.paid_hours));
+    setEditClientHours(a.client_hours == null ? '' : String(a.client_hours));
     setEditBookedAt(toLocalInput(a.booked_at));
     setEditBookedOffAt(toLocalInput(a.booked_off_at));
     setEditDateError('');
@@ -233,6 +235,7 @@ export default function AttendancePage() {
       return;
     }
     let paidHours: number | null = null;
+    let clientHours: number | null = null;
     if (editStatus === 'cancelled_paid') {
       const n = Number(editPaidHours.trim());
       if (!editPaidHours.trim() || !Number.isFinite(n) || n < 0 || n > 24) {
@@ -240,6 +243,12 @@ export default function AttendancePage() {
         return;
       }
       paidHours = Number(n.toFixed(2));
+      const nc = Number(editClientHours.trim());
+      if (!editClientHours.trim() || !Number.isFinite(nc) || nc < 0 || nc > 24) {
+        toast.error('Enter the agreed client hours (0\u201324) for this cancellation');
+        return;
+      }
+      clientHours = Number(nc.toFixed(2));
     }
     if (isFutureLocalInput(editBookedAt)) {
       setEditDateError('Booked on cannot be in the future');
@@ -256,6 +265,7 @@ export default function AttendancePage() {
         status: editStatus,
         note: editNote.trim() || null,
         paid_hours: paidHours,
+        client_hours: clientHours,
         booked_at: fromLocalInput(editBookedAt),
         booked_off_at: fromLocalInput(editBookedOffAt),
       });
@@ -1160,7 +1170,10 @@ export default function AttendancePage() {
                                     </Pill>
                                     {a.status === 'cancelled_paid' && a.paid_hours != null ? (
                                       <span className="text-[11px] text-muted-foreground">
-                                        Agreed Paid Hours: {Number(a.paid_hours).toFixed(2)}
+                                        Paid: {Number(a.paid_hours).toFixed(2)}h
+                                        {a.client_hours != null
+                                          ? ` · Client: ${Number(a.client_hours).toFixed(2)}h`
+                                          : ''}
                                       </span>
                                     ) : null}
                                   </div>
@@ -1256,21 +1269,38 @@ export default function AttendancePage() {
                     </Select>
                   </div>
                   {editStatus === 'cancelled_paid' ? (
-                    <div className="space-y-1">
-                      <Label>
-                        How many hours were agreed for payment?<span className="text-destructive"> *</span>
-                      </Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={24}
-                        step="0.25"
-                        inputMode="decimal"
-                        value={editPaidHours}
-                        onChange={(e) => setEditPaidHours(e.target.value)}
-                        placeholder="Agreed Paid Hours"
-                      />
-                    </div>
+                    <>
+                      <div className="space-y-1">
+                        <Label>
+                          How many hours were agreed for payment?<span className="text-destructive"> *</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={24}
+                          step="0.25"
+                          inputMode="decimal"
+                          value={editPaidHours}
+                          onChange={(e) => setEditPaidHours(e.target.value)}
+                          placeholder="Agreed Paid Hours"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>
+                          How many hours were agreed with the client?<span className="text-destructive"> *</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={24}
+                          step="0.25"
+                          inputMode="decimal"
+                          value={editClientHours}
+                          onChange={(e) => setEditClientHours(e.target.value)}
+                          placeholder="Agreed Client Hours"
+                        />
+                      </div>
+                    </>
                   ) : null}
                   <div className="space-y-1">
                     <Label>

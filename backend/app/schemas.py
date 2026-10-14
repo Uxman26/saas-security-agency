@@ -912,6 +912,8 @@ class RotaDetailResponse(BaseModel):
     # Hours agreed for payment on a paid cancellation. ``hours`` stays the shift's own
     # span so rota and staff reports keep reporting what was rota'd.
     paid_hours: Optional[float] = None
+    # Hours agreed with the client for billing on a paid cancellation.
+    client_hours: Optional[float] = None
     note: Optional[str] = None
 
     class Config:
@@ -942,6 +944,7 @@ class PayrollPreviewShift(BaseModel):
     # Set on a paid cancellation, where ``hours`` is the agreed figure rather than the
     # shift's span. ``scheduled_hours`` keeps the span for reference.
     paid_hours: Optional[float] = None
+    client_hours: Optional[float] = None
     scheduled_hours: float = 0
     payable: bool = False
     amount: float = 0
@@ -1344,6 +1347,8 @@ class AttendanceBase(BaseModel):
     # Only meaningful on status "cancelled_paid": the hours agreed for payment when a
     # shift was cancelled after pay had been agreed.
     paid_hours: Optional[float] = None
+    # Only meaningful on status "cancelled_paid": hours agreed with the client for billing.
+    client_hours: Optional[float] = None
 
 class AttendanceCreate(AttendanceBase):
     pass
@@ -1354,6 +1359,7 @@ class AttendanceUpdate(BaseModel):
     status: Optional[str] = None
     note: Optional[str] = None
     paid_hours: Optional[float] = None
+    client_hours: Optional[float] = None
 
 class AttendanceResponse(AttendanceBase):
     id: int
@@ -1386,8 +1392,9 @@ class AttendanceByShiftRequest(BaseModel):
     note: Optional[str] = ""
     hours: Optional[float] = None
     paid_hours: Optional[float] = None
+    client_hours: Optional[float] = None
 
-    @field_validator("hours", "paid_hours", mode="before")
+    @field_validator("hours", "paid_hours", "client_hours", mode="before")
     @classmethod
     def coerce_hours(cls, v):
         if v is None or v == "":

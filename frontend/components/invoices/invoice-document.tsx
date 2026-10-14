@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Building2, Globe, Mail, MapPin, Phone } from 'lucide-react';
 import type { Invoice } from '@/lib/types';
+import { formatDateUK } from '@/lib/date-format';
 import { hasInvoiceAccountDetails } from '@/lib/invoice-account';
 import { groupInvoiceLines } from '@/lib/invoice-lines';
 import { storageGet } from '@/lib/safe-storage';
@@ -29,10 +30,7 @@ function fmtMoney(n: number) {
 
 function fmtLongDate(value?: string | null) {
   if (!value) return '—';
-  const d = new Date(value.length <= 10 ? `${value}T12:00:00` : value);
-  return Number.isNaN(d.getTime())
-    ? value
-    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  return formatDateUK(value) || '—';
 }
 
 function shiftTiming(ln: { shift_timing?: string | null; shift_start?: string | null; shift_end?: string | null }) {
@@ -296,7 +294,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
           </p>
           {invoice.rota_review ? (
             <div className="mt-3 border-t border-border print:border-slate-200 pt-3">
-              <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground print:text-slate-500">Rota Review</p>
+              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground print:text-slate-500">Rota Review</p>
               <p className="whitespace-pre-line text-sm text-muted-foreground print:text-slate-600">{invoice.rota_review}</p>
             </div>
           ) : null}
@@ -354,18 +352,18 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
             </div>
             {invoice.account_number ? (
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Account Number</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Account Number</p>
                 <p className="text-base font-bold tabular-nums">{invoice.account_number}</p>
               </div>
             ) : null}
             {invoice.sort_code ? (
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-slate-400">Sort Code</p>
+                <p className="text-xs uppercase tracking-wide text-slate-400">Sort Code</p>
                 <p className="text-base font-bold tabular-nums">{invoice.sort_code}</p>
               </div>
             ) : null}
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-slate-400">Payment Reference</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Payment Reference</p>
               <p className="text-base font-bold">INV-{invoice.id}</p>
             </div>
           </div>
@@ -391,7 +389,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                 .map((c) => (
                   <tr key={c.id}>
                     <td className="border border-border print:border-slate-200 p-2">
-                      {c.credit_date ? new Date(`${c.credit_date}T12:00:00`).toLocaleDateString('en-GB') : '—'}
+                      {c.credit_date ? formatDateUK(c.credit_date) : '—'}
                     </td>
                     <td className="border border-border print:border-slate-200 p-2">{c.number}</td>
                     <td className="border border-border print:border-slate-200 p-2">{c.reason || '—'}</td>

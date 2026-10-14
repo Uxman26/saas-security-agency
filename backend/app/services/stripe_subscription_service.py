@@ -959,7 +959,7 @@ def render_billing_receipt_pdf(r: BillingReceipt, company: Company | None = None
         Spacer(1, 14),
     ]
     card = f"•••• {r.payment_method_last4}" if r.payment_method_last4 else "—"
-    paid_at = r.paid_at.strftime("%d %b %Y") if r.paid_at else "—"
+    paid_at = r.paid_at.strftime("%d/%m/%Y") if r.paid_at else "—"
     rows = [
         ["Billed to", (company.name if company else None) or "—"],
         ["Plan", r.plan_name or "Subscription"],
@@ -969,7 +969,7 @@ def render_billing_receipt_pdf(r: BillingReceipt, company: Company | None = None
         ["Amount", money],
         ["Refunded", f"{'£' if currency == 'GBP' else currency + ' '}{refunded:,.2f}" if refunded else "—"],
         ["Status", (out["status"] or "paid").title()],
-        ["Next renewal", r.next_renewal_date.strftime("%d %b %Y") if r.next_renewal_date else "—"],
+        ["Next renewal", r.next_renewal_date.strftime("%d/%m/%Y") if r.next_renewal_date else "—"],
     ]
     table = Table(rows, colWidths=[5 * cm, 11.8 * cm])
     table.setStyle(

@@ -16,12 +16,10 @@ import { Calendar, Check, Copy, LayoutGrid, Loader2, Timer } from 'lucide-react'
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { ModuleGuard } from '@/components/module-guard';
-import { localDateKey } from '@/lib/date-format';
+import { formatDateUK, localDateKey } from '@/lib/date-format';
 
 function fmtPeriod(r: RotaPlanListItem) {
-  const a = new Date(`${r.start_date}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const b = new Date(`${r.end_date}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  return `${a} – ${b}`;
+  return `${formatDateUK(r.start_date)} – ${formatDateUK(r.end_date)}`;
 }
 
 function CreateRotaPage() {
@@ -387,7 +385,7 @@ function CreateRotaPage() {
                   >
                     <Icon className="size-5 text-primary mb-2" />
                     <div className="font-medium text-sm">{title}</div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
                   </button>
                 ))}
               </div>

@@ -20,10 +20,9 @@ import { axisLineProps, chartTooltipStyle, tickProps, useChartTheme } from '@/li
 import { MagicCard } from '@/components/ui/magic-card';
 import { BlurFade } from '@/components/ui/blur-fade';
 
-const fmtDay = (iso: string) => {
-  const d = new Date(iso + 'T12:00:00');
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-};
+import { formatDateUK } from '@/lib/date-format';
+
+const fmtDay = (iso: string) => formatDateUK(iso) || iso;
 
 type Props = {
   shifts: ChartPoint[];

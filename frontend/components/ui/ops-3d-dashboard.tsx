@@ -113,8 +113,8 @@ export function Ops3dDashboard({ className }: { className?: string }) {
             <span className="size-2.5 rounded-full bg-amber-400/90" />
             <span className="size-2.5 rounded-full bg-emerald-400/90" />
           </div>
-          <p className="text-[11px] font-medium tracking-wide text-white/75">ControlOps · Live ops</p>
-          <div className="flex items-center gap-1.5 text-[10px] text-emerald-400">
+          <p className="text-xs font-medium tracking-wide text-white/75">ControlOps · Live ops</p>
+          <div className="flex items-center gap-1.5 text-xs text-emerald-400">
             <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />
             Live
           </div>
@@ -131,17 +131,17 @@ export function Ops3dDashboard({ className }: { className?: string }) {
           {/* Mini chart */}
           <div className="rounded-xl border border-border/60 bg-muted/30 p-3 dark:bg-white/[0.03]">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Shift volume · 14 days
               </p>
-              <p className="text-[10px] font-medium text-[#F45100]">+12%</p>
+              <p className="text-xs font-medium text-[#F45100]">+12%</p>
             </div>
             <MiniBars />
           </div>
 
           {/* Shift rows */}
           <div className="space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Today&apos;s cover
             </p>
             {SHIFTS.map((row) => (
@@ -151,11 +151,11 @@ export function Ops3dDashboard({ className }: { className?: string }) {
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-medium text-foreground">{row.site}</p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {row.time} · {row.staff}
                   </p>
                 </div>
-                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold', STATUS_STYLE[row.status])}>
+                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold', STATUS_STYLE[row.status])}>
                   {row.status}
                 </span>
               </div>
@@ -186,7 +186,7 @@ function Kpi({
       )}
     >
       <div className="mb-1 flex items-center justify-between gap-1">
-        <p className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
         <Icon className={cn('size-3.5', warn ? 'text-amber-500' : 'text-muted-foreground')} />
       </div>
       <NumberTicker

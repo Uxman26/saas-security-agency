@@ -18,6 +18,7 @@ import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-t
 import { Eye, Mail, Zap } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { formatDateUK } from '@/lib/date-format';
 
 const STATUS_STYLES: Record<string, string> = {
   paid: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300',
@@ -182,7 +183,7 @@ export default function AdminInvoicesPage() {
                           <TableCell>{inv.company_name}</TableCell>
                           <TableCell className="capitalize">{inv.subscription_tier}</TableCell>
                           <TableCell className="capitalize">{inv.billing_cycle}</TableCell>
-                          <TableCell>{inv.due_date}</TableCell>
+                          <TableCell>{inv.due_date ? formatDateUK(inv.due_date) : '—'}</TableCell>
                           <TableCell className="font-medium">{fmt(inv.total_amount)}</TableCell>
                           <TableCell>
                             <Select value={inv.status} onValueChange={(v) => handleStatusChange(inv.id, v)}>

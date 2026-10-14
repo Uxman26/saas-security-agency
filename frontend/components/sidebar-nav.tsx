@@ -97,7 +97,7 @@ function navLinkClass(isActive: boolean, compact: boolean) {
   return cn(
     'flex items-center gap-2.5 rounded-md border-s-[3px] border-transparent transition-colors outline-none',
     'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
-    compact ? 'px-2 py-1.5 text-[13px] leading-snug' : 'px-2.5 py-2.5 text-sm leading-snug',
+    compact ? 'px-2 py-1.5 text-sm leading-snug' : 'px-2.5 py-2.5 text-sm leading-snug',
     isActive
       ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary shadow-sm'
       : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/80 hover:text-sidebar-primary'
@@ -124,8 +124,8 @@ function SectionHeading({
       aria-expanded={open}
       className={cn(
         'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start transition-colors',
-        'text-xs font-bold uppercase tracking-[0.06em]',
-        'text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
+        'text-xs font-bold uppercase tracking-[0.05em]',
+        'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
         hasActive && 'text-sidebar-primary/90'
       )}

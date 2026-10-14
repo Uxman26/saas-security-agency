@@ -151,7 +151,7 @@ export function InteractiveGlobe({
         {markers.slice(0, 5).map((m, i) => (
           <span
             key={m.id}
-            className="absolute rounded-md border border-border/60 bg-background/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow-sm backdrop-blur-sm"
+            className="absolute rounded-md border border-border/60 bg-background/80 px-1.5 py-0.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm"
             style={{
               top: `${18 + ((i * 17) % 55)}%`,
               left: i % 2 === 0 ? `${8 + (i % 3) * 6}%` : undefined,

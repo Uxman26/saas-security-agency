@@ -29,7 +29,7 @@ import { BarChart3, Building2, CreditCard, FileText, Plus, Trash2, Pencil } from
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
-import { localDateKey } from '@/lib/date-format';
+import { formatDateUK, localDateKey } from '@/lib/date-format';
 
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'card', 'direct_debit', 'other'];
 const METHOD_LABELS: Record<string, string> = {
@@ -445,7 +445,7 @@ export default function PaymentsPage() {
                               <Pill tone="info">{METHOD_LABELS[p.method] ?? p.method}</Pill>
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
-                              {p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '—'}
+                              {p.paid_at ? formatDateUK(p.paid_at) : '—'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">

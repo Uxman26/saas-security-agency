@@ -14,6 +14,7 @@ import type { SubscriptionReceipt } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { toast } from '@/lib/toast';
+import { formatDateUK } from '@/lib/date-format';
 
 export default function AdminReceiptsPage() {
   const { user } = useAuth();
@@ -138,7 +139,7 @@ export default function AdminReceiptsPage() {
                           <TableCell className="capitalize">{r.subscription_tier}</TableCell>
                           <TableCell>£{r.amount.toFixed(2)}</TableCell>
                           <TableCell className="capitalize">{r.status}</TableCell>
-                          <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell>{formatDateUK(r.created_at)}</TableCell>
                           <TableCell>
                             {r.status === 'pending' ? (
                               <div className="flex flex-wrap gap-1">
@@ -151,7 +152,7 @@ export default function AdminReceiptsPage() {
                               </div>
                             ) : (
                               <span className="text-muted-foreground text-sm">
-                                {r.period_end ? `Until ${new Date(r.period_end).toLocaleDateString()}` : 'Paid'}
+                                {r.period_end ? `Until ${formatDateUK(r.period_end)}` : 'Paid'}
                               </span>
                             )}
                           </TableCell>

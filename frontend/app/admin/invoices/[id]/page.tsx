@@ -14,6 +14,7 @@ import type { SubscriptionInvoice } from '@/lib/types';
 import { ArrowLeft, Mail } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { formatDateUK } from '@/lib/date-format';
 
 const fmt = (n: number) => `£${n.toFixed(2)}`;
 
@@ -127,9 +128,9 @@ export default function AdminSubscriptionInvoicePage() {
                 </div>
                 <div className="sm:text-right">
                   <p className="text-xs uppercase text-muted-foreground mb-1">Invoice date</p>
-                  <p>{new Date(inv.created_at).toLocaleDateString('en-GB')}</p>
+                  <p>{formatDateUK(inv.created_at)}</p>
                   <p className="text-xs uppercase text-muted-foreground mt-3 mb-1">Due date</p>
-                  <p className="font-semibold">{new Date(inv.due_date).toLocaleDateString('en-GB')}</p>
+                  <p className="font-semibold">{formatDateUK(inv.due_date)}</p>
                 </div>
               </div>
 
@@ -149,9 +150,9 @@ export default function AdminSubscriptionInvoicePage() {
                         <p className="text-muted-foreground capitalize">{inv.billing_cycle} billing</p>
                       </td>
                       <td className="p-3 text-muted-foreground">
-                        {inv.period_start ? new Date(inv.period_start).toLocaleDateString('en-GB') : '—'}
+                        {inv.period_start ? formatDateUK(inv.period_start) : '—'}
                         {' — '}
-                        {inv.period_end ? new Date(inv.period_end).toLocaleDateString('en-GB') : '—'}
+                        {inv.period_end ? formatDateUK(inv.period_end) : '—'}
                       </td>
                       <td className="p-3 text-right">{fmt(inv.amount_ex_vat)}</td>
                     </tr>

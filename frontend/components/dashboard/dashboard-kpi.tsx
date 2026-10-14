@@ -79,7 +79,7 @@ export function DashboardKpi({
         )}
       >
         <div className="flex items-start justify-between gap-2 pe-5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.07em] text-muted-foreground">
             {label}
           </p>
           <div

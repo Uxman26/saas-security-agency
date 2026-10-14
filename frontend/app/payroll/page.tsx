@@ -162,7 +162,7 @@ function ProblemShifts({
                 <TableCell className="text-right tabular-nums py-1.5">
                   {sh.hours.toFixed(2)}h
                   {sh.attendance_status === 'cancelled_paid' ? (
-                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">agreed</span>
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">agreed</span>
                   ) : null}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground py-1.5">
@@ -1186,7 +1186,7 @@ export default function PayrollPage() {
                                   {e.guard_name}
                                   {e.unmarked_shifts > 0 ? (
                                     <span
-                                      className="ml-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
+                                      className="ml-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 dark:bg-rose-900/40 dark:text-rose-300"
                                       title={`${e.unmarked_shifts} shift${e.unmarked_shifts === 1 ? '' : 's'} with no attendance marked (${e.unmarked_hours.toFixed(2)} hrs)`}
                                     >
                                       <Clock className="size-3" />

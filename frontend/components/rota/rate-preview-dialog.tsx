@@ -41,7 +41,7 @@ function RateEditor({ rate, onSave }: { rate: number; onSave?: (rate: number) =>
   if (draft === null) {
     return (
       <div className="rounded-lg bg-muted/50 px-3 py-2 text-center">
-        <p className="flex items-center justify-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="flex items-center justify-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <PoundSterling className="size-3.5" />
           Rate
         </p>
@@ -65,7 +65,7 @@ function RateEditor({ rate, onSave }: { rate: number; onSave?: (rate: number) =>
 
   return (
     <div className="rounded-lg bg-muted/50 px-2 py-2 text-center space-y-1">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Rate (£/hr)</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Rate (£/hr)</p>
       <div className="flex items-center gap-1">
         <Input
           type="number"
@@ -133,7 +133,7 @@ function Metric({
 }) {
   return (
     <div className={plain ? 'px-3 py-2 text-center' : 'rounded-lg bg-muted/50 px-3 py-2 text-center'}>
-      <p className="flex items-center justify-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="flex items-center justify-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         <span className="text-muted-foreground">{icon}</span>
         {label}
       </p>
@@ -255,7 +255,7 @@ export function RatePreviewDialog({
                             onSave={onRateChange ? (r) => onRateChange(dk, i, r) : undefined}
                           />
                           <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-center">
-                            <p className="text-[10px] font-medium uppercase tracking-wide text-primary/80">
+                            <p className="text-xs font-medium uppercase tracking-wide text-primary/80">
                               Shift amount
                             </p>
                             <p className="text-lg font-bold text-primary tabular-nums break-words">
@@ -263,7 +263,7 @@ export function RatePreviewDialog({
                             </p>
                           </div>
                         </div>
-                        <p className="text-[11px] text-muted-foreground break-words">
+                        <p className="text-xs text-muted-foreground break-words">
                           {source}
                           {status ? ` · Attendance: ${attStatusLabel(status)}` : ' · No attendance'}
                           {status === 'on_time' || status === 'late'
@@ -290,10 +290,10 @@ export function RatePreviewDialog({
                   plain
                 />
                 <div className="rounded-lg bg-primary px-3 py-2 text-center text-primary-foreground">
-                  <p className="text-[10px] font-medium uppercase tracking-wide opacity-80">Scheduled pay</p>
+                  <p className="text-xs font-medium uppercase tracking-wide opacity-80">Scheduled pay</p>
                   <p className="text-lg font-bold tabular-nums break-words">{formatMoney(totalScheduled)}</p>
                   <div className="my-1 border-t border-primary-foreground/25" />
-                  <p className="text-[10px] font-medium uppercase tracking-wide opacity-80">Payable</p>
+                  <p className="text-xs font-medium uppercase tracking-wide opacity-80">Payable</p>
                   <p className="text-base font-semibold tabular-nums break-words">{formatMoney(totalPayable)}</p>
                 </div>
               </div>

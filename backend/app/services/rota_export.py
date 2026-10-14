@@ -17,7 +17,7 @@ _STATUS_LABELS = {
 
 def _fmt_day(dk: str) -> str:
     try:
-        return datetime.strptime(dk, "%Y-%m-%d").strftime("%a %d %b")
+        return datetime.strptime(dk, "%Y-%m-%d").strftime("%d/%m/%Y")
     except ValueError:
         return dk
 

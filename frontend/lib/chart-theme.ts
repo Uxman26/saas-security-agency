@@ -84,12 +84,12 @@ export function chartTooltipStyle(c: ChartThemeColors) {
     background: c.card,
     border: `1px solid ${c.border}`,
     borderRadius: 8,
-    fontSize: 12,
+    fontSize: 13,
     color: c.foreground,
   };
 }
 
-export const tickProps = (c: ChartThemeColors, size = 10) => ({
+export const tickProps = (c: ChartThemeColors, size = 12) => ({
   fontSize: size,
   fill: c.axis,
 });

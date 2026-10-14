@@ -20,6 +20,7 @@ import { toast } from '@/lib/toast';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { analytics } from '@/lib/analytics';
+import { formatDateUK } from '@/lib/date-format';
 
 type Subscription = {
   subscription_tier?: string | null;
@@ -53,8 +54,7 @@ function fmtMoney(n: number, currency = 'gbp') {
 
 function fmtDate(v?: string | null) {
   if (!v) return '—';
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB');
+  return formatDateUK(v) || '—';
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -78,7 +78,7 @@ function StatusPill({ status }: { status?: string | null }) {
 function MetaCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-[7.5rem] space-y-1">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="text-sm font-semibold text-foreground">{children}</div>
     </div>
   );
@@ -268,10 +268,10 @@ export default function BillingSettingsPage() {
                         </span>
                       </MetaCell>
                       <MetaCell label="Started">
-                        {trial.trial_starts_on ? new Date(trial.trial_starts_on).toLocaleDateString() : '—'}
+                        {trial.trial_starts_on ? formatDateUK(trial.trial_starts_on) : '—'}
                       </MetaCell>
                       <MetaCell label={tb('endsOn')}>
-                        {trial.trial_ends_on ? new Date(trial.trial_ends_on).toLocaleDateString() : '—'}
+                        {trial.trial_ends_on ? formatDateUK(trial.trial_ends_on) : '—'}
                       </MetaCell>
                       {trial.trial_active ? (
                         <MetaCell label={tb('daysRemaining')}>{trial.days_remaining ?? '—'}</MetaCell>
@@ -311,7 +311,7 @@ export default function BillingSettingsPage() {
                         <span className="capitalize">{sub.billing_cycle || 'monthly'}</span>
                       </MetaCell>
                       {sub.subscription_end ? (
-                        <MetaCell label={tb('endsOn')}>{new Date(sub.subscription_end).toLocaleDateString()}</MetaCell>
+                        <MetaCell label={tb('endsOn')}>{formatDateUK(sub.subscription_end)}</MetaCell>
                       ) : null}
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">

@@ -19,6 +19,7 @@ import type { SupportTicket } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { toast } from '@/lib/toast';
+import { formatDateUK } from '@/lib/date-format';
 
 const STATUSES = ['open', 'in_progress', 'escalated', 'resolved', 'closed'];
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
@@ -174,7 +175,7 @@ export default function AdminTicketsPage() {
                           <TableCell>{t.company_name ?? '—'}</TableCell>
                           <TableCell className="capitalize">{t.priority ?? '—'}</TableCell>
                           <TableCell className="capitalize">{(t.status || '').replace('_', ' ') || '—'}</TableCell>
-                          <TableCell>{new Date(t.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell>{formatDateUK(t.created_at)}</TableCell>
                           <TableCell>
                             <Button size="sm" variant="outline" asChild>
                               <Link href={`/admin/tickets/${t.id}`}>Open</Link>

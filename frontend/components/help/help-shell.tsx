@@ -206,7 +206,7 @@ function HelpSidebar({ activeSlug }: { activeSlug?: string }) {
               if (!articles.length) return null;
               return (
                 <div key={cat.id}>
-                  <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                     <Icon className="size-3.5 text-primary" />
                     {cat.title}
                   </p>

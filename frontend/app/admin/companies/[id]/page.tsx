@@ -20,6 +20,7 @@ import { toast } from '@/lib/toast';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { PasswordInput } from '@/components/ui/password-input';
 import { passwordFieldSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
+import { formatDateUK } from '@/lib/date-format';
 
 const ADMIN_TOKEN_BACKUP = 'admin_token_backup';
 
@@ -465,7 +466,7 @@ export default function AdminCompanySupportPage() {
                     <p><span className="text-muted-foreground">Tier:</span> <span className="capitalize">{view.subscription_tier || '—'}</span></p>
                     <p><span className="text-muted-foreground">Status:</span> <span className="capitalize">{view.subscription_status || '—'}</span></p>
                     <p><span className="text-muted-foreground">Billing:</span> <span className="capitalize">{view.billing_cycle || '—'}</span></p>
-                    <p><span className="text-muted-foreground">Ends:</span> {view.subscription_end ? new Date(view.subscription_end).toLocaleDateString() : '—'}</p>
+                    <p><span className="text-muted-foreground">Ends:</span> {view.subscription_end ? formatDateUK(view.subscription_end) : '—'}</p>
                     <p><span className="text-muted-foreground">Users:</span> {view.user_count ?? 0}{view.max_users != null ? ` / ${view.max_users}` : ''}</p>
                   </div>
                   {currentTrial && (
@@ -481,13 +482,13 @@ export default function AdminCompanySupportPage() {
                         <p>
                           <span className="text-muted-foreground">Started:</span>{' '}
                           {currentTrial.trial_starts_on
-                            ? new Date(currentTrial.trial_starts_on).toLocaleDateString()
+                            ? formatDateUK(currentTrial.trial_starts_on)
                             : '—'}
                         </p>
                         <p>
                           <span className="text-muted-foreground">Ends:</span>{' '}
                           {currentTrial.trial_ends_on
-                            ? new Date(currentTrial.trial_ends_on).toLocaleDateString()
+                            ? formatDateUK(currentTrial.trial_ends_on)
                             : '—'}
                         </p>
                         {(currentTrial.trial_active || currentTrial.days_remaining != null) && (
@@ -833,8 +834,8 @@ export default function AdminCompanySupportPage() {
                       #{h.id} · {h.status} · {h.duration_days}d
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {h.started_at ? new Date(h.started_at).toLocaleDateString() : '—'} →{' '}
-                      {h.ends_at ? new Date(h.ends_at).toLocaleDateString() : '—'}
+                      {h.started_at ? formatDateUK(h.started_at) : '—'} →{' '}
+                      {h.ends_at ? formatDateUK(h.ends_at) : '—'}
                       {h.extensions?.length ? ` · ${h.extensions.length} extension(s)` : ''}
                     </p>
                   </li>

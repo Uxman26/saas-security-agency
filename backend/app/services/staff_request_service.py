@@ -61,7 +61,7 @@ def _find_or_create_plan(db: Session, company_id: int, shift_date: date) -> Rota
     days = _day_keys(start, day_count)
     plan = RotaPlan(
         company_id=company_id,
-        name=f"Client requests {start.strftime('%d %b %Y')}",
+        name=f"Client requests {start.strftime('%d/%m/%Y')}",
         start_date=start,
         end_date=end,
         day_count=day_count,

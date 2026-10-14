@@ -28,6 +28,7 @@ import {
   type StatCardSpec,
 } from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { formatDateUK } from '@/lib/date-format';
 import { FolderOpen, Plus, Trash2, AlertTriangle, Upload, Download, X, FileText, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
@@ -511,7 +512,7 @@ export default function DocumentsPage() {
                               )}
                             </TableCell>
                             <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                              {doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '—'}
+                              {doc.created_at ? formatDateUK(doc.created_at) : '—'}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-0.5">

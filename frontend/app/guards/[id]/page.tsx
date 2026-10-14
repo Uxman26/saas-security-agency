@@ -174,16 +174,16 @@ function EmployeeProfile() {
                     <p className="mt-0.5 text-muted-foreground">{guard.job_title || 'Staff member'}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {guard.termination_date ? (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">
                           Terminated · {formatDateUK(guard.termination_date)}
                         </span>
                       ) : (
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
                           Available
                         </span>
                       )}
                       {guard.deleted_at ? (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">Archived</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">Archived</span>
                       ) : null}
                     </div>
                   </div>

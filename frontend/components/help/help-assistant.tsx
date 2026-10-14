@@ -425,7 +425,7 @@ export function HelpAssistant() {
                       <Headphones className="size-3" /> Chat with an Agent
                     </button>
                     {suggestAgent ? (
-                      <span className="self-center text-[11px] text-muted-foreground">Recommended for this question</span>
+                      <span className="self-center text-xs text-muted-foreground">Recommended for this question</span>
                     ) : null}
                     {messages.length < 3
                       ? HELP_SUGGESTIONS.map((s) => (

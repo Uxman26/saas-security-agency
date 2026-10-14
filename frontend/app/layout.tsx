@@ -58,7 +58,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
-      <body className="min-h-dvh antialiased">
+      <body className="min-h-dvh font-sans text-base antialiased">
         <SiteJsonLd />
         <NextIntlClientProvider messages={messages}>
           <Providers>{children}</Providers>

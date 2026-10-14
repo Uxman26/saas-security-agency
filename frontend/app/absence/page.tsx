@@ -28,11 +28,11 @@ import {
 } from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { api } from '@/lib/api';
+import { formatDateUK, localDateKey } from '@/lib/date-format';
 import type { AbsenceKind, AbsenceRecord, AbsenceStatus } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
-import { localDateKey } from '@/lib/date-format';
 import { useGuards } from '@/hooks/use-guards';
 import { CalendarOff, CheckCircle2, Clock, HeartPulse, Loader2, Plane, Plus, Trash2, Users, X } from 'lucide-react';
 
@@ -66,8 +66,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function fmtDate(d?: string | null) {
   if (!d) return '—';
-  const parsed = new Date(`${d}T12:00:00`);
-  return Number.isNaN(parsed.getTime()) ? d : parsed.toLocaleDateString('en-GB');
+  return formatDateUK(d) || '—';
 }
 
 /** "3 Feb" or "3 Feb – 7 Feb" — a single-day absence should not read as a range. */

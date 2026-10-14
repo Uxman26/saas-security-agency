@@ -14,19 +14,11 @@ import { toast } from '@/lib/toast';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoney } from '@/lib/rota-shifts-utils';
-import { localDateKey } from '@/lib/date-format';
+import { formatDateUK, localDateKey } from '@/lib/date-format';
 
 function fmtDate(iso?: string | null) {
   if (!iso) return '—';
-  try {
-    return new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
+  return formatDateUK(iso) || '—';
 }
 
 function moneyParen(n: number) {

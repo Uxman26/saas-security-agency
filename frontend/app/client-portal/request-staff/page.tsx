@@ -18,7 +18,7 @@ import { toast } from '@/lib/toast';
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TimeHmField } from '@/components/ui/time-hm-field';
-import { localDateKey } from '@/lib/date-format';
+import { localDateKey, formatDateUK } from '@/lib/date-format';
 
 type EntryMode = 'same' | 'different';
 
@@ -264,7 +264,7 @@ function RequestStaffPage() {
                         {statusBadge(r.status)}
                       </div>
                       <p className="text-muted-foreground">
-                        {r.shift_date} · {r.shift_start} – {r.shift_end}
+                        {formatDateUK(r.shift_date)} · {r.shift_start} – {r.shift_end}
                         {r.staff_count > 1 ? ` · ${r.staff_count} staff` : ''}
                       </p>
                       {r.client_notes ? <p className="text-xs text-muted-foreground">{r.client_notes}</p> : null}

@@ -1,4 +1,5 @@
 import type { InvoiceLine } from './types';
+import { formatDateUK } from './date-format';
 
 /**
  * One row of the client-facing invoice table.
@@ -24,9 +25,7 @@ export type InvoiceDayRow = {
 };
 
 function fmtDayLabel(iso: string) {
-  const d = new Date(`${iso}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  return formatDateUK(iso) || iso;
 }
 
 export function groupInvoiceLines(lines: InvoiceLine[]): InvoiceDayRow[] {

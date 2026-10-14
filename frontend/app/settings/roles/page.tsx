@@ -122,7 +122,7 @@ function UserScopeFields({
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[11px] text-muted-foreground">The Staff role must be linked to a staff profile.</p>
+        <p className="text-xs text-muted-foreground">The Staff role must be linked to a staff profile.</p>
       </div>
     );
   }
@@ -186,7 +186,7 @@ function UserScopeFields({
                   );
                 })}
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {siteIds.length === 0
                   ? 'None selected — this login sees every site of the client.'
                   : `Restricted to ${siteIds.length} of ${clientSites.length} sites.`}
@@ -1283,7 +1283,7 @@ export default function RolesSettingsPage() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-[11px] text-muted-foreground">Admin is unique and cannot be assigned to new users.</p>
+                      <p className="text-xs text-muted-foreground">Admin is unique and cannot be assigned to new users.</p>
                       {userForm.formState.errors.role_id && (
                         <p className="text-xs text-destructive">{userForm.formState.errors.role_id.message}</p>
                       )}

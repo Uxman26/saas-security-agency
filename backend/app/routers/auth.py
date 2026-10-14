@@ -325,8 +325,9 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
         if co:
             plan = plan_summary(db, co)
             company_name = co.name
-            if resolve_storage_path(co.logo_path):
-                logo_url = "/auth/company-logo"
+            from app.services.company_profile_service import company_logo_url as _company_logo_url
+
+            logo_url = _company_logo_url(co)
     sub_status = None
     sub_end = None
     sidebar_modules = None
@@ -443,4 +444,8 @@ def company_logo(db: Session = Depends(get_db), current_user: User = Depends(get
         raise HTTPException(status_code=404, detail="Logo not found")
     ext = os.path.splitext(path)[1].lower()
     media_type = AVIF_MIME if ext == AVIF_EXT else None
-    return FileResponse(path, media_type=media_type)
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={"Cache-Control": "private, max-age=0, must-revalidate"},
+    )

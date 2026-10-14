@@ -78,6 +78,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
     const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
     void fetch(`${API_URL}${invoice.company_logo_url}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
     })
       .then((r) => (r.ok ? r.blob() : null))
       .then((blob) => {

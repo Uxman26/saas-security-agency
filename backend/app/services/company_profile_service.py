@@ -14,9 +14,14 @@ ALLOWED_LOGO_EXT = {AVIF_EXT, ".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 def company_logo_url(company: Company) -> Optional[str]:
-    if resolve_storage_path(company.logo_path):
-        return "/auth/company-logo"
-    return None
+    path = resolve_storage_path(company.logo_path)
+    if not path:
+        return None
+    try:
+        ver = int(os.path.getmtime(path))
+    except OSError:
+        ver = int(company.id or 0)
+    return f"/auth/company-logo?v={ver}"
 
 
 def account_bank_lines(company: Company) -> list[tuple[str, str]]:

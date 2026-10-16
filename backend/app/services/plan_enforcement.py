@@ -136,8 +136,14 @@ def enforce_module_entitlement(db: Session, user: User, module_key: str) -> None
 
 def plan_summary(db: Session, company: Company) -> dict:
     tier = normalize_tier(company.subscription_tier)
-    ug = db.query(Guard).filter(Guard.company_id == company.id, Guard.deleted_at.is_(None)).count()
-    us = db.query(Site).filter(Site.company_id == company.id, Site.deleted_at.is_(None)).count()
+    try:
+        ug = db.query(Guard).filter(Guard.company_id == company.id, Guard.deleted_at.is_(None)).count()
+    except Exception:
+        ug = db.query(Guard).filter(Guard.company_id == company.id).count()
+    try:
+        us = db.query(Site).filter(Site.company_id == company.id, Site.deleted_at.is_(None)).count()
+    except Exception:
+        us = db.query(Site).filter(Site.company_id == company.id).count()
     uu = db.query(func.count(User.id)).filter(User.company_id == company.id, User.is_active == True).scalar()
     cap = user_limit_for_company(company)
     from app.plan_config import limits_for_tier

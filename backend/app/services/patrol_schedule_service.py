@@ -108,23 +108,41 @@ def ensure_upcoming_occurrences(db: Session, *, horizon_hours: int = 24) -> int:
         slots: list[datetime] = []
         for day in sorted(days):
             slots.extend(slot_datetimes_for_day(day, route.start_time, route.end_time, route.frequency_minutes))
-        slots = [s for s in slots if now - timedelta(minutes=route.grace_minutes or 15) <= s <= until]
+        grace = int(route.grace_minutes or 15)
+        slots = [s for s in slots if now - timedelta(minutes=grace) <= s <= until]
+        if not slots:
+            continue
+        # Cache guards once per calendar day (not per slot) and load existing keys in one query.
+        guards_by_day: dict[date, list[tuple[int, Optional[int], Optional[int]]]] = {}
+        for day in {s.date() for s in slots}:
+            guards_by_day[day] = _guards_for_route(
+                db, route, datetime.combine(day, time.min, tzinfo=timezone.utc)
+            )
+        slot_min, slot_max = min(slots), max(slots)
+        existing = {
+            (cp_id, g_id, _aware(sched))
+            for cp_id, g_id, sched in (
+                db.query(
+                    PatrolOccurrence.checkpoint_id,
+                    PatrolOccurrence.guard_id,
+                    PatrolOccurrence.scheduled_at,
+                )
+                .filter(
+                    PatrolOccurrence.route_id == route.id,
+                    PatrolOccurrence.scheduled_at >= slot_min,
+                    PatrolOccurrence.scheduled_at <= slot_max,
+                )
+                .all()
+            )
+        }
         for scheduled_at in slots:
-            guards = _guards_for_route(db, route, scheduled_at)
+            guards = guards_by_day.get(scheduled_at.date()) or []
             if not guards:
                 continue
             for guard_id, session_id, assignment_id in guards:
                 for cp in cps:
-                    exists = (
-                        db.query(PatrolOccurrence.id)
-                        .filter(
-                            PatrolOccurrence.checkpoint_id == cp.id,
-                            PatrolOccurrence.guard_id == guard_id,
-                            PatrolOccurrence.scheduled_at == scheduled_at,
-                        )
-                        .first()
-                    )
-                    if exists:
+                    key = (cp.id, guard_id, _aware(scheduled_at))
+                    if key in existing:
                         continue
                     db.add(
                         PatrolOccurrence(
@@ -139,14 +157,65 @@ def ensure_upcoming_occurrences(db: Session, *, horizon_hours: int = 24) -> int:
                             status="scheduled",
                         )
                     )
+                    existing.add(key)
                     created += 1
     if created:
         db.commit()
     return created
 
 
+def _push_app_notification(
+    db: Session,
+    *,
+    company_id: int,
+    user_id: int,
+    kind: str,
+    title: str,
+    body: str,
+    entity_type: str,
+    entity_id: int,
+) -> None:
+    notif = AppNotification(
+        company_id=company_id,
+        user_id=user_id,
+        kind=kind,
+        title=title,
+        body=body[:500],
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+    db.add(notif)
+    db.flush()
+    try:
+        from app.services import fcm_push_service
+
+        fcm_push_service.notify_after_app_notification(
+            db,
+            user_id=user_id,
+            notification_id=notif.id,
+            kind=kind,
+            title=title,
+            body=body[:500],
+            entity_type=entity_type,
+            entity_id=entity_id,
+        )
+    except Exception:
+        pass
+
+
 def _notify_guard(db: Session, *, company_id: int, guard_id: int, title: str, body: str, occurrence_id: int) -> None:
+    from sqlalchemy import func
+
     user = db.query(User).filter(User.guard_id == guard_id, User.company_id == company_id).first()
+    if not user:
+        guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
+        email = (guard.email or "").lower().strip() if guard else ""
+        if email:
+            user = (
+                db.query(User)
+                .filter(User.company_id == company_id, func.lower(User.email) == email)
+                .first()
+            )
     if not user:
         return
     since = datetime.now(timezone.utc) - timedelta(hours=6)
@@ -163,20 +232,28 @@ def _notify_guard(db: Session, *, company_id: int, guard_id: int, title: str, bo
     )
     if dup:
         return
-    db.add(
-        AppNotification(
-            company_id=company_id,
-            user_id=user.id,
-            kind="patrol_reminder",
-            title=title,
-            body=body[:500],
-            entity_type="patrol_occurrence",
-            entity_id=occurrence_id,
-        )
+    _push_app_notification(
+        db,
+        company_id=company_id,
+        user_id=user.id,
+        kind="patrol_reminder",
+        title=title,
+        body=body,
+        entity_type="patrol_occurrence",
+        entity_id=occurrence_id,
     )
 
 
-def _notify_supervisors(db: Session, *, company_id: int, title: str, body: str, occurrence_id: int) -> None:
+def _notify_supervisors(
+    db: Session,
+    *,
+    company_id: int,
+    title: str,
+    body: str,
+    occurrence_id: int,
+    kind: str = "patrol_missed",
+    entity_type: str = "patrol_occurrence",
+) -> None:
     users = (
         db.query(User)
         .filter(
@@ -193,7 +270,8 @@ def _notify_supervisors(db: Session, *, company_id: int, title: str, body: str, 
             .filter(
                 AppNotification.company_id == company_id,
                 AppNotification.user_id == u.id,
-                AppNotification.kind == "patrol_missed",
+                AppNotification.kind == kind,
+                AppNotification.entity_type == entity_type,
                 AppNotification.entity_id == occurrence_id,
                 AppNotification.created_at >= now - timedelta(hours=12),
             )
@@ -201,27 +279,125 @@ def _notify_supervisors(db: Session, *, company_id: int, title: str, body: str, 
         )
         if dup:
             continue
-        db.add(
-            AppNotification(
-                company_id=company_id,
-                user_id=u.id,
-                kind="patrol_missed",
-                title=title,
-                body=body[:500],
-                entity_type="patrol_occurrence",
-                entity_id=occurrence_id,
-            )
+        _push_app_notification(
+            db,
+            company_id=company_id,
+            user_id=u.id,
+            kind=kind,
+            title=title,
+            body=body,
+            entity_type=entity_type,
+            entity_id=occurrence_id,
         )
+
+
+def notify_failed_gps_scan(
+    db: Session,
+    *,
+    company_id: int,
+    guard: Guard,
+    checkpoint: PatrolCheckpoint,
+    route: PatrolRoute,
+    log_id: int,
+    notes: str,
+) -> None:
+    if not route:
+        return
+    site_name = ""
+    if route.site:
+        site_name = route.site.name or ""
+    guard_name = getattr(guard, "name", None) or f"Guard #{guard.id}"
+    msg = (
+        f"Invalid / out-of-range patrol scan by {guard_name} — "
+        f"Site: {site_name or '—'}; "
+        f"Point: {checkpoint.name if checkpoint else '—'} "
+        f"({checkpoint.code if checkpoint else ''}). {notes}"
+    )
+    now = datetime.now(timezone.utc)
+    db.add(
+        PatrolAlert(
+            company_id=company_id,
+            route_id=route.id,
+            checkpoint_id=checkpoint.id if checkpoint else None,
+            session_id=None,
+            guard_id=guard.id,
+            occurrence_id=None,
+            alert_type="failed_gps",
+            message=msg[:500],
+            window_start=now,
+            window_end=now,
+            notified_at=now,
+        )
+    )
+    _notify_supervisors(
+        db,
+        company_id=company_id,
+        title="Patrol GPS verification failed",
+        body=msg,
+        occurrence_id=log_id,
+        kind="patrol_failed_gps",
+        entity_type="patrol_log",
+    )
+
+
+_SWEEP_LOCK_KEY = "lock:sweep_patrol_schedule"
+
+
+def _try_sweep_lock(ttl_seconds: int = 240) -> bool:
+    """Redis NX lock so overlapping minute crons do not double-process.
+
+    Fail-closed when Redis is unavailable: arq unique=True still gates enqueue,
+    but we must not run two heavy sweeps against the same DB work queue.
+    """
+    try:
+        from redis import Redis
+
+        from app.config import settings
+
+        client = Redis.from_url(settings.redis_url, decode_responses=True)
+        return bool(client.set(_SWEEP_LOCK_KEY, "1", nx=True, ex=ttl_seconds))
+    except Exception:
+        return False
+
+
+def _release_sweep_lock() -> None:
+    try:
+        from redis import Redis
+
+        from app.config import settings
+
+        Redis.from_url(settings.redis_url, decode_responses=True).delete(_SWEEP_LOCK_KEY)
+    except Exception:
+        pass
 
 
 def sweep_patrol_schedule(db: Session) -> dict:
     """Generate slots, send reminders, mark due/missed. Source of truth for status."""
+    if not _try_sweep_lock():
+        return {
+            "skipped": True,
+            "reason": "lock_held_or_redis_unavailable",
+            "occurrences_created": 0,
+            "reminders_sent": 0,
+            "marked_due": 0,
+            "missed": 0,
+        }
+    try:
+        return _sweep_patrol_schedule_locked(db)
+    finally:
+        _release_sweep_lock()
+
+
+def _sweep_patrol_schedule_locked(db: Session) -> dict:
     created = ensure_upcoming_occurrences(db, horizon_hours=24)
     now = datetime.now(timezone.utc)
     reminders = 0
     marked_due = 0
     missed = 0
 
+    # Bound the working set so stale open rows cannot starve newer due/missed work.
+    window_start = now - timedelta(days=2)
+    window_end = now + timedelta(hours=36)
     open_rows = (
         db.query(PatrolOccurrence)
         .options(
@@ -230,7 +406,12 @@ def sweep_patrol_schedule(db: Session) -> dict:
             joinedload(PatrolOccurrence.site),
             joinedload(PatrolOccurrence.guard),
         )
-        .filter(PatrolOccurrence.status.in_(OPEN_STATUSES))
+        .filter(
+            PatrolOccurrence.status.in_(OPEN_STATUSES),
+            PatrolOccurrence.scheduled_at >= window_start,
+            PatrolOccurrence.scheduled_at <= window_end,
+        )
+        .order_by(PatrolOccurrence.scheduled_at.asc())
         .limit(5000)
         .all()
     )
@@ -361,8 +542,15 @@ def match_open_occurrence(
 def site_geofence_ok(site: Optional[Site], lat: float, lng: float, *, default_radius_m: float = 250.0) -> tuple[bool, Optional[float]]:
     if not site or site.latitude is None or site.longitude is None:
         return True, None
+    radius = default_radius_m
+    site_radius = getattr(site, "geofence_radius_m", None)
+    if site_radius is not None:
+        try:
+            radius = float(site_radius)
+        except (TypeError, ValueError):
+            radius = default_radius_m
     dist = haversine_m(float(site.latitude), float(site.longitude), lat, lng)
-    return dist <= default_radius_m, round(dist, 2)
+    return dist <= radius, round(dist, 2)
 
 
 def dashboard_kpis(db: Session, company_id: int, start: date, end: date) -> dict:

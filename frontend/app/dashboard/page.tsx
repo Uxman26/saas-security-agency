@@ -193,7 +193,7 @@ export default function DashboardPage() {
     <ProtectedRoute>
       <AppShell>
         <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_55%),linear-gradient(to_bottom,var(--background),color-mix(in_oklab,var(--muted)_70%,var(--background)))] dark:bg-[radial-gradient(ellipse_at_top,color-mix(in_oklab,var(--primary)_14%,transparent),transparent_52%),linear-gradient(to_bottom,#0F172A,#0F172A)]">
-          <div className="container mx-auto space-y-6 px-4 py-8">
+          <div className="mx-auto w-full max-w-none space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
             <DashboardHero
               title={`Welcome back${user?.full_name ? `, ${user.full_name}` : ''}`}
               subtitle="Operations Command Centre"

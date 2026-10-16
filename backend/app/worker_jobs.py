@@ -74,14 +74,34 @@ def _scheduled_maintenance_sync() -> dict[str, Any]:
                 suspicious_activity_service.scan_suspicious_activity(db)
             except Exception:
                 logger.exception("suspicious scan failed")
+            # Trial sync/reminders run on the hourly sweep_trials cron — do not
+            # duplicate that work here (was causing double reminders / DB load).
+            purged_jobs = 0
             try:
-                from app.services import trial_service
-                expired = trial_service.sync_expired_trials(db)
-                reminders = trial_service.send_trial_reminders(db)
-                logger.info("trial maintenance: %s %s", expired, reminders)
+                from datetime import datetime, timezone, timedelta
+                from app.models import BackgroundJob
+
+                cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+                purged_jobs = (
+                    db.query(BackgroundJob)
+                    .filter(
+                        BackgroundJob.status.in_(("completed", "failed")),
+                        BackgroundJob.finished_at.isnot(None),
+                        BackgroundJob.finished_at < cutoff,
+                    )
+                    .delete(synchronize_session=False)
+                )
+                if purged_jobs:
+                    db.commit()
+                    logger.info("maintenance: purged %s old background_job rows", purged_jobs)
             except Exception:
-                logger.exception("trial maintenance failed")
-            return {"sia_expiry_due_count": due, "sessions_purged": purged}
+                logger.exception("background_job retention purge failed")
+                db.rollback()
+            return {
+                "sia_expiry_due_count": due,
+                "sessions_purged": purged,
+                "background_jobs_purged": purged_jobs,
+            }
         finally:
             db.close()
 
@@ -186,3 +206,22 @@ def _sweep_finance_recurring_sync() -> dict[str, Any]:
 
 async def sweep_finance_recurring(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_sweep_finance_recurring_sync)
+
+
+def _snapshot_server_metrics_sync() -> dict[str, Any]:
+    def run():
+        db: Session = SessionLocal()
+        try:
+            from app.services import server_monitor_service
+
+            result = server_monitor_service.snapshot_and_store(db)
+            logger.info("server metric snapshot: %s", result)
+            return result
+        finally:
+            db.close()
+
+    return _track_job("snapshot_server_metrics", run)()
+
+
+async def snapshot_server_metrics(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_snapshot_server_metrics_sync)

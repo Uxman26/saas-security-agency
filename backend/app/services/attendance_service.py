@@ -2,7 +2,7 @@ import json
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from app.models import Attendance, Assignment, Guard, Site, User, ShiftOvertimeLog, ShiftEarlyFinishLog, ShiftLateLog
 from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest, AttendanceResponse
 from app.services.company_service import get_company_by_user_id
@@ -30,6 +30,22 @@ ALLOWED_STATUS = {
 STATUS_ALIASES = {"present": "on_time", "cancelled_unpaid": CANCELLED_UNPAID}
 
 NOTE_REQUIRED_DETAIL = "Note is required for Late, Absent, No show, and Cancelled"
+EARLY_BOOK_ON_MINUTES = 20
+
+
+def _assignment_shift_start_dt(assignment: Assignment):
+    shift_start = getattr(assignment, "shift_start", None)
+    day = getattr(assignment, "date", None)
+    if not shift_start or not day:
+        return None
+    try:
+        parts = str(shift_start).split(":")
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        from datetime import time
+        return datetime.combine(day, time(h, m))
+    except (ValueError, IndexError, TypeError):
+        return None
 
 
 def _validated_cancel_hours(status: str, raw, *, label: str) -> Optional[float]:
@@ -288,7 +304,12 @@ def get_attendance_for_assignment(db: Session, assignment_id: int, user_id: int)
 def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
     company = get_company_by_user_id(db, user_id)
     user = db.query(User).filter(User.id == user_id).first()
-    from app.services.portal_access import assert_not_client_portal, visible_assignment_or_404
+    from app.services.portal_access import (
+        assert_not_client_portal,
+        is_staff_portal_user,
+        visible_assignment_or_404,
+    )
+    from app.services.patrol_schedule_service import site_geofence_ok
 
     if user:
         assert_not_client_portal(user)
@@ -300,11 +321,58 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         ).first()
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found")
+
+    staff_portal = bool(user and is_staff_portal_user(user))
+    site = db.query(Site).filter(Site.id == a.site_id).first() if a.site_id else None
+    now = datetime.utcnow()
+    shift_dt = _assignment_shift_start_dt(a)
+
+    if not data.book_off and staff_portal and shift_dt is not None:
+        earliest = shift_dt - timedelta(minutes=EARLY_BOOK_ON_MINUTES)
+        if now.replace(tzinfo=None) < earliest.replace(tzinfo=None):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "too_early",
+                    "message": (
+                        f"Book On opens {EARLY_BOOK_ON_MINUTES} minutes before "
+                        f"the {a.shift_start} start."
+                    ),
+                    "earliest_at": earliest.isoformat(),
+                    "shift_start": shift_dt.isoformat(),
+                },
+            )
+
+    lat = data.latitude
+    lng = data.longitude
+    accuracy = data.accuracy_m if data.accuracy_m is not None else data.accuracy
+    site_has_coords = bool(
+        site and site.latitude is not None and site.longitude is not None
+    )
+    if staff_portal and site_has_coords and (lat is None or lng is None):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "gps_required",
+                "message": "GPS location is required to Book On/Off at this site.",
+            },
+        )
+    if lat is not None and lng is not None:
+        ok, dist = site_geofence_ok(site, float(lat), float(lng), default_radius_m=150.0)
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "outside_geofence",
+                    "message": f"You are outside the site boundary ({dist}m away).",
+                    "distance_m": dist,
+                },
+            )
+
     att = db.query(Attendance).filter(
         Attendance.assignment_id == data.assignment_id,
         Attendance.guard_id == a.guard_id
     ).first()
-    now = datetime.utcnow()
     if not att:
         att = Attendance(assignment_id=data.assignment_id, guard_id=a.guard_id, status="on_time")
         db.add(att)
@@ -313,18 +381,19 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         att.booked_off_at = now
     else:
         att.booked_at = now
-        shift_start = a.shift_start
-        if shift_start:
-            try:
-                parts = shift_start.split(":")
-                h, m = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
-                from datetime import time
-                t = time(h, m)
-                dt = datetime.combine(a.date, t)
-                if now.replace(tzinfo=None) > dt.replace(tzinfo=None) if hasattr(dt, "replace") else now > dt:
-                    att.status = "late"
-            except (ValueError, IndexError):
-                pass
+        if shift_dt is not None and now.replace(tzinfo=None) > shift_dt.replace(tzinfo=None):
+            att.status = "late"
+
+    if lat is not None and lng is not None:
+        captured = data.captured_at.isoformat() if data.captured_at else now.isoformat()
+        acc_part = f" ±{float(accuracy):.1f}m" if accuracy is not None else ""
+        gps_note = f"GPS {float(lat):.6f},{float(lng):.6f}{acc_part} @ {captured}"
+        if data.device_id:
+            gps_note = f"{gps_note} device={data.device_id}"
+        existing = (att.note or "").strip()
+        if gps_note not in existing:
+            att.note = f"{existing} | {gps_note}".strip(" |") if existing else gps_note
+
     att.updated_by_user_id = user_id
     db.commit()
     db.refresh(att)

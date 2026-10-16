@@ -2057,6 +2057,43 @@ export const api = {
       const qs = q.toString();
       return request<ApiUsageSummary>(`/admin/api-usage${qs ? `?${qs}` : ''}`);
     },
+    serverMonitorReport: (params?: {
+      hours?: number;
+      company_id?: number;
+      tier?: string;
+    }): Promise<import('./types').ServerMonitorReport> => {
+      const q = new URLSearchParams();
+      if (params?.hours != null) q.append('hours', String(params.hours));
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      if (params?.tier) q.append('tier', params.tier);
+      const qs = q.toString();
+      return request<import('./types').ServerMonitorReport>(
+        `/admin/server-monitor/report${qs ? `?${qs}` : ''}`,
+      );
+    },
+    serverMonitorSnapshot: (): Promise<{ id: number; captured_at?: string | null }> =>
+      request<{ id: number; captured_at?: string | null }>('/admin/server-monitor/snapshot', {
+        method: 'POST',
+      }),
+    serverMonitorThresholds: (): Promise<Record<string, number>> =>
+      request<Record<string, number>>('/admin/server-monitor/thresholds'),
+    putServerMonitorThresholds: (data: Record<string, number>): Promise<Record<string, number>> =>
+      request<Record<string, number>>('/admin/server-monitor/thresholds', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    serverMonitorExportCsvUrl: (params?: {
+      hours?: number;
+      company_id?: number;
+      tier?: string;
+    }): string => {
+      const q = new URLSearchParams();
+      if (params?.hours != null) q.append('hours', String(params.hours));
+      if (params?.company_id != null) q.append('company_id', String(params.company_id));
+      if (params?.tier) q.append('tier', params.tier);
+      const qs = q.toString();
+      return `/admin/server-monitor/export.csv${qs ? `?${qs}` : ''}`;
+    },
     refunds: (params?: { company_id?: number; status?: string }): Promise<PaymentRefund[]> => {
       const q = new URLSearchParams();
       if (params?.company_id != null) q.append('company_id', String(params.company_id));

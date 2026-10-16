@@ -89,6 +89,7 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
     items: [
       { href: '/admin/reports', labelKey: 'adminReports', icon: BarChart3, perms: ['tenants.read', 'billing.read', 'ops.read'] },
       { href: '/admin/api-usage', labelKey: 'adminApiUsage', icon: Activity, perms: ['ops.read'] },
+      { href: '/admin/server-monitor', labelKey: 'adminServerMonitor', icon: Monitor, perms: ['ops.read'] },
     ],
   },
   {

@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     assistant_llm_model: str = "llama3.2:1b"
     assistant_llm_timeout_seconds: float = 8
 
+    # Firebase Admin (FCM). Leave blank to disable push send; token registration still works.
+    firebase_credentials_json: str = ""  # path or raw JSON
+    firebase_project_id: str = ""
+    firebase_client_email: str = ""
+    firebase_private_key: str = ""  # use \n for newlines in .env
+
     @field_validator("database_url", mode="before")
     @classmethod
     def default_sqlite_if_placeholder(cls, v: str) -> str:

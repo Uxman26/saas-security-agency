@@ -24,11 +24,14 @@ without waiting for a check window or a grace period.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
+
+logger = logging.getLogger(__name__)
 
 from app.middleware.client_source import get_client_source
 from app.models import (
@@ -549,17 +552,32 @@ def notify_level(db: Session, inc: LoneWorkerIncident, level: int, actor: Option
             )
             sent += 1
         if c.user_id:
-            db.add(
-                AppNotification(
-                    company_id=inc.company_id,
+            notif = AppNotification(
+                company_id=inc.company_id,
+                user_id=c.user_id,
+                kind="lone_worker",
+                title=subject,
+                body=body[:500],
+                entity_type="lone_worker_incident",
+                entity_id=inc.id,
+            )
+            db.add(notif)
+            db.flush()
+            try:
+                from app.services import fcm_push_service
+
+                fcm_push_service.notify_after_app_notification(
+                    db,
                     user_id=c.user_id,
+                    notification_id=notif.id,
                     kind="lone_worker",
                     title=subject,
                     body=body[:500],
                     entity_type="lone_worker_incident",
                     entity_id=inc.id,
                 )
-            )
+            except Exception:
+                logger.warning("lone-worker escalation FCM failed for user %s", c.user_id, exc_info=True)
             log_event(
                 db,
                 company_id=inc.company_id,
@@ -1298,6 +1316,22 @@ def _notify_worker(db: Session, sess: LoneWorkerSession, subject: str, body: str
                 entity_id=sess.id,
             )
         )
+        try:
+            from app.services import fcm_push_service
+
+            fcm_push_service.send_to_user(
+                db,
+                sess.user_id,
+                title=subject,
+                body=body[:500],
+                data={
+                    "type": "lone_worker",
+                    "entity_type": "lone_worker_session",
+                    "entity_id": sess.id,
+                },
+            )
+        except Exception:
+            pass
     phone = _guard_phone(sess.guard)
     if phone and sess.user_id:
         _try_send(db, lambda: sms_service.send_sms(db, sess.user_id, phone, body[:320], "lone_worker_reminder"))

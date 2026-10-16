@@ -259,8 +259,30 @@ class ApiUsageLog(Base):
     company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     path = Column(String)
     method = Column(String, default="GET")
+    status_code = Column(Integer, nullable=True, index=True)
+    duration_ms = Column(Integer, nullable=True)
     logged_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     company = relationship("Company", back_populates="api_usage_logs")
+
+
+class ServerMetricSnapshot(Base):
+    """Periodic host/app metric sample for Super Admin historical charts."""
+
+    __tablename__ = "server_metric_snapshots"
+    id = Column(Integer, primary_key=True, index=True)
+    captured_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    cpu_percent = Column(Float)
+    ram_percent = Column(Float)
+    ram_used_mb = Column(Float)
+    disk_percent = Column(Float)
+    disk_used_gb = Column(Float)
+    load_1 = Column(Float)
+    load_5 = Column(Float)
+    load_15 = Column(Float)
+    process_rss_mb = Column(Float)
+    api_rps = Column(Float)
+    api_error_rate = Column(Float)
+    payload_json = Column(Text)
 
 
 class SubscriptionReceipt(Base):
@@ -913,6 +935,7 @@ class Site(Base):
     staff_hourly_rate = Column(Float)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    geofence_radius_m = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     # Soft delete ("archived"): the row stays for its history — past shifts, invoices and
@@ -1605,6 +1628,40 @@ class PushSubscription(Base):
     endpoint = Column(Text, nullable=False)
     p256dh = Column(String, nullable=False)
     auth = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MobileDeviceToken(Base):
+    """FCM (or similar) device token for ControlOps mobile push."""
+
+    __tablename__ = "mobile_device_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    fcm_token = Column(Text, nullable=False)
+    platform = Column(String, nullable=False, default="android")
+    device_id = Column(String, nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MobileAnnouncement(Base):
+    """Optional splash / marketing announcement for the mobile app."""
+
+    __tablename__ = "mobile_announcements"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    message = Column(Text)
+    media_type = Column(String, default="message")  # message | image | video
+    image_url = Column(Text)
+    video_url = Column(Text)
+    cta_label = Column(String, default="Got it")
+    dismissible = Column(Boolean, default=True)
+    priority = Column(Integer, default=0)
+    starts_at = Column(DateTime(timezone=True), nullable=True)
+    ends_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -2754,3 +2811,31 @@ class LiveChatEvent(Base):
     detail_json = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     conversation = relationship("LiveChatConversation", back_populates="events")
+
+
+class PortalMessageThread(Base):
+    """Staff/controller DM thread for ControlOps mobile (cross-device sync)."""
+
+    __tablename__ = "portal_message_threads"
+    __table_args__ = (
+        UniqueConstraint("company_id", "user_a_id", "user_b_id", name="uq_portal_msg_thread_pair"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    user_a_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_b_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    last_message = Column(Text)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PortalMessage(Base):
+    __tablename__ = "portal_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    thread_id = Column(Integer, ForeignKey("portal_message_threads.id"), nullable=False, index=True)
+    sender_user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    body = Column(Text, nullable=False, default="")
+    client_message_id = Column(String, nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    read_at = Column(DateTime(timezone=True), nullable=True)

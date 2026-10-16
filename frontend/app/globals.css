@@ -726,6 +726,18 @@ select:-webkit-autofill {
   }
 }
 
+/*
+  App shell pages use `.container` widely. Tailwind's default container caps at
+  ~1280px and centers, which leaves huge empty gutters on 4.5K / ultrawide CSS
+  viewports (logical CSS px, not physical Retina pixels). Marketing pages keep
+  their own max-w-*; app content should fill the available main column.
+*/
+@utility container {
+  width: 100%;
+  margin-inline: auto;
+  max-width: 100%;
+}
+
 /* Shared app chrome helpers */
 .app-header-safe {
   padding-top: env(safe-area-inset-top);

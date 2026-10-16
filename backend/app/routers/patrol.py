@@ -277,8 +277,20 @@ def today(
 
 @router.get("/check/{qr_token}")
 def public_check_token(qr_token: str, db: Session = Depends(get_db)):
-    """Token-only existence check — no PII."""
-    from app.models import PatrolCheckpoint
+    """Validate a checkpoint QR token and return geo so mobile can show distance before scan.
 
-    cp = db.query(PatrolCheckpoint).filter(PatrolCheckpoint.qr_token == qr_token, PatrolCheckpoint.status == "active").first()
-    return {"valid": bool(cp)}
+    Checkpoint details are only returned when the token is valid (token acts as a capability).
+    Accepts bare tokens or full sticker URLs containing /patrol/check/{token}.
+    """
+    from app.models import PatrolCheckpoint
+    from app.services.patrol_service import _checkpoint_out, normalize_qr_token
+
+    token = normalize_qr_token(qr_token)
+    cp = (
+        db.query(PatrolCheckpoint)
+        .filter(PatrolCheckpoint.qr_token == token, PatrolCheckpoint.status == "active")
+        .first()
+    )
+    if not cp:
+        return {"valid": False}
+    return {"valid": True, "checkpoint": _checkpoint_out(cp)}

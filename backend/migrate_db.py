@@ -62,6 +62,17 @@ def _ensure_user_notification_sound_muted():
 
 
 def run():
+    import logging
+
+    log = logging.getLogger(__name__)
+    try:
+        _run_migrations()
+    except Exception:
+        # Entrypoint / API boot must never die solely because a migration step failed.
+        log.exception("migrate_db.run failed")
+
+
+def _run_migrations():
     _ensure_user_theme_preference()
     _ensure_user_notification_sound_muted()
     path = get_db_path()

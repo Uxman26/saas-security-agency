@@ -91,6 +91,8 @@ AUTH_PROVIDER_APPLE = "apple"
 OAUTH_AUTH_PROVIDERS = frozenset({AUTH_PROVIDER_GOOGLE, AUTH_PROVIDER_MICROSOFT, AUTH_PROVIDER_APPLE})
 
 def requires_email_verification(user: User) -> bool:
+    if getattr(user, "role", None) == SUPER_ADMIN_ROLE:
+        return False
     provider = getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL
     if provider in OAUTH_AUTH_PROVIDERS:
         return False

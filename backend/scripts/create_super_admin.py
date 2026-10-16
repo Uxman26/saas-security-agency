@@ -20,6 +20,9 @@ def main():
             user.role = SUPER_ADMIN_ROLE
             user.company_id = None
             user.password_hash = pwd_hash
+            user.is_active = True
+            if hasattr(user, "email_verified"):
+                user.email_verified = True
             print(f"Updated existing user {EMAIL} to super_admin")
         else:
             user = User(
@@ -28,6 +31,8 @@ def main():
                 full_name="Super Admin",
                 role=SUPER_ADMIN_ROLE,
                 company_id=None,
+                is_active=True,
+                email_verified=True,
             )
             db.add(user)
             print(f"Created super_admin {EMAIL}")

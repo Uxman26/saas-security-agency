@@ -35,11 +35,43 @@ function detailMessage(d: unknown): string {
   return 'Request failed';
 }
 
+function gatewayUnavailableMessage(status: number): string {
+  if (status === 502 || status === 503 || status === 504) {
+    return 'The API server is temporarily unavailable. Please try again in a moment.';
+  }
+  return `Request failed (${status})`;
+}
+
+async function readErrorDetail(response: Response): Promise<unknown> {
+  const ct = (response.headers.get('content-type') || '').toLowerCase();
+  if (ct.includes('application/json')) {
+    const body = await response.json().catch(() => null);
+    if (body && typeof body === 'object' && 'detail' in body) return (body as { detail: unknown }).detail;
+    return body;
+  }
+  const text = (await response.text().catch(() => '')).trim();
+  if (!text || /^error code:\s*\d+$/i.test(text) || text.startsWith('<!')) {
+    return gatewayUnavailableMessage(response.status);
+  }
+  return text.slice(0, 300);
+}
+
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    throw new ApiError(
+      0,
+      'Cannot reach the API server. Check your connection, or wait a moment and try again.',
+    );
+  }
+}
+
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const raw = typeof window !== 'undefined' ? storageGet('token') : null;
   const token = raw ? raw.trim() : null;
-  
-  const response = await fetch(`${API_URL}${endpoint}`, {
+
+  const response = await apiFetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -51,8 +83,7 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   });
 
   if (response.status === 401) {
-    const error = await response.json().catch(() => ({ detail: 'Unauthorized' }));
-    const d = error.detail;
+    const d = await readErrorDetail(response);
     const msg = typeof d === 'string' ? d : 'Unauthorized';
     if (token && typeof window !== 'undefined') {
       storageRemove('token');
@@ -62,17 +93,18 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    const d = error.detail;
+    const d = await readErrorDetail(response);
     if (
       response.status === 402 &&
       d &&
       typeof d === 'object' &&
-      (d.code === 'payment_pending' || d.code === 'subscription_required')
+      ((d as { code?: string }).code === 'payment_pending' ||
+        (d as { code?: string }).code === 'subscription_required')
     ) {
+      const obj = d as { restriction?: string; message?: string; code?: string };
       throw new ApiError(
         402,
-        String(d.restriction || d.message || JSON.stringify(d)),
+        String(obj.restriction || obj.message || JSON.stringify(d)),
         d
       );
     }
@@ -87,7 +119,13 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
         : retryHeader
           ? parseInt(retryHeader, 10)
           : undefined;
-    throw new ApiError(response.status, detailMessage(d), d, retryAfterSeconds);
+    const message =
+      typeof d === 'string' && d.trim()
+        ? d
+        : detailMessage(d) !== 'Request failed'
+          ? detailMessage(d)
+          : gatewayUnavailableMessage(response.status);
+    throw new ApiError(response.status, message, d, retryAfterSeconds);
   }
 
   if (response.status === 204) {
@@ -103,7 +141,7 @@ async function requestBlob(
 ): Promise<Blob> {
   const raw = typeof window !== 'undefined' ? storageGet('token') : null;
   const token = raw ? raw.trim() : null;
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  const response = await apiFetch(`${API_URL}${endpoint}`, {
     method: options?.method || 'GET',
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),
@@ -112,8 +150,7 @@ async function requestBlob(
     body: options?.body,
   });
   if (response.status === 401) {
-    const error = await response.json().catch(() => ({ detail: 'Unauthorized' }));
-    const d = error.detail;
+    const d = await readErrorDetail(response);
     const msg = typeof d === 'string' ? d : 'Unauthorized';
     if (token && typeof window !== 'undefined') {
       storageRemove('token');
@@ -122,15 +159,13 @@ async function requestBlob(
     throw new ApiError(401, msg);
   }
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    const d = error.detail;
-    const msg = Array.isArray(d)
-      ? d.map((x: { msg?: string }) => x.msg).filter(Boolean).join('; ') || 'Request failed'
-      : typeof d === 'string'
+    const d = await readErrorDetail(response);
+    const msg =
+      typeof d === 'string'
         ? d
-        : typeof d === 'object' && d !== null && 'message' in d
-          ? JSON.stringify(d)
-          : 'Request failed';
+        : detailMessage(d) !== 'Request failed'
+          ? detailMessage(d)
+          : gatewayUnavailableMessage(response.status);
     throw new ApiError(response.status, msg);
   }
   return response.blob();

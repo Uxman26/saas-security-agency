@@ -18,17 +18,27 @@ _install_soft_delete_filter()
 
 
 def _ensure_db():
-    if settings.database_url.startswith("sqlite"):
-        path = settings.database_url.replace("sqlite:///", "").split("?")[0]
-        if path and not os.path.isabs(path):
-            path = os.path.abspath(path)
-        if path:
-            parent = os.path.dirname(path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-    Base.metadata.create_all(bind=engine)
-    from migrate_db import run as run_migrate
-    run_migrate()
+    import logging
+
+    log = logging.getLogger("controlops.db")
+    try:
+        if settings.database_url.startswith("sqlite"):
+            path = settings.database_url.replace("sqlite:///", "").split("?")[0]
+            if path and not os.path.isabs(path):
+                path = os.path.abspath(path)
+            if path:
+                parent = os.path.dirname(path)
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
+        Base.metadata.create_all(bind=engine)
+        from migrate_db import run as run_migrate
+
+        run_migrate()
+    except Exception:
+        # Do not prevent the API process from binding — otherwise nginx returns
+        # 502 and login only shows "Request failed".
+        log.exception("database init/migrate failed; API will still start")
+
 
 if os.getenv("CONTROL_OPS_SKIP_DB_INIT") != "1":
     _ensure_db()
@@ -71,7 +81,7 @@ class MaintenanceModeMiddleware(BaseHTTPMiddleware):
         path = request.url.path or ""
         if (
             path.startswith("/auth/")
-            or path in ("/", "/swagger/", "/swagger/openapi.json")
+            or path in ("/", "/health", "/swagger/", "/swagger/openapi.json")
             or path.startswith("/admin/maintenance")
             or path.startswith("/admin/")
         ):
@@ -104,6 +114,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "controlops-api"}
+
 
 app.include_router(auth.router)
 app.include_router(guards.router)

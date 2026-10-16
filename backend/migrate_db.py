@@ -160,6 +160,14 @@ def _run_migrations():
         # Tenant lifecycle: archived companies keep their data but cannot sign in.
         ("companies", "archived_at", "TEXT"),
         ("companies", "archived_by_user_id", "INTEGER"),
+        # Session rows must match the ORM: a partial legacy user_sessions table (missing
+        # idle_timeout_minutes / last_seen_at) makes successful logins 500 while wrong
+        # passwords still return 401 — because only the success path INSERTs a session.
+        ("user_sessions", "last_seen_at", "TEXT"),
+        ("user_sessions", "idle_timeout_minutes", "INTEGER NOT NULL DEFAULT 30"),
+        ("user_sessions", "revoked_at", "TEXT"),
+        ("user_sessions", "ip_address", "TEXT"),
+        ("user_sessions", "user_agent", "TEXT"),
         # Impersonation. A session carrying impersonator_user_id IS an impersonated
         # session; parent_jti points at the super admin's own still-live session, which is
         # what "exit" returns to and what is re-checked on every request.
@@ -268,6 +276,30 @@ def _run_migrations():
                 cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
             except sqlite3.OperationalError:
                 pass
+    if not table_exists(cur, "user_sessions"):
+        try:
+            cur.execute(
+                """CREATE TABLE user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                jti TEXT NOT NULL UNIQUE,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                expires_at TEXT NOT NULL,
+                idle_timeout_minutes INTEGER NOT NULL DEFAULT 30,
+                revoked_at TEXT,
+                ip_address TEXT,
+                user_agent TEXT,
+                impersonator_user_id INTEGER REFERENCES users(id),
+                parent_jti TEXT,
+                impersonation_mode TEXT,
+                impersonation_reason TEXT
+            )"""
+            )
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_user_sessions_user_id ON user_sessions(user_id)")
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_user_sessions_jti ON user_sessions(jti)")
+        except sqlite3.OperationalError:
+            pass
     if table_exists(cur, "companies") and not table_exists(cur, "special_days"):
         try:
             cur.execute(

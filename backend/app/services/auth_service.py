@@ -315,15 +315,21 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
                 "receipt_ref": receipt_ref,
             },
         )
-    block = company_login_blocked(db, user)
+    try:
+        block = company_login_blocked(db, user)
+    except Exception:
+        block = None
     if block:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=402, detail=block)
 
     _assert_mobile_app_entitled(db, user, client_source, ip_address, user_agent)
 
-    login_guard_service.clear_login_failures(user)
-    db.commit()
+    try:
+        login_guard_service.clear_login_failures(user)
+        db.commit()
+    except Exception:
+        db.rollback()
 
     if getattr(user, "role", None) == SUPER_ADMIN_ROLE and getattr(user, "mfa_enabled", False):
         from app.services import mfa_service
@@ -334,7 +340,10 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
             "mfa_token": mfa_service.create_mfa_challenge_token(user.id, remember_me=remember_me),
         }
 
-    login_log_service.log_login(db, email=email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
+    try:
+        login_log_service.log_login(db, email=email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
+    except Exception:
+        db.rollback()
     if remember_me:
         access_token_expires = timedelta(days=settings.remember_me_expire_days)
     else:

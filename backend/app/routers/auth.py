@@ -315,7 +315,14 @@ def resend_verification(body: ResendVerificationRequest, db: Session = Depends(g
 
 
 def _me_response(db: Session, current_user: User) -> UserMeResponse:
-    perms = permissions_for_user_db(db, current_user)
+    import logging
+
+    log = logging.getLogger("controlops.auth.me")
+    try:
+        perms = permissions_for_user_db(db, current_user)
+    except Exception:
+        log.exception("permissions_for_user_db failed for user %s", current_user.id)
+        perms = []
     plan = None
     company_name = None
     logo_url = None
@@ -323,11 +330,18 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
     if current_user.company_id:
         co = db.query(Company).filter(Company.id == current_user.company_id).first()
         if co:
-            plan = plan_summary(db, co)
             company_name = co.name
-            from app.services.company_profile_service import company_logo_url as _company_logo_url
+            try:
+                plan = plan_summary(db, co)
+            except Exception:
+                log.exception("plan_summary failed for company %s", co.id)
+                plan = {"tier": co.subscription_tier}
+            try:
+                from app.services.company_profile_service import company_logo_url as _company_logo_url
 
-            logo_url = _company_logo_url(co)
+                logo_url = _company_logo_url(co)
+            except Exception:
+                logo_url = None
     sub_status = None
     sub_end = None
     sidebar_modules = None
@@ -335,17 +349,27 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
     if current_user.company_id and co:
         sub_status = co.subscription_status
         sub_end = co.subscription_end
-        enabled_modules = parse_modules(co.enabled_modules_json)
+        try:
+            enabled_modules = parse_modules(co.enabled_modules_json)
+        except Exception:
+            enabled_modules = None
     if getattr(current_user, "role", None) != SUPER_ADMIN_ROLE:
         sidebar_modules = parse_sidebar_modules(current_user.sidebar_modules_json)
         if sidebar_modules and co:
-            sidebar_modules = [p for p in sidebar_modules if path_allowed_by_modules(co, p)]
-    ensure_app_modules(db)
-    module_access = module_access_for_role(
-        db,
-        current_user.role_id,
-        permission_bypass(db, current_user),
-    )
+            try:
+                sidebar_modules = [p for p in sidebar_modules if path_allowed_by_modules(co, p)]
+            except Exception:
+                pass
+    try:
+        ensure_app_modules(db)
+        module_access = module_access_for_role(
+            db,
+            current_user.role_id,
+            permission_bypass(db, current_user),
+        )
+    except Exception:
+        log.exception("module_access failed for user %s", current_user.id)
+        module_access = []
     raw_theme = getattr(current_user, "theme_preference", None)
     theme_preference = raw_theme if raw_theme in ("light", "dark", "system") else None
     base = UserResponse.model_validate(current_user)

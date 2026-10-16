@@ -51,6 +51,9 @@ def create_session(
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> UserSession:
+    from fastapi import HTTPException
+    from sqlalchemy.exc import SQLAlchemyError
+
     row = UserSession(
         user_id=user_id,
         jti=jti,
@@ -60,9 +63,40 @@ def create_session(
         ip_address=ip_address,
         user_agent=(user_agent or "")[:500] or None,
     )
-    db.add(row)
-    db.commit()
-    return row
+    try:
+        db.add(row)
+        db.commit()
+        return row
+    except SQLAlchemyError:
+        db.rollback()
+        # Schema drift (missing user_sessions columns) previously surfaced as a bare
+        # "Internal server error" on an otherwise valid password.
+        try:
+            from app.database import Base, engine
+
+            Base.metadata.create_all(bind=engine, tables=[UserSession.__table__])
+            from migrate_db import run as run_migrate
+
+            run_migrate()
+            db.add(
+                UserSession(
+                    user_id=user_id,
+                    jti=jti,
+                    last_seen_at=_now(),
+                    expires_at=expires_at,
+                    idle_timeout_minutes=idle_timeout_minutes(remember_me),
+                    ip_address=ip_address,
+                    user_agent=(user_agent or "")[:500] or None,
+                )
+            )
+            db.commit()
+            return db.query(UserSession).filter(UserSession.jti == jti).one()
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=503,
+                detail="Sign-in is temporarily unavailable while the session store is repaired. Please try again.",
+            ) from e
 
 
 def active_session(db: Session, jti: str) -> UserSession | None:

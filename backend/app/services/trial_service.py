@@ -14,7 +14,7 @@ from app.services.admin_platform_ext_service import get_config, set_config
 
 DEFAULT_TRIAL_CONFIG = {
     "default_days": DEFAULT_TRIAL_DAYS,
-    "allowed_days": [7, 14, 30, 60],
+    "allowed_days": [7, 14, 30, 60, 180],
     "allow_repeat": False,
     "require_card": True,
     "reminder_days": [7, 3, 1],
@@ -55,6 +55,14 @@ def get_trial_config(db: Session) -> dict[str, Any]:
         merged["allowed_days"] = list(DEFAULT_TRIAL_CONFIG["allowed_days"])
     if not isinstance(merged.get("reminder_days"), list):
         merged["reminder_days"] = list(DEFAULT_TRIAL_CONFIG["reminder_days"])
+    # Restore Enterprise on legacy configs that still use the old sales-gated tier list.
+    eligible = [str(t).lower() for t in (merged.get("eligible_tiers") or [])]
+    legacy_without_enterprise = {"basic", "starter", "standard", "premium"}
+    if eligible and "enterprise" not in eligible and set(eligible) <= legacy_without_enterprise:
+        eligible = list(dict.fromkeys([*eligible, "enterprise"]))
+        merged["eligible_tiers"] = eligible
+    elif not eligible:
+        merged["eligible_tiers"] = list(DEFAULT_TRIAL_CONFIG["eligible_tiers"])
     return merged
 
 

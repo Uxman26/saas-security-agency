@@ -51,7 +51,9 @@ export function ShellChromeSkeleton({
               />
             </div>
           ) : (
-            <div className="container mx-auto space-y-6 px-4 py-6">{children}</div>
+            <div className="mx-auto w-full max-w-none space-y-6 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
+              {children}
+            </div>
           )}
         </main>
       </div>

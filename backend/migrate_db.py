@@ -2299,6 +2299,7 @@ def run():
         except sqlite3.OperationalError:
             pass
 
+<<<<<<< HEAD
     try:
         if table_exists(cur, "occurrence_sheets"):
             cur.execute(
@@ -2309,6 +2310,154 @@ def run():
         import logging
 
         logging.getLogger(__name__).warning("occurrence status migration failed: %s", e)
+=======
+    if not table_exists(cur, "mobile_device_tokens"):
+        try:
+            cur.execute(
+                """CREATE TABLE mobile_device_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    fcm_token TEXT NOT NULL,
+                    platform TEXT NOT NULL DEFAULT 'android',
+                    device_id TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_mobile_device_tokens_company_id ON mobile_device_tokens(company_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_mobile_device_tokens_user_id ON mobile_device_tokens(user_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_mobile_device_tokens_device_id ON mobile_device_tokens(device_id)"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    if not table_exists(cur, "mobile_announcements"):
+        try:
+            cur.execute(
+                """CREATE TABLE mobile_announcements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER REFERENCES companies(id),
+                    title TEXT NOT NULL,
+                    message TEXT,
+                    media_type TEXT DEFAULT 'message',
+                    image_url TEXT,
+                    video_url TEXT,
+                    cta_label TEXT DEFAULT 'Got it',
+                    dismissible INTEGER DEFAULT 1,
+                    priority INTEGER DEFAULT 0,
+                    starts_at TEXT,
+                    ends_at TEXT,
+                    status TEXT DEFAULT 'active',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_mobile_announcements_company_id ON mobile_announcements(company_id)"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    if table_exists(cur, "sites") and not column_exists(cur, "sites", "geofence_radius_m"):
+        try:
+            cur.execute("ALTER TABLE sites ADD COLUMN geofence_radius_m REAL")
+        except sqlite3.OperationalError:
+            pass
+
+    if not table_exists(cur, "portal_message_threads"):
+        try:
+            cur.execute(
+                """CREATE TABLE portal_message_threads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    user_a_id INTEGER NOT NULL REFERENCES users(id),
+                    user_b_id INTEGER NOT NULL REFERENCES users(id),
+                    last_message TEXT,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            cur.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_portal_msg_thread_pair ON portal_message_threads(company_id, user_a_id, user_b_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_portal_message_threads_company_id ON portal_message_threads(company_id)"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    if not table_exists(cur, "portal_messages"):
+        try:
+            cur.execute(
+                """CREATE TABLE portal_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL REFERENCES companies(id),
+                    thread_id INTEGER NOT NULL REFERENCES portal_message_threads(id),
+                    sender_user_id INTEGER NOT NULL REFERENCES users(id),
+                    body TEXT NOT NULL DEFAULT '',
+                    client_message_id TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    read_at TEXT
+                )"""
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_portal_messages_thread_id ON portal_messages(thread_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_portal_messages_company_id ON portal_messages(company_id)"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+    # Super Admin server monitoring: request timing + metric snapshots.
+    if table_exists(cur, "api_usage_logs"):
+        for col, spec in (
+            ("status_code", "INTEGER"),
+            ("duration_ms", "INTEGER"),
+        ):
+            if not column_exists(cur, "api_usage_logs", col):
+                try:
+                    cur.execute(f"ALTER TABLE api_usage_logs ADD COLUMN {col} {spec}")
+                except Exception:
+                    pass
+        try:
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_api_usage_status ON api_usage_logs(status_code)"
+            )
+        except Exception:
+            pass
+    if not table_exists(cur, "server_metric_snapshots"):
+        try:
+            cur.execute(
+                """CREATE TABLE server_metric_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                captured_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                cpu_percent REAL,
+                ram_percent REAL,
+                ram_used_mb REAL,
+                disk_percent REAL,
+                disk_used_gb REAL,
+                load_1 REAL,
+                load_5 REAL,
+                load_15 REAL,
+                process_rss_mb REAL,
+                api_rps REAL,
+                api_error_rate REAL,
+                payload_json TEXT
+            )"""
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS ix_server_metric_snapshots_captured "
+                "ON server_metric_snapshots(captured_at)"
+            )
+        except Exception:
+            pass
+>>>>>>> ba6fcd2105111d9347974f88013a1d905dc7dcc5
 
     conn.commit()
     conn.close()
@@ -2363,6 +2512,27 @@ def run():
         logging.getLogger(__name__).warning("RBAC backfill failed: %s", e)
 
     try:
+<<<<<<< HEAD
+=======
+        path2 = get_db_path()
+        if path2:
+            c2 = sqlite3.connect(path2)
+            try:
+                cur2 = c2.cursor()
+                if table_exists(cur2, "occurrence_sheets"):
+                    cur2.execute(
+                        "UPDATE occurrence_sheets SET status = 'reported' WHERE status = 'submitted'"
+                    )
+                    c2.commit()
+            finally:
+                c2.close()
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning("occurrence status migration failed: %s", e)
+
+    try:
+>>>>>>> ba6fcd2105111d9347974f88013a1d905dc7dcc5
         from app.database import SessionLocal
         from app.services import admin_platform_ext_service, gdpr_service
 

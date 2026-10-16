@@ -89,11 +89,11 @@ export default function PricingPage() {
               tcommon={tcommon}
               perMonthLabel={tcommon('perMonth')}
               getStartedLabel={tc('getStarted')}
-              contactLabel={t('contactSales')}
               trial={{
                 enabled: Boolean(trialConfig?.enabled),
                 defaultDays: trialConfig?.default_days,
                 requireCard: trialConfig?.require_card,
+                eligibleTiers: trialConfig?.eligible_tiers,
                 label: (days, requireCard) =>
                   requireCard ? tp('freeTrial', { days }) : tp('freeTrialNoCard', { days }),
                 ctaLabel: (days) => tc('startTrial', { days }),

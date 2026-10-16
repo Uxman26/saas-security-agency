@@ -15,7 +15,7 @@ def role_slug(user: User) -> str:
 
 
 def is_portal_role(user: User) -> bool:
-    return role_slug(user) in {"client", "staff"}
+    return role_slug(user) in {"client", "staff", "guard"}
 
 
 def is_client_portal_user(user: User) -> bool:
@@ -23,7 +23,7 @@ def is_client_portal_user(user: User) -> bool:
 
 
 def is_staff_portal_user(user: User) -> bool:
-    return role_slug(user) == "staff"
+    return role_slug(user) in {"staff", "guard"}
 
 
 def get_linked_guard(db: Session, user: User) -> Optional[Guard]:
@@ -114,7 +114,7 @@ def filter_sites_for_user(db: Session, user: User, q):
         # nothing. Falling through to an unfiltered query here would show it every
         # site in the company.
         return q.filter(Site.id < 0)
-    if slug == "staff":
+    if is_staff_portal_user(user):
         ids = staff_site_ids(db, user)
         if not ids:
             return q.filter(Site.id < 0)
@@ -134,7 +134,7 @@ def filter_assignments_for_user(db: Session, user: User, q):
             return q.filter(Site.client_id == user.client_id)
         # Fail closed, exactly as filter_sites_for_user does.
         return q.filter(Site.id < 0)
-    if slug == "staff":
+    if is_staff_portal_user(user):
         guard = get_linked_guard(db, user)
         if not guard:
             return q.filter(Assignment.guard_id < 0)

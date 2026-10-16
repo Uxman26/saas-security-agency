@@ -737,6 +737,7 @@ class SiteBase(BaseModel):
     staff_hourly_rate: Optional[float] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    geofence_radius_m: Optional[float] = Field(default=None, ge=20, le=5000)
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
     contractor_id: Optional[UUID] = None
@@ -1413,6 +1414,50 @@ class AttendanceByShiftRequest(BaseModel):
 class BookingOnOff(BaseModel):
     assignment_id: int
     book_off: bool = False
+    # Optional GPS from mobile book-on / book-off. When present, the server validates
+    # site geofence (when the site has coordinates) and records the fix on the note.
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_m: Optional[float] = None
+    accuracy: Optional[float] = None  # alias used by some clients
+    device_id: Optional[str] = None
+    captured_at: Optional[datetime] = None
+
+
+class PortalPushTokenRequest(BaseModel):
+    fcm_token: str = Field(min_length=8, max_length=4096)
+    platform: str = Field(default="android", max_length=32)
+    device_id: Optional[str] = Field(default=None, max_length=128)
+
+
+class PortalNotificationResponse(BaseModel):
+    """Mobile-friendly notification shape (mirrors AppNotification + read/type aliases)."""
+
+    id: int
+    title: str
+    body: Optional[str] = None
+    type: Optional[str] = None
+    kind: Optional[str] = None
+    read: bool = False
+    read_at: Optional[datetime] = None
+    created_at: datetime
+    data: dict = {}
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+
+
+class PortalAnnouncementResponse(BaseModel):
+    active: bool = False
+    announcement: Optional[dict] = None
+
+
+class PortalMessageCreateRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=5000)
+    client_message_id: Optional[str] = Field(default=None, max_length=120)
+
+
+class PortalThreadCreateRequest(BaseModel):
+    peer_id: str = Field(min_length=3, max_length=64)
 
 class PayrollBase(BaseModel):
     guard_id: int
@@ -2770,6 +2815,7 @@ class PatrolTodayResponse(BaseModel):
     route_name: Optional[str] = None
     site_name: Optional[str] = None
     next_checkpoint: Optional[PatrolCheckpointResponse] = None
+    checkpoints: list[PatrolCheckpointResponse] = []
     due_at: Optional[str] = None
     recent_logs: list[PatrolLogResponse] = []
 

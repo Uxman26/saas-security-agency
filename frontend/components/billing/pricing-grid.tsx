@@ -30,7 +30,6 @@ type Props = {
   perMonthLabel: string;
   currentPlanLabel?: string;
   upgradeLabel?: string;
-  contactLabel?: string;
   getStartedLabel: string;
   /** Free-trial offer for signup cards. Omit (or pass enabled: false) to hide it. */
   trial?: {
@@ -39,6 +38,8 @@ type Props = {
     defaultDays?: number | null;
     /** Renders the "no card required" wording when the platform is not asking for one. */
     requireCard?: boolean;
+    /** Backend trial_config.eligible_tiers — empty means all packages are eligible. */
+    eligibleTiers?: string[];
     label: (days: number, requireCard: boolean) => string;
     ctaLabel: (days: number) => string;
   };
@@ -59,7 +60,6 @@ export function PricingGrid({
   perMonthLabel,
   currentPlanLabel = 'Current plan',
   upgradeLabel = 'Upgrade',
-  contactLabel = 'Contact sales',
   getStartedLabel,
   trial,
   currentTier,
@@ -78,11 +78,13 @@ export function PricingGrid({
         const price = planDisplayPrice(tier, cycle, yearlyDiscount);
         const isCurrent = currentTier === tier.tier && (currentCycle || 'monthly') === cycle;
         const canChange = canChangeToPlan(currentTier, currentCycle, tier.tier, cycle);
-        const isEnterprise = tier.tier === 'enterprise';
-        // Enterprise goes through sales, and an existing tenant upgrading is past the
-        // trial, so the offer only applies to a fresh self-serve signup.
+        // Trial offer follows backend trial_config (eligible_tiers + enabled). Existing
+        // tenants upgrading use onUpgrade and are past self-serve trial by design.
         const trialDays = tier.trial_days ?? trial?.defaultDays ?? null;
-        const showTrial = Boolean(trial?.enabled && trialDays && !isEnterprise && !onUpgrade);
+        const eligible = (trial?.eligibleTiers || []).map((t) => t.toLowerCase());
+        const tierEligible =
+          eligible.length === 0 || eligible.includes(String(tier.tier).toLowerCase());
+        const showTrial = Boolean(trial?.enabled && trialDays && tierEligible && !onUpgrade);
         const signupHref = `/signup?tier=${tier.tier}&cycle=${cycle}${showTrial ? '&trial=1' : ''}`;
 
         return (
@@ -139,15 +141,6 @@ export function PricingGrid({
                   onClick={() => onUpgrade(tier.tier)}
                 >
                   {isCurrent ? currentPlanLabel : canChange ? upgradeLabel : '—'}
-                </Button>
-              ) : isEnterprise ? (
-                <Button asChild className="w-full" variant="outline" size="lg">
-                  <Link
-                    href="/book-demo"
-                    onClick={() => analytics.ctaClick('enterprise_contact', 'pricing_grid')}
-                  >
-                    {contactLabel}
-                  </Link>
                 </Button>
               ) : (
                 <Button asChild className="w-full" variant={highlighted ? 'default' : 'outline'} size="lg">

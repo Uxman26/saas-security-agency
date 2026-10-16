@@ -21,7 +21,9 @@ from app.schemas import AccidentReportCreate, AccidentReportResponse, AccidentRe
 from app.services import audit_service
 from app.services.company_service import get_company_by_user_id
 from app.services.portal_access import (
+    get_linked_guard,
     is_client_portal_user,
+    is_portal_role,
     is_staff_portal_user,
     pinned_site_ids,
 )
@@ -91,6 +93,9 @@ def _resolve_site(db: Session, user: User, company_id: int, site_id: Optional[in
         pinned = pinned_site_ids(db, user)
         if pinned is not None and site.id not in pinned:
             raise HTTPException(status_code=403, detail="Site not assigned to your login")
+    elif is_portal_role(user):
+        from app.services.portal_access import assert_site_visible
+        assert_site_visible(db, user, site.id)
     return site
 
 
@@ -98,9 +103,14 @@ def create_report(db: Session, user: User, data: AccidentReportCreate) -> Accide
     company = get_company_by_user_id(db, user.id)
     site = _resolve_site(db, user, company.id, data.site_id)
     guard_id = data.guard_id
-    if is_staff_portal_user(user) and user.guard_id:
-        # A guard filing their own report cannot attribute it to someone else.
-        guard_id = user.guard_id
+    if is_staff_portal_user(user):
+        linked = get_linked_guard(db, user)
+        if linked:
+            guard_id = linked.id
+        elif user.guard_id:
+            guard_id = user.guard_id
+        else:
+            guard_id = None
     if guard_id is not None:
         owned = db.query(Guard.id).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
         if not owned:

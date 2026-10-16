@@ -1111,6 +1111,56 @@ export interface ApiUsageSummary {
   recent: { id: number; company_id?: number | null; path?: string | null; method?: string | null; logged_at?: string }[];
 }
 
+export interface ServerMonitorAlert {
+  severity: string;
+  code: string;
+  title: string;
+  detail: string;
+  recommended_action: string;
+  timestamp: string;
+}
+
+export interface ServerMonitorTenantRow {
+  company_id: number;
+  company_name?: string | null;
+  subscription_tier?: string | null;
+  subscription_status?: string | null;
+  api_requests: number;
+  api_requests_per_minute: number;
+  api_failed: number;
+  api_avg_duration_ms?: number | null;
+  api_peak_duration_ms?: number | null;
+  active_users: number;
+  concurrent_sessions: number;
+  background_jobs: number;
+  logo_storage_mb: number;
+  cpu_ram_attribution?: { measurement: string; note?: string };
+  storage_attribution?: { measurement: string; note?: string };
+}
+
+export interface ServerMonitorReport {
+  generated_at: string;
+  window_hours: number;
+  host: Record<string, any>;
+  redis: Record<string, any>;
+  database: Record<string, any>;
+  api: Record<string, any>;
+  jobs: Record<string, any>;
+  tenants: { window_hours: number; tenants: ServerMonitorTenantRow[]; measurement_notes?: string[] };
+  history: {
+    captured_at?: string | null;
+    cpu_percent?: number | null;
+    ram_percent?: number | null;
+    disk_percent?: number | null;
+    load_1?: number | null;
+    api_rps?: number | null;
+    api_error_rate?: number | null;
+  }[];
+  alerts: ServerMonitorAlert[];
+  thresholds: Record<string, number>;
+  data_quality: Record<string, any>;
+}
+
 export interface RefundPolicy {
   id: number;
   code: string;

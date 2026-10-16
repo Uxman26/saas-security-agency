@@ -3,7 +3,16 @@
 import { cn } from '@/lib/utils';
 
 export function ModulePage({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn('container mx-auto px-4 py-8 space-y-6', className)}>{children}</div>;
+  return (
+    <div
+      className={cn(
+        'mx-auto w-full max-w-none space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function ModuleHeader({

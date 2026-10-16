@@ -407,6 +407,7 @@
     "adminSecurity": "Security",
     "adminCompliance": "Compliance",
     "adminApiUsage": "API usage",
+    "adminServerMonitor": "Server monitor",
     "adminTemplates": "Templates",
     "adminRefunds": "Refunds",
     "adminRoles": "Platform roles"

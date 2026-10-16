@@ -1,18 +1,9 @@
 """Per-request API usage logging.
 
-One row per authenticated request, read back as counts by the usage reports. The
-work itself is small, but it runs on every request, so how it is scheduled matters
-more than what it does:
+One row per authenticated request. Timing and status are recorded when available
+so Super Admin monitoring can report measured latency and error rates.
 
-* The DB call is synchronous. Awaiting it directly on the event loop stalled every
-  other in-flight request for its duration, which on a page issuing several parallel
-  calls meant they queued rather than overlapped. It now runs in a worker thread.
-* Resolving the caller's company re-queried ``users`` on every request. The mapping
-  changes only when a user is moved between companies, so it is cached for a short
-  TTL instead.
-
-Behaviour is unchanged: still exactly one row per authenticated, non-OPTIONS request,
-written before the response is returned.
+The DB write runs in a worker thread so the event loop is not blocked.
 """
 
 import time
@@ -26,8 +17,6 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import ApiUsageLog, User
 
-# user id -> (company_id, cached_at). Short enough that a company move is picked up
-# within a minute, long enough to take the query off the hot path.
 _COMPANY_CACHE: dict[int, tuple[int | None, float]] = {}
 _COMPANY_CACHE_TTL = 60.0
 _COMPANY_CACHE_MAX = 2048
@@ -46,12 +35,26 @@ def _company_id_for(db, user_id: int) -> int | None:
     return company_id
 
 
-def _record(user_id: int, path: str, method: str) -> None:
+def _record(
+    user_id: int,
+    path: str,
+    method: str,
+    status_code: int | None,
+    duration_ms: int | None,
+) -> None:
     db = SessionLocal()
     try:
         company_id = _company_id_for(db, user_id)
         if company_id:
-            db.add(ApiUsageLog(company_id=company_id, path=path, method=method))
+            db.add(
+                ApiUsageLog(
+                    company_id=company_id,
+                    path=path,
+                    method=method,
+                    status_code=status_code,
+                    duration_ms=duration_ms,
+                )
+            )
             db.commit()
     except Exception:
         db.rollback()
@@ -61,8 +64,13 @@ def _record(user_id: int, path: str, method: str) -> None:
 
 class ApiUsageMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        started = time.perf_counter()
         response = await call_next(request)
+        duration_ms = int((time.perf_counter() - started) * 1000)
         if request.method == "OPTIONS" or request.url.path == "/" or request.url.path.startswith("/swagger"):
+            return response
+        # Skip high-frequency monitoring polls to avoid feedback loops.
+        if request.url.path.startswith("/admin/server-monitor"):
             return response
         auth = request.headers.get("authorization") or ""
         if not auth.lower().startswith("bearer "):
@@ -73,5 +81,12 @@ class ApiUsageMiddleware(BaseHTTPMiddleware):
             uid = int(payload.get("sub"))
         except (JWTError, TypeError, ValueError):
             return response
-        await run_in_threadpool(_record, uid, request.url.path[:200], request.method)
+        await run_in_threadpool(
+            _record,
+            uid,
+            request.url.path[:200],
+            request.method,
+            int(response.status_code),
+            duration_ms,
+        )
         return response

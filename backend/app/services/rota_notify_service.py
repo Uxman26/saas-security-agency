@@ -234,6 +234,7 @@ def notify_shift_changes(
         if u.guard_id is not None
     }
 
+    fcm_jobs: list[tuple[int, str, str]] = []
     for gid, items in by_guard.items():
         guard = guards.get(gid)
         if not guard:
@@ -262,6 +263,7 @@ def notify_shift_changes(
                     entity_id=plan.id,
                 )
             )
+            fcm_jobs.append((uid, title, body[:500]))
 
         first = items[0]
         _send_channels(
@@ -279,3 +281,18 @@ def notify_shift_changes(
         db.commit()
     except Exception:
         db.rollback()
+        return
+
+    try:
+        from app.services import fcm_push_service
+
+        for uid, title, body in fcm_jobs:
+            fcm_push_service.send_to_user(
+                db,
+                uid,
+                title=title,
+                body=body,
+                data={"type": "rota_change", "entity_type": "rota", "entity_id": plan.id},
+            )
+    except Exception:
+        pass

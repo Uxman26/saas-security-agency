@@ -42,6 +42,11 @@ from app.schemas import (
 )
 from app.services.company_service import get_company_by_user_id
 from app.services.geo_utils import haversine_m
+from app.services.patrol_qr_utils import (
+    MAX_GPS_ACCURACY_M,
+    SUCCESS_SCAN_STATUSES,
+    normalize_qr_token,
+)
 from app.services.portal_access import (
     get_linked_guard,
     is_client_portal_user,
@@ -427,10 +432,11 @@ def scan_checkpoint(
     photo_path: Optional[str] = None,
 ) -> PatrolLogResponse:
     company = get_company_by_user_id(db, user.id)
+    qr_token = normalize_qr_token(data.qr_token)
     cp = (
         db.query(PatrolCheckpoint)
         .options(joinedload(PatrolCheckpoint.route).joinedload(PatrolRoute.site))
-        .filter(PatrolCheckpoint.qr_token == data.qr_token)
+        .filter(PatrolCheckpoint.qr_token == qr_token)
         .first()
     )
     if not cp:
@@ -445,10 +451,25 @@ def scan_checkpoint(
     if not route or route.status != "active":
         raise HTTPException(status_code=400, detail="Patrol route is inactive")
 
-    # Guard must be assigned to this site (active session or today's assignment) unless admin scanning with explicit session
     session_id = data.session_id
     open_s = None
-    if not session_id:
+    if session_id:
+        owned = (
+            db.query(PatrolSession)
+            .filter(
+                PatrolSession.id == session_id,
+                PatrolSession.company_id == company.id,
+                PatrolSession.guard_id == guard.id,
+                PatrolSession.route_id == cp.route_id,
+            )
+            .first()
+        )
+        if not owned:
+            raise HTTPException(status_code=404, detail="Patrol session not found")
+        if (owned.status or "").lower() != "active":
+            raise HTTPException(status_code=400, detail="Patrol session is not active")
+        session_id = owned.id
+    else:
         open_s = (
             db.query(PatrolSession)
             .filter(
@@ -475,48 +496,79 @@ def scan_checkpoint(
     distance = haversine_m(cp.latitude, cp.longitude, data.latitude, data.longitude)
     radius = cp.radius_m or 20
     now = datetime.now(timezone.utc)
-    status = "completed"
-    notes = None
+    # Never default to a success status — only completed* after full validation + open slot.
+    status = "rejected"
+    notes = "Scan not validated"
     late_minutes = None
     occurrence = None
 
     from app.services import patrol_schedule_service
 
-    site_ok, site_dist = patrol_schedule_service.site_geofence_ok(
-        route.site if route else None, data.latitude, data.longitude
-    )
-    if not site_ok:
+    accuracy = data.accuracy
+    if accuracy is None:
         status = "failed_gps"
-        notes = f"Outside site geofence ({site_dist}m)"
-    elif distance > radius:
+        notes = "GPS accuracy unavailable — cannot verify location"
+    elif float(accuracy) > MAX_GPS_ACCURACY_M:
         status = "failed_gps"
-        notes = f"GPS {distance:.1f}m outside checkpoint {radius:.0f}m radius"
-    else:
-        grace = int(getattr(route, "grace_minutes", None) or 15)
-        early = int(getattr(route, "reminder_minutes", None) or 10) + 5
-        occurrence = patrol_schedule_service.match_open_occurrence(
-            db,
-            checkpoint_id=cp.id,
-            guard_id=guard.id,
-            now=now,
-            grace_minutes=grace,
-            early_minutes=early,
+        notes = (
+            f"GPS accuracy {float(accuracy):.1f}m exceeds "
+            f"{MAX_GPS_ACCURACY_M:.0f}m threshold"
         )
-        if occurrence and occurrence.scheduled_at:
-            scheduled = occurrence.scheduled_at
-            if scheduled.tzinfo is None:
-                scheduled = scheduled.replace(tzinfo=timezone.utc)
-            delta_min = (now - scheduled).total_seconds() / 60.0
-            if delta_min > 0:
-                status = "completed_late"
-                late_minutes = round(delta_min, 1)
-                notes = f"Completed late by {late_minutes} minutes"
+    else:
+        site_ok, site_dist = patrol_schedule_service.site_geofence_ok(
+            route.site if route else None, data.latitude, data.longitude
+        )
+        if not site_ok:
+            status = "failed_gps"
+            notes = f"Outside site geofence ({site_dist}m)"
+        elif distance > radius:
+            status = "failed_gps"
+            notes = f"GPS {distance:.1f}m outside checkpoint {radius:.0f}m radius"
+        else:
+            grace = int(getattr(route, "grace_minutes", None) or 15)
+            early = int(getattr(route, "reminder_minutes", None) or 10) + 5
+            freq = max(int(getattr(route, "frequency_minutes", None) or 60), 5)
+            occurrence = patrol_schedule_service.match_open_occurrence(
+                db,
+                checkpoint_id=cp.id,
+                guard_id=guard.id,
+                now=now,
+                grace_minutes=grace,
+                early_minutes=early,
+            )
+            dup = (
+                db.query(PatrolLog.id)
+                .filter(
+                    PatrolLog.checkpoint_id == cp.id,
+                    PatrolLog.guard_id == guard.id,
+                    PatrolLog.status.in_(tuple(SUCCESS_SCAN_STATUSES)),
+                    PatrolLog.scan_time >= now - timedelta(minutes=max(freq // 2, 5)),
+                )
+                .first()
+            )
+            if dup:
+                # Never complete (again) on a duplicate — leave any open occurrence open for ops review.
+                occurrence = None
+                status = "duplicate"
+                notes = "Duplicate scan within patrol interval"
+            elif occurrence and occurrence.scheduled_at:
+                scheduled = occurrence.scheduled_at
+                if scheduled.tzinfo is None:
+                    scheduled = scheduled.replace(tzinfo=timezone.utc)
+                delta_min = (now - scheduled).total_seconds() / 60.0
+                if delta_min > 0:
+                    status = "completed_late"
+                    late_minutes = round(delta_min, 1)
+                    notes = f"Completed late by {late_minutes} minutes"
+                else:
+                    status = "completed"
+                    notes = "Completed on time"
+            elif not _in_window(now, route.start_time, route.end_time):
+                status = "out_of_window"
+                notes = "Scanned outside scheduled window — not counted as completed"
             else:
-                status = "completed"
-                notes = "Completed on time"
-        elif not _in_window(now, route.start_time, route.end_time):
-            status = "completed_late"
-            notes = "Scanned outside scheduled window"
+                status = "no_scheduled_slot"
+                notes = "No open scheduled patrol slot for this checkpoint — not counted as completed"
 
     log = PatrolLog(
         company_id=company.id,
@@ -525,7 +577,7 @@ def scan_checkpoint(
         route_id=cp.route_id,
         session_id=session_id,
         assignment_id=data.assignment_id or (has_assignment[0] if has_assignment else None),
-        occurrence_id=occurrence.id if occurrence else None,
+        occurrence_id=occurrence.id if occurrence and status in SUCCESS_SCAN_STATUSES else None,
         scan_time=now,
         latitude=data.latitude,
         longitude=data.longitude,
@@ -538,13 +590,27 @@ def scan_checkpoint(
     )
     db.add(log)
     db.flush()
-    if occurrence and status in ("completed", "completed_late"):
+    # Fail-closed: only successful statuses may close a scheduled occurrence.
+    if occurrence is not None and status in SUCCESS_SCAN_STATUSES:
         occurrence.status = status
         occurrence.completed_at = now
         occurrence.late_minutes = late_minutes
         occurrence.log_id = log.id
         if occurrence.session_id is None and session_id:
             occurrence.session_id = session_id
+    if status == "failed_gps":
+        try:
+            patrol_schedule_service.notify_failed_gps_scan(
+                db,
+                company_id=company.id,
+                guard=guard,
+                checkpoint=cp,
+                route=route,
+                log_id=log.id,
+                notes=notes or "GPS verification failed",
+            )
+        except Exception:
+            pass
     db.commit()
     log = (
         db.query(PatrolLog)
@@ -705,7 +771,7 @@ def compliance_report(
             rows = occ_by_route_day.get((route.id, day), [])
             if rows:
                 required = len(rows)
-                completed = sum(1 for r in rows if r.status in ("completed", "completed_late"))
+                completed = sum(1 for r in rows if r.status in SUCCESS_SCAN_STATUSES)
                 late = sum(1 for r in rows if r.status == "completed_late")
                 missed = sum(1 for r in rows if r.status == "missed")
             else:
@@ -713,7 +779,7 @@ def compliance_report(
                 loops = max(1, int((8 * 60) / freq))
                 required = len(cps) * loops
                 logs = log_by_route_day.get((route.id, day), [])
-                completed = sum(1 for l in logs if l.status in ("completed", "completed_late"))
+                completed = sum(1 for l in logs if l.status in SUCCESS_SCAN_STATUSES)
                 late = sum(1 for l in logs if l.status == "completed_late")
                 missed = max(0, required - completed)
             pct = round(100.0 * completed / required, 1) if required else 100.0
@@ -803,7 +869,7 @@ def today_for_guard(db: Session, user: User) -> PatrolTodayResponse:
             recent_logs=recent,
         )
     cps = sorted([c for c in (route.checkpoints or []) if c.status == "active"], key=lambda x: x.sort_order or 0)
-    scanned_ids = {l.checkpoint_id for l in recent if l.status in ("completed", "completed_late")}
+    scanned_ids = {l.checkpoint_id for l in recent if l.status in SUCCESS_SCAN_STATUSES}
     nxt = next((c for c in cps if c.id not in scanned_ids), cps[0] if cps else None)
     return PatrolTodayResponse(
         session=PatrolSessionResponse.model_validate(sess) if sess else None,
@@ -811,6 +877,7 @@ def today_for_guard(db: Session, user: User) -> PatrolTodayResponse:
         route_name=route.name,
         site_name=route.site.name if route.site else None,
         next_checkpoint=_checkpoint_out(nxt) if nxt else None,
+        checkpoints=[_checkpoint_out(c) for c in cps],
         due_at=route.start_time,
         recent_logs=recent,
     )

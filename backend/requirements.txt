@@ -20,3 +20,5 @@ pillow==11.3.0
 pytest==8.0.0
 httpx==0.26.0
 pyotp==2.9.0
+firebase-admin==6.5.0
+psutil==6.1.1

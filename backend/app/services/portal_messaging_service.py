@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models import AppNotification, Guard, PortalMessage, PortalMessageThread, User
 from app.services.company_service import get_company_by_user_id
 from app.services import fcm_push_service
+from app.services.portal_access import is_client_portal_user, is_portal_role, is_staff_portal_user
 
 
 def _pair(a: int, b: int) -> tuple[int, int]:
@@ -21,7 +22,34 @@ def _user_name(u: User) -> str:
     return (u.full_name or u.email or f"User #{u.id}").strip()
 
 
-def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str) -> int:
+def _assert_messaging_peer_allowed(sender: User, peer: User) -> None:
+    """Restrict who portal users may open threads with inside a tenant.
+
+    - Internal / ops roles may message anyone in the company.
+    - Staff/guards may message internal/ops users and other staff/guards (not clients).
+    - Clients may message internal/ops users only.
+    """
+    if not peer.is_active:
+        raise HTTPException(status_code=404, detail="Peer user not found")
+    if not is_portal_role(sender):
+        return
+    if is_staff_portal_user(sender):
+        if is_client_portal_user(peer):
+            raise HTTPException(
+                status_code=403,
+                detail="Staff cannot message client accounts",
+            )
+        return
+    if is_client_portal_user(sender):
+        if is_portal_role(peer):
+            raise HTTPException(
+                status_code=403,
+                detail="Clients can only message ControlOps controllers or admins",
+            )
+        return
+
+
+def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str, sender: User) -> int:
     peer_id = (peer_id or "").strip()
     if peer_id.startswith("user:"):
         uid = int(peer_id.split(":", 1)[1])
@@ -32,6 +60,7 @@ def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str) -> int:
         )
         if not user:
             raise HTTPException(status_code=404, detail="Peer user not found")
+        _assert_messaging_peer_allowed(sender, user)
         return user.id
     if peer_id.startswith("guard:"):
         gid = int(peer_id.split(":", 1)[1])
@@ -58,6 +87,7 @@ def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str) -> int:
                 status_code=404,
                 detail="That staff member has no ControlOps login for messaging",
             )
+        _assert_messaging_peer_allowed(sender, user)
         return user.id
     raise HTTPException(status_code=400, detail="peer_id must be user:{id} or guard:{id}")
 
@@ -117,7 +147,7 @@ def list_threads(db: Session, user: User) -> list[dict]:
 
 def get_or_create_thread(db: Session, user: User, peer_id: str) -> dict:
     company = get_company_by_user_id(db, user.id)
-    peer_user_id = _resolve_peer_user_id(db, company.id, peer_id)
+    peer_user_id = _resolve_peer_user_id(db, company.id, peer_id, user)
     if peer_user_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot message yourself")
     a, b = _pair(user.id, peer_user_id)

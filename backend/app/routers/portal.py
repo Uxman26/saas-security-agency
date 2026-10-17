@@ -200,16 +200,35 @@ def portal_register_push_token(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("my_portal", "view")),
 ):
-    """Register / refresh an FCM device token for this portal user."""
+    """Register / refresh an FCM device token for this portal user.
+
+    Tokens are never reassigned across users: if another account already owns
+    this FCM token (or this device_id), that row is cleared/updated only for the
+    current user so push delivery cannot be hijacked by login on a shared device.
+    """
     company = get_company_by_user_id(db, current_user.id)
     platform = (body.platform or "android").strip().lower()
     if platform not in {"android", "ios", "web"}:
         raise HTTPException(status_code=400, detail="platform must be android, ios, or web")
     token = body.fcm_token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="fcm_token is required")
     now = datetime.now(timezone.utc)
+
+    # Drop stale rows where this exact token belonged to someone else in the tenant.
+    (
+        db.query(MobileDeviceToken)
+        .filter(
+            MobileDeviceToken.company_id == company.id,
+            MobileDeviceToken.fcm_token == token,
+            MobileDeviceToken.user_id != current_user.id,
+        )
+        .delete(synchronize_session=False)
+    )
 
     row = None
     if body.device_id:
+        # Prefer updating this user's same physical device.
         row = (
             db.query(MobileDeviceToken)
             .filter(
@@ -219,11 +238,22 @@ def portal_register_push_token(
             )
             .first()
         )
+        # Another user on the same device_id must not keep receiving this device's pushes.
+        (
+            db.query(MobileDeviceToken)
+            .filter(
+                MobileDeviceToken.company_id == company.id,
+                MobileDeviceToken.device_id == body.device_id,
+                MobileDeviceToken.user_id != current_user.id,
+            )
+            .delete(synchronize_session=False)
+        )
     if row is None:
         row = (
             db.query(MobileDeviceToken)
             .filter(
                 MobileDeviceToken.company_id == company.id,
+                MobileDeviceToken.user_id == current_user.id,
                 MobileDeviceToken.fcm_token == token,
             )
             .first()
@@ -238,7 +268,6 @@ def portal_register_push_token(
         )
         db.add(row)
     else:
-        row.user_id = current_user.id
         row.fcm_token = token
         row.platform = platform
         if body.device_id:

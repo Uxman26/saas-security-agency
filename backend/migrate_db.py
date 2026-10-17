@@ -2342,18 +2342,6 @@ def _run_migrations():
         except sqlite3.OperationalError:
             pass
 
-<<<<<<< HEAD
-    try:
-        if table_exists(cur, "occurrence_sheets"):
-            cur.execute(
-                "UPDATE occurrence_sheets SET status = 'reported' WHERE status = 'submitted'"
-            )
-            conn.commit()
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning("occurrence status migration failed: %s", e)
-=======
     if not table_exists(cur, "mobile_device_tokens"):
         try:
             cur.execute(
@@ -2500,7 +2488,6 @@ def _run_migrations():
             )
         except Exception:
             pass
->>>>>>> ba6fcd2105111d9347974f88013a1d905dc7dcc5
 
     conn.commit()
     conn.close()
@@ -2555,8 +2542,6 @@ def _run_migrations():
         logging.getLogger(__name__).warning("RBAC backfill failed: %s", e)
 
     try:
-<<<<<<< HEAD
-=======
         path2 = get_db_path()
         if path2:
             c2 = sqlite3.connect(path2)
@@ -2575,7 +2560,6 @@ def _run_migrations():
         logging.getLogger(__name__).warning("occurrence status migration failed: %s", e)
 
     try:
->>>>>>> ba6fcd2105111d9347974f88013a1d905dc7dcc5
         from app.database import SessionLocal
         from app.services import admin_platform_ext_service, gdpr_service
 

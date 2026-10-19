@@ -42,8 +42,11 @@ def _assert_mobile_app_entitled(
         return
     if getattr(user, "role", None) == SUPER_ADMIN_ROLE or not user.company_id:
         return
+    import logging
+
     from app.services import login_log_service
 
+    log = logging.getLogger("controlops.auth.mobile")
     co = db.query(Company).filter(Company.id == user.company_id).first()
     if not co:
         return
@@ -51,7 +54,20 @@ def _assert_mobile_app_entitled(
 
     entitled = is_module_enabled(co, "mobile_apps") and feature_enabled(co.subscription_tier, "mobile_apps")
     if entitled:
+        log.info(
+            "mobile_login_entitled user_id=%s company_id=%s tier=%s",
+            user.id,
+            user.company_id,
+            co.subscription_tier,
+        )
         return
+    log.warning(
+        "mobile_login_denied user_id=%s company_id=%s tier=%s role=%s",
+        user.id,
+        user.company_id,
+        co.subscription_tier,
+        getattr(user, "role", None),
+    )
     login_log_service.log_login(db, email=user.email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
     raise HTTPException(status_code=403, detail=MOBILE_APP_DENIED)
 

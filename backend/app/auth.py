@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Company, User
+from app.models import Company, TemporaryAccessSession, User
 from app.config import settings
 
 SUPER_ADMIN_ROLE = "super_admin"
@@ -147,6 +147,9 @@ def get_current_user(
         from app.plan_config import feature_enabled
 
         if get_client_source() == "mobile" and user.company_id:
+            # Use the module-level Company import. A local `from app.models import Company`
+            # later in this function previously made Company an unbound local here and
+            # crashed every authenticated mobile request (login succeeded, /auth/me 500'd).
             co = db.query(Company).filter(Company.id == user.company_id).first()
             if co and not (is_module_enabled(co, "mobile_apps") and feature_enabled(co.subscription_tier, "mobile_apps")):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MOBILE_APP_DENIED)
@@ -168,8 +171,8 @@ def get_current_user(
                     detail=block,
                 )
         if user.company_id:
-            from app.models import Company, TemporaryAccessSession
             from datetime import datetime, timezone
+
             co = db.query(Company).filter(Company.id == user.company_id).first()
             if co and (getattr(co, "account_status", None) or "") == "locked":
                 now = datetime.now(timezone.utc)

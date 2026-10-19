@@ -13,15 +13,40 @@ from app.services.attendance_service import CANCELLED_PAID, CANCELLED_STATUSES
 from app.services.company_service import get_company_by_user_id
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
-def normalize_shift_type(st: Optional[str]) -> str:
+_CANONICAL_SHIFT_TYPES = frozenset({"morning", "afternoon", "evening", "night"})
+
+
+def infer_shift_type_from_start(shift_start: Optional[str]) -> str:
+    """Morning / Afternoon / Evening / Night from start clock (matches mobile + web)."""
+    mins = parse_shift_minutes(shift_start)
+    if mins is None:
+        return "morning"
+    hour = mins // 60
+    if 5 <= hour < 12:
+        return "morning"
+    if 12 <= hour < 17:
+        return "afternoon"
+    if 17 <= hour < 21:
+        return "evening"
+    return "night"
+
+
+def normalize_shift_type(st: Optional[str], shift_start: Optional[str] = None) -> str:
+    """Canonical shift types: morning, afternoon, evening, night.
+
+    Legacy ``day`` is remapped via start time (or morning). ``weekend`` / ``holiday``
+    are kept only when explicitly stored for rate tables.
+    """
     if not st:
-        return "day"
-    s = st.lower().strip()
+        return infer_shift_type_from_start(shift_start)
+    s = st.lower().strip().replace("-", "_").replace(" ", "_")
     if s == "holiday":
         return "weekend"
-    if s in ("day", "night", "weekend"):
+    if s == "day":
+        return infer_shift_type_from_start(shift_start)
+    if s in _CANONICAL_SHIFT_TYPES or s == "weekend":
         return s
-    return "day"
+    return infer_shift_type_from_start(shift_start)
 
 
 def parse_shift_minutes(t: Optional[str]) -> Optional[int]:
@@ -386,7 +411,7 @@ def _planner_shift_details(
                             shift_start=start_t or None,
                             shift_end=end_t or None,
                             break_minutes=break_m,
-                            shift_type="day",
+                            shift_type=normalize_shift_type(None, start_t),
                             hours=round(hrs, 2),
                             attendance_status=status,
                             late_minutes=None,

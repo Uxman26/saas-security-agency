@@ -787,7 +787,7 @@ class AssignmentBase(BaseModel):
     shift_start: Optional[str] = None
     shift_end: Optional[str] = None
     break_minutes: Optional[int] = 0
-    shift_type: Optional[str] = "day"
+    shift_type: Optional[str] = "morning"
     shift_rate: Optional[float] = None
     rota_plan_id: Optional[int] = None
 
@@ -899,7 +899,7 @@ class RotaDetailResponse(BaseModel):
     shift_start: Optional[str] = None
     shift_end: Optional[str] = None
     break_minutes: int = 0
-    shift_type: str = "day"
+    shift_type: str = "morning"
     hours: float = 0
     attendance_status: str
     # Whether anyone recorded attendance for this shift. A past shift with no record
@@ -1234,13 +1234,14 @@ class EmailLogResponse(BaseModel):
 
 
 class SmtpConfigResponse(BaseModel):
-    mail_server: str
-    mail_port: int
-    mail_from: str
-    mail_from_name: str
-    username_set: bool
-    password_set: bool
-    configured: bool
+    mail_server: str = ""
+    mail_port: int = 587
+    mail_from: str = ""
+    mail_from_name: str = ""
+    mail_use_tls: bool = True
+    username_set: bool = False
+    password_set: bool = False
+    configured: bool = False
 
 
 class SmtpConfigUpdate(BaseModel):
@@ -1303,7 +1304,7 @@ class GuardRateResponse(GuardRateBase):
         from_attributes = True
 
 class SiteRateBase(BaseModel):
-    shift_type: str = "day"
+    shift_type: str = "morning"
     hourly_rate: float
 
 class SiteRateCreate(SiteRateBase):
@@ -1422,6 +1423,8 @@ class BookingOnOff(BaseModel):
     accuracy: Optional[float] = None  # alias used by some clients
     device_id: Optional[str] = None
     captured_at: Optional[datetime] = None
+    # Late arrival / early finish / overtime reason from Clock In / Clock Out.
+    note: Optional[str] = None
 
 
 class PortalPushTokenRequest(BaseModel):

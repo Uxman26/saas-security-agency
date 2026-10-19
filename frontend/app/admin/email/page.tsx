@@ -35,20 +35,28 @@ export default function AdminEmailPage() {
   const [password, setPassword] = useState('');
   const [from, setFrom] = useState('');
   const [fromName, setFromName] = useState('');
+  const [useTls, setUseTls] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testTo, setTestTo] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(() => {
+    setLoadError(null);
     api.admin.smtp().then((c) => {
       setConfig(c);
-      setServer(c.mail_server);
-      setPort(String(c.mail_port));
-      setFrom(c.mail_from);
-      setFromName(c.mail_from_name);
+      setServer(c.mail_server || '');
+      setPort(String(c.mail_port || 587));
+      setFrom(c.mail_from || '');
+      setFromName(c.mail_from_name || '');
+      setUseTls(c.mail_use_tls !== false);
       if (!testTo && user?.email) setTestTo(user.email);
-    }).catch(() => toast.error('Failed to load SMTP settings'));
+    }).catch((e) => {
+      const msg = smtpErrorMessage(e);
+      setLoadError(msg);
+      toast.error(msg || 'Failed to load SMTP settings');
+    });
   }, [testTo, user?.email]);
 
   useEffect(() => {
@@ -67,6 +75,7 @@ export default function AdminEmailPage() {
         mail_password: password || undefined,
         mail_from: from || undefined,
         mail_from_name: fromName || undefined,
+        mail_use_tls: useTls,
       });
       setConfig(updated);
       setUsername('');
@@ -150,7 +159,24 @@ export default function AdminEmailPage() {
                   <Label>From name</Label>
                   <Input value={fromName} onChange={(e) => setFromName(e.target.value)} />
                 </div>
+                <div className="space-y-1 sm:col-span-2 flex items-center gap-2 pt-1">
+                  <input
+                    id="mail_use_tls"
+                    type="checkbox"
+                    checked={useTls}
+                    onChange={(e) => setUseTls(e.target.checked)}
+                    className="size-4 rounded border"
+                  />
+                  <Label htmlFor="mail_use_tls" className="font-normal">
+                    Use STARTTLS (recommended for port 587; leave off for port 465 SSL)
+                  </Label>
+                </div>
               </div>
+              {loadError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                  {loadError}
+                </div>
+              )}
               <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save SMTP settings'}</Button>
             </CardContent>
           </Card>

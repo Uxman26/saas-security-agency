@@ -79,6 +79,8 @@ function shiftCellClass(d: RotaDetail) {
   if (d.attendance_status === 'pending') return 'bg-yellow-100/90 dark:bg-yellow-950/30 border-yellow-500/40';
   if (d.attendance_status === 'scheduled') return 'bg-slate-200/80 dark:bg-slate-800/50 border-slate-400/40';
   if (d.shift_type === 'night') return 'bg-indigo-200/70 dark:bg-indigo-950/40 border-indigo-400/40';
+  if (d.shift_type === 'evening') return 'bg-slate-200/70 dark:bg-slate-950/40 border-slate-400/40';
+  if (d.shift_type === 'afternoon') return 'bg-yellow-200/70 dark:bg-yellow-950/40 border-yellow-400/40';
   if (d.shift_type === 'weekend') return 'bg-amber-200/70 dark:bg-amber-950/40 border-amber-400/40';
   return 'bg-sky-100/80 dark:bg-sky-950/30 border-sky-400/30';
 }
@@ -170,13 +172,19 @@ export default function RotaPage() {
       shift_start: '09:00',
       shift_end: '17:00',
       break_minutes: 0,
-      shift_type: 'day',
+      shift_type: 'morning',
     });
     setDialogOpen(true);
   };
 
   const openEdit = (row: RotaDetail) => {
     setEditingId(row.id);
+    const st =
+      row.shift_type === 'holiday'
+        ? 'weekend'
+        : row.shift_type === 'day'
+          ? 'morning'
+          : row.shift_type;
     form.reset({
       guard_id: row.guard_id,
       site_id: row.site_id,
@@ -184,7 +192,7 @@ export default function RotaPage() {
       shift_start: row.shift_start || '',
       shift_end: row.shift_end || '',
       break_minutes: row.break_minutes ?? 0,
-      shift_type: (row.shift_type === 'holiday' ? 'weekend' : row.shift_type) as 'day' | 'night' | 'weekend',
+      shift_type: (st || 'morning') as 'morning' | 'afternoon' | 'evening' | 'night' | 'weekend',
     });
     setDialogOpen(true);
   };
@@ -376,12 +384,19 @@ export default function RotaPage() {
                     <div className="space-y-1">
                       <Label>Shift type</Label>
                       <Select
-                        value={form.watch('shift_type') || 'day'}
-                        onValueChange={(v) => form.setValue('shift_type', v as 'day' | 'night' | 'weekend')}
+                        value={form.watch('shift_type') || 'morning'}
+                        onValueChange={(v) =>
+                          form.setValue(
+                            'shift_type',
+                            v as 'morning' | 'afternoon' | 'evening' | 'night' | 'weekend',
+                          )
+                        }
                       >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="day">Day</SelectItem>
+                          <SelectItem value="morning">Morning</SelectItem>
+                          <SelectItem value="afternoon">Afternoon</SelectItem>
+                          <SelectItem value="evening">Evening</SelectItem>
                           <SelectItem value="night">Night</SelectItem>
                           <SelectItem value="weekend">Weekend</SelectItem>
                         </SelectContent>
@@ -442,7 +457,7 @@ export default function RotaPage() {
             <CardHeader>
               <CardTitle>Schedule grid</CardTitle>
               <CardDescription>
-                Colours: day (sky), night (indigo), weekend (amber), absent (red), late (orange), pending (yellow). Special
+                Colours: morning (sky), afternoon (yellow), evening (slate), night (indigo), weekend (amber), absent (red), late (orange), pending (yellow). Special
                 days (bank holidays etc.) show an amber header.
               </CardDescription>
             </CardHeader>

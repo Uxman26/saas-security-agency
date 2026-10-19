@@ -334,6 +334,9 @@ export const siteSchema = z
     reference: z.string().max(200).optional().or(z.literal('')),
     default_hourly_rate: z.number().min(0).optional().nullable(),
     staff_hourly_rate: z.number().min(0).optional().nullable(),
+    latitude: z.number().min(-90).max(90).optional().nullable(),
+    longitude: z.number().min(-180).max(180).optional().nullable(),
+    geofence_radius_m: z.number().min(20).max(5000).optional().nullable(),
     contractor_id: optUuid,
     main_contractor_id: optPosInt,
     sub_contractor_id: optPosInt,
@@ -395,7 +398,7 @@ export const assignmentSchema = z.object({
   shift_start: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
   shift_end: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format').optional().or(z.literal('')),
   break_minutes: z.number().int().min(0).optional(),
-  shift_type: z.enum(['day', 'night', 'weekend']).optional(),
+  shift_type: z.enum(['morning', 'afternoon', 'evening', 'night', 'weekend']).optional(),
 });
 export type AssignmentFormData = z.infer<typeof assignmentSchema>;
 

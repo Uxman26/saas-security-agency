@@ -1016,7 +1016,7 @@ class Assignment(Base):
     shift_start = Column(String)
     shift_end = Column(String)
     break_minutes = Column(Integer, default=0)
-    shift_type = Column(String, default="day")
+    shift_type = Column(String, default="morning")
     shift_rate = Column(Float)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -1096,7 +1096,7 @@ class SiteRate(Base):
     __tablename__ = "site_rates"
     id = Column(Integer, primary_key=True, index=True)
     site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
-    shift_type = Column(String, default="day")
+    shift_type = Column(String, default="morning")
     hourly_rate = Column(Float, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1545,7 +1545,7 @@ def publish_rota_plan(
                         shift_start=sh.get("start"),
                         shift_end=sh.get("end"),
                         break_minutes=break_m,
-                        shift_type=normalize_shift_type("day"),
+                        shift_type=normalize_shift_type(None),
                         shift_rate=locked_rate,
                     )
                 db.add(assignment)

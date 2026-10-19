@@ -61,6 +61,39 @@ def _ensure_user_notification_sound_muted():
         pass
 
 
+def _migrate_legacy_day_shift_type():
+    """Rewrite stored shift_type 'day' → morning/afternoon/evening/night from start time."""
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+        from app.services.rota_service import normalize_shift_type
+
+        insp = inspect(engine)
+        if not insp.has_table("assignments"):
+            return
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, shift_start FROM assignments "
+                    "WHERE lower(coalesce(shift_type, '')) = 'day'"
+                )
+            ).fetchall()
+            for row in rows:
+                conn.execute(
+                    text("UPDATE assignments SET shift_type = :st WHERE id = :id"),
+                    {"st": normalize_shift_type("day", row[1]), "id": row[0]},
+                )
+            if insp.has_table("site_rates"):
+                conn.execute(
+                    text(
+                        "UPDATE site_rates SET shift_type = 'morning' "
+                        "WHERE lower(coalesce(shift_type, '')) = 'day'"
+                    )
+                )
+    except Exception:
+        pass
+
+
 def run():
     import logging
 
@@ -75,6 +108,7 @@ def run():
 def _run_migrations():
     _ensure_user_theme_preference()
     _ensure_user_notification_sound_muted()
+    _migrate_legacy_day_shift_type()
     path = get_db_path()
     if not path:
         return
@@ -125,7 +159,7 @@ def _run_migrations():
         ("sites", "default_hourly_rate", "REAL"),
         ("sites", "updated_at", "TEXT"),
         ("assignments", "break_minutes", "INTEGER DEFAULT 0"),
-        ("assignments", "shift_type", "TEXT DEFAULT 'day'"),
+        ("assignments", "shift_type", "TEXT DEFAULT 'morning'"),
         ("assignments", "shift_rate", "REAL"),
         ("assignments", "updated_at", "TEXT"),
         ("sub_contractors", "updated_at", "TEXT"),

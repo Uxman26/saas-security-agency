@@ -82,7 +82,10 @@ def send_email_async(to_email: str, subject: str, body: str) -> None:
 
 def send_email(to_email: str, subject: str, body: str) -> bool:
     if not is_configured():
-        raise HTTPException(status_code=500, detail="Email service not configured")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "smtp_not_configured", "message": "Platform SMTP is not configured."},
+        )
     if not to_email:
         raise HTTPException(status_code=400, detail="Recipient email is required")
     cfg = get_smtp_config()
@@ -93,7 +96,11 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         raise
     except Exception as e:
         logger.error("SMTP send to %s failed: %s", to_email, type(e).__name__, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send email ({type(e).__name__})")
+        # 4xx so gateways do not replace the body with a generic 502 HTML page.
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "smtp_send_failed", "message": f"Failed to send email ({type(e).__name__})"},
+        )
 
 
 def send_company_email(company: Company, to_email: str, subject: str, body: str) -> bool:
@@ -107,7 +114,10 @@ def send_company_email(company: Company, to_email: str, subject: str, body: str)
         raise
     except Exception as e:
         logger.error("SMTP send to %s failed: %s", to_email, type(e).__name__, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send email ({type(e).__name__})")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "smtp_send_failed", "message": f"Failed to send email ({type(e).__name__})"},
+        )
 
 
 def send_and_log(

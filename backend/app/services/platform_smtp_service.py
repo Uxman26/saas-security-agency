@@ -44,33 +44,47 @@ def get_smtp_config() -> dict[str, Any]:
     saved_creds = bool(raw.get("mail_username") and raw.get("mail_password"))
 
     def pick(key: str, fallback: Any) -> Any:
-        if saved_creds:
+        if saved_creds and key in raw and raw.get(key) not in (None, ""):
+            return raw.get(key)
+        if saved_creds and key in ("mail_username", "mail_password"):
             return raw.get(key)
         return raw.get(key) or fallback
 
     port = pick("mail_port", settings.mail_port)
     use_tls = raw.get("mail_use_tls")
+    try:
+        port_i = int(port or 587)
+    except (TypeError, ValueError):
+        port_i = 587
     return {
-        "mail_server": pick("mail_server", settings.mail_server),
-        "mail_port": int(port or 587),
+        "mail_server": (pick("mail_server", settings.mail_server) or "") or "",
+        "mail_port": port_i,
         "mail_use_tls": use_tls if use_tls is not None else settings.mail_use_tls,
-        "mail_username": pick("mail_username", settings.mail_username),
-        "mail_password": pick("mail_password", settings.mail_password),
-        "mail_from": pick("mail_from", settings.mail_from),
-        "mail_from_name": pick("mail_from_name", settings.mail_from_name),
+        "mail_username": pick("mail_username", settings.mail_username) or "",
+        "mail_password": pick("mail_password", settings.mail_password) or "",
+        "mail_from": (pick("mail_from", settings.mail_from) or "") or "",
+        "mail_from_name": (pick("mail_from_name", settings.mail_from_name) or "") or "",
     }
 
 
 def smtp_status() -> dict[str, Any]:
     cfg = get_smtp_config()
-    configured = bool(cfg["mail_username"] and cfg["mail_password"])
+    configured = bool(cfg.get("mail_username") and cfg.get("mail_password"))
+    # Never return None for string fields — SmtpConfigResponse requires str and a
+    # validation 500 was surfacing in the Super Admin UI as "API temporarily unavailable".
+    port = cfg.get("mail_port") or 587
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        port = 587
     return {
-        "mail_server": cfg["mail_server"],
-        "mail_port": cfg["mail_port"],
-        "mail_from": cfg["mail_from"],
-        "mail_from_name": cfg["mail_from_name"],
-        "username_set": bool(cfg["mail_username"]),
-        "password_set": bool(cfg["mail_password"]),
+        "mail_server": (cfg.get("mail_server") or "") or "",
+        "mail_port": port,
+        "mail_from": (cfg.get("mail_from") or "") or "",
+        "mail_from_name": (cfg.get("mail_from_name") or "") or "",
+        "mail_use_tls": bool(cfg.get("mail_use_tls") if cfg.get("mail_use_tls") is not None else port not in (25, 465)),
+        "username_set": bool(cfg.get("mail_username")),
+        "password_set": bool(cfg.get("mail_password")),
         "configured": configured,
     }
 
@@ -85,20 +99,24 @@ def update_smtp_config(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _safe_smtp_error(exc: BaseException) -> tuple[int, str, str]:
-    """Map SMTP failures to safe user-facing codes. Never include credentials."""
+    """Map SMTP failures to safe user-facing codes. Never include credentials.
+
+    Always use 4xx so reverse proxies / Cloudflare do not replace the JSON body
+    with a generic 502 HTML page ("API server is temporarily unavailable").
+    """
     name = type(exc).__name__
     if isinstance(exc, socket.gaierror):
         return 400, "invalid_host", "SMTP host could not be resolved. Check the server hostname."
     if isinstance(exc, (socket.timeout, TimeoutError)):
-        return 504, "connection_timeout", "Could not reach the SMTP server in time. Check host, port, and firewall."
+        return 400, "connection_timeout", "Could not reach the SMTP server in time. Check host, port, and firewall."
     if isinstance(exc, ConnectionRefusedError):
-        return 502, "connection_refused", "SMTP connection was refused. Check host and port."
+        return 400, "connection_refused", "SMTP connection was refused. Check host and port."
     if isinstance(exc, smtplib.SMTPAuthenticationError):
-        return 401, "auth_failed", "SMTP authentication failed. Check the username and password."
+        return 400, "auth_failed", "SMTP authentication failed. Check the username and password."
     if isinstance(exc, smtplib.SMTPConnectError):
-        return 502, "connection_failed", "Could not connect to the SMTP server. Check host, port, and TLS/SSL settings."
+        return 400, "connection_failed", "Could not connect to the SMTP server. Check host, port, and TLS/SSL settings."
     if isinstance(exc, (smtplib.SMTPServerDisconnected, smtplib.SMTPHeloError)):
-        return 502, "connection_failed", "SMTP connection dropped. Check host, port, and TLS/SSL settings."
+        return 400, "connection_failed", "SMTP connection dropped. Check host, port, and TLS/SSL settings."
     if isinstance(exc, smtplib.SMTPNotSupportedError):
         return 400, "tls_error", "SMTP server rejected the TLS/SSL configuration. Try a different port or TLS setting."
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
@@ -106,12 +124,12 @@ def _safe_smtp_error(exc: BaseException) -> tuple[int, str, str]:
     if isinstance(exc, smtplib.SMTPSenderRefused):
         return 400, "invalid_sender", "The SMTP server rejected the From address."
     if isinstance(exc, smtplib.SMTPDataError):
-        return 502, "send_failed", "SMTP accepted the connection but rejected the message."
+        return 400, "send_failed", "SMTP accepted the connection but rejected the message."
     if isinstance(exc, OSError):
-        return 502, "connection_failed", "Network error while contacting the SMTP server. Check host and port."
+        return 400, "connection_failed", "Network error while contacting the SMTP server. Check host and port."
     if "ssl" in name.lower() or "tls" in name.lower():
         return 400, "tls_error", "TLS/SSL configuration error. Check port and encryption settings."
-    return 500, "smtp_error", "SMTP test failed. Check server settings and try again."
+    return 400, "smtp_error", "SMTP test failed. Check server settings and try again."
 
 
 def test_smtp_connection(to_email: str) -> dict[str, Any]:

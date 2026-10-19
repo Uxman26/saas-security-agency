@@ -97,7 +97,7 @@ def resolve_shift_pay(
     if hourly is not None and hourly > 0:
         basis = "salaried" if (getattr(guard, "employment_pay_type", None) or "").lower() == "salaried" else "hourly"
         return {"rate": hourly, "amount": round(max(0.0, hours) * hourly, 2), "basis": basis, "hours": hours}
-    rate = resolve_pay_rate(db, company_id, guard_id, site_id or 0, shift_type or "day", shift_date)
+    rate = resolve_pay_rate(db, company_id, guard_id, site_id or 0, shift_type or "morning", shift_date)
     return {
         "rate": float(rate or 0),
         "amount": round(max(0.0, hours) * float(rate or 0), 2),
@@ -127,7 +127,7 @@ def _guard_rate_for_date(db: Session, guard_id: int, site_id: Optional[int], shi
     return None
 
 def _billing_rate_for_site(db: Session, company_id: int, site_id: int, shift_type: str) -> Optional[float]:
-    st = shift_type or "day"
+    st = shift_type or "morning"
     sr = db.query(SiteRate).filter(SiteRate.site_id == site_id, SiteRate.shift_type == st).first()
     if sr:
         return sr.hourly_rate
@@ -137,7 +137,7 @@ def _billing_rate_for_site(db: Session, company_id: int, site_id: int, shift_typ
     return None
 
 def resolve_pay_rate(db: Session, company_id: int, guard_id: int, site_id: int, shift_type: str, d: date) -> float:
-    r = _guard_rate_for_date(db, guard_id, site_id, shift_type or "day", d)
+    r = _guard_rate_for_date(db, guard_id, site_id, shift_type or "morning", d)
     if r is not None:
         return r
     site = db.query(Site).filter(Site.id == site_id, Site.company_id == company_id).first()
@@ -151,16 +151,16 @@ def resolve_assignment_pay_rate(db: Session, assignment: Assignment, company_id:
     if assignment.shift_rate is not None:
         return assignment.shift_rate
     return resolve_pay_rate(
-        db, company_id, assignment.guard_id, assignment.site_id, assignment.shift_type or "day", assignment.date
+        db, company_id, assignment.guard_id, assignment.site_id, assignment.shift_type or "morning", assignment.date
     )
 
 def resolve_assignment_billing_rate(db: Session, assignment: Assignment, company_id: int) -> float:
     return resolve_billing_rate(
-        db, company_id, assignment.guard_id, assignment.site_id, assignment.shift_type or "day", assignment.date
+        db, company_id, assignment.guard_id, assignment.site_id, assignment.shift_type or "morning", assignment.date
     )
 
 def resolve_billing_rate(db: Session, company_id: int, guard_id: int, site_id: int, shift_type: str, d: date) -> float:
-    r = _billing_rate_for_site(db, company_id, site_id, shift_type or "day")
+    r = _billing_rate_for_site(db, company_id, site_id, shift_type or "morning")
     if r is not None:
         return r
     return resolve_pay_rate(db, company_id, guard_id, site_id, shift_type, d)

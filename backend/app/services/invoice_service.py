@@ -54,11 +54,11 @@ def _billable_hours_for_shift(scheduled_hours: float, att: Optional[dict]) -> Op
 
 # How a shift line describes itself on the bill.
 SHIFT_TYPE_LABELS = {
-    "day": "Day shift",
-    "night": "Night shift",
     "morning": "Morning shift",
     "afternoon": "Afternoon shift",
     "evening": "Evening shift",
+    "night": "Night shift",
+    "weekend": "Weekend shift",
 }
 
 
@@ -581,7 +581,10 @@ def _rota_invoice_shift_lines(
                             "hours": hours,
                             "shift_start": start,
                             "shift_end": end,
-                            "shift_type": normalize_shift_type(sh.get("shiftType") or sh.get("shift_type") or "day"),
+                            "shift_type": normalize_shift_type(
+                                sh.get("shiftType") or sh.get("shift_type"),
+                                sh.get("start") or sh.get("shift_start") or sh.get("shiftStart"),
+                            ),
                         }
                     )
     return lines

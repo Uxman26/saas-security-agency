@@ -206,6 +206,41 @@ function SiteForm({
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
         </div>
         <div className="space-y-1">
+          <Label>Latitude</Label>
+          <Input
+            type="number"
+            step="any"
+            {...register('latitude', { setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)) })}
+            placeholder="e.g. 51.5074"
+          />
+          {errors.latitude && <p className="text-xs text-destructive">{errors.latitude.message}</p>}
+        </div>
+        <div className="space-y-1">
+          <Label>Longitude</Label>
+          <Input
+            type="number"
+            step="any"
+            {...register('longitude', { setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)) })}
+            placeholder="e.g. -0.1278"
+          />
+          {errors.longitude && <p className="text-xs text-destructive">{errors.longitude.message}</p>}
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Geofence radius (metres)</Label>
+          <Input
+            type="number"
+            step="1"
+            min={20}
+            max={5000}
+            {...register('geofence_radius_m', { setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)) })}
+            placeholder="150"
+          />
+          {errors.geofence_radius_m && (
+            <p className="text-xs text-destructive">{errors.geofence_radius_m.message}</p>
+          )}
+          <p className="text-xs text-muted-foreground">Used for mobile Clock In range checks. Leave blank to use the default 150 m.</p>
+        </div>
+        <div className="space-y-1">
           <Label>Contact Person</Label>
           <Input {...register('contact_person')} placeholder="John Smith" />
         </div>
@@ -379,6 +414,11 @@ export default function SitesPage() {
     if (rate != null && !Number.isNaN(Number(rate))) o.default_hourly_rate = rate;
     const staffRate = data.staff_hourly_rate;
     if (staffRate != null && !Number.isNaN(Number(staffRate))) o.staff_hourly_rate = staffRate;
+    if (data.latitude != null && !Number.isNaN(Number(data.latitude))) o.latitude = data.latitude;
+    if (data.longitude != null && !Number.isNaN(Number(data.longitude))) o.longitude = data.longitude;
+    if (data.geofence_radius_m != null && !Number.isNaN(Number(data.geofence_radius_m))) {
+      o.geofence_radius_m = data.geofence_radius_m;
+    }
     if (data.contractor_id) {
       o.contractor_id = data.contractor_id;
       o.main_contractor_id = null;
@@ -440,6 +480,9 @@ export default function SitesPage() {
       main_contractor_id: site.main_contractor_id ?? undefined,
       sub_contractor_id: site.sub_contractor_id ?? undefined,
       contractor_id: site.contractor_id ?? undefined,
+      latitude: site.latitude ?? undefined,
+      longitude: site.longitude ?? undefined,
+      geofence_radius_m: site.geofence_radius_m ?? undefined,
       // Never carried into an edit: the API rejects create_login on PUT, and leaving a
       // stale password in the form would make the edit look like it provisioned access.
       create_login: false,

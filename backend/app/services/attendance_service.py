@@ -48,6 +48,41 @@ def _assignment_shift_start_dt(assignment: Assignment):
         return None
 
 
+def _assignment_shift_end_dt(assignment: Assignment):
+    shift_end = getattr(assignment, "shift_end", None)
+    day = getattr(assignment, "date", None)
+    if not shift_end or not day:
+        return None
+    try:
+        parts = str(shift_end).split(":")
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        from datetime import time
+        end = datetime.combine(day, time(h, m))
+        start = _assignment_shift_start_dt(assignment)
+        if start is not None and end <= start:
+            end = end + timedelta(days=1)
+        return end
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def _hhmm(dt: datetime) -> str:
+    return f"{dt.hour:02d}:{dt.minute:02d}"
+
+
+def _append_note(existing: Optional[str], addition: str) -> Optional[str]:
+    addition = (addition or "").strip()
+    base = (existing or "").strip()
+    if not addition:
+        return base or None
+    if not base:
+        return addition
+    if addition in base:
+        return base
+    return f"{base} | {addition}"
+
+
 def _validated_cancel_hours(status: str, raw, *, label: str) -> Optional[float]:
     if status != CANCELLED_PAID:
         return None
@@ -335,7 +370,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                 detail={
                     "code": "too_early",
                     "message": (
-                        f"Book On opens {EARLY_BOOK_ON_MINUTES} minutes before "
+                        f"Clock In opens {EARLY_BOOK_ON_MINUTES} minutes before "
                         f"the {a.shift_start} start."
                     ),
                     "earliest_at": earliest.isoformat(),
@@ -354,7 +389,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
             status_code=400,
             detail={
                 "code": "gps_required",
-                "message": "GPS location is required to Book On/Off at this site.",
+                "message": "GPS location is required to Clock In/Out at this site.",
             },
         )
     if lat is not None and lng is not None:
@@ -369,6 +404,38 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                 },
             )
 
+    reason = (getattr(data, "note", None) or "").strip()
+    shift_end_dt = _assignment_shift_end_dt(a)
+    is_late_arrival = (
+        not data.book_off
+        and shift_dt is not None
+        and now.replace(tzinfo=None) > shift_dt.replace(tzinfo=None)
+    )
+    is_early_finish = (
+        data.book_off
+        and shift_end_dt is not None
+        and now.replace(tzinfo=None) < (shift_end_dt - timedelta(minutes=5)).replace(tzinfo=None)
+    )
+    is_late_finish = (
+        data.book_off
+        and shift_end_dt is not None
+        and now.replace(tzinfo=None) > shift_end_dt.replace(tzinfo=None)
+    )
+    if staff_portal and (is_late_arrival or is_early_finish or is_late_finish) and not reason:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "reason_required",
+                "message": (
+                    "A reason is required for late arrival."
+                    if is_late_arrival
+                    else "A reason is required for finishing early."
+                    if is_early_finish
+                    else "A reason is required for overtime / late finish."
+                ),
+            },
+        )
+
     att = db.query(Attendance).filter(
         Attendance.assignment_id == data.assignment_id,
         Attendance.guard_id == a.guard_id
@@ -378,11 +445,126 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         db.add(att)
         db.flush()
     if data.book_off:
+        if att.booked_off_at:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "already_clocked_out",
+                    "message": "This shift is already clocked out.",
+                },
+            )
+        if not att.booked_at and staff_portal:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "not_clocked_in",
+                    "message": "Clock In before Clock Out.",
+                },
+            )
         att.booked_off_at = now
+        if is_early_finish:
+            att.status = "early_leave"
+            existing_ef = (
+                db.query(ShiftEarlyFinishLog)
+                .filter(ShiftEarlyFinishLog.assignment_id == a.id)
+                .first()
+            )
+            actual_end = _hhmm(now)
+            if existing_ef:
+                existing_ef.actual_end = actual_end
+                existing_ef.reason = reason
+                existing_ef.recorded_by = user_id
+            else:
+                db.add(
+                    ShiftEarlyFinishLog(
+                        company_id=company.id,
+                        assignment_id=a.id,
+                        guard_id=a.guard_id,
+                        site_id=a.site_id,
+                        shift_date=a.date,
+                        shift_start=a.shift_start,
+                        scheduled_end=a.shift_end,
+                        actual_end=actual_end,
+                        reason=reason,
+                        recorded_by=user_id,
+                    )
+                )
+        elif is_late_finish:
+            existing_ot = (
+                db.query(ShiftOvertimeLog)
+                .filter(ShiftOvertimeLog.assignment_id == a.id)
+                .first()
+            )
+            new_end = _hhmm(now)
+            if existing_ot:
+                existing_ot.new_end = new_end
+                existing_ot.reason = reason
+                existing_ot.recorded_by = user_id
+            else:
+                db.add(
+                    ShiftOvertimeLog(
+                        company_id=company.id,
+                        assignment_id=a.id,
+                        guard_id=a.guard_id,
+                        site_id=a.site_id,
+                        shift_date=a.date,
+                        shift_start=a.shift_start,
+                        scheduled_end=a.shift_end,
+                        new_end=new_end,
+                        reason=reason,
+                        recorded_by=user_id,
+                    )
+                )
     else:
+        if att.booked_at:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "already_clocked_in",
+                    "message": "This shift is already clocked in.",
+                },
+            )
         att.booked_at = now
-        if shift_dt is not None and now.replace(tzinfo=None) > shift_dt.replace(tzinfo=None):
+        if is_late_arrival:
             att.status = "late"
+            late_mins = max(
+                1,
+                int((now.replace(tzinfo=None) - shift_dt.replace(tzinfo=None)).total_seconds() // 60),
+            )
+            existing_late = (
+                db.query(ShiftLateLog)
+                .filter(ShiftLateLog.assignment_id == a.id)
+                .first()
+            )
+            actual_start = _hhmm(now)
+            if existing_late:
+                existing_late.actual_start = actual_start
+                existing_late.late_minutes = late_mins
+                existing_late.note = reason or existing_late.note
+                existing_late.recorded_by = user_id
+            else:
+                db.add(
+                    ShiftLateLog(
+                        company_id=company.id,
+                        assignment_id=a.id,
+                        guard_id=a.guard_id,
+                        site_id=a.site_id,
+                        shift_date=a.date,
+                        scheduled_start=a.shift_start or _hhmm(shift_dt),
+                        actual_start=actual_start,
+                        late_minutes=late_mins,
+                        note=reason or None,
+                        recorded_by=user_id,
+                    )
+                )
+        else:
+            # Preserve a status already set by an authorised web user when it is
+            # already a booked-on status; otherwise mark on time.
+            if (att.status or "").strip().lower() not in {"on_time", "late", "present", "booked_on"}:
+                att.status = "on_time"
+
+    if reason:
+        att.note = _append_note(att.note, reason)
 
     if lat is not None and lng is not None:
         captured = data.captured_at.isoformat() if data.captured_at else now.isoformat()
@@ -390,9 +572,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         gps_note = f"GPS {float(lat):.6f},{float(lng):.6f}{acc_part} @ {captured}"
         if data.device_id:
             gps_note = f"{gps_note} device={data.device_id}"
-        existing = (att.note or "").strip()
-        if gps_note not in existing:
-            att.note = f"{existing} | {gps_note}".strip(" |") if existing else gps_note
+        att.note = _append_note(att.note, gps_note)
 
     att.updated_by_user_id = user_id
     db.commit()

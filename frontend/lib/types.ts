@@ -931,6 +931,7 @@ export interface Site {
   contractor_id?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  geofence_radius_m?: number | null;
   created_at: string;
   /** Write-only, POST /sites only: provisions a Client-role portal login pinned to this
    * site. Rejected on PUT. Never returned. */
@@ -1927,6 +1928,7 @@ export interface SmtpConfig {
   mail_port: number;
   mail_from: string;
   mail_from_name: string;
+  mail_use_tls?: boolean;
   username_set: boolean;
   password_set: boolean;
   configured: boolean;

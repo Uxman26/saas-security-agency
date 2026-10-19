@@ -1105,7 +1105,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
               shift_start: sh.start,
               shift_end: sh.end,
               break_minutes: (sh.breakH || 0) * 60 + (sh.breakM || 0),
-              shift_type: 'day',
+              shift_type: 'morning',
               ...(sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate))
                 ? { shift_rate: Number(sh.shiftRate) }
                 : {}),

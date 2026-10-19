@@ -226,13 +226,32 @@ def notify_shift_changes(
         )
         .all()
     }
-    portal_users = {
-        int(u.guard_id): u.id
-        for u in db.query(User)
+    # Prefer User.guard_id, then fall back to email-linked staff accounts
+    # (same rule as portal_access.get_linked_guard) so publish notifications
+    # reach staff who were never back-filled with guard_id.
+    from app.services.portal_access import get_linked_guard, is_staff_portal_user
+
+    portal_users: Dict[int, int] = {}
+    for u in (
+        db.query(User)
         .filter(User.company_id == company.id, User.guard_id.in_(guard_ids))
         .all()
-        if u.guard_id is not None
-    }
+    ):
+        if u.guard_id is not None:
+            portal_users[int(u.guard_id)] = u.id
+    staff_candidates = (
+        db.query(User)
+        .filter(User.company_id == company.id)
+        .all()
+    )
+    for u in staff_candidates:
+        if u.id in portal_users.values():
+            continue
+        if not is_staff_portal_user(u):
+            continue
+        linked = get_linked_guard(db, u)
+        if linked and linked.id in by_guard and linked.id not in portal_users:
+            portal_users[int(linked.id)] = u.id
 
     fcm_jobs: list[tuple[int, str, str]] = []
     for gid, items in by_guard.items():

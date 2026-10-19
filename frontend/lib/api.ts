@@ -119,11 +119,15 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
         : retryHeader
           ? parseInt(retryHeader, 10)
           : undefined;
+    // Prefer structured API error messages (e.g. SMTP test failures) over the
+    // generic gateway copy — proxies sometimes remap SMTP 5xx to HTML 502 pages,
+    // but when JSON detail is present we must surface it.
+    const structured = detailMessage(d);
     const message =
       typeof d === 'string' && d.trim()
         ? d
-        : detailMessage(d) !== 'Request failed'
-          ? detailMessage(d)
+        : structured !== 'Request failed'
+          ? structured
           : gatewayUnavailableMessage(response.status);
     throw new ApiError(response.status, message, d, retryAfterSeconds);
   }

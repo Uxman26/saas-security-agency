@@ -64,7 +64,10 @@ def send_template_email(
         db.commit()
         return True
     except Exception as e:
+        reason = getattr(e, "detail", None) or str(e) or type(e).__name__
+        if isinstance(reason, dict):
+            reason = reason.get("message") or reason.get("code") or str(reason)
         row.status = "failed"
-        row.error_message = str(e)[:500]
+        row.error_message = str(reason)[:500]
         db.commit()
         return False

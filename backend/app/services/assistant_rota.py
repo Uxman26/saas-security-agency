@@ -387,7 +387,7 @@ def confirm_shift_proposal(db: Session, user: User, proposal: dict) -> dict[str,
                     shift_start=item["shift_start"],
                     shift_end=item["shift_end"],
                     break_minutes=30,
-                    shift_type="day",
+                    shift_type="morning",
                 ),
                 user.id,
             )

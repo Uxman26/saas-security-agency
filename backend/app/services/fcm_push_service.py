@@ -138,9 +138,26 @@ def send_to_user(
         notification=messaging.Notification(title=title, body=body),
         data=payload,
         tokens=tokens,
-        android=messaging.AndroidConfig(priority="high"),
+        android=messaging.AndroidConfig(
+            priority="high",
+            notification=messaging.AndroidNotification(
+                channel_id="controlops_ops",
+                sound="default",
+                default_sound=True,
+                default_vibrate_timings=True,
+                priority="high",
+            ),
+        ),
         apns=messaging.APNSConfig(
-            payload=messaging.APNSPayload(aps=messaging.Aps(sound="default", badge=1))
+            headers={"apns-priority": "10"},
+            payload=messaging.APNSPayload(
+                aps=messaging.Aps(
+                    alert=messaging.ApsAlert(title=title, body=body),
+                    sound="default",
+                    badge=1,
+                    content_available=True,
+                )
+            ),
         ),
     )
 

@@ -49,7 +49,7 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
         )
 
     data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
-    data["shift_type"] = normalize_shift_type(data.get("shift_type"))
+    data["shift_type"] = normalize_shift_type(data.get("shift_type"), data.get("shift_start"))
     db_assignment = Assignment(**data)
     db.add(db_assignment)
     db.flush()
@@ -226,7 +226,7 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
         raise HTTPException(status_code=404, detail="Site not found")
 
     data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
-    data["shift_type"] = normalize_shift_type(data.get("shift_type"))
+    data["shift_type"] = normalize_shift_type(data.get("shift_type"), data.get("shift_start"))
     before = shift_audit_service.snapshot_from_assignment(db_assignment)
     for key, value in data.items():
         setattr(db_assignment, key, value)

@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
@@ -29,6 +31,8 @@ MOBILE_APP_DENIED = {
     "code": "mobile_app_not_included",
     "message": "The mobile application is not included in your organisation's current package. Please contact your administrator or upgrade your subscription to enable mobile access.",
 }
+
+log = logging.getLogger("controlops.auth")
 
 
 def _assert_mobile_app_entitled(
@@ -75,6 +79,14 @@ def _assert_mobile_app_entitled(
 def send_verification_email(user: User) -> None:
     if not requires_email_verification(user):
         return
+    if not email_service.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "smtp_not_configured",
+                "message": "Platform SMTP is not configured. Configure it in Super Admin → SMTP email before new tenants can verify.",
+            },
+        )
     token = create_email_verification_token(user.id)
     link = f"{settings.frontend_url.rstrip('/')}/verify-email?token={token}"
     from app.database import SessionLocal
@@ -97,14 +109,18 @@ def send_verification_email(user: User) -> None:
             fallback_subject="Verify your email",
             fallback_body=f"Hi {user.full_name},\n\nVerify your email: {link}",
         )
-        if not sent and email_service.is_configured():
+        if not sent:
+            # Synchronous fallback so delivery failures are visible in logs / callers.
             body = (
                 f"<p>Hi {esc(user.full_name)},</p>"
                 f"<p>Please verify your email address to activate your ControlOps account.</p>"
                 f'<p><a href="{link}">Verify email</a></p>'
                 f"<p>This link expires in 24 hours. If you did not create an account, you can ignore this email.</p>"
             )
-            email_service.send_email_async(user.email, "Verify your email", body)
+            email_service.send_email(user.email, "Verify your email", body)
+            log.info("verification_email_sent_fallback user_id=%s email=%s", user.id, user.email)
+        else:
+            log.info("verification_email_sent user_id=%s email=%s", user.id, user.email)
     finally:
         db.close()
 
@@ -157,7 +173,20 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     existing = find_user_by_email(db, email)
     if existing:
         if requires_email_verification(existing):
-            send_verification_email(existing)
+            sent = False
+            if email_service.is_configured():
+                try:
+                    send_verification_email(existing)
+                    sent = True
+                except Exception as e:
+                    reason = getattr(e, "detail", None) or str(e) or type(e).__name__
+                    log.error(
+                        "verification_email_failed existing_user_id=%s email=%s reason=%s",
+                        existing.id,
+                        existing.email,
+                        reason,
+                        exc_info=True,
+                    )
             receipt_ref = None
             if existing.company_id:
                 pending = latest_pending_receipt(db, existing.company_id)
@@ -166,7 +195,11 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
                 status_code=403,
                 detail={
                     "code": "email_verification_required",
-                    "message": "Account exists but email is not verified. A new verification link has been sent.",
+                    "message": (
+                        "Account exists but email is not verified. A new verification link has been sent."
+                        if sent
+                        else "Account exists but email is not verified. Verification email could not be sent — check Super Admin SMTP settings or try Resend."
+                    ),
                     "email": existing.email,
                     "receipt_ref": receipt_ref,
                 },
@@ -210,21 +243,35 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         if email_service.is_configured():
             try:
                 send_verification_email(user)
-            except Exception:
-                pass
+            except Exception as e:
+                # Do not auto-verify when SMTP is configured but delivery fails —
+                # that previously left new tenants without a usable verification email.
+                reason = getattr(e, "detail", None) or str(e) or type(e).__name__
+                log.error(
+                    "verification_email_failed user_id=%s email=%s reason=%s",
+                    user.id,
+                    user.email,
+                    reason,
+                    exc_info=True,
+                )
         else:
+            log.warning(
+                "smtp_not_configured auto_verifying_signup user_id=%s email=%s",
+                user.id,
+                user.email,
+            )
             user.email_verified = True
             db.commit()
             db.refresh(user)
             try:
                 send_welcome_email(user, user_data.company_name or "")
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("welcome_email_failed user_id=%s reason=%s", user.id, e)
     else:
         try:
             send_welcome_email(user, user_data.company_name if hasattr(user_data, "company_name") else "")
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("welcome_email_failed user_id=%s reason=%s", user.id, e)
     return user
 
 

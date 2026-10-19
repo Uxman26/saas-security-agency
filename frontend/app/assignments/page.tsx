@@ -38,10 +38,14 @@ import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
-  day: 'Day',
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  evening: 'Evening',
   night: 'Night',
   weekend: 'Weekend',
 };
+
+type AssignmentShiftType = 'morning' | 'afternoon' | 'evening' | 'night' | 'weekend';
 
 function AssignmentForm({
   form,
@@ -97,12 +101,14 @@ function AssignmentForm({
         </div>
         <div className="space-y-1">
           <Label>Shift Type</Label>
-          <Select value={shiftType || ''} onValueChange={(v) => setValue('shift_type', v as 'day' | 'night' | 'weekend')}>
+          <Select value={shiftType || ''} onValueChange={(v) => setValue('shift_type', v as AssignmentShiftType)}>
             <SelectTrigger>
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="day">Day</SelectItem>
+              <SelectItem value="morning">Morning</SelectItem>
+              <SelectItem value="afternoon">Afternoon</SelectItem>
+              <SelectItem value="evening">Evening</SelectItem>
               <SelectItem value="night">Night</SelectItem>
               <SelectItem value="weekend">Weekend</SelectItem>
             </SelectContent>
@@ -205,7 +211,11 @@ export default function AssignmentsPage() {
       shift_start: a.shift_start ?? '',
       shift_end: a.shift_end ?? '',
       break_minutes: a.break_minutes ?? undefined,
-      shift_type: (a.shift_type === 'holiday' ? 'weekend' : a.shift_type) as 'day' | 'night' | 'weekend' | undefined,
+      shift_type: (a.shift_type === 'holiday'
+        ? 'weekend'
+        : a.shift_type === 'day'
+          ? 'morning'
+          : a.shift_type) as AssignmentShiftType | undefined,
     });
     setEditOpen(true);
   };
@@ -228,7 +238,7 @@ export default function AssignmentsPage() {
 
   const byShift = useMemo(() => {
     if (shiftFilter === 'all') return assignments;
-    return assignments.filter((a) => (a.shift_type || 'day') === shiftFilter);
+    return assignments.filter((a) => (a.shift_type || 'morning') === shiftFilter);
   }, [assignments, shiftFilter]);
 
   const getSearchText = useCallback(
@@ -293,9 +303,10 @@ export default function AssignmentsPage() {
   /** The cards along the top, in the shape every module dashboard uses. */
   const statCards: StatCardSpec[] = [
     { key: 'total', label: 'Assignments', value: assignments.length, icon: ClipboardList, tone: 'neutral' },
-    { key: 'day', label: 'Day shifts', value: byType('day'), icon: Clock, tone: 'positive' },
-    { key: 'night', label: 'Night shifts', value: byType('night'), icon: Clock, tone: 'info' },
-    { key: 'weekend', label: 'Weekend shifts', value: byType('weekend'), icon: Calendar, tone: 'warning' },
+    { key: 'morning', label: 'Morning', value: byType('morning'), icon: Clock, tone: 'positive' },
+    { key: 'afternoon', label: 'Afternoon', value: byType('afternoon'), icon: Clock, tone: 'info' },
+    { key: 'evening', label: 'Evening', value: byType('evening'), icon: Clock, tone: 'warning' },
+    { key: 'night', label: 'Night', value: byType('night'), icon: Clock, tone: 'info' },
     {
       key: 'sites',
       label: 'Sites covered',
@@ -369,7 +380,9 @@ export default function AssignmentsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All shift types</SelectItem>
-                    <SelectItem value="day">Day</SelectItem>
+                    <SelectItem value="morning">Morning</SelectItem>
+                    <SelectItem value="afternoon">Afternoon</SelectItem>
+                    <SelectItem value="evening">Evening</SelectItem>
                     <SelectItem value="night">Night</SelectItem>
                     <SelectItem value="weekend">Weekend</SelectItem>
                   </SelectContent>

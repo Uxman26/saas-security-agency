@@ -50,6 +50,7 @@ def create_session(
     remember_me: bool = False,
     ip_address: str | None = None,
     user_agent: str | None = None,
+    company_id: int | None = None,
 ) -> UserSession:
     from fastapi import HTTPException
     from sqlalchemy.exc import SQLAlchemyError
@@ -62,6 +63,7 @@ def create_session(
         idle_timeout_minutes=idle_timeout_minutes(remember_me),
         ip_address=ip_address,
         user_agent=(user_agent or "")[:500] or None,
+        company_id=company_id,
     )
     try:
         db.add(row)
@@ -87,6 +89,7 @@ def create_session(
                     idle_timeout_minutes=idle_timeout_minutes(remember_me),
                     ip_address=ip_address,
                     user_agent=(user_agent or "")[:500] or None,
+                    company_id=company_id,
                 )
             )
             db.commit()

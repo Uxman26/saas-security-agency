@@ -33,11 +33,9 @@ def company_usage(db: Session, company_id: int) -> dict[str, Any]:
     co = db.query(Company).filter(Company.id == company_id).first()
     if not co:
         return {}
-    active_users = (
-        db.query(func.count(User.id))
-        .filter(User.company_id == company_id, User.is_active == True)
-        .scalar()
-    )
+    from app.services.membership_service import count_active_company_users
+
+    active_users = count_active_company_users(db, company_id)
     guards = db.query(func.count(Guard.id)).filter(Guard.company_id == company_id).scalar()
     limit = user_limit_for_company(co)
     storage_bytes = _dir_size(UPLOADS_DIR)

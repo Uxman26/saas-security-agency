@@ -206,16 +206,17 @@ def _push_app_notification(
 def _notify_guard(db: Session, *, company_id: int, guard_id: int, title: str, body: str, occurrence_id: int) -> None:
     from sqlalchemy import func
 
-    user = db.query(User).filter(User.guard_id == guard_id, User.company_id == company_id).first()
+    from app.services import membership_service
+
+    ids = membership_service.user_ids_for_guard(db, company_id, guard_id)
+    user = db.query(User).filter(User.id.in_(ids)).first() if ids else None
     if not user:
         guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
         email = (guard.email or "").lower().strip() if guard else ""
         if email:
-            user = (
-                db.query(User)
-                .filter(User.company_id == company_id, func.lower(User.email) == email)
-                .first()
-            )
+            user = db.query(User).filter(func.lower(User.email) == email).first()
+            if user and not membership_service.belongs_to_company(db, user, company_id):
+                user = None
     if not user:
         return
     since = datetime.now(timezone.utc) - timedelta(hours=6)

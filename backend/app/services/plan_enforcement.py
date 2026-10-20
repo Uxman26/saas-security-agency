@@ -87,7 +87,9 @@ def enforce_user_quota(db: Session, company: Company) -> None:
     cap = user_limit_for_company(company)
     if cap is None:
         return
-    n = db.query(func.count(User.id)).filter(User.company_id == company.id, User.is_active == True).scalar()
+    from app.services.membership_service import count_active_company_users
+
+    n = count_active_company_users(db, company.id)
     if int(n or 0) >= cap:
         raise HTTPException(
             status_code=403,
@@ -144,7 +146,9 @@ def plan_summary(db: Session, company: Company) -> dict:
         us = db.query(Site).filter(Site.company_id == company.id, Site.deleted_at.is_(None)).count()
     except Exception:
         us = db.query(Site).filter(Site.company_id == company.id).count()
-    uu = db.query(func.count(User.id)).filter(User.company_id == company.id, User.is_active == True).scalar()
+    from app.services.membership_service import count_active_company_users
+
+    uu = count_active_company_users(db, company.id)
     cap = user_limit_for_company(company)
     from app.plan_config import limits_for_tier
 

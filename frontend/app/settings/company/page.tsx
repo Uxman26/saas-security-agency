@@ -343,6 +343,13 @@ export default function CompanySettingsPage() {
                   <Label>Company name</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
+                <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+                  <Label>Company ID</Label>
+                  <Input value={profile?.login_id ?? ''} readOnly className="font-mono tracking-wide" />
+                  <p className="text-xs text-muted-foreground">
+                    Staff enter this on the login screen with their email and password. It is not the internal record number.
+                  </p>
+                </div>
                 <div className="space-y-1">
                   <Label>Email</Label>
                   <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="billing@company.com" />

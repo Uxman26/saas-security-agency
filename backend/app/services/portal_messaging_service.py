@@ -53,12 +53,10 @@ def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str, sender: Us
     peer_id = (peer_id or "").strip()
     if peer_id.startswith("user:"):
         uid = int(peer_id.split(":", 1)[1])
-        user = (
-            db.query(User)
-            .filter(User.id == uid, User.company_id == company_id)
-            .first()
-        )
-        if not user:
+        from app.services import membership_service
+
+        user = db.query(User).filter(User.id == uid).first()
+        if not user or not membership_service.belongs_to_company(db, user, company_id):
             raise HTTPException(status_code=404, detail="Peer user not found")
         _assert_messaging_peer_allowed(sender, user)
         return user.id
@@ -71,17 +69,14 @@ def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str, sender: Us
         )
         if not guard:
             raise HTTPException(status_code=404, detail="Peer staff not found")
-        user = (
-            db.query(User)
-            .filter(User.company_id == company_id, User.guard_id == gid)
-            .first()
-        )
+        from app.services import membership_service
+
+        ids = membership_service.user_ids_for_guard(db, company_id, gid)
+        user = db.query(User).filter(User.id.in_(ids)).first() if ids else None
         if not user and guard.email:
-            user = (
-                db.query(User)
-                .filter(User.company_id == company_id, User.email == guard.email)
-                .first()
-            )
+            user = db.query(User).filter(User.email == guard.email).first()
+            if user and not membership_service.belongs_to_company(db, user, company_id):
+                user = None
         if not user:
             raise HTTPException(
                 status_code=404,

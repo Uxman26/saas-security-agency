@@ -139,12 +139,13 @@ def _apple_client_secret() -> str:
     )
 
 
-def create_oauth_state(*, provider: str, remember_me: bool = True) -> str:
+def create_oauth_state(*, provider: str, remember_me: bool = True, company_id: str | None = None) -> str:
     return jwt.encode(
         {
             "type": "oauth_state",
             "provider": provider,
             "remember_me": remember_me,
+            "company_id": company_id or "",
             "nonce": secrets.token_urlsafe(16),
             "exp": datetime.utcnow() + timedelta(minutes=15),
         },
@@ -163,13 +164,18 @@ def parse_oauth_state(state: str) -> dict:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from e
 
 
-def authorization_url(provider: str, *, remember_me: bool = True) -> str:
+def authorization_url(provider: str, *, remember_me: bool = True, company_id: str | None = None) -> str:
     if provider not in PROVIDERS:
         raise HTTPException(status_code=400, detail="Unsupported OAuth provider")
     if not provider_configured(provider):
         raise HTTPException(status_code=503, detail=f"{provider.title()} Sign In is not configured")
+    from app.services.company_login_id_service import normalize_login_id
+
+    public_company_id = normalize_login_id(company_id)
+    if not public_company_id:
+        raise HTTPException(status_code=400, detail="Enter your Company ID before signing in with social login.")
     meta = PROVIDERS[provider]
-    state = create_oauth_state(provider=provider, remember_me=remember_me)
+    state = create_oauth_state(provider=provider, remember_me=remember_me, company_id=public_company_id)
     redirect_uri = redirect_uri_for(provider)
     if provider == AUTH_PROVIDER_MICROSOFT:
         auth_url = meta["auth_url"].format(tenant=settings.microsoft_oauth_tenant_id or "common")
@@ -313,44 +319,50 @@ def _issue_session(
     remember_me: bool,
     ip_address: Optional[str],
     user_agent: Optional[str],
+    company_login_id: str | None = None,
+    created_new_tenant: bool = False,
 ) -> dict:
-    from app.services import login_log_service, session_service
+    from app.services import login_log_service
+    from app.services.auth_service import bind_user_to_login_company, issue_access_session, send_welcome_email
+    from app.services.company_login_id_service import LOGIN_FAILED_DETAIL
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
+    if created_new_tenant:
+        tenant_company_id = user.company_id
+        try:
+            send_welcome_email(user, "")
+        except Exception:
+            pass
+    else:
+        if not company_login_id:
+            raise HTTPException(status_code=400, detail="Enter your Company ID before signing in with social login.")
+        try:
+            tenant_company_id = bind_user_to_login_company(db, user, company_login_id)
+        except HTTPException as exc:
+            if exc.status_code == 401:
+                raise HTTPException(status_code=401, detail=LOGIN_FAILED_DETAIL) from exc
+            raise
+        db.commit()
+        db.refresh(user)
     block = company_login_blocked(db, user)
     if block:
         # Mirror email/password login: payment-pending accounts cannot receive a session.
         raise HTTPException(status_code=402, detail=block)
 
-    if remember_me:
-        access_token_expires = timedelta(days=settings.remember_me_expire_days)
-    else:
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-
-    jti = session_service.new_jti()
-    session_service.create_session(
-        db,
-        user.id,
-        jti,
-        expires_at=datetime.now(timezone.utc) + access_token_expires,
-        remember_me=remember_me,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
-    access_token = create_access_token(data={"sub": user.id, "jti": jti}, expires_delta=access_token_expires)
     login_log_service.log_login(
         db, email=user.email, status="success", user=user, ip_address=ip_address, user_agent=user_agent
     )
-    return {
-        "access_token": str(access_token),
-        "token_type": "bearer",
-        "mfa_required": False,
-        "mfa_token": None,
-        "user_id": user.id,
-        "receipt_ref": None,
-        "payment_pending": False,
-    }
+    out = issue_access_session(
+        db,
+        user,
+        remember_me=remember_me,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        company_id=tenant_company_id,
+    )
+    out.update({"user_id": user.id, "receipt_ref": None, "payment_pending": False})
+    return out
 
 
 def complete_oauth_login(
@@ -367,11 +379,21 @@ def complete_oauth_login(
     if st.get("provider") != provider:
         raise HTTPException(status_code=400, detail="OAuth state provider mismatch")
     remember_me = bool(st.get("remember_me", True))
+    company_login_id = (st.get("company_id") or "").strip()
     tokens = _exchange_code(provider, code)
     profile = fetch_profile(provider, tokens, apple_user=apple_user)
+    existed = _oauth_user_exists(db, provider, profile)
     user = resolve_or_create_user(db, provider, profile)
     try:
-        return _issue_session(db, user, remember_me=remember_me, ip_address=ip_address, user_agent=user_agent)
+        return _issue_session(
+            db,
+            user,
+            remember_me=remember_me,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            company_login_id=company_login_id,
+            created_new_tenant=not existed,
+        )
     except HTTPException as e:
         if e.status_code == 402 and isinstance(e.detail, dict) and e.detail.get("code") == "payment_pending":
             return {
@@ -432,6 +454,9 @@ def _create_tenant_for_oauth(db: Session, *, email: str, full_name: str, provide
     )
     db.add(company)
     db.flush()
+    from app.services.company_login_id_service import ensure_company_login_id
+
+    ensure_company_login_id(db, company)
     user.company_id = company.id
     ensure_roles_for_company(db, company.id)
     db.flush()
@@ -442,6 +467,17 @@ def _create_tenant_for_oauth(db: Session, *, email: str, full_name: str, provide
     db.commit()
     db.refresh(user)
     return user
+
+
+def _oauth_user_exists(db: Session, provider: str, profile: dict) -> bool:
+    sub = profile.get("sub") or ""
+    email = (profile.get("email") or "").strip().lower()
+    subject_key = _oauth_subject_key(provider, sub) if sub else None
+    if subject_key and db.query(User.id).filter(User.oauth_subject == subject_key).first():
+        return True
+    if email and db.query(User.id).filter(func.lower(User.email) == email).first():
+        return True
+    return False
 
 
 def resolve_or_create_user(db: Session, provider: str, profile: dict) -> User:

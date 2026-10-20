@@ -55,7 +55,7 @@ export default function AdminApiUsagePage() {
               </Select>
               <Input
                 className="w-36"
-                placeholder="Company ID"
+                placeholder="Record #"
                 value={companyId}
                 onChange={(e) => setCompanyId(e.target.value.replace(/\D/g, ''))}
               />

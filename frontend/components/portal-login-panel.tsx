@@ -168,6 +168,9 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
               placeholder="Set a password"
             />
             <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MSG}</p>
+            <p className="text-xs text-muted-foreground">
+              If this email already has a ControlOps login at another company, they keep that password and sign in with this company&apos;s Company ID.
+            </p>
             <Button
               type="button"
               variant="outline"

@@ -201,7 +201,7 @@ export default function AdminTicketsPage() {
                 <Input value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1" />
               </div>
               <div>
-                <Label>Company ID (optional)</Label>
+                <Label>Record # (optional)</Label>
                 <Input type="number" value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="mt-1" />
               </div>
               <div>

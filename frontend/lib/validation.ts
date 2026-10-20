@@ -41,6 +41,11 @@ const emailFieldSchema = z
   .max(TEXT_LIMITS.email, tooLongMessage('Email', TEXT_LIMITS.email));
 
 export const loginSchema = z.object({
+  company_id: z
+    .string()
+    .trim()
+    .min(3, 'Company ID is required')
+    .max(32, tooLongMessage('Company ID', 32)),
   email: emailFieldSchema,
   password: z
     .string()

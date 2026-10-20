@@ -15,7 +15,7 @@ export type LoginResult =
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<LoginResult>;
+  login: (companyId: string, email: string, password: string, rememberMe?: boolean) => Promise<LoginResult>;
   loginWithToken: (token: string) => Promise<User>;
   completeMfa: (mfaToken: string, code: string) => Promise<User>;
   logout: () => Promise<void>;
@@ -77,8 +77,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return finishLogin(token);
   };
 
-  const login = async (email: string, password: string, rememberMe = true): Promise<LoginResult> => {
-    const response = await api.auth.login({ email, password, remember_me: rememberMe });
+  const login = async (
+    companyId: string,
+    email: string,
+    password: string,
+    rememberMe = true
+  ): Promise<LoginResult> => {
+    const response = await api.auth.login({
+      company_id: companyId,
+      email,
+      password,
+      remember_me: rememberMe,
+    });
     if (response.mfa_required && response.mfa_token) {
       return { mfa_required: true, mfa_token: response.mfa_token };
     }

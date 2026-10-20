@@ -264,9 +264,30 @@ export default function AdminCompanySupportPage() {
               <Link href="/admin/companies" className="text-sm text-muted-foreground hover:underline">← Companies</Link>
               <h1 className="text-3xl font-bold mt-1">{loading ? 'Loading...' : view?.name ?? 'Tenant'}</h1>
               {view && (
-                <p className="text-muted-foreground mt-1 capitalize">
-                  {view.account_status || 'active'} · {view.subscription_tier || '—'} · {view.subscription_status || '—'}
-                </p>
+                <div className="mt-1 space-y-1">
+                  <p className="flex flex-wrap items-center gap-2 font-mono text-base font-semibold tracking-wide">
+                    Company ID {view.login_id || '—'}
+                    {view.login_id ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(view.login_id || '').then(
+                            () => toast.success(`Company ID copied: ${view.login_id}`),
+                            () => toast.error('Could not copy Company ID')
+                          );
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    ) : null}
+                  </p>
+                  <p className="text-muted-foreground capitalize">
+                    Internal record #{view.id} · {view.account_status || 'active'} · {view.subscription_tier || '—'} · {view.subscription_status || '—'}
+                  </p>
+                </div>
               )}
             </div>
             <Button variant="outline" size="sm" onClick={load}>Refresh</Button>
@@ -319,6 +340,8 @@ export default function AdminCompanySupportPage() {
                 <Card>
                   <CardHeader><CardTitle>Company</CardTitle></CardHeader>
                   <CardContent className="text-sm space-y-1">
+                    <p><span className="text-muted-foreground">Company ID:</span> <span className="font-mono font-semibold tracking-wide">{view.login_id || '—'}</span></p>
+                    <p><span className="text-muted-foreground">Internal record #:</span> {view.id}</p>
                     <p><span className="text-muted-foreground">Email:</span> {view.email || '—'}</p>
                     <p><span className="text-muted-foreground">Phone:</span> {view.phone || '—'}</p>
                     <p><span className="text-muted-foreground">Address:</span> {[view.address, view.postcode].filter(Boolean).join(', ') || '—'}</p>

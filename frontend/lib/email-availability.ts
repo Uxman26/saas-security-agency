@@ -27,6 +27,7 @@ export function isDuplicateEmailError(err: unknown): boolean {
   const msg = err.message || '';
   return (
     msg.includes('already registered') ||
+    msg.includes('already has a login for this company') ||
     msg.includes(DUPLICATE_EMAIL_MESSAGE) ||
     msg.toLowerCase().includes('email address is already')
   );

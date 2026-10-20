@@ -218,11 +218,15 @@ def start_impersonation(
         parent_jti=parent_jti,
         impersonation_mode=mode,
         impersonation_reason=reason.strip(),
+        company_id=target.company_id,
     )
     db.add(row)
     db.commit()
+    token_data = {"sub": target.id, "jti": jti}
+    if target.company_id is not None:
+        token_data["cid"] = target.company_id
     token = create_access_token(
-        data={"sub": target.id, "jti": jti},
+        data=token_data,
         expires_delta=timedelta(minutes=IMPERSONATION_MINUTES),
     )
     platform_audit_service.log(

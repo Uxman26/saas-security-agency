@@ -115,7 +115,7 @@ export default function AdminRefundsPage() {
   const runPreview = async () => {
     const cid = parseInt(companyId, 10);
     if (!cid) {
-      toast.error('Company ID required');
+      toast.error('Record # required');
       return;
     }
     if (!invoiceId && !billingReceiptId) {
@@ -147,7 +147,7 @@ export default function AdminRefundsPage() {
   const create = async () => {
     const cid = parseInt(companyId, 10);
     if (!cid) {
-      toast.error('Company ID required');
+      toast.error('Record # required');
       return;
     }
     if (override && !overrideReason.trim()) {
@@ -486,7 +486,7 @@ export default function AdminRefundsPage() {
             </DialogHeader>
             <div className="space-y-3">
               <div>
-                <Label>Company ID</Label>
+                <Label>Record #</Label>
                 <Input className="mt-1" value={companyId} onChange={(e) => setCompanyId(e.target.value)} />
               </div>
               <div className="grid grid-cols-2 gap-3">

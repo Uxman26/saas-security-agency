@@ -148,7 +148,7 @@ export default function AdminTrialsPage() {
   const submitStart = async () => {
     const companyId = parseInt(startCompanyId, 10);
     if (!companyId) {
-      toast.error('Company ID required');
+      toast.error('Record # required');
       return;
     }
     setStarting(true);
@@ -447,7 +447,7 @@ export default function AdminTrialsPage() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="start_co">Company ID</Label>
+                <Label htmlFor="start_co">Record #</Label>
                 <Input
                   id="start_co"
                   type="number"

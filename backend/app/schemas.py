@@ -59,9 +59,20 @@ class UserCreate(StrictModel):
         return validate_password_strength(v)
 
 class UserLogin(StrictModel):
+    company_id: str = Field(min_length=3, max_length=32)
     email: EmailStr = Field(max_length=EMAIL_MAX)
     password: str
     remember_me: Optional[bool] = False
+
+    @field_validator("company_id")
+    @classmethod
+    def company_login_id_rules(cls, v: str) -> str:
+        from app.services.company_login_id_service import normalize_login_id
+
+        code = normalize_login_id(v)
+        if len(code) < 3:
+            raise ValueError("Company ID is required")
+        return code
 
     @field_validator("password")
     @classmethod
@@ -173,11 +184,27 @@ class NotificationSoundUpdate(StrictModel):
     muted: bool
 
 
+class CompanyMembershipOut(BaseModel):
+    company_id: int
+    login_id: Optional[str] = None
+    company_name: str
+    role: Optional[str] = None
+    role_id: Optional[int] = None
+    guard_id: Optional[int] = None
+    client_id: Optional[int] = None
+    is_current: bool = False
+
+
+class SwitchCompanyRequest(StrictModel):
+    company_id: int
+
+
 class UserMeResponse(UserResponse):
     permissions: List[str] = Field(default_factory=list)
     module_access: List[dict[str, Any]] = Field(default_factory=list)
     plan: Optional[dict[str, Any]] = None
     company_name: Optional[str] = None
+    company_login_id: Optional[str] = None
     logo_url: Optional[str] = None
     subscription_status: Optional[str] = None
     subscription_end: Optional[datetime] = None
@@ -185,6 +212,7 @@ class UserMeResponse(UserResponse):
     enabled_modules: Optional[dict[str, bool]] = None
     theme_preference: Optional[str] = None
     notification_sound_muted: bool = False
+    companies: List[CompanyMembershipOut] = Field(default_factory=list)
 
 
 class SubscriptionReceiptResponse(BaseModel):
@@ -218,6 +246,7 @@ class SignupResponse(BaseModel):
     receipt: SubscriptionReceiptResponse
     email_verification_required: bool = False
     trial: TrialStartedOut = Field(default_factory=TrialStartedOut)
+    company_login_id: Optional[str] = None
 
 
 class ReceiptPublicResponse(BaseModel):
@@ -446,6 +475,7 @@ class CompanyBase(BaseModel):
 
 class CompanyResponse(CompanyBase):
     id: int
+    login_id: Optional[str] = None
     admin_id: int
     subscription_tier: Optional[str] = None
     subscription_status: Optional[str] = None
@@ -461,6 +491,7 @@ class CompanyResponse(CompanyBase):
 
 class CompanyAdminResponse(CompanyBase):
     id: int
+    login_id: Optional[str] = None
     admin_id: int
     subscription_tier: Optional[str] = None
     subscription_status: Optional[str] = None
@@ -523,6 +554,7 @@ class CompanyProfileUpdate(BaseModel):
 
 class CompanyProfileResponse(BaseModel):
     id: int
+    login_id: Optional[str] = None
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None

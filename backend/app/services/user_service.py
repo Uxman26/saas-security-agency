@@ -3,15 +3,16 @@ from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth import get_password_hash
-from app.models import User, Role, Company, Guard, Client, Site, UserSite
+from app.auth import SUPER_ADMIN_ROLE, get_password_hash
+from app.models import User, Role, Company, Guard, Client, Site, UserSite, UserCompanyMembership
 from app.schemas import CompanyUserCreate, CompanyUserUpdate
 from app.services.plan_enforcement import enforce_user_quota
+from app.services import membership_service
 
 
 def _get_user(db: Session, company_id: int, user_id: int) -> User:
-    u = db.query(User).filter(User.id == user_id, User.company_id == company_id).first()
-    if not u:
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u or not membership_service.belongs_to_company(db, u, company_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return u
 
@@ -47,22 +48,18 @@ def _set_site_pins(
 ) -> None:
     """Replace this user's pin rows. Caller commits."""
     validated = _validate_site_ids(db, company_id, site_ids, client_id)
-    db.query(UserSite).filter(UserSite.user_id == user.id).delete(synchronize_session=False)
+    db.query(UserSite).filter(
+        UserSite.user_id == user.id, UserSite.company_id == company_id
+    ).delete(synchronize_session=False)
     for sid in validated:
         db.add(UserSite(user_id=user.id, site_id=sid, company_id=company_id))
 
 
-def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -> User:
-    from app.services.email_uniqueness import assert_email_available
-
-    company = db.query(Company).filter(Company.id == company_id).first()
-    if not company:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
-    enforce_user_quota(db, company)
-    email = assert_email_available(db, data.email)
-    role = db.query(Role).filter(Role.id == data.role_id, Role.company_id == company_id).first()
-    if not role:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+def _validate_role_scope(
+    db: Session, company_id: int, role: Role, data: CompanyUserCreate
+) -> tuple[Optional[int], Optional[int]]:
+    client_id = data.client_id
+    guard_id = data.guard_id
     if role.slug == "super_admin":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
     if role.slug == "admin":
@@ -70,12 +67,7 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only one Admin is allowed. Assign a custom role instead.",
         )
-    client_id = data.client_id
-    guard_id = data.guard_id
     if role.slug == "client":
-        # A Client login is scoped either by its client (all that client's sites) or by
-        # an explicit site list (a site-only login, independent of any client). One of
-        # the two is required: with neither, the login would be scoped to nothing.
         if not client_id and not data.site_ids:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -98,6 +90,50 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
         if guard_id and not db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff profile not found")
+    return client_id, guard_id
+
+
+def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -> User:
+    from app.services.email_uniqueness import assert_email_available, find_user_by_email, normalize_email
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    enforce_user_quota(db, company)
+    email = normalize_email(data.email)
+    role = db.query(Role).filter(Role.id == data.role_id, Role.company_id == company_id).first()
+    if not role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    client_id, guard_id = _validate_role_scope(db, company_id, role, data)
+
+    existing = find_user_by_email(db, email)
+    if existing:
+        if getattr(existing, "role", None) == SUPER_ADMIN_ROLE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This email address is already registered. Please use a different email.",
+            )
+        if membership_service.belongs_to_company(db, existing, company_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This person already has a login for this company.",
+            )
+        membership_service.upsert_membership(
+            db,
+            user=existing,
+            company_id=company_id,
+            role=role,
+            guard_id=guard_id,
+            client_id=client_id,
+            make_active_context=not existing.company_id,
+        )
+        if data.site_ids:
+            _set_site_pins(db, existing, company_id, data.site_ids, client_id)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    email = assert_email_available(db, data.email)
     user = User(
         email=email,
         password_hash=get_password_hash(data.password),
@@ -111,10 +147,17 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
         email_verified=True,
     )
     db.add(user)
+    db.flush()
+    membership_service.upsert_membership(
+        db,
+        user=user,
+        company_id=company_id,
+        role=role,
+        guard_id=guard_id,
+        client_id=client_id,
+        make_active_context=True,
+    )
     if data.site_ids:
-        # flush so user.id exists for the pin rows, but stay in the same transaction:
-        # a rejected pin must roll the new user back with it.
-        db.flush()
         _set_site_pins(db, user, company_id, data.site_ids, client_id)
     db.commit()
     db.refresh(user)
@@ -131,8 +174,16 @@ def update_company_user(db: Session, company_id: int, user_id: int, data: Compan
         user.full_name = data.full_name.strip()
     if data.password:
         user.password_hash = get_password_hash(data.password)
+    membership = membership_service.get_membership(db, user.id, company_id, active_only=False)
+    active_here = user.company_id == company_id
+    next_role_id = membership.role_id if membership else (user.role_id if active_here else None)
+    next_guard_id = membership.guard_id if membership else (user.guard_id if active_here else None)
+    next_client_id = membership.client_id if membership else (user.client_id if active_here else None)
+    current_role = None
+    if next_role_id:
+        current_role = db.query(Role).filter(Role.id == next_role_id).first()
     if data.role_id is not None:
-        if user.role_row and user.role_row.slug == "admin" and data.role_id != user.role_id:
+        if current_role and current_role.slug == "admin" and data.role_id != next_role_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Admin role cannot be changed",
@@ -140,30 +191,41 @@ def update_company_user(db: Session, company_id: int, user_id: int, data: Compan
         role = db.query(Role).filter(Role.id == data.role_id, Role.company_id == company_id).first()
         if not role:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
-        if role.slug == "admin" and (not user.role_row or user.role_row.slug != "admin"):
+        if role.slug == "admin" and (not current_role or current_role.slug != "admin"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only one Admin is allowed. Assign a custom role instead.",
             )
-        user.role_id = role.id
-        user.role = role.slug
+        next_role_id = role.id
+        current_role = role
         if role.slug == "client":
-            user.guard_id = None
+            next_guard_id = None
         elif role.slug == "staff":
-            user.client_id = None
+            next_client_id = None
     if data.client_id is not None:
         if data.client_id:
             if not db.query(Client).filter(Client.id == data.client_id, Client.company_id == company_id).first():
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
-        user.client_id = data.client_id
+        next_client_id = data.client_id
     if data.guard_id is not None:
         if data.guard_id:
             if not db.query(Guard).filter(Guard.id == data.guard_id, Guard.company_id == company_id).first():
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff profile not found")
-        user.guard_id = data.guard_id
+        next_guard_id = data.guard_id
     if data.site_ids is not None:
-        # [] clears the pins, restoring client-wide access; None leaves them untouched.
-        _set_site_pins(db, user, company_id, data.site_ids, user.client_id)
+        _set_site_pins(db, user, company_id, data.site_ids, next_client_id)
+    if current_role is None and next_role_id:
+        current_role = db.query(Role).filter(Role.id == next_role_id).first()
+    if current_role:
+        membership_service.upsert_membership(
+            db,
+            user=user,
+            company_id=company_id,
+            role=current_role,
+            guard_id=next_guard_id,
+            client_id=next_client_id,
+            make_active_context=active_here,
+        )
     db.commit()
     db.refresh(user)
     return user
@@ -190,5 +252,12 @@ def delete_company_user(db: Session, company_id: int, user_id: int, actor_id: in
     user = _get_user(db, company_id, user_id)
     if company.admin_id == user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete the company owner account")
-    db.delete(user)
+    membership_service.remove_membership(db, user, company_id)
+    still_member = (
+        db.query(UserCompanyMembership)
+        .filter(UserCompanyMembership.user_id == user.id, UserCompanyMembership.is_active.is_(True))
+        .first()
+    )
+    if still_member is None and user.company_id is None:
+        db.delete(user)
     db.commit()

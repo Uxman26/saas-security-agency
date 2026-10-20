@@ -117,6 +117,40 @@ class User(Base):
     admin_company = relationship("Company", back_populates="admin", uselist=False, foreign_keys="Company.admin_id")
     role_row = relationship("Role", back_populates="users", foreign_keys=[role_id])
     site_pins = relationship("UserSite", back_populates="user", cascade="all, delete-orphan")
+    company_memberships = relationship(
+        "UserCompanyMembership",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="UserCompanyMembership.user_id",
+    )
+
+
+class UserCompanyMembership(Base):
+    """One employment / portal role for a login in a tenant.
+
+    ``users.email`` stays globally unique so a person signs in once. Each row here
+    is a separate tenant assignment (role, staff profile, client) so the same
+    person can work for X Facilities Group and TSS without sharing rota or
+    attendance data. ``users.company_id`` is the *active* tenant for this session.
+    """
+
+    __tablename__ = "user_company_memberships"
+    __table_args__ = (
+        UniqueConstraint("user_id", "company_id", name="uq_user_company_membership"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
+    role = Column(String, nullable=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    user = relationship("User", back_populates="company_memberships", foreign_keys=[user_id])
+    company = relationship("Company")
+    role_row = relationship("Role", foreign_keys=[role_id])
 
 
 class UserSite(Base):
@@ -142,6 +176,8 @@ class UserSite(Base):
 class Company(Base):
     __tablename__ = "companies"
     id = Column(Integer, primary_key=True, index=True)
+    # Public Company ID for login. Not the integer primary key.
+    login_id = Column(String(16), unique=True, nullable=True, index=True)
     name = Column(String, nullable=False)
     admin_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     subscription_tier = Column(String, default="basic")
@@ -439,6 +475,8 @@ class UserSession(Base):
     parent_jti = Column(String(64), nullable=True, index=True)
     impersonation_mode = Column(String, nullable=True)
     impersonation_reason = Column(Text, nullable=True)
+    # Tenant pinned at login. Subsequent requests use this, not a client-supplied company id.
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=True, index=True)
     user = relationship("User", foreign_keys=[user_id])
     impersonator = relationship("User", foreign_keys=[impersonator_user_id])
 

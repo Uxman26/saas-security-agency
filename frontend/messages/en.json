@@ -206,6 +206,8 @@
     "signupTitle": "Create your ControlOps account",
     "signupSubtitle": "Set up your company and begin organising your workforce, locations and rotas.",
     "signupSubtitlePlan": "Start with the {tier} plan on ControlOps",
+    "companyId": "Company ID",
+    "companyIdHint": "From your welcome email. Platform administrators use PLATFORM.",
     "email": "Work email",
     "password": "Password",
     "fullName": "Full name",

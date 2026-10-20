@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { CompanyBrand } from '@/components/company-brand';
+import { CompanySwitcher } from '@/components/company-switcher';
 import { AdminSidebarNav, TenantSidebarNav } from '@/components/sidebar-nav';
 import { ADMIN_NAV_SECTIONS, filterAdminNavSections } from '@/lib/admin-nav';
 import { groupTenantNavSections } from '@/lib/sidebar-sections';
@@ -25,8 +26,9 @@ export function AppSidebar() {
 
   return (
     <aside className={asideClass}>
-      <div className="shrink-0 border-b border-sidebar-border px-3 py-3.5">
+      <div className="shrink-0 space-y-2 border-b border-sidebar-border px-3 py-3.5">
         <CompanyBrand />
+        <CompanySwitcher />
       </div>
       <nav
         ref={navRef}

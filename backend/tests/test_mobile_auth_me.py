@@ -13,14 +13,16 @@ from app.auth import get_password_hash
 from app.database import SessionLocal
 from app.main import app
 from app.models import Company, Role, User
+from app.services.company_login_id_service import ensure_company_login_id
 from app.services.module_service import dump_modules, parse_modules
 
 
-def _ensure_staff_user() -> tuple[str, str]:
+def _ensure_staff_user() -> tuple[str, str, str]:
     db = SessionLocal()
     try:
         co = db.get(Company, 1)
         assert co is not None
+        login_id = ensure_company_login_id(db, co)
         if not co.subscription_status or co.subscription_status == "pending":
             co.subscription_status = "active"
         co.enabled_modules_json = dump_modules(
@@ -50,13 +52,13 @@ def _ensure_staff_user() -> tuple[str, str]:
             user.role_id = staff_role.id if staff_role else user.role_id
             user.company_id = co.id
         db.commit()
-        return email, password
+        return email, password, login_id
     finally:
         db.close()
 
 
 def test_staff_mobile_login_then_me():
-    email, password = _ensure_staff_user()
+    email, password, login_id = _ensure_staff_user()
     client = TestClient(app)
     headers = {
         "User-Agent": "ControlOpsMobile/1.0",
@@ -64,7 +66,7 @@ def test_staff_mobile_login_then_me():
     }
     login = client.post(
         "/auth/login",
-        json={"email": email, "password": password, "remember_me": True},
+        json={"company_id": login_id, "email": email, "password": password, "remember_me": True},
         headers=headers,
     )
     assert login.status_code == 200, login.text
@@ -82,11 +84,11 @@ def test_staff_mobile_login_then_me():
 
 
 def test_staff_web_login_still_works():
-    email, password = _ensure_staff_user()
+    email, password, login_id = _ensure_staff_user()
     client = TestClient(app)
     login = client.post(
         "/auth/login",
-        json={"email": email, "password": password, "remember_me": True},
+        json={"company_id": login_id, "email": email, "password": password, "remember_me": True},
         headers={"User-Agent": "Mozilla/5.0"},
     )
     assert login.status_code == 200, login.text

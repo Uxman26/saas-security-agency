@@ -220,8 +220,14 @@ export const api = {
       };
       return request<SignupResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
     },
-    login: (data: { email: string; password: string; remember_me?: boolean }): Promise<LoginResponse> => {
+    login: (data: {
+      company_id: string;
+      email: string;
+      password: string;
+      remember_me?: boolean;
+    }): Promise<LoginResponse> => {
       const sanitized = {
+        company_id: sanitizeInput(data.company_id).toUpperCase().replace(/[^A-Z0-9]/g, ''),
         email: sanitizeInput(data.email),
         password: data.password,
         remember_me: data.remember_me ?? true,
@@ -230,8 +236,13 @@ export const api = {
     },
     oauthProviders: (): Promise<{ providers: { provider: string; enabled: boolean }[] }> =>
       request<{ providers: { provider: string; enabled: boolean }[] }>('/auth/oauth/providers'),
-    oauthStartUrl: (provider: string, rememberMe = true) =>
-      `${API_URL}/auth/oauth/${encodeURIComponent(provider)}/start?remember_me=${rememberMe ? 'true' : 'false'}`,
+    oauthStartUrl: (provider: string, rememberMe = true, companyId = '') => {
+      const q = new URLSearchParams({
+        remember_me: rememberMe ? 'true' : 'false',
+        company_id: companyId.trim(),
+      });
+      return `${API_URL}/auth/oauth/${encodeURIComponent(provider)}/start?${q.toString()}`;
+    },
     checkEmail: (
       email: string,
       exclude_user_id?: number
@@ -244,6 +255,11 @@ export const api = {
         }),
       }),
     me: (): Promise<User> => request<User>('/auth/me'),
+    switchCompany: (company_id: number): Promise<User> =>
+      request<User>('/auth/switch-company', {
+        method: 'POST',
+        body: JSON.stringify({ company_id }),
+      }),
     updateProfile: (full_name: string): Promise<User> =>
       request<User>('/auth/me/profile', {
         method: 'PATCH',

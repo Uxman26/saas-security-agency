@@ -192,10 +192,19 @@ def send_verification_email(user: User) -> None:
 def send_welcome_email(user: User, company_name: str = "") -> None:
     from app.database import SessionLocal
     from app.services.platform_mail_service import send_template_email
+    from app.services.company_login_id_service import PLATFORM_LOGIN_ID, ensure_company_login_id
 
     login_url = f"{settings.frontend_url.rstrip('/')}/login"
     db = SessionLocal()
     try:
+        company_login_id = PLATFORM_LOGIN_ID
+        resolved_name = company_name or ""
+        if user.company_id:
+            company = db.query(Company).filter(Company.id == user.company_id).first()
+            if company:
+                company_login_id = ensure_company_login_id(db, company)
+                resolved_name = resolved_name or company.name or ""
+                db.commit()
         send_template_email(
             db,
             key="welcome_onboarding",
@@ -203,11 +212,19 @@ def send_welcome_email(user: User, company_name: str = "") -> None:
             variables={
                 "full_name": user.full_name or user.email,
                 "email": user.email,
-                "company_name": company_name or "",
+                "company_name": resolved_name,
+                "company_login_id": company_login_id,
                 "login_url": login_url,
             },
             company_id=user.company_id,
             user_id=user.id,
+            fallback_subject="Welcome to ControlOps",
+            fallback_body=(
+                f"Hi {user.full_name or user.email},\n\n"
+                f"Welcome to ControlOps. Your company {resolved_name} is ready.\n\n"
+                f"Your Company ID is {company_login_id}. Sign in at {login_url} with this "
+                f"Company ID, your email, and your password.\n"
+            ),
         )
     finally:
         db.close()
@@ -320,6 +337,9 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         )
         db.add(company)
         db.flush()
+        from app.services.company_login_id_service import ensure_company_login_id
+
+        ensure_company_login_id(db, company)
         user.company_id = company.id
         ensure_roles_for_company(db, company.id)
         db.flush()
@@ -424,37 +444,177 @@ def signup_with_receipt(db: Session, user_data: UserCreate):
         trial = start_signup_trial(db, user)
     return user, r, requires_email_verification(user), trial
 
-def authenticate_user(db: Session, email: str, password: str, ip_address: str | None = None, user_agent: str | None = None, remember_me: bool = False, client_source: str | None = None) -> dict:
+def _fail_login(
+    db: Session,
+    *,
+    email: str,
+    user: User | None,
+    ip_address: str | None,
+    user_agent: str | None,
+    detail: str,
+    record_password_failure: bool = False,
+) -> None:
+    from app.services import login_guard_service, login_log_service
+
+    login_log_service.log_login(
+        db, email=email, status="failed", ip_address=ip_address, user_agent=user_agent, user=user
+    )
+    try:
+        from app.services.admin_platform_ext_service import record_security_event
+
+        record_security_event(
+            db,
+            event_type="login.failed",
+            message=f"Failed login for {email}",
+            severity="warning",
+            company_id=user.company_id if user else None,
+            user_id=user.id if user else None,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except Exception:
+        pass
+    if record_password_failure and user:
+        login_guard_service.record_failed_password_attempt(db, user)
+    raise HTTPException(status_code=401, detail=detail)
+
+
+def bind_user_to_login_company(db: Session, user: User, company_login_id: str) -> int | None:
+    """Pin the user to the tenant identified by the public Company ID.
+
+    Returns the internal companies.id, or None for platform administrators.
+    """
+    from app.services import membership_service
+    from app.services.company_login_id_service import (
+        LOGIN_FAILED_DETAIL,
+        ensure_company_login_id,
+        resolve_login_company,
+    )
+
+    company, is_platform = resolve_login_company(db, company_login_id)
+    if is_platform:
+        if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
+            raise HTTPException(status_code=401, detail=LOGIN_FAILED_DETAIL)
+        return None
+    if company is None or getattr(user, "role", None) == SUPER_ADMIN_ROLE:
+        raise HTTPException(status_code=401, detail=LOGIN_FAILED_DETAIL)
+    ensure_company_login_id(db, company)
+    if not membership_service.belongs_to_company(db, user, company.id):
+        raise HTTPException(status_code=401, detail=LOGIN_FAILED_DETAIL)
+    from app.models import Role
+
+    membership = membership_service.get_membership(db, user.id, company.id)
+    if membership is None and user.company_id == company.id:
+        role = db.query(Role).filter(Role.id == user.role_id).first() if user.role_id else None
+        if role:
+            membership = membership_service.upsert_membership(
+                db,
+                user=user,
+                company_id=company.id,
+                role=role,
+                guard_id=user.guard_id,
+                client_id=user.client_id,
+                make_active_context=True,
+            )
+    if membership is not None:
+        role = db.query(Role).filter(Role.id == membership.role_id).first() if membership.role_id else None
+        membership_service.apply_membership_to_user(user, membership, role)
+    else:
+        user.company_id = company.id
+    return company.id
+
+
+def issue_access_session(
+    db: Session,
+    user: User,
+    *,
+    remember_me: bool,
+    ip_address: str | None,
+    user_agent: str | None,
+    company_id: int | None,
+) -> dict:
+    from app.services import session_service
+
+    if remember_me:
+        access_token_expires = timedelta(days=settings.remember_me_expire_days)
+    else:
+        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    jti = session_service.new_jti()
+    session_service.create_session(
+        db,
+        user.id,
+        jti,
+        expires_at=datetime.now(timezone.utc) + access_token_expires,
+        remember_me=remember_me,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        company_id=company_id,
+    )
+    token_data = {"sub": user.id, "jti": jti}
+    if company_id is not None:
+        token_data["cid"] = company_id
+    access_token = create_access_token(data=token_data, expires_delta=access_token_expires)
+    return {
+        "access_token": str(access_token),
+        "token_type": "bearer",
+        "mfa_required": False,
+        "mfa_token": None,
+    }
+
+
+def authenticate_user(
+    db: Session,
+    email: str,
+    password: str,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+    remember_me: bool = False,
+    client_source: str | None = None,
+    company_id: str | None = None,
+) -> dict:
     from app.auth import verify_password
-    from app.services import login_guard_service, login_log_service, session_service
+    from app.services import login_guard_service, login_log_service
+    from app.services.company_login_id_service import LOGIN_FAILED_DETAIL, normalize_login_id
 
     login_guard_service.assert_login_allowed(db, email, ip_address)
+    public_company_id = normalize_login_id(company_id)
+    if not public_company_id:
+        raise HTTPException(status_code=422, detail="Company ID is required")
 
     user = db.query(User).filter(func.lower(User.email) == email.lower().strip()).first()
     if not user or not verify_password(password, user.password_hash):
-        login_log_service.log_login(db, email=email, status="failed", ip_address=ip_address, user_agent=user_agent, user=user)
         if user and (getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL) in OAUTH_AUTH_PROVIDERS:
+            login_log_service.log_login(
+                db, email=email, status="failed", ip_address=ip_address, user_agent=user_agent, user=user
+            )
             raise HTTPException(
                 status_code=401,
                 detail="This account uses social sign-in. Please continue with Google, Microsoft, or Apple.",
             )
-        try:
-            from app.services.admin_platform_ext_service import record_security_event
-            record_security_event(
+        _fail_login(
+            db,
+            email=email,
+            user=user,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            detail=LOGIN_FAILED_DETAIL,
+            record_password_failure=True,
+        )
+    try:
+        tenant_company_id = bind_user_to_login_company(db, user, public_company_id)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            _fail_login(
                 db,
-                event_type="login.failed",
-                message=f"Failed login for {email}",
-                severity="warning",
-                company_id=user.company_id if user else None,
-                user_id=user.id if user else None,
+                email=email,
+                user=user,
                 ip_address=ip_address,
                 user_agent=user_agent,
+                detail=LOGIN_FAILED_DETAIL,
             )
-        except Exception:
-            pass
-        if user:
-            login_guard_service.record_failed_password_attempt(db, user)
-        raise HTTPException(status_code=401, detail="The email or password is incorrect.")
+        raise
+    db.commit()
+    db.refresh(user)
     if not user.is_active:
         login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=403, detail="Account is deactivated")
@@ -495,32 +655,23 @@ def authenticate_user(db: Session, email: str, password: str, ip_address: str | 
             "access_token": None,
             "token_type": "bearer",
             "mfa_required": True,
-            "mfa_token": mfa_service.create_mfa_challenge_token(user.id, remember_me=remember_me),
+            "mfa_token": mfa_service.create_mfa_challenge_token(
+                user.id, remember_me=remember_me, company_id=tenant_company_id
+            ),
         }
 
     try:
         login_log_service.log_login(db, email=email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
     except Exception:
         db.rollback()
-    if remember_me:
-        access_token_expires = timedelta(days=settings.remember_me_expire_days)
-    else:
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-
-    jti = session_service.new_jti()
-    session_service.create_session(
+    return issue_access_session(
         db,
-        user.id,
-        jti,
-        expires_at=datetime.now(timezone.utc) + access_token_expires,
+        user,
         remember_me=remember_me,
         ip_address=ip_address,
         user_agent=user_agent,
+        company_id=tenant_company_id,
     )
-    access_token = create_access_token(
-        data={"sub": user.id, "jti": jti}, expires_delta=access_token_expires
-    )
-    return {"access_token": str(access_token), "token_type": "bearer", "mfa_required": False, "mfa_token": None}
 
 
 def complete_mfa_login(
@@ -530,9 +681,9 @@ def complete_mfa_login(
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> dict:
-    from app.services import mfa_service, login_log_service, session_service
+    from app.services import mfa_service, login_log_service
 
-    user_id, remember_me = mfa_service.verify_mfa_challenge_token(mfa_token)
+    user_id, remember_me, company_id = mfa_service.verify_mfa_challenge_token(mfa_token)
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid MFA challenge")
@@ -541,24 +692,14 @@ def complete_mfa_login(
         raise HTTPException(status_code=401, detail="Invalid authenticator code")
     db.commit()
     login_log_service.log_login(db, email=user.email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
-    if remember_me:
-        access_token_expires = timedelta(days=settings.remember_me_expire_days)
-    else:
-        access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    jti = session_service.new_jti()
-    session_service.create_session(
+    return issue_access_session(
         db,
-        user.id,
-        jti,
-        expires_at=datetime.now(timezone.utc) + access_token_expires,
+        user,
         remember_me=remember_me,
         ip_address=ip_address,
         user_agent=user_agent,
+        company_id=company_id,
     )
-    access_token = create_access_token(
-        data={"sub": user.id, "jti": jti}, expires_delta=access_token_expires
-    )
-    return {"access_token": str(access_token), "token_type": "bearer", "mfa_required": False, "mfa_token": None}
 
 
 def logout(db: Session, jti: str | None) -> None:

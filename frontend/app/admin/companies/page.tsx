@@ -27,6 +27,21 @@ import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { toast } from '@/lib/toast';
+import { Copy } from 'lucide-react';
+
+async function copyCompanyId(value?: string | null) {
+  const code = (value || '').trim();
+  if (!code) {
+    toast.error('This tenant does not have a Company ID yet');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(code);
+    toast.success(`Company ID copied: ${code}`);
+  } catch {
+    toast.error('Could not copy Company ID');
+  }
+}
 
 const TIERS = ['basic', 'standard', 'premium', 'enterprise'];
 const STATUSES = ['active', 'pending', 'expired', 'cancelled'];
@@ -69,7 +84,7 @@ export default function AdminCompaniesPage() {
 
   const getSearchText = useCallback(
     (c: Company) =>
-      [String(c.id), c.name, String(c.admin_id), c.subscription_tier ?? '', c.subscription_status ?? '', c.account_status ?? '', c.created_at]
+      [String(c.id), c.login_id ?? '', c.name, String(c.admin_id), c.subscription_tier ?? '', c.subscription_status ?? '', c.account_status ?? '', c.created_at]
         .filter(Boolean)
         .join(' '),
     []
@@ -78,6 +93,8 @@ export default function AdminCompaniesPage() {
     switch (key) {
       case 'id':
         return c.id;
+      case 'login_id':
+        return c.login_id || '';
       case 'name':
         return c.name;
       case 'tier':
@@ -176,7 +193,8 @@ export default function AdminCompaniesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <SortableHead label="ID" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Record #" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Company ID" colKey="login_id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Plan" colKey="tier" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -189,7 +207,24 @@ export default function AdminCompaniesPage() {
                     <TableBody>
                       {pageRows.map((c) => (
                         <TableRow key={c.id}>
-                          <TableCell>{c.id}</TableCell>
+                          <TableCell className="text-muted-foreground tabular-nums" title="Internal record number. Not used at login.">
+                            {c.id}
+                          </TableCell>
+                          <TableCell>
+                            {c.login_id ? (
+                              <button
+                                type="button"
+                                onClick={() => void copyCompanyId(c.login_id)}
+                                className="inline-flex items-center gap-1.5 font-mono text-sm font-semibold tracking-wide text-foreground hover:text-primary"
+                                title="Copy login Company ID"
+                              >
+                                {c.login_id}
+                                <Copy className="size-3.5 opacity-60" />
+                              </button>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell className="font-medium">
                             <Link href={`/admin/companies/${c.id}`} className="text-primary hover:underline">
                               {c.name}
@@ -222,6 +257,18 @@ export default function AdminCompaniesPage() {
             <DialogHeader><DialogTitle>{selected?.name}</DialogTitle></DialogHeader>
             {selected && (
               <div className="space-y-4">
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <Label>Company ID</Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Input value={selected.login_id ?? ''} readOnly className="font-mono tracking-wide" />
+                    <Button type="button" variant="outline" size="sm" onClick={() => void copyCompanyId(selected.login_id)}>
+                      Copy
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Used at web and mobile login. Internal record #{selected.id} is not a login Company ID.
+                  </p>
+                </div>
                 <div>
                   <Label>Name</Label>
                   <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-1" />

@@ -105,9 +105,59 @@ def run():
         log.exception("migrate_db.run failed")
 
 
+def _ensure_user_company_memberships():
+    try:
+        from app.database import SessionLocal, engine
+        from app.models import UserCompanyMembership
+        from app.services.membership_service import ensure_memberships_table
+
+        UserCompanyMembership.__table__.create(bind=engine, checkfirst=True)
+        db = SessionLocal()
+        try:
+            ensure_memberships_table(db)
+        finally:
+            db.close()
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("user_company_memberships migration failed")
+
+
+def _ensure_company_login_ids():
+    try:
+        from app.database import SessionLocal
+        from app.services.company_login_id_service import backfill_company_login_ids
+        from app.services.admin_billing_notify_service import ensure_templates, DEFAULT_TEMPLATES
+        from app.models import NotificationTemplate
+
+        db = SessionLocal()
+        try:
+            backfill_company_login_ids(db)
+            ensure_templates(db)
+            welcome = db.query(NotificationTemplate).filter(NotificationTemplate.key == "welcome_onboarding").first()
+            default_body = next((t["body"] for t in DEFAULT_TEMPLATES if t["key"] == "welcome_onboarding"), "")
+            if welcome is not None and "{{company_login_id}}" not in (welcome.body or ""):
+                if (welcome.body or "").strip() == "" or "{{login_url}}" in (welcome.body or ""):
+                    if "{{company_login_id}}" in default_body:
+                        welcome.body = default_body
+                    else:
+                        welcome.body = (welcome.body or "") + (
+                            "\n\nYour Company ID is {{company_login_id}}. "
+                            "Enter it with your email and password when you sign in at {{login_url}}."
+                        )
+                    db.commit()
+        finally:
+            db.close()
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("company login_id migration failed")
+
+
 def _run_migrations():
     _ensure_user_theme_preference()
     _ensure_user_notification_sound_muted()
+    _ensure_user_company_memberships()
     _migrate_legacy_day_shift_type()
     path = get_db_path()
     if not path:
@@ -209,6 +259,8 @@ def _run_migrations():
         ("user_sessions", "parent_jti", "TEXT"),
         ("user_sessions", "impersonation_mode", "TEXT"),
         ("user_sessions", "impersonation_reason", "TEXT"),
+        ("user_sessions", "company_id", "INTEGER REFERENCES companies(id)"),
+        ("companies", "login_id", "TEXT"),
         # Audit rows record the real actor as well as the acting user, so an action taken
         # while impersonating is never attributed to the customer.
         ("audit_logs", "actor_user_id", "INTEGER"),
@@ -2523,8 +2575,19 @@ def _run_migrations():
         except Exception:
             pass
 
+    if table_exists(cur, "companies"):
+        try:
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_companies_login_id ON companies(login_id)")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_user_sessions_company_id ON user_sessions(company_id)")
+        except sqlite3.OperationalError:
+            pass
+
     conn.commit()
     conn.close()
+    _ensure_company_login_ids()
     try:
         from app.database import SessionLocal
         from app.services.role_service import backfill_user_roles

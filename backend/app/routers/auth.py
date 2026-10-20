@@ -25,13 +25,21 @@ from app.schemas import (
     TokenResponse,
     UserCreate,
     UserLogin,
+    SwitchCompanyRequest,
     UserMeResponse,
     UserResponse,
     VerifyEmailRequest,
     VerifyEmailResponse,
     ResendVerificationResponse,
 )
-from app.auth import current_session_jti, get_current_user, SUPER_ADMIN_ROLE, get_password_hash, verify_password
+from app.auth import (
+    current_session_jti,
+    get_current_user,
+    get_optional_user,
+    SUPER_ADMIN_ROLE,
+    get_password_hash,
+    verify_password,
+)
 from app.services import auth_service, oauth_service
 from typing import Optional
 from app.rbac import permissions_for_user_db, permission_bypass
@@ -49,6 +57,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def signup(user_data: UserCreate, db: Session = Depends(get_db)):
     user, receipt, needs_verify, trial = auth_service.signup_with_receipt(db, user_data)
     co = db.query(Company).filter(Company.id == user.company_id).first()
+    from app.services.company_login_id_service import ensure_company_login_id
+
+    company_login_id = ensure_company_login_id(db, co) if co else None
     return SignupResponse(
         user=UserResponse.model_validate(user),
         receipt=SubscriptionReceiptResponse(
@@ -68,18 +79,32 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
         ),
         email_verification_required=needs_verify,
         trial=TrialStartedOut(**trial),
+        company_login_id=company_login_id,
     )
 
 
 @router.post("/check-email", response_model=EmailAvailabilityResponse)
-def check_email(body: EmailAvailabilityRequest, db: Session = Depends(get_db)):
-    from app.services.email_uniqueness import DUPLICATE_EMAIL_MESSAGE, email_available
+def check_email(
+    body: EmailAvailabilityRequest,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    from app.services.email_uniqueness import DUPLICATE_EMAIL_MESSAGE, find_user_by_email
+    from app.services import membership_service
 
-    available = email_available(db, body.email, exclude_user_id=body.exclude_user_id)
-    return EmailAvailabilityResponse(
-        available=available,
-        message=None if available else DUPLICATE_EMAIL_MESSAGE,
-    )
+    existing = find_user_by_email(db, body.email, exclude_user_id=body.exclude_user_id)
+    if existing is None:
+        return EmailAvailabilityResponse(available=True, message=None)
+    # Signup (unauthenticated) still requires a unique login identity.
+    if current_user is None or not current_user.company_id:
+        return EmailAvailabilityResponse(available=False, message=DUPLICATE_EMAIL_MESSAGE)
+    if membership_service.belongs_to_company(db, existing, current_user.company_id):
+        return EmailAvailabilityResponse(
+            available=False,
+            message="This person already has a login for this company.",
+        )
+    # Same email in another tenant can be linked as a membership, not a second user.
+    return EmailAvailabilityResponse(available=True, message=None)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -96,6 +121,7 @@ def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db
         user_agent=ua,
         remember_me=bool(credentials.remember_me),
         client_source=get_client_source(),
+        company_id=credentials.company_id,
     )
 
 
@@ -105,8 +131,10 @@ def oauth_providers():
 
 
 @router.get("/oauth/{provider}/start")
-def oauth_start(provider: str, remember_me: bool = True):
-    url = oauth_service.authorization_url(provider.lower().strip(), remember_me=remember_me)
+def oauth_start(provider: str, remember_me: bool = True, company_id: str = ""):
+    url = oauth_service.authorization_url(
+        provider.lower().strip(), remember_me=remember_me, company_id=company_id
+    )
     return RedirectResponse(url=url, status_code=302)
 
 
@@ -253,19 +281,26 @@ def swagger_login(
     credentials: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    """OAuth2 form adapter used only by Swagger UI's Authorize dialog."""
+    """OAuth2 form adapter used only by Swagger UI's Authorize dialog.
+
+    Username is ``CompanyID email`` (example: ``CO7K2M9QP4 you@company.com``).
+    Platform administrators use ``PLATFORM you@controlops.co.uk``.
+    """
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     from app.middleware.client_source import get_client_source
 
+    raw = (credentials.username or "").strip()
+    company_id, email = (raw.split(None, 1) + [""])[:2] if " " in raw else ("", raw)
     return auth_service.authenticate_user(
         db,
-        credentials.username,
+        email or raw,
         credentials.password,
         ip_address=ip,
         user_agent=ua,
         remember_me=False,
         client_source=get_client_source(),
+        company_id=company_id,
     )
 
 
@@ -377,12 +412,16 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
     raw_theme = getattr(current_user, "theme_preference", None)
     theme_preference = raw_theme if raw_theme in ("light", "dark", "system") else None
     base = UserResponse.model_validate(current_user)
+    from app.services import membership_service
+
+    companies = membership_service.list_company_options(db, current_user)
     return UserMeResponse(
         **base.model_dump(),
         permissions=perms,
         module_access=module_access,
         plan=plan,
         company_name=company_name,
+        company_login_id=(getattr(co, "login_id", None) if co else None),
         logo_url=logo_url,
         subscription_status=sub_status,
         subscription_end=sub_end,
@@ -390,12 +429,25 @@ def _me_response(db: Session, current_user: User) -> UserMeResponse:
         enabled_modules=enabled_modules,
         theme_preference=theme_preference,
         notification_sound_muted=bool(getattr(current_user, "notification_sound_muted", False)),
+        companies=companies,
     )
 
 
 @router.get("/me", response_model=UserMeResponse)
 def get_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return _me_response(db, current_user)
+
+
+@router.post("/switch-company", response_model=UserMeResponse)
+def switch_company(
+    body: SwitchCompanyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    raise HTTPException(
+        status_code=403,
+        detail="Sign in with that company's Company ID to change tenant. In-session company switching is not available.",
+    )
 
 
 @router.patch("/me/profile", response_model=UserMeResponse)

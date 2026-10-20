@@ -105,6 +105,9 @@ function SignupForm() {
       const cycleQ = `&cycle=${billing_cycle}`;
       const code = (data.verification_code || verificationCode).trim();
       const couponQ = code ? `&coupon=${encodeURIComponent(code)}` : '';
+      if (res.company_login_id) {
+        toast.success(`Your Company ID is ${res.company_login_id}. Keep it for sign-in.`);
+      }
       if (trialDays) {
         toast.success(t('accountCreatedTrial', { days: trialDays }));
         router.push(

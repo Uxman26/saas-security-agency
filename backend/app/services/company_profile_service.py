@@ -51,8 +51,12 @@ def get_company_profile(db: Session, user_id: int) -> dict:
 
     company_bank_service.ensure_seeded_from_legacy(db, company)
     admin = db.query(User).filter(User.id == company.admin_id).first()
+    from app.services.company_login_id_service import persist_company_login_id
+
+    login_id = persist_company_login_id(db, company)
     return {
         "id": company.id,
+        "login_id": login_id,
         "name": company.name,
         "email": company.email or (admin.email if admin else None),
         "phone": company.phone,

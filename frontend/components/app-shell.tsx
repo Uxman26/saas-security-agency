@@ -9,6 +9,7 @@ import { AppSidebar } from '@/components/app-sidebar';
 import { ADMIN_NAV_SECTIONS, filterAdminNavSections } from '@/lib/admin-nav';
 import { LogOut, Menu, X } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
+import { CompanySwitcher } from '@/components/company-switcher';
 import { AlertsPanel } from '@/components/alerts-panel';
 import { usePathname } from 'next/navigation';
 import { useMemo, useState, useEffect } from 'react';
@@ -162,18 +163,21 @@ export function AppShell({ children }: { children: ReactNode }) {
               id="app-mobile-nav"
               className="app-drawer-safe absolute start-0 top-0 bottom-0 flex w-[min(20rem,88vw)] max-w-full flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl"
             >
-              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-3 py-3">
-                <CompanyBrand className="min-w-0 truncate" />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                  aria-label={tc('closeMenu')}
-                  onClick={() => setDrawer(false)}
-                >
-                  <X className="size-5" />
-                </Button>
+              <div className="flex shrink-0 flex-col gap-2 border-b border-sidebar-border px-3 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <CompanyBrand className="min-w-0 truncate" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                    aria-label={tc('closeMenu')}
+                    onClick={() => setDrawer(false)}
+                  >
+                    <X className="size-5" />
+                  </Button>
+                </div>
+                <CompanySwitcher />
               </div>
               <nav
                 ref={mobileNavRef}

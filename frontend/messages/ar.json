@@ -206,6 +206,8 @@
     "signupTitle": "أنشئ حسابك",
     "signupSubtitle": "سجّل شركتك على ControlOps",
     "signupSubtitlePlan": "ابدأ بباقة {tier} على ControlOps",
+    "companyId": "معرّف الشركة",
+    "companyIdHint": "موجود في رسالة الترحيب. يستخدم مسؤولو المنصة PLATFORM.",
     "email": "البريد الإلكتروني للعمل",
     "password": "كلمة المرور",
     "fullName": "الاسم الكامل",

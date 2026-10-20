@@ -153,12 +153,10 @@ _KIND_TITLES = {
 
 
 def _guard_user_id(db: Session, company_id: int, guard_id: int) -> Optional[int]:
-    u = (
-        db.query(User)
-        .filter(User.company_id == company_id, User.guard_id == guard_id)
-        .first()
-    )
-    return u.id if u else None
+    from app.services import membership_service
+
+    ids = membership_service.user_ids_for_guard(db, company_id, guard_id)
+    return next(iter(ids), None)
 
 
 def _send_channels(
@@ -230,20 +228,13 @@ def notify_shift_changes(
     # (same rule as portal_access.get_linked_guard) so publish notifications
     # reach staff who were never back-filled with guard_id.
     from app.services.portal_access import get_linked_guard, is_staff_portal_user
+    from app.services import membership_service
 
     portal_users: Dict[int, int] = {}
-    for u in (
-        db.query(User)
-        .filter(User.company_id == company.id, User.guard_id.in_(guard_ids))
-        .all()
-    ):
-        if u.guard_id is not None:
-            portal_users[int(u.guard_id)] = u.id
-    staff_candidates = (
-        db.query(User)
-        .filter(User.company_id == company.id)
-        .all()
-    )
+    for gid in guard_ids:
+        for uid in membership_service.user_ids_for_guard(db, company.id, gid):
+            portal_users[int(gid)] = uid
+    staff_candidates = membership_service.users_in_company(db, company.id)
     for u in staff_candidates:
         if u.id in portal_users.values():
             continue
@@ -351,16 +342,11 @@ def notify_assignment_event(
 
     from app.services.portal_access import get_linked_guard, is_staff_portal_user
 
-    uid = None
-    linked = (
-        db.query(User)
-        .filter(User.company_id == company.id, User.guard_id == guard.id)
-        .first()
-    )
-    if linked:
-        uid = linked.id
-    else:
-        for u in db.query(User).filter(User.company_id == company.id).all():
+    uid = _guard_user_id(db, company.id, guard.id)
+    if uid is None:
+        from app.services import membership_service
+
+        for u in membership_service.users_in_company(db, company.id):
             if not is_staff_portal_user(u):
                 continue
             g = get_linked_guard(db, u)

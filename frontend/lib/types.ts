@@ -45,6 +45,17 @@ export interface CompanyUser {
   site_ids?: number[];
 }
 
+export interface CompanyMembership {
+  company_id: number;
+  login_id?: string | null;
+  company_name: string;
+  role?: string | null;
+  role_id?: number | null;
+  guard_id?: number | null;
+  client_id?: number | null;
+  is_current?: boolean;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -52,6 +63,7 @@ export interface User {
   role?: string;
   role_id?: number | null;
   company_id?: number | null;
+  company_login_id?: string | null;
   is_active: boolean;
   created_at: string;
   permissions?: string[];
@@ -67,6 +79,7 @@ export interface User {
   client_id?: number | null;
   guard_id?: number | null;
   module_access?: ModuleAccess[];
+  companies?: CompanyMembership[];
 }
 
 export interface ModuleAccess {
@@ -166,6 +179,7 @@ export interface SignupResponse {
   receipt: SubscriptionReceipt;
   email_verification_required?: boolean;
   trial?: SignupTrial;
+  company_login_id?: string | null;
 }
 
 export interface PaymentPendingDetail {
@@ -451,6 +465,7 @@ export interface AdminPayment extends Payment {
 
 export interface CompanyProfile {
   id: number;
+  login_id?: string | null;
   name: string;
   email?: string | null;
   phone?: string | null;
@@ -470,6 +485,7 @@ export interface CompanyProfile {
 
 export interface Company {
   id: number;
+  login_id?: string | null;
   name: string;
   admin_id: number;
   subscription_tier?: string;

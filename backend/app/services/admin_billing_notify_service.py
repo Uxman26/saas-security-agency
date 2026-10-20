@@ -44,7 +44,7 @@ DEFAULT_TEMPLATES = [
         "name": "Welcome / onboarding",
         "channel": "email",
         "subject": "Welcome to ControlOps",
-        "body": "Hi {{full_name}},\n\nWelcome to ControlOps. Your company {{company_name}} is ready — sign in to finish setup and invite your team.\n\n{{login_url}}",
+        "body": "Hi {{full_name}},\n\nWelcome to ControlOps. Your company {{company_name}} is ready — sign in to finish setup and invite your team.\n\nYour Company ID is {{company_login_id}}.\nSign in at {{login_url}} with this Company ID, your email, and your password.\nKeep the Company ID somewhere safe — you will need it every time you sign in.\nIf you work for more than one company, use that company's Company ID with the same email and password.",
     },
     {
         "key": "login_security_alert",

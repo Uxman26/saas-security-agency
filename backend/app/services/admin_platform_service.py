@@ -101,8 +101,11 @@ def company_admin_out(db: Session, co: Company) -> dict:
     db.refresh(co)
     user_count = db.query(func.count(User.id)).filter(User.company_id == co.id, User.is_active == True).scalar()
     trial = trial_service.tenant_trial_status(db, co)
+    from app.services.company_login_id_service import ensure_company_login_id
+
     return {
         "id": co.id,
+        "login_id": ensure_company_login_id(db, co),
         "name": co.name,
         "admin_id": co.admin_id,
         "subscription_tier": co.subscription_tier,

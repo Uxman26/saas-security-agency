@@ -126,12 +126,12 @@ def list_guard_portal_logins(db: Session, guard_id: int, user_id: int) -> List["
     from app.models import User
 
     guard = get_guard_by_id(db, guard_id, user_id)
-    return (
-        db.query(User)
-        .filter(User.company_id == guard.company_id, User.guard_id == guard.id)
-        .order_by(User.email)
-        .all()
-    )
+    from app.services import membership_service
+
+    ids = membership_service.user_ids_for_guard(db, guard.company_id, guard.id)
+    if not ids:
+        return []
+    return db.query(User).filter(User.id.in_(ids)).order_by(User.email).all()
 
 
 def create_guard_portal_login(
@@ -286,12 +286,17 @@ def _guard_for_write(db: Session, guard_id: int, user_id: int) -> tuple[Guard, "
 def _deactivate_guard_logins(db: Session, guard: Guard) -> int:
     """Archiving someone has to close their way in, or the record is only half gone."""
     from app.models import User
+    from app.services import membership_service
 
-    return (
-        db.query(User)
-        .filter(User.company_id == guard.company_id, User.guard_id == guard.id, User.is_active.is_(True))
-        .update({User.is_active: False}, synchronize_session=False)
-    )
+    ids = membership_service.user_ids_for_guard(db, guard.company_id, guard.id)
+    n = 0
+    for uid in ids:
+        user = db.query(User).filter(User.id == uid).first()
+        if not user:
+            continue
+        membership_service.remove_membership(db, user, guard.company_id)
+        n += 1
+    return n
 
 
 def archive_guard(db: Session, guard_id: int, user_id: int) -> Guard:

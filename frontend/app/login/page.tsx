@@ -18,7 +18,7 @@ import { toast } from '@/lib/toast';
 import { parsePaymentPending, parseEmailVerificationRequired, parseAccountLocked, parsePasswordResetRequired } from '@/lib/sidebar-modules';
 import { api } from '@/lib/api';
 import { setLocale } from '@/actions/locale';
-import { ChevronRight, Eye, EyeOff, Globe, Lock, Mail } from 'lucide-react';
+import { Building2, ChevronRight, Eye, EyeOff, Globe, Lock, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LoginHeroPanel } from '@/components/auth/login-hero-panel';
 
@@ -134,9 +134,10 @@ function LoginForm() {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '', remember_me: true },
+    defaultValues: { company_id: '', email: '', password: '', remember_me: true },
   });
   const rememberMe = watch('remember_me');
+  const companyId = watch('company_id');
 
   const goAfterLogin = (role?: string | null) => {
     router.push(homePathForRole(role));
@@ -150,11 +151,16 @@ function LoginForm() {
 
   const signInDisabled = loading || lockoutSeconds > 0 || passwordResetRequired;
 
-  const onSubmit = async (data: { email: string; password: string; remember_me?: boolean }) => {
+  const onSubmit = async (data: {
+    company_id: string;
+    email: string;
+    password: string;
+    remember_me?: boolean;
+  }) => {
     if (signInDisabled) return;
     setLoading(true);
     try {
-      const result = await login(data.email, data.password, data.remember_me ?? true);
+      const result = await login(data.company_id, data.email, data.password, data.remember_me ?? true);
       setLockoutSeconds(0);
       setPasswordResetRequired(false);
       if ('mfa_required' in result) {
@@ -215,11 +221,16 @@ function LoginForm() {
   };
 
   const startOAuth = (provider: string) => {
+    const code = (companyId || '').trim();
+    if (code.length < 3) {
+      toast.error('Enter your Company ID before using social sign-in.');
+      return;
+    }
     if (!oauthProviders[provider]) {
       toast.error(`${provider[0].toUpperCase()}${provider.slice(1)} Sign In is not configured yet.`);
       return;
     }
-    window.location.href = api.auth.oauthStartUrl(provider, !!rememberMe);
+    window.location.href = api.auth.oauthStartUrl(provider, !!rememberMe, code);
   };
 
   const fieldClass =
@@ -315,6 +326,26 @@ function LoginForm() {
                   }}
                   className="space-y-4"
                 >
+                  <div className="space-y-1.5">
+                    <Label htmlFor="company_id" className="text-sm font-medium text-neutral-700">
+                      {t('companyId')}
+                    </Label>
+                    <div className="relative">
+                      <Building2 className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
+                      <Input
+                        id="company_id"
+                        autoComplete="organization"
+                        placeholder="CO7K2M9QP4"
+                        className={cn(fieldClass, 'uppercase tracking-wide')}
+                        {...register('company_id')}
+                      />
+                    </div>
+                    {errors.company_id && (
+                      <p className="text-xs text-red-600">{errors.company_id.message as string}</p>
+                    )}
+                    <p className="text-xs text-neutral-400">{t('companyIdHint')}</p>
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label htmlFor="email" className="text-sm font-medium text-neutral-700">
                       Email address

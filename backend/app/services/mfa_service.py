@@ -62,24 +62,29 @@ def consume_backup_code(user: User, code: str) -> bool:
     return True
 
 
-def create_mfa_challenge_token(user_id: int, remember_me: bool = False) -> str:
+def create_mfa_challenge_token(
+    user_id: int, remember_me: bool = False, company_id: int | None = None
+) -> str:
     expire = datetime.utcnow() + timedelta(minutes=5)
     payload = {
         "sub": str(user_id),
         "type": MFA_CHALLENGE_TYPE,
         "exp": expire,
         "remember_me": remember_me,
+        "cid": company_id,
     }
     token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
     return str(token) if not isinstance(token, str) else token
 
 
-def verify_mfa_challenge_token(token: str) -> tuple[int, bool]:
+def verify_mfa_challenge_token(token: str) -> tuple[int, bool, int | None]:
     try:
         payload = jwt.decode(token.strip(), settings.secret_key, algorithms=[settings.algorithm])
         if payload.get("type") != MFA_CHALLENGE_TYPE:
             raise HTTPException(status_code=400, detail="Invalid MFA challenge")
-        return int(payload["sub"]), bool(payload.get("remember_me"))
+        cid = payload.get("cid")
+        company_id = int(cid) if cid is not None and str(cid).isdigit() else None
+        return int(payload["sub"]), bool(payload.get("remember_me")), company_id
     except (JWTError, ValueError, KeyError):
         raise HTTPException(status_code=400, detail="Invalid or expired MFA challenge")
 

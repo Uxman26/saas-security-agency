@@ -21,7 +21,7 @@ EMAIL_VERIFY_TOKEN_TYPE = "email_verify"
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/auth/swagger-login",
     scheme_name="EmailPassword",
-    description="Enter the account email in the Username field and the account password.",
+    description="Username is Company ID, a space, then email (example: PLATFORM you@controlops.co.uk).",
     auto_error=False,
 )
 
@@ -139,6 +139,33 @@ def get_current_user(
         raise credentials_exception
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated")
+
+    session_company_id = getattr(session, "company_id", None)
+    token_cid = payload.get("cid")
+    if token_cid is not None:
+        try:
+            token_cid = int(token_cid)
+        except (TypeError, ValueError):
+            raise credentials_exception
+        if session_company_id is not None and token_cid != session_company_id:
+            raise credentials_exception
+    if session_company_id:
+        from app.services import membership_service
+
+        is_impersonating = bool(getattr(session, "impersonator_user_id", None))
+        if getattr(user, "role", None) == SUPER_ADMIN_ROLE and not is_impersonating:
+            raise credentials_exception
+        if not membership_service.belongs_to_company(db, user, session_company_id):
+            raise credentials_exception
+        membership = membership_service.get_membership(db, user.id, session_company_id)
+        if membership is not None:
+            from app.models import Role
+
+            role = db.query(Role).filter(Role.id == membership.role_id).first() if membership.role_id else None
+            membership_service.apply_membership_to_user(user, membership, role)
+        else:
+            user.company_id = session_company_id
+
     is_impersonating = bool(getattr(session, "impersonator_user_id", None))
     if getattr(user, "role", None) != SUPER_ADMIN_ROLE and not is_impersonating:
         from app.middleware.client_source import get_client_source
@@ -204,6 +231,19 @@ def current_session_jti(token: str | None = Depends(oauth2_scheme)) -> str | Non
     if payload.get("type") != ACCESS_TOKEN_TYPE:
         return None
     return payload.get("jti")
+
+
+def get_optional_user(
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    if not (token or "").strip():
+        return None
+    try:
+        return get_current_user(request, token, db)
+    except HTTPException:
+        return None
 
 
 def get_current_super_admin(user: User = Depends(get_current_user)) -> User:

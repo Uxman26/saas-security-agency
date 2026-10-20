@@ -50,6 +50,7 @@ export default function AdminEmailPage() {
       setPort(String(c.mail_port || 587));
       setFrom(c.mail_from || '');
       setFromName(c.mail_from_name || '');
+      setUsername(c.mail_username || '');
       setUseTls(c.mail_use_tls !== false);
       if (!testTo && user?.email) setTestTo(user.email);
     }).catch((e) => {
@@ -78,7 +79,7 @@ export default function AdminEmailPage() {
         mail_use_tls: useTls,
       });
       setConfig(updated);
-      setUsername('');
+      setUsername(updated.mail_username || username);
       setPassword('');
       toast.success('SMTP settings saved');
     } catch (e) {
@@ -145,7 +146,12 @@ export default function AdminEmailPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Username</Label>
-                  <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={config?.username_set ? '•••••••• (configured)' : ''} autoComplete="off" />
+                  <Input
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="SMTP username / email"
+                    autoComplete="off"
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Password</Label>

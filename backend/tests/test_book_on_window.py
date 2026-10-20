@@ -4,6 +4,7 @@ from app.services.attendance_service import (
     EARLY_BOOK_ON_MINUTES,
     _assignment_shift_end_dt,
     _assignment_shift_start_dt,
+    is_late_clock_in,
 )
 
 
@@ -47,3 +48,10 @@ def test_example_1715_opens_at_1655():
     start = _assignment_shift_start_dt(a)
     earliest = start - timedelta(minutes=EARLY_BOOK_ON_MINUTES)
     assert earliest == datetime(2026, 10, 16, 16, 55)
+
+
+def test_late_from_one_minute_after_start():
+    start = datetime(2026, 10, 16, 11, 15)
+    assert is_late_clock_in(datetime(2026, 10, 16, 11, 15), start) is False
+    assert is_late_clock_in(datetime(2026, 10, 16, 11, 15, 59), start) is False
+    assert is_late_clock_in(datetime(2026, 10, 16, 11, 16), start) is True

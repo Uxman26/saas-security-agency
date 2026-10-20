@@ -62,9 +62,13 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
     )
     db.commit()
     db.refresh(db_assignment)
-    from app.services import sms_trigger_service, email_trigger_service
+    from app.services import rota_notify_service, sms_trigger_service, email_trigger_service
     sms_trigger_service.notify_shift_assignment(db, user_id, db_assignment)
     email_trigger_service.notify_shift_assignment(db, user_id, db_assignment)
+    try:
+        rota_notify_service.notify_assignment_event(db, user_id, db_assignment, "added")
+    except Exception:
+        pass
     return db_assignment
 
 def get_assignments(
@@ -245,6 +249,17 @@ def update_assignment(db: Session, assignment_id: int, assignment: AssignmentCre
         )
     db.commit()
     db.refresh(db_assignment)
+    if before != after:
+        try:
+            from app.services import rota_notify_service
+            kind = "changed"
+            if before.get("start") != after.get("start") or before.get("end") != after.get("end"):
+                kind = "time_changed"
+            elif before.get("site") != after.get("site"):
+                kind = "site_changed"
+            rota_notify_service.notify_assignment_event(db, user_id, db_assignment, kind)
+        except Exception:
+            pass
     return db_assignment
 
 def delete_assignment(db: Session, assignment_id: int, user_id: int) -> None:
@@ -256,6 +271,11 @@ def delete_assignment(db: Session, assignment_id: int, user_id: int) -> None:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     assignment = _assignment_for_user(db, company.id, assignment_id, user_id)
+    try:
+        from app.services import rota_notify_service
+        rota_notify_service.notify_assignment_event(db, user_id, assignment, "removed")
+    except Exception:
+        pass
 
     shift_audit_service.log_assignment_event(
         db,

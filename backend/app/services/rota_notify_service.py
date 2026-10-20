@@ -306,12 +306,99 @@ def notify_shift_changes(
         from app.services import fcm_push_service
 
         for uid, title, body in fcm_jobs:
-            fcm_push_service.send_to_user(
+            sent = fcm_push_service.send_to_user(
                 db,
                 uid,
                 title=title,
                 body=body,
-                data={"type": "rota_change", "entity_type": "rota", "entity_id": plan.id},
+                data={
+                    "type": "rota_change",
+                    "entity_type": "rota",
+                    "entity_id": plan.id,
+                    "screen": "rota",
+                },
             )
+            if sent == 0:
+                logger = __import__("logging").getLogger(__name__)
+                logger.info("FCM rota notify user=%s sent=0 (no token or Firebase not configured)", uid)
     except Exception:
         pass
+
+
+def notify_assignment_event(
+    db: Session,
+    actor_user_id: int,
+    assignment: Assignment,
+    kind: str,
+) -> None:
+    """Push + in-app + email/SMS when a single assignment is created/updated/removed."""
+    company = get_company_by_user_id(db, actor_user_id)
+    guard = assignment.guard or db.query(Guard).filter(Guard.id == assignment.guard_id).first()
+    if not guard or guard.company_id != company.id:
+        return
+    site = assignment.site
+    if site is None and assignment.site_id:
+        from app.models import Site
+
+        site = db.query(Site).filter(Site.id == assignment.site_id).first()
+    date_str = assignment.date.isoformat() if isinstance(assignment.date, date) else str(assignment.date or "")[:10]
+    start = (assignment.shift_start or "").strip()
+    end = (assignment.shift_end or "").strip()
+    site_name = site.name if site else ""
+    detail = f"{date_str}: {start}–{end} at {site_name or 'site'}"
+    title = _KIND_TITLES.get(kind, "Rota updated")
+    body = f"{title}: {detail}"
+
+    from app.services.portal_access import get_linked_guard, is_staff_portal_user
+
+    uid = None
+    linked = (
+        db.query(User)
+        .filter(User.company_id == company.id, User.guard_id == guard.id)
+        .first()
+    )
+    if linked:
+        uid = linked.id
+    else:
+        for u in db.query(User).filter(User.company_id == company.id).all():
+            if not is_staff_portal_user(u):
+                continue
+            g = get_linked_guard(db, u)
+            if g and g.id == guard.id:
+                uid = u.id
+                break
+
+    if uid:
+        row = AppNotification(
+            company_id=company.id,
+            user_id=uid,
+            kind="rota_change",
+            title=title,
+            body=body[:500],
+            entity_type="assignment",
+            entity_id=assignment.id,
+        )
+        db.add(row)
+        try:
+            db.commit()
+            db.refresh(row)
+        except Exception:
+            db.rollback()
+            row = None
+        try:
+            from app.services import fcm_push_service
+
+            fcm_push_service.notify_after_app_notification(
+                db,
+                user_id=uid,
+                notification_id=getattr(row, "id", None),
+                kind="rota_change",
+                title=title,
+                body=body[:500],
+                entity_type="assignment",
+                entity_id=assignment.id,
+            )
+        except Exception:
+            pass
+
+    _send_channels(db, actor_user_id, guard, title, body, date_str, site_name, f"{start}–{end}")

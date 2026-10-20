@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import smtplib
 import socket
@@ -9,6 +10,8 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Must live on the mounted data volume (/app/data, same place as the sqlite db),
 # NOT app/data inside the image — settings written there are lost on every rebuild.
@@ -83,6 +86,7 @@ def smtp_status() -> dict[str, Any]:
         "mail_from": (cfg.get("mail_from") or "") or "",
         "mail_from_name": (cfg.get("mail_from_name") or "") or "",
         "mail_use_tls": bool(cfg.get("mail_use_tls") if cfg.get("mail_use_tls") is not None else port not in (25, 465)),
+        "mail_username": (cfg.get("mail_username") or "") or "",
         "username_set": bool(cfg.get("mail_username")),
         "password_set": bool(cfg.get("mail_password")),
         "configured": configured,
@@ -105,6 +109,9 @@ def _safe_smtp_error(exc: BaseException) -> tuple[int, str, str]:
     with a generic 502 HTML page ("API server is temporarily unavailable").
     """
     name = type(exc).__name__
+    smtp_code = getattr(exc, "smtp_code", None)
+    suffix = f" (SMTP {smtp_code})" if isinstance(smtp_code, int) else ""
+    logger.warning("SMTP failure type=%s smtp_code=%s", name, smtp_code)
     if isinstance(exc, socket.gaierror):
         return 400, "invalid_host", "SMTP host could not be resolved. Check the server hostname."
     if isinstance(exc, (socket.timeout, TimeoutError)):
@@ -112,11 +119,11 @@ def _safe_smtp_error(exc: BaseException) -> tuple[int, str, str]:
     if isinstance(exc, ConnectionRefusedError):
         return 400, "connection_refused", "SMTP connection was refused. Check host and port."
     if isinstance(exc, smtplib.SMTPAuthenticationError):
-        return 400, "auth_failed", "SMTP authentication failed. Check the username and password."
+        return 400, "auth_failed", f"SMTP authentication failed. Check the username and password.{suffix}"
     if isinstance(exc, smtplib.SMTPConnectError):
-        return 400, "connection_failed", "Could not connect to the SMTP server. Check host, port, and TLS/SSL settings."
+        return 400, "connection_failed", f"Could not connect to the SMTP server. Check host, port, and TLS/SSL settings.{suffix}"
     if isinstance(exc, (smtplib.SMTPServerDisconnected, smtplib.SMTPHeloError)):
-        return 400, "connection_failed", "SMTP connection dropped. Check host, port, and TLS/SSL settings."
+        return 400, "connection_failed", f"SMTP connection dropped. Check host, port, and TLS/SSL settings.{suffix}"
     if isinstance(exc, smtplib.SMTPNotSupportedError):
         return 400, "tls_error", "SMTP server rejected the TLS/SSL configuration. Try a different port or TLS setting."
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
@@ -124,12 +131,12 @@ def _safe_smtp_error(exc: BaseException) -> tuple[int, str, str]:
     if isinstance(exc, smtplib.SMTPSenderRefused):
         return 400, "invalid_sender", "The SMTP server rejected the From address."
     if isinstance(exc, smtplib.SMTPDataError):
-        return 400, "send_failed", "SMTP accepted the connection but rejected the message."
+        return 400, "send_failed", f"SMTP accepted the connection but rejected the message.{suffix}"
     if isinstance(exc, OSError):
         return 400, "connection_failed", "Network error while contacting the SMTP server. Check host and port."
     if "ssl" in name.lower() or "tls" in name.lower():
         return 400, "tls_error", "TLS/SSL configuration error. Check port and encryption settings."
-    return 400, "smtp_error", "SMTP test failed. Check server settings and try again."
+    return 400, "smtp_error", f"SMTP could not send the email ({name}). Check server, port, TLS, and credentials.{suffix}"
 
 
 def test_smtp_connection(to_email: str) -> dict[str, Any]:

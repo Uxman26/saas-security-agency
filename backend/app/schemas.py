@@ -1253,6 +1253,7 @@ class SmtpConfigResponse(BaseModel):
     mail_from: str = ""
     mail_from_name: str = ""
     mail_use_tls: bool = True
+    mail_username: str = ""
     username_set: bool = False
     password_set: bool = False
     configured: bool = False

@@ -1936,6 +1936,7 @@ export interface SmtpConfig {
   mail_from: string;
   mail_from_name: string;
   mail_use_tls?: boolean;
+  mail_username?: string;
   username_set: boolean;
   password_set: boolean;
   configured: boolean;

@@ -29,3 +29,5 @@ def test_smtp_status_never_none():
     assert isinstance(status["mail_from_name"], str)
     assert isinstance(status["mail_port"], int)
     assert "configured" in status
+    assert "mail_username" in status
+    assert isinstance(status["mail_username"], str)

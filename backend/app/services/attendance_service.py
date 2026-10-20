@@ -1,12 +1,16 @@
 import json
+import logging
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta, time
+from zoneinfo import ZoneInfo
 from app.models import Attendance, Assignment, Guard, Site, User, ShiftOvertimeLog, ShiftEarlyFinishLog, ShiftLateLog
 from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest, AttendanceResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.shift_adjustment_service import find_assignment
+
+logger = logging.getLogger(__name__)
 
 # A cancelled shift is recorded as one of two statuses rather than a status plus a
 # separate paid flag. Every consumer already branches on the status string alone — the
@@ -31,6 +35,29 @@ STATUS_ALIASES = {"present": "on_time", "cancelled_unpaid": CANCELLED_UNPAID}
 
 NOTE_REQUIRED_DETAIL = "Note is required for Late, Absent, No show, and Cancelled"
 EARLY_BOOK_ON_MINUTES = 20
+# Late only after the scheduled start minute has fully passed (11:15 → late from 11:16).
+LATE_GRACE = timedelta(minutes=1)
+DEFAULT_COMPANY_TZ = "Europe/London"
+
+
+def _company_zone(company) -> ZoneInfo:
+    name = (getattr(company, "timezone", None) or DEFAULT_COMPANY_TZ).strip() or DEFAULT_COMPANY_TZ
+    try:
+        return ZoneInfo(name)
+    except Exception:
+        return ZoneInfo(DEFAULT_COMPANY_TZ)
+
+
+def _naive_company_now(company=None) -> datetime:
+    """Wall-clock now in the tenant timezone (naive), matching shift start/end strings."""
+    return datetime.now(_company_zone(company)).replace(tzinfo=None)
+
+
+def is_late_clock_in(now: datetime, shift_start: datetime) -> bool:
+    """True from the first minute after scheduled start (inclusive of HH:MM+1:00)."""
+    now_n = now.replace(tzinfo=None) if now.tzinfo else now
+    start_n = shift_start.replace(tzinfo=None) if shift_start.tzinfo else shift_start
+    return now_n >= start_n + LATE_GRACE
 
 
 def _assignment_shift_start_dt(assignment: Assignment):
@@ -42,7 +69,6 @@ def _assignment_shift_start_dt(assignment: Assignment):
         parts = str(shift_start).split(":")
         h = int(parts[0])
         m = int(parts[1]) if len(parts) > 1 else 0
-        from datetime import time
         return datetime.combine(day, time(h, m))
     except (ValueError, IndexError, TypeError):
         return None
@@ -57,7 +83,6 @@ def _assignment_shift_end_dt(assignment: Assignment):
         parts = str(shift_end).split(":")
         h = int(parts[0])
         m = int(parts[1]) if len(parts) > 1 else 0
-        from datetime import time
         end = datetime.combine(day, time(h, m))
         start = _assignment_shift_start_dt(assignment)
         if start is not None and end <= start:
@@ -359,12 +384,13 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
 
     staff_portal = bool(user and is_staff_portal_user(user))
     site = db.query(Site).filter(Site.id == a.site_id).first() if a.site_id else None
-    now = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
+    now = _naive_company_now(company)
     shift_dt = _assignment_shift_start_dt(a)
 
     if not data.book_off and staff_portal and shift_dt is not None:
         earliest = shift_dt - timedelta(minutes=EARLY_BOOK_ON_MINUTES)
-        if now.replace(tzinfo=None) < earliest.replace(tzinfo=None):
+        if now < earliest.replace(tzinfo=None):
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -409,17 +435,28 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
     is_late_arrival = (
         not data.book_off
         and shift_dt is not None
-        and now.replace(tzinfo=None) > shift_dt.replace(tzinfo=None)
+        and is_late_clock_in(now, shift_dt)
     )
     is_early_finish = (
         data.book_off
         and shift_end_dt is not None
-        and now.replace(tzinfo=None) < (shift_end_dt - timedelta(minutes=5)).replace(tzinfo=None)
+        and now < (shift_end_dt - timedelta(minutes=5)).replace(tzinfo=None)
     )
     is_late_finish = (
         data.book_off
         and shift_end_dt is not None
-        and now.replace(tzinfo=None) > shift_end_dt.replace(tzinfo=None)
+        and now > shift_end_dt.replace(tzinfo=None)
+    )
+    logger.info(
+        "clock %s assignment=%s user=%s local_now=%s start=%s late=%s early_finish=%s late_finish=%s",
+        "out" if data.book_off else "in",
+        data.assignment_id,
+        user_id,
+        now.isoformat(timespec="seconds"),
+        shift_dt.isoformat(timespec="minutes") if shift_dt else None,
+        is_late_arrival,
+        is_early_finish,
+        is_late_finish,
     )
     if staff_portal and (is_late_arrival or is_early_finish or is_late_finish) and not reason:
         raise HTTPException(
@@ -461,7 +498,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                     "message": "Clock In before Clock Out.",
                 },
             )
-        att.booked_off_at = now
+        att.booked_off_at = now_utc
         if is_early_finish:
             att.status = "early_leave"
             existing_ef = (
@@ -524,12 +561,12 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                     "message": "This shift is already clocked in.",
                 },
             )
-        att.booked_at = now
+        att.booked_at = now_utc
         if is_late_arrival:
             att.status = "late"
             late_mins = max(
                 1,
-                int((now.replace(tzinfo=None) - shift_dt.replace(tzinfo=None)).total_seconds() // 60),
+                int((now - shift_dt.replace(tzinfo=None)).total_seconds() // 60),
             )
             existing_late = (
                 db.query(ShiftLateLog)
@@ -567,7 +604,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         att.note = _append_note(att.note, reason)
 
     if lat is not None and lng is not None:
-        captured = data.captured_at.isoformat() if data.captured_at else now.isoformat()
+        captured = data.captured_at.isoformat() if data.captured_at else now_utc.isoformat()
         acc_part = f" ±{float(accuracy):.1f}m" if accuracy is not None else ""
         gps_note = f"GPS {float(lat):.6f},{float(lng):.6f}{acc_part} @ {captured}"
         if data.device_id:

@@ -205,5 +205,6 @@ def notify_after_app_notification(
             "notification_id": notification_id,
             "entity_type": entity_type,
             "entity_id": entity_id,
+            "screen": "rota" if entity_type in {"rota", "assignment"} else entity_type,
         },
     )

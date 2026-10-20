@@ -97,10 +97,10 @@ function navLinkClass(isActive: boolean, compact: boolean) {
   return cn(
     'flex items-center gap-2.5 rounded-md border-s-[3px] border-transparent transition-colors outline-none',
     'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
-    compact ? 'px-2 py-1.5 text-sm leading-snug' : 'px-2.5 py-2.5 text-sm leading-snug',
+    compact ? 'px-2.5 py-2 text-[15px] leading-5' : 'px-3 py-2.5 text-[15px] leading-5',
     isActive
       ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary shadow-sm'
-      : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/80 hover:text-sidebar-primary'
+      : 'text-sidebar-foreground hover:bg-sidebar-accent/80 hover:text-sidebar-primary'
   );
 }
 
@@ -123,11 +123,11 @@ function SectionHeading({
       onClick={onToggle}
       aria-expanded={open}
       className={cn(
-        'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start transition-colors',
-        'text-xs font-bold uppercase tracking-[0.05em]',
-        'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
+        'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-start transition-colors',
+        'text-[13px] font-semibold tracking-wide',
+        'text-sidebar-foreground/90 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-        hasActive && 'text-sidebar-primary/90'
+        hasActive && 'text-sidebar-primary'
       )}
     >
       <ChevronDown
@@ -236,7 +236,7 @@ export function TenantSidebarNav({
                       aria-current={isActive ? 'page' : undefined}
                       onClick={onNavigate}
                     >
-                      <Icon className={cn('shrink-0 opacity-90', compact ? 'size-4' : 'size-[1.125rem]')} aria-hidden />
+                      <Icon className={cn('shrink-0 opacity-90', compact ? 'size-[1.125rem]' : 'size-5')} aria-hidden />
                       <span className="min-w-0 truncate">{moduleLabel(m.key, m.name)}</span>
                     </Link>
                   );
@@ -297,7 +297,7 @@ export function AdminSidebarNav({
                       aria-current={isActive ? 'page' : undefined}
                       onClick={onNavigate}
                     >
-                      <Icon className={cn('shrink-0 opacity-90', compact ? 'size-4' : 'size-[1.125rem]')} aria-hidden />
+                      <Icon className={cn('shrink-0 opacity-90', compact ? 'size-[1.125rem]' : 'size-5')} aria-hidden />
                       <span className="min-w-0 truncate">{ts(labelKey)}</span>
                     </Link>
                   );

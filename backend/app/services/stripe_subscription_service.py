@@ -259,6 +259,19 @@ def create_checkout_session(
     user = db.query(User).filter(User.id == receipt.user_id).first()
     if not company or not user:
         raise HTTPException(status_code=404, detail="Company not found")
+    from app.auth import requires_email_verification
+
+    # Signup order is form → verify email → pay; never open checkout for an unverified address.
+    if requires_email_verification(user):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "email_verification_required",
+                "message": "Verify your email address before continuing to payment.",
+                "email": user.email,
+                "receipt_ref": receipt.ref_id,
+            },
+        )
     customer_id = ensure_customer(db, company, user.email, user.full_name or company.name)
     credit_to_apply = float(getattr(company, "account_credit_balance", 0) or 0)
     price_id = stripe_plan_service.resolve_price_id(db, receipt.subscription_tier, cycle)

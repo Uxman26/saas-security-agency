@@ -95,7 +95,7 @@ function SignupForm() {
         toast.error(dup);
         return;
       }
-      const res = await api.auth.signup({ ...data, subscription_tier, start_trial: wantsTrial });
+      const res = await api.auth.signup({ ...data, subscription_tier, start_trial: wantsTrial, billing_cycle });
       completedRef.current = true;
       const trialDays = res.trial?.started ? res.trial.days ?? 0 : 0;
       analytics.signUp({ tier: subscription_tier, trial: Boolean(trialDays) });
@@ -108,14 +108,14 @@ function SignupForm() {
       if (trialDays) {
         toast.success(t('accountCreatedTrial', { days: trialDays }));
         router.push(
-          res.email_verification_required ? `/verify-email?email=${email}` : '/login'
+          res.email_verification_required ? `/verify-email?email=${email}&sent=1` : '/login'
         );
       } else if (res.email_verification_required) {
         toast.success(t('accountCreatedVerify'));
-        router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}${couponQ}`);
+        router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}${couponQ}&sent=1`);
       } else {
         toast.success(t('accountCreatedPayment'));
-        router.push(`/payment-pending?ref=${ref}&cycle=${billing_cycle}${couponQ}`);
+        router.push(`/payment-pending?ref=${ref}&cycle=${billing_cycle}${couponQ}&checkout=1`);
       }
     } catch (err: unknown) {
       const verify = parseEmailVerificationRequired(err);
@@ -125,6 +125,7 @@ function SignupForm() {
         q.set('cycle', billing_cycle);
         const code = verificationCode.trim();
         if (code) q.set('coupon', code);
+        q.set('sent', '1');
         toast.info(t('accountCreatedVerify'));
         router.push(`/verify-email?${q.toString()}`);
         return;

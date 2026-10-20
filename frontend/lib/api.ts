@@ -1,4 +1,4 @@
-import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries, AbsenceKind, AbsenceRecord, AbsenceSummary, DeleteImpact, DocumentDetail, DocumentReceipt, EmergencyContact, EmployeeHub, RecordView, Team, SubscriptionInvoice, BillingReceipt } from './types';
+import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, VerifyEmailResult, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries, AbsenceKind, AbsenceRecord, AbsenceSummary, DeleteImpact, DocumentDetail, DocumentReceipt, EmergencyContact, EmployeeHub, RecordView, Team, SubscriptionInvoice, BillingReceipt } from './types';
 import { storageGet, storageRemove } from '@/lib/safe-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -207,6 +207,7 @@ export const api = {
       company_name: string;
       subscription_tier?: string;
       start_trial?: boolean;
+      billing_cycle?: 'monthly' | 'yearly';
     }): Promise<SignupResponse> => {
       const sanitized = {
         email: sanitizeInput(data.email),
@@ -215,6 +216,7 @@ export const api = {
         company_name: sanitizeInput(data.company_name),
         ...(data.subscription_tier && { subscription_tier: sanitizeInput(data.subscription_tier) }),
         ...(data.start_trial !== undefined && { start_trial: data.start_trial }),
+        ...(data.billing_cycle && { billing_cycle: data.billing_cycle }),
       };
       return request<SignupResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
     },
@@ -276,13 +278,13 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ token, new_password }),
       }),
-    verifyEmail: (token: string): Promise<{ message: string }> =>
-      request<{ message: string }>('/auth/verify-email', {
+    verifyEmail: (token: string): Promise<VerifyEmailResult> =>
+      request<VerifyEmailResult>('/auth/verify-email', {
         method: 'POST',
         body: JSON.stringify({ token }),
       }),
-    resendVerification: (email: string): Promise<{ message: string }> =>
-      request<{ message: string }>('/auth/resend-verification', {
+    resendVerification: (email: string): Promise<{ message: string; retry_after_seconds: number }> =>
+      request<{ message: string; retry_after_seconds: number }>('/auth/resend-verification', {
         method: 'POST',
         body: JSON.stringify({ email: sanitizeInput(email) }),
       }),

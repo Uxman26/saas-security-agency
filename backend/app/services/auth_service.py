@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -76,6 +78,61 @@ def _assert_mobile_app_entitled(
     raise HTTPException(status_code=403, detail=MOBILE_APP_DENIED)
 
 
+VERIFICATION_RESEND_COOLDOWN_SECONDS = 60
+_verification_cooldown_local: dict[str, float] = {}
+_verification_cooldown_lock = threading.Lock()
+
+
+def claim_verification_cooldown(email: str) -> int:
+    """Reserve the next verification send for this address.
+
+    Returns 0 when the caller may send now (and starts a fresh 60s window), otherwise
+    the seconds left. Keyed by the address, not the user, so the resend endpoint
+    behaves the same whether or not an account exists. Redis keeps the window shared
+    across workers; the in-process map is a fallback when Redis is unreachable.
+    """
+    key = (email or "").strip().lower()
+    if not key:
+        return 0
+    ttl = VERIFICATION_RESEND_COOLDOWN_SECONDS
+    try:
+        from redis import Redis
+
+        client = Redis.from_url(settings.redis_url, socket_timeout=1, socket_connect_timeout=1)
+        rkey = f"verify_email_cooldown:{key}"
+        if client.set(rkey, "1", nx=True, ex=ttl):
+            return 0
+        remaining = int(client.ttl(rkey) or 0)
+        return remaining if remaining > 0 else ttl
+    except Exception:
+        pass
+    now = time.monotonic()
+    with _verification_cooldown_lock:
+        until = _verification_cooldown_local.get(key, 0.0)
+        if until > now:
+            return max(1, int(until - now + 0.999))
+        _verification_cooldown_local[key] = now + ttl
+        if len(_verification_cooldown_local) > 10_000:
+            for k, v in list(_verification_cooldown_local.items()):
+                if v <= now:
+                    _verification_cooldown_local.pop(k, None)
+    return 0
+
+
+def payment_step_for(db: Session, user: User) -> tuple[str, str] | None:
+    """(receipt_ref, billing_cycle) when the tenant still has to pay before using the
+    app — i.e. never paid and not on a trial — else None."""
+    if not user.company_id:
+        return None
+    company = db.query(Company).filter(Company.id == user.company_id).first()
+    if not company or (company.subscription_status or "pending").lower() != "pending":
+        return None
+    pending = latest_pending_receipt(db, company.id)
+    if not pending:
+        return None
+    return pending.ref_id, (pending.billing_cycle or "monthly")
+
+
 def send_verification_email(user: User) -> None:
     if not requires_email_verification(user):
         return
@@ -88,12 +145,19 @@ def send_verification_email(user: User) -> None:
             },
         )
     token = create_email_verification_token(user.id)
-    link = f"{settings.frontend_url.rstrip('/')}/verify-email?token={token}"
+    from urllib.parse import urlencode
     from app.database import SessionLocal
     from app.services.platform_mail_service import send_template_email
 
     db = SessionLocal()
     try:
+        # Carry the payment step in the link so verifying from the inbox (often a new
+        # tab without the signup URL) still continues straight to payment.
+        params = {"token": token}
+        step = payment_step_for(db, user)
+        if step:
+            params["ref"], params["cycle"] = step
+        link = f"{settings.frontend_url.rstrip('/')}/verify-email?{urlencode(params)}"
         sent = send_template_email(
             db,
             key="account_verification",
@@ -149,18 +213,42 @@ def send_welcome_email(user: User, company_name: str = "") -> None:
         db.close()
 
 
-def verify_email_with_token(db: Session, token: str) -> None:
+def verify_email_with_token(db: Session, token: str) -> dict:
+    """Mark the address verified and say which step comes next.
+
+    Idempotent: re-opening the link after verifying still returns the next step, so
+    the tenant is never stranded on the verify page.
+    """
     user_id = verify_email_verification_token(token)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired verification link")
-    if (getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL) in OAUTH_AUTH_PROVIDERS:
-        return
-    user.email_verified = True
-    db.commit()
+    if (getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL) not in OAUTH_AUTH_PROVIDERS:
+        user.email_verified = True
+        db.commit()
+    step = payment_step_for(db, user)
+    if step:
+        return {
+            "message": "Email verified. Continue to payment to activate your account.",
+            "next_step": "payment",
+            "receipt_ref": step[0],
+            "billing_cycle": step[1],
+        }
+    return {"message": "Email verified. You can sign in now.", "next_step": "login"}
 
 
 def resend_verification_email(db: Session, email: str) -> None:
+    wait = claim_verification_cooldown(email)
+    if wait:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "verification_cooldown",
+                "message": f"Please wait {wait} seconds before requesting another verification email.",
+                "retry_after_seconds": wait,
+            },
+            headers={"Retry-After": str(wait)},
+        )
     user = db.query(User).filter(func.lower(User.email) == email.lower().strip()).first()
     if not user or not user.is_active or not requires_email_verification(user):
         return
@@ -174,7 +262,10 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
     if existing:
         if requires_email_verification(existing):
             sent = False
-            if email_service.is_configured():
+            # Re-submitting the form must not bypass the resend cooldown.
+            if claim_verification_cooldown(email):
+                sent = True
+            elif email_service.is_configured():
                 try:
                     send_verification_email(existing)
                     sent = True
@@ -236,12 +327,16 @@ def create_user_and_company(db: Session, user_data: UserCreate) -> User:
         if ar:
             user.role_id = ar.id
         user.role = "admin"
-        create_receipt_for_signup(db, company, user, tier)
+        receipt = create_receipt_for_signup(db, company, user, tier)
+        if user_data.billing_cycle:
+            receipt.billing_cycle = user_data.billing_cycle
     db.commit()
     db.refresh(user)
     if requires_email_verification(user):
         if email_service.is_configured():
             try:
+                # Starts the 60s window so "Resend" can't fire right after signup.
+                claim_verification_cooldown(user.email)
                 send_verification_email(user)
             except Exception as e:
                 # Do not auto-verify when SMTP is configured but delivery fails —

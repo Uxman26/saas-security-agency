@@ -44,6 +44,9 @@ class UserCreate(StrictModel):
     # Opt-in to the free trial chosen on the pricing page. Defaults on so an older
     # client that predates the flag still lands on a trial rather than a payment wall.
     start_trial: Optional[bool] = True
+    # Billing cycle picked on the pricing page; stored on the signup receipt so the
+    # verification link can land the tenant on the right payment step later.
+    billing_cycle: Optional[Literal["monthly", "yearly"]] = None
 
     @field_validator("email")
     @classmethod
@@ -118,6 +121,17 @@ class ResendVerificationRequest(StrictModel):
 
 class VerifyEmailRequest(StrictModel):
     token: TokenStr
+
+class VerifyEmailResponse(BaseModel):
+    message: str
+    # "payment" → send the tenant to the payment step for receipt_ref; "login" otherwise.
+    next_step: Literal["payment", "login"] = "login"
+    receipt_ref: Optional[str] = None
+    billing_cycle: Optional[str] = None
+
+class ResendVerificationResponse(BaseModel):
+    message: str
+    retry_after_seconds: int
 
 class UserResponse(UserBase):
     id: int

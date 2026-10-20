@@ -147,6 +147,13 @@ export interface ReceiptPublic {
   created_at: string;
 }
 
+export interface VerifyEmailResult {
+  message: string;
+  next_step: 'payment' | 'login';
+  receipt_ref?: string | null;
+  billing_cycle?: string | null;
+}
+
 export interface SignupTrial {
   started: boolean;
   days?: number | null;

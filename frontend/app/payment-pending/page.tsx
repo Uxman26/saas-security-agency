@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,12 +12,16 @@ import type { ReceiptPublic } from '@/lib/types';
 import { CreditCard, Loader2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { analytics } from '@/lib/analytics';
+import { parseEmailVerificationRequired } from '@/lib/sidebar-modules';
 
 function PaymentPendingContent() {
   const t = useTranslations('payment');
   const tc = useTranslations('common');
+  const router = useRouter();
   const searchParams = useSearchParams();
   const ref = searchParams.get('ref') || '';
+  // Set by signup / verify / login links: go straight on to Stripe card entry.
+  const autoCheckout = searchParams.get('checkout') === '1';
   const cycleParam = searchParams.get('cycle');
   const couponParam = searchParams.get('coupon') || '';
   const success = searchParams.get('success') === '1';
@@ -33,6 +37,7 @@ function PaymentPendingContent() {
   const [paying, setPaying] = useState(false);
   const [verified, setVerified] = useState(false);
   const purchasedRef = useRef(false);
+  const autoCheckoutRef = useRef(false);
 
   useEffect(() => {
     api.stripe
@@ -48,7 +53,12 @@ function PaymentPendingContent() {
     if (!ref) return;
     api.receipts
       .public(ref)
-      .then(setReceipt)
+      .then((r) => {
+        setReceipt(r);
+        // No cycle in the link (e.g. from login) → use the one chosen at signup.
+        if (!cycleParam && r.billing_cycle === 'yearly') setBillingCycle('yearly');
+        return r;
+      })
       .catch(() => setReceipt(null))
       .finally(() => setLoading(false));
   }, [ref]);
@@ -87,14 +97,22 @@ function PaymentPendingContent() {
     analytics.subscriptionActivated(receipt.subscription_tier);
   }, [receipt, verified, billingCycle]);
 
-  const payWithStripe = async () => {
+  const payWithStripe = async (cycle: 'monthly' | 'yearly' = billingCycle) => {
     if (!ref) return;
     setPaying(true);
     try {
-      analytics.beginCheckout(receipt?.subscription_tier, receipt?.amount, billingCycle);
-      const { url } = await api.stripe.checkoutSession(ref, billingCycle, couponParam || undefined);
+      analytics.beginCheckout(receipt?.subscription_tier, receipt?.amount, cycle);
+      const { url } = await api.stripe.checkoutSession(ref, cycle, couponParam || undefined);
       window.location.href = url;
     } catch (e) {
+      const verify = parseEmailVerificationRequired(e);
+      if (verify?.email) {
+        const q = new URLSearchParams({ email: verify.email, ref });
+        q.set('cycle', cycle);
+        if (couponParam) q.set('coupon', couponParam);
+        router.replace(`/verify-email?${q.toString()}`);
+        return;
+      }
       analytics.paymentFailed(receipt?.subscription_tier, 'checkout_session');
       toast.error(e instanceof Error ? e.message : t('stripeUnavailable'));
       setPaying(false);
@@ -102,6 +120,19 @@ function PaymentPendingContent() {
   };
 
   const isPaid = receipt?.status === 'paid' || verified;
+
+  useEffect(() => {
+    if (!autoCheckout || autoCheckoutRef.current) return;
+    if (!stripeEnabled || !receipt || isPaid || canceled || success) return;
+    autoCheckoutRef.current = true;
+    // Drop the flag first so Back from Stripe shows this page instead of bouncing again.
+    const q = new URLSearchParams(searchParams.toString());
+    q.delete('checkout');
+    window.history.replaceState(null, '', `${window.location.pathname}?${q.toString()}`);
+    const cycle = cycleParam === 'yearly' || (!cycleParam && receipt.billing_cycle === 'yearly') ? 'yearly' : 'monthly';
+    void payWithStripe(cycle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoCheckout, stripeEnabled, receipt, isPaid, canceled, success]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/5">

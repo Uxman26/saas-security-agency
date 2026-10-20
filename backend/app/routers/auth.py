@@ -28,6 +28,8 @@ from app.schemas import (
     UserMeResponse,
     UserResponse,
     VerifyEmailRequest,
+    VerifyEmailResponse,
+    ResendVerificationResponse,
 )
 from app.auth import current_session_jti, get_current_user, SUPER_ADMIN_ROLE, get_password_hash, verify_password
 from app.services import auth_service, oauth_service
@@ -302,16 +304,18 @@ def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     return {"message": "Password updated. You can sign in now."}
 
 
-@router.post("/verify-email", response_model=MessageResponse)
+@router.post("/verify-email", response_model=VerifyEmailResponse)
 def verify_email(body: VerifyEmailRequest, db: Session = Depends(get_db)):
-    auth_service.verify_email_with_token(db, body.token)
-    return {"message": "Email verified. You can sign in now."}
+    return auth_service.verify_email_with_token(db, body.token)
 
 
-@router.post("/resend-verification", response_model=MessageResponse)
+@router.post("/resend-verification", response_model=ResendVerificationResponse)
 def resend_verification(body: ResendVerificationRequest, db: Session = Depends(get_db)):
     auth_service.resend_verification_email(db, body.email)
-    return {"message": "If an account exists and needs verification, a new link has been sent."}
+    return {
+        "message": "If an account exists and needs verification, a new link has been sent.",
+        "retry_after_seconds": auth_service.VERIFICATION_RESEND_COOLDOWN_SECONDS,
+    }
 
 
 def _me_response(db: Session, current_user: User) -> UserMeResponse:

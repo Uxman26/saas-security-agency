@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -10,6 +10,8 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { Loader2, Mail } from 'lucide-react';
+
+const RESEND_COOLDOWN_SECONDS = 60;
 
 function VerifyEmailContent() {
   const t = useTranslations('verify');
@@ -24,40 +26,63 @@ function VerifyEmailContent() {
   const [verifying, setVerifying] = useState(!!token);
   const [verified, setVerified] = useState(false);
   const [resending, setResending] = useState(false);
+  // The email was just sent by signup, so start the resend window straight away.
+  const [cooldown, setCooldown] = useState(searchParams.get('sent') === '1' ? RESEND_COOLDOWN_SECONDS : 0);
+  const verifyStarted = useRef(false);
 
   useEffect(() => {
-    if (!token) return;
+    if (cooldown <= 0) return;
+    const id = window.setTimeout(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => window.clearTimeout(id);
+  }, [cooldown]);
+
+  useEffect(() => {
+    if (!token || verifyStarted.current) return;
+    verifyStarted.current = true;
     api.auth
       .verifyEmail(token)
-      .then(() => {
+      .then((res) => {
         setVerified(true);
         toast.success(t('emailVerifiedToast'));
-        if (ref) {
-          const q = new URLSearchParams({ ref });
-          if (cycle) q.set('cycle', cycle);
+        // The server decides the next step, so a link opened in a fresh tab (no signup
+        // state) still lands on payment — or on sign-in for trial / already-paid tenants.
+        const payRef = res.next_step === 'payment' ? res.receipt_ref || ref : '';
+        if (payRef) {
+          const q = new URLSearchParams({ ref: payRef });
+          const payCycle = cycle || res.billing_cycle || '';
+          if (payCycle) q.set('cycle', payCycle);
           if (coupon) q.set('coupon', coupon);
+          q.set('checkout', '1');
           router.replace(`/payment-pending?${q.toString()}`);
+        } else {
+          router.replace('/login');
         }
       })
       .catch((e: Error) => toast.error(e.message || t('verificationFailed')))
       .finally(() => setVerifying(false));
-  }, [token, ref, router, t]);
+  }, [token, ref, cycle, coupon, router, t]);
 
   const resend = async () => {
     if (!email) {
       toast.warning(t('emailMissing'));
       return;
     }
+    if (cooldown > 0) return;
     setResending(true);
     try {
-      await api.auth.resendVerification(email);
+      const res = await api.auth.resendVerification(email);
       toast.success(t('sent'));
+      setCooldown(res.retry_after_seconds || RESEND_COOLDOWN_SECONDS);
     } catch (e: unknown) {
+      const wait = (e as { retryAfterSeconds?: number }).retryAfterSeconds;
+      if (wait && wait > 0) setCooldown(wait);
       toast.error(e instanceof Error ? e.message : t('couldNotResend'));
     } finally {
       setResending(false);
     }
   };
+
+  const resendLabel = cooldown > 0 ? t('resendIn', { seconds: cooldown }) : t('resend');
 
   if (token) {
     return (
@@ -77,9 +102,9 @@ function VerifyEmailContent() {
             {!verifying && !verified && (
               <>
                 {email ? (
-                  <Button variant="outline" onClick={() => void resend()} disabled={resending}>
+                  <Button variant="outline" onClick={() => void resend()} disabled={resending || cooldown > 0}>
                     {resending ? <Loader2 className="size-4 me-2 animate-spin" /> : null}
-                    {t('resend')}
+                    {resendLabel}
                   </Button>
                 ) : null}
                 <Button asChild variant="ghost">
@@ -110,14 +135,9 @@ function VerifyEmailContent() {
         </CardHeader>
         <CardContent className="space-y-3">
           {email && (
-            <Button className="w-full" variant="outline" onClick={() => void resend()} disabled={resending}>
+            <Button className="w-full" variant="outline" onClick={() => void resend()} disabled={resending || cooldown > 0}>
               {resending ? <Loader2 className="size-4 me-2 animate-spin" /> : null}
-              {t('resend')}
-            </Button>
-          )}
-          {ref && (
-            <Button asChild className="w-full" variant="secondary">
-              <Link href={`/payment-pending?ref=${encodeURIComponent(ref)}${cycle ? `&cycle=${encodeURIComponent(cycle)}` : ''}${coupon ? `&coupon=${encodeURIComponent(coupon)}` : ''}`}>{t('viewPayment')}</Link>
+              {resendLabel}
             </Button>
           )}
           <Button asChild className="w-full" variant="ghost">

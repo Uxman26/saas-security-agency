@@ -310,6 +310,7 @@
     "title": "Verify your email",
     "description": "Your account has been created. We sent a verification link{email}. Click the link in that email, then continue to payment.",
     "emailTo": " to {email}",
+    "resendIn": "Resend available in {seconds}s",
     "resend": "Resend verification email",
     "sent": "Verification email sent",
     "verifying": "Verifying email",

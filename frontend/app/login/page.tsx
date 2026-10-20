@@ -166,7 +166,7 @@ function LoginForm() {
     } catch (err: unknown) {
       const pending = parsePaymentPending(err);
       if (pending?.receipt_ref) {
-        router.push(`/payment-pending?ref=${encodeURIComponent(pending.receipt_ref)}`);
+        router.push(`/payment-pending?ref=${encodeURIComponent(pending.receipt_ref)}&checkout=1`);
         return;
       }
       const verify = parseEmailVerificationRequired(err);

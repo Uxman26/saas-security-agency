@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { broadcastLogout, onRemoteLogout, TOKEN_KEY } from '@/lib/session-sync';
 import { bindUserTheme, clearActiveThemeUser } from '@/lib/user-theme';
 import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
+import { loginPathForSession } from '@/lib/auth-routes';
 
 export type LoginResult =
   | { user: User }
@@ -15,7 +16,12 @@ export type LoginResult =
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (companyId: string, email: string, password: string, rememberMe?: boolean) => Promise<LoginResult>;
+  login: (
+    companyId: string | null | undefined,
+    email: string,
+    password: string,
+    rememberMe?: boolean
+  ) => Promise<LoginResult>;
   loginWithToken: (token: string) => Promise<User>;
   completeMfa: (mfaToken: string, code: string) => Promise<User>;
   logout: () => Promise<void>;
@@ -57,11 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const clearSession = useCallback(() => {
+    const next = loginPathForSession({ role: user?.role });
     storageRemove(TOKEN_KEY);
     clearActiveThemeUser();
     setUser(null);
-    router.replace('/login');
-  }, [router]);
+    router.replace(next);
+  }, [router, user?.role]);
 
   useEffect(() => onRemoteLogout(() => clearSession()), [clearSession]);
 
@@ -78,13 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (
-    companyId: string,
+    companyId: string | null | undefined,
     email: string,
     password: string,
     rememberMe = true
   ): Promise<LoginResult> => {
     const response = await api.auth.login({
-      company_id: companyId,
+      company_id: companyId || undefined,
       email,
       password,
       remember_me: rememberMe,

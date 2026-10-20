@@ -578,8 +578,6 @@ def authenticate_user(
 
     login_guard_service.assert_login_allowed(db, email, ip_address)
     public_company_id = normalize_login_id(company_id)
-    if not public_company_id:
-        raise HTTPException(status_code=422, detail="Company ID is required")
 
     user = db.query(User).filter(func.lower(User.email) == email.lower().strip()).first()
     if not user or not verify_password(password, user.password_hash):
@@ -600,10 +598,8 @@ def authenticate_user(
             detail=LOGIN_FAILED_DETAIL,
             record_password_failure=True,
         )
-    try:
-        tenant_company_id = bind_user_to_login_company(db, user, public_company_id)
-    except HTTPException as exc:
-        if exc.status_code == 401:
+    if not public_company_id:
+        if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
             _fail_login(
                 db,
                 email=email,
@@ -612,7 +608,21 @@ def authenticate_user(
                 user_agent=user_agent,
                 detail=LOGIN_FAILED_DETAIL,
             )
-        raise
+        tenant_company_id = None
+    else:
+        try:
+            tenant_company_id = bind_user_to_login_company(db, user, public_company_id)
+        except HTTPException as exc:
+            if exc.status_code == 401:
+                _fail_login(
+                    db,
+                    email=email,
+                    user=user,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    detail=LOGIN_FAILED_DETAIL,
+                )
+            raise
     db.commit()
     db.refresh(user)
     if not user.is_active:

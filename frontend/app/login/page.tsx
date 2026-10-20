@@ -343,7 +343,6 @@ function LoginForm() {
                     {errors.company_id && (
                       <p className="text-xs text-red-600">{errors.company_id.message as string}</p>
                     )}
-                    <p className="text-xs text-neutral-400">{t('companyIdHint')}</p>
                   </div>
 
                   <div className="space-y-1.5">

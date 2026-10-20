@@ -59,17 +59,19 @@ class UserCreate(StrictModel):
         return validate_password_strength(v)
 
 class UserLogin(StrictModel):
-    company_id: str = Field(min_length=3, max_length=32)
+    company_id: Optional[str] = Field(default=None, max_length=32)
     email: EmailStr = Field(max_length=EMAIL_MAX)
     password: str
     remember_me: Optional[bool] = False
 
     @field_validator("company_id")
     @classmethod
-    def company_login_id_rules(cls, v: str) -> str:
+    def company_login_id_rules(cls, v: Optional[str]) -> Optional[str]:
         from app.services.company_login_id_service import normalize_login_id
 
         code = normalize_login_id(v)
+        if not code:
+            return None
         if len(code) < 3:
             raise ValueError("Company ID is required")
         return code

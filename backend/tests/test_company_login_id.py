@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.auth import get_password_hash
+from app.auth import SUPER_ADMIN_ROLE, get_password_hash
 from app.database import SessionLocal
 from app.main import app
 from app.models import Company, NotificationTemplate, Role, User
@@ -66,7 +66,9 @@ def test_login_requires_company_id():
     email, password, _, _ = _staff_login()
     client = TestClient(app)
     missing = client.post("/auth/login", json={"email": email, "password": password, "remember_me": True})
-    assert missing.status_code == 422, missing.text
+    assert missing.status_code == 401, missing.text
+    detail = missing.json().get("detail")
+    assert "incorrect" in str(detail).lower()
 
 
 def test_login_rejects_unknown_company_id():
@@ -176,6 +178,77 @@ def test_existing_numeric_ids_are_internal_and_not_used_at_login():
         json={"company_id": login_id, "email": email, "password": password, "remember_me": True},
     )
     assert ok.status_code == 200, ok.text
+
+
+def _super_admin_login() -> tuple[str, str]:
+    db = SessionLocal()
+    try:
+        email = "company.login.superadmin@example.com"
+        password = "SuperAdmin1!"
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            user = User(
+                email=email,
+                full_name="Platform Super Admin",
+                password_hash=get_password_hash(password),
+                role=SUPER_ADMIN_ROLE,
+                company_id=None,
+                is_active=True,
+                email_verified=True,
+                mfa_enabled=False,
+            )
+            db.add(user)
+        else:
+            user.password_hash = get_password_hash(password)
+            user.role = SUPER_ADMIN_ROLE
+            user.company_id = None
+            user.is_active = True
+            user.email_verified = True
+            user.mfa_enabled = False
+        db.commit()
+        return email, password
+    finally:
+        db.close()
+
+
+def test_super_admin_login_without_company_id():
+    email, password = _super_admin_login()
+    client = TestClient(app)
+    missing = client.post("/auth/login", json={"email": email, "password": password, "remember_me": True})
+    assert missing.status_code == 200, missing.text
+    token = missing.json()["access_token"]
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200, me.text
+    body = me.json()
+    assert body["role"] == SUPER_ADMIN_ROLE
+    assert body.get("company_id") in (None, 0)
+    hq = client.get("/admin/dashboard", headers={"Authorization": f"Bearer {token}"})
+    assert hq.status_code == 200, hq.text
+
+
+def test_super_admin_login_still_accepts_platform_company_id():
+    email, password = _super_admin_login()
+    client = TestClient(app)
+    ok = client.post(
+        "/auth/login",
+        json={"company_id": PLATFORM_LOGIN_ID, "email": email, "password": password, "remember_me": True},
+    )
+    assert ok.status_code == 200, ok.text
+
+
+def test_tenant_cannot_use_super_admin_login_or_admin_api():
+    email, password, login_id, _ = _staff_login()
+    client = TestClient(app)
+    denied = client.post("/auth/login", json={"email": email, "password": password, "remember_me": True})
+    assert denied.status_code == 401, denied.text
+    tenant = client.post(
+        "/auth/login",
+        json={"company_id": login_id, "email": email, "password": password, "remember_me": True},
+    )
+    assert tenant.status_code == 200, tenant.text
+    token = tenant.json()["access_token"]
+    hq = client.get("/admin/dashboard", headers={"Authorization": f"Bearer {token}"})
+    assert hq.status_code == 403, hq.text
 
 
 def test_ensure_does_not_replace_existing_company_id():

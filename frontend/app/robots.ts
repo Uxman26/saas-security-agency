@@ -39,6 +39,7 @@ const PRIVATE_PREFIXES = [
   '/my-portal',
   '/signup',
   '/login',
+  '/secret',
   '/forgot-password',
   '/reset-password',
   '/verify-email',

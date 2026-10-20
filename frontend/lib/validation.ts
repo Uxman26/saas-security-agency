@@ -54,6 +54,15 @@ export const loginSchema = z.object({
   remember_me: z.boolean().optional().default(true),
 });
 
+export const superAdminLoginSchema = z.object({
+  email: emailFieldSchema,
+  password: z
+    .string()
+    .min(6, 'Password must be at least 6 characters')
+    .max(TEXT_LIMITS.text, tooLongMessage('Password', TEXT_LIMITS.text)),
+  remember_me: z.boolean().optional().default(true),
+});
+
 export const forgotPasswordSchema = z.object({
   email: emailFieldSchema,
 });

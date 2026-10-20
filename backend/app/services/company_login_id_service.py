@@ -4,7 +4,8 @@ This is a human-enterable tenant code stored in ``companies.login_id``. It is **
 ``companies.id``. Existing tenants numbered 1, 2, 3, … keep those integers as internal
 primary keys and foreign keys. Login uses the separate stable ``login_id``.
 
-Super administrators sign in with the reserved value ``PLATFORM``.
+Super administrators sign in without a Company ID. The reserved value
+``PLATFORM`` remains accepted for compatibility.
 """
 
 from __future__ import annotations

@@ -284,7 +284,7 @@ def swagger_login(
     """OAuth2 form adapter used only by Swagger UI's Authorize dialog.
 
     Username is ``CompanyID email`` (example: ``CO7K2M9QP4 you@company.com``).
-    Platform administrators use ``PLATFORM you@controlops.co.uk``.
+    Super administrators use email only.
     """
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")

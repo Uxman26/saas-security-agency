@@ -41,6 +41,7 @@ const privateRoots = [
   'my-portal',
   'signup',
   'login',
+  'secret',
   'forgot-password',
   'reset-password',
   'verify-email',

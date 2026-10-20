@@ -1,5 +1,6 @@
 import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, VerifyEmailResult, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries, AbsenceKind, AbsenceRecord, AbsenceSummary, DeleteImpact, DocumentDetail, DocumentReceipt, EmergencyContact, EmployeeHub, RecordView, Team, SubscriptionInvoice, BillingReceipt } from './types';
 import { storageGet, storageRemove } from '@/lib/safe-storage';
+import { loginPathForSession } from '@/lib/auth-routes';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -87,7 +88,7 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const msg = typeof d === 'string' ? d : 'Unauthorized';
     if (token && typeof window !== 'undefined') {
       storageRemove('token');
-      window.location.href = '/login';
+      window.location.href = loginPathForSession();
     }
     throw new ApiError(401, msg, d);
   }
@@ -158,7 +159,7 @@ async function requestBlob(
     const msg = typeof d === 'string' ? d : 'Unauthorized';
     if (token && typeof window !== 'undefined') {
       storageRemove('token');
-      window.location.href = '/login';
+      window.location.href = loginPathForSession();
     }
     throw new ApiError(401, msg);
   }
@@ -221,17 +222,20 @@ export const api = {
       return request<SignupResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
     },
     login: (data: {
-      company_id: string;
+      company_id?: string;
       email: string;
       password: string;
       remember_me?: boolean;
     }): Promise<LoginResponse> => {
-      const sanitized = {
-        company_id: sanitizeInput(data.company_id).toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      const company = sanitizeInput(data.company_id || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '');
+      const sanitized: Record<string, unknown> = {
         email: sanitizeInput(data.email),
         password: data.password,
         remember_me: data.remember_me ?? true,
       };
+      if (company) sanitized.company_id = company;
       return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
     },
     oauthProviders: (): Promise<{ providers: { provider: string; enabled: boolean }[] }> =>
@@ -2404,7 +2408,7 @@ export const api = {
       if (response.status === 401) {
         if (typeof window !== 'undefined') {
           storageRemove('token');
-          window.location.href = '/login';
+          window.location.href = loginPathForSession();
         }
         throw new ApiError(401, 'Unauthorized');
       }

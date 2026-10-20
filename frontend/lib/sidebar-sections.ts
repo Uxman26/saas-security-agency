@@ -25,7 +25,7 @@ export function groupTenantNavSections(user: User | null | undefined): TenantNav
   const bySection: Record<string, ModuleAccess[]> = {};
   for (const m of access) {
     if (!moduleNavAllowed(user, m)) continue;
-    const sec = m.section_key || 'sectionOperations';
+    const sec = m.key === 'roles' ? 'sectionSettings' : m.section_key || 'sectionOperations';
     if (!bySection[sec]) bySection[sec] = [];
     bySection[sec].push(m);
   }

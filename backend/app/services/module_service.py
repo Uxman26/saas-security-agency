@@ -62,7 +62,7 @@ MODULE_SEED: tuple[tuple[str, str, str, str, int, str], ...] = (
     ("incidents", "Incidents", "AlertTriangle", "/incidents", 40, "sectionSafety"),
     ("accident_reports", "Accident reports", "ClipboardCheck", "/accident-reports", 41, "sectionSafety"),
     ("occurrence_sheets", "Occurrence sheets", "NotebookPen", "/occurrence-sheets", 42, "sectionSafety"),
-    ("roles", "Roles & permissions", "Shield", "/settings/roles", 43, "sectionSafety"),
+    ("roles", "Roles & permissions", "Shield", "/settings/roles", 79, "sectionSettings"),
     # Clients & sales.
     ("clients", "Clients", "Building2", "/clients", 50, "sectionSales"),
     ("client_portal", "Client portal", "Building2", "/client-portal", 51, "sectionSales"),

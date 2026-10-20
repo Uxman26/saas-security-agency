@@ -47,14 +47,16 @@ export function CompanyBrand({ className = '' }: { className?: string }) {
   return (
     <Link
       href={homePathForRole(user?.role)}
-      className={cn('flex min-w-0 items-center gap-2 font-semibold text-sidebar-foreground', className)}
+      className={cn('flex min-w-0 items-start gap-2 font-semibold text-sidebar-foreground', className)}
     >
       {logoSrc ? (
-        <img src={logoSrc} alt="" className="h-11 w-auto max-w-[180px] object-contain shrink-0" />
+        <img src={logoSrc} alt="" className="mt-0.5 h-8 w-auto max-w-[2.5rem] object-contain shrink-0" />
       ) : (
-        <Shield className="size-5 shrink-0 text-sidebar-primary" />
+        <Shield className="mt-0.5 size-5 shrink-0 text-sidebar-primary" />
       )}
-      <span className="truncate">{name}</span>
+      <span className="min-w-0 flex-1 break-words text-[13px] leading-tight [overflow-wrap:anywhere] line-clamp-2">
+        {name}
+      </span>
     </Link>
   );
 }

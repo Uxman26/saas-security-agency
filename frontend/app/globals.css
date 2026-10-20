@@ -78,6 +78,10 @@
   --color-shift-afternoon: var(--shift-afternoon);
   --color-shift-evening: var(--shift-evening);
   --color-shift-night: var(--shift-night);
+  --color-shift-morning-fg: var(--shift-morning-fg);
+  --color-shift-afternoon-fg: var(--shift-afternoon-fg);
+  --color-shift-evening-fg: var(--shift-evening-fg);
+  --color-shift-night-fg: var(--shift-night-fg);
   --color-shift-urgent: var(--shift-urgent);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -178,11 +182,16 @@
   --header-dark-foreground: #F8FAFC;
   --surface-dark: #1E293B;
   --surface-dark-foreground: #F8FAFC;
-  /* Shift periods, shared by the rota grid and the shift dialog. */
-  --shift-morning: #06B6D4;
-  --shift-afternoon: #6366F1;
-  --shift-evening: #F59E0B;
-  --shift-night: #64748B;
+  /* Shift periods, shared by the rota grid and the shift dialog.
+     Keep in sync with mobile lib/core/utils/shift_type_display.dart. */
+  --shift-morning: #7DD3FC;
+  --shift-morning-fg: #0C4A6E;
+  --shift-afternoon: #CA8A04;
+  --shift-afternoon-fg: #422006;
+  --shift-evening: #D8B4FE;
+  --shift-evening-fg: #4C1D95;
+  --shift-night: #0B0F14;
+  --shift-night-fg: #F8FAFC;
   --shift-urgent: #EF4444;
   /* Rota bands. Opaque on purpose: the sticky columns paint over scrolling shift
      cards, so a translucent tint would let them bleed through. */
@@ -238,10 +247,14 @@
   --surface-dark: #1E293B;
   --surface-dark-foreground: #F8FAFC;
   /* Shift hues lifted for contrast on the dark ground; same families. */
-  --shift-morning: #22D3EE;
-  --shift-afternoon: #818CF8;
-  --shift-evening: #FBBF24;
-  --shift-night: #94A3B8;
+  --shift-morning: #38BDF8;
+  --shift-morning-fg: #082F49;
+  --shift-afternoon: #EAB308;
+  --shift-afternoon-fg: #1C1917;
+  --shift-evening: #C084FC;
+  --shift-evening-fg: #2E1065;
+  --shift-night: #020617;
+  --shift-night-fg: #F8FAFC;
   --shift-urgent: #F87171;
   --rota-hours-bg: #16223C;
   --rota-pay-bg: #16223C;
@@ -467,9 +480,9 @@ select:-webkit-autofill {
 .rota-grid-table {
   --rota-emp-w: 210px;
   --rota-day-w: 168px;
-  --rota-hours-w: 68px;
-  --rota-pay-w: 62px;
-  --rota-publish-w: 92px;
+  --rota-hours-w: 72px;
+  --rota-pay-w: 96px;
+  --rota-publish-w: 96px;
 }
 
 /* Opaque sticky rota columns — solid fills, no shift bleed-through */
@@ -561,9 +574,9 @@ select:-webkit-autofill {
        leaves so little room that names wrap one character per line. */
     --rota-emp-w: 200px;
     --rota-day-w: 116px;
-    --rota-hours-w: 56px;
-    --rota-pay-w: 58px;
-    --rota-publish-w: 84px;
+    --rota-hours-w: 64px;
+    --rota-pay-w: 88px;
+    --rota-publish-w: 88px;
   }
 
   .rota-grid-table .rota-sticky-emp,

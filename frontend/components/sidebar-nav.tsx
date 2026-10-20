@@ -237,7 +237,9 @@ export function TenantSidebarNav({
                       onClick={onNavigate}
                     >
                       <Icon className={cn('shrink-0 opacity-90', compact ? 'size-[1.125rem]' : 'size-5')} aria-hidden />
-                      <span className="min-w-0 truncate">{moduleLabel(m.key, m.name)}</span>
+                      <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">
+                        {moduleLabel(m.key, m.name)}
+                      </span>
                     </Link>
                   );
                 })}
@@ -298,7 +300,9 @@ export function AdminSidebarNav({
                       onClick={onNavigate}
                     >
                       <Icon className={cn('shrink-0 opacity-90', compact ? 'size-[1.125rem]' : 'size-5')} aria-hidden />
-                      <span className="min-w-0 truncate">{ts(labelKey)}</span>
+                      <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">
+                        {ts(labelKey)}
+                      </span>
                     </Link>
                   );
                 })}

@@ -1,7 +1,9 @@
+import os
+import uuid
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -28,6 +30,8 @@ from app.schemas import (
 )
 from app.services import attendance_service, incident_service, lead_service, patrol_service, portal_messaging_service, portal_service
 from app.services.company_service import get_company_by_user_id
+from app.services.image_avif_service import is_image_filename, save_upload_as_avif
+from app.storage_paths import INCIDENT_PHOTOS_DIR, ensure_upload_dirs
 
 router = APIRouter(prefix="/portal", tags=["portal"])
 
@@ -171,6 +175,45 @@ def portal_create_incident(
     current_user: User = Depends(require_module("my_portal", "incidents_create")),
 ):
     return incident_service.create_incident(db, current_user, body)
+
+
+@router.post("/incidents/with-images", response_model=IncidentResponse, status_code=201)
+async def portal_create_incident_with_images(
+    notes: str = Form(...),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    accuracy: Optional[float] = Form(None),
+    occurred_at: Optional[str] = Form(None),
+    site_id: Optional[int] = Form(None),
+    assignment_id: Optional[int] = Form(None),
+    images: List[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "incidents_create")),
+):
+    occurred = None
+    if occurred_at:
+        try:
+            occurred = datetime.fromisoformat(occurred_at.replace("Z", "+00:00"))
+        except ValueError:
+            occurred = None
+    attachments: list[tuple[str, Optional[str]]] = []
+    ensure_upload_dirs()
+    for img in images or []:
+        if not img.filename or not is_image_filename(img.filename):
+            continue
+        base = os.path.join(INCIDENT_PHOTOS_DIR, f"{uuid.uuid4().hex}")
+        dest, mime = save_upload_as_avif(img.file, base)
+        attachments.append((dest, mime))
+    body = IncidentCreate(
+        notes=notes,
+        latitude=latitude,
+        longitude=longitude,
+        accuracy=accuracy,
+        occurred_at=occurred,
+        site_id=site_id,
+        assignment_id=assignment_id,
+    )
+    return incident_service.create_incident(db, current_user, body, attachment_paths=attachments)
 
 
 @router.get("/notifications", response_model=list[PortalNotificationResponse])

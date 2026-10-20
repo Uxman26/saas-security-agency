@@ -122,6 +122,8 @@ MODULE_LEGACY_EXPANSION: dict[str, dict[str, frozenset[str]]] = {
         "view": frozenset({PERM_PORTAL_SITES, PERM_PORTAL_ROTA_CURRENT, PERM_PORTAL_HOURS}),
         "create": frozenset({PERM_PORTAL_ROTA_UPCOMING}),
         "edit": frozenset({PERM_PORTAL_ROTA_PREVIOUS}),
+        "incidents_view": frozenset({PERM_INCIDENT_READ, PERM_INCIDENT_REPORTS}),
+        "incidents_create": frozenset({PERM_INCIDENT_WRITE}),
     },
     "sites": {
         "view": frozenset({PERM_SITES_READ}),

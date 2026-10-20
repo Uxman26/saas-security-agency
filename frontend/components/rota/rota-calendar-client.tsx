@@ -71,9 +71,9 @@ const EMP_MENU_H = 348;
    on `.rota-grid-table` in globals.css, which narrows them below `sm` so a phone can
    reach every column in fewer swipes. These constants stay the desktop values and are
    only used for scroll maths, which is a no-op on mobile where nothing is frozen. */
-const ROTA_PAY_COL_W = 62;
-const ROTA_HOURS_COL_W = 68;
-const ROTA_PUBLISH_COL_W = 92;
+const ROTA_PAY_COL_W = 96;
+const ROTA_HOURS_COL_W = 72;
+const ROTA_PUBLISH_COL_W = 96;
 const ROTA_EMP_COL_W = 210;
 const ROTA_DAY_COL_W = 160;
 /** Column widths as CSS vars so the media query in globals.css can override them. */
@@ -2713,14 +2713,14 @@ export function RotaCalendarClient() {
               {unpublishing ? 'Unpublishing…' : 'Unpublish'}
             </Button>
           ) : null}
-          <span className="text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
+          <span className="shrink-0 whitespace-nowrap text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
             Total {formatHoursDecimal(totalRotaHours)}
             <span className="text-muted-foreground font-normal ml-1">
               (excl. breaks)
             </span>
           </span>
           {showPayable ? (
-            <span className="text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 px-2 py-1 tabular-nums">
+            <span className="shrink-0 whitespace-nowrap text-xs rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-100 px-2 py-1 tabular-nums">
               Payable {formatMoney(totalRotaPayable)}
             </span>
           ) : null}
@@ -2852,7 +2852,7 @@ export function RotaCalendarClient() {
                 </th>
                 {showPayable ? (
                   <th
-                    className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                    className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-visible isolate"
                     style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                   >
                     <div className="font-semibold leading-tight">Payable</div>
@@ -3075,7 +3075,7 @@ export function RotaCalendarClient() {
                                     backgroundColor:
                                       conflicts.length > 0
                                         ? SHIFT_URGENT_COLOR
-                                        : sh.color || shiftTypeOption(sh.shiftType)?.bar || 'var(--shift-night)',
+                                        : shiftTypeOption(sh.shiftType)?.bar || sh.color || 'var(--shift-night)',
                                   }}
                                 />
                                 {conflicts.length > 0 ? (
@@ -3128,7 +3128,7 @@ export function RotaCalendarClient() {
                   </td>
                   {showPayable ? (
                     <td
-                      className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
+                      className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-visible isolate"
                       style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                     >
                       {formatMoney(empTotalPayable(emp.id))}
@@ -3185,7 +3185,7 @@ export function RotaCalendarClient() {
                 </td>
                 {showPayable ? (
                   <td
-                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-visible isolate"
                     style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
                   >
                     {formatMoney(totalRotaPayable)}
@@ -3326,7 +3326,8 @@ export function RotaCalendarClient() {
                                     left,
                                     width,
                                     borderLeftWidth: 4,
-                                    borderLeftColor: sh.color || emp.avatarColor,
+                                    borderLeftColor:
+                                      shiftTypeOption(sh.shiftType)?.bar || sh.color || emp.avatarColor,
                                   }}
                                   onClick={() => openEditShift(emp.id, dk, idx)}
                                   title={`${emp.name}${emp.role ? ` · ${emp.role}` : ''} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
@@ -3989,7 +3990,10 @@ export function RotaCalendarClient() {
                     conflicts.length > 0 && 'border-amber-300 bg-amber-50/70 dark:bg-amber-950/30'
                   )}
                 >
-                  <span className="h-8 w-1 rounded-full shrink-0" style={{ backgroundColor: sh.color }} />
+                  <span
+                    className="h-8 w-1 rounded-full shrink-0"
+                    style={{ backgroundColor: shiftTypeOption(sh.shiftType)?.bar || sh.color }}
+                  />
                   <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="font-medium flex items-center gap-1.5">
                       {fmtShortDate(dk)}

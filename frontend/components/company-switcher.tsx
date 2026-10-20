@@ -12,10 +12,13 @@ export function CompanySwitcher({ className = '' }: { className?: string }) {
 
   return (
     <div className={cn('min-w-0 px-0.5', className)}>
-      <p className="truncate text-xs font-medium text-sidebar-foreground">{user.company_name}</p>
       {loginId ? (
-        <p className="truncate font-mono text-[11px] tracking-wide text-sidebar-foreground/70">
+        <p className="break-all font-mono text-[11px] leading-tight tracking-wide text-sidebar-foreground/70">
           Company ID {loginId}
+        </p>
+      ) : user.company_name ? (
+        <p className="line-clamp-2 break-words text-xs font-medium leading-tight text-sidebar-foreground">
+          {user.company_name}
         </p>
       ) : null}
     </div>

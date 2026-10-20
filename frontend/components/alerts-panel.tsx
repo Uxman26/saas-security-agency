@@ -45,12 +45,12 @@ export function AlertsPanel() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative transition-colors hover:bg-primary/10 hover:text-primary"
+          className="relative overflow-visible transition-colors hover:bg-primary/10 hover:text-primary"
           title={t('title')}
         >
           <Bell className="size-4" />
           {badgeCount > 0 && (
-            <span className="absolute -top-0.5 -end-0.5 size-4 rounded-full bg-destructive text-xs text-white flex items-center justify-center">
+            <span className="absolute top-0.5 end-0.5 flex size-4 min-w-4 items-center justify-center rounded-full bg-destructive text-[10px] leading-none text-white">
               {badgeCount > 9 ? '9+' : badgeCount}
             </span>
           )}

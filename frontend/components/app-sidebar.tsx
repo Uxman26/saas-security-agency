@@ -11,7 +11,7 @@ import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
 
 const asideClass =
-  'hidden h-[100vh] h-dvh min-h-0 w-56 shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex';
+  'hidden h-[100vh] h-dvh min-h-0 w-64 shrink-0 flex-col overflow-hidden border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex';
 
 export function AppSidebar() {
   const { user } = useAuth();

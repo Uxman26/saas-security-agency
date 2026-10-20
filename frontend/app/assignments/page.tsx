@@ -23,7 +23,6 @@ import {
   DashboardHeader,
   FilterBar,
   FilterField,
-  Pill,
   QuickLinks,
   ResultsCard,
   ShowingCount,
@@ -36,14 +35,8 @@ import { toast } from '@/lib/toast';
 import { TimeHmField } from '@/components/ui/time-hm-field';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
-
-const SHIFT_TYPE_LABELS: Record<string, string> = {
-  morning: 'Morning',
-  afternoon: 'Afternoon',
-  evening: 'Evening',
-  night: 'Night',
-  weekend: 'Weekend',
-};
+import { ShiftTypeBadge } from '@/components/rota/shift-rota-sections';
+import type { ShiftType } from '@/lib/rota-shifts-types';
 
 type AssignmentShiftType = 'morning' | 'afternoon' | 'evening' | 'night' | 'weekend';
 
@@ -437,17 +430,11 @@ export default function AssignmentsPage() {
                           <TableCell className="whitespace-nowrap">{a.date}</TableCell>
                           <TableCell>
                             {a.shift_type ? (
-                              <Pill
-                                tone={
-                                  a.shift_type === 'night'
-                                    ? 'info'
-                                    : a.shift_type === 'weekend' || a.shift_type === 'holiday'
-                                      ? 'warning'
-                                      : 'neutral'
-                                }
-                              >
-                                {SHIFT_TYPE_LABELS[a.shift_type] ?? a.shift_type}
-                              </Pill>
+                              ['morning', 'afternoon', 'evening', 'night'].includes(a.shift_type) ? (
+                                <ShiftTypeBadge shiftType={a.shift_type as ShiftType} />
+                              ) : (
+                                <span className="capitalize">{a.shift_type}</span>
+                              )
                             ) : '-'}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">

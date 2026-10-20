@@ -127,12 +127,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu className="size-5" />
             </Button>
-            <CompanyBrand className="min-w-0 truncate text-primary text-sm [&_span]:truncate [&_span]:text-primary" />
+            <CompanyBrand className="min-w-0 text-primary text-sm [&_span]:text-primary" />
           </div>
           <div className="flex shrink-0 items-center md:flex-1 md:justify-center md:px-4">
             <GlobalSearch className="w-auto md:w-full md:max-w-sm" />
           </div>
-          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
+          <div className="flex shrink-0 items-center gap-1 overflow-visible py-1 sm:gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
             <QuickActionsMenu />
             <LanguageSwitcher />
             <ThemeToggle />
@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <div className="flex shrink-0 flex-col gap-2 border-b border-sidebar-border px-3 py-3">
                 <div className="flex items-center justify-between gap-2">
-                  <CompanyBrand className="min-w-0 truncate" />
+                  <CompanyBrand className="min-w-0" />
                   <Button
                     type="button"
                     variant="ghost"

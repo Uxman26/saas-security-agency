@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { storageGet, storageSet } from '@/lib/safe-storage';
 
 type Msg = {
   id: string;
@@ -18,6 +19,38 @@ type Msg = {
   navigation?: { label: string; href: string }[];
   proposal?: Record<string, unknown> | null;
 };
+
+const FAB_SIZE = 48;
+const FAB_MARGIN = 16;
+const FAB_POS_KEY = 'controlops-assistant-pos';
+
+function defaultFabPos() {
+  if (typeof window === 'undefined') return { x: FAB_MARGIN, y: FAB_MARGIN };
+  return {
+    x: Math.max(FAB_MARGIN, window.innerWidth - FAB_SIZE - FAB_MARGIN),
+    y: Math.max(FAB_MARGIN, window.innerHeight - FAB_SIZE - FAB_MARGIN),
+  };
+}
+
+function loadFabPos() {
+  try {
+    const raw = storageGet(FAB_POS_KEY);
+    if (!raw) return defaultFabPos();
+    const parsed = JSON.parse(raw) as { x?: number; y?: number };
+    if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return defaultFabPos();
+    return clampFabPos(parsed.x, parsed.y);
+  } catch {
+    return defaultFabPos();
+  }
+}
+
+function clampFabPos(x: number, y: number) {
+  if (typeof window === 'undefined') return { x, y };
+  return {
+    x: Math.min(Math.max(FAB_MARGIN, x), Math.max(FAB_MARGIN, window.innerWidth - FAB_SIZE - FAB_MARGIN)),
+    y: Math.min(Math.max(FAB_MARGIN, y), Math.max(FAB_MARGIN, window.innerHeight - FAB_SIZE - FAB_MARGIN)),
+  };
+}
 
 const SUGGESTIONS_BY_PATH: { match: RegExp; tips: string[] }[] = [
   { match: /^\/rota/, tips: ['How do I publish a rota?', 'Create morning shifts for Site next Monday', 'Explain rota conflicts'] },
@@ -64,6 +97,22 @@ export function ControlOpsAssistant({
     },
   ]);
   const endRef = useRef<HTMLDivElement>(null);
+  const [fabPos, setFabPos] = useState(defaultFabPos);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    moved: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    setFabPos(loadFabPos());
+    const onResize = () => setFabPos((p) => clampFabPos(p.x, p.y));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     setMessages((m) =>
@@ -121,14 +170,30 @@ export function ControlOpsAssistant({
   if (!user) return null;
 
   const tips = defaultTips(pathname || '', user.role);
+  const panelW = typeof window === 'undefined' ? 360 : Math.min(360, window.innerWidth - 24);
+  const panelH = typeof window === 'undefined' ? 480 : Math.min(520, window.innerHeight * 0.68);
+  const viewW = typeof window === 'undefined' ? 1200 : window.innerWidth;
+  const viewH = typeof window === 'undefined' ? 800 : window.innerHeight;
+  const panelLeft = Math.min(Math.max(12, fabPos.x + FAB_SIZE - panelW), Math.max(12, viewW - panelW - 12));
+  const panelTop = Math.min(Math.max(12, fabPos.y - panelH - 8), Math.max(12, viewH - panelH - FAB_SIZE - 24));
 
   const panel = (
     <div
       className={cn(
         'flex flex-col bg-background border shadow-lg',
-        embedded ? 'h-full min-h-[320px] rounded-lg' : 'fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-[max(1rem,env(safe-area-inset-right))] z-50 h-[min(560px,70dvh)] w-[min(400px,calc(100vw-2rem))] rounded-xl',
+        embedded ? 'h-full min-h-[320px] rounded-lg' : 'fixed z-50 rounded-xl',
         className
       )}
+      style={
+        embedded
+          ? undefined
+          : {
+              left: panelLeft,
+              top: panelTop,
+              width: panelW,
+              height: panelH,
+            }
+      }
     >
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2 bg-muted/40 rounded-t-xl">
         <div className="flex items-center gap-2 min-w-0">
@@ -283,15 +348,54 @@ export function ControlOpsAssistant({
 
   if (embedded) return panel;
 
+  const onFabPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: fabPos.x,
+      origY: fabPos.y,
+      moved: false,
+    };
+  };
+
+  const onFabPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    drag.moved = true;
+    setFabPos(clampFabPos(drag.origX + dx, drag.origY + dy));
+  };
+
+  const onFabPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    if (drag.moved) {
+      const next = clampFabPos(fabPos.x, fabPos.y);
+      setFabPos(next);
+      storageSet(FAB_POS_KEY, JSON.stringify(next));
+      return;
+    }
+    setOpen((v) => !v);
+  };
+
   return (
     <>
       {open ? panel : null}
       <Button
         type="button"
         size="icon"
-        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-50 size-12 rounded-full shadow-lg bg-primary hover:bg-primary-hover text-primary-foreground"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={open ? t('assistantTitle') : t('assistantTitle')}
+        className="fixed z-50 size-12 cursor-grab touch-none rounded-full shadow-lg bg-primary hover:bg-primary-hover text-primary-foreground active:cursor-grabbing"
+        style={{ left: fabPos.x, top: fabPos.y }}
+        onPointerDown={onFabPointerDown}
+        onPointerMove={onFabPointerMove}
+        onPointerUp={onFabPointerUp}
+        onPointerCancel={onFabPointerUp}
+        aria-label={t('assistantTitle')}
       >
         {open ? <X className="size-5" /> : <Bot className="size-5" />}
       </Button>

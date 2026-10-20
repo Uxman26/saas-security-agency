@@ -63,11 +63,10 @@ Ensure these ports are not blocked and that the proxy targets match where Docker
 
 ## 6. SMTP on Plesk (Docker)
 
-Containers often cannot reach `mail.yourdomain.com:587` (outbound SMTP blocked or hairpin NAT). Use the **host** mail server instead.
-
-In `backend/.env` on the server:
+Containers often cannot reach `mail.yourdomain.com:465` / `:587` (outbound SMTP blocked or hairpin NAT). Keep the public hostname in Super Admin → SMTP email (needed for TLS certificates). Point the container at the host mail server with:
 
 ```env
+MAIL_CONNECT_HOST=host.docker.internal
 MAIL_SERVER=host.docker.internal
 MAIL_PORT=587
 MAIL_USE_TLS=true
@@ -75,6 +74,8 @@ MAIL_USERNAME=noreply@yourdomain.com
 MAIL_PASSWORD=your-mailbox-password
 MAIL_FROM=noreply@yourdomain.com
 ```
+
+The API retries `host.docker.internal` automatically from Docker when the public hostname fails. Super Admin UI settings still win for username/password/from.
 
 `docker-compose.yml` already maps `host.docker.internal` to the host gateway.
 

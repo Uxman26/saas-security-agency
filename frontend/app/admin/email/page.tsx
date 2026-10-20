@@ -132,7 +132,9 @@ export default function AdminEmailPage() {
             <CardContent className="space-y-4">
               {config && (
                 <div className={cn('rounded-lg border p-3 text-sm', config.configured ? 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300' : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300')}>
-                  {config.configured ? 'SMTP is configured and ready to send.' : 'SMTP credentials are missing — emails will not send until configured.'}
+                  {config.configured
+                    ? 'SMTP credentials are saved. Send a test email below to confirm the API can reach the mail server.'
+                    : 'SMTP credentials are missing — emails will not send until configured.'}
                 </div>
               )}
               <div className="grid gap-4 sm:grid-cols-2">
@@ -142,7 +144,16 @@ export default function AdminEmailPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Port</Label>
-                  <Input type="number" value={port} onChange={(e) => setPort(e.target.value)} />
+                  <Input
+                    type="number"
+                    value={port}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setPort(next);
+                      if (next === '465') setUseTls(false);
+                      if (next === '587') setUseTls(true);
+                    }}
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Username</Label>

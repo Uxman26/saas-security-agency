@@ -1,8 +1,5 @@
 import logging
-import smtplib
 import threading
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -10,10 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Company, EmailLog
-from app.services.platform_smtp_service import _safe_smtp_error, get_smtp_config
+from app.services.platform_smtp_service import _safe_smtp_error, get_smtp_config, send_with_config
 
 logger = logging.getLogger(__name__)
-SMTP_TIMEOUT = 10
 
 
 def is_configured() -> bool:
@@ -41,30 +37,7 @@ def company_smtp_config(company: Company) -> dict[str, Any]:
 
 
 def _send_with_config(cfg: dict[str, Any], to_email: str, subject: str, body: str) -> None:
-    msg = MIMEMultipart()
-    msg["From"] = f"{cfg['mail_from_name']} <{cfg['mail_from']}>"
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "html"))
-    host = cfg["mail_server"]
-    port = int(cfg["mail_port"])
-    use_tls = bool(cfg.get("mail_use_tls", port not in (25, 465)))
-    logger.info("SMTP connect %s:%s tls=%s", host, port, use_tls)
-    if port == 465:
-        server = smtplib.SMTP_SSL(host, port, timeout=SMTP_TIMEOUT)
-    else:
-        server = smtplib.SMTP(host, port, timeout=SMTP_TIMEOUT)
-        if use_tls:
-            server.starttls()
-    try:
-        if cfg.get("mail_username") and cfg.get("mail_password"):
-            server.login(cfg["mail_username"], cfg["mail_password"])
-        server.send_message(msg)
-    finally:
-        try:
-            server.quit()
-        except Exception:
-            pass
+    send_with_config(cfg, to_email, subject, body)
 
 
 def send_email_async(to_email: str, subject: str, body: str) -> None:
@@ -96,7 +69,7 @@ def send_email(to_email: str, subject: str, body: str) -> bool:
         raise
     except Exception as e:
         logger.error("SMTP send to %s failed: %s", to_email, type(e).__name__, exc_info=True)
-        _, code, message = _safe_smtp_error(e)
+        _, code, message = _safe_smtp_error(e, host=cfg.get("mail_server"), port=cfg.get("mail_port"))
         raise HTTPException(status_code=400, detail={"code": code, "message": message})
 
 
@@ -111,7 +84,7 @@ def send_company_email(company: Company, to_email: str, subject: str, body: str)
         raise
     except Exception as e:
         logger.error("SMTP send to %s failed: %s", to_email, type(e).__name__, exc_info=True)
-        _, code, message = _safe_smtp_error(e)
+        _, code, message = _safe_smtp_error(e, host=cfg.get("mail_server"), port=cfg.get("mail_port"))
         raise HTTPException(status_code=400, detail={"code": code, "message": message})
 
 

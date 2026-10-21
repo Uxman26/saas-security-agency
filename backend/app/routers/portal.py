@@ -416,6 +416,14 @@ def portal_message_threads(
     return portal_messaging_service.list_threads(db, current_user)
 
 
+@router.get("/messages/contacts")
+def portal_message_contacts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    return portal_messaging_service.list_contacts(db, current_user)
+
+
 @router.post("/messages/threads", status_code=201)
 def portal_create_thread(
     body: PortalThreadCreateRequest,

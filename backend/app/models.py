@@ -999,7 +999,7 @@ class RotaPlan(Base):
     id = Column(Integer, primary_key=True, index=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
     deleted_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
@@ -1047,15 +1047,16 @@ class StaffRequest(Base):
 class Assignment(Base):
     __tablename__ = "assignments"
     id = Column(Integer, primary_key=True, index=True)
-    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
-    rota_plan_id = Column(Integer, ForeignKey("rota_plans.id"))
-    date = Column(Date, nullable=False)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
+    rota_plan_id = Column(Integer, ForeignKey("rota_plans.id"), index=True)
+    date = Column(Date, nullable=False, index=True)
     shift_start = Column(String)
     shift_end = Column(String)
     break_minutes = Column(Integer, default=0)
     shift_type = Column(String, default="morning")
     shift_rate = Column(Float)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     guard = relationship("Guard", back_populates="assignments")
@@ -1123,7 +1124,7 @@ class ShiftLateLog(Base):
 class GuardRate(Base):
     __tablename__ = "guard_rates"
     id = Column(Integer, primary_key=True, index=True)
-    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False, index=True)
     hourly_rate = Column(Float, nullable=False)
     effective_from = Column(Date, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1167,6 +1168,9 @@ class Attendance(Base):
     booked_off_at = Column(DateTime(timezone=True))
     status = Column(String, default="on_time")
     note = Column(Text)
+    location_name = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     # Hours agreed for payment when a shift is cancelled but still paid. Null for every
     # other status: those are paid on the shift's own span, not on a negotiated figure.
     paid_hours = Column(Float, nullable=True)

@@ -524,9 +524,11 @@ select:-webkit-autofill {
   border-bottom-color: var(--rota-row-line);
 }
 
-/* Always-visible rota grid scrollbars (X + Y position) */
+/* Always-visible rota grid scrollbars (X + Y position).
+   isolation contains sticky z-index so frozen columns cannot cover viewport FABs. */
 .rota-grid-scroll {
   overflow: scroll;
+  isolation: isolate;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scrollbar-width: auto;

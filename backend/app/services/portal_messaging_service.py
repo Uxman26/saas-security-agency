@@ -8,10 +8,34 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models import AppNotification, Guard, PortalMessage, PortalMessageThread, User
+from app.models import (
+    AppNotification,
+    Assignment,
+    Guard,
+    PortalMessage,
+    PortalMessageThread,
+    ShiftAuditLog,
+    User,
+)
 from app.services.company_service import get_company_by_user_id
-from app.services import fcm_push_service
-from app.services.portal_access import is_client_portal_user, is_portal_role, is_staff_portal_user
+from app.services import fcm_push_service, membership_service
+from app.services.portal_access import (
+    get_linked_guard,
+    is_client_portal_user,
+    is_portal_role,
+    is_staff_portal_user,
+    role_slug,
+)
+
+_STAFF_ASSIGN_ACTIONS = frozenset(
+    {
+        "shift_assigned",
+        "shift_published",
+        "shift_reassigned",
+        "shift_added_to_rota",
+        "shift_created",
+    }
+)
 
 
 def _pair(a: int, b: int) -> tuple[int, int]:
@@ -22,22 +46,71 @@ def _user_name(u: User) -> str:
     return (u.full_name or u.email or f"User #{u.id}").strip()
 
 
-def _assert_messaging_peer_allowed(sender: User, peer: User) -> None:
-    """Restrict who portal users may open threads with inside a tenant.
+def _is_ops_user(user: User) -> bool:
+    if not user or not user.is_active:
+        return False
+    return not is_staff_portal_user(user) and not is_client_portal_user(user)
 
-    - Internal / ops roles may message anyone in the company.
-    - Staff/guards may message internal/ops users and other staff/guards (not clients).
-    - Clients may message internal/ops users only.
-    """
+
+def _staff_assigner_ids(db: Session, staff: User, company_id: int) -> set[int]:
+    guard = get_linked_guard(db, staff)
+    ids: set[int] = set()
+    if not guard:
+        return ids
+    for row in (
+        db.query(Assignment.created_by_user_id)
+        .filter(
+            Assignment.guard_id == guard.id,
+            Assignment.created_by_user_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    ):
+        if row[0]:
+            ids.add(int(row[0]))
+    for row in (
+        db.query(ShiftAuditLog.user_id)
+        .filter(
+            ShiftAuditLog.company_id == company_id,
+            ShiftAuditLog.guard_id == guard.id,
+            ShiftAuditLog.action.in_(_STAFF_ASSIGN_ACTIONS),
+            ShiftAuditLog.user_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    ):
+        if row[0]:
+            ids.add(int(row[0]))
+    ids.discard(staff.id)
+    return ids
+
+
+def _ops_user_ids(db: Session, company_id: int, exclude_id: int) -> set[int]:
+    return {
+        u.id
+        for u in membership_service.users_in_company(db, company_id)
+        if u.id != exclude_id and _is_ops_user(u)
+    }
+
+
+def staff_authorized_peer_ids(db: Session, staff: User, company_id: int) -> set[int]:
+    ops = _ops_user_ids(db, company_id, staff.id)
+    assigners = _staff_assigner_ids(db, staff, company_id) & ops
+    return assigners or ops
+
+
+def _assert_messaging_peer_allowed(db: Session, sender: User, peer: User, company_id: int) -> None:
     if not peer.is_active:
+        raise HTTPException(status_code=404, detail="Peer user not found")
+    if not membership_service.belongs_to_company(db, peer, company_id):
         raise HTTPException(status_code=404, detail="Peer user not found")
     if not is_portal_role(sender):
         return
     if is_staff_portal_user(sender):
-        if is_client_portal_user(peer):
+        if peer.id not in staff_authorized_peer_ids(db, sender, company_id):
             raise HTTPException(
                 status_code=403,
-                detail="Staff cannot message client accounts",
+                detail="Staff can only message the controller or administrator who assigned their shift",
             )
         return
     if is_client_portal_user(sender):
@@ -58,7 +131,7 @@ def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str, sender: Us
         user = db.query(User).filter(User.id == uid).first()
         if not user or not membership_service.belongs_to_company(db, user, company_id):
             raise HTTPException(status_code=404, detail="Peer user not found")
-        _assert_messaging_peer_allowed(sender, user)
+        _assert_messaging_peer_allowed(db, sender, user, company_id)
         return user.id
     if peer_id.startswith("guard:"):
         gid = int(peer_id.split(":", 1)[1])
@@ -82,7 +155,7 @@ def _resolve_peer_user_id(db: Session, company_id: int, peer_id: str, sender: Us
                 status_code=404,
                 detail="That staff member has no ControlOps login for messaging",
             )
-        _assert_messaging_peer_allowed(sender, user)
+        _assert_messaging_peer_allowed(db, sender, user, company_id)
         return user.id
     raise HTTPException(status_code=400, detail="peer_id must be user:{id} or guard:{id}")
 
@@ -137,7 +210,50 @@ def list_threads(db: Session, user: User) -> list[dict]:
         .limit(200)
         .all()
     )
-    return [_thread_out(db, t, user.id) for t in rows]
+    allowed = None
+    if is_staff_portal_user(user):
+        allowed = staff_authorized_peer_ids(db, user, company.id)
+    out = []
+    for t in rows:
+        peer_id = t.user_b_id if t.user_a_id == user.id else t.user_a_id
+        if allowed is not None and peer_id not in allowed:
+            continue
+        out.append(_thread_out(db, t, user.id))
+    return out
+
+
+def list_contacts(db: Session, user: User) -> list[dict]:
+    company = get_company_by_user_id(db, user.id)
+    if is_staff_portal_user(user):
+        ids = staff_authorized_peer_ids(db, user, company.id)
+    elif is_client_portal_user(user):
+        ids = _ops_user_ids(db, company.id, user.id)
+    else:
+        ids = {
+            u.id
+            for u in membership_service.users_in_company(db, company.id)
+            if u.id != user.id and u.is_active
+        }
+    if not ids:
+        return []
+    rows = (
+        db.query(User)
+        .filter(User.id.in_(ids), User.is_active.is_(True))
+        .order_by(User.full_name, User.email)
+        .all()
+    )
+    return [
+        {
+            "id": f"user:{u.id}",
+            "peer_id": f"user:{u.id}",
+            "name": _user_name(u),
+            "full_name": _user_name(u),
+            "email": u.email,
+            "role": role_slug(u),
+            "source": "assigner" if is_staff_portal_user(user) else "user",
+        }
+        for u in rows
+    ]
 
 
 def get_or_create_thread(db: Session, user: User, peer_id: str) -> dict:
@@ -186,6 +302,10 @@ def _get_owned_thread(db: Session, user: User, thread_key: str) -> PortalMessage
     )
     if not thread or user.id not in (thread.user_a_id, thread.user_b_id):
         raise HTTPException(status_code=404, detail="Thread not found")
+    if is_staff_portal_user(user):
+        peer_id = thread.user_b_id if thread.user_a_id == user.id else thread.user_a_id
+        if peer_id not in staff_authorized_peer_ids(db, user, company.id):
+            raise HTTPException(status_code=404, detail="Thread not found")
     return thread
 
 

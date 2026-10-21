@@ -15,7 +15,7 @@ import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
-import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftTypeOption } from '@/lib/rota-shifts-types';
+import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftSiteBarColor } from '@/lib/rota-shifts-types';
 import type { RotaPlanListItem } from '@/lib/types';
 import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
@@ -423,6 +423,13 @@ export function RotaCalendarClient() {
   const [exporting, setExporting] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const bootstrappedRef = useRef(false);
+  const loadRotaPlanRef = useRef(loadRotaPlan);
+  loadRotaPlanRef.current = loadRotaPlan;
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const planLoadSeqRef = useRef(0);
   const [siblingPlans, setSiblingPlans] = useState<RotaPlanListItem[]>([]);
   const [switchingPlan, setSwitchingPlan] = useState<'prev' | 'next' | null>(null);
   const [previewEmpId, setPreviewEmpId] = useState<string | null>(null);
@@ -455,47 +462,48 @@ export function RotaCalendarClient() {
       return;
     }
     let cancelled = false;
+    const seq = ++planLoadSeqRef.current;
+    const params = searchParamsRef.current;
     setPlanLoading(true);
     void api.rotaPlans
       .get(id)
       .then((plan) => {
-        if (cancelled) return;
+        if (cancelled || seq !== planLoadSeqRef.current) return;
         setPublishedGuardIds(plan.published_guard_ids || []);
-        const bootstrap = searchParams.get('bootstrap') === '1';
+        const bootstrap = params.get('bootstrap') === '1';
         if (bootstrap && !bootstrappedRef.current) {
           bootstrappedRef.current = true;
-          const staffParam = searchParams.get('staffIds');
+          const staffParam = params.get('staffIds');
           const staffIds = staffParam ? staffParam.split(',').filter(Boolean) : undefined;
           const rawView = plan.view_mode === 'dnd' ? 'table' : plan.view_mode;
-          loadRotaPlan(plan, {
+          loadRotaPlanRef.current(plan, {
             name: plan.name,
             view: (rawView as RotaViewMode) || 'table',
             startDate: plan.start_date,
             dayCount: plan.day_count,
             budget: plan.budget,
-            copySeed: searchParams.get('copy') === '1',
-            includeAllStaff: searchParams.get('allStaff') === '1',
+            copySeed: params.get('copy') === '1',
+            includeAllStaff: params.get('allStaff') === '1',
             staffIds,
           });
-          router.replace(`/rota/calendar?id=${id}`, { scroll: false });
+          routerRef.current.replace(`/rota/calendar?id=${id}`, { scroll: false });
         } else if (!bootstrap) {
-          loadRotaPlan(plan);
+          loadRotaPlanRef.current(plan);
         }
       })
       .catch(() => {})
       .finally(() => {
-        if (!cancelled) setPlanLoading(false);
+        if (!cancelled && seq === planLoadSeqRef.current) setPlanLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [planIdParam, searchParams, loadRotaPlan, router]);
+  }, [planIdParam, setPublishedGuardIds]);
 
-  /** Backs the Previous/Next rota buttons — the list is small, so one fetch is enough. */
   useEffect(() => {
     let cancelled = false;
     void api.rotaPlans
-      .list()
+      .list({ compact: true })
       .then((plans) => {
         if (!cancelled) setSiblingPlans(plans);
       })
@@ -819,6 +827,8 @@ export function RotaCalendarClient() {
     [state.days, state.shifts, shiftFiltersActive, shiftMatchesFilters]
   );
 
+  const poolById = useMemo(() => new Map(pool.map((p) => [p.id, p])), [pool]);
+
   const rows = useMemo(() => {
     const q = empFilter.trim().toLowerCase();
     let list = state.employees.filter((e) => empMatchesShiftFilters(e.id));
@@ -827,10 +837,10 @@ export function RotaCalendarClient() {
     }
     if (q) list = list.filter((e) => e.name.toLowerCase().includes(q) || e.role.toLowerCase().includes(q));
     return list.map((e) => {
-      const fromPool = pool.find((p) => p.id === e.id);
+      const fromPool = poolById.get(e.id);
       return fromPool?.photoUrl ? { ...e, photoUrl: fromPool.photoUrl } : e;
     });
-  }, [state.employees, empFilter, jobTitleFilter, empMatchesShiftFilters, pool]);
+  }, [state.employees, empFilter, jobTitleFilter, empMatchesShiftFilters, poolById]);
 
   const activeFilterCount =
     (statusFilter !== 'all' ? 1 : 0) +
@@ -3075,7 +3085,7 @@ export function RotaCalendarClient() {
                                     backgroundColor:
                                       conflicts.length > 0
                                         ? SHIFT_URGENT_COLOR
-                                        : shiftTypeOption(sh.shiftType)?.bar || sh.color || 'var(--shift-night)',
+                                        : shiftSiteBarColor(sh, allSites),
                                   }}
                                 />
                                 {conflicts.length > 0 ? (
@@ -3326,8 +3336,7 @@ export function RotaCalendarClient() {
                                     left,
                                     width,
                                     borderLeftWidth: 4,
-                                    borderLeftColor:
-                                      shiftTypeOption(sh.shiftType)?.bar || sh.color || emp.avatarColor,
+                                    borderLeftColor: shiftSiteBarColor(sh, allSites, emp.avatarColor),
                                   }}
                                   onClick={() => openEditShift(emp.id, dk, idx)}
                                   title={`${emp.name}${emp.role ? ` · ${emp.role}` : ''} · ${sh.start}–${sh.end}${sh.site ? ` · ${sh.site}` : ''}`}
@@ -3992,7 +4001,7 @@ export function RotaCalendarClient() {
                 >
                   <span
                     className="h-8 w-1 rounded-full shrink-0"
-                    style={{ backgroundColor: shiftTypeOption(sh.shiftType)?.bar || sh.color }}
+                    style={{ backgroundColor: shiftSiteBarColor(sh, allSites) }}
                   />
                   <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="font-medium flex items-center gap-1.5">

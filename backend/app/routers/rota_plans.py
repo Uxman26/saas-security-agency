@@ -46,6 +46,7 @@ def list_rotas(
     sub_contractor_id: Optional[str] = None,
     guard_id: Optional[int] = None,
     job_title: Optional[str] = None,
+    compact: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("rota", "view")),
 ):
@@ -62,6 +63,7 @@ def list_rotas(
         sub_contractor_id=sub_contractor_id,
         guard_id=guard_id,
         job_title=job_title,
+        compact=compact,
     )
 
 

@@ -249,7 +249,15 @@ def portal_hours(
         ),
         pinned,
     )
-    total = round(sum(r.hours for r in rows), 2)
+    total = round(
+        sum(
+            float(r.actual_hours)
+            if getattr(r, "actual_hours", None) is not None
+            else float(r.hours or 0)
+            for r in rows
+        ),
+        2,
+    )
     # Only a staff login is looking at its own wages here; a client login sees the same
     # shifts but must not be told what the guards on them are paid.
     pay = _total_pay(db, get_company_by_user_id(db, user.id).id, rows) if guard_id else None

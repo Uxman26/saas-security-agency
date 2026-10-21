@@ -497,10 +497,17 @@ def preview_pay(
 
     for d in details:
         scheduled_hours = round(float(d.hours or 0), 2)
+        actual = getattr(d, "payable_hours", None)
+        if actual is None:
+            actual = getattr(d, "actual_hours", None)
         hours = (
             round(max(0.0, _number(d.paid_hours)), 2)
             if d.attendance_status == CANCELLED_PAID
-            else scheduled_hours
+            else (
+                round(float(actual), 2)
+                if actual is not None
+                else scheduled_hours
+            )
         )
         locked = _number(d.shift_rate)
         pay = resolve_shift_pay(

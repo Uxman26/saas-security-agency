@@ -876,9 +876,20 @@ def lead_audit_logs(db: Session, user_id: int, lead_id: int) -> List[AuditLog]:
     )
 
 
-def list_notifications(db: Session, user_id: int, unread_only: bool = False) -> List[AppNotification]:
+def _visible_notifications(db: Session, user_id: int):
     company = get_company_by_user_id(db, user_id)
-    q = db.query(AppNotification).filter(AppNotification.company_id == company.id, AppNotification.user_id == user_id)
+    return (
+        db.query(AppNotification).filter(
+            AppNotification.company_id == company.id,
+            AppNotification.user_id == user_id,
+            AppNotification.cleared_at.is_(None),
+        ),
+        company,
+    )
+
+
+def list_notifications(db: Session, user_id: int, unread_only: bool = False) -> List[AppNotification]:
+    q, _company = _visible_notifications(db, user_id)
     if unread_only:
         q = q.filter(AppNotification.read_at.is_(None))
     return q.order_by(AppNotification.created_at.desc()).limit(100).all()
@@ -914,6 +925,7 @@ def mark_all_notifications_read(db: Session, user_id: int) -> int:
             AppNotification.company_id == company.id,
             AppNotification.user_id == user_id,
             AppNotification.read_at.is_(None),
+            AppNotification.cleared_at.is_(None),
         )
     )
     count = q.count()
@@ -931,10 +943,35 @@ def unread_notification_count(db: Session, user_id: int) -> int:
             AppNotification.company_id == company.id,
             AppNotification.user_id == user_id,
             AppNotification.read_at.is_(None),
+            AppNotification.cleared_at.is_(None),
         )
         .scalar()
         or 0
     )
+
+
+def clear_all_notifications(db: Session, user_id: int) -> int:
+    company = get_company_by_user_id(db, user_id)
+    now = datetime.now(timezone.utc)
+    q = (
+        db.query(AppNotification)
+        .filter(
+            AppNotification.company_id == company.id,
+            AppNotification.user_id == user_id,
+            AppNotification.cleared_at.is_(None),
+        )
+    )
+    count = q.count()
+    if count:
+        q.update(
+            {
+                AppNotification.cleared_at: now,
+                AppNotification.read_at: func.coalesce(AppNotification.read_at, now),
+            },
+            synchronize_session=False,
+        )
+        db.commit()
+    return count
 
 
 def purge_old_notifications(db: Session, *, read_days: int = 90) -> int:

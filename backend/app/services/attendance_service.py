@@ -97,6 +97,71 @@ def _hhmm(dt: datetime) -> str:
     return f"{dt.hour:02d}:{dt.minute:02d}"
 
 
+def scheduled_shift_hours(assignment) -> Optional[float]:
+    start = _assignment_shift_start_dt(assignment)
+    end = _assignment_shift_end_dt(assignment)
+    if not start or not end:
+        return None
+    brk = max(0, int(getattr(assignment, "break_minutes", 0) or 0))
+    mins = (end - start).total_seconds() / 60.0 - brk
+    return round(max(0.0, mins / 60.0), 2)
+
+
+def _combine_hhmm(day, hhmm, *, after: Optional[datetime] = None):
+    if not hhmm or not day:
+        return None
+    try:
+        parts = str(hhmm).split(":")
+        h = int(parts[0])
+        m = int(parts[1]) if len(parts) > 1 else 0
+        dt = datetime.combine(day, time(h, m))
+        if after is not None and dt <= after:
+            dt = dt + timedelta(days=1)
+        return dt
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def compute_worked_hours(
+    *,
+    shift_date,
+    shift_start=None,
+    shift_end=None,
+    break_minutes=0,
+    booked_at=None,
+    booked_off_at=None,
+    overtime_end=None,
+    early_finish_end=None,
+    cap_early_start: bool = False,
+):
+    """Actual (or payable) hours from clock-in to clock-out / scheduled end.
+
+    Scheduled assignment times are never rewritten. Late arrival shortens the
+    span from the real clock-in; overtime / early finish change only the end.
+    """
+    if booked_at is None:
+        return None
+    start = booked_at.replace(tzinfo=None) if getattr(booked_at, "tzinfo", None) else booked_at
+    sched_start = _combine_hhmm(shift_date, shift_start)
+    if cap_early_start and sched_start is not None and start < sched_start:
+        start = sched_start
+    if booked_off_at is not None:
+        end = booked_off_at.replace(tzinfo=None) if getattr(booked_off_at, "tzinfo", None) else booked_off_at
+    else:
+        extra = overtime_end or early_finish_end
+        if extra:
+            end = _combine_hhmm(shift_date, extra, after=start)
+        else:
+            end = _combine_hhmm(shift_date, shift_end, after=start)
+    if end is None:
+        return None
+    if end <= start:
+        end = end + timedelta(days=1)
+    brk = max(0, int(break_minutes or 0))
+    mins = (end - start).total_seconds() / 60.0 - brk
+    return round(max(0.0, mins / 60.0), 2)
+
+
 def _append_note(existing: Optional[str], addition: str) -> Optional[str]:
     addition = (addition or "").strip()
     base = (existing or "").strip()
@@ -233,6 +298,19 @@ def _enrich_attendance_rows(db: Session, rows: List[Attendance]) -> List[Attenda
                 overtime_end=ot.new_end if ot else None,
                 early_finish_end=ef.actual_end if ef else None,
                 late_minutes=late.late_minutes if late else None,
+                scheduled_hours=scheduled_shift_hours(a) if a else None,
+                actual_hours=compute_worked_hours(
+                    shift_date=a.date if a else None,
+                    shift_start=a.shift_start if a else None,
+                    shift_end=a.shift_end if a else None,
+                    break_minutes=(a.break_minutes or 0) if a else 0,
+                    booked_at=att.booked_at,
+                    booked_off_at=att.booked_off_at,
+                    overtime_end=ot.new_end if ot else None,
+                    early_finish_end=ef.actual_end if ef else None,
+                )
+                if a
+                else None,
             )
         )
     return out

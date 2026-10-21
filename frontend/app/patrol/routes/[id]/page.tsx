@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 import { TEXT_LIMITS } from '@/lib/text-limits';
 import type { PatrolRoute } from '@/lib/types';
 import { toast } from '@/lib/toast';
-import { ArrowLeft, Download, Plus, QrCode } from 'lucide-react';
+import { ArrowLeft, Download, Plus, QrCode, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 
@@ -27,6 +27,8 @@ export default function PatrolRouteDetailPage() {
   const { user: permUser } = useAuth();
   const canCreateMod = canModule(permUser, 'patrol', 'create');
   const canEditMod = canModule(permUser, 'patrol', 'edit');
+  const canDeleteMod = canModule(permUser, 'patrol', 'delete');
+  const router = useRouter();
   const params = useParams();
   const routeId = Number(params.id);
   const [route, setRoute] = useState<PatrolRoute | null>(null);
@@ -110,6 +112,22 @@ export default function PatrolRouteDetailPage() {
     }
   };
 
+  const removeRoute = () => {
+    if (!route) return;
+    toast.confirm(`Delete route “${route.name}”?`, async () => {
+      try {
+        await api.patrol.deleteRoute(route.id);
+        toast.snack('Route moved to Recycle Bin');
+        router.push('/patrol');
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not delete route');
+      }
+    }, {
+      label: 'Delete',
+      description: 'The route is archived. Scheduled patrols for this route are cancelled.',
+    });
+  };
+
   const downloadQr = async (checkpointId: number, kind: 'png' | 'pdf') => {
     try {
       const blob = await api.patrol.downloadQr(checkpointId, kind);
@@ -152,6 +170,16 @@ export default function PatrolRouteDetailPage() {
                   <Button onClick={() => setOpen(true)}>
                     <Plus className="size-4 mr-1" />
                     Add checkpoint
+                  </Button>
+                ) : null}
+                {canDeleteMod ? (
+                  <Button
+                    variant="outline"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={removeRoute}
+                  >
+                    <Trash2 className="size-4 mr-1" />
+                    Delete
                   </Button>
                 ) : null}
               </div>

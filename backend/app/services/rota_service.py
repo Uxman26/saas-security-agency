@@ -7,9 +7,9 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site, User
+from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftEarlyFinishLog, ShiftLateLog, ShiftOvertimeLog, Site, User
 from app.schemas import RotaDetailResponse, RotaSummaryRow
-from app.services.attendance_service import CANCELLED_PAID, CANCELLED_STATUSES
+from app.services.attendance_service import CANCELLED_PAID, CANCELLED_STATUSES, compute_worked_hours
 from app.services.company_service import get_company_by_user_id
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
@@ -226,6 +226,8 @@ def list_rota_details(
     today = date.today()
     att_map = {}
     late_map = {}
+    ot_map = {}
+    ef_map = {}
     if rows:
         ids = [r.id for r in rows]
         for att in db.query(Attendance).filter(Attendance.assignment_id.in_(ids)).all():
@@ -234,6 +236,22 @@ def list_rota_details(
         for log in db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id.in_(ids)).all():
             if log.assignment_id not in late_map:
                 late_map[log.assignment_id] = log
+        for log in (
+            db.query(ShiftOvertimeLog)
+            .filter(ShiftOvertimeLog.assignment_id.in_(ids))
+            .order_by(ShiftOvertimeLog.id.desc())
+            .all()
+        ):
+            if log.assignment_id not in ot_map:
+                ot_map[log.assignment_id] = log
+        for log in (
+            db.query(ShiftEarlyFinishLog)
+            .filter(ShiftEarlyFinishLog.assignment_id.in_(ids))
+            .order_by(ShiftEarlyFinishLog.id.desc())
+            .all()
+        ):
+            if log.assignment_id not in ef_map:
+                ef_map[log.assignment_id] = log
     out: List[RotaDetailResponse] = []
     # Fingerprints to avoid double-counting draft planner rows already published as assignments
     seen = set()
@@ -246,6 +264,8 @@ def list_rota_details(
     for a in rows:
         att = att_map.get(a.id)
         late_log = late_map.get(a.id)
+        ot_log = ot_map.get(a.id)
+        ef_log = ef_map.get(a.id)
         g = a.guard
         site = a.site
         cli: Optional[Client] = site.client if site else None
@@ -253,6 +273,27 @@ def list_rota_details(
         st = normalize_shift_type(a.shift_type)
         status = _attendance_status(a, att, late_log, today)
         late_m = _late_minutes(a, att, late_log) if status == "late" else None
+        actual = compute_worked_hours(
+            shift_date=a.date,
+            shift_start=a.shift_start,
+            shift_end=a.shift_end,
+            break_minutes=a.break_minutes or 0,
+            booked_at=att.booked_at if att else None,
+            booked_off_at=att.booked_off_at if att else None,
+            overtime_end=ot_log.new_end if ot_log else None,
+            early_finish_end=ef_log.actual_end if ef_log else None,
+        )
+        payable = compute_worked_hours(
+            shift_date=a.date,
+            shift_start=a.shift_start,
+            shift_end=a.shift_end,
+            break_minutes=a.break_minutes or 0,
+            booked_at=att.booked_at if att else None,
+            booked_off_at=att.booked_off_at if att else None,
+            overtime_end=ot_log.new_end if ot_log else None,
+            early_finish_end=ef_log.actual_end if ef_log else None,
+            cap_early_start=True,
+        )
         # A past shift nobody touched also reports "absent", so the status alone cannot
         # tell a recorded absence from a forgotten mark. This says whether anyone marked it.
         marked = bool(late_log) or bool(att and (att.booked_at or att.status))
@@ -271,6 +312,8 @@ def list_rota_details(
                 break_minutes=a.break_minutes or 0,
                 shift_type=st,
                 hours=round(hrs, 2),
+                actual_hours=actual,
+                payable_hours=payable,
                 attendance_status=status,
                 attendance_marked=marked,
                 late_minutes=late_m,

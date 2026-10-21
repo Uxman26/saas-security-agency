@@ -227,6 +227,32 @@ def portal_notifications(
     return [_portal_notification_out(n) for n in rows]
 
 
+@router.get("/notifications/unread-count")
+def portal_notifications_unread_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    return {"count": lead_service.unread_notification_count(db, current_user.id)}
+
+
+@router.post("/notifications/read-all")
+def portal_notifications_read_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    updated = lead_service.mark_all_notifications_read(db, current_user.id)
+    return {"updated": updated}
+
+
+@router.post("/notifications/clear-all")
+def portal_notifications_clear_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    updated = lead_service.clear_all_notifications(db, current_user.id)
+    return {"updated": updated}
+
+
 @router.post("/notifications/{notification_id}/read", response_model=PortalNotificationResponse)
 def portal_notification_read(
     notification_id: int,

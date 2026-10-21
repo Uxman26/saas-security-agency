@@ -293,6 +293,16 @@ def delete_route(db: Session, user: User, route_id: int) -> None:
     if not route:
         raise HTTPException(status_code=404, detail="Route not found")
     _assert_site_in_portal_scope(db, user, route.site_id)
+    try:
+        from app.models import PatrolOccurrence
+        from app.services.patrol_schedule_service import OPEN_STATUSES
+
+        db.query(PatrolOccurrence).filter(
+            PatrolOccurrence.route_id == route.id,
+            PatrolOccurrence.status.in_(OPEN_STATUSES),
+        ).update({"status": "cancelled"}, synchronize_session=False)
+    except Exception:
+        pass
     _bin_archive(route, user.id)
     db.commit()
 
@@ -913,13 +923,17 @@ def list_occurrences(
     company = get_company_by_user_id(db, user.id)
     q = (
         db.query(PatrolOccurrence)
+        .join(PatrolRoute, PatrolOccurrence.route_id == PatrolRoute.id)
         .options(
             joinedload(PatrolOccurrence.site),
             joinedload(PatrolOccurrence.route),
             joinedload(PatrolOccurrence.checkpoint),
             joinedload(PatrolOccurrence.guard),
         )
-        .filter(PatrolOccurrence.company_id == company.id)
+        .filter(
+            PatrolOccurrence.company_id == company.id,
+            PatrolRoute.deleted_at.is_(None),
+        )
     )
     allowed = _portal_route_site_ids(db, user)
     if allowed is not None:
@@ -930,6 +944,8 @@ def list_occurrences(
         q = q.filter(PatrolOccurrence.guard_id == guard_id)
     if status:
         q = q.filter(PatrolOccurrence.status == status)
+    else:
+        q = q.filter(PatrolOccurrence.status != "cancelled")
     if start_date:
         q = q.filter(PatrolOccurrence.scheduled_at >= datetime.combine(start_date, time.min, tzinfo=timezone.utc))
     if end_date:

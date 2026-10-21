@@ -949,6 +949,8 @@ class RotaDetailResponse(BaseModel):
     break_minutes: int = 0
     shift_type: str = "morning"
     hours: float = 0
+    actual_hours: Optional[float] = None
+    payable_hours: Optional[float] = None
     attendance_status: str
     # Whether anyone recorded attendance for this shift. A past shift with no record
     # reports attendance_status "absent" exactly like a marked absence, so this is the
@@ -1429,6 +1431,8 @@ class AttendanceResponse(AttendanceBase):
     overtime_end: Optional[str] = None
     early_finish_end: Optional[str] = None
     late_minutes: Optional[int] = None
+    scheduled_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
 
     class Config:
         from_attributes = True

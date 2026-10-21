@@ -1157,6 +1157,9 @@ class Allowance(Base):
 
 class Attendance(Base):
     __tablename__ = "attendance"
+    __table_args__ = (
+        UniqueConstraint("assignment_id", "guard_id", name="uq_attendance_assignment_guard"),
+    )
     id = Column(Integer, primary_key=True, index=True)
     assignment_id = Column(Integer, ForeignKey("assignments.id"), nullable=False)
     guard_id = Column(Integer, ForeignKey("guards.id"), nullable=False)

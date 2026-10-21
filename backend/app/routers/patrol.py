@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
@@ -276,14 +276,12 @@ def today(
 
 
 @router.get("/check/{qr_token}")
-def public_check_token(qr_token: str, db: Session = Depends(get_db)):
-    """Validate a checkpoint QR token and return geo so mobile can show distance before scan.
-
-    Checkpoint details are only returned when the token is valid (token acts as a capability).
-    Accepts bare tokens or full sticker URLs containing /patrol/check/{token}.
-    """
+def public_check_token(qr_token: str, request: Request, db: Session = Depends(get_db)):
     from app.models import PatrolCheckpoint
     from app.services.patrol_service import _checkpoint_out, normalize_qr_token
+    from app.services.public_rate_limit import enforce_public_rate
+
+    enforce_public_rate(request, key="patrol-check", limit=30)
 
     token = normalize_qr_token(qr_token)
     cp = (

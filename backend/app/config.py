@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # device, so it gets a longer idle window — still bounded, and still subject to
     # logout and the absolute expiry.
     session_remember_idle_days: int = 7
+    # Phones background for hours; 30 minutes of idle would force a full login after
+    # every lunch break. Absolute token `exp` still caps the session.
+    session_mobile_idle_minutes: int = 720
     # How stale last_seen_at may get before we write it again. Without this every
     # authenticated request would issue an UPDATE.
     session_touch_interval_seconds: int = 60

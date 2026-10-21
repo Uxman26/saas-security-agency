@@ -26,6 +26,15 @@ if _is_sqlite:
         pool_timeout=30,
         pool_recycle=1800,
     )
+else:
+    _engine_options.update(
+        poolclass=QueuePool,
+        pool_size=20,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+    )
 
 engine = create_engine(
     settings.database_url,

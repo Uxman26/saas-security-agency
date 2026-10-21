@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftAuditLog, ShiftLateLog, Site
 from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
@@ -302,6 +302,159 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
     )
 
 
+def _compact_list_item(plan: RotaPlan) -> RotaPlanListItem:
+    return RotaPlanListItem(
+        id=plan.id,
+        name=plan.name,
+        start_date=plan.start_date,
+        end_date=plan.end_date,
+        day_count=plan.day_count,
+        view_mode=plan.view_mode,
+        budget=float(plan.budget or 0),
+        status=plan.status,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+        published_at=plan.published_at,
+    )
+
+
+def _to_list_items(db: Session, plans: List[RotaPlan]) -> List[RotaPlanListItem]:
+    if not plans:
+        return []
+    published_ids = [p.id for p in plans if p.status == "published"]
+    counts: dict = {}
+    staff_counts: dict = {}
+    names: dict = {}
+    unmarked: dict = {}
+    published_guards: dict = {}
+    if published_ids:
+        for pid, sc, stc in (
+            db.query(
+                Assignment.rota_plan_id,
+                func.count(Assignment.id),
+                func.count(func.distinct(Assignment.guard_id)),
+            )
+            .filter(Assignment.rota_plan_id.in_(published_ids))
+            .group_by(Assignment.rota_plan_id)
+        ):
+            counts[pid] = sc
+            staff_counts[pid] = stc
+        for pid, sname, cname in (
+            db.query(Assignment.rota_plan_id, Site.name, Client.name)
+            .select_from(Assignment)
+            .join(Site, Site.id == Assignment.site_id)
+            .outerjoin(Client, Client.id == Site.client_id)
+            .filter(Assignment.rota_plan_id.in_(published_ids))
+            .distinct()
+        ):
+            bucket = names.setdefault(pid, (set(), set()))
+            if sname:
+                bucket[0].add(sname)
+            if cname:
+                bucket[1].add(cname)
+        for pid, gid in (
+            db.query(Assignment.rota_plan_id, Assignment.guard_id)
+            .filter(Assignment.rota_plan_id.in_(published_ids), Assignment.guard_id.isnot(None))
+            .distinct()
+        ):
+            published_guards.setdefault(pid, set()).add(int(gid))
+        for pid, n in (
+            db.query(Assignment.rota_plan_id, func.count(func.distinct(Assignment.id)))
+            .outerjoin(Attendance, Attendance.assignment_id == Assignment.id)
+            .outerjoin(ShiftLateLog, ShiftLateLog.assignment_id == Assignment.id)
+            .filter(
+                Assignment.rota_plan_id.in_(published_ids),
+                Assignment.date <= date.today(),
+                ShiftLateLog.id.is_(None),
+                or_(
+                    Attendance.id.is_(None),
+                    and_(
+                        Attendance.booked_at.is_(None),
+                        or_(Attendance.status.is_(None), Attendance.status == ""),
+                    ),
+                ),
+            )
+            .group_by(Assignment.rota_plan_id)
+        ):
+            unmarked[pid] = n
+
+    draft_site_lower: dict = {}
+    company_id = plans[0].company_id
+    draft_names = []
+    for plan in plans:
+        if plan.status != "published":
+            draft_names.extend(_site_names_from_json(plan.planner_data))
+    lowered = list({n.lower() for n in draft_names if n})
+    if lowered:
+        for sname, cname in (
+            db.query(Site.name, Client.name)
+            .outerjoin(Client, Client.id == Site.client_id)
+            .filter(Site.company_id == company_id, func.lower(Site.name).in_(lowered))
+            .all()
+        ):
+            if sname:
+                draft_site_lower[sname.lower()] = cname
+
+    out: List[RotaPlanListItem] = []
+    for plan in plans:
+        span = _span_from_planner_days(plan.planner_data)
+        start_date = span[0] if span else plan.start_date
+        end_date = span[1] if span else plan.end_date
+        day_count = span[2] if span else plan.day_count
+        if plan.status == "published":
+            site_set, client_set = names.get(plan.id, (set(), set()))
+            with_shifts = _staff_ids_with_shifts_from_json(plan.planner_data)
+            unpublished = len(with_shifts - published_guards.get(plan.id, set())) if with_shifts else 0
+            out.append(
+                RotaPlanListItem(
+                    id=plan.id,
+                    name=plan.name,
+                    start_date=start_date,
+                    end_date=end_date,
+                    day_count=day_count,
+                    view_mode=plan.view_mode,
+                    budget=float(plan.budget or 0),
+                    status=plan.status,
+                    shift_count=int(counts.get(plan.id, 0) or 0),
+                    staff_count=int(staff_counts.get(plan.id, 0) or 0),
+                    site_names=sorted(site_set),
+                    client_names=sorted(client_set),
+                    unmarked_attendance_count=int(unmarked.get(plan.id, 0) or 0),
+                    unpublished_staff_count=unpublished,
+                    created_at=plan.created_at,
+                    updated_at=plan.updated_at,
+                    published_at=plan.published_at,
+                )
+            )
+            continue
+        sites = _site_names_from_json(plan.planner_data)
+        clients = sorted(
+            {draft_site_lower[n.lower()] for n in sites if n and n.lower() in draft_site_lower and draft_site_lower[n.lower()]}
+        )
+        out.append(
+            RotaPlanListItem(
+                id=plan.id,
+                name=plan.name,
+                start_date=start_date,
+                end_date=end_date,
+                day_count=day_count,
+                view_mode=plan.view_mode,
+                budget=float(plan.budget or 0),
+                status=plan.status,
+                shift_count=_count_shifts_from_json(plan.planner_data),
+                staff_count=_count_staff_from_json(plan.planner_data),
+                site_names=sorted(sites),
+                client_names=clients,
+                unmarked_attendance_count=0,
+                unpublished_staff_count=0,
+                created_at=plan.created_at,
+                updated_at=plan.updated_at,
+                published_at=plan.published_at,
+            )
+        )
+    return out
+
+
 def _plan_matches_scope(db: Session, plan: RotaPlan, scope: WorkScope, site_ids_by_name: dict) -> bool:
     """Whether a rota holds at least one shift the filters allow.
 
@@ -345,6 +498,7 @@ def list_rota_plans(
     sub_contractor_id: Optional[str] = None,
     guard_id: Optional[int] = None,
     job_title: Optional[str] = None,
+    compact: bool = False,
 ) -> List[RotaPlanListItem]:
     """The rota list, optionally narrowed to rotas that contain matching shifts.
 
@@ -353,12 +507,7 @@ def list_rota_plans(
     the one pick.
     """
     company = get_company_by_user_id(db, user_id)
-    rows = (
-        db.query(RotaPlan)
-        .filter(RotaPlan.company_id == company.id)
-        .order_by(RotaPlan.created_at.desc())
-        .all()
-    )
+    q = db.query(RotaPlan).filter(RotaPlan.company_id == company.id)
     scope = resolve_work_scope(
         db,
         company.id,
@@ -369,6 +518,31 @@ def list_rota_plans(
         guard_id=guard_id,
         job_title=job_title,
     )
+    portal = _portal_user(db, user_id)
+    if compact and not portal and not scope.active:
+        rows = (
+            q.options(
+                load_only(
+                    RotaPlan.id,
+                    RotaPlan.company_id,
+                    RotaPlan.name,
+                    RotaPlan.start_date,
+                    RotaPlan.end_date,
+                    RotaPlan.day_count,
+                    RotaPlan.view_mode,
+                    RotaPlan.budget,
+                    RotaPlan.status,
+                    RotaPlan.created_at,
+                    RotaPlan.updated_at,
+                    RotaPlan.published_at,
+                )
+            )
+            .order_by(RotaPlan.created_at.desc())
+            .all()
+        )
+        return [_compact_list_item(p) for p in rows]
+
+    rows = q.order_by(RotaPlan.created_at.desc()).all()
     if scope.active:
         site_ids_by_name = {
             (name or "").strip().lower(): sid
@@ -376,9 +550,8 @@ def list_rota_plans(
             if name
         }
         rows = [p for p in rows if _plan_matches_scope(db, p, scope, site_ids_by_name)]
-    portal = _portal_user(db, user_id)
     if not portal:
-        return [_to_list_item(db, p) for p in rows]
+        return _to_list_items(db, rows)
 
     # A portal login sees a rota only if it holds shifts it is allowed to read — their
     # own sites for a Client, their own shifts for a member of Staff — and the counts
@@ -1545,8 +1718,12 @@ def publish_rota_plan(
                         shift_start=sh.get("start"),
                         shift_end=sh.get("end"),
                         break_minutes=break_m,
-                        shift_type=normalize_shift_type(None),
+                        shift_type=normalize_shift_type(
+                            sh.get("shiftType") or sh.get("shift_type"),
+                            sh.get("start"),
+                        ),
                         shift_rate=locked_rate,
+                        created_by_user_id=user_id,
                     )
                 db.add(assignment)
                 db.flush()

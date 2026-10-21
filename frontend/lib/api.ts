@@ -514,8 +514,10 @@ export const api = {
       request<import('./types').ShiftLateLog>('/assignments/by-shift/lateness', { method: 'POST', body: JSON.stringify(data) }),
   },
   rotaPlans: {
-    list: (params?: WorkFilterParams): Promise<RotaPlanListItem[]> => {
-      const qs = appendWorkFilters(new URLSearchParams(), params).toString();
+    list: (params?: WorkFilterParams & { compact?: boolean }): Promise<RotaPlanListItem[]> => {
+      const q = appendWorkFilters(new URLSearchParams(), params);
+      if (params?.compact) q.set('compact', 'true');
+      const qs = q.toString();
       return request<RotaPlanListItem[]>(`/rotas${qs ? `?${qs}` : ''}`);
     },
     get: (id: number): Promise<RotaPlanDetail> => request<RotaPlanDetail>(`/rotas/${id}`),

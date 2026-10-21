@@ -270,7 +270,7 @@ def list_rota_details(
         site = a.site
         cli: Optional[Client] = site.client if site else None
         hrs = shift_hours(a)
-        st = normalize_shift_type(a.shift_type)
+        st = normalize_shift_type(a.shift_type, a.shift_start)
         status = _attendance_status(a, att, late_log, today)
         late_m = _late_minutes(a, att, late_log) if status == "late" else None
         actual = compute_worked_hours(
@@ -454,7 +454,10 @@ def _planner_shift_details(
                             shift_start=start_t or None,
                             shift_end=end_t or None,
                             break_minutes=break_m,
-                            shift_type=normalize_shift_type(None, start_t),
+                            shift_type=normalize_shift_type(
+                                sh.get("shiftType") or sh.get("shift_type"),
+                                start_t,
+                            ),
                             hours=round(hrs, 2),
                             attendance_status=status,
                             late_minutes=None,

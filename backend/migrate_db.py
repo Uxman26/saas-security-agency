@@ -289,12 +289,81 @@ def _restore_scheduled_assignment_times():
         logging.getLogger(__name__).exception("restore scheduled assignment times failed")
 
 
+def _ensure_clock_in_location_columns():
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("attendance"):
+            return
+        cols = {c["name"] for c in insp.get_columns("attendance")}
+        dialect = engine.dialect.name
+        str_type = "VARCHAR(255)" if dialect == "postgresql" else "TEXT"
+        float_type = "DOUBLE PRECISION" if dialect == "postgresql" else "REAL"
+        with engine.begin() as conn:
+            if "location_name" not in cols:
+                conn.execute(text(f"ALTER TABLE attendance ADD COLUMN location_name {str_type}"))
+            if "latitude" not in cols:
+                conn.execute(text(f"ALTER TABLE attendance ADD COLUMN latitude {float_type}"))
+            if "longitude" not in cols:
+                conn.execute(text(f"ALTER TABLE attendance ADD COLUMN longitude {float_type}"))
+        if insp.has_table("assignments"):
+            a_cols = {c["name"] for c in insp.get_columns("assignments")}
+            if "created_by_user_id" not in a_cols:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE assignments ADD COLUMN created_by_user_id INTEGER"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("clock-in location columns migration failed")
+
+
+def _backfill_assignment_shift_types():
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+        from app.services.rota_service import infer_shift_type_from_start, parse_shift_minutes
+
+        insp = inspect(engine)
+        if not insp.has_table("assignments"):
+            return
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, shift_start, shift_end, shift_type FROM assignments "
+                    "WHERE lower(coalesce(shift_type, 'morning')) = 'morning'"
+                )
+            ).fetchall()
+            for row in rows:
+                start = row[1]
+                end = row[2]
+                start_m = parse_shift_minutes(start)
+                end_m = parse_shift_minutes(end)
+                if start_m is not None and end_m is not None and end_m <= start_m:
+                    st = "night"
+                else:
+                    st = infer_shift_type_from_start(start)
+                if st == "morning":
+                    continue
+                conn.execute(
+                    text("UPDATE assignments SET shift_type = :st WHERE id = :id"),
+                    {"st": st, "id": row[0]},
+                )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("assignment shift_type backfill failed")
+
+
 def _run_migrations():
     _ensure_user_theme_preference()
     _ensure_user_notification_sound_muted()
     _ensure_notification_cleared_at()
     _ensure_user_company_memberships()
     _migrate_legacy_day_shift_type()
+    _backfill_assignment_shift_types()
+    _ensure_clock_in_location_columns()
     _ensure_unique_attendance()
     _restore_scheduled_assignment_times()
     path = get_db_path()
@@ -349,7 +418,11 @@ def _run_migrations():
         ("assignments", "break_minutes", "INTEGER DEFAULT 0"),
         ("assignments", "shift_type", "TEXT DEFAULT 'morning'"),
         ("assignments", "shift_rate", "REAL"),
+        ("assignments", "created_by_user_id", "INTEGER"),
         ("assignments", "updated_at", "TEXT"),
+        ("attendance", "location_name", "TEXT"),
+        ("attendance", "latitude", "REAL"),
+        ("attendance", "longitude", "REAL"),
         ("sub_contractors", "updated_at", "TEXT"),
         ("guards", "dbs_status", "TEXT"),
         ("guards", "weekly_contracted_hours", "REAL DEFAULT 40"),
@@ -1587,9 +1660,11 @@ def _run_migrations():
         "CREATE INDEX IF NOT EXISTS ix_api_usage_company_logged ON api_usage_logs(company_id, logged_at)",
         # Rota / assignment lookups: by plan on publish, by guard or site on the grid.
         "CREATE INDEX IF NOT EXISTS ix_assignments_rota_plan ON assignments(rota_plan_id)",
+        "CREATE INDEX IF NOT EXISTS ix_assignments_rota_plan_date ON assignments(rota_plan_id, date)",
         "CREATE INDEX IF NOT EXISTS ix_assignments_guard_date ON assignments(guard_id, date)",
         "CREATE INDEX IF NOT EXISTS ix_assignments_site_date ON assignments(site_id, date)",
         "CREATE INDEX IF NOT EXISTS ix_assignments_date ON assignments(date)",
+        "CREATE INDEX IF NOT EXISTS ix_guard_rates_guard ON guard_rates(guard_id)",
         "CREATE INDEX IF NOT EXISTS ix_attendance_assignment ON attendance(assignment_id)",
         "CREATE INDEX IF NOT EXISTS ix_attendance_guard ON attendance(guard_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS uq_attendance_assignment_guard ON attendance(assignment_id, guard_id)",

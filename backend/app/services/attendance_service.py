@@ -97,6 +97,17 @@ def _hhmm(dt: datetime) -> str:
     return f"{dt.hour:02d}:{dt.minute:02d}"
 
 
+def _site_location_label(site) -> str:
+    if not site:
+        return ""
+    parts = [
+        (getattr(site, "name", None) or "").strip(),
+        (getattr(site, "address", None) or "").strip(),
+        (getattr(site, "postcode", None) or "").strip(),
+    ]
+    return ", ".join(p for p in parts if p)
+
+
 def scheduled_shift_hours(assignment) -> Optional[float]:
     start = _assignment_shift_start_dt(assignment)
     end = _assignment_shift_end_dt(assignment)
@@ -311,6 +322,9 @@ def _enrich_attendance_rows(db: Session, rows: List[Attendance]) -> List[Attenda
                 )
                 if a
                 else None,
+                location_name=getattr(att, "location_name", None),
+                latitude=getattr(att, "latitude", None),
+                longitude=getattr(att, "longitude", None),
             )
         )
     return out
@@ -705,7 +719,16 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
     if lat is not None and lng is not None:
         captured = data.captured_at.isoformat() if data.captured_at else now_utc.isoformat()
         acc_part = f" ±{float(accuracy):.1f}m" if accuracy is not None else ""
-        gps_note = f"GPS {float(lat):.6f},{float(lng):.6f}{acc_part} @ {captured}"
+        loc_name = (getattr(data, "location_name", None) or "").strip()
+        if not loc_name:
+            loc_name = _site_location_label(site)
+        if not data.book_off:
+            att.latitude = float(lat)
+            att.longitude = float(lng)
+            if loc_name:
+                att.location_name = loc_name[:255]
+        gps_label = f"{loc_name} ({float(lat):.6f},{float(lng):.6f})" if loc_name else f"{float(lat):.6f},{float(lng):.6f}"
+        gps_note = f"GPS {gps_label}{acc_part} @ {captured}"
         if data.device_id:
             gps_note = f"{gps_note} device={data.device_id}"
         att.note = _append_note(att.note, gps_note)

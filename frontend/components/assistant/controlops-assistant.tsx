@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bot, Loader2, Send, Sparkles, X } from 'lucide-react';
@@ -24,11 +25,19 @@ const FAB_SIZE = 48;
 const FAB_MARGIN = 16;
 const FAB_POS_KEY = 'controlops-assistant-pos';
 
+function rotaFabInset() {
+  if (typeof window === 'undefined') return { x: 0, y: 0 };
+  const path = window.location.pathname || '';
+  if (!path.startsWith('/rota')) return { x: 0, y: 0 };
+  return { x: 8, y: 72 };
+}
+
 function defaultFabPos() {
   if (typeof window === 'undefined') return { x: FAB_MARGIN, y: FAB_MARGIN };
+  const inset = rotaFabInset();
   return {
-    x: Math.max(FAB_MARGIN, window.innerWidth - FAB_SIZE - FAB_MARGIN),
-    y: Math.max(FAB_MARGIN, window.innerHeight - FAB_SIZE - FAB_MARGIN),
+    x: Math.max(FAB_MARGIN, window.innerWidth - FAB_SIZE - FAB_MARGIN - inset.x),
+    y: Math.max(FAB_MARGIN, window.innerHeight - FAB_SIZE - FAB_MARGIN - inset.y),
   };
 }
 
@@ -46,9 +55,16 @@ function loadFabPos() {
 
 function clampFabPos(x: number, y: number) {
   if (typeof window === 'undefined') return { x, y };
+  const inset = rotaFabInset();
   return {
-    x: Math.min(Math.max(FAB_MARGIN, x), Math.max(FAB_MARGIN, window.innerWidth - FAB_SIZE - FAB_MARGIN)),
-    y: Math.min(Math.max(FAB_MARGIN, y), Math.max(FAB_MARGIN, window.innerHeight - FAB_SIZE - FAB_MARGIN)),
+    x: Math.min(
+      Math.max(FAB_MARGIN, x),
+      Math.max(FAB_MARGIN, window.innerWidth - FAB_SIZE - FAB_MARGIN - inset.x)
+    ),
+    y: Math.min(
+      Math.max(FAB_MARGIN, y),
+      Math.max(FAB_MARGIN, window.innerHeight - FAB_SIZE - FAB_MARGIN - inset.y)
+    ),
   };
 }
 
@@ -98,6 +114,7 @@ export function ControlOpsAssistant({
   ]);
   const endRef = useRef<HTMLDivElement>(null);
   const [fabPos, setFabPos] = useState(defaultFabPos);
+  const [portalReady, setPortalReady] = useState(false);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -108,11 +125,16 @@ export function ControlOpsAssistant({
   } | null>(null);
 
   useEffect(() => {
+    setPortalReady(true);
     setFabPos(loadFabPos());
     const onResize = () => setFabPos((p) => clampFabPos(p.x, p.y));
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  useEffect(() => {
+    setFabPos((p) => clampFabPos(p.x, p.y));
+  }, [pathname]);
 
   useEffect(() => {
     setMessages((m) =>
@@ -181,7 +203,7 @@ export function ControlOpsAssistant({
     <div
       className={cn(
         'flex flex-col bg-background border shadow-lg',
-        embedded ? 'h-full min-h-[320px] rounded-lg' : 'fixed z-50 rounded-xl',
+        embedded ? 'h-full min-h-[320px] rounded-lg' : 'fixed z-[80] rounded-xl',
         className
       )}
       style={
@@ -383,13 +405,13 @@ export function ControlOpsAssistant({
     setOpen((v) => !v);
   };
 
-  return (
+  const overlay = (
     <>
       {open ? panel : null}
       <Button
         type="button"
         size="icon"
-        className="fixed z-50 size-12 cursor-grab touch-none rounded-full shadow-lg bg-primary hover:bg-primary-hover text-primary-foreground active:cursor-grabbing"
+        className="fixed z-[80] size-12 cursor-grab touch-none rounded-full shadow-lg bg-primary hover:bg-primary-hover text-primary-foreground active:cursor-grabbing"
         style={{ left: fabPos.x, top: fabPos.y }}
         onPointerDown={onFabPointerDown}
         onPointerMove={onFabPointerMove}
@@ -401,4 +423,9 @@ export function ControlOpsAssistant({
       </Button>
     </>
   );
+
+  if (portalReady && typeof document !== 'undefined') {
+    return createPortal(overlay, document.body);
+  }
+  return overlay;
 }

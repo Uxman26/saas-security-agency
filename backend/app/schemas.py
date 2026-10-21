@@ -1433,6 +1433,9 @@ class AttendanceResponse(AttendanceBase):
     late_minutes: Optional[int] = None
     scheduled_hours: Optional[float] = None
     actual_hours: Optional[float] = None
+    location_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -1476,6 +1479,7 @@ class BookingOnOff(BaseModel):
     accuracy: Optional[float] = None  # alias used by some clients
     device_id: Optional[str] = None
     captured_at: Optional[datetime] = None
+    location_name: Optional[str] = None
     # Late arrival / early finish / overtime reason from Clock In / Clock Out.
     note: Optional[str] = None
 

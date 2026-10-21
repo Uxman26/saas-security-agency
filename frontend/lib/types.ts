@@ -2040,6 +2040,9 @@ export interface Attendance {
   late_minutes?: number | null;
   scheduled_hours?: number | null;
   actual_hours?: number | null;
+  location_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface Payment {

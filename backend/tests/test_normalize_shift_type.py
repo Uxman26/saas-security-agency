@@ -20,6 +20,12 @@ def test_empty_infers_morning_default():
     assert infer_shift_type_from_start("09:30") == "morning"
 
 
+def test_empty_infers_from_start_time():
+    assert normalize_shift_type(None, "13:00") == "afternoon"
+    assert normalize_shift_type("", "17:15") == "evening"
+    assert normalize_shift_type(None, "22:00") == "night"
+
+
 def test_smtp_status_never_none():
     from app.services.platform_smtp_service import smtp_status
 

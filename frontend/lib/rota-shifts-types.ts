@@ -159,6 +159,18 @@ export function shiftTypeOption(value: ShiftType | null | undefined) {
   return SHIFT_TYPE_OPTS.find((o) => o.value === value) ?? null;
 }
 
+export function shiftSiteBarColor(
+  shift: Pick<ShiftRec, 'color' | 'site' | 'shiftType'>,
+  sites?: Array<{ name?: string | null; color?: string | null }> | null,
+  fallback = 'var(--shift-night)'
+) {
+  const siteName = (shift.site || '').trim().toLowerCase();
+  const fromSite = siteName
+    ? sites?.find((s) => (s.name || '').trim().toLowerCase() === siteName)?.color
+    : undefined;
+  return (fromSite || shift.color || shiftTypeOption(shift.shiftType)?.bar || fallback).trim();
+}
+
 /** Accepts anything stored on old shifts and returns a valid type or null. */
 export function normalizeShiftType(value: unknown): ShiftType | null {
   const v = String(value ?? '').trim().toLowerCase();

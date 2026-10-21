@@ -67,6 +67,22 @@ function displayStatus(status?: string | null) {
   return attStatusLabel(normalizeAttStatus(status));
 }
 
+function attendanceLocation(a: Attendance): { name?: string; lat?: number; lng?: number } {
+  if (a.location_name || a.latitude != null) {
+    return {
+      name: a.location_name ?? undefined,
+      lat: a.latitude ?? undefined,
+      lng: a.longitude ?? undefined,
+    };
+  }
+  const note = a.note || '';
+  const named = note.match(/GPS\s+(.+?)\s+\((-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\)/);
+  if (named) return { name: named[1], lat: Number(named[2]), lng: Number(named[3]) };
+  const bare = note.match(/GPS\s+(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+  if (bare) return { lat: Number(bare[1]), lng: Number(bare[2]) };
+  return {};
+}
+
 function statusTone(status?: string | null): 'positive' | 'danger' | 'warning' | 'muted' | 'info' {
   const s = normalizeAttStatus(status);
   if (s === 'on_time') return 'positive';
@@ -1119,6 +1135,7 @@ export default function AttendancePage() {
                         <TableRow>
                           <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <TableHead>Location</TableHead>
                           <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <TableHead>Flags</TableHead>
@@ -1155,6 +1172,24 @@ export default function AttendancePage() {
                                 </div>
                               </TableCell>
                               <TableCell className="whitespace-nowrap">{a.site_name || '—'}</TableCell>
+                              <TableCell className="max-w-[220px] text-sm">
+                                {(() => {
+                                  const loc = attendanceLocation(a);
+                                  if (!loc.name && loc.lat == null) return '—';
+                                  return (
+                                    <div className="min-w-0">
+                                      <div className="truncate font-medium" title={loc.name}>
+                                        {loc.name || 'GPS'}
+                                      </div>
+                                      {loc.lat != null && loc.lng != null ? (
+                                        <div className="truncate text-xs text-muted-foreground tabular-nums">
+                                          {loc.lat.toFixed(6)}, {loc.lng.toFixed(6)}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })()}
+                              </TableCell>
                               <TableCell className="whitespace-nowrap text-sm">
                                 {shiftDateOf(a) || '—'}
                                 {a.shift_start ? (

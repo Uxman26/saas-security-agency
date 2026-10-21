@@ -50,6 +50,7 @@ def create_assignment(db: Session, assignment: AssignmentCreate, user_id: int) -
 
     data = assignment.model_dump() if hasattr(assignment, "model_dump") else assignment.dict()
     data["shift_type"] = normalize_shift_type(data.get("shift_type"), data.get("shift_start"))
+    data["created_by_user_id"] = user_id
     db_assignment = Assignment(**data)
     db.add(db_assignment)
     db.flush()

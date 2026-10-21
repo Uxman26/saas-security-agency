@@ -10,12 +10,13 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { guardsToEmployees, profileShiftRate } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
 import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
-import { SHIFT_COLOR_OPTS } from '@/lib/rota-shifts-types';
+import { SHIFT_COLOR_OPTS, classifyShiftType } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
 import { addDays } from 'date-fns';
 
@@ -168,6 +169,7 @@ type Ctx = {
 const RotaCtx = createContext<Ctx | null>(null);
 
 export function RotaShiftsProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<RotaJsState>(defaultState);
   const [rotaPlanId, setRotaPlanId] = useState<number | null>(null);
   const [publishedGuardIds, setPublishedGuardIdsState] = useState<Set<string>>(() => new Set());
@@ -179,6 +181,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const poolRef = useRef(pool);
+  poolRef.current = pool;
+  const siteNamesRef = useRef(siteNames);
+  siteNamesRef.current = siteNames;
+  const lastSavedPayloadRef = useRef<string | null>(null);
+  const saveGenRef = useRef(0);
   const undoStackRef = useRef<
     { label: string; shifts: RotaJsState['shifts']; attendance: RotaJsState['attendance'] }[]
   >([]);
@@ -256,7 +264,16 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     void (async () => {
       setPoolLoading(true);
       try {
-        const [guards, sites] = await Promise.all([api.guards.list(), api.sites.list()]);
+        const [guards, sites] = await Promise.all([
+          queryClient.fetchQuery({
+            queryKey: ['guards', '', '', '', 'active'],
+            queryFn: () => api.guards.list(),
+          }),
+          queryClient.fetchQuery({
+            queryKey: ['sites', 'list', 'active'],
+            queryFn: () => api.sites.list({ view: 'active' }),
+          }),
+        ]);
         if (cancelled) return;
         const freshPool = guardsToEmployees(guards);
         setPool(freshPool);
@@ -265,7 +282,6 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         for (const s of sites) {
           const staff = s.staff_hourly_rate != null && !Number.isNaN(Number(s.staff_hourly_rate)) ? Number(s.staff_hourly_rate) : null;
           const siteRate = s.default_hourly_rate != null && !Number.isNaN(Number(s.default_hourly_rate)) ? Number(s.default_hourly_rate) : null;
-          // Payable prefers staff rate; fall back to site rate for older data
           const pay = staff != null && staff > 0 ? staff : siteRate;
           if (pay != null && pay > 0) {
             rates[s.name.trim().toLowerCase()] = pay;
@@ -273,10 +289,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         }
         setSiteRateByName(rates);
 
-        // Enrich staff with latest guard hourly rates (used for Payable fallback)
         const rateRows: Array<readonly [string, number] | null> = [];
         const noProfileRate = guards.filter((g) => profileShiftRate(g) == null);
-        // Keep request concurrency below the API's database capacity.
         for (let i = 0; i < noProfileRate.length && !cancelled; i += 3) {
           const batch = noProfileRate.slice(i, i + 3);
           const rows = await Promise.all(
@@ -309,22 +323,27 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         );
         setPool(poolWithRates);
         const byId = new Map(poolWithRates.map((e) => [e.id, e]));
-        // Keep rota staff name + job title in sync with Staff profile
-        setState((prev) => ({
-          ...prev,
-          employees: prev.employees.map((e) => {
-            const live = byId.get(e.id);
-            if (!live) return gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e;
-            return {
-              ...e,
-              name: live.name || e.name,
-              role: live.role || e.role,
-              photoUrl: live.photoUrl ?? e.photoUrl,
-              phone: live.phone ?? e.phone,
-              hourlyRate: gRates[e.id] ?? e.hourlyRate ?? live.hourlyRate,
-            };
-          }),
-        }));
+        setState((prev) => {
+          const next = {
+            ...prev,
+            employees: prev.employees.map((e) => {
+              const live = byId.get(e.id);
+              if (!live) return gRates[e.id] != null ? { ...e, hourlyRate: gRates[e.id] } : e;
+              return {
+                ...e,
+                name: live.name || e.name,
+                role: live.role || e.role,
+                photoUrl: live.photoUrl ?? e.photoUrl,
+                phone: live.phone ?? e.phone,
+                hourlyRate: gRates[e.id] ?? e.hourlyRate ?? live.hourlyRate,
+              };
+            }),
+          };
+          if (prev.days.length > 0) {
+            lastSavedPayloadRef.current = serializePlannerState(next);
+          }
+          return next;
+        });
       } catch {
         if (!cancelled) {
           setPool([]);
@@ -339,7 +358,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [queryClient]);
 
   const resolveShiftRate = useCallback(
     (sh: { site?: string; shiftRate?: number | null }, empId?: string) => {
@@ -397,15 +416,18 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     if (!rotaPlanId || s.days.length === 0) return;
     const undoOf = pendingUndoLabelRef.current;
     pendingUndoLabelRef.current = null;
+    const payload = serializePlannerState(s);
+    saveGenRef.current += 1;
     const updated = await api.rotaPlans.update(rotaPlanId, {
       name: s.rotaName,
       view_mode: s.rotaView,
       budget: s.budget,
       day_count: s.days.length,
       start_date: s.days[0],
-      planner_data: serializePlannerState(s),
+      planner_data: payload,
       ...(undoOf ? { is_undo: true, undo_of: undoOf } : {}),
     });
+    lastSavedPayloadRef.current = payload;
     if (updated.published_guard_ids) {
       setPublishedGuardIds(updated.published_guard_ids);
     }
@@ -413,9 +435,14 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!rotaPlanId || state.days.length === 0) return;
+    const payload = serializePlannerState(state);
+    if (payload === lastSavedPayloadRef.current) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    const gen = ++saveGenRef.current;
     saveTimer.current = setTimeout(() => {
       const s = stateRef.current;
+      const nextPayload = serializePlannerState(s);
+      if (nextPayload === lastSavedPayloadRef.current) return;
       const undoOf = pendingUndoLabelRef.current;
       pendingUndoLabelRef.current = null;
       void api.rotaPlans
@@ -425,10 +452,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           budget: s.budget,
           day_count: s.days.length,
           start_date: s.days[0],
-          planner_data: serializePlannerState(s),
+          planner_data: nextPayload,
           ...(undoOf ? { is_undo: true, undo_of: undoOf } : {}),
         })
         .then((updated) => {
+          if (gen !== saveGenRef.current) return;
+          lastSavedPayloadRef.current = nextPayload;
           if (updated.published_guard_ids) {
             setPublishedGuardIds(updated.published_guard_ids);
           }
@@ -442,11 +471,18 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
   const loadRotaPlan = useCallback(
     (plan: RotaPlanDetail, bootstrap?: InitPayload) => {
+      saveGenRef.current += 1;
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      const poolNow = poolRef.current;
+      const siteNamesNow = siteNamesRef.current;
       setRotaPlanId(plan.id);
       setPublishedGuardIds(plan.published_guard_ids || []);
       const syncFromPool = (employees: EmployeeRec[]): EmployeeRec[] => {
-        if (!pool.length) return employees;
-        const byId = new Map(pool.map((e) => [e.id, e]));
+        if (!poolNow.length) return employees;
+        const byId = new Map(poolNow.map((e) => [e.id, e]));
         return employees.map((e) => {
           const live = byId.get(e.id);
           if (!live) return e;
@@ -460,10 +496,16 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           };
         });
       };
+      const commit = (next: RotaJsState) => {
+        lastSavedPayloadRef.current = serializePlannerState(next);
+        setState(next);
+      };
       if (plan.planner_data) {
         setState((s) => {
           const next = applyPlannerPayload(s, plan.planner_data, plan.name);
-          return { ...next, employees: syncFromPool(next.employees) };
+          const synced = { ...next, employees: syncFromPool(next.employees) };
+          lastSavedPayloadRef.current = serializePlannerState(synced);
+          return synced;
         });
         return;
       }
@@ -471,16 +513,16 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         const days = buildDayRange(bootstrap.startDate, bootstrap.dayCount);
         let employees: EmployeeRec[] = [];
         let shifts = emptyShifts();
-        if (bootstrap.copySeed && pool.length > 0) {
-          employees = pool.slice(0, Math.min(5, pool.length));
-          shifts = seedSampleShifts(days, pool, siteNames);
-        } else if (bootstrap.staffIds?.length && pool.length > 0) {
+        if (bootstrap.copySeed && poolNow.length > 0) {
+          employees = poolNow.slice(0, Math.min(5, poolNow.length));
+          shifts = seedSampleShifts(days, poolNow, siteNamesNow);
+        } else if (bootstrap.staffIds?.length && poolNow.length > 0) {
           const idSet = new Set(bootstrap.staffIds);
-          employees = pool.filter((e) => idSet.has(e.id));
-        } else if (bootstrap.includeAllStaff && pool.length > 0) {
-          employees = [...pool];
+          employees = poolNow.filter((e) => idSet.has(e.id));
+        } else if (bootstrap.includeAllStaff && poolNow.length > 0) {
+          employees = [...poolNow];
         }
-        setState({
+        commit({
           ...defaultState(),
           rotaName: plan.name,
           rotaView: (plan.view_mode === 'dnd' ? 'table' : plan.view_mode as RotaViewMode) || bootstrap.view,
@@ -491,15 +533,19 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           selectedColor: SHIFT_COLOR_OPTS[0],
         });
       } else {
-        setState((s) => ({
-          ...applyPlannerPayload(s, null, plan.name),
-          rotaView: (plan.view_mode === 'dnd' ? 'table' : plan.view_mode as RotaViewMode) || 'table',
-          days: buildDayRange(plan.start_date, plan.day_count),
-          budget: plan.budget ?? 0,
-        }));
+        setState((s) => {
+          const next = {
+            ...applyPlannerPayload(s, null, plan.name),
+            rotaView: (plan.view_mode === 'dnd' ? 'table' : plan.view_mode as RotaViewMode) || 'table',
+            days: buildDayRange(plan.start_date, plan.day_count),
+            budget: plan.budget ?? 0,
+          };
+          lastSavedPayloadRef.current = serializePlannerState(next);
+          return next;
+        });
       }
     },
-    [pool, siteNames, setPublishedGuardIds]
+    [setPublishedGuardIds]
   );
 
   const setRotaView = useCallback((rotaView: RotaViewMode) => {
@@ -598,13 +644,17 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   );
 
   const refreshPool = useCallback(async () => {
-    const guards = await api.guards.list();
+    const guards = await queryClient.fetchQuery({
+      queryKey: ['guards', '', '', '', 'active'],
+      queryFn: () => api.guards.list(),
+      staleTime: 0,
+    });
     const fresh = guardsToEmployees(guards).map((e) =>
       e.hourlyRate == null && guardRateById[e.id] != null ? { ...e, hourlyRate: guardRateById[e.id] } : e
     );
     setPool(fresh);
     return fresh;
-  }, [guardRateById]);
+  }, [guardRateById, queryClient]);
 
   const addEmployeeRecords = useCallback((emps: EmployeeRec[]) => {
     if (!emps.length) return;
@@ -709,7 +759,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       pushUndoSnapshot('Assign / edit shift');
       setState((s) => {
         let shifts = { ...s.shifts };
-        let attendance = { ...s.attendance };
+        const attendance = { ...s.attendance };
         let preserved: AttendanceRec | undefined;
 
         const empRate = (empId: string): number | null => {
@@ -1105,7 +1155,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
               shift_start: sh.start,
               shift_end: sh.end,
               break_minutes: (sh.breakH || 0) * 60 + (sh.breakM || 0),
-              shift_type: 'morning',
+              shift_type: sh.shiftType || classifyShiftType(sh.start, sh.end) || 'morning',
               ...(sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate))
                 ? { shift_rate: Number(sh.shiftRate) }
                 : {}),
@@ -1175,35 +1225,39 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     return t;
   }, [state.shifts, state.attendance, state.inclBreaks]);
 
-  const empTotalHours = useCallback(
-    (empId: string) => {
+  const empHoursById = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const empId of Object.keys(state.shifts)) {
       const byD = state.shifts[empId];
-      if (!byD) return 0;
       let t = 0;
-      for (const dk of Object.keys(byD)) {
+      for (const dk of Object.keys(byD || {})) {
         (byD[dk] || []).forEach((sh, idx) => {
-          const att = state.attendance[attKey(empId, dk, idx)];
-          t += countedHoursForAttendance(sh, att, state.inclBreaks);
+          t += countedHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], state.inclBreaks);
         });
       }
-      return t;
-    },
-    [state.shifts, state.attendance, state.inclBreaks]
-  );
+      m[empId] = t;
+    }
+    return m;
+  }, [state.shifts, state.attendance, state.inclBreaks]);
 
-  const dayTotalHours = useCallback(
-    (dk: string) => {
-      let t = 0;
-      for (const empId of Object.keys(state.shifts)) {
-        (state.shifts[empId]?.[dk] || []).forEach((sh, idx) => {
-          const att = state.attendance[attKey(empId, dk, idx)];
-          t += countedHoursForAttendance(sh, att, state.inclBreaks);
+  const empTotalHours = useCallback((empId: string) => empHoursById[empId] || 0, [empHoursById]);
+
+  const dayHoursByKey = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const empId of Object.keys(state.shifts)) {
+      const byD = state.shifts[empId];
+      for (const dk of Object.keys(byD || {})) {
+        let t = m[dk] || 0;
+        (byD[dk] || []).forEach((sh, idx) => {
+          t += countedHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], state.inclBreaks);
         });
+        m[dk] = t;
       }
-      return t;
-    },
-    [state.shifts, state.attendance, state.inclBreaks]
-  );
+    }
+    return m;
+  }, [state.shifts, state.attendance, state.inclBreaks]);
+
+  const dayTotalHours = useCallback((dk: string) => dayHoursByKey[dk] || 0, [dayHoursByKey]);
 
   const totalRotaPayable = useMemo(() => {
     let t = 0;
@@ -1221,23 +1275,24 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     return t;
   }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate]);
 
-  const empTotalPayable = useCallback(
-    (empId: string) => {
+  const empPayableById = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const empId of Object.keys(state.shifts)) {
       const byD = state.shifts[empId];
-      if (!byD) return 0;
       let t = 0;
-      for (const dk of Object.keys(byD)) {
+      for (const dk of Object.keys(byD || {})) {
         (byD[dk] || []).forEach((sh, idx) => {
-          const att = state.attendance[attKey(empId, dk, idx)];
-          const hrs = payableHoursForAttendance(sh, att, state.inclBreaks);
+          const hrs = payableHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], state.inclBreaks);
           if (hrs <= 0) return;
           t += hrs * resolveShiftRate(sh, empId);
         });
       }
-      return t;
-    },
-    [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate]
-  );
+      m[empId] = t;
+    }
+    return m;
+  }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate]);
+
+  const empTotalPayable = useCallback((empId: string) => empPayableById[empId] || 0, [empPayableById]);
 
   const value = useMemo(
     () => ({

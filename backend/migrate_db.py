@@ -2575,6 +2575,16 @@ def _run_migrations():
         except Exception:
             pass
 
+    if table_exists(cur, "live_chat_conversations") and not column_exists(cur, "live_chat_conversations", "visitor_token"):
+        try:
+            cur.execute("ALTER TABLE live_chat_conversations ADD COLUMN visitor_token TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS ix_live_chat_conversations_visitor_token ON live_chat_conversations(visitor_token)")
+        except sqlite3.OperationalError:
+            pass
+
     if table_exists(cur, "companies"):
         try:
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_companies_login_id ON companies(login_id)")

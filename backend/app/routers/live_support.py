@@ -1,7 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -13,6 +13,20 @@ router = APIRouter(prefix="/live-support", tags=["live-support"])
 admin_router = APIRouter(prefix="/admin/live-support", tags=["admin-live-support"])
 
 
+class DayHours(BaseModel):
+    enabled: bool = True
+    start: str = "09:00"
+    end: str = "17:30"
+
+    @field_validator("start", "end")
+    @classmethod
+    def hhmm(cls, v: str) -> str:
+        value = (v or "").strip()
+        if not svc.HHMM.match(value):
+            raise ValueError("Time must be HH:MM")
+        return value
+
+
 class VisitorStart(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     email: EmailStr
@@ -20,9 +34,18 @@ class VisitorStart(BaseModel):
     city: str = Field(min_length=2, max_length=80)
     initial_message: Optional[str] = Field(default=None, max_length=4000)
 
+    @field_validator("full_name", "company_name", "city")
+    @classmethod
+    def strip_required(cls, v: str) -> str:
+        value = (v or "").strip()
+        if len(value) < 2:
+            raise ValueError("This field is required")
+        return value
+
 
 class VisitorMessage(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
+    visitor_token: Optional[str] = Field(default=None, max_length=200)
 
 
 class AgentMessage(BaseModel):
@@ -32,10 +55,12 @@ class AgentMessage(BaseModel):
 class AvailabilityUpdate(BaseModel):
     enabled: Optional[bool] = None
     timezone: Optional[str] = None
+    days: Optional[dict[str, DayHours]] = None
     working_days: Optional[list[int]] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
-    offline_message: Optional[str] = None
+    offline_message: Optional[str] = Field(default=None, max_length=500)
+    no_agent_message: Optional[str] = Field(default=None, max_length=500)
     contact_email: Optional[str] = None
 
 
@@ -67,13 +92,17 @@ def start_chat(body: VisitorStart, db: Session = Depends(get_db)):
 
 
 @router.get("/conversations/{public_id}")
-def get_chat(public_id: str, db: Session = Depends(get_db)):
-    return svc.get_conversation(db, public_id)
+def get_chat(
+    public_id: str,
+    token: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    return svc.get_conversation(db, public_id, visitor_token=token, include_token=False, require_token=True)
 
 
 @router.post("/conversations/{public_id}/messages")
 def visitor_message(public_id: str, body: VisitorMessage, db: Session = Depends(get_db)):
-    return svc.post_visitor_message(db, public_id, body.body)
+    return svc.post_visitor_message(db, public_id, body.body, visitor_token=body.visitor_token)
 
 
 @admin_router.get("/status")
@@ -92,7 +121,10 @@ def patch_availability(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_platform_perm("support.write")),
 ):
-    return svc.update_availability(db, body.model_dump(exclude_unset=True), current_user)
+    payload = body.model_dump(exclude_unset=True)
+    if "days" in payload and payload["days"] is not None:
+        payload["days"] = {k: (v if isinstance(v, dict) else v.model_dump()) for k, v in payload["days"].items()}
+    return svc.update_availability(db, payload, current_user)
 
 
 @admin_router.get("/agents")
@@ -120,20 +152,31 @@ def patch_agent(
 
 
 @admin_router.get("/conversations")
-def open_conversations(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("support.read", "support.write"))):
-    return svc.list_open_conversations(db)
+def list_conversations(
+    status: Optional[str] = Query(default="inbox"),
+    q: Optional[str] = Query(default=None, max_length=120),
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_perm("support.read", "support.write")),
+):
+    if (status or "inbox") in ("inbox", "open_inbox"):
+        return {"total": None, "items": svc.list_open_conversations(db)}
+    return svc.list_conversations(db, status=status, q=q, limit=limit, offset=offset)
+
+
+@admin_router.get("/reports")
+def reports(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("support.read", "support.write"))):
+    return svc.conversation_report(db)
 
 
 @admin_router.get("/conversations/{conversation_id}")
-def admin_get_conversation(conversation_id: int, db: Session = Depends(get_db), _: User = Depends(require_platform_perm("support.read", "support.write"))):
-    from app.models import LiveChatConversation
-
-    conv = db.query(LiveChatConversation).filter(LiveChatConversation.id == conversation_id).first()
-    if not conv:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    return svc.get_conversation(db, conv.public_id)
+def admin_get_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_platform_perm("support.read", "support.write")),
+):
+    return svc.get_conversation_by_id(db, conversation_id)
 
 
 @admin_router.post("/conversations/{conversation_id}/messages")
@@ -153,6 +196,15 @@ def close_conversation(
     current_user: User = Depends(require_platform_perm("support.write")),
 ):
     return svc.close_conversation(db, conversation_id, current_user)
+
+
+@admin_router.post("/conversations/{conversation_id}/reopen")
+def reopen_conversation(
+    conversation_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("support.write")),
+):
+    return svc.reopen_conversation(db, conversation_id, current_user)
 
 
 @admin_router.post("/conversations/{conversation_id}/reassign")

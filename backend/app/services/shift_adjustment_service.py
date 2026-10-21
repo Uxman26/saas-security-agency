@@ -184,7 +184,11 @@ def find_assignment(
         )
         if not late:
             continue
-        if _norm_hhmm(late.scheduled_start) == want_start or _norm_hhmm(a.shift_start) == want_start:
+        if (
+            _norm_hhmm(late.scheduled_start) == want_start
+            or _norm_hhmm(late.actual_start) == want_start
+            or _norm_hhmm(a.shift_start) == want_start
+        ):
             return a
 
     # Single shift that day (+ matching site when given): accept even if times drifted.
@@ -224,7 +228,6 @@ def record_overtime(
         recorded_by=user_id,
     )
     _audit_timing_change(db, company.id, user_id, a, shift_end=new_end, reason=f"Overtime: {reason}")
-    a.shift_end = new_end
     db.add(log)
     db.commit()
     db.refresh(log)
@@ -282,7 +285,6 @@ def record_early_finish(
         recorded_by=user_id,
     )
     _audit_timing_change(db, company.id, user_id, a, shift_end=actual_end, reason=f"Early finish: {reason}")
-    a.shift_end = actual_end
     db.add(log)
     db.commit()
     db.refresh(log)
@@ -353,7 +355,6 @@ def record_lateness(
         shift_start=actual_start,
         reason=f"Late arrival: {late_minutes} min" + (f" · {(note or '').strip()}" if (note or "").strip() else ""),
     )
-    a.shift_start = actual_start
     att = db.query(Attendance).filter(Attendance.assignment_id == a.id).first()
     if att:
         att.status = "late"
@@ -432,7 +433,6 @@ def apply_planner_lateness(
                 recorded_by=user_id,
             )
         )
-    assignment.shift_start = actual_start
 
 
 def apply_planner_adjustments(db: Session, user_id: int, company_id: int, assignment: Assignment, adjustments: list) -> None:
@@ -464,7 +464,6 @@ def apply_planner_adjustments(db: Session, user_id: int, company_id: int, assign
                     recorded_by=user_id,
                 )
             )
-            assignment.shift_end = new_end
         elif kind == "early_finish":
             actual_end = (adj.get("actualEnd") or "").strip()
             if not actual_end or _parse_mins(actual_end) >= _parse_mins(scheduled):
@@ -483,7 +482,6 @@ def apply_planner_adjustments(db: Session, user_id: int, company_id: int, assign
                     recorded_by=user_id,
                 )
             )
-            assignment.shift_end = actual_end
 
 
 def sync_published_plan_adjustments(db: Session, user_id: int, plan) -> None:

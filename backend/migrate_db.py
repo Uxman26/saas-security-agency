@@ -228,12 +228,75 @@ def _ensure_unique_attendance():
         logging.getLogger(__name__).exception("unique attendance migration failed")
 
 
+def _ensure_notification_cleared_at():
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("app_notifications"):
+            return
+        cols = {c["name"] for c in insp.get_columns("app_notifications")}
+        if "cleared_at" in cols:
+            return
+        with engine.begin() as conn:
+            dialect = engine.dialect.name
+            coltype = "TIMESTAMP WITH TIME ZONE" if dialect == "postgresql" else "DATETIME"
+            conn.execute(text(f"ALTER TABLE app_notifications ADD COLUMN cleared_at {coltype}"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("app_notifications.cleared_at migration failed")
+
+
+def _restore_scheduled_assignment_times():
+    """Put scheduled start/end back on assignments that late/OT/early-finish overwrote."""
+    try:
+        from app.database import SessionLocal
+        from app.models import Assignment, ShiftEarlyFinishLog, ShiftLateLog, ShiftOvertimeLog
+
+        db = SessionLocal()
+        try:
+            changed = False
+            for log in db.query(ShiftLateLog).all():
+                a = db.query(Assignment).filter(Assignment.id == log.assignment_id).first()
+                if not a or not log.scheduled_start:
+                    continue
+                if a.shift_start == log.actual_start and a.shift_start != log.scheduled_start:
+                    a.shift_start = log.scheduled_start
+                    changed = True
+            for log in db.query(ShiftOvertimeLog).all():
+                a = db.query(Assignment).filter(Assignment.id == log.assignment_id).first()
+                if not a or not log.scheduled_end:
+                    continue
+                if a.shift_end == log.new_end and a.shift_end != log.scheduled_end:
+                    a.shift_end = log.scheduled_end
+                    changed = True
+            for log in db.query(ShiftEarlyFinishLog).all():
+                a = db.query(Assignment).filter(Assignment.id == log.assignment_id).first()
+                if not a or not log.scheduled_end:
+                    continue
+                if a.shift_end == log.actual_end and a.shift_end != log.scheduled_end:
+                    a.shift_end = log.scheduled_end
+                    changed = True
+            if changed:
+                db.commit()
+        finally:
+            db.close()
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("restore scheduled assignment times failed")
+
+
 def _run_migrations():
     _ensure_user_theme_preference()
     _ensure_user_notification_sound_muted()
+    _ensure_notification_cleared_at()
     _ensure_user_company_memberships()
     _migrate_legacy_day_shift_type()
     _ensure_unique_attendance()
+    _restore_scheduled_assignment_times()
     path = get_db_path()
     if not path:
         return

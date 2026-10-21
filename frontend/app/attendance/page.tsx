@@ -1125,6 +1125,8 @@ export default function AttendancePage() {
                           <SortableHead label="Note" colKey="note" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Booked On" colKey="on" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Booked Off" colKey="off" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <TableHead className="text-right">Scheduled</TableHead>
+                          <TableHead className="text-right">Actual</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -1195,6 +1197,12 @@ export default function AttendancePage() {
                               </TableCell>
                               <TableCell className="whitespace-nowrap text-sm">
                                 {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-sm">
+                                {a.scheduled_hours != null ? `${Number(a.scheduled_hours).toFixed(2)}h` : '—'}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums text-sm">
+                                {a.actual_hours != null ? `${Number(a.actual_hours).toFixed(2)}h` : '—'}
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-1">

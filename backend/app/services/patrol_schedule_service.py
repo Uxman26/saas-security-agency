@@ -563,6 +563,7 @@ def dashboard_kpis(db: Session, company_id: int, start: date, end: date) -> dict
             PatrolOccurrence.company_id == company_id,
             PatrolOccurrence.scheduled_at >= start_dt,
             PatrolOccurrence.scheduled_at <= end_dt,
+            PatrolOccurrence.status != "cancelled",
         )
         .all()
     )

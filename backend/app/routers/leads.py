@@ -155,6 +155,15 @@ def read_all_notifications(
     return {"updated": updated}
 
 
+@router.post("/notifications/clear-all")
+def clear_all_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("leads", "view")),
+):
+    updated = lead_service.clear_all_notifications(db, current_user.id)
+    return {"updated": updated}
+
+
 @router.get("", response_model=list[LeadResponse])
 def list_leads(
     status: Optional[str] = None,

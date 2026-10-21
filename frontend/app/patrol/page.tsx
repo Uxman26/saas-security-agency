@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api } from '@/lib/api';
 import type { PatrolDashboardKpis, PatrolLog, PatrolOccurrence, PatrolRoute, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
-import { MapPinned, Plus } from 'lucide-react';
+import { MapPinned, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { localDateKey, localDateOffset } from '@/lib/date-format';
@@ -45,6 +45,7 @@ function statusLabel(s: string) {
 export default function PatrolPage() {
   const { user: permUser } = useAuth();
   const canCreateMod = canModule(permUser, 'patrol', 'create');
+  const canDeleteMod = canModule(permUser, 'patrol', 'delete');
   const [routes, setRoutes] = useState<PatrolRoute[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [logs, setLogs] = useState<PatrolLog[]>([]);
@@ -85,6 +86,21 @@ export default function PatrolPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const removeRoute = (r: PatrolRoute) => {
+    toast.confirm(`Delete route “${r.name}”?`, async () => {
+      try {
+        await api.patrol.deleteRoute(r.id);
+        toast.snack('Route moved to Recycle Bin');
+        load();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Could not delete route');
+      }
+    }, {
+      label: 'Delete',
+      description: 'The route is archived. Scheduled patrols for this route are cancelled. Completed scans stay in Logs.',
+    });
+  };
 
   const create = async () => {
     if (!form.site_id || !form.name.trim()) {
@@ -272,9 +288,22 @@ export default function PatrolPage() {
                       </TableCell>
                       <TableCell>{r.checkpoint_count}</TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/patrol/routes/${r.id}`}>Manage</Link>
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/patrol/routes/${r.id}`}>Manage</Link>
+                          </Button>
+                          {canDeleteMod ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => removeRoute(r)}
+                              title="Delete route"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

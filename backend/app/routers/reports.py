@@ -202,7 +202,7 @@ def export_report(
     rows: list[dict] = []
     if report_type == "attendance":
         rows = staff_report_service.attendance_report_rows(db, current_user.id, start_date, end_date, guard_id)
-        columns = [("guard", "Guard"), ("site", "Site"), ("date", "Date"), ("shift", "Shift"), ("hours", "Hours"), ("status", "Status"), ("late_minutes", "Late mins")]
+        columns = [("guard", "Guard"), ("site", "Site"), ("date", "Date"), ("shift", "Shift"), ("hours", "Scheduled hours"), ("actual_hours", "Actual hours"), ("status", "Status"), ("late_minutes", "Late mins")]
     elif report_type == "invoices":
         rows = reports_hub_service.financial_invoice_rows(db, current_user.id, start_date, end_date)
         columns = [("invoice_id", "Invoice"), ("period_end", "Period end"), ("total", "Total"), ("amount_paid", "Paid"), ("balance", "Balance"), ("status", "Status"), ("due_date", "Due")]

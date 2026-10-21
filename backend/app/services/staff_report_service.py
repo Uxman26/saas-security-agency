@@ -146,6 +146,8 @@ def shift_hours_report(
             "shift_end": d.shift_end or "",
             "break_minutes": d.break_minutes or 0,
             "hours": round(float(d.hours or 0), 2),
+            "scheduled_hours": round(float(d.hours or 0), 2),
+            "actual_hours": d.actual_hours if getattr(d, "actual_hours", None) is not None else "",
             "status": d.attendance_status,
             "late_minutes": d.late_minutes if d.late_minutes is not None else "",
         }
@@ -174,6 +176,8 @@ def attendance_report_rows(db: Session, user_id: int, start_date: date, end_date
             "date": d.date.isoformat(),
             "shift": f"{d.shift_start}-{d.shift_end}",
             "hours": d.hours,
+            "scheduled_hours": d.hours,
+            "actual_hours": getattr(d, "actual_hours", None) if getattr(d, "actual_hours", None) is not None else "",
             "status": d.attendance_status,
             "late_minutes": d.late_minutes or "",
         }

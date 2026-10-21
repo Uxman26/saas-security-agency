@@ -1658,6 +1658,7 @@ class AppNotification(Base):
     entity_type = Column(String)
     entity_id = Column(Integer)
     read_at = Column(DateTime(timezone=True))
+    cleared_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

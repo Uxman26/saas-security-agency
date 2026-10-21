@@ -1091,6 +1091,8 @@ export interface RotaDetail {
   break_minutes: number;
   shift_type: string;
   hours: number;
+  actual_hours?: number | null;
+  payable_hours?: number | null;
   attendance_status: string;
   late_minutes?: number | null;
 }
@@ -2036,6 +2038,8 @@ export interface Attendance {
   overtime_end?: string | null;
   early_finish_end?: string | null;
   late_minutes?: number | null;
+  scheduled_hours?: number | null;
+  actual_hours?: number | null;
 }
 
 export interface Payment {

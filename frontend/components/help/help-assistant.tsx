@@ -269,6 +269,10 @@ export function HelpAssistant() {
       return;
     }
 
+    const history = messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-6)
+      .map((m) => ({ role: m.role, content: m.text }));
     setInput('');
     setMessages((prev) => [...prev, { id: uid(), role: 'user', text: q }]);
     setBusy(true);
@@ -278,7 +282,7 @@ export function HelpAssistant() {
       const res = await fetch('/help-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q }),
+        body: JSON.stringify({ message: q, history }),
       });
       const data = await res.json().catch(() => ({}));
       const answer =

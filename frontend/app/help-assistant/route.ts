@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
-import { findHelpAnswers } from '@/lib/help-qa';
+import { buildHelpContext, findHelpAnswers } from '@/lib/help-qa';
+import { askFreeLlm, sanitizeHistory } from '@/lib/free-llm';
 
-type Body = { message?: string };
+type Body = { message?: string; history?: unknown };
+
+const SYSTEM_PROMPT =
+  'You are the ControlOps help assistant. Answer briefly and accurately, grounded in the ControlOps reference context. ' +
+  'You may also answer general questions the way a helpful assistant would, but never invent ControlOps features, prices or policies. ' +
+  'If the context does not cover a ControlOps-specific question, say so and suggest /help, /book-demo, or chatting with a live agent. ' +
+  'Prefer plain text, short paragraphs, and bullet points when useful.';
 
 export async function POST(req: Request) {
   let body: Body;
@@ -20,11 +27,23 @@ export async function POST(req: Request) {
   }
 
   const matches = findHelpAnswers(message, 3);
+  const sources = matches.map((m) => ({ title: m.question, href: m.href }));
+
+  const llmAnswer = await askFreeLlm({
+    system: SYSTEM_PROMPT,
+    context: buildHelpContext(message, 4),
+    question: message,
+    history: sanitizeHistory(body.history),
+  });
+  if (llmAnswer) {
+    return NextResponse.json({ answer: llmAnswer, sources, provider: 'llm' as const });
+  }
+
   if (matches.length) {
     const top = matches[0];
     return NextResponse.json({
       answer: `${top.answer}\n\nMore detail: ${top.href}`,
-      sources: matches.map((m) => ({ title: m.question, href: m.href })),
+      sources,
       provider: 'local' as const,
     });
   }

@@ -65,6 +65,11 @@ services:
         NEXT_PUBLIC_API_URL: https://controlops.co.uk/api
         NEXT_PUBLIC_SITE_URL: https://controlops.co.uk
         NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID:-}
+    environment:
+      # Optional free LLM key for the help assistant (see frontend/lib/free-llm.ts)
+      LLM_API_URL: ${LLM_API_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
     expose:
       - "3000"
     depends_on:

@@ -2815,6 +2815,7 @@ class LiveChatConversation(Base):
     __tablename__ = "live_chat_conversations"
     id = Column(Integer, primary_key=True, index=True)
     public_id = Column(String, unique=True, nullable=False, index=True)
+    visitor_token = Column(String, nullable=True, index=True)
     visitor_name = Column(String, nullable=False)
     visitor_email = Column(String, nullable=False, index=True)
     visitor_company = Column(String, nullable=False)

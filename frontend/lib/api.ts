@@ -1939,7 +1939,17 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ is_available }),
       }),
-    liveSupportConversations: () => request<Record<string, unknown>[]>('/admin/live-support/conversations'),
+    liveSupportConversations: (params?: { status?: string; q?: string; limit?: number; offset?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.status) q.set('status', params.status);
+      if (params?.q) q.set('q', params.q);
+      if (params?.limit != null) q.set('limit', String(params.limit));
+      if (params?.offset != null) q.set('offset', String(params.offset));
+      const qs = q.toString();
+      return request<{ total: number | null; items: Record<string, unknown>[] }>(
+        `/admin/live-support/conversations${qs ? `?${qs}` : ''}`
+      );
+    },
     liveSupportConversation: (id: number) => request<Record<string, unknown>>(`/admin/live-support/conversations/${id}`),
     liveSupportReply: (id: number, body: string) =>
       request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/messages`, {
@@ -1948,8 +1958,11 @@ export const api = {
       }),
     liveSupportClose: (id: number) =>
       request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/close`, { method: 'POST' }),
+    liveSupportReopen: (id: number) =>
+      request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/reopen`, { method: 'POST' }),
     liveSupportReassign: (id: number) =>
       request<Record<string, unknown>>(`/admin/live-support/conversations/${id}/reassign`, { method: 'POST' }),
+    liveSupportReport: () => request<Record<string, unknown>>('/admin/live-support/reports'),
     feedbackList: (params?: { status?: string; category?: string; company_id?: number; q?: string }) => {
       const q = new URLSearchParams();
       if (params?.status) q.append('status', params.status);
@@ -2663,10 +2676,15 @@ export const api = {
     status: () =>
       request<{
         available: boolean;
+        can_queue?: boolean;
         within_hours: boolean;
         agents_online: number;
+        reason?: string;
+        timezone?: string;
         offline_message?: string;
         contact_email?: string | null;
+        next_open_at?: string | null;
+        days?: { weekday: number; label: string; enabled: boolean; start: string; end: string }[];
       }>('/live-support/status'),
     start: (data: {
       full_name: string;
@@ -2675,11 +2693,14 @@ export const api = {
       city: string;
       initial_message?: string;
     }) => request<Record<string, unknown>>('/live-support/conversations', { method: 'POST', body: JSON.stringify(data) }),
-    get: (publicId: string) => request<Record<string, unknown>>(`/live-support/conversations/${publicId}`),
-    send: (publicId: string, body: string) =>
+    get: (publicId: string, token?: string) => {
+      const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+      return request<Record<string, unknown>>(`/live-support/conversations/${publicId}${qs}`);
+    },
+    send: (publicId: string, body: string, visitorToken?: string) =>
       request<Record<string, unknown>>(`/live-support/conversations/${publicId}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, visitor_token: visitorToken || undefined }),
       }),
   },
   feedback: {

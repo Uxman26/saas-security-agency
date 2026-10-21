@@ -19,7 +19,44 @@ type ChatMsg = {
 
 type Mode = 'ai' | 'intake' | 'live';
 
-const LIVE_CHAT_KEY = 'controlops_live_chat_id';
+const LIVE_CHAT_KEY = 'controlops_live_chat';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type LiveChatSession = { public_id: string; visitor_token: string };
+
+function readLiveChatSession(): LiveChatSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LIVE_CHAT_KEY) || sessionStorage.getItem('controlops_live_chat_id');
+    if (!raw) return null;
+    if (raw.startsWith('LC-')) return { public_id: raw, visitor_token: '' };
+    const parsed = JSON.parse(raw) as Partial<LiveChatSession>;
+    if (parsed.public_id) return { public_id: String(parsed.public_id), visitor_token: String(parsed.visitor_token || '') };
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function writeLiveChatSession(session: LiveChatSession | null) {
+  if (typeof window === 'undefined') return;
+  if (!session) {
+    localStorage.removeItem(LIVE_CHAT_KEY);
+    sessionStorage.removeItem('controlops_live_chat_id');
+    return;
+  }
+  localStorage.setItem(LIVE_CHAT_KEY, JSON.stringify(session));
+  sessionStorage.removeItem('controlops_live_chat_id');
+}
+
+function validateIntake(intake: { full_name: string; email: string; company_name: string; city: string }) {
+  const errors: Record<string, string> = {};
+  if (intake.full_name.trim().length < 2) errors.full_name = 'Enter your name.';
+  if (!EMAIL_RE.test(intake.email.trim())) errors.email = 'Enter a valid email address.';
+  if (intake.company_name.trim().length < 2) errors.company_name = 'Enter your company name.';
+  if (intake.city.trim().length < 2) errors.city = 'Enter your city.';
+  return errors;
+}
 
 const APP_PREFIXES = [
   '/dashboard',
@@ -78,7 +115,10 @@ export function HelpAssistant() {
   const [suggestAgent, setSuggestAgent] = useState(false);
   const [offlineNote, setOfflineNote] = useState('');
   const [publicId, setPublicId] = useState<string | null>(null);
+  const [visitorToken, setVisitorToken] = useState('');
   const [intake, setIntake] = useState({ full_name: '', email: '', company_name: '', city: '' });
+  const [intakeErrors, setIntakeErrors] = useState<Record<string, string>>({});
+  const [liveStatus, setLiveStatus] = useState<{ available: boolean; reason?: string; offline_message?: string } | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       id: 'welcome',
@@ -97,17 +137,24 @@ export function HelpAssistant() {
   }, [open, messages, busy, mode]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const saved = sessionStorage.getItem(LIVE_CHAT_KEY);
+    api.liveSupport
+      .status()
+      .then((s) => setLiveStatus(s))
+      .catch(() => {});
+  }, [open]);
+
+  useEffect(() => {
+    const saved = readLiveChatSession();
     if (!saved) return;
     api.liveSupport
-      .get(saved)
+      .get(saved.public_id, saved.visitor_token)
       .then((conv) => {
         if (String(conv.status || '') === 'closed' || String(conv.status || '') === 'resolved') {
-          sessionStorage.removeItem(LIVE_CHAT_KEY);
+          writeLiveChatSession(null);
           return;
         }
-        setPublicId(saved);
+        setPublicId(saved.public_id);
+        setVisitorToken(saved.visitor_token);
         setMode('live');
         const msgs = Array.isArray(conv.messages) ? (conv.messages as Record<string, unknown>[]) : [];
         setMessages(
@@ -118,17 +165,17 @@ export function HelpAssistant() {
           }))
         );
       })
-      .catch(() => sessionStorage.removeItem(LIVE_CHAT_KEY));
+      .catch(() => writeLiveChatSession(null));
   }, []);
 
   useEffect(() => {
     if (mode !== 'live' || !publicId) return;
     const pull = () => {
       api.liveSupport
-        .get(publicId)
+        .get(publicId, visitorToken)
         .then((conv) => {
           if (String(conv.status || '') === 'closed' || String(conv.status || '') === 'resolved') {
-            sessionStorage.removeItem(LIVE_CHAT_KEY);
+            writeLiveChatSession(null);
           }
           const msgs = Array.isArray(conv.messages) ? (conv.messages as Record<string, unknown>[]) : [];
           setMessages(
@@ -151,7 +198,7 @@ export function HelpAssistant() {
       clearInterval(t);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [mode, publicId]);
+  }, [mode, publicId, visitorToken]);
 
   if (isAppRoute(pathname) || isAuthRoute(pathname)) return null;
 
@@ -159,16 +206,22 @@ export function HelpAssistant() {
     setBusy(true);
     try {
       const status = await api.liveSupport.status();
-      if (!status.available) {
-        setOfflineNote(status.offline_message || 'Live agents are currently unavailable.');
+      setLiveStatus(status);
+      const canStart = status.available || status.can_queue;
+      if (!canStart) {
+        const next = status.next_open_at
+          ? `\n\nNext available: ${new Date(status.next_open_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} (${status.timezone || 'Europe/London'}).`
+          : '';
+        const note = `${status.offline_message || 'Live agents are currently unavailable.'}${next}${
+          status.contact_email ? `\n\nYou can also email ${status.contact_email}.` : ''
+        }`;
+        setOfflineNote(note);
         setMessages((prev) => [
           ...prev,
           {
             id: uid(),
             role: 'assistant',
-            text: `${status.offline_message || 'Live agents are currently unavailable.'}${
-              status.contact_email ? `\n\nYou can also email ${status.contact_email}.` : ''
-            }`,
+            text: note,
             sources: [
               { title: 'Help Centre', href: '/help' },
               { title: 'Book a demo', href: '/book-demo' },
@@ -178,7 +231,7 @@ export function HelpAssistant() {
         setMode('ai');
         return;
       }
-      setOfflineNote('');
+      setOfflineNote(status.reason === 'no_agents' ? status.offline_message || '' : '');
       setMode('intake');
     } catch {
       setMessages((prev) => [
@@ -196,14 +249,10 @@ export function HelpAssistant() {
   }
 
   async function startLiveChat() {
+    const errors = validateIntake(intake);
+    setIntakeErrors(errors);
+    if (Object.keys(errors).length) return;
     const { full_name, email, company_name, city } = intake;
-    if (!full_name.trim() || !email.trim() || !company_name.trim() || !city.trim()) {
-      setMessages((prev) => [
-        ...prev,
-        { id: uid(), role: 'system', text: 'Please complete full name, email, company name, and city before starting live chat.' },
-      ]);
-      return;
-    }
     setBusy(true);
     try {
       const conv = await api.liveSupport.start({
@@ -214,8 +263,10 @@ export function HelpAssistant() {
         initial_message: 'I would like to speak with an agent.',
       });
       const id = String(conv.public_id || '');
+      const token = String(conv.visitor_token || '');
       setPublicId(id);
-      if (id) sessionStorage.setItem(LIVE_CHAT_KEY, id);
+      setVisitorToken(token);
+      if (id) writeLiveChatSession({ public_id: id, visitor_token: token });
       setMode('live');
       const msgs = Array.isArray(conv.messages) ? (conv.messages as Record<string, unknown>[]) : [];
       setMessages(
@@ -242,7 +293,7 @@ export function HelpAssistant() {
       setInput('');
       setBusy(true);
       try {
-        const conv = await api.liveSupport.send(publicId, q);
+        const conv = await api.liveSupport.send(publicId, q, visitorToken);
         const msgs = Array.isArray(conv.messages) ? (conv.messages as Record<string, unknown>[]) : [];
         setMessages(
           msgs.map((m) => ({
@@ -326,7 +377,13 @@ export function HelpAssistant() {
             <div className="min-w-0">
               <p className="font-semibold leading-tight">{mode === 'live' ? 'Live agent chat' : 'Ask ControlOps'}</p>
               <p className="text-xs text-primary-foreground/80">
-                {mode === 'live' ? 'Connected with support' : mode === 'intake' ? 'Start live chat' : 'AI help · live agent available'}
+                {mode === 'live'
+                  ? 'Connected with support'
+                  : mode === 'intake'
+                    ? 'Tell us who you are'
+                    : liveStatus?.available
+                      ? 'AI help · live agent available'
+                      : 'AI help · live chat currently offline'}
               </p>
             </div>
             <button
@@ -352,12 +409,28 @@ export function HelpAssistant() {
                   ] as const
                 ).map(([key, label]) => (
                   <div key={key} className="space-y-1">
-                    <label className="text-xs font-medium">{label}</label>
+                    <label htmlFor={`live-chat-${key}`} className="text-xs font-medium">
+                      {label}
+                    </label>
                     <Input
+                      id={`live-chat-${key}`}
                       value={intake[key]}
-                      onChange={(e) => setIntake((prev) => ({ ...prev, [key]: e.target.value }))}
+                      onChange={(e) => {
+                        setIntake((prev) => ({ ...prev, [key]: e.target.value }));
+                        setIntakeErrors((prev) => ({ ...prev, [key]: '' }));
+                      }}
                       type={key === 'email' ? 'email' : 'text'}
+                      autoComplete={
+                        key === 'email' ? 'email' : key === 'full_name' ? 'name' : key === 'city' ? 'address-level2' : 'organization'
+                      }
+                      aria-invalid={Boolean(intakeErrors[key])}
+                      aria-describedby={intakeErrors[key] ? `live-chat-${key}-error` : undefined}
                     />
+                    {intakeErrors[key] ? (
+                      <p id={`live-chat-${key}-error`} className="text-xs text-destructive">
+                        {intakeErrors[key]}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
                 {offlineNote ? <p className="text-sm text-amber-700 dark:text-amber-300">{offlineNote}</p> : null}

@@ -36,6 +36,7 @@ from app.auth import (
     current_session_jti,
     get_current_user,
     get_optional_user,
+    oauth2_scheme,
     SUPER_ADMIN_ROLE,
     get_password_hash,
     verify_password,
@@ -123,6 +124,20 @@ def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db
         client_source=get_client_source(),
         company_id=credentials.company_id,
     )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh_session(
+    db: Session = Depends(get_db),
+    token: str | None = Depends(oauth2_scheme),
+):
+    if not (token or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return auth_service.refresh_access_session(db, token)
 
 
 @router.get("/oauth/providers")

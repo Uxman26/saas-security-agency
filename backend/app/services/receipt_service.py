@@ -158,7 +158,7 @@ def mark_receipt_paid(db: Session, receipt_id: int) -> SubscriptionReceipt:
     return r
 
 
-def company_subscription_blocked(db: Session, user: User) -> dict | None:
+def company_subscription_blocked(db: Session, user: User, company: Company | None = None) -> dict | None:
     """Gate for paid operational APIs.
 
     Returns None when the tenant may use paid features (active or valid trial).
@@ -167,7 +167,9 @@ def company_subscription_blocked(db: Session, user: User) -> dict | None:
     """
     if not user.company_id:
         return None
-    co = db.query(Company).filter(Company.id == user.company_id).first()
+    co = company if company is not None and company.id == user.company_id else None
+    if co is None:
+        co = db.query(Company).filter(Company.id == user.company_id).first()
     if not co:
         return None
 

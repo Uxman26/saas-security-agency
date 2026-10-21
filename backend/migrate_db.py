@@ -154,11 +154,86 @@ def _ensure_company_login_ids():
         logging.getLogger(__name__).exception("company login_id migration failed")
 
 
+def _ensure_unique_attendance():
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("attendance"):
+            return
+        indexes = insp.get_indexes("attendance")
+        uniques = {ix.get("name") for ix in indexes if ix.get("unique")}
+        try:
+            uniques |= {c.get("name") for c in insp.get_unique_constraints("attendance")}
+        except Exception:
+            pass
+        pair_unique = any(
+            set(ix.get("column_names") or []) == {"assignment_id", "guard_id"} and ix.get("unique")
+            for ix in indexes
+        )
+        with engine.begin() as conn:
+            dups = conn.execute(
+                text(
+                    "SELECT assignment_id, guard_id FROM attendance "
+                    "GROUP BY assignment_id, guard_id HAVING COUNT(*) > 1"
+                )
+            ).fetchall()
+            for assignment_id, guard_id in dups:
+                rows = conn.execute(
+                    text(
+                        "SELECT id, booked_at, booked_off_at, note, status FROM attendance "
+                        "WHERE assignment_id = :a AND guard_id = :g ORDER BY id ASC"
+                    ),
+                    {"a": assignment_id, "g": guard_id},
+                ).fetchall()
+                if len(rows) < 2:
+                    continue
+                keep_id, booked_at, booked_off, note, status = rows[0]
+                notes = [note] if note else []
+                for rid, ba, bo, n, st in rows[1:]:
+                    if booked_at is None and ba is not None:
+                        booked_at = ba
+                    if booked_off is None and bo is not None:
+                        booked_off = bo
+                    if n:
+                        notes.append(n)
+                    if (status or "").strip().lower() in {"", "on_time"} and st:
+                        status = st
+                conn.execute(
+                    text(
+                        "UPDATE attendance SET booked_at = :ba, booked_off_at = :bo, "
+                        "note = :n, status = :s WHERE id = :id"
+                    ),
+                    {
+                        "ba": booked_at,
+                        "bo": booked_off,
+                        "n": "\n".join(notes) if notes else None,
+                        "s": status,
+                        "id": keep_id,
+                    },
+                )
+                for rid, *_ in rows[1:]:
+                    conn.execute(text("DELETE FROM attendance WHERE id = :id"), {"id": rid})
+            if "uq_attendance_assignment_guard" not in uniques and not pair_unique:
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_attendance_assignment_guard "
+                        "ON attendance(assignment_id, guard_id)"
+                    )
+                )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("unique attendance migration failed")
+
+
 def _run_migrations():
     _ensure_user_theme_preference()
     _ensure_user_notification_sound_muted()
     _ensure_user_company_memberships()
     _migrate_legacy_day_shift_type()
+    _ensure_unique_attendance()
     path = get_db_path()
     if not path:
         return
@@ -1454,6 +1529,7 @@ def _run_migrations():
         "CREATE INDEX IF NOT EXISTS ix_assignments_date ON assignments(date)",
         "CREATE INDEX IF NOT EXISTS ix_attendance_assignment ON attendance(assignment_id)",
         "CREATE INDEX IF NOT EXISTS ix_attendance_guard ON attendance(guard_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_attendance_assignment_guard ON attendance(assignment_id, guard_id)",
         # Shift adjustment logs, joined per shift on the rota grid and in reports.
         "CREATE INDEX IF NOT EXISTS ix_overtime_company_date ON shift_overtime_logs(company_id, shift_date)",
         "CREATE INDEX IF NOT EXISTS ix_overtime_assignment ON shift_overtime_logs(assignment_id)",
@@ -1508,8 +1584,7 @@ def _run_migrations():
     ):
         try:
             cur.execute(statement)
-        except sqlite3.OperationalError:
-            # Table not present on this database yet — created later by create_all.
+        except (sqlite3.OperationalError, sqlite3.IntegrityError):
             pass
 
     # --- Incident categories + emergency services called ------------------------------

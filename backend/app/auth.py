@@ -173,18 +173,15 @@ def get_current_user(
         from app.services.module_service import is_module_enabled
         from app.plan_config import feature_enabled
 
+        co = db.query(Company).filter(Company.id == user.company_id).first() if user.company_id else None
         if get_client_source() == "mobile" and user.company_id:
-            # Use the module-level Company import. A local `from app.models import Company`
-            # later in this function previously made Company an unbound local here and
-            # crashed every authenticated mobile request (login succeeded, /auth/me 500'd).
-            co = db.query(Company).filter(Company.id == user.company_id).first()
             if co and not (is_module_enabled(co, "mobile_apps") and feature_enabled(co.subscription_tier, "mobile_apps")):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=MOBILE_APP_DENIED)
 
         from app.services.receipt_service import company_subscription_blocked
         from app.services.trial_service import path_allowed_when_subscription_required
 
-        block = company_subscription_blocked(db, user)
+        block = company_subscription_blocked(db, user, company=co)
         if block:
             path = request.url.path or ""
             # Trial-expired (and similar) tenants keep account/billing routes; paid ops stay gated.
@@ -200,7 +197,6 @@ def get_current_user(
         if user.company_id:
             from datetime import datetime, timezone
 
-            co = db.query(Company).filter(Company.id == user.company_id).first()
             if co and (getattr(co, "account_status", None) or "") == "locked":
                 now = datetime.now(timezone.utc)
                 temp = (

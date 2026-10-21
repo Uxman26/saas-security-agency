@@ -1,5 +1,6 @@
 import json
 import logging
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List, Optional
@@ -473,16 +474,34 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
             },
         )
 
-    att = db.query(Attendance).filter(
-        Attendance.assignment_id == data.assignment_id,
-        Attendance.guard_id == a.guard_id
-    ).first()
+    att = (
+        db.query(Attendance)
+        .filter(Attendance.assignment_id == data.assignment_id, Attendance.guard_id == a.guard_id)
+        .order_by(Attendance.id.asc())
+        .first()
+    )
     if not att:
-        att = Attendance(assignment_id=data.assignment_id, guard_id=a.guard_id, status="on_time")
-        db.add(att)
-        db.flush()
+        try:
+            with db.begin_nested():
+                att = Attendance(assignment_id=data.assignment_id, guard_id=a.guard_id, status="on_time")
+                db.add(att)
+                db.flush()
+        except IntegrityError:
+            att = (
+                db.query(Attendance)
+                .filter(Attendance.assignment_id == data.assignment_id, Attendance.guard_id == a.guard_id)
+                .order_by(Attendance.id.asc())
+                .first()
+            )
+            if att is None:
+                raise
+    from app.middleware.client_source import get_client_source
+
+    mobile_client = get_client_source() == "mobile"
     if data.book_off:
         if att.booked_off_at:
+            if mobile_client:
+                return _att_out(att)
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -554,6 +573,8 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                 )
     else:
         if att.booked_at:
+            if mobile_client:
+                return _att_out(att)
             raise HTTPException(
                 status_code=400,
                 detail={

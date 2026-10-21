@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models import User
 from app.services.platform_rbac_service import require_platform_perm
 from app.services import live_support_service as svc
+from app.services.public_rate_limit import enforce_public_rate
 
 router = APIRouter(prefix="/live-support", tags=["live-support"])
 admin_router = APIRouter(prefix="/admin/live-support", tags=["admin-live-support"])
@@ -80,7 +81,8 @@ def public_status(db: Session = Depends(get_db)):
 
 
 @router.post("/conversations")
-def start_chat(body: VisitorStart, db: Session = Depends(get_db)):
+def start_chat(body: VisitorStart, request: Request, db: Session = Depends(get_db)):
+    enforce_public_rate(request, key="live-support-start", limit=8)
     return svc.start_conversation(
         db,
         full_name=body.full_name,

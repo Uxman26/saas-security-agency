@@ -76,6 +76,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse as StarletteJSONResponse
 
 
+_MAINTENANCE_TTL_S = 5.0
+_maintenance_cache = {"at": 0.0, "cfg": {"enabled": False}}
+
+
 class MaintenanceModeMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path or ""
@@ -87,13 +91,19 @@ class MaintenanceModeMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
         try:
-            from app.database import SessionLocal
-            from app.services.admin_platform_ext_service import get_config
-            db = SessionLocal()
-            try:
-                cfg = get_config(db, "maintenance_mode", {"enabled": False})
-            finally:
-                db.close()
+            import time
+            now = time.monotonic()
+            cfg = _maintenance_cache["cfg"]
+            if now - float(_maintenance_cache["at"] or 0) >= _MAINTENANCE_TTL_S:
+                from app.database import SessionLocal
+                from app.services.admin_platform_ext_service import get_config
+                db = SessionLocal()
+                try:
+                    cfg = get_config(db, "maintenance_mode", {"enabled": False}) or {"enabled": False}
+                finally:
+                    db.close()
+                _maintenance_cache["at"] = now
+                _maintenance_cache["cfg"] = cfg
             if cfg and cfg.get("enabled"):
                 return StarletteJSONResponse(
                     status_code=503,

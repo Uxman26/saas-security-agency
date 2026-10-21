@@ -539,6 +539,8 @@ def issue_access_session(
         access_token_expires = timedelta(days=settings.remember_me_expire_days)
     else:
         access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    from app.middleware.client_source import get_client_source
+
     jti = session_service.new_jti()
     session_service.create_session(
         db,
@@ -549,11 +551,70 @@ def issue_access_session(
         ip_address=ip_address,
         user_agent=user_agent,
         company_id=company_id,
+        client_source=get_client_source(),
     )
     token_data = {"sub": user.id, "jti": jti}
     if company_id is not None:
         token_data["cid"] = company_id
     access_token = create_access_token(data=token_data, expires_delta=access_token_expires)
+    return {
+        "access_token": str(access_token),
+        "token_type": "bearer",
+        "mfa_required": False,
+        "mfa_token": None,
+    }
+
+
+def refresh_access_session(db: Session, token: str) -> dict:
+    from jose import JWTError, jwt
+    from app.auth import ACCESS_TOKEN_TYPE
+    from app.middleware.client_source import get_client_source
+    from app.services import session_service
+
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode((token or "").strip(), settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != ACCESS_TOKEN_TYPE:
+            raise credentials_exception
+        sub = payload.get("sub")
+        jti = payload.get("jti")
+        if sub is None or not jti:
+            raise credentials_exception
+        user_id = int(sub)
+    except (JWTError, ValueError):
+        raise credentials_exception
+
+    session = session_service.session_for_refresh(db, jti)
+    if session is None or session.user_id != user_id:
+        raise credentials_exception
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or not user.is_active:
+        raise credentials_exception
+
+    now = datetime.now(timezone.utc)
+    session.last_seen_at = now
+    if get_client_source() == "mobile":
+        mobile_idle = session_service.idle_timeout_minutes(False, client_source="mobile")
+        if (session.idle_timeout_minutes or 0) < mobile_idle:
+            session.idle_timeout_minutes = mobile_idle
+
+    expires = session.expires_at
+    if expires is not None and getattr(expires, "tzinfo", None) is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    remaining = (expires - now) if expires else timedelta(minutes=settings.access_token_expire_minutes)
+    if remaining.total_seconds() < 60:
+        remaining = timedelta(minutes=settings.access_token_expire_minutes)
+        session.expires_at = now + remaining
+    db.commit()
+
+    token_data = {"sub": user.id, "jti": session.jti}
+    if session.company_id is not None:
+        token_data["cid"] = session.company_id
+    access_token = create_access_token(data=token_data, expires_delta=remaining)
     return {
         "access_token": str(access_token),
         "token_type": "bearer",

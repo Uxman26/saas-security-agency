@@ -35,9 +35,11 @@ def new_jti() -> str:
     return uuid.uuid4().hex
 
 
-def idle_timeout_minutes(remember_me: bool) -> int:
+def idle_timeout_minutes(remember_me: bool, client_source: str | None = None) -> int:
     if remember_me:
         return settings.session_remember_idle_days * 24 * 60
+    if (client_source or "").strip().lower() == "mobile":
+        return settings.session_mobile_idle_minutes
     return settings.session_idle_timeout_minutes
 
 
@@ -51,6 +53,7 @@ def create_session(
     ip_address: str | None = None,
     user_agent: str | None = None,
     company_id: int | None = None,
+    client_source: str | None = None,
 ) -> UserSession:
     from fastapi import HTTPException
     from sqlalchemy.exc import SQLAlchemyError
@@ -60,7 +63,7 @@ def create_session(
         jti=jti,
         last_seen_at=_now(),
         expires_at=expires_at,
-        idle_timeout_minutes=idle_timeout_minutes(remember_me),
+        idle_timeout_minutes=idle_timeout_minutes(remember_me, client_source),
         ip_address=ip_address,
         user_agent=(user_agent or "")[:500] or None,
         company_id=company_id,
@@ -86,7 +89,7 @@ def create_session(
                     jti=jti,
                     last_seen_at=_now(),
                     expires_at=expires_at,
-                    idle_timeout_minutes=idle_timeout_minutes(remember_me),
+                    idle_timeout_minutes=idle_timeout_minutes(remember_me, client_source),
                     ip_address=ip_address,
                     user_agent=(user_agent or "")[:500] or None,
                     company_id=company_id,
@@ -120,6 +123,18 @@ def active_session(db: Session, jti: str) -> UserSession | None:
     last_seen = _aware(row.last_seen_at) or _aware(row.created_at)
     window = row.idle_timeout_minutes or settings.session_idle_timeout_minutes
     if last_seen and last_seen < now - timedelta(minutes=window):
+        return None
+    return row
+
+
+def session_for_refresh(db: Session, jti: str) -> UserSession | None:
+    if not jti:
+        return None
+    row = db.query(UserSession).filter(UserSession.jti == jti).first()
+    if row is None or row.revoked_at is not None:
+        return None
+    now = _now()
+    if (expires := _aware(row.expires_at)) and expires <= now:
         return None
     return row
 

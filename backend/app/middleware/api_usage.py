@@ -6,6 +6,7 @@ so Super Admin monitoring can report measured latency and error rates.
 The DB write runs in a worker thread so the event loop is not blocked.
 """
 
+import random
 import time
 
 from jose import JWTError, jwt
@@ -72,6 +73,12 @@ class ApiUsageMiddleware(BaseHTTPMiddleware):
         # Skip high-frequency monitoring polls to avoid feedback loops.
         if request.url.path.startswith("/admin/server-monitor"):
             return response
+        if request.method == "GET":
+            path = request.url.path
+            if path.endswith("/notifications") or path.endswith("/session/current") or path == "/health":
+                return response
+            if random.random() > 0.1:
+                return response
         auth = request.headers.get("authorization") or ""
         if not auth.lower().startswith("bearer "):
             return response

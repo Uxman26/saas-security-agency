@@ -24,6 +24,7 @@ DEFAULT_TRIAL_CONFIG = {
 
 SUBSCRIPTION_REQUIRED_ALLOW_PREFIXES = (
     "/auth/me",
+    "/auth/refresh",
     "/auth/logout",
     "/auth/logout-all",
     "/auth/company-logo",

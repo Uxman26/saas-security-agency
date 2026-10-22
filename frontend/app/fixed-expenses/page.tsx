@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
 import { api } from '@/lib/api';
 import type { FixedExpense, Vendor } from '@/lib/types';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -34,6 +34,7 @@ export default function FixedExpensesPage() {
   const { user } = useAuth();
   const canWrite = canModule(user, 'fixed_expenses', 'create');
   const canEdit = canModule(user, 'fixed_expenses', 'edit');
+  const canDelete = canModule(user, 'fixed_expenses', 'delete');
   const [rows, setRows] = useState<FixedExpense[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [open, setOpen] = useState(false);
@@ -182,19 +183,35 @@ export default function FixedExpensesPage() {
                       <TableCell>{r.next_run || '—'}</TableCell>
                       <TableCell>{r.status}</TableCell>
                       <TableCell>
-                        {canEdit ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={async () => {
-                              const next = r.status === 'active' ? 'paused' : 'active';
-                              await api.fixedExpenses.setStatus(r.id, next);
-                              await load();
-                            }}
-                          >
-                            {r.status === 'active' ? 'Pause' : 'Resume'}
-                          </Button>
-                        ) : null}
+                        <div className="flex gap-1">
+                          {canEdit ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                const next = r.status === 'active' ? 'paused' : 'active';
+                                await api.fixedExpenses.setStatus(r.id, next);
+                                await load();
+                              }}
+                            >
+                              {r.status === 'active' ? 'Pause' : 'Resume'}
+                            </Button>
+                          ) : null}
+                          {canDelete ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={async () => {
+                                await api.fixedExpenses.delete(r.id);
+                                await load();
+                                toast.success('Fixed expense deleted');
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

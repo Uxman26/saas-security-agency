@@ -491,7 +491,11 @@ def ar_aging(db: Session, company_id: int, as_of: Optional[date] = None) -> dict
     invoices = (
         db.query(Invoice)
         .options(joinedload(Invoice.client))
-        .filter(Invoice.company_id == company_id, Invoice.status.notin_(["draft", "cancelled", "paid"]))
+        .filter(
+            Invoice.company_id == company_id,
+            Invoice.deleted_at.is_(None),
+            Invoice.status.notin_(["draft", "cancelled", "paid"]),
+        )
         .all()
     )
     settlements = batch_invoice_settlements(db, [inv.id for inv in invoices])
@@ -539,6 +543,7 @@ def ap_aging(db: Session, company_id: int, as_of: Optional[date] = None) -> dict
         db.query(Expense)
         .filter(
             Expense.company_id == company_id,
+            Expense.deleted_at.is_(None),
             Expense.payment_status.in_(["pending", "overdue"]),
         )
         .all()
@@ -636,6 +641,26 @@ def update_account(db: Session, company_id: int, account_id: int, data: dict) ->
     db.commit()
     db.refresh(row)
     return row
+
+
+def delete_account(db: Session, company_id: int, account_id: int) -> None:
+    row = db.query(Account).filter(Account.id == account_id, Account.company_id == company_id).first()
+    if not row:
+        raise ValueError("Account not found")
+    if row.is_system:
+        raise ValueError("System accounts cannot be deleted")
+    if db.query(Account).filter(Account.parent_id == account_id, Account.company_id == company_id).first():
+        raise ValueError("Account has child accounts")
+    used = (
+        db.query(JournalLine)
+        .join(JournalEntry)
+        .filter(JournalLine.account_id == account_id, JournalEntry.company_id == company_id)
+        .first()
+    )
+    if used:
+        raise ValueError("Account has journal entries")
+    db.delete(row)
+    db.commit()
 
 
 def run_fixed_expenses(db: Session) -> dict:
@@ -742,7 +767,7 @@ def run_recurring_invoices(db: Session) -> dict:
                 lines=lines,
             )
             inv = invoice_service.create_invoice(db, data, admin.id)
-            inv.status = "issued"
+            inv.status = "sent"
             db.commit()
             ri.last_invoice_id = inv.id
             try:

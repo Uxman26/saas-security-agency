@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
 import { api } from '@/lib/api';
 import type { Client, RecurringInvoice, Site } from '@/lib/types';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -36,6 +36,7 @@ export default function RecurringInvoicesPage() {
   const { user } = useAuth();
   const canWrite = canModule(user, 'recurring_invoices', 'create');
   const canEdit = canModule(user, 'recurring_invoices', 'edit');
+  const canDelete = canModule(user, 'recurring_invoices', 'delete');
   const [rows, setRows] = useState<RecurringInvoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -238,20 +239,20 @@ export default function RecurringInvoicesPage() {
                       <TableCell>{r.tax_rate}%</TableCell>
                       <TableCell>{r.status}</TableCell>
                       <TableCell>
-                        {canEdit ? (
-                          <div className="flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={async () => {
-                                const next = r.status === 'active' ? 'paused' : 'active';
-                                await api.recurringInvoices.setStatus(r.id, next);
-                                await load();
-                              }}
-                            >
-                              {r.status === 'active' ? 'Pause' : 'Resume'}
-                            </Button>
-                            {r.status !== 'cancelled' ? (
+                        <div className="flex gap-1">
+                          {canEdit && r.status !== 'cancelled' ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={async () => {
+                                  const next = r.status === 'active' ? 'paused' : 'active';
+                                  await api.recurringInvoices.setStatus(r.id, next);
+                                  await load();
+                                }}
+                              >
+                                {r.status === 'active' ? 'Pause' : 'Resume'}
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -262,9 +263,23 @@ export default function RecurringInvoicesPage() {
                               >
                                 Cancel
                               </Button>
-                            ) : null}
-                          </div>
-                        ) : null}
+                            </>
+                          ) : null}
+                          {canDelete ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={async () => {
+                                await api.recurringInvoices.delete(r.id);
+                                await load();
+                                toast.success('Recurring invoice deleted');
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

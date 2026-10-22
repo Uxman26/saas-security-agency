@@ -382,7 +382,7 @@ export default function DashboardPage() {
                           label="Invoiced total"
                           value={Math.round(stats.invoice_total)}
                           prefix="£"
-                          sub="All invoices"
+                          sub="Issued invoices"
                           icon={FileText}
                           accent="text-rose-700 dark:text-rose-400"
                           href="/invoices"
@@ -394,7 +394,7 @@ export default function DashboardPage() {
                           label="Outstanding"
                           value={Math.round(stats.invoice_outstanding)}
                           prefix="£"
-                          sub="Draft + sent"
+                          sub="Amount due"
                           icon={FileText}
                           accent="text-rose-700 dark:text-rose-400"
                           warn={stats.invoice_outstanding > 0}

@@ -106,7 +106,11 @@ def _load(db: Session, credit_note_id: int, company_id: int) -> CreditNote:
             joinedload(CreditNote.client),
             joinedload(CreditNote.site),
         )
-        .filter(CreditNote.id == credit_note_id, CreditNote.company_id == company_id)
+        .filter(
+            CreditNote.id == credit_note_id,
+            CreditNote.company_id == company_id,
+            CreditNote.deleted_at.is_(None),
+        )
         .first()
     )
     if not row:
@@ -130,7 +134,7 @@ def list_credit_notes(
             joinedload(CreditNote.client),
             joinedload(CreditNote.site),
         )
-        .filter(CreditNote.company_id == company.id)
+        .filter(CreditNote.company_id == company.id, CreditNote.deleted_at.is_(None))
     )
     if invoice_id:
         q = q.filter(CreditNote.invoice_id == invoice_id)
@@ -239,6 +243,13 @@ def create_credit_note(db: Session, data: dict, user_id: int) -> dict:
         },
     )
     db.commit()
+    if status == ISSUED:
+        try:
+            from app.services import accounting_service
+
+            accounting_service.post_credit_note(db, company.id, row)
+        except Exception:
+            pass
     return _serialize(_load(db, row.id, company.id))
 
 
@@ -364,19 +375,18 @@ def cancel_credit_note(db: Session, credit_note_id: int, user_id: int) -> dict:
     if row.status == CANCELLED:
         return _serialize(row)
     inv = db.query(Invoice).filter(Invoice.id == row.invoice_id, Invoice.company_id == company.id).first()
-    if not inv:
-        raise HTTPException(status_code=404, detail="Invoice not found")
     prev = row.status
     row.status = CANCELLED
-    sync_invoice_payment_status(db, inv, user_id)
-    log_invoice_audit(
-        db,
-        company.id,
-        user_id,
-        inv.id,
-        "credit_note_cancelled",
-        {"credit_note_id": row.id, "number": row.number, "total": row.total, "previous_status": prev},
-    )
+    if inv:
+        sync_invoice_payment_status(db, inv, user_id)
+        log_invoice_audit(
+            db,
+            company.id,
+            user_id,
+            inv.id,
+            "credit_note_cancelled",
+            {"credit_note_id": row.id, "number": row.number, "total": row.total, "previous_status": prev},
+        )
     db.commit()
     return _serialize(_load(db, row.id, company.id))
 

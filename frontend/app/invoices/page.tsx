@@ -86,6 +86,7 @@ export default function InvoicesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoiceStats, setInvoiceStats] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [genOpen, setGenOpen] = useState(false);
@@ -171,15 +172,23 @@ export default function InvoicesPage() {
 
   const loadInvoices = useCallback(() => {
     setLoading(true);
-    api.invoices
-      .list({
-        ...toWorkFilterParams(workFilters),
+    const shared = {
+      ...toWorkFilterParams(workFilters),
+      due_from: dueFrom || undefined,
+      due_to: dueTo || undefined,
+    };
+    Promise.all([
+      api.invoices.list({
+        ...shared,
         status_group: listTab,
         status: statusFilter || undefined,
-        due_from: dueFrom || undefined,
-        due_to: dueTo || undefined,
+      }),
+      api.invoices.list(shared),
+    ])
+      .then(([rows, statsRows]) => {
+        setInvoices(rows);
+        setInvoiceStats(statsRows);
       })
-      .then(setInvoices)
       .catch(() => toast.error('Could not load invoices'))
       .finally(() => setLoading(false));
   }, [workFilters, listTab, statusFilter, dueFrom, dueTo]);
@@ -427,9 +436,9 @@ export default function InvoicesPage() {
     setPage((p) => Math.min(p, pageCount));
   }, [pageCount]);
 
-  const totalAmount = invoices.reduce((sum, inv) => sum + inv.total, 0);
-  const paidAmount = invoices.reduce((sum, i) => sum + (i.amount_paid ?? (i.status === 'paid' ? i.total : 0)), 0);
-  const outstanding = invoices
+  const totalAmount = invoiceStats.reduce((sum, inv) => sum + inv.total, 0);
+  const paidAmount = invoiceStats.reduce((sum, i) => sum + (i.amount_paid ?? 0), 0);
+  const outstanding = invoiceStats
     .filter((i) => !['draft', 'paid', 'cancelled'].includes(i.status))
     .reduce(
       (sum, i) =>
@@ -438,7 +447,7 @@ export default function InvoicesPage() {
           Math.max(0, i.total - (i.amount_paid ?? 0) - (i.credit_applied ?? 0))),
       0
     );
-  const draftInvoices = invoices.filter((i) => i.status === 'draft');
+  const draftInvoices = invoiceStats.filter((i) => i.status === 'draft');
   const draftTotal = draftInvoices.reduce((sum, i) => sum + i.total, 0);
 
   const handleDuplicate = async (id: number) => {
@@ -472,8 +481,8 @@ export default function InvoicesPage() {
     }
   };
 
-  const unpaidCount = invoices.filter((i) => ['sent', 'unpaid', 'overdue', 'partial'].includes(i.status)).length;
-  const draftCount = invoices.filter((i) => i.status === 'draft').length;
+  const unpaidCount = invoiceStats.filter((i) => ['sent', 'unpaid', 'overdue', 'partial'].includes(i.status)).length;
+  const draftCount = invoiceStats.filter((i) => i.status === 'draft').length;
 
   const formatInvoiceDate = (inv: Invoice) => {
     const raw = inv.created_at ?? inv.period_end;
@@ -545,7 +554,7 @@ export default function InvoicesPage() {
       value: formatGbp(totalAmount),
       icon: ReceiptText,
       tone: 'neutral',
-      caption: `${invoices.length} invoice${invoices.length === 1 ? '' : 's'}`,
+      caption: `${invoiceStats.length} invoice${invoiceStats.length === 1 ? '' : 's'}`,
     },
     {
       key: 'paid',
@@ -566,10 +575,10 @@ export default function InvoicesPage() {
     {
       key: 'overdue',
       label: 'Overdue',
-      value: invoices.filter((i) => i.status === 'overdue').length,
+      value: invoiceStats.filter((i) => i.status === 'overdue').length,
       icon: AlertTriangle,
       tone: 'danger',
-      action: invoices.some((i) => i.status === 'overdue')
+      action: invoiceStats.some((i) => i.status === 'overdue')
         ? { label: 'View', onClick: () => setStatusFilter('overdue') }
         : undefined,
     },
@@ -586,7 +595,7 @@ export default function InvoicesPage() {
 
   const statusChart = STATUS_OPTIONS.map((s) => ({
     name: s.charAt(0).toUpperCase() + s.slice(1),
-    value: invoices.filter((i) => i.status === s).length,
+    value: invoiceStats.filter((i) => i.status === s).length,
   }));
 
   return (
@@ -1025,7 +1034,7 @@ export default function InvoicesPage() {
             onChange={setPageTab}
           />
 
-          {pageTab === 'overview' && invoices.length > 0 ? (
+          {pageTab === 'overview' && invoiceStats.length > 0 ? (
             <StatusPieChart data={statusChart} title="Invoices by status" />
           ) : null}
 
@@ -1162,7 +1171,9 @@ export default function InvoicesPage() {
                     <TableBody>
                       {pageRows.map((inv) => {
                         const pastDue = isInvoicePastDue(inv);
-                        const rawBalance = inv.balance_due ?? (inv.status === 'paid' ? 0 : inv.total);
+                        const rawBalance =
+                          inv.balance_due ??
+                          Math.max(0, inv.total - (inv.amount_paid ?? 0) - (inv.credit_applied ?? 0));
                         const balance = Number(rawBalance);
                         const safeBalance = Number.isFinite(balance) && Math.abs(balance) <= 1e12 ? balance : 0;
                         const customer =

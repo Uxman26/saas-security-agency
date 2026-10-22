@@ -139,6 +139,8 @@ def build_statement(
     activities: list[dict[str, Any]] = []
 
     for inv in invoices:
+        if (inv.status or "").strip().lower() == "draft":
+            continue
         inv_date = _invoice_date(inv)
         amt = _invoice_amount_for_site(inv, site_id)
         if amt <= 0 and site_id:
@@ -199,9 +201,8 @@ def build_statement(
                 )
 
         if inv_date < date_from:
-            if inv.status != "draft":
-                opening += amt - site_paid_before - site_credit_before
-        elif date_from <= inv_date <= date_to and inv.status != "draft":
+            opening += amt - site_paid_before - site_credit_before
+        elif date_from <= inv_date <= date_to:
             invoiced += amt
             due = inv.due_date.isoformat() if inv.due_date else None
             activities.append(

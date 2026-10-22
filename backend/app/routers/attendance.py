@@ -4,8 +4,8 @@ from typing import List, Optional
 from datetime import date
 from app.database import get_db
 from app.models import User
-from app.schemas import AttendanceCreate, AttendanceUpdate, AttendanceResponse, BookingOnOff, AttendanceByShiftRequest
-from app.rbac import require_module
+from app.schemas import AttendanceCreate, AttendanceUpdate, AttendanceResponse, BookingOnOff, AttendanceByShiftRequest, AttendanceClearByShiftRequest
+from app.rbac import require_internal_module, require_module
 from app.services import attendance_service
 
 router = APIRouter(prefix="/attendance", tags=["attendance"])
@@ -45,6 +45,15 @@ def upsert_by_shift(
     current_user: User = Depends(require_module("attendance", "book_by_shift")),
 ):
     return attendance_service.upsert_attendance_by_shift(db, current_user.id, data)
+
+@router.post("/by-shift/clear", status_code=status.HTTP_204_NO_CONTENT)
+def clear_by_shift(
+    data: AttendanceClearByShiftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("attendance", "book_by_shift")),
+):
+    attendance_service.clear_attendance_by_shift(db, current_user.id, data)
+    return None
 
 @router.get("/assignment/{assignment_id}", response_model=List[AttendanceResponse])
 def list_attendance(assignment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("attendance", "view"))):

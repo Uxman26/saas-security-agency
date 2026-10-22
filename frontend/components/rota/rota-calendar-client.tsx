@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, lateMinutesLabel, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftSiteBarColor } from '@/lib/rota-shifts-types';
@@ -1607,9 +1607,53 @@ export function RotaCalendarClient() {
       toast.warning('No attendance marked on this shift');
       return;
     }
-    toast.confirm('Remove attendance from this shift?', () => {
+    toast.confirm('Remove attendance from this shift?', async () => {
       beginUndoAction('Clear attendance');
-      clearAttendance(k);
+      const sh = state.shifts[empId]?.[dk]?.[idx];
+      const published = isEmployeePublished(empId);
+      const guardId = parseInt(empId, 10);
+      if (published && Number.isFinite(guardId) && guardId > 0 && sh) {
+        const lookupStarts = Array.from(
+          new Set(
+            [sh.scheduledStart || sh.start, sh.start]
+              .map((t) => (t || '').trim())
+              .filter(Boolean)
+          )
+        );
+        const siteName = (sh.site || '').trim();
+        let ok = false;
+        let err: unknown;
+        for (const start of lookupStarts) {
+          try {
+            await api.attendance.clearByShift({
+              guard_id: guardId,
+              date: dk,
+              shift_start: start,
+              site_name: siteName,
+            });
+            ok = true;
+            break;
+          } catch (e) {
+            err = e;
+          }
+        }
+        if (!ok) {
+          toast.error(err instanceof Error ? err.message : 'Failed to undo attendance');
+          return;
+        }
+      }
+      flushSync(() => {
+        const latest = state.shifts[empId]?.[dk]?.[idx] || sh;
+        if (latest?.scheduledStart) {
+          updateShift(empId, dk, idx, { ...latest, start: latest.scheduledStart, scheduledStart: undefined });
+        }
+        clearAttendance(k);
+      });
+      try {
+        await saveRotaPlan();
+      } catch {
+        /* GET overlay drops assignment marks even if the planner save fails. */
+      }
       toast.snack('Attendance removed');
     }, { label: 'Remove' });
   };
@@ -3033,6 +3077,7 @@ export function RotaCalendarClient() {
                               sh.site,
                               (sh.notes || '').trim() || (sh.label || '').trim(),
                               attStatus ? attStatusLabel(attStatus) : '',
+                              att?.lateMinutes ? lateMinutesLabel(att.lateMinutes) : '',
                               attMissing ? 'Attendance not marked — this shift has already started' : '',
                               conflicts.length
                                 ? `${conflicts.length} shift conflict${conflicts.length === 1 ? '' : 's'}`

@@ -37,6 +37,7 @@ import { TimeHmField, normalizeHm } from '@/components/ui/time-hm-field';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import { formatDateTimeLocalInput, formatDateTimeUK, londonWallToIso } from '@/lib/date-format';
 import {
   ATT_STATUS_FILTERS,
   EMPTY_ATT_FILTERS,
@@ -104,28 +105,21 @@ function joinLocalInput(date: string, time: string): string {
 }
 
 function toLocalInput(iso?: string | null) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return formatDateTimeLocalInput(iso);
 }
 
 function fromLocalInput(v: string) {
-  if (!v) return null;
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
+  return londonWallToIso(v);
 }
 
 function maxLocalDateTime() {
-  return toLocalInput(new Date().toISOString());
+  return formatDateTimeLocalInput(new Date().toISOString());
 }
 
 function isFutureLocalInput(v: string) {
   if (!v) return false;
-  const d = new Date(v);
-  return !Number.isNaN(d.getTime()) && d.getTime() > Date.now();
+  const iso = londonWallToIso(v);
+  return !!iso && new Date(iso).getTime() > Date.now();
 }
 
 export default function AttendancePage() {
@@ -1228,10 +1222,10 @@ export default function AttendancePage() {
                                 {a.note?.trim() ? a.note : '—'}
                               </TableCell>
                               <TableCell className="whitespace-nowrap text-sm">
-                                {a.booked_at ? new Date(a.booked_at).toLocaleString() : '—'}
+                                {a.booked_at ? formatDateTimeUK(a.booked_at) : '—'}
                               </TableCell>
                               <TableCell className="whitespace-nowrap text-sm">
-                                {a.booked_off_at ? new Date(a.booked_off_at).toLocaleString() : '—'}
+                                {a.booked_off_at ? formatDateTimeUK(a.booked_off_at) : '—'}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-sm">
                                 {a.scheduled_hours != null ? `${Number(a.scheduled_hours).toFixed(2)}h` : '—'}

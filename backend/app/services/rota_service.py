@@ -2,14 +2,23 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftEarlyFinishLog, ShiftLateLog, ShiftOvertimeLog, Site, User
 from app.schemas import RotaDetailResponse, RotaSummaryRow
-from app.services.attendance_service import CANCELLED_PAID, CANCELLED_STATUSES, compute_worked_hours
+from app.services.attendance_service import (
+    CANCELLED_PAID,
+    CANCELLED_STATUSES,
+    DEFAULT_COMPANY_TZ,
+    _company_zone,
+    compute_worked_hours,
+    gps_verified_for,
+    parse_gps_accuracy_m,
+)
 from app.services.company_service import get_company_by_user_id
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
@@ -158,6 +167,11 @@ def _attendance_status(a: Assignment, att: Optional[Attendance], late_log: Optio
     recorded = (att.status or "").strip() if att else ""
     if recorded in CANCELLED_STATUSES:
         return recorded
+    if att and att.booked_off_at:
+        raw = recorded.lower()
+        if raw in {"early_leave", "early_finish", "completed", "booked_off"}:
+            return "early_leave" if raw == "early_finish" else raw
+        return "booked_off"
     if late_log:
         return "late"
     # A mark wins over the calendar: attendance recorded ahead of the shift date, or
@@ -171,18 +185,27 @@ def _attendance_status(a: Assignment, att: Optional[Attendance], late_log: Optio
     return "pending"
 
 
-def _late_minutes(a: Assignment, att: Optional[Attendance], late_log: Optional[ShiftLateLog]) -> Optional[int]:
-    if late_log:
-        return late_log.late_minutes
-    if not att or not att.booked_at or not a.shift_start or att.status != "late":
+def _late_minutes(
+    a: Optional[Assignment],
+    att: Optional[Attendance],
+    late_log: Optional[ShiftLateLog],
+    zone: Optional[ZoneInfo] = None,
+) -> Optional[int]:
+    if late_log and late_log.late_minutes is not None:
+        mins = int(late_log.late_minutes)
+        return mins if mins > 0 else None
+    if not a or not att or not att.booked_at or not a.shift_start:
         return None
     try:
-        parts = a.shift_start.split(":")
+        parts = str(a.shift_start).split(":")
         sh, sm = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
-        due = datetime.combine(a.date, time(sh, sm))
-        actual = att.booked_at.replace(tzinfo=None) if att.booked_at.tzinfo else att.booked_at
-        diff = (actual - due).total_seconds() / 60.0
-        if diff > 0:
+        tz = zone or ZoneInfo(DEFAULT_COMPANY_TZ)
+        due = datetime.combine(a.date, time(sh, sm), tzinfo=tz)
+        booked = att.booked_at
+        if booked.tzinfo is None:
+            booked = booked.replace(tzinfo=timezone.utc)
+        diff = (booked.astimezone(tz) - due).total_seconds() / 60.0
+        if diff >= 1:
             return int(diff)
     except (ValueError, IndexError, TypeError):
         pass
@@ -223,7 +246,8 @@ def list_rota_details(
     q = _scope_for_portal_user(db, user_id, q)
     q = _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, scope)
     rows = q.order_by(Assignment.date, Guard.full_name).all()
-    today = date.today()
+    zone = _company_zone(company)
+    today = datetime.now(zone).date()
     att_map = {}
     late_map = {}
     ot_map = {}
@@ -272,7 +296,7 @@ def list_rota_details(
         hrs = shift_hours(a)
         st = normalize_shift_type(a.shift_type, a.shift_start)
         status = _attendance_status(a, att, late_log, today)
-        late_m = _late_minutes(a, att, late_log) if status == "late" else None
+        late_m = _late_minutes(a, att, late_log, zone=zone)
         actual = compute_worked_hours(
             shift_date=a.date,
             shift_start=a.shift_start,
@@ -322,6 +346,14 @@ def list_rota_details(
                 paid_hours=att.paid_hours if att and status == CANCELLED_PAID else None,
                 client_hours=att.client_hours if att and status == CANCELLED_PAID else None,
                 note=(att.note if att and att.note else None),
+                gps_verified=gps_verified_for(
+                    getattr(att, "latitude", None),
+                    getattr(att, "longitude", None),
+                    parse_gps_accuracy_m(att.note, getattr(att, "accuracy_m", None)),
+                    site,
+                )
+                if att
+                else None,
             )
         )
         seen.add(_shift_fingerprint(a.guard_id, a.date, a.shift_start, a.shift_end, a.site_id))

@@ -211,7 +211,46 @@ export function isAttendanceMarked(s: string | undefined | null): boolean {
   return !!(s || '').trim();
 }
 
+export function lateMinutesLabel(mins?: number | null): string {
+  const m = Math.max(0, Math.round(Number(mins) || 0));
+  if (m <= 0) return '';
+  return m === 1 ? '1 minute late' : `${m} minutes late`;
+}
+
+const ISO_TS =
+  /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/g;
+
+export function formatDisplayDateTime(iso: string, timeZone?: string): string {
+  const raw = (iso || '').trim();
+  if (!raw) return iso;
+  const hasZone = /Z$/i.test(raw) || /[+-]\d{2}:\d{2}$/.test(raw);
+  const parsed = new Date(hasZone ? raw : `${raw}Z`);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: timeZone || undefined,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+      .formatToParts(parsed)
+      .map((p) => [p.type, p.value])
+  );
+  return `${parts.day}-${parts.month}-${parts.year} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+export function formatNoteTimestamps(note: string, timeZone?: string): string {
+  return (note || '').replace(ISO_TS, (m) => formatDisplayDateTime(m, timeZone));
+}
+
 export function attStatusLabel(s: AttStatus | string | null | undefined): string {
+  const raw = (s ?? '').trim().toLowerCase();
+  if (raw === 'early_leave' || raw === 'early_finish') return 'Finished early';
+  if (raw === 'booked_off' || raw === 'completed') return 'Clocked out';
   const n = normalizeAttStatus(s ?? null);
   switch (n) {
     case 'on_time':

@@ -44,6 +44,7 @@ ACTION_LABELS: dict[str, str] = {
     "shift_published": "Shift published to staff",
     "shift_unpublished": "Shift unpublished",
     "shift_undone": "Undo",
+    "attendance_cleared": "Attendance undone",
 }
 
 FIELD_LABELS: list[tuple[str, str]] = [

@@ -2508,6 +2508,13 @@ export const api = {
       client_hours?: string | number;
     }): Promise<Attendance> =>
       request<Attendance>('/attendance/by-shift', { method: 'POST', body: JSON.stringify(data) }),
+    clearByShift: (data: {
+      guard_id: number;
+      date: string;
+      shift_start: string;
+      site_name?: string;
+    }): Promise<void> =>
+      request<void>('/attendance/by-shift/clear', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/attendance/${id}`, { method: 'DELETE' }),
     late: (params?: { start_date?: string; end_date?: string }): Promise<Attendance[]> => {
       const q = new URLSearchParams();

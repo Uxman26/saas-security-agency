@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
@@ -7,7 +8,7 @@ from typing import List, Optional
 from datetime import datetime, date, timezone, timedelta, time
 from zoneinfo import ZoneInfo
 from app.models import Attendance, Assignment, Guard, Site, User, ShiftOvertimeLog, ShiftEarlyFinishLog, ShiftLateLog
-from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest, AttendanceResponse
+from app.schemas import AttendanceCreate, BookingOnOff, AttendanceUpdate, AttendanceByShiftRequest, AttendanceClearByShiftRequest, AttendanceResponse
 from app.services.company_service import get_company_by_user_id
 from app.services.shift_adjustment_service import find_assignment
 
@@ -39,6 +40,9 @@ EARLY_BOOK_ON_MINUTES = 20
 # Late only after the scheduled start minute has fully passed (11:15 → late from 11:16).
 LATE_GRACE = timedelta(minutes=1)
 DEFAULT_COMPANY_TZ = "Europe/London"
+GPS_VERIFIED_ACCURACY_M = 25.0
+GPS_MAX_ACCEPTED_ACCURACY_M = 75.0
+_GPS_ACCURACY_RE = re.compile(r"±\s*([0-9]+(?:\.[0-9]+)?)\s*m", re.IGNORECASE)
 
 
 def _company_zone(company) -> ZoneInfo:
@@ -227,11 +231,67 @@ def _normalize_status(status: str) -> str:
     return s
 
 
-def _att_out(att: Attendance) -> Attendance:
+def parse_gps_accuracy_m(note: Optional[str], explicit=None) -> Optional[float]:
+    if explicit is not None:
+        try:
+            return float(explicit)
+        except (TypeError, ValueError):
+            pass
+    if not note:
+        return None
+    match = _GPS_ACCURACY_RE.search(str(note))
+    return float(match.group(1)) if match else None
+
+
+def gps_verified_for(
+    latitude,
+    longitude,
+    accuracy_m: Optional[float],
+    site=None,
+) -> Optional[bool]:
+    if latitude is None or longitude is None:
+        return False if accuracy_m is not None else None
+    if accuracy_m is not None and accuracy_m > GPS_VERIFIED_ACCURACY_M:
+        return False
+    if site is not None and getattr(site, "latitude", None) is not None and getattr(site, "longitude", None) is not None:
+        from app.services.patrol_schedule_service import site_geofence_ok
+
+        ok, _dist = site_geofence_ok(site, float(latitude), float(longitude), default_radius_m=150.0)
+        return bool(ok) and (accuracy_m is None or accuracy_m <= GPS_VERIFIED_ACCURACY_M)
+    if accuracy_m is None:
+        return None
+    return accuracy_m <= GPS_VERIFIED_ACCURACY_M
+
+
+def _apply_gps_fields(att: Attendance, site=None, accuracy=None) -> None:
+    acc = parse_gps_accuracy_m(getattr(att, "note", None), accuracy if accuracy is not None else getattr(att, "accuracy_m", None))
+    if acc is not None:
+        try:
+            att.accuracy_m = acc
+        except Exception:
+            pass
+    setattr(att, "accuracy_m", acc if acc is not None else getattr(att, "accuracy_m", None))
+    setattr(
+        att,
+        "gps_verified",
+        gps_verified_for(
+            getattr(att, "latitude", None),
+            getattr(att, "longitude", None),
+            getattr(att, "accuracy_m", None),
+            site,
+        ),
+    )
+
+
+def _att_out(att: Attendance, site=None, accuracy=None) -> Attendance:
     if att.updated_by is not None:
         setattr(att, "updated_by_name", att.updated_by.full_name)
     else:
         setattr(att, "updated_by_name", None)
+    if site is None:
+        assignment = getattr(att, "assignment", None)
+        site = getattr(assignment, "site", None) if assignment is not None else None
+    _apply_gps_fields(att, site=site, accuracy=accuracy)
     return att
 
 
@@ -325,6 +385,8 @@ def _enrich_attendance_rows(db: Session, rows: List[Attendance]) -> List[Attenda
                 location_name=getattr(att, "location_name", None),
                 latitude=getattr(att, "latitude", None),
                 longitude=getattr(att, "longitude", None),
+                accuracy_m=getattr(att, "accuracy_m", None),
+                gps_verified=getattr(att, "gps_verified", None),
             )
         )
     return out
@@ -511,6 +573,23 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                 "message": "GPS location is required to Clock In/Out at this site.",
             },
         )
+    if staff_portal and accuracy is not None:
+        try:
+            acc_val = float(accuracy)
+        except (TypeError, ValueError):
+            acc_val = None
+        if acc_val is not None and acc_val > GPS_MAX_ACCEPTED_ACCURACY_M:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "gps_inaccurate",
+                    "message": (
+                        f"GPS accuracy is ±{acc_val:.1f}m, which is too uncertain "
+                        "for attendance verification. Move outdoors and retry."
+                    ),
+                    "accuracy_m": acc_val,
+                },
+            )
     if lat is not None and lng is not None:
         ok, dist = site_geofence_ok(site, float(lat), float(lng), default_radius_m=150.0)
         if not ok:
@@ -593,7 +672,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
     if data.book_off:
         if att.booked_off_at:
             if mobile_client:
-                return _att_out(att)
+                return _att_out(att, site=site, accuracy=accuracy)
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -664,9 +743,26 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                     )
                 )
     else:
+        recorded = (att.status or "").strip().lower()
+        if recorded in CANCELLED_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "shift_cancelled",
+                    "message": "This shift has been cancelled.",
+                },
+            )
+        if att.booked_off_at:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "already_completed",
+                    "message": "This shift is already clocked out.",
+                },
+            )
         if att.booked_at:
             if mobile_client:
-                return _att_out(att)
+                return _att_out(att, site=site, accuracy=accuracy)
             raise HTTPException(
                 status_code=400,
                 detail={
@@ -727,6 +823,11 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
             att.longitude = float(lng)
             if loc_name:
                 att.location_name = loc_name[:255]
+            if accuracy is not None:
+                try:
+                    att.accuracy_m = float(accuracy)
+                except (TypeError, ValueError, AttributeError):
+                    pass
         gps_label = f"{loc_name} ({float(lat):.6f},{float(lng):.6f})" if loc_name else f"{float(lat):.6f},{float(lng):.6f}"
         gps_note = f"GPS {gps_label}{acc_part} @ {captured}"
         if data.device_id:
@@ -742,7 +843,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         .filter(Attendance.id == att.id)
         .first()
     )
-    return _att_out(att)
+    return _att_out(att, site=site, accuracy=accuracy)
 
 
 def get_late_summary(db: Session, user_id: int, start: Optional[date] = None, end: Optional[date] = None) -> List[Attendance]:
@@ -986,6 +1087,82 @@ def sync_published_plan_attendance(db: Session, user_id: int, plan) -> None:
         db.commit()
 
 
+def _purge_attendance_for_assignment(
+    db: Session, user_id: int, company_id: int, assignment: Assignment
+) -> bool:
+    from app.services import shift_audit_service
+    from app.services.rota_plan_service import strip_assignment_attendance
+
+    late_logs = (
+        db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id == assignment.id).all()
+    )
+    att = (
+        db.query(Attendance)
+        .filter(Attendance.assignment_id == assignment.id, Attendance.guard_id == assignment.guard_id)
+        .first()
+    )
+    if not att and not late_logs:
+        return False
+    before = shift_audit_service.snapshot_from_assignment(assignment)
+    if att:
+        before["attendance_status"] = att.status
+        before["booked_at"] = att.booked_at.isoformat() if att.booked_at else None
+        before["booked_off_at"] = att.booked_off_at.isoformat() if att.booked_off_at else None
+        before["paid_hours"] = att.paid_hours
+    scheduled = None
+    for log in late_logs:
+        if not scheduled and (log.scheduled_start or "").strip():
+            scheduled = log.scheduled_start.strip()
+        db.delete(log)
+    if att:
+        db.delete(att)
+    if scheduled and (assignment.shift_start or "").strip() != scheduled:
+        assignment.shift_start = scheduled
+    strip_assignment_attendance(db, assignment)
+    shift_audit_service.log_assignment_event(
+        db,
+        company_id=company_id,
+        user_id=user_id,
+        action="attendance_cleared",
+        assignment=assignment,
+        before=before,
+        after=shift_audit_service.snapshot_from_assignment(assignment),
+    )
+    return True
+
+
+def clear_attendance_by_shift(db: Session, user_id: int, data: AttendanceClearByShiftRequest) -> None:
+    from app.services.portal_access import assert_not_portal_role
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        assert_not_portal_role(user)
+    company = get_company_by_user_id(db, user_id)
+    starts = []
+    raw = (data.shift_start or "").strip()
+    if raw:
+        starts.append(raw)
+        if len(raw) >= 5:
+            starts.append(raw[:5])
+    a = None
+    seen = set()
+    for start in starts:
+        if start in seen:
+            continue
+        seen.add(start)
+        a = find_assignment(db, company.id, data.guard_id, data.date, start, data.site_name or "")
+        if a:
+            break
+    if not a:
+        return
+    if user:
+        from app.services.portal_access import visible_assignment_or_404
+
+        visible_assignment_or_404(db, user, a.id, company.id)
+    _purge_attendance_for_assignment(db, user_id, company.id, a)
+    db.commit()
+
+
 def delete_attendance(db: Session, attendance_id: int, user_id: int) -> None:
     user = db.query(User).filter(User.id == user_id).first()
     from app.services.portal_access import assert_not_portal_role
@@ -993,5 +1170,15 @@ def delete_attendance(db: Session, attendance_id: int, user_id: int) -> None:
     if user:
         assert_not_portal_role(user)
     att = _get_owned_attendance(db, attendance_id, user_id)
-    db.delete(att)
+    assignment = (
+        db.query(Assignment)
+        .options(joinedload(Assignment.guard), joinedload(Assignment.site))
+        .filter(Assignment.id == att.assignment_id)
+        .first()
+    )
+    company = get_company_by_user_id(db, user_id)
+    if assignment:
+        _purge_attendance_for_assignment(db, user_id, company.id, assignment)
+    else:
+        db.delete(att)
     db.commit()

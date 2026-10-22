@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { guardsToEmployees, profileShiftRate } from '@/lib/rota-guards-pool';
+import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
 import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
@@ -268,10 +268,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           queryClient.fetchQuery({
             queryKey: ['guards', '', '', '', 'active'],
             queryFn: () => api.guards.list(),
+            staleTime: 5 * 60 * 1000,
           }),
           queryClient.fetchQuery({
             queryKey: ['sites', 'list', 'active'],
             queryFn: () => api.sites.list({ view: 'active' }),
+            staleTime: 5 * 60 * 1000,
           }),
         ]);
         if (cancelled) return;
@@ -289,31 +291,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         }
         setSiteRateByName(rates);
 
-        const rateRows: Array<readonly [string, number] | null> = [];
-        const noProfileRate = guards.filter((g) => profileShiftRate(g) == null);
-        for (let i = 0; i < noProfileRate.length && !cancelled; i += 3) {
-          const batch = noProfileRate.slice(i, i + 3);
-          const rows = await Promise.all(
-            batch.map(async (g) => {
-              try {
-                const gr = await api.rates.guardRates(g.id);
-                if (!gr?.length) return null;
-                const sorted = [...gr].sort((a, b) => String(b.effective_from).localeCompare(String(a.effective_from)));
-                const rate = Number(sorted[0]?.hourly_rate);
-                if (!rate || Number.isNaN(rate) || rate <= 0) return null;
-                return [String(g.id), rate] as const;
-              } catch {
-                return null;
-              }
-            })
-          );
-          rateRows.push(...rows);
-        }
         if (cancelled) return;
         const gRates: Record<string, number> = {};
-        for (const row of rateRows) {
-          if (row) gRates[row[0]] = row[1];
-        }
         for (const e of freshPool) {
           if (e.hourlyRate) gRates[e.id] = e.hourlyRate;
         }

@@ -683,8 +683,22 @@ def start_session(db: Session, user: User, data: LoneWorkerSessionStart) -> Lone
     if existing:
         raise HTTPException(status_code=409, detail="A lone working session is already active")
 
-    policy = resolve_policy(db, company.id, data.site_id, data.policy_id)
-    if policy and policy.require_location and (data.latitude is None or data.longitude is None):
+    from app.services.ops_feature_eligibility import assert_lone_worker_start
+
+    matched_policy, assignment = assert_lone_worker_start(db, user, data.site_id)
+    if assignment is not None:
+        if not data.site_id:
+            data.site_id = assignment.site_id
+        if not data.assignment_id:
+            data.assignment_id = assignment.id
+        _assert_site(db, company.id, data.site_id, user)
+    policy = matched_policy or resolve_policy(db, company.id, data.site_id, data.policy_id)
+    if not policy:
+        raise HTTPException(
+            status_code=400,
+            detail="Lone Worker is not configured for this site.",
+        )
+    if policy.require_location and (data.latitude is None or data.longitude is None):
         raise HTTPException(status_code=422, detail="Location is required to start lone working at this site")
 
     sess = LoneWorkerSession(

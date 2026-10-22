@@ -8,7 +8,8 @@ export function useSites(view: RecordView = 'active') {
   return useQuery({
     queryKey: ['sites', 'list', view],
     queryFn: () => api.sites.list({ view }),
-    refetchOnMount: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
   });
 }
 

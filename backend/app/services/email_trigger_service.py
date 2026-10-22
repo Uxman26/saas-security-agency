@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -44,8 +44,12 @@ def notify_shift_assignment(db: Session, user_id: int, assignment: Assignment) -
     site = db.query(Site).filter(Site.id == assignment.site_id).first()
     if not guard or not site:
         return
-    tomorrow = date.today() + timedelta(days=1)
-    if assignment.date != tomorrow and assignment.date != date.today():
+    from app.services.attendance_service import _company_zone
+
+    company = get_company_by_user_id(db, user_id)
+    today = datetime.now(_company_zone(company)).date()
+    tomorrow = today + timedelta(days=1)
+    if assignment.date != tomorrow and assignment.date != today:
         return
     shift = ""
     if assignment.shift_start and assignment.shift_end:

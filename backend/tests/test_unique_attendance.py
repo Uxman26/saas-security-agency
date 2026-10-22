@@ -4,10 +4,11 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.models import Attendance
-from migrate_db import _ensure_unique_attendance
+from migrate_db import _ensure_clock_in_location_columns, _ensure_unique_attendance
 
 
 def test_unique_attendance_dedupes_and_indexes():
+    _ensure_clock_in_location_columns()
     assignment_id = 912001
     guard_id = 912001
     db = SessionLocal()

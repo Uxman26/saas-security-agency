@@ -12,7 +12,7 @@ from app.services import shift_audit_service
 from app.services.recycle_bin import archive as _bin_archive
 from app.services.company_service import get_company_by_user_id
 from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID
-from app.services.rota_service import normalize_shift_type
+from app.services.rota_service import _late_minutes, normalize_shift_type
 from app.services.work_filters import WorkScope, resolve_work_scope
 
 
@@ -263,7 +263,7 @@ def _unmarked_attendance_count(db: Session, plan: RotaPlan) -> int:
     )
 
 
-def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
+def _to_list_item(db: Session, plan: RotaPlan, *, include_counts: bool = True) -> RotaPlanListItem:
     if plan.status == "published":
         shift_count = db.query(Assignment).filter(Assignment.rota_plan_id == plan.id).count()
         staff_count = (
@@ -294,8 +294,8 @@ def _to_list_item(db: Session, plan: RotaPlan) -> RotaPlanListItem:
         staff_count=int(staff_count),
         site_names=site_names,
         client_names=client_names,
-        unmarked_attendance_count=_unmarked_attendance_count(db, plan),
-        unpublished_staff_count=_unpublished_staff_count(db, plan),
+        unmarked_attendance_count=_unmarked_attendance_count(db, plan) if include_counts else 0,
+        unpublished_staff_count=_unpublished_staff_count(db, plan) if include_counts else 0,
         created_at=plan.created_at,
         updated_at=plan.updated_at,
         published_at=plan.published_at,
@@ -796,7 +796,7 @@ def get_rota_plan(db: Session, user_id: int, plan_id: int) -> RotaPlanDetail:
     portal = _portal_user(db, user_id)
     if portal:
         return _portal_rota_detail(db, portal, plan)
-    base = _to_list_item(db, plan)
+    base = _to_list_item(db, plan, include_counts=False)
     return RotaPlanDetail(
         **base.model_dump(),
         # Not the stored planner verbatim: attendance recorded against the assignments —
@@ -869,7 +869,7 @@ def _portal_rota_detail(db: Session, user, plan: RotaPlan) -> RotaPlanDetail:
     site_rows = site_q.distinct().all()
     s_names = sorted({(n or "").strip() for n, _ in site_rows if n})
     c_names = sorted({(n or "").strip() for _, n in site_rows if n})
-    base = _to_list_item(db, plan).model_copy(
+    base = _to_list_item(db, plan, include_counts=False).model_copy(
         update={
             "shift_count": shift_count,
             "staff_count": len(payload["employees"]),
@@ -1144,27 +1144,32 @@ def _payload_from_assignments(
     }
 
 
-def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str]) -> dict:
+def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str], zone=None) -> dict:
     """Attendance map keyed by the rebuilt slot indices, for the given assignments only."""
     if not slot_by_assignment:
         return {}
+    ids = list(slot_by_assignment)
     out: dict[str, dict] = {}
-    rows = (
-        db.query(Attendance)
-        .filter(Attendance.assignment_id.in_(list(slot_by_assignment)))
-        .all()
-    )
+    rows = db.query(Attendance).filter(Attendance.assignment_id.in_(ids)).all()
+    late_logs = {
+        log.assignment_id: log
+        for log in db.query(ShiftLateLog).filter(ShiftLateLog.assignment_id.in_(ids)).all()
+    }
+    assignments = {a.id: a for a in db.query(Assignment).filter(Assignment.id.in_(ids)).all()}
     for att in rows:
         key = slot_by_assignment.get(att.assignment_id)
         if not key or key in out:
             continue
         emp_id, dk, si = key.split(":")
-        out[key] = {
-            # Stored already normalised at write time (on_time / late / absent / …).
+        late_m = _late_minutes(
+            assignments.get(att.assignment_id),
+            att,
+            late_logs.get(att.assignment_id),
+            zone=zone,
+        )
+        rec = {
             "status": (att.status or "").strip(),
             "hours": "",
-            # Only a paid cancellation carries one; blank on anything else so switching a
-            # shift back to worked does not leave a stale agreed figure on the planner.
             "paidHours": "" if att.paid_hours is None else str(att.paid_hours),
             "clientHours": "" if att.client_hours is None else str(att.client_hours),
             "note": (att.note or ""),
@@ -1172,6 +1177,9 @@ def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str])
             "dk": dk,
             "si": int(si),
         }
+        if late_m:
+            rec["lateMinutes"] = int(late_m)
+        out[key] = rec
     return out
 
 
@@ -1239,6 +1247,52 @@ def _recorded_attendance_by_shift(
     return out
 
 
+def apply_recorded_attendance_overlay(payload: dict, slots: dict[int, str], recorded: dict) -> dict:
+    merged = dict(payload.get("attendance") or {})
+    for _aid, key in slots.items():
+        rec = recorded.get(key)
+        if rec and str(rec.get("status") or "").strip():
+            existing = merged.get(key)
+            combined = {**existing, **rec} if isinstance(existing, dict) else dict(rec)
+            if isinstance(existing, dict):
+                if not rec.get("hours") and existing.get("hours"):
+                    combined["hours"] = existing["hours"]
+                if rec.get("lateMinutes") is None and existing.get("lateMinutes"):
+                    combined["lateMinutes"] = existing["lateMinutes"]
+            merged[key] = combined
+        else:
+            merged.pop(key, None)
+    out = dict(payload)
+    out["attendance"] = merged
+    return out
+
+
+def strip_assignment_attendance(db: Session, assignment: Assignment) -> None:
+    if not assignment.rota_plan_id:
+        return
+    plan = db.query(RotaPlan).filter(RotaPlan.id == assignment.rota_plan_id).first()
+    if not plan:
+        return
+    payload = _parse_planner(plan.planner_data)
+    if not payload:
+        return
+    slots = _slot_map_for_plan(db, plan, payload)
+    key = slots.get(assignment.id)
+    attendance = dict(payload.get("attendance") or {})
+    if not key:
+        gid = str(assignment.guard_id)
+        dk = assignment.date.isoformat() if isinstance(assignment.date, date) else str(assignment.date)[:10]
+        prefix = f"{gid}:{dk}:"
+        matches = [k for k in attendance if str(k).startswith(prefix)]
+        if len(matches) == 1:
+            key = matches[0]
+    if not key or key not in attendance:
+        return
+    attendance.pop(key, None)
+    payload["attendance"] = attendance
+    plan.planner_data = json.dumps(payload)
+
+
 def _overlay_recorded_attendance(db: Session, plan: RotaPlan, payload: dict) -> dict:
     """Let attendance recorded against assignments win over the planner's own copy.
 
@@ -1248,25 +1302,18 @@ def _overlay_recorded_attendance(db: Session, plan: RotaPlan, payload: dict) -> 
     and without this the rota would keep reporting those shifts as unmarked and keep
     offering to mark them — then overwrite the real record on the next publish.
 
-    Only shifts that resolve to an assignment are touched, so an unpublished plan and any
-    slot the rebuild could not line up keep exactly what the planner stored.
+    Assigned slots with no attendance row are treated as unmarked so an undo cannot be
+    resurrected from leftover planner JSON. Unpublished slots keep the planner copy.
     """
     slots = _slot_map_for_plan(db, plan, payload)
     if not slots:
         return payload
-    recorded = _attendance_for_assignments(db, slots)
-    if not recorded:
-        return payload
-    merged = dict(payload.get("attendance") or {})
-    for key, rec in recorded.items():
-        if not (rec.get("status") or "").strip():
-            continue
-        existing = merged.get(key)
-        # Keep the planner's hours/lateMinutes, which the assignment row does not carry.
-        merged[key] = {**existing, **rec} if isinstance(existing, dict) else rec
-    out = dict(payload)
-    out["attendance"] = merged
-    return out
+    from app.models import Company
+    from app.services.attendance_service import _company_zone
+
+    company = db.query(Company).filter(Company.id == plan.company_id).first()
+    recorded = _attendance_for_assignments(db, slots, zone=_company_zone(company))
+    return apply_recorded_attendance_overlay(payload, slots, recorded)
 
 
 def _slot_map_for_plan(db: Session, plan: RotaPlan, payload: dict) -> dict[int, str]:

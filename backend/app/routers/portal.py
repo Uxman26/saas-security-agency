@@ -20,6 +20,7 @@ from app.schemas import (
     PatrolComplianceRow,
     PatrolTodayResponse,
     PortalAnnouncementResponse,
+    OpsEligibilityResponse,
     PortalHoursResponse,
     PortalMessageCreateRequest,
     PortalNotificationResponse,
@@ -121,6 +122,16 @@ def portal_rota_previous(
     return portal_service.list_portal_rota(
         db, current_user, "previous", start_date=start_date, site_id=site_id
     )
+
+
+@router.get("/ops-eligibility", response_model=OpsEligibilityResponse)
+def portal_ops_eligibility(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("my_portal", "view")),
+):
+    from app.services.ops_feature_eligibility import ops_eligibility
+
+    return ops_eligibility(db, current_user)
 
 
 @router.get("/hours", response_model=PortalHoursResponse)

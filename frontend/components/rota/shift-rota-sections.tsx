@@ -8,6 +8,8 @@ import {
   attStatusBarColor,
   attStatusLabel,
   formatDurationMins,
+  formatNoteTimestamps,
+  lateMinutesLabel,
   latestShiftAdjustment,
   minutesBetweenTimes,
   normalizeAttStatus,
@@ -51,8 +53,11 @@ export function ShiftTypeBadge({
 }
 
 export function ShiftRotaSections({ shift, attendance, compact, className }: Props) {
+  const rawStatus = (attendance?.status || '').trim();
   const attStatus = attendance ? normalizeAttStatus(attendance.status) : null;
-  const attNote = (attendance?.note || '').trim();
+  const lateMins = Math.max(0, Number(attendance?.lateMinutes) || 0);
+  const lateLabel = lateMinutesLabel(lateMins);
+  const attNote = formatNoteTimestamps((attendance?.note || '').trim());
   const overtime = latestShiftAdjustment(shift, 'overtime');
   const early = latestShiftAdjustment(shift, 'early_finish');
   const otMins = overtime ? minutesBetweenTimes(overtime.scheduledEnd, overtime.actualEnd) : 0;
@@ -61,7 +66,7 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
   const notes = (shift.notes || '').trim();
   const label = (shift.label || '').trim();
   const description = notes || label;
-  const showAtt = !!attStatus;
+  const showAtt = !!attStatus || lateMins > 0 || ['early_leave', 'early_finish', 'booked_off', 'completed'].includes(rawStatus);
   const showOt = !!overtime && otMins > 0;
   const showEarly = !!early && earlyMins > 0;
   const hasExtras = showAtt || showOt || showEarly;
@@ -109,11 +114,16 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
             <div className="min-w-0 space-y-0.5">
               <div
                 className={cn(labelCls, 'truncate')}
-                style={{ color: attStatusBarColor(attStatus) || undefined }}
-                title={`Attendance: ${attStatusLabel(attStatus)}`}
+                style={{ color: attStatusBarColor(attStatus || rawStatus) || undefined }}
+                title={`Attendance: ${lateLabel || attStatusLabel(attStatus || rawStatus)}`}
               >
-                Attendance: {attStatusLabel(attStatus)}
+                Attendance: {attStatusLabel(attStatus || rawStatus)}
               </div>
+              {lateLabel ? (
+                <div className={cn(bodyCls, 'font-semibold text-amber-700 dark:text-amber-300')}>
+                  {lateLabel}
+                </div>
+              ) : null}
               {attStatus === 'cancelled_paid' ? (
                 <div className={cn(bodyCls, 'text-muted-foreground')}>
                   Paid: {agreedPaidHours(attendance).toFixed(2)}h

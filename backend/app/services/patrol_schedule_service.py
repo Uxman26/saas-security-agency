@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -36,30 +37,57 @@ def _aware(dt: Optional[datetime]) -> Optional[datetime]:
     return dt
 
 
-def slot_datetimes_for_day(day: date, start_hm: str, end_hm: str, frequency_minutes: int) -> list[datetime]:
-    """Scheduled UTC-naive wall times for one calendar day, then tagged as UTC."""
+def _zone(name: Optional[str] = None) -> ZoneInfo:
+    from app.services.attendance_service import DEFAULT_COMPANY_TZ
+
+    raw = (name or DEFAULT_COMPANY_TZ).strip() or DEFAULT_COMPANY_TZ
+    try:
+        return ZoneInfo(raw)
+    except Exception:
+        return ZoneInfo(DEFAULT_COMPANY_TZ)
+
+
+def _route_zone(db: Session, route: PatrolRoute) -> ZoneInfo:
+    company = getattr(route, "company", None)
+    if company is None:
+        from app.models import Company
+
+        company = db.query(Company).filter(Company.id == route.company_id).first()
+    from app.services.attendance_service import _company_zone
+
+    return _company_zone(company)
+
+
+def slot_datetimes_for_day(
+    day: date,
+    start_hm: str,
+    end_hm: str,
+    frequency_minutes: int,
+    zone: Optional[ZoneInfo] = None,
+) -> list[datetime]:
+    """Company wall-clock slots for one calendar day, returned as UTC instants."""
+    tz = zone or ZoneInfo("Europe/London")
     freq = max(int(frequency_minutes or 60), 5)
     a, b = _parse_hm(start_hm), _parse_hm(end_hm)
     out: list[datetime] = []
     if a <= b:
-        cur = datetime.combine(day, a, tzinfo=timezone.utc)
-        end = datetime.combine(day, b, tzinfo=timezone.utc)
+        cur = datetime.combine(day, a, tzinfo=tz)
+        end = datetime.combine(day, b, tzinfo=tz)
         while cur <= end:
-            out.append(cur)
+            out.append(cur.astimezone(timezone.utc))
             cur += timedelta(minutes=freq)
         return out
-    # Overnight: day start → midnight, then midnight → end on next calendar day is handled by calling for both days;
-    # for this day produce from start to 23:59 and from 00:00 to end when day is the "end" day.
-    cur = datetime.combine(day, a, tzinfo=timezone.utc)
-    end_night = datetime.combine(day, time(23, 59), tzinfo=timezone.utc)
+    cur = datetime.combine(day, a, tzinfo=tz)
+    end_night = datetime.combine(day, time(23, 59), tzinfo=tz)
     while cur <= end_night:
-        out.append(cur)
+        out.append(cur.astimezone(timezone.utc))
         cur += timedelta(minutes=freq)
-    cur = datetime.combine(day, time(0, 0), tzinfo=timezone.utc)
-    end_morn = datetime.combine(day, b, tzinfo=timezone.utc)
+    cur = datetime.combine(day, time(0, 0), tzinfo=tz)
+    end_morn = datetime.combine(day, b, tzinfo=tz)
     while cur <= end_morn:
-        if cur not in out:
-            out.append(cur)
+        utc = cur.astimezone(timezone.utc)
+        if utc not in out:
+            out.append(utc)
         cur += timedelta(minutes=freq)
     return sorted(set(out))
 
@@ -96,27 +124,33 @@ def ensure_upcoming_occurrences(db: Session, *, horizon_hours: int = 24) -> int:
     created = 0
     routes = (
         db.query(PatrolRoute)
-        .options(joinedload(PatrolRoute.checkpoints))
+        .options(joinedload(PatrolRoute.checkpoints), joinedload(PatrolRoute.company))
         .filter(PatrolRoute.status == "active", PatrolRoute.deleted_at.is_(None))
         .all()
     )
-    days = {now.date(), (now + timedelta(days=1)).date()}
     for route in routes:
         cps = [c for c in (route.checkpoints or []) if c.status == "active"]
         if not cps:
             continue
+        zone = _route_zone(db, route)
+        local_now = now.astimezone(zone)
+        days = {local_now.date(), (local_now + timedelta(days=1)).date()}
         slots: list[datetime] = []
         for day in sorted(days):
-            slots.extend(slot_datetimes_for_day(day, route.start_time, route.end_time, route.frequency_minutes))
+            slots.extend(
+                slot_datetimes_for_day(
+                    day, route.start_time, route.end_time, route.frequency_minutes, zone=zone
+                )
+            )
         grace = int(route.grace_minutes or 15)
         slots = [s for s in slots if now - timedelta(minutes=grace) <= s <= until]
         if not slots:
             continue
-        # Cache guards once per calendar day (not per slot) and load existing keys in one query.
+        # Cache guards once per company calendar day (not per UTC slot).
         guards_by_day: dict[date, list[tuple[int, Optional[int], Optional[int]]]] = {}
-        for day in {s.date() for s in slots}:
+        for day in {s.astimezone(zone).date() for s in slots}:
             guards_by_day[day] = _guards_for_route(
-                db, route, datetime.combine(day, time.min, tzinfo=timezone.utc)
+                db, route, datetime.combine(day, time.min, tzinfo=zone)
             )
         slot_min, slot_max = min(slots), max(slots)
         existing = {
@@ -135,13 +169,15 @@ def ensure_upcoming_occurrences(db: Session, *, horizon_hours: int = 24) -> int:
                 .all()
             )
         }
+        wanted: set[tuple] = set()
         for scheduled_at in slots:
-            guards = guards_by_day.get(scheduled_at.date()) or []
+            guards = guards_by_day.get(scheduled_at.astimezone(zone).date()) or []
             if not guards:
                 continue
             for guard_id, session_id, assignment_id in guards:
                 for cp in cps:
                     key = (cp.id, guard_id, _aware(scheduled_at))
+                    wanted.add(key)
                     if key in existing:
                         continue
                     db.add(
@@ -159,8 +195,22 @@ def ensure_upcoming_occurrences(db: Session, *, horizon_hours: int = 24) -> int:
                     )
                     existing.add(key)
                     created += 1
-    if created:
-        db.commit()
+        stale = (
+            db.query(PatrolOccurrence)
+            .filter(
+                PatrolOccurrence.route_id == route.id,
+                PatrolOccurrence.status.in_(("scheduled", "reminder_sent")),
+                PatrolOccurrence.scheduled_at >= now,
+                PatrolOccurrence.scheduled_at <= until,
+            )
+            .all()
+        )
+        for occ in stale:
+            key = (occ.checkpoint_id, occ.guard_id, _aware(occ.scheduled_at))
+            if key in wanted:
+                continue
+            db.delete(occ)
+    db.commit()
     return created
 
 
@@ -431,9 +481,11 @@ def _sweep_patrol_schedule_locked(db: Session) -> dict:
         if occ.reminder_sent_at is None and now >= reminder_at and now < miss_at:
             cp = occ.checkpoint
             site = occ.site
+            zone = _route_zone(db, route)
+            local_due = scheduled.astimezone(zone).strftime("%H:%M")
             title = "Patrol reminder"
             body = (
-                f"Patrol due at {scheduled.strftime('%H:%M')} UTC — "
+                f"Patrol due at {local_due} — "
                 f"Site: {site.name if site else '—'}; "
                 f"Point: {cp.name if cp else '—'} ({cp.code if cp else ''}). "
                 f"Scan the correct QR at the site within the allowed window."
@@ -460,8 +512,10 @@ def _sweep_patrol_schedule_locked(db: Session) -> dict:
             missed += 1
             cp = occ.checkpoint
             route_name = route.name if route else "route"
+            zone = _route_zone(db, route)
+            local_missed = scheduled.astimezone(zone).strftime("%Y-%m-%d %H:%M")
             msg = (
-                f"Missed patrol at {scheduled.strftime('%Y-%m-%d %H:%M')} UTC — "
+                f"Missed patrol at {local_missed} — "
                 f"{cp.name if cp else 'checkpoint'} on {route_name}"
             )
             alert = PatrolAlert(

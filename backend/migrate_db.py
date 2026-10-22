@@ -308,6 +308,8 @@ def _ensure_clock_in_location_columns():
                 conn.execute(text(f"ALTER TABLE attendance ADD COLUMN latitude {float_type}"))
             if "longitude" not in cols:
                 conn.execute(text(f"ALTER TABLE attendance ADD COLUMN longitude {float_type}"))
+            if "accuracy_m" not in cols:
+                conn.execute(text(f"ALTER TABLE attendance ADD COLUMN accuracy_m {float_type}"))
         if insp.has_table("assignments"):
             a_cols = {c["name"] for c in insp.get_columns("assignments")}
             if "created_by_user_id" not in a_cols:
@@ -423,6 +425,7 @@ def _run_migrations():
         ("attendance", "location_name", "TEXT"),
         ("attendance", "latitude", "REAL"),
         ("attendance", "longitude", "REAL"),
+        ("attendance", "accuracy_m", "REAL"),
         ("sub_contractors", "updated_at", "TEXT"),
         ("guards", "dbs_status", "TEXT"),
         ("guards", "weekly_contracted_hours", "REAL DEFAULT 40"),

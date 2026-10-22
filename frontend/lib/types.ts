@@ -1075,6 +1075,8 @@ export interface PortalHours {
   shifts_count: number;
   /** Staff logins only. Null for client logins, which never see guard wages. */
   total_pay?: number | null;
+  early_exits?: number;
+  overtime_hours?: number;
 }
 
 export interface RotaDetail {

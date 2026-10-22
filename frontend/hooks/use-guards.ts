@@ -14,7 +14,8 @@ export function useGuards(params?: { area?: string; postcode?: string; nearby?: 
       params?.view ?? 'active',
     ],
     queryFn: () => api.guards.list(params),
-    refetchOnMount: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
   });
 }
 

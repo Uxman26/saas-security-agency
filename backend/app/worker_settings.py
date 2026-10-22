@@ -12,6 +12,7 @@ from app.worker_jobs import (
     sweep_renewal_invoices,
     sweep_finance_recurring,
     snapshot_server_metrics,
+    sweep_shift_reminders,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -28,12 +29,14 @@ class WorkerSettings:
         sweep_renewal_invoices,
         sweep_finance_recurring,
         snapshot_server_metrics,
+        sweep_shift_reminders,
     ]
     # unique=True: skip enqueue if the same job is already queued/running (overlap guard).
     cron_jobs = [
         cron(scheduled_maintenance, hour=3, minute=0, unique=True, timeout=600, max_tries=1),
         cron(check_missed_patrols, minute=set(range(60)), unique=True, timeout=240, max_tries=1),
         cron(sweep_lone_worker, minute=set(range(60)), unique=True, timeout=240, max_tries=1),
+        cron(sweep_shift_reminders, minute=set(range(60)), unique=True, timeout=240, max_tries=1),
         cron(sweep_trials, minute={0}, unique=True, timeout=300, max_tries=1),
         cron(sweep_renewal_invoices, hour=4, minute=15, unique=True, timeout=600, max_tries=1),
         cron(sweep_finance_recurring, hour=5, minute=0, unique=True, timeout=600, max_tries=1),

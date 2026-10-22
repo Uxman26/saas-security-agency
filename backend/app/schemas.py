@@ -966,6 +966,7 @@ class RotaDetailResponse(BaseModel):
     # Hours agreed with the client for billing on a paid cancellation.
     client_hours: Optional[float] = None
     note: Optional[str] = None
+    gps_verified: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -1436,6 +1437,8 @@ class AttendanceResponse(AttendanceBase):
     location_name: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    accuracy_m: Optional[float] = None
+    gps_verified: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -1466,6 +1469,13 @@ class AttendanceByShiftRequest(BaseModel):
     @classmethod
     def note_strip(cls, v: Optional[str]) -> str:
         return (v or "").strip()
+
+
+class AttendanceClearByShiftRequest(BaseModel):
+    guard_id: int
+    date: date
+    shift_start: str
+    site_name: str = ""
 
 
 class BookingOnOff(BaseModel):
@@ -2099,6 +2109,18 @@ class PortalHoursResponse(BaseModel):
     # Staff only: what the logged-in guard earned over the period. None for client
     # logins, which must never see guard wages.
     total_pay: Optional[float] = None
+    early_exits: int = 0
+    overtime_hours: float = 0
+
+
+class OpsEligibilityResponse(BaseModel):
+    patrol_enabled: bool = False
+    patrol_reason: Optional[str] = None
+    patrol_route_id: Optional[int] = None
+    lone_worker_enabled: bool = False
+    lone_worker_reason: Optional[str] = None
+    site_id: Optional[int] = None
+    assignment_id: Optional[int] = None
 
 
 class StaffRequestResponse(BaseModel):

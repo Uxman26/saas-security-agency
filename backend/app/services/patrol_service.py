@@ -400,6 +400,11 @@ def start_session(db: Session, user: User, data: PatrolSessionStart) -> PatrolSe
     if not route or route.status != "active":
         raise HTTPException(status_code=404, detail="Active route not found")
     _assert_site_in_portal_scope(db, user, route.site_id)
+    from app.services.ops_feature_eligibility import assert_patrol_start
+
+    matched_assignment = assert_patrol_start(db, user, route)
+    if matched_assignment is not None and not data.assignment_id:
+        data.assignment_id = matched_assignment.id
     guard = _resolve_guard(db, user, company.id, data.guard_id)
     # end any open session for this guard+route
     open_s = (
@@ -492,16 +497,10 @@ def scan_checkpoint(
             .first()
         )
         session_id = open_s.id if open_s else None
-    from app.models import Assignment
+    if not session_id and is_staff_portal_user(user):
+        from app.services.ops_feature_eligibility import assert_patrol_start
 
-    today = date.today()
-    has_assignment = (
-        db.query(Assignment.id)
-        .filter(Assignment.guard_id == guard.id, Assignment.site_id == cp.site_id, Assignment.date == today)
-        .first()
-    )
-    if not session_id and not has_assignment and is_staff_portal_user(user):
-        raise HTTPException(status_code=403, detail="You are not assigned to patrol this site today")
+        assert_patrol_start(db, user, route)
 
     distance = haversine_m(cp.latitude, cp.longitude, data.latitude, data.longitude)
     radius = cp.radius_m or 20
@@ -844,33 +843,23 @@ def today_for_guard(db: Session, user: User) -> PatrolTodayResponse:
         .order_by(PatrolSession.id.desc())
         .first()
     )
-    recent = list_logs(db, user, guard_id=guard.id, start_date=date.today(), end_date=date.today())[:10]
+    from app.services.attendance_service import _company_zone
+
+    today = datetime.now(_company_zone(company)).date()
+    recent = list_logs(db, user, guard_id=guard.id, start_date=today, end_date=today)[:10]
     route = sess.route if sess else None
     if not route:
-        # Without an open session, suggest today's route from the guard's shift site(s)
-        # so Start session on My workspace has a route_id to call.
-        today = date.today()
-        site_ids = {
-            r[0]
-            for r in db.query(Assignment.site_id)
-            .filter(Assignment.guard_id == guard.id, Assignment.date == today)
-            .distinct()
-            .all()
-            if r[0]
-        }
-        if site_ids:
+        from app.services.ops_feature_eligibility import patrol_match
+
+        matched, _, _ = patrol_match(db, user)
+        if matched:
             route = (
                 db.query(PatrolRoute)
                 .options(
                     joinedload(PatrolRoute.site),
                     joinedload(PatrolRoute.checkpoints).joinedload(PatrolCheckpoint.site),
                 )
-                .filter(
-                    PatrolRoute.company_id == company.id,
-                    PatrolRoute.status == "active",
-                    PatrolRoute.site_id.in_(site_ids),
-                )
-                .order_by(PatrolRoute.id.asc())
+                .filter(PatrolRoute.id == matched.id)
                 .first()
             )
     if not route:

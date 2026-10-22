@@ -1171,6 +1171,7 @@ class Attendance(Base):
     location_name = Column(String, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    accuracy_m = Column(Float, nullable=True)
     # Hours agreed for payment when a shift is cancelled but still paid. Null for every
     # other status: those are paid on the shift's own span, not on a negotiated figure.
     paid_hours = Column(Float, nullable=True)

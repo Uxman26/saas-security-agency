@@ -261,6 +261,11 @@ def portal_hours(
     # Only a staff login is looking at its own wages here; a client login sees the same
     # shifts but must not be told what the guards on them are paid.
     pay = _total_pay(db, get_company_by_user_id(db, user.id).id, rows) if guard_id else None
+    early_exits = sum(
+        1
+        for r in rows
+        if (r.attendance_status or "").strip().lower() in {"early_leave", "early_finish"}
+    )
     return PortalHoursResponse(
         period=label,
         start_date=start_date,
@@ -268,4 +273,5 @@ def portal_hours(
         total_hours=total,
         shifts_count=len(rows),
         total_pay=pay,
+        early_exits=early_exits,
     )

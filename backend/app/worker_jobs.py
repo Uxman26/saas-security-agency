@@ -225,3 +225,23 @@ def _snapshot_server_metrics_sync() -> dict[str, Any]:
 
 async def snapshot_server_metrics(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_snapshot_server_metrics_sync)
+
+
+def _sweep_shift_reminders_sync() -> dict[str, Any]:
+    def run():
+        db: Session = SessionLocal()
+        try:
+            from app.services import shift_reminder_service
+
+            result = shift_reminder_service.sweep_shift_reminders(db)
+            if result.get("sent"):
+                logger.info("shift reminders: %s", result)
+            return result
+        finally:
+            db.close()
+
+    return _track_job("sweep_shift_reminders", run)()
+
+
+async def sweep_shift_reminders(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_sweep_shift_reminders_sync)

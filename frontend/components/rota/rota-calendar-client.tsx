@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, lateMinutesLabel, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attendanceStatusLine, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftSiteBarColor } from '@/lib/rota-shifts-types';
@@ -3076,8 +3076,13 @@ export function RotaCalendarClient() {
                               sh.start && sh.end ? `${sh.start} – ${sh.end}` : '',
                               sh.site,
                               (sh.notes || '').trim() || (sh.label || '').trim(),
-                              attStatus ? attStatusLabel(attStatus) : '',
-                              att?.lateMinutes ? lateMinutesLabel(att.lateMinutes) : '',
+                              att
+                                ? attendanceStatusLine({
+                                    status: att.status,
+                                    lateMinutes:
+                                      normalizeAttStatus(att.status) === 'late' ? att.lateMinutes : 0,
+                                  })
+                                : '',
                               attMissing ? 'Attendance not marked — this shift has already started' : '',
                               conflicts.length
                                 ? `${conflicts.length} shift conflict${conflicts.length === 1 ? '' : 's'}`

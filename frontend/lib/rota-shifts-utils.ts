@@ -211,10 +211,35 @@ export function isAttendanceMarked(s: string | undefined | null): boolean {
   return !!(s || '').trim();
 }
 
-export function lateMinutesLabel(mins?: number | null): string {
+export function minsLabel(mins?: number | null): string {
   const m = Math.max(0, Math.round(Number(mins) || 0));
   if (m <= 0) return '';
-  return m === 1 ? '1 minute late' : `${m} minutes late`;
+  return m === 1 ? '1 min' : `${m} mins`;
+}
+
+export function lateMinutesLabel(mins?: number | null): string {
+  const label = minsLabel(mins);
+  return label ? `${label} late` : '';
+}
+
+export function attendanceStatusLine(opts: {
+  status?: string | null;
+  lateMinutes?: number | null;
+  overtimeMinutes?: number | null;
+  earlyMinutes?: number | null;
+}): string {
+  const status = normalizeAttStatus(opts.status ?? null) || (opts.status || '').trim().toLowerCase();
+  const late = Math.max(0, Math.round(Number(opts.lateMinutes) || 0));
+  const overtime = Math.max(0, Math.round(Number(opts.overtimeMinutes) || 0));
+  const early = Math.max(0, Math.round(Number(opts.earlyMinutes) || 0));
+  if (status === 'late' && late > 0) return `Attendance: Late ${minsLabel(late)}`;
+  if (early > 0 && (status === 'early_leave' || status === 'early_finish')) {
+    return `Attendance: Finished Early ${minsLabel(early)}`;
+  }
+  if (overtime > 0) return `Attendance: Overtime ${minsLabel(overtime)}`;
+  if (early > 0) return `Attendance: Finished Early ${minsLabel(early)}`;
+  const label = attStatusLabel(opts.status);
+  return label && label !== '—' ? `Attendance: ${label}` : '';
 }
 
 const ISO_TS =

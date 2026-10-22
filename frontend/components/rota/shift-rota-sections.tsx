@@ -5,11 +5,9 @@ import { isCancelledStatus, shiftTypeOption } from '@/lib/rota-shifts-types';
 import {
   agreedClientHours,
   agreedPaidHours,
+  attendanceStatusLine,
   attStatusBarColor,
-  attStatusLabel,
-  formatDurationMins,
   formatNoteTimestamps,
-  lateMinutesLabel,
   latestShiftAdjustment,
   minutesBetweenTimes,
   normalizeAttStatus,
@@ -56,12 +54,17 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
   const rawStatus = (attendance?.status || '').trim();
   const attStatus = attendance ? normalizeAttStatus(attendance.status) : null;
   const lateMins = Math.max(0, Number(attendance?.lateMinutes) || 0);
-  const lateLabel = lateMinutesLabel(lateMins);
   const attNote = formatNoteTimestamps((attendance?.note || '').trim());
   const overtime = latestShiftAdjustment(shift, 'overtime');
   const early = latestShiftAdjustment(shift, 'early_finish');
   const otMins = overtime ? minutesBetweenTimes(overtime.scheduledEnd, overtime.actualEnd) : 0;
   const earlyMins = early ? minutesBetweenTimes(early.actualEnd, early.scheduledEnd) : 0;
+  const attLine = attendanceStatusLine({
+    status: attStatus || rawStatus,
+    lateMinutes: attStatus === 'late' || rawStatus.toLowerCase() === 'late' ? lateMins : 0,
+  });
+  const otLine = otMins > 0 ? attendanceStatusLine({ overtimeMinutes: otMins }) : '';
+  const earlyLine = earlyMins > 0 ? attendanceStatusLine({ earlyMinutes: earlyMins, status: 'early_leave' }) : '';
   const site = shiftSiteLine(shift);
   const notes = (shift.notes || '').trim();
   const label = (shift.label || '').trim();
@@ -113,17 +116,12 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
           {showAtt ? (
             <div className="min-w-0 space-y-0.5">
               <div
-                className={cn(labelCls, 'truncate')}
+                className={cn(labelCls, 'whitespace-normal break-words normal-case')}
                 style={{ color: attStatusBarColor(attStatus || rawStatus) || undefined }}
-                title={`Attendance: ${lateLabel || attStatusLabel(attStatus || rawStatus)}`}
+                title={attLine}
               >
-                Attendance: {attStatusLabel(attStatus || rawStatus)}
+                {attLine}
               </div>
-              {lateLabel ? (
-                <div className={cn(bodyCls, 'font-semibold text-amber-700 dark:text-amber-300')}>
-                  {lateLabel}
-                </div>
-              ) : null}
               {attStatus === 'cancelled_paid' ? (
                 <div className={cn(bodyCls, 'text-muted-foreground')}>
                   Paid: {agreedPaidHours(attendance).toFixed(2)}h
@@ -143,8 +141,8 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
 
           {showOt ? (
             <div className="min-w-0 space-y-0.5">
-              <div className={cn(labelCls, 'text-sky-700 dark:text-sky-300 truncate')}>
-                Overtime: {formatDurationMins(otMins)}
+              <div className={cn(labelCls, 'text-sky-700 dark:text-sky-300 whitespace-normal break-words normal-case')} title={otLine}>
+                {otLine}
               </div>
               {(overtime?.reason || '').trim() ? (
                 <div className={noteCls}>Note: {(overtime?.reason || '').trim()}</div>
@@ -158,8 +156,8 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
 
           {showEarly ? (
             <div className="min-w-0 space-y-0.5">
-              <div className={cn(labelCls, 'text-amber-700 dark:text-amber-300 truncate')}>
-                Early finish: {formatDurationMins(earlyMins)}
+              <div className={cn(labelCls, 'text-amber-700 dark:text-amber-300 whitespace-normal break-words normal-case')} title={earlyLine}>
+                {earlyLine}
               </div>
               {(early?.reason || '').trim() ? (
                 <div className={noteCls}>Note: {(early?.reason || '').trim()}</div>

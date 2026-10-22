@@ -193,7 +193,7 @@ def _late_minutes(
 ) -> Optional[int]:
     if late_log and late_log.late_minutes is not None:
         mins = int(late_log.late_minutes)
-        return mins if mins > 0 else None
+        return mins if 1 <= mins <= 16 * 60 else None
     if not a or not att or not att.booked_at or not a.shift_start:
         return None
     try:
@@ -205,7 +205,7 @@ def _late_minutes(
         if booked.tzinfo is None:
             booked = booked.replace(tzinfo=timezone.utc)
         diff = (booked.astimezone(tz) - due).total_seconds() / 60.0
-        if diff >= 1:
+        if 1 <= diff <= 16 * 60:
             return int(diff)
     except (ValueError, IndexError, TypeError):
         pass

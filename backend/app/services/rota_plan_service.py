@@ -1177,7 +1177,7 @@ def _attendance_for_assignments(db: Session, slot_by_assignment: dict[int, str],
             "dk": dk,
             "si": int(si),
         }
-        if late_m:
+        if late_m and (att.status or "").strip().lower() == "late":
             rec["lateMinutes"] = int(late_m)
         out[key] = rec
     return out
@@ -1254,11 +1254,19 @@ def apply_recorded_attendance_overlay(payload: dict, slots: dict[int, str], reco
         if rec and str(rec.get("status") or "").strip():
             existing = merged.get(key)
             combined = {**existing, **rec} if isinstance(existing, dict) else dict(rec)
+            status = str(rec.get("status") or "").strip().lower()
             if isinstance(existing, dict):
                 if not rec.get("hours") and existing.get("hours"):
                     combined["hours"] = existing["hours"]
-                if rec.get("lateMinutes") is None and existing.get("lateMinutes"):
+            if status == "late":
+                if rec.get("lateMinutes") is not None:
+                    combined["lateMinutes"] = rec["lateMinutes"]
+                elif isinstance(existing, dict) and existing.get("lateMinutes"):
                     combined["lateMinutes"] = existing["lateMinutes"]
+                else:
+                    combined.pop("lateMinutes", None)
+            else:
+                combined.pop("lateMinutes", None)
             merged[key] = combined
         else:
             merged.pop(key, None)

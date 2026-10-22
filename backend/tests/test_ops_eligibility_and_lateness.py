@@ -46,3 +46,14 @@ def test_late_minutes_prefers_shift_late_log():
     )
     log = SimpleNamespace(late_minutes=18)
     assert _late_minutes(assignment, att, log) == 18
+
+
+def test_late_minutes_drops_impossible_duration():
+    assignment = SimpleNamespace(date=date(2026, 10, 22), shift_start="14:20")
+    att = SimpleNamespace(
+        status="late",
+        booked_at=datetime(2026, 10, 24, 9, 11, tzinfo=timezone.utc),
+    )
+    london = ZoneInfo("Europe/London")
+    assert _late_minutes(assignment, att, None, zone=london) is None
+    assert _late_minutes(assignment, att, SimpleNamespace(late_minutes=2571), zone=london) is None

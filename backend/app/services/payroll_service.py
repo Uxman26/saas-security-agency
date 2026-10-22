@@ -163,6 +163,7 @@ def _upsert_from_rota_lines(
             Payroll.guard_id == guard_id,
             Payroll.period_start == period_start,
             Payroll.period_end == period_end,
+            Payroll.deleted_at.is_(None),
         )
         .first()
     )
@@ -230,7 +231,7 @@ def get_payrolls(
     of its sites without listing them.
     """
     company = get_company_by_user_id(db, user_id)
-    q = db.query(Payroll).filter(Payroll.company_id == company.id)
+    q = db.query(Payroll).filter(Payroll.company_id == company.id, Payroll.deleted_at.is_(None))
     scope = resolve_work_scope(
         db,
         company.id,
@@ -265,7 +266,9 @@ def get_payrolls(
 
 def get_payroll(db: Session, payroll_id: int, user_id: int) -> Payroll:
     company = get_company_by_user_id(db, user_id)
-    pr = db.query(Payroll).filter(Payroll.id == payroll_id, Payroll.company_id == company.id).first()
+    pr = db.query(Payroll).filter(
+        Payroll.id == payroll_id, Payroll.company_id == company.id, Payroll.deleted_at.is_(None)
+    ).first()
     if not pr:
         raise HTTPException(status_code=404, detail="Payroll not found")
     return pr
@@ -505,7 +508,7 @@ def preview_pay(
             if d.attendance_status == CANCELLED_PAID
             else (
                 round(float(actual), 2)
-                if actual is not None
+                if actual is not None and float(actual) > 0
                 else scheduled_hours
             )
         )
@@ -635,7 +638,9 @@ def delete_payroll(db: Session, payroll_id: int, user_id: int) -> None:
 
 def update_payroll(db: Session, payroll_id: int, data: PayrollUpdate, user_id: int) -> Payroll:
     company = get_company_by_user_id(db, user_id)
-    pr = db.query(Payroll).filter(Payroll.id == payroll_id, Payroll.company_id == company.id).first()
+    pr = db.query(Payroll).filter(
+        Payroll.id == payroll_id, Payroll.company_id == company.id, Payroll.deleted_at.is_(None)
+    ).first()
     if not pr:
         raise HTTPException(status_code=404, detail="Payroll not found")
     payload = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)

@@ -451,6 +451,7 @@ export default function ExpensesPage() {
           value={form.description}
           onChange={(ev) => setForm((f) => ({ ...f, description: ev.target.value }))}
           rows={2}
+          maxLength={2000}
         />
       </div>
       <div>
@@ -724,7 +725,7 @@ export default function ExpensesPage() {
                             <TableRow key={e.id}>
                               <TableCell>{e.expense_date}</TableCell>
                               <TableCell>{CAT_LABELS[e.category] || e.category}</TableCell>
-                              <TableCell>{e.vendor_name || '—'}</TableCell>
+                              <TableCell className="max-w-[12rem] truncate" title={e.vendor_name || undefined}>{e.vendor_name || '—'}</TableCell>
                               <TableCell className="max-w-[120px] truncate">{e.reference_number || '—'}</TableCell>
                               <TableCell>{fmt(e.amount_ex_vat)}</TableCell>
                               <TableCell>{fmt(e.vat_amount)}</TableCell>
@@ -824,7 +825,7 @@ export default function ExpensesPage() {
                         <div key={e.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
                           <div>
                             <span className="font-medium">{CAT_LABELS[e.category] || e.category}</span>
-                            {e.vendor_name && <span className="text-muted-foreground ml-2">{e.vendor_name}</span>}
+                            {e.vendor_name && <span className="text-muted-foreground ml-2 max-w-[14rem] truncate inline-block align-bottom" title={e.vendor_name}>{e.vendor_name}</span>}
                             <span className="text-muted-foreground ml-2">{e.expense_date}</span>
                           </div>
                           <span className="font-medium">{fmt(e.total_amount)}</span>

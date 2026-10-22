@@ -68,9 +68,7 @@ def invoice_balance_due(
 
 
 def sync_invoice_payment_status(db: Session, inv: Invoice, user_id: Optional[int] = None) -> str:
-    if inv.status == "draft":
-        return inv.status
-    if inv.status == "cancelled":
+    if inv.status in ("draft", "cancelled"):
         return inv.status
     prev = inv.status
     paid = invoice_amount_paid(db, inv.id)
@@ -83,12 +81,14 @@ def sync_invoice_payment_status(db: Session, inv: Invoice, user_id: Optional[int
         inv.status = "paid"
     elif settled > 0:
         inv.status = "partial"
-    elif inv.status == "paid":
-        inv.status = "sent"
-    elif inv.due_date and inv.due_date < date.today() and inv.status in ("sent", "unpaid", "overdue"):
+    elif inv.due_date and inv.due_date < date.today():
         inv.status = "overdue"
-    elif inv.status not in ("sent", "unpaid", "overdue", "partial") and inv.status != "draft":
-        inv.status = "unpaid" if inv.status not in ("sent",) else inv.status
+    elif prev == "unpaid":
+        inv.status = "unpaid"
+    else:
+        # Sent, paid, partial, overdue, or the legacy "issued" value all return
+        # to a collectable issued state once every payment and credit is gone.
+        inv.status = "sent"
     if user_id and inv.status == "overdue" and prev != "overdue":
         from app.services import sms_trigger_service, email_trigger_service
         balance = round(max(0, total - settled), 2)

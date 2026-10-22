@@ -1773,7 +1773,7 @@ class PaymentBase(BaseModel):
     paid_at: Optional[datetime] = None
 
 class PaymentCreate(PaymentBase):
-    pass
+    invoice_id: int
 
 class PaymentUpdate(BaseModel):
     invoice_id: Optional[int] = None
@@ -2132,9 +2132,9 @@ class ExpenseBase(BaseModel):
     expense_date: date
     category: str
     vendor_id: Optional[int] = None
-    vendor_name: Optional[str] = None
-    reference_number: Optional[str] = None
-    description: Optional[str] = None
+    vendor_name: OptShortTextStr = None
+    reference_number: OptShortTextStr = None
+    description: OptNoteStr = None
     amount_ex_vat: float
     vat_exempt: bool = False
     payment_method: Optional[str] = None
@@ -2142,7 +2142,6 @@ class ExpenseBase(BaseModel):
 
 
 class ExpenseCreate(ExpenseBase):
-    # Tightened on input only; ExpenseResponse is a separate model already.
     category: RequiredShortTextStr
 
 
@@ -2150,9 +2149,9 @@ class ExpenseUpdate(BaseModel):
     expense_date: Optional[date] = None
     category: Optional[str] = None
     vendor_id: Optional[int] = None
-    vendor_name: Optional[str] = None
-    reference_number: Optional[str] = None
-    description: Optional[str] = None
+    vendor_name: OptShortTextStr = None
+    reference_number: OptShortTextStr = None
+    description: OptNoteStr = None
     amount_ex_vat: Optional[float] = None
     vat_exempt: Optional[bool] = None
     payment_method: Optional[str] = None

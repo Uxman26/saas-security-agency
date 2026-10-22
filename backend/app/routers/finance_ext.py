@@ -15,7 +15,7 @@ router = APIRouter(tags=["finance-ext"])
 
 
 class VendorIn(BaseModel):
-    name: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=255)
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
@@ -51,7 +51,9 @@ def create_vendor(body: VendorIn, db: Session = Depends(get_db), user: User = De
 @router.patch("/vendors/{vendor_id}")
 def patch_vendor(vendor_id: int, body: VendorIn, db: Session = Depends(get_db), user: User = Depends(require_module("vendors", "edit"))):
     company = get_company_by_user_id(db, user.id)
-    row = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.company_id == company.id).first()
+    row = db.query(Vendor).filter(
+        Vendor.id == vendor_id, Vendor.company_id == company.id, Vendor.deleted_at.is_(None)
+    ).first()
     if not row:
         raise HTTPException(404, "Vendor not found")
     for k, v in body.model_dump().items():
@@ -63,7 +65,9 @@ def patch_vendor(vendor_id: int, body: VendorIn, db: Session = Depends(get_db), 
 @router.delete("/vendors/{vendor_id}", status_code=204)
 def delete_vendor(vendor_id: int, db: Session = Depends(get_db), user: User = Depends(require_module("vendors", "delete"))):
     company = get_company_by_user_id(db, user.id)
-    row = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.company_id == company.id).first()
+    row = db.query(Vendor).filter(
+        Vendor.id == vendor_id, Vendor.company_id == company.id, Vendor.deleted_at.is_(None)
+    ).first()
     if not row:
         raise HTTPException(404, "Vendor not found")
     from datetime import datetime, timezone
@@ -74,8 +78,8 @@ def delete_vendor(vendor_id: int, db: Session = Depends(get_db), user: User = De
 
 class FixedExpenseIn(BaseModel):
     vendor_id: Optional[int] = None
-    category: str
-    description: str
+    category: str = Field(min_length=1, max_length=255)
+    description: str = Field(min_length=1, max_length=255)
     amount: float
     vat_rate: float = 20
     day_of_month: int = 1
@@ -127,6 +131,16 @@ def fixed_status(fid: int, status: str = Query(...), db: Session = Depends(get_d
     row.status = status
     db.commit()
     return {"id": row.id, "status": row.status}
+
+
+@router.delete("/fixed-expenses/{fid}", status_code=204)
+def delete_fixed(fid: int, db: Session = Depends(get_db), user: User = Depends(require_module("fixed_expenses", "delete"))):
+    company = get_company_by_user_id(db, user.id)
+    row = db.query(FixedExpense).filter(FixedExpense.id == fid, FixedExpense.company_id == company.id).first()
+    if not row:
+        raise HTTPException(404, "Fixed expense not found")
+    db.delete(row)
+    db.commit()
 
 
 class RecurringIn(BaseModel):
@@ -185,6 +199,18 @@ def recurring_status(rid: int, status: str = Query(...), db: Session = Depends(g
     row.status = status
     db.commit()
     return {"id": row.id, "status": row.status}
+
+
+@router.delete("/recurring-invoices/{rid}", status_code=204)
+def delete_recurring(rid: int, db: Session = Depends(get_db), user: User = Depends(require_module("recurring_invoices", "delete"))):
+    company = get_company_by_user_id(db, user.id)
+    row = db.query(RecurringInvoice).filter(RecurringInvoice.id == rid, RecurringInvoice.company_id == company.id).first()
+    if not row:
+        raise HTTPException(404, "Recurring invoice not found")
+    row.last_invoice_id = None
+    db.flush()
+    db.delete(row)
+    db.commit()
 
 
 @router.get("/accounts")
@@ -263,6 +289,19 @@ def patch_account(
         "is_system": bool(row.is_system),
         "status": row.status,
     }
+
+
+@router.delete("/accounts/{account_id}", status_code=204)
+def delete_account(
+    account_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_module("chart_of_accounts", "edit")),
+):
+    company = get_company_by_user_id(db, user.id)
+    try:
+        accounting_service.delete_account(db, company.id, account_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/accounts/reports/trial-balance")

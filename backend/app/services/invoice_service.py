@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
 from app.authz import assert_owned_by_company
-from app.models import Allowance, AuditLog, Client, ClientBankAccount, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
+from app.models import Allowance, AuditLog, Client, ClientBankAccount, CreditNote, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
@@ -17,6 +17,13 @@ from app.services.recycle_bin import archive as _bin_archive
 
 
 DEFAULT_INVOICE_VAT_RATE = 20.0
+
+
+def _assert_site_matches_client(site: Site, client_id: Optional[int]) -> None:
+    if client_id is None or site.client_id is None:
+        return
+    if int(site.client_id) != int(client_id):
+        raise HTTPException(status_code=400, detail="Site does not belong to this client")
 
 
 def _parse_att_hours(raw) -> Optional[float]:
@@ -167,6 +174,7 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
         site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
         if not site:
             raise HTTPException(status_code=404, detail=f"Site not found: {site_id}")
+        _assert_site_matches_client(site, client.id)
         hours = float(ld.get("hours") if isinstance(ld, dict) else ld.hours or 0)
         rate = float(ld.get("rate") if isinstance(ld, dict) else ld.rate or 0)
         allowance = float(ld.get("allowance_amount") if isinstance(ld, dict) else getattr(ld, "allowance_amount", 0) or 0)
@@ -267,7 +275,7 @@ def get_invoices(
     q = (
         db.query(Invoice)
         .options(noload(Invoice.lines), joinedload(Invoice.client), joinedload(Invoice.company))
-        .filter(Invoice.company_id == company.id)
+        .filter(Invoice.company_id == company.id, Invoice.deleted_at.is_(None))
     )
     q = _scope_for_portal_user(db, user_id, q)
     if client_id:
@@ -328,7 +336,7 @@ def get_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
             joinedload(Invoice.client),
             joinedload(Invoice.company),
         )
-        .filter(Invoice.id == invoice_id, Invoice.company_id == company.id)
+        .filter(Invoice.id == invoice_id, Invoice.company_id == company.id, Invoice.deleted_at.is_(None))
     )
     # 404 rather than 403 so another client's invoice ids cannot be probed.
     inv = _scope_for_portal_user(db, user_id, q).first()
@@ -401,6 +409,7 @@ def add_invoice_line(db: Session, invoice_id: int, data: InvoiceLineBase, user_i
     site = db.query(Site).filter(Site.id == data.site_id, Site.company_id == company.id).first()
     if not site:
         raise HTTPException(status_code=404, detail="Site not found")
+    _assert_site_matches_client(site, inv.client_id)
     assert_owned_by_company(db, Guard, data.guard_id, company.id, field_name="guard_id")
     hours = float(data.hours or 0)
     rate = float(data.rate or 0)
@@ -445,6 +454,7 @@ def update_invoice_line(db: Session, invoice_id: int, line_id: int, data: Invoic
         site = db.query(Site).filter(Site.id == payload["site_id"], Site.company_id == company.id).first()
         if not site:
             raise HTTPException(status_code=404, detail="Site not found")
+        _assert_site_matches_client(site, inv.client_id)
     assert_owned_by_company(db, Guard, payload.get("guard_id"), company.id, field_name="guard_id")
     amount_override = payload.pop("amount", None) if "amount" in payload else None
     for k, v in payload.items():
@@ -669,6 +679,7 @@ def generate_from_rota(
             Invoice.company_id == company.id,
             Invoice.period_start == period_start,
             Invoice.period_end == period_end,
+            Invoice.deleted_at.is_(None),
         )
         dup_q = dup_q.filter(Invoice.client_id == client_id) if client_id else dup_q.filter(Invoice.client_id.is_(None))
         existing = None
@@ -877,6 +888,18 @@ def delete_invoice(db: Session, invoice_id: int, user_id: int) -> None:
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
     log_invoice_audit(db, company.id, user_id, invoice_id, "invoice_deleted", {})
+    related_payments = (
+        db.query(Payment).filter(Payment.invoice_id == invoice_id, Payment.company_id == company.id).all()
+    )
+    related_credits = (
+        db.query(CreditNote)
+        .filter(CreditNote.invoice_id == invoice_id, CreditNote.company_id == company.id)
+        .all()
+    )
+    for row in related_payments:
+        _bin_archive(row, user_id)
+    for row in related_credits:
+        _bin_archive(row, user_id)
     _bin_archive(inv, user_id)
     db.commit()
 

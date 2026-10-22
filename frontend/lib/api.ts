@@ -1538,6 +1538,7 @@ export const api = {
       request<{ id: number; status: string }>(`/fixed-expenses/${id}/status?status=${encodeURIComponent(status)}`, {
         method: 'PATCH',
       }),
+    delete: (id: number): Promise<void> => request<void>(`/fixed-expenses/${id}`, { method: 'DELETE' }),
   },
   recurringInvoices: {
     list: (): Promise<import('./types').RecurringInvoice[]> =>
@@ -1549,6 +1550,7 @@ export const api = {
         `/recurring-invoices/${id}/status?status=${encodeURIComponent(status)}`,
         { method: 'PATCH' }
       ),
+    delete: (id: number): Promise<void> => request<void>(`/recurring-invoices/${id}`, { method: 'DELETE' }),
   },
   accounts: {
     list: (): Promise<import('./types').Account[]> => request<import('./types').Account[]>('/accounts'),
@@ -1565,6 +1567,7 @@ export const api = {
       data: Partial<{ code: string; name: string; account_type: string; status: string }>
     ): Promise<import('./types').Account> =>
       request<import('./types').Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id: number): Promise<void> => request<void>(`/accounts/${id}`, { method: 'DELETE' }),
     trialBalance: (params?: { date_from?: string; date_to?: string }): Promise<import('./types').TrialBalanceRow[]> => {
       const q = new URLSearchParams();
       if (params?.date_from) q.set('date_from', params.date_from);

@@ -203,19 +203,30 @@ def get_dashboard_stats(db: Session, user_id: int, company_id: Optional[int] = N
     payroll_total = float(payroll_row[0] or 0)
     payroll_mtd = float(payroll_row[1] or 0)
 
-    inv_row = (
-        db.query(
-            func.coalesce(func.sum(Invoice.total), 0),
-            func.coalesce(
-                func.sum(case((Invoice.status.in_(["draft", "sent"]), Invoice.total), else_=0)),
-                0,
-            ),
-        )
-        .filter(Invoice.company_id == cid)
-        .one()
-    )
-    invoice_total = float(inv_row[0] or 0)
-    invoice_outstanding = float(inv_row[1] or 0)
+    # Invoiced total is issued AR (not drafts or cancelled). Outstanding is remaining
+    # cash still due on open invoices — not the face value of drafts labelled "sent".
+    OPEN_INVOICE_STATUSES = ("sent", "issued", "unpaid", "partial", "overdue")
+    inv_rows = db.query(Invoice.id, Invoice.total, Invoice.status).filter(Invoice.company_id == cid).all()
+    invoice_total = 0.0
+    open_ids: list[int] = []
+    open_totals: dict[int, float] = {}
+    for iid, total, status in inv_rows:
+        st = (status or "").strip().lower()
+        amt = float(total or 0)
+        if st not in ("draft", "cancelled"):
+            invoice_total += amt
+        if st in OPEN_INVOICE_STATUSES:
+            open_ids.append(int(iid))
+            open_totals[int(iid)] = amt
+    from app.services.invoice_payment_service import batch_invoice_settlements
+
+    settlements = batch_invoice_settlements(db, open_ids)
+    outstanding = 0.0
+    for iid, amt in open_totals.items():
+        paid, credited = settlements.get(iid, (0.0, 0.0))
+        outstanding += max(0.0, round(amt, 2) - paid - credited)
+    invoice_total = round(invoice_total, 2)
+    invoice_outstanding = round(outstanding, 2)
 
     # Attendance: late (30d) + present/absent today — one grouped query
     att_rows = (

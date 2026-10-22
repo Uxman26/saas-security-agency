@@ -23,7 +23,7 @@ import type {
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 
 type Tab = 'coa' | 'trial' | 'pl' | 'bs' | 'cf' | 'gl' | 'ar' | 'ap';
 
@@ -438,23 +438,43 @@ export default function AccountsPage() {
                         <TableCell>{a.status || 'active'}</TableCell>
                         <TableCell>
                           {canEdit ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => {
-                                setEditId(a.id);
-                                setForm({
-                                  code: a.code,
-                                  name: a.name,
-                                  account_type: a.account_type,
-                                  parent_id: a.parent_id ?? '',
-                                  status: a.status || 'active',
-                                });
-                                setOpen(true);
-                              }}
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
+                            <div className="flex">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditId(a.id);
+                                  setForm({
+                                    code: a.code,
+                                    name: a.name,
+                                    account_type: a.account_type,
+                                    parent_id: a.parent_id ?? '',
+                                    status: a.status || 'active',
+                                  });
+                                  setOpen(true);
+                                }}
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              {!a.is_system ? (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="text-destructive"
+                                  onClick={async () => {
+                                    try {
+                                      await api.accounts.delete(a.id);
+                                      await loadCoa();
+                                      toast.success('Account deleted');
+                                    } catch (e) {
+                                      toast.error(e instanceof Error ? e.message : 'Delete failed');
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              ) : null}
+                            </div>
                           ) : null}
                         </TableCell>
                       </TableRow>

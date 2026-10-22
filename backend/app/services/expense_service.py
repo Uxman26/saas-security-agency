@@ -67,7 +67,9 @@ def _to_response(exp: Expense) -> dict:
 
 def _get_expense(db: Session, expense_id: int, user_id: int) -> Expense:
     company = get_company_by_user_id(db, user_id)
-    exp = db.query(Expense).filter(Expense.id == expense_id, Expense.company_id == company.id).first()
+    exp = db.query(Expense).filter(
+        Expense.id == expense_id, Expense.company_id == company.id, Expense.deleted_at.is_(None)
+    ).first()
     if not exp:
         raise HTTPException(status_code=404, detail="Expense not found")
     return exp
@@ -82,7 +84,7 @@ def list_expenses(
     payment_status: Optional[str] = None,
 ) -> List[dict]:
     company = get_company_by_user_id(db, user_id)
-    q = db.query(Expense).filter(Expense.company_id == company.id)
+    q = db.query(Expense).filter(Expense.company_id == company.id, Expense.deleted_at.is_(None))
     if start_date:
         q = q.filter(Expense.expense_date >= start_date)
     if end_date:
@@ -240,6 +242,7 @@ def _expense_totals(db: Session, company_id: int, start: date, end: date) -> dic
             Expense.expense_date >= start,
             Expense.expense_date <= end,
             Expense.payment_status != "cancelled",
+            Expense.deleted_at.is_(None),
         )
         .first()
     )
@@ -264,6 +267,7 @@ def _invoice_vat_summary(db: Session, company_id: int, start: date, end: date) -
             Invoice.period_start <= end,
             Invoice.period_end >= start,
             Invoice.status.in_(_ISSUED_INVOICE_STATUSES),
+            Invoice.deleted_at.is_(None),
         )
         .first()
     )
@@ -297,6 +301,7 @@ def dashboard_summary(db: Session, user_id: int, start_date: date, end_date: dat
             Expense.expense_date >= start_date,
             Expense.expense_date <= end_date,
             Expense.payment_status != "cancelled",
+            Expense.deleted_at.is_(None),
         )
         .group_by(Expense.category)
         .all()
@@ -313,7 +318,11 @@ def dashboard_summary(db: Session, user_id: int, start_date: date, end_date: dat
 
     recent = (
         db.query(Expense)
-        .filter(Expense.company_id == company.id, Expense.payment_status != "cancelled")
+        .filter(
+            Expense.company_id == company.id,
+            Expense.payment_status != "cancelled",
+            Expense.deleted_at.is_(None),
+        )
         .order_by(Expense.expense_date.desc(), Expense.id.desc())
         .limit(8)
         .all()
@@ -364,6 +373,7 @@ def expense_report(db: Session, user_id: int, start_date: date, end_date: date, 
             Expense.expense_date >= start_date,
             Expense.expense_date <= end_date,
             Expense.payment_status != "cancelled",
+            Expense.deleted_at.is_(None),
         )
         .all()
     )

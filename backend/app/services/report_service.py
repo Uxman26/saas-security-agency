@@ -111,14 +111,18 @@ def _shifts_by_day(db: Session, company_id: int, start: date, end: date) -> list
 
 def _payroll_by_month(db: Session, company_id: int, months: int = 6) -> list[ChartPoint]:
     cutoff = date.today().replace(day=1) - timedelta(days=months * 31)
+    if db.get_bind().dialect.name == "postgresql":
+        month = func.to_char(Payroll.period_end, "YYYY-MM")
+    else:
+        month = func.strftime("%Y-%m", Payroll.period_end)
     rows = (
         db.query(
-            func.strftime("%Y-%m", Payroll.period_end),
+            month,
             func.sum(func.coalesce(Payroll.bank_amount, 0) + func.coalesce(Payroll.cash_amount, 0)),
         )
         .filter(Payroll.company_id == company_id, Payroll.period_end >= cutoff)
-        .group_by(func.strftime("%Y-%m", Payroll.period_end))
-        .order_by(func.strftime("%Y-%m", Payroll.period_end))
+        .group_by(month)
+        .order_by(month)
         .all()
     )
     return [ChartPoint(label=r[0] or "", value=float(r[1] or 0)) for r in rows]

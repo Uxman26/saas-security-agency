@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload, load_only
 
-from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftAuditLog, ShiftLateLog, Site
+from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site
 from app.schemas import RotaPlanCopy, RotaPlanCreate, RotaPlanDetail, RotaPlanListItem, RotaPlanPublishResult, RotaPlanUpdate
 from app.services import shift_audit_service
 from app.services.recycle_bin import archive as _bin_archive
@@ -769,9 +769,7 @@ def _delete_plan_assignments(db: Session, plan_id: int, guard_id: Optional[int] 
         )
         # Republishing recreates assignment rows, so history rows keep their snapshot and
         # drop the pointer rather than being deleted along with the assignment.
-        db.query(ShiftAuditLog).filter(ShiftAuditLog.assignment_id.in_(assignment_ids)).update(
-            {ShiftAuditLog.assignment_id: None}, synchronize_session=False
-        )
+        shift_audit_service.detach_assignments(db, assignment_ids)
     del_q = db.query(Assignment).filter(Assignment.rota_plan_id == plan_id)
     if guard_id is not None:
         del_q = del_q.filter(Assignment.guard_id == guard_id)

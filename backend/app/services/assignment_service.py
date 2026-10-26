@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import Assignment, Guard, ShiftAuditLog, Site, User
+from app.models import Assignment, Guard, Site, User
 from app.schemas import AssignmentCreate, RotaResponse
 from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
@@ -286,8 +286,6 @@ def delete_assignment(db: Session, assignment_id: int, user_id: int) -> None:
         assignment=assignment,
         before=shift_audit_service.snapshot_from_assignment(assignment),
     )
-    db.query(ShiftAuditLog).filter(ShiftAuditLog.assignment_id == assignment.id).update(
-        {ShiftAuditLog.assignment_id: None}, synchronize_session=False
-    )
+    shift_audit_service.detach_assignments(db, [assignment.id])
     db.delete(assignment)
     db.commit()

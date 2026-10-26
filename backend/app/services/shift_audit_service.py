@@ -659,3 +659,39 @@ def shift_history_rows(
 
     rows = q.order_by(ShiftAuditLog.created_at.desc(), ShiftAuditLog.id.desc()).limit(max(1, min(limit, 5000))).all()
     return [_row_dict(r) for r in rows]
+
+
+def detach_assignments(db: Session, assignment_ids: list[int]) -> None:
+    """Drop every history row's pointer to assignments about to be deleted.
+
+    Republishing a rota recreates its assignment rows, so lateness / overtime / early
+    finish logs, patrols, incidents and the audit trail keep their own snapshot and lose
+    only the link. Postgres enforces these foreign keys, so the delete fails without this.
+    """
+    if not assignment_ids:
+        return
+    from app.models import (
+        Incident,
+        LoneWorkerSession,
+        PatrolLog,
+        PatrolOccurrence,
+        PatrolSession,
+        ShiftEarlyFinishLog,
+        ShiftLateLog,
+        ShiftOvertimeLog,
+    )
+
+    for model in (
+        ShiftAuditLog,
+        ShiftLateLog,
+        ShiftOvertimeLog,
+        ShiftEarlyFinishLog,
+        PatrolSession,
+        PatrolOccurrence,
+        PatrolLog,
+        Incident,
+        LoneWorkerSession,
+    ):
+        db.query(model).filter(model.assignment_id.in_(assignment_ids)).update(
+            {model.assignment_id: None}, synchronize_session=False
+        )

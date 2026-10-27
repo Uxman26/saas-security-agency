@@ -203,7 +203,7 @@ export function MarketingFooter() {
             className={cn(
               'pointer-events-none select-none overflow-hidden py-2',
               'text-center font-bold uppercase leading-[1.05] tracking-[-0.04em]',
-              'text-[clamp(3.5rem,18vw,11rem)] text-transparent'
+              'text-[clamp(2rem,12vw,11rem)] text-transparent'
             )}
           >
             <span className="block dark:hidden" style={{ WebkitTextStroke: '1px rgba(22, 30, 44, 0.14)' }}>

@@ -147,16 +147,6 @@ export function InteractiveRobotSpline({ scene, className }: Props) {
         className
       )}
     >
-      {/* Opaque mask over Built-with-Spline badge — matches page black / light bg */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 end-0 z-30 h-[72px] w-[180px] bg-background dark:bg-[#0F172A]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 end-0 z-30 h-20 w-48 bg-gradient-to-tl from-background from-50% via-background/90 to-transparent dark:from-[#0F172A] dark:via-[#0F172A]/95"
-      />
-
       <SplineErrorBoundary fallback={<RobotFallback className="h-full w-full" />}>
         <Suspense
           fallback={
@@ -168,8 +158,10 @@ export function InteractiveRobotSpline({ scene, className }: Props) {
             </div>
           }
         >
+          {/* Spline draws its badge inside the canvas, bottom-right. Running the canvas 64px past the
+              clipped bottom edge keeps it out of view without a mask box over the robot. */}
           <div
-            className="h-full w-full origin-center scale-[1.05] bg-transparent [&_canvas]:bg-transparent"
+            className="absolute inset-x-0 top-0 h-[calc(100%+64px)] origin-center scale-[1.05] bg-transparent [&_canvas]:bg-transparent"
             style={{ filter: ORANGE_BOT_FILTER }}
           >
             <Spline scene={scene} className="h-full w-full bg-transparent" onLoad={onLoad} />

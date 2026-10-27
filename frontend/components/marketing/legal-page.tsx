@@ -14,10 +14,11 @@ export function LegalPage({ title, children, effectiveDate, version }: Props) {
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav />
-      <article className="container mx-auto px-4 py-16 max-w-3xl prose prose-neutral dark:prose-invert prose-headings:scroll-mt-24 prose-a:text-primary">
-        <h1>{title}</h1>
+      <article className="legal-prose container mx-auto px-4 py-12 md:py-16 max-w-3xl">
+        <header className="not-prose mb-10 border-b border-border pb-6">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">{title}</h1>
         {(effectiveDate || version) && (
-          <p className="text-sm text-muted-foreground not-prose -mt-4 mb-8">
+          <p className="mt-3 text-sm text-muted-foreground">
             {effectiveDate ? <>Effective date: {effectiveDate}</> : null}
             {effectiveDate && version ? ' · ' : null}
             {version ? <>Version {version}</> : null}
@@ -31,8 +32,9 @@ export function LegalPage({ title, children, effectiveDate, version }: Props) {
             </span>
           </p>
         )}
+        </header>
         {children}
-        <p className="text-sm text-muted-foreground not-prose mt-12">
+        <p className="not-prose mt-12 border-t border-border pt-6 text-sm text-muted-foreground">
           For questions,{' '}
           <Link href="/book-demo" className="text-primary hover:underline">
             book a demo

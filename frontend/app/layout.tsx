@@ -24,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://controlops.co.uk'),
     title: {
       default: t('title'),
-      template: '%s | ControlOps',
+      template: '%s | Control Operations',
     },
     description: t('description'),
     icons: {

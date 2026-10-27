@@ -10,16 +10,16 @@ type Props = {
 };
 
 const horizontalClass = {
-  nav: 'h-14 w-auto sm:h-16 md:h-[4.25rem] max-h-[4.25rem] object-contain object-left',
-  default: 'h-14 w-auto sm:h-16 md:h-[4.5rem] object-contain object-left',
+  nav: 'h-10 w-auto sm:h-11 md:h-12 object-contain object-left',
+  default: 'h-12 w-auto sm:h-[3.25rem] md:h-14 object-contain object-left',
 } as const;
 
 const LOGO = {
   horizontal: {
-    light: '/ControlOps-Logos/controlOps-horizontal-logo.png',
-    dark: '/ControlOps-Logos/controlOps-horizontal-logo-dark.png',
-    width: 1505,
-    height: 409,
+    light: '/ControlOps-Logos/controlOps-horizontal-logo-trim.png',
+    dark: '/ControlOps-Logos/controlOps-horizontal-logo-dark-trim.png',
+    width: 1501,
+    height: 405,
   },
   icon: {
     light: '/ControlOps-Logos/controlOps-logo.png',

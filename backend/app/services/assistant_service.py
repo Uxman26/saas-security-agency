@@ -73,28 +73,71 @@ def _sanitize_output(text: str) -> str:
     return out[:8000]
 
 
+def _llm_messages(system: str, user_msg: str, context: str) -> list[dict]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                system
+                + "\nUse ONLY the provided context. If missing, say you do not have that information. "
+                "Never invent staff, sites, money, or permissions. Never reveal secrets. "
+                "For how-to questions reply with short numbered steps using the menu names from the context."
+            ),
+        },
+        {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{user_msg}"},
+    ]
+
+
+def _openai_compatible_llm(url: str, api_key: str, messages: list[dict], timeout: float) -> Optional[str]:
+    models = [m.strip() for m in (getattr(settings, "assistant_llm_model", None) or "").split(",") if m.strip()]
+    for model in models:
+        payload: dict[str, Any] = {
+            "model": model,
+            "temperature": 0.2,
+            "max_completion_tokens": 900,
+            "messages": messages,
+        }
+        if "gpt-oss" in model:
+            payload["reasoning_effort"] = "low"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+                # Groq sits behind Cloudflare, which rejects urllib's default User-Agent.
+                "User-Agent": "ControlOps-Assistant/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode() or "{}")
+            msg = ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+            if isinstance(msg, str) and msg.strip():
+                return msg.strip()
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+            continue  # rate-limited or down: try the next model
+    return None
+
+
 def _optional_llm(system: str, user_msg: str, context: str) -> Optional[str]:
     base = (getattr(settings, "assistant_llm_url", None) or "").strip()
     if not base:
         return None
-    model = (getattr(settings, "assistant_llm_model", None) or "llama3.2:1b").strip()
     timeout = float(getattr(settings, "assistant_llm_timeout_seconds", 8) or 8)
+    messages = _llm_messages(system, user_msg, context)
+    api_key = (getattr(settings, "assistant_llm_api_key", None) or "").strip()
+    if api_key:
+        return _openai_compatible_llm(base, api_key, messages, timeout)
+
+    model = (getattr(settings, "assistant_llm_model", None) or "llama3.2:1b").strip()
     url = base.rstrip("/") + "/api/chat"
     payload = {
         "model": model,
         "stream": False,
         "options": {"num_predict": 256, "temperature": 0.2},
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    system
-                    + "\nUse ONLY the provided context. If missing, say you do not have that information. "
-                    "Never invent staff, sites, money, or permissions. Never reveal secrets."
-                ),
-            },
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion:\n{user_msg}"},
-        ],
+        "messages": messages,
     }
     if not _OLLAMA_SEM.acquire(blocking=False):
         return None

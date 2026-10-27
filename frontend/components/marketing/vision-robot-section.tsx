@@ -54,7 +54,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
                     startOnView
                     once
                     className="inline"
-                    segmentClassName="inline"
+                    segmentClassName="inline whitespace-pre-wrap"
                   >
                     {quote}
                   </TextAnimate>
@@ -76,7 +76,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
             direction="right"
             offset={28}
             inView
-            className="relative order-1 h-[300px] w-full overflow-hidden bg-transparent md:order-2 md:col-span-7 md:h-[440px] md:ps-10 lg:h-[520px] lg:ps-14"
+            className="relative order-1 h-[340px] w-full overflow-hidden bg-transparent sm:h-[380px] md:order-2 md:col-span-7 md:h-[440px] md:ps-10 lg:h-[520px] lg:ps-14"
           >
             <Ripple
               className="opacity-25"
@@ -86,7 +86,7 @@ export function VisionRobotSection({ eyebrow, quote, attribution }: Props) {
             />
             <InteractiveRobotSpline
               scene={ROBOT_SCENE_URL}
-              className="absolute inset-0 h-full w-full translate-x-[12%] bg-transparent sm:translate-x-[14%] md:translate-x-[18%] lg:translate-x-[22%]"
+              className="absolute inset-0 h-full w-full bg-transparent md:translate-x-[18%] lg:translate-x-[22%]"
             />
           </BlurFade>
         </div>

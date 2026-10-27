@@ -26,7 +26,7 @@ const abs = (title: string, description: string, path = '/'): Metadata => {
 };
 
 export const homeMetadata = abs(
-  'Workforce Operations & Rota Management Software | ControlOps',
+  'Workforce Operations & Rota Management Software | Control Operations',
   'Manage employees, contractors, rotas, client sites, workforce records, payroll preparation and billing with ControlOps.',
   '/'
 );
@@ -56,79 +56,79 @@ export const platformMetadata = abs(
 );
 
 export const industriesMetadata = abs(
-  'Industries | ControlOps',
+  'Industries | Control Operations',
   'ControlOps for security, cleaning, facilities, event staffing, temporary staffing and other multi-site service businesses.',
   '/industries'
 );
 
 export const securityIndustryMetadata = abs(
-  'Security Workforce Management Software UK | ControlOps',
+  'Security Workforce Management Software UK | Control Operations',
   'Manage guards, sites, rotas, SIA records, subcontractors, payroll information and client invoices with ControlOps.',
   '/industries/security'
 );
 
 export const cleaningIndustryMetadata = abs(
-  'Cleaning & Facilities Workforce Software | ControlOps',
+  'Cleaning & Facilities Workforce Software | Control Operations',
   'Schedule cleaning and facilities teams across client locations while managing workforce records, rates, payroll preparation and billing.',
   '/industries/cleaning-facilities'
 );
 
 export const eventIndustryMetadata = abs(
-  'Event Staffing & Rota Management Software | ControlOps',
+  'Event Staffing & Rota Management Software | Control Operations',
   'Organise temporary workers, venues, assignments, documents, rates, payroll information and client billing.',
   '/industries/event-staffing'
 );
 
 export const staffingIndustryMetadata = abs(
-  'Temporary Staffing Operations Software | ControlOps',
+  'Temporary Staffing Operations Software | Control Operations',
   'Manage workers, client assignments, pay and charge rates, payroll preparation and invoices in one operational platform.',
   '/industries/temporary-staffing'
 );
 
 export const privacyMetadata = abs(
-  'Privacy Notice | ControlOps',
+  'Privacy Notice | Control Operations',
   'How ControlOps collects, uses and protects personal data for its UK workforce operations website and SaaS platform.',
   '/privacy'
 );
 
 export const termsMetadata = abs(
-  'Terms of Service | ControlOps',
+  'Terms of Service | Control Operations',
   'Terms governing use of the ControlOps workforce operations SaaS platform and public website for UK business customers.',
   '/terms'
 );
 
 export const cookiesMetadata = abs(
-  'Cookie Policy | ControlOps',
+  'Cookie Policy | Control Operations',
   'How ControlOps uses cookies and similar technologies on controlops.co.uk and the ControlOps Service.',
   '/cookies'
 );
 
 export const contactMetadata = abs(
-  'Contact | ControlOps',
+  'Contact | Control Operations',
   'Contact ControlOps for demos, sales questions and support for workforce operations software.',
   '/contact'
 );
 
 export const helpMetadata = abs(
-  'Help Centre | ControlOps',
+  'Help Centre | Control Operations',
   'Guides for ControlOps: getting started, rotas, payroll, invoicing, settings, FAQ, and how to contact support.',
   '/help'
 );
 
 export const securityPageMetadata = abs(
-  'Security | ControlOps',
+  'Security | Control Operations',
   'How ControlOps approaches application security, access control and operational safeguards.',
   '/security'
 );
 
 export const dpaMetadata = abs(
-  'Data Processing Agreement | ControlOps',
+  'Data Processing Agreement | Control Operations',
   'Data Processing Agreement for ControlOps SaaS customers processing personal data in the UK.',
   '/dpa'
 );
 
 export const accessibilityMetadata = abs(
-  'Accessibility Statement | ControlOps',
+  'Accessibility Statement | Control Operations',
   'Accessibility statement for the ControlOps public website and SaaS application.',
   '/accessibility'
 );

@@ -28,11 +28,11 @@ export function AuthShell({ title, subtitle, children, footer, topLink }: AuthSh
         </div>
         <div className="relative">
           <Image
-            src="/ControlOps-Logos/controlOps-horizontal-logo.png"
+            src="/ControlOps-Logos/controlOps-horizontal-logo-trim.png"
             alt="ControlOps workforce operations platform"
-            width={480}
-            height={125}
-            className="h-28 xl:h-32 w-auto max-w-full object-contain"
+            width={1501}
+            height={405}
+            className="h-16 xl:h-20 w-auto max-w-full object-contain object-left"
             priority
           />
         </div>

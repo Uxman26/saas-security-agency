@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     assistant_llm_url: str = ""  # e.g. http://127.0.0.1:11434 — leave blank to disable LLM
     assistant_llm_model: str = "llama3.2:1b"
     assistant_llm_timeout_seconds: float = 8
+    # With a key, assistant_llm_url is an OpenAI-compatible chat completions URL (e.g. Groq:
+    # https://api.groq.com/openai/v1/chat/completions) and assistant_llm_model may list
+    # comma-separated fallbacks, tried in order.
+    assistant_llm_api_key: str = ""
 
     # Firebase Admin (FCM). Leave blank to disable push send; token registration still works.
     firebase_credentials_json: str = ""  # path or raw JSON

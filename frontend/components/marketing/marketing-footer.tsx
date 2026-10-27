@@ -195,14 +195,14 @@ export function MarketingFooter() {
         <BlurFade
           delay={0.35}
           inView
-          className="relative mt-14 overflow-hidden border-t border-border/70 pt-10 md:mt-16 md:pt-12 dark:border-white/10"
+          className="relative mt-14 overflow-hidden border-t border-border/70 pt-8 md:mt-16 md:pt-10 dark:border-white/10"
         >
           <BorderBeam size={160} duration={12} colorFrom="#F45100" colorTo="#FDBA74" borderWidth={1} />
           <div
             aria-hidden
             className={cn(
-              'pointer-events-none select-none overflow-hidden',
-              'text-center font-bold uppercase leading-none tracking-[-0.04em]',
+              'pointer-events-none select-none overflow-hidden py-2',
+              'text-center font-bold uppercase leading-[1.05] tracking-[-0.04em]',
               'text-[clamp(3.5rem,18vw,11rem)] text-transparent'
             )}
           >
@@ -217,7 +217,7 @@ export function MarketingFooter() {
             </span>
           </div>
 
-          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center justify-between gap-4 px-1 sm:flex-row sm:items-end">
+          <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-border/70 pt-6 pb-1 sm:flex-row sm:pe-20 dark:border-white/10">
             <div className="flex items-center gap-1">
               <SocialIcon label="LinkedIn" href="https://www.linkedin.com/showcase/control-operations">
                 <svg viewBox="0 0 24 24" className="size-4 fill-current" aria-hidden>
@@ -244,7 +244,7 @@ export function MarketingFooter() {
                 </svg>
               </SocialIcon>
             </div>
-            <p className="text-xs text-muted-foreground sm:text-sm dark:text-stone-400">
+            <p className="text-center text-xs text-muted-foreground sm:text-sm dark:text-stone-400">
               © {year} {t('rights')}
             </p>
           </div>

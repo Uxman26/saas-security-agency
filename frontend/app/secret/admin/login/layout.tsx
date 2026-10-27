@@ -1,7 +1,7 @@
 import { noIndexFollow } from '@/lib/marketing-seo';
 
 export const metadata = {
-  title: { absolute: 'Administrator Sign In | ControlOps' },
+  title: { absolute: 'Administrator Sign In | Control Operations' },
   ...noIndexFollow,
 };
 

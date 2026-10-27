@@ -14,10 +14,12 @@ export function LegalPageClient({ page }: { page: LegalKey }) {
   return (
     <div className="min-h-screen bg-background">
       <MarketingNav />
-      <article className="container mx-auto px-4 py-16 max-w-3xl prose prose-neutral dark:prose-invert">
-        <h1>{t('title')}</h1>
+      <article className="legal-prose container mx-auto px-4 py-12 md:py-16 max-w-3xl">
+        <header className="not-prose mb-10 border-b border-border pb-6">
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">{t('title')}</h1>
+        </header>
         <p>{t('body')}</p>
-        <p className="text-sm text-muted-foreground not-prose mt-12">
+        <p className="not-prose mt-12 border-t border-border pt-6 text-sm text-muted-foreground">
           {tf('footerPrefix')}{' '}
           <Link href="/book-demo" className="text-primary hover:underline">{tf('footerLink')}</Link>{' '}
           {tf('footerSuffix')}

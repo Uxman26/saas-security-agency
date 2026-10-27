@@ -34,7 +34,33 @@ function tokenize(text: string): string[] {
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter((t) => t.length > 2);
+    .filter((t) => t.length > 2)
+    .map((t) => (t.length > 4 && t.endsWith('s') && !t.endsWith('ss') ? t.slice(0, -1) : t));
+}
+
+// Words customers use for the same ControlOps concept, so "add an employee" finds the staff article.
+const SYNONYM_GROUPS = [
+  ['staff', 'guard', 'employee', 'worker', 'officer', 'cleaner', 'people', 'contractor', 'team'],
+  ['rota', 'shift', 'schedule', 'scheduling', 'roster', 'planner'],
+  ['payroll', 'pay', 'wage', 'salary', 'payslip', 'timesheet'],
+  ['invoice', 'bill', 'billing', 'payment', 'charge'],
+  ['login', 'signin', 'sign', 'password', 'reset', 'locked', 'verify', 'verification'],
+  ['site', 'location', 'venue', 'client', 'customer', 'assignment'],
+  ['plan', 'subscription', 'package', 'upgrade', 'downgrade', 'cancel', 'trial', 'pricing', 'price'],
+  ['role', 'permission', 'user', 'access', 'admin'],
+  ['document', 'compliance', 'licence', 'license', 'sia', 'certificate', 'expiry'],
+  ['report', 'export', 'attendance', 'overtime', 'analytics'],
+  ['email', 'smtp', 'sms', 'notification', 'message'],
+  ['lead', 'portal', 'request', 'enquiry'],
+  ['support', 'contact', 'help', 'demo', 'agent'],
+];
+const SYNONYMS = new Map<string, string[]>();
+for (const group of SYNONYM_GROUPS) for (const word of group) SYNONYMS.set(word, group);
+
+function expandTokens(tokens: string[]): string[] {
+  const out = new Set(tokens);
+  for (const t of tokens) for (const s of SYNONYMS.get(t) ?? []) out.add(s);
+  return [...out];
 }
 
 export function extractFaqEntries(article: HelpArticle): HelpQaEntry[] {
@@ -108,6 +134,12 @@ export function scoreHelpQa(entry: HelpQaEntry, query: string): number {
     else if (aTokens.has(t)) score += 3;
     else if (hay.includes(t)) score += 1;
   }
+  // Synonyms count for less than the user's own words so exact matches still rank first.
+  for (const t of expandTokens(tokens)) {
+    if (tokens.includes(t)) continue;
+    if (qTokens.has(t)) score += 3;
+    else if (aTokens.has(t)) score += 1;
+  }
   return score;
 }
 
@@ -120,16 +152,17 @@ export function findHelpAnswers(query: string, limit = 3): HelpQaEntry[] {
     .map((x) => x.entry);
 }
 
-export function buildHelpContext(query: string, limit = 4): string {
+export function buildHelpContext(query: string, limit = 5): string {
   const matches = findHelpAnswers(query, limit);
-  if (!matches.length) {
-    return HELP_ARTICLES.slice(0, 4)
-      .map((a) => `## ${a.title}\n${a.description}\n${a.body.map(blockToPlain).join('\n')}`)
-      .join('\n\n');
-  }
-  return matches
-    .map((m) => `## ${m.question}\n${m.answer}\nSource: ${m.href}`)
-    .join('\n\n');
+  const index =
+    '## All Help Centre pages\n' +
+    HELP_ARTICLES.map((a) => `• ${a.title}: /help/${a.slug} (${a.description})`).join('\n');
+  const relevant = matches.length
+    ? matches.map((m) => `## ${m.question}\n${m.answer}\nSource: ${m.href}`)
+    : HELP_ARTICLES.slice(0, 3).map(
+        (a) => `## ${a.title}\n${a.description}\n${a.body.map(blockToPlain).join('\n')}\nSource: /help/${a.slug}`
+      );
+  return [...relevant, index].join('\n\n');
 }
 
 export const HELP_SUGGESTIONS = [

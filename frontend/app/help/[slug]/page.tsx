@@ -14,10 +14,10 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const article = getHelpArticle(slug);
-  if (!article) return { title: { absolute: 'Help | ControlOps' } };
+  if (!article) return { title: { absolute: 'Help | Control Operations' } };
   const url = `${SITE_URL}/help/${slug}`;
   return {
-    title: { absolute: `${article.title} | Help | ControlOps` },
+    title: { absolute: `${article.title} | Help | Control Operations` },
     description: article.description,
     alternates: { canonical: url },
     robots: { index: true, follow: true },

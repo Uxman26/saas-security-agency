@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import stripe
@@ -303,6 +303,15 @@ def create_checkout_session(
                 days = trial_service.trial_days_for_tier(db, receipt.subscription_tier)
                 params["subscription_data"]["trial_period_days"] = days
                 params["subscription_data"]["metadata"]["trial_days"] = str(days)
+                params["payment_method_collection"] = "always"
+        elif (company.subscription_status or "") == "trialing" and not company.stripe_subscription_id:
+            trial = trial_service.active_trial_for_company(db, company.id)
+            ends = trial.ends_at if trial else None
+            if ends and ends.tzinfo is None:
+                ends = ends.replace(tzinfo=timezone.utc)
+            # Stripe needs trial_end at least 48h out; inside that the card is charged now.
+            if ends and ends > datetime.now(timezone.utc) + timedelta(hours=49):
+                params["subscription_data"]["trial_end"] = int(ends.timestamp())
                 params["payment_method_collection"] = "always"
     except Exception:
         pass

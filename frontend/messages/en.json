@@ -258,7 +258,14 @@
     "yearly": "Yearly ({discount}% off)",
     "viewDetails": "View payment details",
     "notFound": "Receipt not found. Check your reference ID.",
-    "noRef": "No receipt reference provided."
+    "noRef": "No receipt reference provided.",
+    "trialTitle": "Activate your subscription",
+    "trialDescription": "Your free trial is running. Add a card now so your service carries on without interruption — you won't be charged until the trial ends.",
+    "dueToday": "Due today",
+    "firstCharge": "First charge",
+    "trialEnds": "Free trial ends",
+    "addCard": "Add card — £0 today",
+    "continueTrial": "Continue with free trial for now"
   },
   "billing": {
     "title": "Billing & plan",

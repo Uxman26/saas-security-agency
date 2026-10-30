@@ -148,6 +148,12 @@ const toOptInt = (v: unknown) => {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(999, Math.trunc(n)));
 };
+// Empty, hidden or half-typed number inputs arrive as '' or NaN (valueAsNumber); both mean "not set".
+const toOptNum = (v: unknown) => {
+  if (v === '' || v == null) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
 const optInt = z.preprocess(toOptInt, z.number().int().min(0).max(999));
 const toOptDay = (v: unknown) => {
   if (v === '' || v === null || v === undefined) return 1;
@@ -223,15 +229,15 @@ export const guardSchema = z.object({
   employment_pay_type: z.enum(['salaried', 'non_salaried']).optional().or(z.literal('')),
   pay_method: z.enum(['per_hour', 'per_job']).optional().or(z.literal('')),
   hourly_rate: z.preprocess(
-    (v) => (v === '' || v == null ? undefined : Number(v)),
+    toOptNum,
     z.number().min(0).optional()
   ),
   per_job_rate: z.preprocess(
-    (v) => (v === '' || v == null ? undefined : Number(v)),
+    toOptNum,
     z.number().min(0).optional()
   ),
   salary_amount: z.preprocess(
-    (v) => (v === '' || v == null ? undefined : Number(v)),
+    toOptNum,
     z.number().min(0).optional()
   ),
   working_time_pattern: optStr,
@@ -261,7 +267,7 @@ export const guardSchema = z.object({
   employment_history: z.string().max(2000).optional().or(z.literal('')),
   dbs_status: z.string().max(100).optional().or(z.literal('')),
   weekly_contracted_hours: z.preprocess(
-    (v) => (v === '' || v === null || v === undefined ? undefined : Number(v)),
+    toOptNum,
     z.number().min(0).max(168).optional()
   ),
   contractor_id: optUuid,

@@ -35,6 +35,10 @@ def user_platform_permission_codes(db: Session, user: User) -> set[str]:
     return codes
 
 
+def _has_full_access(db: Session, user: User) -> bool:
+    return {p[2] for p in ext.PLATFORM_PERMS} <= user_platform_permission_codes(db, user)
+
+
 def require_platform_perm(*codes: str):
     def dependency(
         db: Session = Depends(get_db),
@@ -61,10 +65,20 @@ def assign_platform_role(db: Session, user_id: int, role_slug: str, actor: User 
     role = db.query(PlatformRole).filter(PlatformRole.slug == role_slug).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    if role_slug == "super_admin" and actor:
-        have = user_platform_permission_codes(db, actor)
-        if "impersonate.start" not in have:
-            raise HTTPException(status_code=403, detail="Only Super Admin can assign the Super Admin role")
+    if role_slug == "super_admin" and actor and not _has_full_access(db, actor):
+        raise HTTPException(status_code=403, detail="Only Super Admin can assign the Super Admin role")
+    # A first explicit role replaces the legacy full access a bare super_admin has, so
+    # giving the last full admin a narrower role would lock billing and config for good.
+    if role_slug != "super_admin" and _has_full_access(db, user):
+        others = [
+            u for u in db.query(User).filter(User.role == "super_admin", User.is_active.is_(True), User.id != user.id)
+            if _has_full_access(db, u)
+        ]
+        if not others:
+            raise HTTPException(
+                status_code=400,
+                detail="This is the only Super Admin. Giving it a narrower role would remove billing and settings access. Add another Super Admin first.",
+            )
     existing = (
         db.query(PlatformAdminRole)
         .filter(PlatformAdminRole.user_id == user_id, PlatformAdminRole.role_id == role.id)

@@ -48,8 +48,8 @@ export default function AdminSubscriptionInvoicePage() {
       const updated = await api.admin.patchInvoiceStatus(id, 'paid');
       setInv(updated);
       toast.success('Marked as paid');
-    } catch {
-      toast.error('Update failed');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Update failed');
     }
   };
 

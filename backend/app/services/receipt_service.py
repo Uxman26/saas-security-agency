@@ -152,7 +152,9 @@ def mark_receipt_paid(db: Session, receipt_id: int) -> SubscriptionReceipt:
     db.commit()
     db.refresh(r)
     if co:
-        from app.services import subscription_invoice_service
+        from app.services import subscription_invoice_service, trial_service
+
+        trial_service.mark_trial_converted(db, co.id)
         subscription_invoice_service.create_invoice(db, co, status="paid", period_start=now, send_email=False)
         subscription_invoice_service.ensure_renewal_invoices(db)
     return r

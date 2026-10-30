@@ -111,7 +111,9 @@ function SignupForm() {
       if (trialDays) {
         toast.success(t('accountCreatedTrial', { days: trialDays }));
         router.push(
-          res.email_verification_required ? `/verify-email?email=${email}&sent=1` : '/login'
+          res.email_verification_required
+            ? `/verify-email?email=${email}&ref=${ref}${cycleQ}${couponQ}&sent=1`
+            : `/payment-pending?ref=${ref}${cycleQ}${couponQ}&checkout=1`
         );
       } else if (res.email_verification_required) {
         toast.success(t('accountCreatedVerify'));

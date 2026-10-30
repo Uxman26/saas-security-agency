@@ -434,6 +434,8 @@ def calculate_payroll_batch(
 # shift's span. Anything else — absent, an unpaid cancellation, pending, or a future shift
 # nobody has marked yet — is rota'd but not payable.
 PAYABLE_STATUSES = frozenset({"on_time", "late", CANCELLED_PAID})
+# Not due yet: a future shift, or one today that nobody has marked. Neither is missed.
+UPCOMING_STATUSES = frozenset({"scheduled", "pending"})
 
 
 def preview_pay(
@@ -531,7 +533,7 @@ def preview_pay(
             missing_rate += 1
         unmarked = (
             not getattr(d, "attendance_marked", False)
-            and d.attendance_status != "scheduled"
+            and d.attendance_status not in UPCOMING_STATUSES
             and (d.id or 0) > 0
         )
         if unmarked:
@@ -579,7 +581,7 @@ def preview_pay(
             if payable:
                 bucket.attended_hours = round(bucket.attended_hours + hours, 2)
                 bucket.amount = round(bucket.amount + amount, 2)
-            elif d.attendance_status == "scheduled":
+            elif d.attendance_status in UPCOMING_STATUSES:
                 bucket.upcoming_hours = round(bucket.upcoming_hours + hours, 2)
             else:
                 bucket.unattended_hours = round(bucket.unattended_hours + hours, 2)
@@ -592,9 +594,9 @@ def preview_pay(
     by_employee = sorted(people.values(), key=lambda r: (-r.amount, r.guard_name.lower()))
     rota_hours = round(sum(x.hours for x in shifts), 2)
     attended_hours = round(sum(x.hours for x in shifts if x.payable), 2)
-    upcoming = [x for x in shifts if not x.payable and x.attendance_status == "scheduled"]
+    upcoming = [x for x in shifts if not x.payable and x.attendance_status in UPCOMING_STATUSES]
     upcoming_hours = round(sum(x.hours for x in upcoming), 2)
-    missed = [x for x in shifts if not x.payable and x.attendance_status != "scheduled"]
+    missed = [x for x in shifts if not x.payable and x.attendance_status not in UPCOMING_STATUSES]
 
     return PayrollPreviewResponse(
         guard_id=guard.id if guard else None,

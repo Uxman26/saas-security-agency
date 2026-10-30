@@ -120,12 +120,21 @@ def claim_verification_cooldown(email: str) -> int:
 
 
 def payment_step_for(db: Session, user: User) -> tuple[str, str] | None:
-    """(receipt_ref, billing_cycle) when the tenant still has to pay before using the
-    app — i.e. never paid and not on a trial — else None."""
+    """(receipt_ref, billing_cycle) while the tenant has no payment method on file.
+
+    Covers a never-paid tenant and one on the card-free signup trial: both are sent to
+    checkout, and for the trial Stripe only saves the card until the trial ends.
+    """
     if not user.company_id:
         return None
     company = db.query(Company).filter(Company.id == user.company_id).first()
-    if not company or (company.subscription_status or "pending").lower() != "pending":
+    if not company:
+        return None
+    status = (company.subscription_status or "pending").lower()
+    if status == "trialing":
+        if company.stripe_subscription_id:
+            return None
+    elif status != "pending":
         return None
     pending = latest_pending_receipt(db, company.id)
     if not pending:
@@ -246,7 +255,7 @@ def verify_email_with_token(db: Session, token: str) -> dict:
     step = payment_step_for(db, user)
     if step:
         return {
-            "message": "Email verified. Continue to payment to activate your account.",
+            "message": "Email verified. Add your payment details to activate your account.",
             "next_step": "payment",
             "receipt_ref": step[0],
             "billing_cycle": step[1],

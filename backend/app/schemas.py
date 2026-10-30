@@ -260,6 +260,7 @@ class ReceiptPublicResponse(BaseModel):
     billing_cycle: str = "monthly"
     status: str
     created_at: datetime
+    trial_ends_at: Optional[datetime] = None
 
 
 class BillingSettingsResponse(BaseModel):

@@ -34,6 +34,9 @@ def get_public_receipt(ref_id: str, db: Session = Depends(get_db)):
     if not r:
         raise HTTPException(status_code=404, detail="Receipt not found")
     co = db.query(Company).filter(Company.id == r.company_id).first()
+    from app.services import trial_service
+
+    trial = trial_service.active_trial_for_company(db, r.company_id) if co and not co.stripe_subscription_id else None
     return ReceiptPublicResponse(
         ref_id=r.ref_id,
         company_name=co.name if co else "",
@@ -43,4 +46,5 @@ def get_public_receipt(ref_id: str, db: Session = Depends(get_db)):
         billing_cycle=r.billing_cycle or "monthly",
         status=r.status,
         created_at=r.created_at,
+        trial_ends_at=trial.ends_at if trial else None,
     )

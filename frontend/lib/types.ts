@@ -158,6 +158,7 @@ export interface ReceiptPublic {
   billing_cycle?: string;
   status: string;
   created_at: string;
+  trial_ends_at?: string | null;
 }
 
 export interface VerifyEmailResult {

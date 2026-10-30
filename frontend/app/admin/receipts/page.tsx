@@ -41,8 +41,8 @@ export default function AdminReceiptsPage() {
       await api.admin.markReceiptPaid(id);
       toast.success('Marked as paid — subscription activated');
       load();
-    } catch {
-      toast.error('Failed to mark paid');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to mark paid');
     }
   };
 

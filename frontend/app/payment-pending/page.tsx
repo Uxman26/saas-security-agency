@@ -120,6 +120,11 @@ function PaymentPendingContent() {
   };
 
   const isPaid = receipt?.status === 'paid' || verified;
+  // A card-free signup trial: checkout only saves the card, the first charge is at trial end.
+  const trialEnds = !isPaid && receipt?.trial_ends_at ? new Date(receipt.trial_ends_at) : null;
+  const trialEndsLabel = trialEnds
+    ? trialEnds.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
 
   useEffect(() => {
     if (!autoCheckout || autoCheckoutRef.current) return;
@@ -141,8 +146,12 @@ function PaymentPendingContent() {
       </div>
       <Card className="w-full max-w-lg shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">{isPaid ? t('paymentSuccessTitle') : t('title')}</CardTitle>
-          <CardDescription>{isPaid ? t('paymentSuccessDescription') : t('description')}</CardDescription>
+          <CardTitle className="text-2xl">
+            {isPaid ? t('paymentSuccessTitle') : trialEnds ? t('trialTitle') : t('title')}
+          </CardTitle>
+          <CardDescription>
+            {isPaid ? t('paymentSuccessDescription') : trialEnds ? t('trialDescription') : t('description')}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {canceled && !isPaid ? (
@@ -173,6 +182,24 @@ function PaymentPendingContent() {
                 <span className="text-muted-foreground">{t('cycle')}</span>
                 <span>{t('days', { count: receipt.period_days })}</span>
               </div>
+              {trialEnds ? (
+                <>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">{t('trialEnds')}</span>
+                    <span>{trialEndsLabel}</span>
+                  </div>
+                  <div className="flex justify-between gap-4 border-t pt-2">
+                    <span className="text-muted-foreground">{t('dueToday')}</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">£0.00</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-muted-foreground">{t('firstCharge')}</span>
+                    <span>
+                      £{receipt.amount.toFixed(2)} &middot; {trialEndsLabel}
+                    </span>
+                  </div>
+                </>
+              ) : null}
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">{t('status')}</span>
                 <span
@@ -209,12 +236,12 @@ function PaymentPendingContent() {
               </div>
               <Button className="w-full" onClick={() => void payWithStripe()} disabled={paying}>
               {paying ? <Loader2 className="size-4 mr-2 animate-spin" /> : <CreditCard className="size-4 mr-2" />}
-              {paying ? t('processing') : t('payWithCard')}
+              {paying ? t('processing') : trialEnds ? t('addCard') : t('payWithCard')}
               </Button>
             </>
           ) : null}
-          <Button asChild className="w-full" variant={isPaid ? 'default' : 'outline'}>
-            <Link href="/login">{isPaid ? tc('backToSignIn') : tc('backToSignIn')}</Link>
+          <Button asChild className="w-full" variant={isPaid ? 'default' : trialEnds ? 'ghost' : 'outline'}>
+            <Link href="/login">{trialEnds ? t('continueTrial') : tc('backToSignIn')}</Link>
           </Button>
         </CardContent>
       </Card>

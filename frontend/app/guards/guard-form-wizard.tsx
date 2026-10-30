@@ -50,6 +50,7 @@ const STEP1_KEYS: (keyof GuardFormData)[] = [
   'pay_method',
   'salary_amount',
   'weekly_contracted_hours',
+  'contracted_week_hrs',
   'hourly_rate',
   'per_job_rate',
   'entitlement_unit',
@@ -205,6 +206,16 @@ export function GuardFormWizard({
     const ok = await trigger(REQUIRED_KEYS);
     if (!ok) return;
     clearErrors();
+    // Pay rules (rate for the chosen method, salary + hours) belong to this step, so
+    // stop here rather than letting Save bounce the user back to it.
+    const pay = guardSubmitSchema.safeParse(getValues());
+    const payIssues = pay.success
+      ? []
+      : pay.error.issues.filter((i) => stepForField(String(i.path[0] ?? '')) === 1);
+    if (payIssues.length) {
+      for (const issue of payIssues) setError(String(issue.path[0]) as keyof GuardFormData, { message: issue.message });
+      return;
+    }
     setStep(2);
   };
 

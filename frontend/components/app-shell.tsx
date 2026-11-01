@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { EmailDialog } from '@/components/email-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { AppSidebar } from '@/components/app-sidebar';
-import { ADMIN_NAV_SECTIONS, filterAdminNavSections } from '@/lib/admin-nav';
+import { filterAdminNavSections } from '@/lib/admin-nav';
 import { LogOut, Menu, X } from 'lucide-react';
 import { CompanyBrand } from '@/components/company-brand';
 import { CompanySwitcher } from '@/components/company-switcher';
@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportExtras, setReportExtras] = useState<Record<string, unknown> | null>(null);
   const isSuperAdmin = user?.role === 'super_admin';
-  const { can, loaded: permsLoaded } = usePlatformPermissions();
+  const { can } = usePlatformPermissions();
   const mobileNavRef = usePersistedScroll<HTMLElement>('app-sidebar-nav-mobile');
 
   useEffect(() => {
@@ -68,13 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     setDrawer(false);
   }, [pathname]);
 
-  const adminSections = useMemo(
-    () =>
-      permsLoaded
-        ? filterAdminNavSections(can)
-        : ADMIN_NAV_SECTIONS.map((s) => ({ titleKey: s.titleKey, items: [...s.items] })),
-    [can, permsLoaded]
-  );
+  const adminSections = useMemo(() => filterAdminNavSections(can), [can]);
   const tenantSections = useMemo(() => groupTenantNavSections(user), [user]);
   const queryClient = useQueryClient();
   useModulePathGuard(pathname);

@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -370,7 +371,24 @@ ROLE_PERMS = {
 }
 
 
+_rbac_seeded = False
+
+
 def ensure_platform_rbac(db: Session) -> None:
+    # Runs on every permission check, so seed once per process. A concurrent worker
+    # seeding at the same moment can hit the unique constraints; retry next call.
+    global _rbac_seeded
+    if _rbac_seeded:
+        return
+    try:
+        _seed_platform_rbac(db)
+    except IntegrityError:
+        db.rollback()
+        return
+    _rbac_seeded = True
+
+
+def _seed_platform_rbac(db: Session) -> None:
     perm_by_code = {}
     for module, action, code, sensitive in PLATFORM_PERMS:
         row = db.query(PlatformPermission).filter(PlatformPermission.code == code).first()

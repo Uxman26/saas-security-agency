@@ -8,11 +8,12 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import StreamingResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.validators import validate_password_strength
 from app.models import ApiUsageLog, Company, User, WebhookLog
 from app.services import admin_billing_notify_service as billing_notify
 from app.services import admin_platform_ext_service as ext
@@ -72,6 +73,33 @@ class DeleteTenantBody(BaseModel):
 class AssignRoleBody(BaseModel):
     user_id: int
     role_slug: str
+
+
+class SetRoleBody(BaseModel):
+    role_slug: str
+
+
+class PlatformAdminCreateBody(BaseModel):
+    email: EmailStr = Field(max_length=254)
+    full_name: str = Field(min_length=1, max_length=200)
+    password: str
+    role_slug: str
+
+    @field_validator("full_name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Full name is required")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+
+class PlatformAdminActiveBody(BaseModel):
+    is_active: bool
 
 
 class PasswordPolicyBody(BaseModel):
@@ -421,6 +449,83 @@ def assign_role(
         request=request,
     )
     return out
+
+
+@router.get("/platform-admins")
+def platform_admins(db: Session = Depends(get_db), _: User = Depends(require_platform_perm("config.read"))):
+    return rbac.list_platform_admins(db)
+
+
+@router.post("/platform-admins")
+def create_platform_admin(
+    body: PlatformAdminCreateBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("config.write")),
+):
+    u = rbac.create_platform_admin(
+        db,
+        email=body.email,
+        full_name=body.full_name,
+        password=body.password,
+        role_slug=body.role_slug,
+        actor=current_user,
+    )
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="platform_admin.created",
+        target_type="user",
+        target_id=u.id,
+        target_label=u.email,
+        after={"role": body.role_slug},
+        request=request,
+    )
+    return {"id": u.id, "email": u.email, "full_name": u.full_name, "role": body.role_slug}
+
+
+@router.put("/platform-admins/{user_id}/role")
+def set_platform_admin_role(
+    user_id: int,
+    body: SetRoleBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("config.write")),
+):
+    out = rbac.set_platform_role(db, user_id, body.role_slug, actor=current_user)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="platform_role.changed",
+        target_type="user",
+        target_id=user_id,
+        before={"roles": out["previous_roles"]},
+        after={"role": out["role"]},
+        request=request,
+    )
+    return out
+
+
+@router.patch("/platform-admins/{user_id}/active")
+def set_platform_admin_active(
+    user_id: int,
+    body: PlatformAdminActiveBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("config.write")),
+):
+    u = rbac.set_platform_admin_active(db, user_id, body.is_active, actor=current_user)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="platform_admin.activated" if body.is_active else "platform_admin.deactivated",
+        target_type="user",
+        target_id=u.id,
+        target_label=u.email,
+        after={"is_active": u.is_active},
+        request=request,
+    )
+    return {"id": u.id, "is_active": u.is_active}
 
 
 @router.get("/reports/export")

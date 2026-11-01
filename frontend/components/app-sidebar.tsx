@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { CompanyBrand } from '@/components/company-brand';
 import { CompanySwitcher } from '@/components/company-switcher';
 import { AdminSidebarNav, TenantSidebarNav } from '@/components/sidebar-nav';
-import { ADMIN_NAV_SECTIONS, filterAdminNavSections } from '@/lib/admin-nav';
+import { filterAdminNavSections } from '@/lib/admin-nav';
 import { groupTenantNavSections } from '@/lib/sidebar-sections';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
 import { usePersistedScroll } from '@/hooks/use-persisted-scroll';
@@ -16,12 +16,10 @@ const asideClass =
 export function AppSidebar() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
-  const { can, loaded } = usePlatformPermissions();
+  const { can } = usePlatformPermissions();
   const navRef = usePersistedScroll<HTMLElement>('app-sidebar-nav');
-  const adminSections = useMemo(
-    () => (loaded ? filterAdminNavSections(can) : ADMIN_NAV_SECTIONS.map((s) => ({ titleKey: s.titleKey, items: [...s.items] }))),
-    [can, loaded]
-  );
+  // Items appear once permissions are known, never before, so the nav does not shrink after load.
+  const adminSections = useMemo(() => filterAdminNavSections(can), [can]);
   const tenantSections = useMemo(() => groupTenantNavSections(user), [user]);
 
   return (

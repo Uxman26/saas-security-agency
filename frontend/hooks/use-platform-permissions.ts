@@ -4,38 +4,87 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 
+// One shared copy for the sidebar, the mobile drawer and the page, so they never
+// disagree and page navigation does not refetch (and re-filter) the nav.
+type Cache = { userId: number; perms: string[] };
+let cache: Cache | null = null;
+let inflight: { userId: number; promise: Promise<string[]> } | null = null;
+const listeners = new Set<() => void>();
+
+function notify() {
+  listeners.forEach((fn) => fn());
+}
+
+async function fetchPerms(userId: number): Promise<string[]> {
+  if (inflight?.userId === userId) return inflight.promise;
+  const promise = (async () => {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const r = await api.admin.myPermissions();
+        return r.permissions || [];
+      } catch (e) {
+        lastErr = e;
+        await new Promise((res) => setTimeout(res, 800 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  })();
+  inflight = { userId, promise };
+  try {
+    const perms = await promise;
+    cache = { userId, perms };
+    notify();
+    return perms;
+  } finally {
+    if (inflight?.promise === promise) inflight = null;
+  }
+}
+
+/** Drop the cached permissions, e.g. after the current admin's role changed. */
+export function invalidatePlatformPermissions() {
+  cache = null;
+  notify();
+}
+
 export function usePlatformPermissions() {
   const { user } = useAuth();
-  const [perms, setPerms] = useState<string[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  const reload = useCallback(() => {
-    if (!user || user.role !== 'super_admin') {
-      setPerms([]);
-      setLoaded(true);
-      return;
-    }
-    api.admin
-      .myPermissions()
-      .then((r) => setPerms(r.permissions || []))
-      .catch(() => setPerms([]))
-      .finally(() => setLoaded(true));
-  }, [user]);
+  const userId = user?.role === 'super_admin' ? user.id : null;
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    const fn = () => setTick((t) => t + 1);
+    listeners.add(fn);
+    return () => {
+      listeners.delete(fn);
+    };
+  }, []);
+
+  const current = userId != null && cache?.userId === userId ? cache : null;
+
+  useEffect(() => {
+    if (userId == null || current) return;
+    fetchPerms(userId).catch(() => {
+      // Keep gated items hidden rather than guessing; the next mount retries.
+    });
+  }, [userId, current]);
+
+  const perms = current?.perms ?? [];
+  const loaded = userId == null || current != null;
+
+  const reload = useCallback(() => {
+    if (userId == null) return;
+    cache = null;
+    fetchPerms(userId).catch(() => notify());
+  }, [userId]);
 
   const can = useCallback(
     (...codes: string[]) => {
       if (!codes.length) return true;
-      if (user?.role !== 'super_admin') return false;
-      if (!loaded) return false;
-      // Legacy / full-access fallback when permission rows not yet assigned.
-      if (perms.length === 0) return true;
-      return codes.some((c) => perms.includes(c));
+      if (userId == null || !current) return false;
+      return codes.some((c) => current.perms.includes(c));
     },
-    [perms, user, loaded]
+    [userId, current]
   );
 
   return { perms, loaded, can, reload };

@@ -2085,7 +2085,7 @@ export const api = {
       const q = company_id != null ? `?company_id=${company_id}` : '';
       return request<import('./types').WebhookLogItem[]>(`/admin/webhooks${q}`);
     },
-    platformRoles: () => request<Record<string, unknown>[]>('/admin/platform-roles'),
+    platformRoles: () => request<import('./types').PlatformRole[]>('/admin/platform-roles'),
     config: () => request<Record<string, unknown>[]>('/admin/config'),
     putConfig: (key: string, data: { value: unknown; category?: string; is_sensitive?: boolean }) =>
       request<Record<string, unknown>>(`/admin/config/${encodeURIComponent(key)}`, {
@@ -2313,6 +2313,23 @@ export const api = {
       request<{ user_id: number; role: string }>('/admin/platform-role-assignments', {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+    platformAdmins: (): Promise<import('./types').PlatformAdmin[]> =>
+      request<import('./types').PlatformAdmin[]>('/admin/platform-admins'),
+    createPlatformAdmin: (data: { email: string; full_name: string; password: string; role_slug: string }) =>
+      request<{ id: number; email: string; full_name: string; role: string }>('/admin/platform-admins', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    setPlatformAdminRole: (userId: number, role_slug: string) =>
+      request<{ user_id: number; role: string }>(`/admin/platform-admins/${userId}/role`, {
+        method: 'PUT',
+        body: JSON.stringify({ role_slug }),
+      }),
+    setPlatformAdminActive: (userId: number, is_active: boolean) =>
+      request<{ id: number; is_active: boolean }>(`/admin/platform-admins/${userId}/active`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active }),
       }),
     syncWorkers: (): Promise<{ created: number; jobs: { job_name: string; queue: string }[] }> =>
       request<{ created: number; jobs: { job_name: string; queue: string }[] }>('/admin/jobs/sync-workers', {

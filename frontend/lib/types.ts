@@ -1374,6 +1374,27 @@ export interface PlatformRoleAssignment {
   assigned_at?: string | null;
 }
 
+export interface PlatformRole {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string | null;
+  is_system?: boolean;
+  permissions: string[];
+}
+
+export interface PlatformAdmin {
+  id: number;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  created_at?: string | null;
+  roles: { slug: string; name: string }[];
+  legacy_full_access: boolean;
+  full_access: boolean;
+  permission_count: number;
+}
+
 export interface AdminReportsTimeseries {
   labels: string[];
   new_tenants: number[];

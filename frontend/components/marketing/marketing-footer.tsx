@@ -198,20 +198,22 @@ export function MarketingFooter() {
           className="relative mt-14 overflow-hidden border-t border-border/70 pt-8 md:mt-16 md:pt-10 dark:border-white/10"
         >
           <BorderBeam size={160} duration={12} colorFrom="#F45100" colorTo="#FDBA74" borderWidth={1} />
+          {/* Size and line height are inline: a text-[clamp()] utility resets line-height in
+              Tailwind v4, which squeezed the line box to 24px and clipped the letters. */}
           <div
             aria-hidden
             className={cn(
-              'pointer-events-none select-none overflow-hidden py-2',
-              'text-center font-bold uppercase leading-[1.05] tracking-[-0.04em]',
-              'text-[clamp(2rem,12vw,11rem)] text-transparent'
+              'pointer-events-none select-none overflow-hidden whitespace-nowrap py-3',
+              'text-center font-bold uppercase tracking-[-0.04em] text-transparent'
             )}
+            style={{ fontSize: 'clamp(2rem, 12vw, 11rem)', lineHeight: 0.95 }}
           >
-            <span className="block dark:hidden" style={{ WebkitTextStroke: '1px rgba(22, 30, 44, 0.14)' }}>
+            <span className="block dark:hidden" style={{ WebkitTextStroke: '1px rgba(22, 30, 44, 0.22)' }}>
               CONTROLOPS
             </span>
             <span
               className="hidden dark:block"
-              style={{ WebkitTextStroke: '1px rgba(224, 78, 0, 0.35)' }}
+              style={{ WebkitTextStroke: '1px rgba(224, 78, 0, 0.45)' }}
             >
               CONTROLOPS
             </span>

@@ -180,22 +180,20 @@ export function normalizeShiftType(value: unknown): ShiftType | null {
 /**
  * Classify a shift as Morning / Afternoon / Evening / Night from its clock times.
  *
- * Overnight (end at or before start) is Night. Same start and end is treated as unset
- * so a blank new-shift form does not jump to Night before times are chosen.
+ * Goes by start time only, matching rota_service.infer_shift_type_from_start, so a
+ * 15:00–00:00 shift is Afternoon rather than Night just because it ends at midnight.
+ * Same start and end is treated as unset so a blank new-shift form does not jump to a
+ * type before times are chosen.
  */
 export function classifyShiftType(start: string, end: string): ShiftType | null {
   const s = String(start || '').trim();
   const e = String(end || '').trim();
   if (!s || !e || s === e) return null;
-  const startMins =
-    (parseInt(s.split(':')[0] || '0', 10) || 0) * 60 + (parseInt(s.split(':')[1] || '0', 10) || 0);
-  const endMins =
-    (parseInt(e.split(':')[0] || '0', 10) || 0) * 60 + (parseInt(e.split(':')[1] || '0', 10) || 0);
-  if (endMins <= startMins) return 'night';
-  const hour = Math.floor(startMins / 60);
-  if (hour < 11) return 'morning';
-  if (hour < 17) return 'afternoon';
-  return 'evening';
+  const hour = parseInt(s.split(':')[0] || '0', 10) || 0;
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
 }
 
 export const AVATAR_PALETTE = [

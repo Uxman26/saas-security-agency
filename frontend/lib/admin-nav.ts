@@ -58,7 +58,7 @@ export const ADMIN_NAV_SECTIONS: readonly AdminNavSection[] = [
     items: [
       { href: '/admin/users', labelKey: 'adminUsers', icon: Users, perms: ['tenants.read'] },
       { href: '/admin/admins', labelKey: 'adminAdmins', icon: UserCog, perms: ['tenants.read'] },
-      { href: '/admin/roles', labelKey: 'adminRoles', icon: KeyRound, perms: ['config.read'] },
+      { href: '/admin/team', labelKey: 'adminTeam', icon: KeyRound, perms: ['config.read'] },
     ],
   },
   {

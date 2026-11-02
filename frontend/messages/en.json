@@ -420,7 +420,8 @@
     "adminServerMonitor": "Server monitor",
     "adminTemplates": "Templates",
     "adminRefunds": "Refunds",
-    "adminRoles": "Platform roles"
+    "adminRoles": "Platform roles",
+    "adminTeam": "Team & roles"
   },
   "marketing": {
     "nav": {

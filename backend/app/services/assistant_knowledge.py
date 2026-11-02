@@ -194,6 +194,27 @@ KNOWLEDGE: list[dict] = [
         "href": "/admin",
     },
     {
+        "id": "super-admin-team",
+        "audience": "super_admin",
+        "modules": [],
+        "title": "Team & roles (super users)",
+        "tags": ["team", "super user", "super users", "roles", "permissions", "support", "technical", "assistant", "add admin", "staff"],
+        "body": (
+            "Users & admins -> Team & roles manages the ControlOps team who sign in to the "
+            "super admin portal. The Super Admin (the first platform account, marked with a "
+            "crown) always has full access and needs no permissions; other users cannot change "
+            "or deactivate it. Everyone else is a super user and sees only what their role "
+            "allows. To add one: Super users tab -> Add super user, enter name, email, password "
+            "and role. Edit changes the name, resets the password or switches the role; "
+            "Deactivate blocks sign-in. Roles tab: built-in roles are read-only; New role (or "
+            "the Support / Technical / Assistant quick-start buttons) creates a custom role "
+            "where you tick View/Edit per area such as Billing & packages, Support tickets, "
+            "Operations or Settings. A role still assigned to someone cannot be deleted. Nobody "
+            "can grant permissions they do not have themselves."
+        ),
+        "href": "/admin/team",
+    },
+    {
         "id": "incidents-occurrence",
         "audience": "tenant",
         "modules": ["incidents", "occurrence_sheets", "accident_reports"],

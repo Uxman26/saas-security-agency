@@ -1387,6 +1387,13 @@ export interface PlatformRole {
   permissions: string[];
 }
 
+export interface PlatformPermissionDef {
+  module: string;
+  action: string;
+  code: string;
+  sensitive: boolean;
+}
+
 export interface PlatformAdmin {
   id: number;
   email: string;
@@ -1395,6 +1402,8 @@ export interface PlatformAdmin {
   created_at?: string | null;
   roles: { slug: string; name: string }[];
   legacy_full_access: boolean;
+  /** The Super Admin account: always full access, cannot be changed by others. */
+  owner?: boolean;
   full_access: boolean;
   permission_count: number;
 }

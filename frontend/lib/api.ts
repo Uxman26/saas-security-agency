@@ -2341,6 +2341,17 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ role_slug }),
       }),
+    updatePlatformAdmin: (userId: number, data: { full_name?: string; password?: string }) =>
+      request<{ id: number; email: string; full_name: string }>(`/admin/platform-admins/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    platformPermissions: () => request<import('./types').PlatformPermissionDef[]>('/admin/platform-permissions'),
+    createPlatformRole: (data: { name: string; description?: string; permissions: string[] }) =>
+      request<import('./types').PlatformRole>('/admin/platform-roles', { method: 'POST', body: JSON.stringify(data) }),
+    updatePlatformRole: (slug: string, data: { name?: string; description?: string; permissions?: string[] }) =>
+      request<import('./types').PlatformRole>(`/admin/platform-roles/${slug}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deletePlatformRole: (slug: string) => request<void>(`/admin/platform-roles/${slug}`, { method: 'DELETE' }),
     setPlatformAdminActive: (userId: number, is_active: boolean) =>
       request<{ id: number; is_active: boolean }>(`/admin/platform-admins/${userId}/active`, {
         method: 'PATCH',

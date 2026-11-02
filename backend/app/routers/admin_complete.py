@@ -102,6 +102,38 @@ class PlatformAdminActiveBody(BaseModel):
     is_active: bool
 
 
+class PlatformAdminUpdateBody(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    password: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def _password(cls, v: Optional[str]) -> Optional[str]:
+        return validate_password_strength(v) if v else None
+
+
+class PlatformRoleBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field("", max_length=300)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class PlatformRoleUpdateBody(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=80)
+    description: Optional[str] = Field(None, max_length=300)
+    permissions: Optional[list[str]] = None
+
+
+def _role_out(role) -> dict:
+    return {
+        "id": role.id,
+        "slug": role.slug,
+        "name": role.name,
+        "description": role.description,
+        "is_system": bool(role.is_system),
+    }
+
+
 class PasswordPolicyBody(BaseModel):
     min_length: Optional[int] = 9
     require_upper: Optional[bool] = True
@@ -526,6 +558,105 @@ def set_platform_admin_active(
         request=request,
     )
     return {"id": u.id, "is_active": u.is_active}
+
+
+@router.patch("/platform-admins/{user_id}")
+def update_platform_admin(
+    user_id: int,
+    body: PlatformAdminUpdateBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("config.write")),
+):
+    u = rbac.update_platform_admin(db, user_id, full_name=body.full_name, password=body.password, actor=current_user)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="platform_admin.updated",
+        target_type="user",
+        target_id=u.id,
+        target_label=u.email,
+        # Never log the password itself, only that it was reset.
+        after={"full_name": u.full_name, "password_reset": bool(body.password)},
+        request=request,
+    )
+    return {"id": u.id, "email": u.email, "full_name": u.full_name}
+
+
+@router.get("/platform-permissions")
+def platform_permissions(_: User = Depends(require_platform_perm("config.read"))):
+    return rbac.list_permission_catalog()
+
+
+@router.post("/platform-roles")
+def create_platform_role(
+    body: PlatformRoleBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("config.write")),
+):
+    role = rbac.create_platform_role(
+        db, name=body.name, description=body.description, permissions=body.permissions, actor=current_user
+    )
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="platform_role.created",
+        target_type="platform_role",
+        target_id=role.id,
+        target_label=role.slug,
+        after={"name": role.name, "permissions": sorted(set(body.permissions))},
+        request=request,
+    )
+    return _role_out(role)
+
+
+@router.put("/platform-roles/{slug}")
+def update_platform_role(
+    slug: str,
+    body: PlatformRoleUpdateBody,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("config.write")),
+):
+    role = rbac.update_platform_role(
+        db,
+        slug,
+        name=body.name,
+        description=body.description,
+        permissions=body.permissions,
+        actor=current_user,
+    )
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="platform_role.updated",
+        target_type="platform_role",
+        target_id=role.id,
+        target_label=role.slug,
+        after=body.model_dump(exclude_unset=True),
+        request=request,
+    )
+    return _role_out(role)
+
+
+@router.delete("/platform-roles/{slug}", status_code=204)
+def delete_platform_role(
+    slug: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("config.write")),
+):
+    rbac.delete_platform_role(db, slug)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="platform_role.deleted",
+        target_type="platform_role",
+        target_id=None,
+        target_label=slug,
+        request=request,
+    )
 
 
 @router.get("/reports/export")

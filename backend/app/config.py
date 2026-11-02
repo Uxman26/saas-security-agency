@@ -80,6 +80,10 @@ class Settings(BaseSettings):
     firebase_client_email: str = ""
     firebase_private_key: str = ""  # use \n for newlines in .env
 
+    # Comma-separated emails that always have full platform access, on top of the first
+    # super admin account. Roles never narrow them and no one else can change them.
+    platform_owner_emails: str = ""
+
     @field_validator("database_url", mode="before")
     @classmethod
     def default_sqlite_if_placeholder(cls, v: str) -> str:

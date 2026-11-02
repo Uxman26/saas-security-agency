@@ -4,14 +4,35 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import re
+
 from app.auth import get_current_super_admin, get_password_hash
+from app.config import settings
 from app.database import get_db
 from app.models import PlatformAdminRole, PlatformPermission, PlatformRole, PlatformRolePermission, User
 from app.services import admin_platform_ext_service as ext
 
 
+def is_platform_owner(db: Session, user: User | None) -> bool:
+    """The Super Admin: the first platform account plus PLATFORM_OWNER_EMAILS.
+
+    Everyone else signing in to the portal is a super user whose role decides what they
+    can do. Keyed on the lowest id rather than on a role row, so a role change can never
+    lock the owner out again (it did on 2026-10-28).
+    """
+    if user is None or getattr(user, "role", None) != "super_admin":
+        return False
+    emails = {e.strip().lower() for e in (settings.platform_owner_emails or "").split(",") if e.strip()}
+    if (user.email or "").lower() in emails:
+        return True
+    first = db.query(func.min(User.id)).filter(User.role == "super_admin").scalar()
+    return first == user.id
+
+
 def user_platform_permission_codes(db: Session, user: User) -> set[str]:
     ext.ensure_platform_rbac(db)
+    if is_platform_owner(db, user):
+        return _all_codes()
     links = db.query(PlatformAdminRole).filter(PlatformAdminRole.user_id == user.id).all()
     if not links:
         # Legacy: bare super_admin with no platform role row has full access.
@@ -94,6 +115,8 @@ def _check_can_grant(db: Session, actor: User | None, role: PlatformRole) -> Non
 
 
 def _check_can_manage(db: Session, actor: User | None, user: User) -> None:
+    if is_platform_owner(db, user) and not (actor is None or actor.id == user.id):
+        raise HTTPException(status_code=403, detail="The Super Admin account cannot be changed by other users")
     if actor is None or _has_full_access(db, actor):
         return
     if actor.id == user.id:
@@ -224,6 +247,7 @@ def list_platform_admins(db: Session) -> list[dict]:
                 "is_active": bool(u.is_active),
                 "created_at": u.created_at,
                 "roles": [{"slug": r.slug, "name": r.name} for r in roles],
+                "owner": is_platform_owner(db, u),
                 # No role rows = legacy full access.
                 "legacy_full_access": not roles,
                 "full_access": codes >= _all_codes(),
@@ -252,3 +276,126 @@ def list_admin_role_assignments(db: Session) -> list[dict]:
             }
         )
     return out
+
+
+def update_platform_admin(
+    db: Session,
+    user_id: int,
+    *,
+    full_name: str | None = None,
+    password: str | None = None,
+    actor: User | None = None,
+) -> User:
+    user = _get_platform_admin(db, user_id)
+    _check_can_manage(db, actor, user)
+    if full_name is not None:
+        user.full_name = full_name.strip()
+    if password:
+        user.password_hash = get_password_hash(password)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _clean_codes(codes: list[str]) -> list[str]:
+    allowed = _all_codes()
+    unknown = sorted(set(codes) - allowed)
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown permissions: {', '.join(unknown)}")
+    return sorted(set(codes))
+
+
+def _check_can_grant_codes(db: Session, actor: User | None, codes: list[str]) -> None:
+    if actor is None or _has_full_access(db, actor):
+        return
+    missing = set(codes) - user_platform_permission_codes(db, actor)
+    if missing:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You cannot grant permissions you do not have: {', '.join(sorted(missing))}",
+        )
+
+
+def _get_custom_role(db: Session, slug: str) -> PlatformRole:
+    role = _get_role(db, slug)
+    if role.is_system:
+        raise HTTPException(status_code=400, detail="Built-in roles cannot be changed. Create a custom role instead.")
+    return role
+
+
+def _set_role_codes(db: Session, role: PlatformRole, codes: list[str]) -> None:
+    db.query(PlatformRolePermission).filter(PlatformRolePermission.role_id == role.id).delete(synchronize_session=False)
+    perms = db.query(PlatformPermission).filter(PlatformPermission.code.in_(codes)).all() if codes else []
+    for p in perms:
+        db.add(PlatformRolePermission(role_id=role.id, permission_id=p.id))
+
+
+def list_permission_catalog() -> list[dict]:
+    return [{"module": m, "action": a, "code": c, "sensitive": s} for m, a, c, s in ext.PLATFORM_PERMS]
+
+
+def create_platform_role(
+    db: Session, *, name: str, description: str = "", permissions: list[str], actor: User | None = None
+) -> PlatformRole:
+    ext.ensure_platform_rbac(db)
+    codes = _clean_codes(permissions)
+    _check_can_grant_codes(db, actor, codes)
+    slug = re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")[:40]
+    if not slug:
+        raise HTTPException(status_code=400, detail="Role name is required")
+    if db.query(PlatformRole).filter(PlatformRole.slug == slug).first():
+        raise HTTPException(status_code=400, detail="A role with this name already exists")
+    role = PlatformRole(slug=slug, name=name.strip(), description=description.strip() or None, is_system=False)
+    db.add(role)
+    db.flush()
+    _set_role_codes(db, role, codes)
+    db.commit()
+    db.refresh(role)
+    return role
+
+
+def update_platform_role(
+    db: Session,
+    slug: str,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+    permissions: list[str] | None = None,
+    actor: User | None = None,
+) -> PlatformRole:
+    ext.ensure_platform_rbac(db)
+    role = _get_custom_role(db, slug)
+    if name is not None:
+        if not name.strip():
+            raise HTTPException(status_code=400, detail="Role name is required")
+        role.name = name.strip()
+    if description is not None:
+        role.description = description.strip() or None
+    if permissions is not None:
+        codes = _clean_codes(permissions)
+        _check_can_grant_codes(db, actor, codes)
+        # A super user editing their own role could otherwise strip or widen themselves.
+        if actor is not None and not _has_full_access(db, actor):
+            mine = db.query(PlatformAdminRole).filter(
+                PlatformAdminRole.user_id == actor.id, PlatformAdminRole.role_id == role.id
+            ).first()
+            if mine:
+                raise HTTPException(status_code=403, detail="You cannot change the permissions of your own role")
+        _set_role_codes(db, role, codes)
+    db.commit()
+    db.refresh(role)
+    return role
+
+
+def delete_platform_role(db: Session, slug: str) -> None:
+    ext.ensure_platform_rbac(db)
+    role = _get_custom_role(db, slug)
+    in_use = db.query(PlatformAdminRole).filter(PlatformAdminRole.role_id == role.id).count()
+    if in_use:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{in_use} super user{'' if in_use == 1 else 's'} still {'has' if in_use == 1 else 'have'} this role. Move them to another role first.",
+        )
+    db.query(PlatformRolePermission).filter(PlatformRolePermission.role_id == role.id).delete(synchronize_session=False)
+    db.delete(role)
+    db.commit()

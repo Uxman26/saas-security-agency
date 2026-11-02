@@ -43,7 +43,6 @@ async function copyCompanyId(value?: string | null) {
   }
 }
 
-const TIERS = ['basic', 'standard', 'premium', 'enterprise'];
 const STATUSES = ['active', 'pending', 'expired', 'cancelled'];
 const CYCLES = ['monthly', 'quarterly', 'yearly'];
 
@@ -278,7 +277,7 @@ export default function AdminCompaniesPage() {
                     <Label>Plan</Label>
                     <Select value={editTier} onValueChange={onTierChange}>
                       <SelectTrigger className="mt-1 capitalize"><SelectValue /></SelectTrigger>
-                      <SelectContent>{TIERS.map((t) => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent>
+                      <SelectContent>{packages.map((p) => <SelectItem key={p.tier} value={p.tier} className="capitalize">{p.name || p.tier}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>

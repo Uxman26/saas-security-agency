@@ -53,8 +53,8 @@ export function planDetails(tier: PlanTier, t: TFn) {
 export function planDisplay(tier: PlanTier, t: TFn) {
   const tierKey = tier.tier;
   return {
-    name: t(`${tierKey}.name`),
-    description: t(`${tierKey}.description`),
+    name: tier.name || t(`${tierKey}.name`),
+    description: tier.description ?? t(`${tierKey}.description`),
     highlighted: HIGHLIGHTED.has(tierKey),
   };
 }
@@ -65,8 +65,10 @@ export function formatPriceGBP(price: number) {
 
 export const TIER_ORDER = ['basic', 'standard', 'premium', 'enterprise'] as const;
 
-export function tierRank(tier: string) {
-  const i = TIER_ORDER.indexOf(tier as (typeof TIER_ORDER)[number]);
+/** `order` is the live package list (the API sends it cheapest first); without it the
+ * built-in order applies, which cannot place packages a super admin created. */
+export function tierRank(tier: string, order: readonly string[] = TIER_ORDER) {
+  const i = order.indexOf(tier);
   return i >= 0 ? i : 0;
 }
 
@@ -78,18 +80,19 @@ export function planDisplayPrice(tier: PlanTier, cycle: 'monthly' | 'yearly', di
   return cycle === 'monthly' ? tier.price_gbp : yearlyMonthlyPrice(tier.price_gbp, discountPercent);
 }
 
-export function isTierDowngrade(fromTier: string, toTier: string) {
-  return tierRank(toTier) < tierRank(fromTier);
+export function isTierDowngrade(fromTier: string, toTier: string, order?: readonly string[]) {
+  return tierRank(toTier, order) < tierRank(fromTier, order);
 }
 
 export function canChangeToPlan(
   currentTier: string | null | undefined,
   currentCycle: string | null | undefined,
   targetTier: string,
-  targetCycle: 'monthly' | 'yearly'
+  targetCycle: 'monthly' | 'yearly',
+  order?: readonly string[]
 ) {
   if (!currentTier) return true;
-  if (isTierDowngrade(currentTier, targetTier)) return false;
+  if (isTierDowngrade(currentTier, targetTier, order)) return false;
   const cycle = currentCycle || 'monthly';
   if (currentTier === targetTier && cycle === 'yearly' && targetCycle === 'monthly') return false;
   if (currentTier === targetTier && cycle === targetCycle) return false;

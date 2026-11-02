@@ -19,6 +19,7 @@ from app.schemas import (
     AdminModulesPatch,
     AdminPaymentResponse,
     PlanTierOut,
+    PlanTierCreate,
     PlanTierUpdate,
     PackageFeatureOut,
     PackageFeatureCreate,
@@ -364,6 +365,55 @@ def delete_package_feature(
         target_id=None,
         target_label=key,
         before={"key": key},
+        after=None,
+        request=request,
+    )
+
+
+@router.post("/packages", response_model=PlanTierOut)
+def create_package(
+    body: PlanTierCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("billing.write", "config.write")),
+):
+    default_days = trial_service.get_trial_config(db).get("default_days")
+    out = platform_plans_service.create_tier(body.model_dump(exclude_unset=True), default_days)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="plan.created",
+        target_type="plan",
+        target_id=None,
+        target_label=out["tier"],
+        before=None,
+        after=out,
+        request=request,
+    )
+    return PlanTierOut(**out)
+
+
+@router.delete("/packages/{tier}", status_code=204)
+def delete_package(
+    tier: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_perm("billing.write", "config.write")),
+):
+    from app.models import Company
+
+    t = (tier or "").strip().lower()
+    on_tier = db.query(Company).filter(Company.subscription_tier == t).count()
+    before = platform_plans_service.get_limits(t) | {"price_gbp": platform_plans_service.get_price(t)}
+    platform_plans_service.delete_tier(t, on_tier)
+    platform_audit_service.log(
+        db,
+        actor=current_user,
+        action="plan.deleted",
+        target_type="plan",
+        target_id=None,
+        target_label=t,
+        before=before,
         after=None,
         request=request,
     )

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import StripePlanPrice
-from app.plan_config import VALID_TIERS, normalize_tier
+from app.plan_config import normalize_tier
 from app.services import platform_plans_service, platform_settings_service
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def ensure_yearly_coupon(db: Session) -> str:
 def sync_all_plans(db: Session) -> list[dict]:
     _configure()
     out = []
-    for tier in sorted(VALID_TIERS):
+    for tier in platform_plans_service.active_tiers():
         monthly_gbp = platform_plans_service.get_price(tier)
         out.append(_sync_price(db, tier, "monthly", int(round(monthly_gbp * 100)), None))
         coupon_id = ensure_yearly_coupon(db)

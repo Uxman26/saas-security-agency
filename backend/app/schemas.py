@@ -342,6 +342,9 @@ class AdminModulesPatch(BaseModel):
 
 class PlanTierOut(BaseModel):
     tier: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+    custom: bool = False
     price_gbp: float
     max_guards: Optional[int] = None
     max_sites: Optional[int] = None
@@ -351,12 +354,26 @@ class PlanTierOut(BaseModel):
 
 
 class PlanTierUpdate(BaseModel):
-    price_gbp: Optional[float] = None
+    name: Optional[str] = Field(None, max_length=60)
+    description: Optional[str] = Field(None, max_length=200)
+    price_gbp: Optional[float] = Field(None, ge=0)
     max_guards: Optional[int] = None
     max_sites: Optional[int] = None
     max_users: Optional[int] = None
     features: Optional[dict[str, Any]] = None
     remove_features: Optional[list[str]] = None
+    trial_days: Optional[int] = None
+
+
+class PlanTierCreate(BaseModel):
+    tier: str = Field(..., min_length=1, max_length=32)
+    name: str = Field(..., min_length=1, max_length=60)
+    description: str = Field("", max_length=200)
+    price_gbp: float = Field(0, ge=0)
+    max_guards: Optional[int] = None
+    max_sites: Optional[int] = None
+    max_users: Optional[int] = None
+    features: Optional[dict[str, Any]] = None
     trial_days: Optional[int] = None
 
 

@@ -442,6 +442,10 @@ export interface AdminUserListItem {
 
 export interface PlanTier {
   tier: string;
+  /** Set when a super admin named the package; built-ins otherwise use translations. */
+  name?: string | null;
+  description?: string | null;
+  custom?: boolean;
   price_gbp: number;
   max_guards?: number | null;
   max_sites?: number | null;

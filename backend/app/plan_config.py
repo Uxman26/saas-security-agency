@@ -98,9 +98,16 @@ LIMITS: dict[str, dict[str, Any]] = {
 
 
 def normalize_tier(tier: Optional[str]) -> str:
+    from app.services.platform_plans_service import active_tiers
+
     t = (tier or "basic").lower().strip()
     t = TIER_ALIASES.get(t, t)
-    return t if t in VALID_TIERS else "basic"
+    # Super admins can delete and create packages, so the live list decides what is
+    # valid. Unknown values fall back to Basic, or the cheapest package if Basic is gone.
+    active = active_tiers()
+    if t in active:
+        return t
+    return "basic" if "basic" in active or not active else active[0]
 
 
 def limits_for_tier(tier: Optional[str]) -> dict[str, Any]:
@@ -150,7 +157,11 @@ TIER_ORDER = {"basic": 1, "standard": 2, "premium": 3, "enterprise": 4}
 
 
 def tier_rank(tier: Optional[str]) -> int:
-    return TIER_ORDER.get(normalize_tier(tier), 0)
+    from app.services.platform_plans_service import active_tiers
+
+    t = normalize_tier(tier)
+    active = active_tiers()
+    return active.index(t) + 1 if t in active else TIER_ORDER.get(t, 0)
 
 
 def is_plan_downgrade(company, tier: str, billing_cycle: str) -> bool:

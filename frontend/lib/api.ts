@@ -1797,9 +1797,24 @@ export const api = {
       }),
     deletePackageFeature: (key: string): Promise<void> =>
       request<void>(`/admin/packages/features/${key}`, { method: 'DELETE' }),
+    createPackage: (data: {
+      tier: string;
+      name: string;
+      description?: string;
+      price_gbp: number;
+      max_guards?: number | null;
+      max_sites?: number | null;
+      max_users?: number | null;
+      features?: Record<string, boolean>;
+      trial_days?: number;
+    }): Promise<PlanTier> => request<PlanTier>('/admin/packages', { method: 'POST', body: JSON.stringify(data) }),
+    deletePackage: (tier: string): Promise<void> =>
+      request<void>(`/admin/packages/${tier}`, { method: 'DELETE' }),
     patchPackage: (
       tier: string,
       data: {
+        name?: string;
+        description?: string;
         price_gbp?: number;
         max_guards?: number | null;
         max_sites?: number | null;

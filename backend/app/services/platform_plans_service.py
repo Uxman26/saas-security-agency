@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.feature_catalog import CATALOG_KEYS, catalog_entries
-from app.plan_config import DEFAULT_TRIAL_DAYS, LIMITS, PLAN_PRICES_GBP, VALID_TIERS, normalize_tier
+from app.plan_config import DEFAULT_TRIAL_DAYS, LIMITS, PLAN_PRICES_GBP, TIER_ORDER, VALID_TIERS, normalize_tier
 
 # Must resolve to the persistent volume (/app/data), the same place
 # platform_smtp_service writes. Deriving it from __file__ pointed at /app/app/data —
@@ -29,6 +29,41 @@ def _write_raw(data: dict) -> None:
     os.makedirs(_DATA_DIR, exist_ok=True)
     with open(_PLANS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
+
+
+MAX_TIERS = 4
+
+
+def _slug(value: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in (value or "").strip().lower()).strip("_")
+
+
+def active_tiers() -> list[str]:
+    """Packages that exist right now: the built-ins a super admin has not deleted plus
+    any they created, cheapest first so rank (upgrade vs downgrade) follows price."""
+    raw = _read_raw()
+    removed = set(raw.get("removed_tiers") or [])
+    custom = raw.get("custom_tiers") or {}
+    keys = [t for t in VALID_TIERS if t not in removed] + [k for k in custom if k not in VALID_TIERS]
+    prices = raw.get("prices") or {}
+
+    def price(t: str) -> float:
+        return float(prices.get(t, PLAN_PRICES_GBP.get(t, 0.0)))
+
+    return sorted(keys, key=lambda t: (price(t), TIER_ORDER.get(t, 99), t))
+
+
+def get_display(tier: str) -> dict[str, Any]:
+    """Name/description a super admin set. None for built-ins left alone, so the
+    translated copy on the public pricing page still applies."""
+    raw = _read_raw()
+    meta = (raw.get("display") or {}).get(tier) or {}
+    custom = (raw.get("custom_tiers") or {}).get(tier)
+    name = meta.get("name") or (custom or {}).get("name")
+    description = meta.get("description")
+    if description is None and custom is not None:
+        description = custom.get("description") or ""
+    return {"name": name, "description": description}
 
 
 def get_price(tier: str) -> float:
@@ -97,7 +132,7 @@ def list_features() -> list[dict[str, Any]]:
 
 
 def add_custom_feature(key: str, label: str, description: str = "", group: str = "apps") -> dict[str, Any]:
-    slug = "".join(c if c.isalnum() else "_" for c in (key or "").strip().lower()).strip("_")
+    slug = _slug(key)
     if not slug:
         raise HTTPException(status_code=400, detail="Feature key is required")
     if slug in CATALOG_KEYS:
@@ -150,35 +185,42 @@ def get_trial_days(tier: str) -> int:
     return get_trial_days_override(tier) or DEFAULT_TRIAL_DAYS
 
 
+def _tier_out(tier: str, default_trial_days: int | None) -> dict[str, Any]:
+    lim = get_limits(tier)
+    return {
+        "tier": tier,
+        **get_display(tier),
+        "price_gbp": get_price(tier),
+        "max_guards": lim.get("max_guards"),
+        "max_sites": lim.get("max_sites"),
+        "max_users": lim.get("max_users"),
+        "features": lim.get("features") or {},
+        "trial_days": get_trial_days_override(tier) or default_trial_days or DEFAULT_TRIAL_DAYS,
+        "custom": tier not in VALID_TIERS,
+    }
+
+
 def list_tiers(default_trial_days: int | None = None) -> list[dict[str, Any]]:
     """`default_trial_days` is the platform-wide Trials -> Default days, which callers
     with a session pass so a package without its own override reports the value that
     would actually be granted."""
-    out = []
-    for tier in VALID_TIERS:
-        lim = get_limits(tier)
-        out.append(
-            {
-                "tier": tier,
-                "price_gbp": get_price(tier),
-                "max_guards": lim.get("max_guards"),
-                "max_sites": lim.get("max_sites"),
-                "max_users": lim.get("max_users"),
-                "features": lim.get("features") or {},
-                "trial_days": get_trial_days_override(tier) or default_trial_days or DEFAULT_TRIAL_DAYS,
-            }
-        )
-    from app.plan_config import tier_rank
-
-    out.sort(key=lambda x: tier_rank(x["tier"]))
-    return out
+    return [_tier_out(t, default_trial_days) for t in active_tiers()]
 
 
 def update_tier(tier: str, payload: dict[str, Any], default_trial_days: int | None = None) -> dict[str, Any]:
-    t = normalize_tier(tier)
-    if t not in VALID_TIERS:
-        raise HTTPException(status_code=400, detail="Invalid tier")
+    # Not normalize_tier: that maps unknown keys to basic, so a typo would edit Basic.
+    t = (tier or "").strip().lower()
+    if t not in active_tiers():
+        raise HTTPException(status_code=404, detail="Package not found")
     raw = _read_raw()
+    display = dict(raw.get("display") or {})
+    meta = dict(display.get(t) or {})
+    for key in ("name", "description"):
+        if key in payload and payload[key] is not None:
+            meta[key] = str(payload[key]).strip()
+    if meta:
+        display[t] = meta
+        raw["display"] = display
     prices = dict(raw.get("prices") or {})
     limits = dict(raw.get("limits") or {})
     if payload.get("price_gbp") is not None:
@@ -205,13 +247,70 @@ def update_tier(tier: str, payload: dict[str, Any], default_trial_days: int | No
     raw["prices"] = prices
     raw["limits"] = limits
     _write_raw(raw)
-    lim = get_limits(t)
-    return {
-        "tier": t,
-        "price_gbp": get_price(t),
-        "max_guards": lim.get("max_guards"),
-        "max_sites": lim.get("max_sites"),
-        "max_users": lim.get("max_users"),
-        "features": lim.get("features") or {},
-        "trial_days": get_trial_days_override(t) or default_trial_days or DEFAULT_TRIAL_DAYS,
-    }
+    return _tier_out(t, default_trial_days)
+
+
+def create_tier(payload: dict[str, Any], default_trial_days: int | None = None) -> dict[str, Any]:
+    slug = _slug(payload.get("tier") or payload.get("name") or "")
+    if not slug:
+        raise HTTPException(status_code=400, detail="Package key is required")
+    if len(slug) > 32:
+        raise HTTPException(status_code=400, detail="Package key must be 32 characters or fewer")
+    active = active_tiers()
+    if slug in active:
+        raise HTTPException(status_code=400, detail="A package with that key already exists")
+    if len(active) >= MAX_TIERS:
+        raise HTTPException(status_code=400, detail=f"You can have at most {MAX_TIERS} packages. Delete one first.")
+    raw = _read_raw()
+    if slug in VALID_TIERS:
+        # Re-creating a deleted built-in brings it back instead of shadowing it.
+        raw["removed_tiers"] = [t for t in raw.get("removed_tiers") or [] if t != slug]
+    else:
+        custom = dict(raw.get("custom_tiers") or {})
+        custom[slug] = {
+            "name": (payload.get("name") or slug.replace("_", " ").title()).strip(),
+            "description": (payload.get("description") or "").strip(),
+        }
+        raw["custom_tiers"] = custom
+        limits = dict(raw.get("limits") or {})
+        limits[slug] = {
+            "max_guards": None,
+            "max_sites": None,
+            "max_users": None,
+            "features": {k: False for k in _feature_keys(raw)},
+        }
+        raw["limits"] = limits
+        prices = dict(raw.get("prices") or {})
+        prices[slug] = 0.0
+        raw["prices"] = prices
+    _write_raw(raw)
+    rest = {k: v for k, v in payload.items() if k != "tier"}
+    rest.setdefault("features", {})
+    return update_tier(slug, rest, default_trial_days)
+
+
+def delete_tier(tier: str, companies_on_tier: int) -> None:
+    t = (tier or "").strip().lower()
+    active = active_tiers()
+    if t not in active:
+        raise HTTPException(status_code=404, detail="Package not found")
+    if len(active) <= 1:
+        raise HTTPException(status_code=400, detail="At least one package must remain")
+    if companies_on_tier:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{companies_on_tier} compan{'y is' if companies_on_tier == 1 else 'ies are'} on this package. Move them to another package first.",
+        )
+    raw = _read_raw()
+    if t in VALID_TIERS:
+        raw["removed_tiers"] = sorted(set(raw.get("removed_tiers") or []) | {t})
+    else:
+        custom = dict(raw.get("custom_tiers") or {})
+        custom.pop(t, None)
+        raw["custom_tiers"] = custom
+    # Drop saved settings so a re-created package starts from its defaults.
+    for section in ("prices", "limits", "trial_days", "display"):
+        data = dict(raw.get(section) or {})
+        data.pop(t, None)
+        raw[section] = data
+    _write_raw(raw)

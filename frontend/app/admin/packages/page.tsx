@@ -17,7 +17,7 @@ import { formatPriceGBP } from '@/lib/plan-tiers';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
-import { Check, Minus, Plus, Trash2 } from 'lucide-react';
+import { Check, Minus, Pencil, Plus, Trash2 } from 'lucide-react';
 
 const GROUP_ORDER = ['core', 'apps', 'comms', 'limits_support'] as const;
 
@@ -27,6 +27,9 @@ const GROUP_LABELS: Record<string, string> = {
   comms: 'Communications',
   limits_support: 'Service level',
 };
+
+// Mirrors platform_plans_service.MAX_TIERS; the API enforces it, this only greys the button.
+const MAX_PACKAGES = 4;
 
 const TIER_BLURB: Record<string, string> = {
   basic: 'Entry plan for a single small operation',
@@ -71,6 +74,11 @@ export default function AdminPackagesPage() {
   const [features, setFeatures] = useState<PackageFeature[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<PlanTier | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [tierKey, setTierKey] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [price, setPrice] = useState('');
   const [trialDays, setTrialDays] = useState('');
   const [maxGuards, setMaxGuards] = useState('');
@@ -102,8 +110,34 @@ export default function AdminPackagesPage() {
 
   const grouped = useMemo(() => groupFeatures(features), [features]);
 
+  const tierName = (t: PlanTier) => t.name || t.tier.charAt(0).toUpperCase() + t.tier.slice(1);
+  const tierBlurb = (t: PlanTier) => t.description ?? TIER_BLURB[t.tier] ?? 'Custom plan';
+  const atLimit = tiers.length >= MAX_PACKAGES;
+
+  const closeDialog = () => {
+    setSelected(null);
+    setCreating(false);
+  };
+
+  const openCreate = () => {
+    setSelected(null);
+    setCreating(true);
+    setTierKey('');
+    setName('');
+    setDescription('');
+    setPrice('');
+    setTrialDays('');
+    setMaxGuards('');
+    setMaxSites('');
+    setMaxUsers('');
+    setDraftFeatures(Object.fromEntries(features.map((f) => [f.key, false])));
+  };
+
   const openEdit = (t: PlanTier) => {
+    setCreating(false);
     setSelected(t);
+    setName(tierName(t));
+    setDescription(tierBlurb(t));
     setPrice(String(t.price_gbp));
     setTrialDays(t.trial_days != null ? String(t.trial_days) : '');
     setMaxGuards(t.max_guards != null ? String(t.max_guards) : '');
@@ -115,26 +149,56 @@ export default function AdminPackagesPage() {
   const toggleFeature = (key: string) => setDraftFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const save = async () => {
-    if (!selected) return;
+    if (!selected && !creating) return;
+    if (!name.trim()) {
+      toast.error('Package name is required');
+      return;
+    }
+    const body = {
+      name: name.trim(),
+      description: description.trim(),
+      price_gbp: parseFloat(price) || 0,
+      // Empty means unlimited, and null is how the API records that — sending
+      // undefined would leave the previous cap in place instead.
+      max_guards: maxGuards ? parseInt(maxGuards, 10) : null,
+      max_sites: maxSites ? parseInt(maxSites, 10) : null,
+      max_users: maxUsers ? parseInt(maxUsers, 10) : null,
+      features: draftFeatures,
+      trial_days: trialDays ? parseInt(trialDays, 10) : undefined,
+    };
     setSaving(true);
     try {
-      const updated = await api.admin.patchPackage(selected.tier, {
-        price_gbp: parseFloat(price),
-        // Empty means unlimited, and null is how the API records that — sending
-        // undefined would leave the previous cap in place instead.
-        max_guards: maxGuards ? parseInt(maxGuards, 10) : null,
-        max_sites: maxSites ? parseInt(maxSites, 10) : null,
-        max_users: maxUsers ? parseInt(maxUsers, 10) : null,
-        features: draftFeatures,
-        trial_days: trialDays ? parseInt(trialDays, 10) : undefined,
-      });
-      setTiers((prev) => prev.map((t) => (t.tier === updated.tier ? updated : t)));
-      setSelected(null);
-      toast.success('Package updated');
+      if (creating) {
+        await api.admin.createPackage({ tier: tierKey.trim() || name.trim(), ...body });
+        // Reload rather than append: the list is ordered by price server side.
+        load();
+        toast.success('Package created');
+      } else if (selected) {
+        const updated = await api.admin.patchPackage(selected.tier, body);
+        setTiers((prev) => prev.map((t) => (t.tier === updated.tier ? updated : t)));
+        toast.success('Package updated');
+      }
+      closeDialog();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const removePackage = async () => {
+    if (!selected) return;
+    if (!window.confirm(`Delete the ${tierName(selected)} package? Companies must be moved off it first. This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await api.admin.deletePackage(selected.tier);
+      setTiers((prev) => prev.filter((t) => t.tier !== selected.tier));
+      closeDialog();
+      toast.success(`${tierName(selected)} deleted`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete package');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -184,6 +248,16 @@ export default function AdminPackagesPage() {
             </div>
             <div className="flex gap-2">
               {canEdit && (
+                <Button
+                  size="sm"
+                  onClick={openCreate}
+                  disabled={loading || atLimit}
+                  title={atLimit ? `Maximum of ${MAX_PACKAGES} packages. Delete one to add another.` : undefined}
+                >
+                  <Plus className="size-4" /> New package
+                </Button>
+              )}
+              {canEdit && (
                 <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
                   <Plus className="size-4" /> Add feature / app
                 </Button>
@@ -205,11 +279,11 @@ export default function AdminPackagesPage() {
                 return (
                   <Card key={t.tier} className="flex flex-col">
                     <CardHeader className="pb-3">
-                      <CardTitle className="flex items-baseline justify-between capitalize">
-                        <span>{t.tier}</span>
+                      <CardTitle className="flex items-baseline justify-between">
+                        <span>{tierName(t)}</span>
                         <span className="text-2xl font-bold">{formatPriceGBP(t.price_gbp)}</span>
                       </CardTitle>
-                      <p className="text-xs text-muted-foreground">{TIER_BLURB[t.tier] ?? 'Custom plan'}</p>
+                      <p className="text-xs text-muted-foreground">{tierBlurb(t)}</p>
                       <p className="text-xs text-muted-foreground">
                         per month · {t.trial_days}-day trial · {included} of {features.length} features
                       </p>
@@ -252,7 +326,7 @@ export default function AdminPackagesPage() {
 
                       {canEdit && (
                         <Button size="sm" variant="outline" className="w-full" onClick={() => openEdit(t)}>
-                          Edit package
+                          <Pencil className="size-4" /> Edit package
                         </Button>
                       )}
                     </CardContent>
@@ -289,14 +363,37 @@ export default function AdminPackagesPage() {
           )}
         </div>
 
-        <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+        <Dialog open={!!selected || creating} onOpenChange={(o) => !o && closeDialog()}>
           <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="capitalize">Edit {selected?.tier} package</DialogTitle>
+              <DialogTitle>{creating ? 'New package' : `Edit ${selected ? tierName(selected) : ''} package`}</DialogTitle>
             </DialogHeader>
-            {selected && (
+            {(selected || creating) && (
               <div className="space-y-5">
                 <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="pkgName">Package name</Label>
+                    <Input id="pkgName" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" placeholder="Gold" maxLength={60} />
+                  </div>
+                  <div>
+                    <Label htmlFor="pkgKey">Key</Label>
+                    <Input
+                      id="pkgKey"
+                      value={creating ? tierKey : selected?.tier ?? ''}
+                      onChange={(e) => setTierKey(e.target.value)}
+                      disabled={!creating}
+                      className="mt-1"
+                      placeholder={name ? name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'gold'}
+                      maxLength={32}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {creating ? 'Used in signup links and billing. Cannot be changed later.' : 'Fixed once created.'}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="pkgDesc">Description</Label>
+                    <Input id="pkgDesc" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1" maxLength={200} />
+                  </div>
                   <div>
                     <Label htmlFor="price">Monthly price (GBP)</Label>
                     <Input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="mt-1" />
@@ -333,7 +430,7 @@ export default function AdminPackagesPage() {
                       size="sm"
                       variant="ghost"
                       onClick={() => {
-                        setSelected(null);
+                        closeDialog();
                         setAddOpen(true);
                       }}
                     >
@@ -378,9 +475,16 @@ export default function AdminPackagesPage() {
                   ))}
                 </div>
 
-                <Button onClick={save} disabled={saving} className="w-full">
-                  {saving ? 'Saving...' : 'Save package'}
-                </Button>
+                <div className="flex gap-2">
+                  {selected && (
+                    <Button variant="outline" onClick={removePackage} disabled={saving || deleting || tiers.length <= 1}>
+                      <Trash2 className="size-4 text-destructive" /> {deleting ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  )}
+                  <Button onClick={save} disabled={saving || deleting} className="flex-1">
+                    {saving ? 'Saving...' : creating ? 'Create package' : 'Save package'}
+                  </Button>
+                </div>
               </div>
             )}
           </DialogContent>

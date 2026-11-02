@@ -67,6 +67,7 @@ export function PricingGrid({
   onUpgrade,
   upgradingTier,
 }: Props) {
+  const order = tiers.map((t) => t.tier);
   const cols = tiers.length >= 4 ? 'lg:grid-cols-4' : tiers.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2';
 
   return (
@@ -77,7 +78,7 @@ export function PricingGrid({
         const details = planDetails(tier, tp);
         const price = planDisplayPrice(tier, cycle, yearlyDiscount);
         const isCurrent = currentTier === tier.tier && (currentCycle || 'monthly') === cycle;
-        const canChange = canChangeToPlan(currentTier, currentCycle, tier.tier, cycle);
+        const canChange = canChangeToPlan(currentTier, currentCycle, tier.tier, cycle, order);
         // Trial offer follows backend trial_config (eligible_tiers + enabled). Existing
         // tenants upgrading use onUpgrade and are past self-serve trial by design.
         const trialDays = tier.trial_days ?? trial?.defaultDays ?? null;

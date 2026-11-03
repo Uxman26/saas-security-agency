@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attendanceStatusLine, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attendanceStatusLine, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, payTypeRateSuffix, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftSiteBarColor } from '@/lib/rota-shifts-types';
@@ -385,6 +385,7 @@ export function RotaCalendarClient() {
     totalRotaPayable,
     empTotalPayable,
     resolveShiftRate,
+    resolveShiftPayType,
     deleteShift,
     updateShift,
     applyShiftChange,
@@ -1227,53 +1228,11 @@ export function RotaCalendarClient() {
     setDescCtx({ empId, dk, idx });
   };
 
-  const rateOf = (sh: { shiftRate?: number | null } | null | undefined) =>
-    sh?.shiftRate == null ? null : Number(sh.shiftRate);
-
-  /**
-   * A published shift has already been sent to the staff member and copied into the
-   * assignment the payroll preview reads, both carrying the old rate. Editing the rate
-   * here would leave those disagreeing with the grid, so the affected people are
-   * unpublished and the rota has to be published again at the new rate.
-   */
-  const unpublishForRateChange = async (empIds: string[]) => {
-    const affected = [...new Set(empIds)].filter((id) => isEmployeePublished(id));
-    if (!affected.length) return;
-    if (!canUnpublishGuard) {
-      toast.warning(
-        'Shift rate changed, but this rota is published and you cannot unpublish. Ask an admin to unpublish and publish it again so the new rate applies.'
-      );
-      return;
-    }
-    let done = 0;
-    for (const id of affected) {
-      const guardId = parseInt(id, 10);
-      if (!Number.isFinite(guardId)) continue;
-      try {
-        const result = await unpublishGuard(guardId);
-        if (result.published_guard_ids) setPublishedGuardIds(result.published_guard_ids);
-        done += 1;
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Rate changed but unpublish failed');
-        return;
-      }
-    }
-    if (done) {
-      toast.warning(
-        done === 1
-          ? 'Shift rate changed — unpublished for that employee. Publish again to send the new rate.'
-          : `Shift rate changed — unpublished for ${done} employees. Publish again to send the new rate.`
-      );
-    }
-  };
-
+  // A rate or job-type edit on a published shift no longer needs an unpublish: saving
+  // the rota carries both onto the published assignment that payroll reads.
   const onApplyShift = (assignees: string[], dk: string, sh: ShiftRec, rates?: Record<string, number>) => {
-    const prev = shiftEdit ? state.shifts[shiftEdit.empId]?.[shiftEdit.dk]?.[shiftEdit.idx] : null;
-    const rateChanged = !!prev && rateOf(prev) !== rateOf(sh);
-    const touched = [...assignees, ...(shiftEdit ? [shiftEdit.empId] : [])].filter(Boolean);
     applyShiftChange(shiftEdit, assignees, dk, sh, rates);
     setShiftEdit(null);
-    if (rateChanged) void unpublishForRateChange(touched);
   };
 
   const amendPreviewRate = (dk: string, idx: number, rate: number) => {
@@ -1282,7 +1241,6 @@ export function RotaCalendarClient() {
     if (!empId || !sh) return;
     updateShift(empId, dk, idx, { ...sh, shiftRate: rate });
     toast.snack('Shift rate updated');
-    void unpublishForRateChange([empId]);
   };
 
   const startCopy = (empId: string, dk: string, idx: number) => {
@@ -1517,7 +1475,8 @@ export function RotaCalendarClient() {
     ) {
       const rate = resolveShiftRate(nextShift, attCtx.empId);
       if (rate > 0) {
-        nextShift = { ...nextShift, shiftRate: rate };
+        // Lock the job type with the rate so the pair cannot drift apart later.
+        nextShift = { ...nextShift, shiftRate: rate, payType: resolveShiftPayType(nextShift, attCtx.empId) };
         flushSync(() => updateShift(attCtx.empId, attCtx.dk, attCtx.idx, nextShift));
       }
     }
@@ -4070,7 +4029,9 @@ export function RotaCalendarClient() {
                     <div className="text-[11px] text-muted-foreground">
                       Break {(sh.breakH || 0) > 0 || (sh.breakM || 0) > 0 ? `${sh.breakH}h ${sh.breakM}m` : 'none'} ·{' '}
                       {formatHoursDecimal(calcHours(sh, state.inclBreaks))}
-                      {sh.shiftRate != null ? ` · £${Number(sh.shiftRate).toFixed(2)}/hr` : ''}
+                      {sh.shiftRate != null
+                        ? ` · £${Number(sh.shiftRate).toFixed(2)}${payTypeRateSuffix(resolveShiftPayType(sh, viewShiftsEmpId ?? undefined))}`
+                        : ''}
                     </div>
                     {conflicts.length > 0 ? (
                       <div className="mt-1 text-[11px] font-medium text-amber-800 dark:text-amber-200">

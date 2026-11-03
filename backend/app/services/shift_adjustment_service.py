@@ -197,6 +197,80 @@ def find_assignment(
     return None
 
 
+class AssignmentFinder:
+    """find_assignment over many shifts, with the rows loaded up front.
+
+    Same matching rules as find_assignment; it exists so a loop over a whole rota does
+    two queries instead of one or more per shift.
+    """
+
+    def __init__(self, db: Session, company_id: int, guard_ids: set[int], dates: set[date]):
+        self._by_day: dict[tuple[int, date], list[Assignment]] = {}
+        self._late: dict[int, ShiftLateLog] = {}
+        if not guard_ids or not dates:
+            return
+        rows = (
+            db.query(Assignment)
+            .join(Guard)
+            .options(joinedload(Assignment.site))
+            .filter(
+                Guard.company_id == company_id,
+                Assignment.guard_id.in_(guard_ids),
+                Assignment.date.in_(dates),
+            )
+            .order_by(Assignment.id.desc())
+            .all()
+        )
+        for a in rows:
+            self._by_day.setdefault((a.guard_id, a.date), []).append(a)
+        if rows:
+            for log in (
+                db.query(ShiftLateLog)
+                .filter(ShiftLateLog.assignment_id.in_([a.id for a in rows]))
+                .order_by(ShiftLateLog.id.asc())
+                .all()
+            ):
+                self._late[log.assignment_id] = log
+
+    def assignment_ids(self) -> list[int]:
+        return [a.id for rows in self._by_day.values() for a in rows]
+
+    def find(
+        self, guard_id: int, shift_date: date, shift_start: str, site_name: Optional[str] = None
+    ) -> Optional[Assignment]:
+        rows = self._by_day.get((guard_id, shift_date)) or []
+        if not rows:
+            return None
+        want_start = _norm_hhmm(shift_start)
+        site_key = " ".join((site_name or "").strip().lower().split())
+
+        def site_ok(a: Assignment) -> bool:
+            if not site_key:
+                return True
+            name = " ".join(((a.site.name if a.site else "") or "").strip().lower().split())
+            return name == site_key
+
+        candidates = [a for a in rows if site_ok(a)] or rows
+        for a in candidates:
+            if _norm_hhmm(a.shift_start) == want_start:
+                return a
+        for a in rows:
+            late = self._late.get(a.id)
+            if not late:
+                continue
+            if not site_ok(a) and site_key:
+                continue
+            if (
+                _norm_hhmm(late.scheduled_start) == want_start
+                or _norm_hhmm(late.actual_start) == want_start
+                or _norm_hhmm(a.shift_start) == want_start
+            ):
+                return a
+        if len(candidates) == 1:
+            return candidates[0]
+        return None
+
+
 def record_overtime(
     db: Session,
     user_id: int,

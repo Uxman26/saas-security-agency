@@ -9,14 +9,25 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
-import type { EmployeeRec, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
+import type { EmployeeRec, PayType, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import {
+  PAY_TYPE_OPTS,
   SHIFT_COLOR_OPTS,
   SHIFT_TYPE_OPTS,
   classifyShiftType,
+  normalizePayType,
   normalizeShiftType,
 } from '@/lib/rota-shifts-types';
-import { buildSiteIndex, findConflictsForDraft, normalizeSiteKey } from '@/lib/rota-shifts-utils';
+import {
+  buildSiteIndex,
+  calcHours,
+  clientChargeableHours,
+  findConflictsForDraft,
+  formatHoursDecimal,
+  formatMoney,
+  normalizeSiteKey,
+  shiftPayAmount,
+} from '@/lib/rota-shifts-utils';
 import { useCreateSite, useSites } from '@/hooks/use-sites';
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
@@ -48,7 +59,16 @@ const empty = (): ShiftRec => ({
   label: '',
   shiftType: null,
   shiftRate: null,
+  payType: null,
+  invoiceWithoutBreak: true,
 });
+
+/** The profile rate a staff member has for a job type, or null when none is set. */
+function employeeRateFor(emp: EmployeeRec, payType: PayType): number | null {
+  const own = emp.payType ?? 'hourly';
+  const r = payType === own ? emp.hourlyRate : emp.ratesByType?.[payType];
+  return r != null && !Number.isNaN(Number(r)) && Number(r) > 0 ? Number(r) : null;
+}
 
 /** Radix Select cannot hold an empty string value, so "no type" gets a sentinel. */
 const NO_SHIFT_TYPE = '__none__';
@@ -70,6 +90,8 @@ function normalizeShiftForm(sh: ShiftRec): ShiftRec {
     breakH: Number.isFinite(Number(sh.breakH)) ? Number(sh.breakH) : 0,
     breakM: Number.isFinite(Number(sh.breakM)) ? Number(sh.breakM) : 0,
     shiftType: normalizeShiftType(sh.shiftType),
+    payType: normalizePayType(sh.payType),
+    invoiceWithoutBreak: sh.invoiceWithoutBreak !== false,
   };
 }
 
@@ -97,6 +119,8 @@ export function ShiftDialog({
   const [assignees, setAssignees] = useState<string[]>([defaultEmpId]);
   /** Once the rate box is edited we show it verbatim, so it can be cleared back to empty. */
   const [rateTouched, setRateTouched] = useState(false);
+  /** Once a job type is picked it sticks; until then it follows the first assignee's profile. */
+  const [payTypeTouched, setPayTypeTouched] = useState(false);
   /** Manual shift-type picks stick until times change away from the last auto value. */
   const [shiftTypeTouched, setShiftTypeTouched] = useState(false);
   const lastAutoShiftType = useRef<ShiftType | null>(null);
@@ -120,8 +144,14 @@ export function ShiftDialog({
     if (!open) return;
     setDk(defaultDk);
     setRateTouched(false);
+    setPayTypeTouched(false);
     if (edit) {
-      const form = normalizeShiftForm({ ...edit.shift });
+      const owner = employees.find((e) => e.id === edit.empId);
+      const form = normalizeShiftForm({
+        ...edit.shift,
+        // Shifts saved before job types existed are paid on the profile's terms.
+        payType: normalizePayType(edit.shift.payType) ?? owner?.payType ?? 'hourly',
+      });
       const auto = classifyShiftType(form.start, form.end);
       lastAutoShiftType.current = auto;
       setShiftTypeTouched(!!form.shiftType && form.shiftType !== auto);
@@ -162,6 +192,7 @@ export function ShiftDialog({
       breakH: 0,
       breakM: 0,
       shiftType: null,
+      invoiceWithoutBreak: true,
     }));
   };
 
@@ -177,7 +208,11 @@ export function ShiftDialog({
       return;
     }
     if (!rateValid) {
-      toast.warning('Shift rate is required — enter the hourly rate for this shift');
+      toast.warning(
+        payType === 'per_job'
+          ? 'Job rate is required — enter the fixed amount paid for this shift'
+          : 'Shift rate is required — enter the hourly rate for this shift'
+      );
       return;
     }
     let resolvedName = siteName;
@@ -198,7 +233,8 @@ export function ShiftDialog({
     onApply(
       assignees,
       dk,
-      normalizeShiftForm({ ...shift, site: resolvedName, shiftRate: rateValue }),
+      // Several staff with no job type picked: each keeps their own profile type and rate.
+      normalizeShiftForm({ ...shift, site: resolvedName, shiftRate: rateValue, payType: perStaffRates && !payTypeTouched ? null : payType }),
       perStaffRates ? Object.fromEntries(assigneeStaffRates.map((r) => [r.id, r.rate])) : undefined
     );
     onOpenChange(false);
@@ -226,26 +262,32 @@ export function ShiftDialog({
 
   const siteValue = shift.site.trim() || undefined;
 
-  const assigneeStaffRates = useMemo(() => {
-    return assignees
-      .map((id) => {
-        const emp = employees.find((e) => e.id === id);
-        if (!emp) return null;
-        const rate = emp.hourlyRate;
-        if (rate == null || Number.isNaN(Number(rate)) || Number(rate) <= 0) return null;
-        return { id: emp.id, name: emp.name, rate: Number(rate) };
-      })
-      .filter((r): r is { id: string; name: string; rate: number } => !!r);
-  }, [assignees, employees]);
-
-  const primaryStaffRate = assignees.length === 1 && assigneeStaffRates.length === 1 ? assigneeStaffRates[0] : null;
-
   /**
    * Until the rate box is edited, a new shift, or one handed to someone else, takes each
    * assignee's own profile rate. An existing shift kept by the same person shows exactly
    * what was saved, so opening it for edit never silently reprices it.
    */
   const reassigned = !!edit && !(assignees.length === 1 && assignees[0] === edit.empId);
+  const firstAssignee = employees.find((e) => e.id === assignees[0]);
+  const payType: PayType =
+    payTypeTouched || (edit && !reassigned)
+      ? (shift.payType ?? firstAssignee?.payType ?? 'hourly')
+      : (firstAssignee?.payType ?? 'hourly');
+
+  const assigneeStaffRates = useMemo(() => {
+    return assignees
+      .map((id) => {
+        const emp = employees.find((e) => e.id === id);
+        if (!emp) return null;
+        // Untouched multi-assign keeps each person's own type, so their own profile rate.
+        const rate = employeeRateFor(emp, payTypeTouched || assignees.length === 1 ? payType : emp.payType ?? 'hourly');
+        if (rate == null) return null;
+        return { id: emp.id, name: emp.name, rate };
+      })
+      .filter((r): r is { id: string; name: string; rate: number } => !!r);
+  }, [assignees, employees, payType, payTypeTouched]);
+
+  const primaryStaffRate = assignees.length === 1 && assigneeStaffRates.length === 1 ? assigneeStaffRates[0] : null;
   const ownRates = !rateTouched && (!edit || reassigned);
   const perStaffRates = ownRates && assignees.length > 1 && assigneeStaffRates.length === assignees.length;
   const rateValue = !ownRates
@@ -262,6 +304,12 @@ export function ShiftDialog({
   const siteNameValid = (shift.site || '').trim().length > 0 && !siteNameTooLong;
   const rateValid = (rateValue != null && rateValue > 0) || perStaffRates;
   const canSubmit = assignees.length > 0 && !!dk && siteNameValid && rateValid;
+
+  // Live split between what staff are paid for and what the client is charged for.
+  const staffHours = calcHours(shift);
+  const clientHours = clientChargeableHours(shift);
+  const hasTimes = shift.start !== shift.end;
+  const staffPayEstimate = rateValue != null && rateValue > 0 ? shiftPayAmount(staffHours, rateValue, payType) : null;
 
   const draftConflicts = useMemo(() => {
     if (!open || !allShifts) return [] as ReturnType<typeof findConflictsForDraft>;
@@ -337,6 +385,29 @@ export function ShiftDialog({
                 maxHours={8}
                 onChange={({ hours, minutes }) => setShift((s) => ({ ...s, breakH: hours, breakM: minutes }))}
               />
+              <p className="text-[11px] text-muted-foreground">Unpaid — taken off the staff member&apos;s paid hours.</p>
+            </div>
+            <div className="space-y-1 rounded-md border px-3 py-2">
+              <label className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={shift.invoiceWithoutBreak !== false}
+                  onChange={(e) => setShift((s) => ({ ...s, invoiceWithoutBreak: e.target.checked }))}
+                />
+                <span>
+                  <span className="font-medium">Invoice without break</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Charge the client for the full shift. Untick to take the break off the invoice too.
+                  </span>
+                </span>
+              </label>
+              {hasTimes ? (
+                <p className="text-[11px] tabular-nums text-muted-foreground">
+                  Staff paid: <span className="font-medium text-foreground">{formatHoursDecimal(staffHours)}</span>
+                  {' · '}Client charged: <span className="font-medium text-foreground">{formatHoursDecimal(clientHours)}</span>
+                </p>
+              ) : null}
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
@@ -422,15 +493,51 @@ export function ShiftDialog({
               </p>
             </div>
             <div className="space-y-1">
+              <Label>Job type</Label>
+              <Select
+                value={payType}
+                onValueChange={(v) => {
+                  const next = v as PayType;
+                  setPayTypeTouched(true);
+                  // An hourly figure is never a sensible job rate, or the reverse, so a
+                  // switch takes the staff member's rate for the new type when they have one.
+                  const ownRate = firstAssignee && assignees.length === 1 ? employeeRateFor(firstAssignee, next) : null;
+                  if (ownRate != null && next !== payType) {
+                    setRateTouched(true);
+                    setShift((s) => ({ ...s, payType: next, shiftRate: ownRate }));
+                  } else {
+                    setShift((s) => ({ ...s, payType: next }));
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" className="z-[250]">
+                  {PAY_TYPE_OPTS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {payType === 'per_job'
+                  ? 'Paid the job rate once for this shift, whatever its length.'
+                  : 'Paid the hourly rate for each hour worked, less the break.'}
+              </p>
+            </div>
+            <div className="space-y-1">
               <div className="flex items-center justify-between gap-2">
                 <Label>
-                  Shift rate (per hour) <span className="text-destructive">*</span>
+                  {payType === 'per_job' ? 'Job rate (fixed per shift)' : 'Shift rate (per hour)'}{' '}
+                  <span className="text-destructive">*</span>
                 </Label>
                 {primaryStaffRate ? (
                   <button
                     type="button"
                     className="text-xs font-medium text-sky-600 hover:underline tabular-nums"
-                    title="Use this staff hourly rate"
+                    title={payType === 'per_job' ? 'Use this staff job rate' : 'Use this staff hourly rate'}
                     onClick={() => {
                       setRateTouched(true);
                       setShift((s) => ({ ...s, shiftRate: primaryStaffRate.rate }));
@@ -449,7 +556,7 @@ export function ShiftDialog({
                 step="0.01"
                 min={0.01}
                 required
-                placeholder={perStaffRates ? 'Each staff rate' : 'e.g. 12.50'}
+                placeholder={perStaffRates ? 'Each staff rate' : payType === 'per_job' ? 'e.g. 120.00' : 'e.g. 12.50'}
                 value={rateValue ?? ''}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -464,6 +571,9 @@ export function ShiftDialog({
                 {perStaffRates
                   ? 'Each staff member gets their own profile rate. Enter a rate to use one rate for everyone.'
                   : 'Auto-filled from Staff → Employment Details when available. You can override it.'}
+                {staffPayEstimate != null && hasTimes && !perStaffRates
+                  ? ` Staff pay for this shift: ${formatMoney(staffPayEstimate)}.`
+                  : ''}
               </p>
             </div>
             <div className="space-y-2">
@@ -507,7 +617,7 @@ export function ShiftDialog({
               type="button"
               onClick={() => void submit()}
               disabled={!canSubmit || createSite.isPending}
-              title={canSubmit ? undefined : 'Site name and shift rate are required'}
+              title={canSubmit ? undefined : `Site name and ${payType === 'per_job' ? 'job' : 'shift'} rate are required`}
             >
               {createSite.isPending ? 'Saving…' : edit ? 'Update shift' : 'Add shift'}
             </Button>

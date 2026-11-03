@@ -20,6 +20,7 @@ from app.services.attendance_service import (
     parse_gps_accuracy_m,
 )
 from app.services.company_service import get_company_by_user_id
+from app.services.rate_service import normalize_pay_type
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
 _CANONICAL_SHIFT_TYPES = frozenset({"morning", "afternoon", "evening", "night"})
@@ -342,6 +343,7 @@ def list_rota_details(
                 attendance_marked=marked,
                 late_minutes=late_m,
                 shift_rate=None if redact_rates else a.shift_rate,
+                pay_type=None if redact_rates else a.pay_type,
                 rota_plan_id=a.rota_plan_id,
                 paid_hours=att.paid_hours if att and status == CANCELLED_PAID else None,
                 client_hours=att.client_hours if att and status == CANCELLED_PAID else None,
@@ -397,6 +399,14 @@ def _parse_planner_json(raw) -> dict:
         return data if isinstance(data, dict) else {}
     except (TypeError, ValueError, json.JSONDecodeError):
         return {}
+
+
+def _planner_rate(raw) -> Optional[float]:
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return v if v >= 0 else None
 
 
 def _planner_shift_details(
@@ -493,6 +503,8 @@ def _planner_shift_details(
                             hours=round(hrs, 2),
                             attendance_status=status,
                             late_minutes=None,
+                            shift_rate=_planner_rate(sh.get("shiftRate")),
+                            pay_type=normalize_pay_type(sh.get("payType")),
                             rota_plan_id=plan.id,
                         )
                     )

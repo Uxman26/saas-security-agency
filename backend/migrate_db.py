@@ -315,6 +315,9 @@ def _ensure_clock_in_location_columns():
             if "created_by_user_id" not in a_cols:
                 with engine.begin() as conn:
                     conn.execute(text("ALTER TABLE assignments ADD COLUMN created_by_user_id INTEGER"))
+            if "pay_type" not in a_cols:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE assignments ADD COLUMN pay_type {str_type}"))
     except Exception:
         import logging
 

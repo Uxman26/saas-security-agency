@@ -251,11 +251,11 @@ export default function PayrollPage() {
     `pay-${(p.guard_id !== null ? p.guard_name : 'all-employees').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${p.period_start}-to-${p.period_end}.${ext}`;
 
   const exportPreviewCsv = (p: PayrollPreview) => {
-    const head = ['Employee', 'Date', 'Site', 'Start', 'End', 'Break mins', 'Hours', 'Attendance', 'Rate', 'Paid'];
+    const head = ['Employee', 'Date', 'Site', 'Start', 'End', 'Break mins', 'Hours', 'Attendance', 'Job type', 'Rate', 'Paid'];
     const body = p.shifts.map((s) => [
       s.guard_name, s.date, s.site_name, s.shift_start ?? '', s.shift_end ?? '', s.break_minutes,
       s.hours, ATT_LABELS[s.attendance_status] ?? s.attendance_status,
-      s.shift_rate ?? '', s.amount,
+      s.pay_type === 'per_job' ? 'Per job' : 'Hourly', s.shift_rate ?? '', s.amount,
     ]);
     const csv = [head, ...body, [], ['Total hours', p.rota_hours], ['Attended hours', p.attended_hours],
       ['Total paid', p.amount]]

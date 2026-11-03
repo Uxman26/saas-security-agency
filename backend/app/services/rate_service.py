@@ -69,6 +69,37 @@ def profile_per_job_rate(guard: Optional[Guard]) -> Optional[float]:
     return float(rate)
 
 
+PAY_HOURLY = "hourly"
+PAY_PER_JOB = "per_job"
+
+
+def normalize_pay_type(raw) -> Optional[str]:
+    """A shift's job type as stored on the planner or an assignment, or None when unset."""
+    v = str(raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if v in ("per_job", "perjob", "job"):
+        return PAY_PER_JOB
+    if v in ("hourly", "per_hour", "hour"):
+        return PAY_HOURLY
+    return None
+
+
+def profile_pay_type(guard: Optional[Guard]) -> str:
+    """The job type a new shift takes from the staff profile's payment method."""
+    return PAY_PER_JOB if profile_per_job_rate(guard) is not None else PAY_HOURLY
+
+
+def shift_pay_amount(hours: float, rate: float, pay_type: Optional[str]) -> float:
+    """Pay for one shift: hourly pays per hour, a per-job shift pays its rate once.
+
+    A per-job shift with no payable hours (absent, unpaid cancellation) pays nothing.
+    """
+    hours = max(0.0, float(hours or 0))
+    rate = float(rate or 0)
+    if normalize_pay_type(pay_type) == PAY_PER_JOB:
+        return round(rate, 2) if hours > 0 else 0.0
+    return round(hours * rate, 2)
+
+
 def resolve_shift_pay(
     db: Session,
     company_id: int,
@@ -79,12 +110,23 @@ def resolve_shift_pay(
     shift_date: date,
     hours: float,
     locked_shift_rate: Optional[float] = None,
+    pay_type: Optional[str] = None,
+    guard: Optional[Guard] = None,
 ) -> dict:
-    guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
-    job = profile_per_job_rate(guard)
-    if job is not None:
-        rate = float(locked_shift_rate) if locked_shift_rate is not None and float(locked_shift_rate) > 0 else job
-        return {"rate": rate, "amount": round(rate, 2), "basis": "per_job", "hours": hours}
+    """Rate and amount for one shift.
+
+    ``pay_type`` is the job type chosen on the rota. Shifts saved before that choice
+    existed pass None and fall back to the staff profile, as they always did.
+    """
+    if guard is None:
+        guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
+    kind = normalize_pay_type(pay_type) or profile_pay_type(guard)
+    if kind == PAY_PER_JOB:
+        locked = float(locked_shift_rate) if locked_shift_rate is not None and float(locked_shift_rate) > 0 else None
+        rate = locked if locked is not None else profile_per_job_rate(guard)
+        if rate is None:
+            rate = float(resolve_pay_rate(db, company_id, guard_id, site_id or 0, shift_type or "morning", shift_date) or 0)
+        return {"rate": rate, "amount": shift_pay_amount(hours, rate, PAY_PER_JOB), "basis": "per_job", "hours": hours}
     if locked_shift_rate is not None and float(locked_shift_rate) > 0:
         rate = float(locked_shift_rate)
         return {

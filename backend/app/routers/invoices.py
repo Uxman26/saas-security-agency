@@ -281,11 +281,16 @@ def generate_invoice(
     guard_id: Optional[int] = None,
     job_title: Optional[str] = None,
     force: bool = False,
+    break_mode: str = "shift",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("invoices", "generate")),
 ):
     """Generate from published rota shifts. By client this covers all of the client's
-    sites; the contractor, sub-contractor, staff and job title filters narrow it."""
+    sites; the contractor, sub-contractor, staff and job title filters narrow it.
+
+    ``break_mode`` sets the client's chargeable hours apart from staff pay: ``shift``
+    follows each shift's "Invoice without break" setting, ``without_break`` bills every
+    shift's full span, ``deduct`` takes the staff break off every shift."""
     inv = invoice_service.generate_from_rota(
         db,
         period_start,
@@ -298,6 +303,7 @@ def generate_invoice(
         guard_id=guard_id,
         job_title=job_title,
         force=force,
+        break_mode=break_mode,
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)

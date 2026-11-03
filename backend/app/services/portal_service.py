@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Assignment, Client, Site, User
 from app.schemas import ClientResponse, GuardResponse, PortalHoursResponse, RotaDetailResponse, SiteResponse
@@ -19,7 +19,12 @@ from app.services.portal_access import (
     redact_sites_for_portal,
     role_slug,
 )
-from app.services.rate_service import resolve_assignment_pay_rate
+from app.services.rate_service import (
+    normalize_pay_type,
+    profile_pay_type,
+    resolve_assignment_pay_rate,
+    shift_pay_amount,
+)
 from app.services.rota_service import list_rota_details
 
 
@@ -161,24 +166,23 @@ def _total_pay(db: Session, company_id: int, rows: List[RotaDetailResponse]) -> 
     assignments = {
         a.id: a
         for a in db.query(Assignment)
+        .options(joinedload(Assignment.guard))
         .filter(Assignment.id.in_(ids))
         .all()
     }
-    # Fast path: when every assignment already carries a locked shift_rate, skip the
-    # per-row rate lookup tree entirely.
-    if assignments and all(a.shift_rate is not None for a in assignments.values()):
-        total = 0.0
-        for r in rows:
-            a = assignments.get(r.id)
-            if a:
-                total += r.hours * float(a.shift_rate)
-        return round(total, 2)
     total = 0.0
     for r in rows:
         assignment = assignments.get(r.id)
         if not assignment:
             continue
-        total += r.hours * resolve_assignment_pay_rate(db, assignment, company_id)
+        # A locked shift_rate skips the rate lookup tree; per-job shifts pay it once.
+        rate = (
+            float(assignment.shift_rate)
+            if assignment.shift_rate is not None
+            else resolve_assignment_pay_rate(db, assignment, company_id)
+        )
+        pay_type = normalize_pay_type(assignment.pay_type) or profile_pay_type(assignment.guard)
+        total += shift_pay_amount(r.hours, rate, pay_type)
     return round(total, 2)
 
 

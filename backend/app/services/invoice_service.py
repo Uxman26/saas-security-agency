@@ -59,6 +59,29 @@ def _billable_hours_for_shift(scheduled_hours: float, att: Optional[dict]) -> Op
         return max(0.0, client)
     return scheduled_hours
 
+# How breaks are treated on a rota invoice. Staff payroll always deducts the unpaid
+# break; what the client is charged is decided separately.
+#   "shift"         - each shift's own "Invoice without break" setting (the default)
+#   "without_break" - every shift billed for its full span
+#   "deduct"        - every shift billed net of the staff break
+INVOICE_BREAK_MODES = ("shift", "without_break", "deduct")
+
+
+def _client_break_minutes(sh: dict, break_mode: str) -> int:
+    """Break minutes to take off the client's chargeable hours for one planner shift."""
+    staff_break = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
+    if break_mode == "without_break":
+        return 0
+    if break_mode == "deduct":
+        return staff_break
+    raw = sh.get("invoiceWithoutBreak")
+    # Unset means without break: the client pays for the post being covered.
+    without = True if raw is None or raw == "" else (
+        str(raw).strip().lower() not in ("0", "false", "no", "off") if isinstance(raw, str) else bool(raw)
+    )
+    return 0 if without else staff_break
+
+
 # How a shift line describes itself on the bill.
 SHIFT_TYPE_LABELS = {
     "morning": "Morning shift",
@@ -509,8 +532,12 @@ def _rota_invoice_shift_lines(
     client_id: Optional[int],
     site_id: Optional[int] = None,
     scope=None,
+    break_mode: str = "shift",
 ) -> list[dict]:
     """Billable shift rows from published rota planner data (not Assignment rows).
+
+    Hours are the client's chargeable hours, worked out independently of what the staff
+    member is paid: see ``break_mode``.
 
     Every site the client owns is in play unless ``site_id`` narrows it to one, so
     invoicing a client bills all of its sites in a single document. ``scope`` carries
@@ -570,7 +597,7 @@ def _rota_invoice_shift_lines(
                         continue
                     if scope is not None and scope.active and not scope.matches(site.id, guard_id):
                         continue
-                    break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
+                    break_m = _client_break_minutes(sh, break_mode)
                     scheduled = calc_shift_hours(sh.get("start"), sh.get("end"), break_m)
                     att_key = f"{emp_id}:{day_key}:{idx}"
                     att = attendance.get(att_key) if isinstance(attendance, dict) else None
@@ -613,6 +640,7 @@ def generate_from_rota(
     guard_id: Optional[int] = None,
     job_title: Optional[str] = None,
     force: bool = False,
+    break_mode: str = "shift",
 ) -> Invoice:
     """Create a draft invoice from published rota planner shifts for a client/site period.
 
@@ -622,6 +650,9 @@ def generate_from_rota(
     """
     if period_start > period_end:
         raise HTTPException(status_code=400, detail="Period start cannot be after period end")
+    break_mode = (break_mode or "shift").strip().lower()
+    if break_mode not in INVOICE_BREAK_MODES:
+        raise HTTPException(status_code=400, detail="break_mode must be shift, without_break or deduct")
     company = get_company_by_user_id(db, user_id)
     # A site with no client is billable on its own: the invoice simply carries no
     # customer record, and the site name stands in for one wherever it is displayed.
@@ -653,7 +684,14 @@ def generate_from_rota(
         job_title=job_title,
     )
     details = _rota_invoice_shift_lines(
-        db, company.id, period_start, period_end, client_id=client_id, site_id=site_id, scope=scope
+        db,
+        company.id,
+        period_start,
+        period_end,
+        client_id=client_id,
+        site_id=site_id,
+        scope=scope,
+        break_mode=break_mode,
     )
     allowance_inv = db.query(Allowance).filter(Allowance.company_id == company.id, Allowance.in_invoice == True).all()
     # Allowances ride along with billed work; they are never a reason to raise an invoice
@@ -801,6 +839,7 @@ def generate_from_rota(
             "period_start": str(period_start),
             "period_end": str(period_end),
             "source": "rota",
+            "break_mode": break_mode,
             "filters": {
                 k: str(v)
                 for k, v in (

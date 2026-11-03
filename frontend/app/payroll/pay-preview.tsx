@@ -309,7 +309,7 @@ export function PayPreviewDetail({
                       {sh.late_minutes ? <span className="text-muted-foreground"> +{sh.late_minutes}m</span> : null}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {sh.shift_rate ? formatMoney(sh.shift_rate) : '—'}
+                      {sh.shift_rate ? `${formatMoney(sh.shift_rate)}${sh.pay_type === 'per_job' ? '/job' : '/hr'}` : '—'}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{formatMoney(sh.amount)}</TableCell>
                     <TableCell className="max-w-[12rem] truncate text-muted-foreground" title={sh.note || undefined}>

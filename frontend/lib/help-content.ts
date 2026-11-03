@@ -250,7 +250,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       },
       {
         type: 'tip',
-        text: 'Total hours can include or exclude breaks via the “Incl. breaks?” checkbox on the rota grid. Backend pay and invoice hours deduct break minutes from shift duration.',
+        text: 'Rota hours are always net of the unpaid break, which is what staff are paid for. Each shift has a Job type: Hourly job pays the rate for every hour worked, Per job pays the job rate once for the shift whatever its length. Invoices are separate: “Invoice without break” (on by default) charges the client the full shift even though staff are not paid for the break.',
       },
       {
         type: 'links',
@@ -464,7 +464,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: 'heading', text: 'Why do rota hours differ from payroll hours?' },
       {
         type: 'paragraph',
-        text: 'The rota grid can show hours with or without breaks. Payroll uses On time / Late planner hours; invoicing uses published rota shift duration minus break minutes. Align the “Incl. breaks?” toggle when comparing totals.',
+        text: 'Payroll pays On time / Late shifts on hours net of the unpaid break (hourly jobs) or the fixed job rate (per-job shifts). Invoices charge the client independently: by default the full shift, unless the shift has “Invoice without break” unticked or the invoice is generated with “Deduct the staff break”. So invoice hours can be higher than payroll hours for the same shifts.',
       },
       { type: 'heading', text: 'Dark mode and language' },
       {

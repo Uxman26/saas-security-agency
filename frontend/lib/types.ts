@@ -979,6 +979,8 @@ export interface Assignment {
   break_minutes?: number;
   shift_type?: string;
   shift_rate?: number | null;
+  /** "per_job" pays shift_rate once per shift; "hourly" pays it per hour. */
+  pay_type?: 'hourly' | 'per_job' | null;
   created_at: string;
 }
 
@@ -1698,6 +1700,8 @@ export interface PayrollPreviewShift {
   attendance_marked: boolean;
   late_minutes: number | null;
   shift_rate: number | null;
+  /** "per_job" pays shift_rate once per shift; "hourly" pays it per hour. */
+  pay_type?: 'hourly' | 'per_job' | null;
   rota_plan_id: number | null;
   /** Agreed paid hours on a paid cancellation; `hours` is then that figure, not the span. */
   paid_hours: number | null;

@@ -47,13 +47,14 @@ def _planner_payroll_lines(
     db: Session = None,
     company_id: int = None,
     site_id_by_name: dict | None = None,
+    guards_by_id: dict | None = None,
 ) -> list[dict]:
     try:
         payload = json.loads(plan.planner_data or "{}")
     except (json.JSONDecodeError, TypeError):
         return []
 
-    from app.services.rate_service import resolve_shift_pay
+    from app.services.rate_service import normalize_pay_type, resolve_shift_pay, shift_pay_amount
 
     if site_id_by_name is None:
         site_id_by_name = {}
@@ -84,10 +85,11 @@ def _planner_payroll_lines(
                 if hours <= 0:
                     continue
                 locked = _number(shift.get("shiftRate"))
+                pay_type = normalize_pay_type(shift.get("payType"))
                 site_name = str(shift.get("site") or "").strip().lower()
                 site_id = site_id_by_name.get(site_name)
                 rate = locked
-                amount = hours * rate
+                amount = shift_pay_amount(hours, rate, pay_type)
                 if db is not None and company_id is not None:
                     try:
                         on_date = date.fromisoformat(str(day)[:10])
@@ -100,9 +102,12 @@ def _planner_payroll_lines(
                             shift_date=on_date,
                             hours=hours,
                             locked_shift_rate=locked if locked > 0 else None,
+                            pay_type=pay_type,
+                            guard=guards_by_id.get(int(guard_id)) if guards_by_id is not None else None,
                         )
                         rate = float(pay.get("rate") or 0)
                         amount = float(pay.get("amount") or 0)
+                        pay_type = pay.get("basis") if pay.get("basis") == "per_job" else "hourly"
                     except (TypeError, ValueError):
                         pass
                 lines.append(
@@ -113,6 +118,7 @@ def _planner_payroll_lines(
                         "hours": hours,
                         "rate": rate,
                         "amount": amount,
+                        "payType": pay_type,
                         "status": status,
                     }
                 )
@@ -374,9 +380,12 @@ def calculate_payroll_batch(
         if name
     }
 
+    guards_by_id = {g.id: g for g in db.query(Guard).filter(Guard.company_id == company.id).all()}
     by_guard: dict[int, list[dict]] = {}
     for plan in plans_query.all():
-        for line in _planner_payroll_lines(plan, db, company.id, site_id_by_name=site_id_by_name):
+        for line in _planner_payroll_lines(
+            plan, db, company.id, site_id_by_name=site_id_by_name, guards_by_id=guards_by_id
+        ):
             try:
                 line_date = date.fromisoformat(str(line.get("date")))
                 line_guard_id = int(line.get("guardId"))
@@ -404,7 +413,7 @@ def calculate_payroll_batch(
 
     created: list[Payroll] = []
     for gid, lines in by_guard.items():
-        guard = db.query(Guard).filter(Guard.id == gid, Guard.company_id == company.id).first()
+        guard = guards_by_id.get(gid)
         if not guard:
             continue
         pr, _was_created = _upsert_from_rota_lines(
@@ -500,6 +509,7 @@ def preview_pay(
 
     from app.services.rate_service import resolve_shift_pay
 
+    guards_by_id = {g.id: g for g in db.query(Guard).filter(Guard.company_id == company.id).all()}
     for d in details:
         scheduled_hours = round(float(d.hours or 0), 2)
         actual = getattr(d, "payable_hours", None)
@@ -524,9 +534,12 @@ def preview_pay(
             shift_date=d.date,
             hours=hours,
             locked_shift_rate=locked if locked > 0 else None,
+            pay_type=getattr(d, "pay_type", None),
+            guard=guards_by_id.get(d.guard_id),
         )
         rate = float(pay.get("rate") or 0)
         gross = float(pay.get("amount") or 0)
+        pay_type = "per_job" if pay.get("basis") == "per_job" else "hourly"
         payable = d.attendance_status in PAYABLE_STATUSES
         amount = gross if payable else 0.0
         if payable and rate <= 0:
@@ -559,6 +572,7 @@ def preview_pay(
                 attendance_status=d.attendance_status,
                 late_minutes=d.late_minutes,
                 shift_rate=rate if rate > 0 else d.shift_rate,
+                pay_type=pay_type,
                 rota_plan_id=d.rota_plan_id,
                 attendance_marked=not unmarked,
                 payable=payable,

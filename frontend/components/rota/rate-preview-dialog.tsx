@@ -14,6 +14,8 @@ import {
   formatMoney,
   normalizeAttStatus,
   payableHoursForAttendance,
+  payTypeRateSuffix,
+  shiftPayAmount,
   shiftSiteLine,
 } from '@/lib/rota-shifts-utils';
 import type { EmployeeRec, RotaJsState, ShiftRec } from '@/lib/rota-shifts-types';
@@ -168,20 +170,21 @@ export function RatePreviewDialog({
   let totalHours = 0;
   let totalScheduled = 0;
   let totalPayable = 0;
-  const ratesSeen = new Set<number>();
+  const ratesSeen = new Set<string>();
 
   const dayRows = shiftsByDay.map(({ dk, shifts }) => {
     const lines = shifts.map((sh, i) => {
       const hrs = calcHours(sh, state.inclBreaks);
       const rate = resolveShiftRate(sh, employee.id);
-      const scheduledPay = hrs * rate;
+      const payType = sh.payType ?? employee.payType ?? 'hourly';
+      const scheduledPay = shiftPayAmount(hrs, rate, payType);
       const att = state.attendance[attKey(employee.id, dk, i)];
       const payHrs = payableHoursForAttendance(sh, att, state.inclBreaks);
-      const payable = payHrs * rate;
+      const payable = shiftPayAmount(payHrs, rate, payType);
       totalHours += hrs;
       totalScheduled += scheduledPay;
       totalPayable += payable;
-      ratesSeen.add(Math.round(rate * 100));
+      ratesSeen.add(`${Math.round(rate * 100)}${payTypeRateSuffix(payType)}`);
       const status = normalizeAttStatus(att?.status ?? null);
       return {
         i,
@@ -191,15 +194,17 @@ export function RatePreviewDialog({
         scheduledPay,
         payable,
         status,
-        source: rateSourceLabel(sh, employee, rate),
+        source: `${payType === 'per_job' ? 'Per job' : 'Hourly job'} · ${rateSourceLabel(sh, employee, rate)}`,
       };
     });
     return { dk, lines };
   });
 
   // A single figure only makes sense when every shift resolved to the same rate.
-  const summaryRate =
-    ratesSeen.size === 1 ? `${formatMoney([...ratesSeen][0] / 100)}/hr` : 'Mixed';
+  const onlyRate = ratesSeen.size === 1 ? [...ratesSeen][0] : null;
+  const summaryRate = onlyRate
+    ? `${formatMoney(parseInt(onlyRate, 10) / 100)}${onlyRate.replace(/^\d+/, '')}`
+    : 'Mixed';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -211,7 +216,7 @@ export function RatePreviewDialog({
           <p className="text-sm text-muted-foreground break-words">
             {rotaName || state.rotaName || 'Rota'}
             {employee.hourlyRate != null && employee.hourlyRate > 0
-              ? ` · Staff rate ${formatMoney(employee.hourlyRate)}/hr`
+              ? ` · Staff rate ${formatMoney(employee.hourlyRate)}${payTypeRateSuffix(employee.payType)}`
               : ''}
             {' · Hours exclude breaks'}
           </p>
@@ -284,7 +289,7 @@ export function RatePreviewDialog({
                 />
                 <Metric
                   icon={<PoundSterling className="size-3.5" />}
-                  label="Hourly rate"
+                  label="Rate"
                   value={summaryRate}
                   accent
                   plain

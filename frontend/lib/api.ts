@@ -1365,12 +1365,15 @@ export const api = {
       period_start: string;
       period_end: string;
       force?: boolean;
+      /** Client break billing: each shift's own setting, full span, or less the staff break. */
+      break_mode?: 'shift' | 'without_break' | 'deduct';
     } & WorkFilterParams): Promise<Invoice> => {
       const q = appendWorkFilters(
         new URLSearchParams({ period_start: params.period_start, period_end: params.period_end }),
         params
       );
       if (params.force) q.append('force', 'true');
+      if (params.break_mode && params.break_mode !== 'shift') q.append('break_mode', params.break_mode);
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),

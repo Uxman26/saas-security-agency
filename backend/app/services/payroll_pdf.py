@@ -351,7 +351,7 @@ def render_payroll_preview_pdf(
                 f"-{s.break_minutes}m" if s.break_minutes else "—",
                 f"{s.hours:.2f}",
                 ATT_LABELS.get(s.attendance_status, s.attendance_status),
-                _money(s.shift_rate) if s.shift_rate else "—",
+                (_money(s.shift_rate) + ("/job" if getattr(s, "pay_type", None) == "per_job" else "/hr")) if s.shift_rate else "—",
                 _money(s.amount),
             ]
             if guard_id is not None:

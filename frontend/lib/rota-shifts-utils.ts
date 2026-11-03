@@ -1,5 +1,5 @@
 import { addDays, format, parseISO } from 'date-fns';
-import type { AttStatus, ShiftRec } from './rota-shifts-types';
+import type { AttStatus, PayType, ShiftRec } from './rota-shifts-types';
 
 export function dateKey(d: Date) {
   return format(d, 'yyyy-MM-dd');
@@ -315,12 +315,42 @@ export function attStatusBarColor(s: AttStatus | string | null | undefined): str
   }
 }
 
-export function shiftPayable(sh: ShiftRec, inclBreaks = false, rateOverride?: number | null): number {
+/**
+ * Pay for one shift from its payable hours. Hourly jobs pay per hour; a per-job shift
+ * pays its rate once whatever the length, and nothing when there are no payable hours.
+ * Mirrors backend rate_service.shift_pay_amount.
+ */
+export function shiftPayAmount(hours: number, rate: number, payType: PayType | null | undefined): number {
+  const h = Math.max(0, Number(hours) || 0);
+  const r = Number(rate) || 0;
+  if (r <= 0 || h <= 0) return 0;
+  return payType === 'per_job' ? r : h * r;
+}
+
+/** "/hr" or "/job" after a shift's rate. */
+export function payTypeRateSuffix(payType: PayType | null | undefined): string {
+  return payType === 'per_job' ? '/job' : '/hr';
+}
+
+/**
+ * Hours the client is charged for. Independent of staff pay: unless the shift says
+ * otherwise the client pays the full span, even though staff go unpaid for the break.
+ */
+export function clientChargeableHours(s: ShiftRec): number {
+  if (s.invoiceWithoutBreak === false) return calcHours(s);
+  return calcHours({ ...s, breakH: 0, breakM: 0 });
+}
+
+export function shiftPayable(
+  sh: ShiftRec,
+  inclBreaks = false,
+  rateOverride?: number | null,
+  payType?: PayType | null
+): number {
   const rate = rateOverride != null && !Number.isNaN(Number(rateOverride))
     ? Number(rateOverride)
     : Number(sh.shiftRate) || 0;
-  if (rate <= 0) return 0;
-  return calcHours(sh, inclBreaks) * rate;
+  return shiftPayAmount(calcHours(sh, inclBreaks), rate, sh.payType ?? payType);
 }
 
 /**

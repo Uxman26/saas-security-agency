@@ -1056,6 +1056,10 @@ class Assignment(Base):
     break_minutes = Column(Integer, default=0)
     shift_type = Column(String, default="morning")
     shift_rate = Column(Float)
+    # "hourly" pays shift_rate per payable hour; "per_job" pays shift_rate once for the
+    # shift whatever its length. Null on rows published before the choice existed, which
+    # fall back to the staff profile's payment method.
+    pay_type = Column(String, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

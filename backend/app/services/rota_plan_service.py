@@ -12,6 +12,7 @@ from app.services import shift_audit_service
 from app.services.recycle_bin import archive as _bin_archive
 from app.services.company_service import get_company_by_user_id
 from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID
+from app.services.rate_service import normalize_pay_type
 from app.services.rota_service import _late_minutes, normalize_shift_type
 from app.services.work_filters import WorkScope, resolve_work_scope
 
@@ -660,6 +661,20 @@ def _parse_shift_rate(raw) -> Optional[float]:
         return None
 
 
+def _parse_invoice_without_break(raw) -> bool:
+    """Whether the client is billed the full shift with no break taken off.
+
+    True unless the shift explicitly says otherwise: staff go unpaid for their break, but
+    the client is charged for the post being covered, so the staff deduction is never
+    carried onto the invoice by default.
+    """
+    if raw is None or raw == "":
+        return True
+    if isinstance(raw, str):
+        return raw.strip().lower() not in ("0", "false", "no", "off")
+    return bool(raw)
+
+
 def _employee_profile_rate(
     db: Session,
     company_id: int,
@@ -668,16 +683,33 @@ def _employee_profile_rate(
     *,
     guards_by_id: Optional[dict] = None,
     rates_by_guard: Optional[dict] = None,
+    pay_type: Optional[str] = None,
 ) -> Optional[float]:
+    """The staff profile's rate for a shift of the given job type.
+
+    With no job type the profile decides, as before: a per-job profile gives its job rate.
+    An hourly shift for per-job staff, or a per-job shift for hourly staff, takes the rate
+    of the type asked for.
+    """
     from app.models import GuardRate
-    from app.services.rate_service import profile_hourly_rate, profile_per_job_rate
+    from app.services.rate_service import PAY_HOURLY, PAY_PER_JOB, normalize_pay_type, profile_hourly_rate, profile_per_job_rate
 
     guard = (guards_by_id or {}).get(guard_id)
     if guard is None:
         guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company_id).first()
+    kind = normalize_pay_type(pay_type)
     job = profile_per_job_rate(guard)
-    if job is not None:
+    if kind == PAY_PER_JOB:
+        if job is not None:
+            return float(job)
+        raw_job = getattr(guard, "per_job_rate", None) if guard else None
+        return float(raw_job) if raw_job is not None and float(raw_job) > 0 else None
+    if job is not None and kind != PAY_HOURLY:
         return float(job)
+    if kind == PAY_HOURLY and job is not None and guard is not None:
+        hr = getattr(guard, "hourly_rate", None)
+        if hr is not None and float(hr) > 0:
+            return float(hr)
     profile = profile_hourly_rate(guard)
     if profile is not None and profile > 0:
         return float(profile)
@@ -743,7 +775,8 @@ def _enforce_rates_on_reassign(db: Session, company_id: int, old_json: Optional[
             on_date = date.fromisoformat(str(dk)[:10])
         except ValueError:
             continue
-        rate = _employee_profile_rate(db, company_id, int(gid), on_date)
+        from app.services.rate_service import profile_pay_type
+
         by_emp = new_data.setdefault("shifts", {}).setdefault(str(int(gid)), {})
         blocks = by_emp.get(str(dk)[:10])
         if not isinstance(blocks, list) or slot < 0 or slot >= len(blocks):
@@ -751,9 +784,16 @@ def _enforce_rates_on_reassign(db: Session, company_id: int, old_json: Optional[
         block = blocks[slot]
         if not isinstance(block, dict):
             continue
+        # The shift takes the new person's own terms: their job type and their rate.
+        guard = db.query(Guard).filter(Guard.id == int(gid), Guard.company_id == company_id).first()
+        pay_type = profile_pay_type(guard)
+        rate = _employee_profile_rate(db, company_id, int(gid), on_date, pay_type=pay_type)
         cur = _parse_shift_rate(block.get("shiftRate"))
         if cur != rate:
             block["shiftRate"] = rate
+            changed = True
+        if block.get("payType") != pay_type:
+            block["payType"] = pay_type
             changed = True
     return json.dumps(new_data) if changed else new_json
 
@@ -910,6 +950,8 @@ def _normalize_shift(block: dict, idx: int = 0) -> dict:
         "label": b.get("label") or "",
         "shiftType": _parse_shift_type(b.get("shiftType")),
         "shiftRate": _parse_shift_rate(b.get("shiftRate")),
+        "payType": normalize_pay_type(b.get("payType")),
+        "invoiceWithoutBreak": _parse_invoice_without_break(b.get("invoiceWithoutBreak")),
         "scheduledEnd": b.get("scheduledEnd") or "",
         "adjustments": b.get("adjustments") or [],
     }
@@ -1114,6 +1156,7 @@ def _payload_from_assignments(
             "color": "",
             "label": "",
             "shiftRate": a.shift_rate,
+            "payType": a.pay_type,
         }
         matched = lookup.get((eid, dk, base["start"], base["end"]))
         if matched:
@@ -1596,16 +1639,26 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
                 new_data = json.loads(plan.planner_data or "{}")
             except json.JSONDecodeError:
                 new_data = {}
-            published_ids = _published_guard_ids(db, plan.id)
-            structural = False
-            for gid in published_ids:
-                before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, gid)
-                after_fp = rota_notify_service.fingerprint_from_planner_shifts(
-                    new_data.get("shifts"), gid
-                )
-                if before_fp != after_fp:
-                    publish_rota_plan(db, user_id, plan.id, guard_id=gid)
-                    structural = True
+            # One query for every published guard's shifts, then one republish covering
+            # all the guards whose shifts actually moved.
+            before_by_guard: dict[int, set] = {}
+            for key in rota_notify_service.fingerprint_from_assignments(db, plan.id):
+                before_by_guard.setdefault(key[0], set()).add(key)
+            after_all = rota_notify_service.fingerprint_from_planner_shifts(new_data.get("shifts"))
+            after_by_guard: dict[int, set] = {}
+            for key in after_all:
+                after_by_guard.setdefault(key[0], set()).add(key)
+            changed_guards = {
+                gid for gid in before_by_guard if before_by_guard[gid] != after_by_guard.get(gid, set())
+            }
+            structural = bool(changed_guards)
+            if structural:
+                _publish_guards(db, user_id, plan.id, changed_guards)
+            # Rate and job type are not part of a shift's identity, so editing them on a
+            # published shift never triggered a republish and the assignment kept the old
+            # figures. Carry them across in place.
+            if _sync_published_pay_terms(db, plan, new_data):
+                db.commit()
             if not structural:
                 shift_adjustment_service.sync_published_plan_adjustments(db, user_id, plan)
                 shift_adjustment_service.sync_published_plan_lateness(db, user_id, plan)
@@ -1617,6 +1670,51 @@ def update_rota_plan(db: Session, user_id: int, plan_id: int, data: RotaPlanUpda
             attendance_service.sync_published_plan_attendance(db, user_id, plan)
     db.refresh(plan)
     return get_rota_plan(db, user_id, plan.id)
+
+
+def _sync_published_pay_terms(db: Session, plan: RotaPlan, data: dict) -> bool:
+    """Copy each planner shift's rate and job type onto its published assignment."""
+    rows = (
+        db.query(Assignment)
+        .options(joinedload(Assignment.site))
+        .filter(Assignment.rota_plan_id == plan.id)
+        .all()
+    )
+    if not rows:
+        return False
+    by_key: dict[tuple, list] = {}
+    for a in rows:
+        key = (
+            int(a.guard_id),
+            a.date.isoformat(),
+            (a.shift_start or "").strip(),
+            " ".join(((a.site.name if a.site else "") or "").lower().split()),
+        )
+        by_key.setdefault(key, []).append(a)
+    changed = False
+    for emp_id, by_d in (data.get("shifts") or {}).items():
+        try:
+            gid = int(emp_id)
+        except (TypeError, ValueError):
+            continue
+        for dk, blocks in (by_d or {}).items():
+            for sh in blocks or []:
+                if not isinstance(sh, dict):
+                    continue
+                key = (gid, str(dk)[:10], str(sh.get("start") or "").strip(), " ".join(str(sh.get("site") or "").lower().split()))
+                matches = by_key.get(key) or []
+                if len(matches) != 1:
+                    continue
+                a = matches[0]
+                rate = _parse_shift_rate(sh.get("shiftRate"))
+                pay_type = normalize_pay_type(sh.get("payType"))
+                if rate is not None and a.shift_rate != rate:
+                    a.shift_rate = rate
+                    changed = True
+                if pay_type is not None and a.pay_type != pay_type:
+                    a.pay_type = pay_type
+                    changed = True
+    return changed
 
 
 def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
@@ -1650,6 +1748,17 @@ def delete_rota_plan(db: Session, user_id: int, plan_id: int) -> None:
 def publish_rota_plan(
     db: Session, user_id: int, plan_id: int, guard_id: Optional[int] = None
 ) -> RotaPlanPublishResult:
+    return _publish_guards(db, user_id, plan_id, {guard_id} if guard_id is not None else None)
+
+
+def _publish_guards(
+    db: Session, user_id: int, plan_id: int, guard_ids: Optional[set[int]] = None
+) -> RotaPlanPublishResult:
+    """Rebuild the assignment rows for ``guard_ids`` (every guard when None) in one pass.
+
+    Saving a published rota used to republish each changed employee with its own call,
+    and every call reloaded the company's sites, guards and rate history from scratch.
+    """
     _block_portal_roles(db, user_id)
     company = get_company_by_user_id(db, user_id)
     plan = db.query(RotaPlan).filter(RotaPlan.id == plan_id, RotaPlan.company_id == company.id).first()
@@ -1663,14 +1772,20 @@ def publish_rota_plan(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid planner data")
 
-    if guard_id is not None:
-        guard = db.query(Guard).filter(Guard.id == guard_id, Guard.company_id == company.id).first()
-        if not guard:
-            raise HTTPException(status_code=404, detail="Staff not found")
-
     from app.services import rota_notify_service
 
-    before_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, guard_id)
+    guards_by_id, rates_by_guard = _load_rate_lookups(db, company.id)
+    if guard_ids is not None and not set(guard_ids) <= set(guards_by_id):
+        raise HTTPException(status_code=404, detail="Staff not found")
+    # The rota-notify and attendance helpers take one guard or all of them.
+    only_guard = next(iter(guard_ids)) if guard_ids is not None and len(guard_ids) == 1 else None
+
+    def _before_fp():
+        if guard_ids is None or only_guard is not None:
+            return rota_notify_service.fingerprint_from_assignments(db, plan.id, only_guard)
+        return {k for k in rota_notify_service.fingerprint_from_assignments(db, plan.id) if k[0] in guard_ids}
+
+    before_fp = _before_fp()
 
     sites = db.query(Site).filter(Site.company_id == company.id).all()
     site_by_name = {s.name.strip().lower(): s.id for s in sites}
@@ -1710,27 +1825,33 @@ def publish_rota_plan(
     # with them. Anything marked outside the rota screen — Attendance, the staff portal,
     # the by-shift API — lives only on those rows, so it is carried across by shift
     # identity and re-applied below wherever the planner has nothing to say.
-    prior_attendance = _recorded_attendance_by_shift(db, plan.id, guard_id)
-
-    _delete_plan_assignments(db, plan.id, guard_id)
+    prior_attendance = _recorded_attendance_by_shift(db, plan.id, only_guard)
+    if guard_ids is None or only_guard is not None:
+        _delete_plan_assignments(db, plan.id, only_guard)
+    else:
+        for gid in guard_ids:
+            _delete_plan_assignments(db, plan.id, gid)
 
     created = 0
     skipped = 0
     errors: list[str] = []
     shifts = data.get("shifts") or {}
 
-    guards_by_id, rates_by_guard = _load_rate_lookups(db, company.id)
     guard_ids_in_company = set(guards_by_id.keys())
-    rate_cache: dict[tuple[int, date], Optional[float]] = {}
+    rate_cache: dict[tuple[int, date, str], Optional[float]] = {}
     from app.services import shift_adjustment_service
+    from app.services.rate_service import profile_pay_type
 
+    # Assignments are inserted together and flushed once; their adjustments and
+    # attendance need the new ids, so that work runs in a second pass.
+    pending: list[tuple[Assignment, dict, str, str, int, int]] = []
     for emp_id, by_d in shifts.items():
         try:
             emp_guard_id = int(emp_id)
         except (TypeError, ValueError):
             skipped += 1
             continue
-        if guard_id is not None and emp_guard_id != guard_id:
+        if guard_ids is not None and emp_guard_id not in guard_ids:
             continue
         if emp_guard_id not in guard_ids_in_company:
             skipped += 1
@@ -1750,9 +1871,12 @@ def publish_rota_plan(
                     continue
                 break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
                 on_date = date.fromisoformat(dk)
+                # Lock the job type with the rate, so a later change to the staff
+                # profile cannot turn a published per-job shift into an hourly one.
+                pay_type = normalize_pay_type(sh.get("payType")) or profile_pay_type(guards_by_id.get(emp_guard_id))
                 locked_rate = _parse_shift_rate(sh.get("shiftRate"))
                 if locked_rate is None:
-                    cache_key = (emp_guard_id, on_date)
+                    cache_key = (emp_guard_id, on_date, pay_type)
                     if cache_key not in rate_cache:
                         rate_cache[cache_key] = _employee_profile_rate(
                             db,
@@ -1761,6 +1885,7 @@ def publish_rota_plan(
                             on_date,
                             guards_by_id=guards_by_id,
                             rates_by_guard=rates_by_guard,
+                            pay_type=pay_type,
                         )
                     locked_rate = rate_cache[cache_key]
                 assignment = Assignment(
@@ -1776,61 +1901,66 @@ def publish_rota_plan(
                             sh.get("start"),
                         ),
                         shift_rate=locked_rate,
+                        pay_type=pay_type,
                         created_by_user_id=user_id,
                     )
                 db.add(assignment)
-                db.flush()
-                shift_adjustment_service.apply_planner_adjustments(
-                    db, user_id, company.id, assignment, sh.get("adjustments") or []
-                )
-                scheduled = (sh.get("scheduledStart") or "").strip()
-                att_key = f"{emp_id}:{dk}:{idx}"
-                att_rec = (data.get("attendance") or {}).get(att_key) or {}
-                late_m = int(att_rec.get("lateMinutes") or 0)
-                if late_m <= 0 and scheduled and sh.get("start") and scheduled != sh.get("start"):
-                    late_m = max(
-                        0,
-                        shift_adjustment_service._parse_mins(sh.get("start"))
-                        - shift_adjustment_service._parse_mins(scheduled),
-                    )
-                if late_m > 0:
-                    start = sh.get("start") or ""
-                    sched = scheduled or shift_adjustment_service._mins_to_time(
-                        shift_adjustment_service._parse_mins(start) - late_m
-                    )
-                    shift_adjustment_service.apply_planner_lateness(
-                        db, user_id, company.id, assignment, sched, late_m, att_rec.get("note")
-                    )
-                raw_status = str(att_rec.get("status") or "").strip().lower().replace(" ", "_")
-                status = "on_time" if raw_status == "present" else raw_status
-                note = (att_rec.get("note") or "").strip() or None
-                booked_at = None
-                paid_hours = _parse_paid_hours(att_rec.get("paidHours"))
-                client_hours = _parse_client_hours(att_rec.get("clientHours"))
-                if status not in ATTENDANCE_STATUSES:
-                    carried = prior_attendance.get(
-                        _attendance_shift_key(emp_guard_id, assignment.date, sh.get("start"), site_id)
-                    )
-                    if carried:
-                        status, note, booked_at = carried["status"], carried["note"], carried["booked_at"]
-                        paid_hours = carried.get("paid_hours")
-                        client_hours = carried.get("client_hours")
-                if status in ATTENDANCE_STATUSES:
-                    marked = Attendance(
-                        assignment_id=assignment.id,
-                        guard_id=emp_guard_id,
-                        status=status,
-                        note=note,
-                        paid_hours=paid_hours if status == CANCELLED_PAID else None,
-                        client_hours=client_hours if status == CANCELLED_PAID else None,
-                        updated_by_user_id=user_id,
-                    )
-                    if booked_at:
-                        marked.booked_at = booked_at
-                    elif status in {"on_time", "late"}:
-                        marked.booked_at = datetime.now(timezone.utc)
-                    db.add(marked)
-                created += 1
+                pending.append((assignment, sh, emp_id, dk, idx, emp_guard_id))
+
+    db.flush()
+    for assignment, sh, emp_id, dk, idx, emp_guard_id in pending:
+        site_id = assignment.site_id
+        shift_adjustment_service.apply_planner_adjustments(
+            db, user_id, company.id, assignment, sh.get("adjustments") or []
+        )
+        scheduled = (sh.get("scheduledStart") or "").strip()
+        att_key = f"{emp_id}:{dk}:{idx}"
+        att_rec = (data.get("attendance") or {}).get(att_key) or {}
+        late_m = int(att_rec.get("lateMinutes") or 0)
+        if late_m <= 0 and scheduled and sh.get("start") and scheduled != sh.get("start"):
+            late_m = max(
+                0,
+                shift_adjustment_service._parse_mins(sh.get("start"))
+                - shift_adjustment_service._parse_mins(scheduled),
+            )
+        if late_m > 0:
+            start = sh.get("start") or ""
+            sched = scheduled or shift_adjustment_service._mins_to_time(
+                shift_adjustment_service._parse_mins(start) - late_m
+            )
+            shift_adjustment_service.apply_planner_lateness(
+                db, user_id, company.id, assignment, sched, late_m, att_rec.get("note")
+            )
+        raw_status = str(att_rec.get("status") or "").strip().lower().replace(" ", "_")
+        status = "on_time" if raw_status == "present" else raw_status
+        note = (att_rec.get("note") or "").strip() or None
+        booked_at = None
+        paid_hours = _parse_paid_hours(att_rec.get("paidHours"))
+        client_hours = _parse_client_hours(att_rec.get("clientHours"))
+        if status not in ATTENDANCE_STATUSES:
+            carried = prior_attendance.get(
+                _attendance_shift_key(emp_guard_id, assignment.date, sh.get("start"), site_id)
+            )
+            if carried:
+                status, note, booked_at = carried["status"], carried["note"], carried["booked_at"]
+                paid_hours = carried.get("paid_hours")
+                client_hours = carried.get("client_hours")
+        if status in ATTENDANCE_STATUSES:
+            marked = Attendance(
+                assignment_id=assignment.id,
+                guard_id=emp_guard_id,
+                status=status,
+                note=note,
+                paid_hours=paid_hours if status == CANCELLED_PAID else None,
+                client_hours=client_hours if status == CANCELLED_PAID else None,
+                updated_by_user_id=user_id,
+            )
+            if booked_at:
+                marked.booked_at = booked_at
+            elif status in {"on_time", "late"}:
+                marked.booked_at = datetime.now(timezone.utc)
+            db.add(marked)
+        created += 1
 
     published_ids = _published_guard_ids(db, plan.id)
     if published_ids:
@@ -1841,7 +1971,7 @@ def publish_rota_plan(
         plan.published_at = None
     db.commit()
 
-    after_fp = rota_notify_service.fingerprint_from_assignments(db, plan.id, guard_id)
+    after_fp = _before_fp()
     changes = rota_notify_service.diff_shift_fingerprints(before_fp, after_fp)
     if changes:
         shift_audit_service.log_publish_changes(

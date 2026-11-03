@@ -855,6 +855,8 @@ class AssignmentBase(BaseModel):
     break_minutes: Optional[int] = 0
     shift_type: Optional[str] = "morning"
     shift_rate: Optional[float] = None
+    # "hourly" (rate per hour) or "per_job" (rate paid once); None follows the staff profile.
+    pay_type: Optional[Literal["hourly", "per_job"]] = None
     rota_plan_id: Optional[int] = None
 
 class AssignmentCreate(AssignmentBase):
@@ -978,6 +980,8 @@ class RotaDetailResponse(BaseModel):
     late_minutes: Optional[int] = None
     # The rate stored on the shift itself. Optional so older callers are unaffected.
     shift_rate: Optional[float] = None
+    # "hourly" or "per_job". None on shifts saved before job types existed.
+    pay_type: Optional[str] = None
     # Hours agreed for payment on a paid cancellation. ``hours`` stays the shift's own
     # span so rota and staff reports keep reporting what was rota'd.
     paid_hours: Optional[float] = None
@@ -1010,6 +1014,8 @@ class PayrollPreviewShift(BaseModel):
     attendance_marked: bool = True
     late_minutes: Optional[int] = None
     shift_rate: Optional[float] = None
+    # "hourly" pays shift_rate per hour; "per_job" pays it once for the shift.
+    pay_type: Optional[str] = None
     rota_plan_id: Optional[int] = None
     # Set on a paid cancellation, where ``hours`` is the agreed figure rather than the
     # shift's span. ``scheduled_hours`` keeps the span for reference.

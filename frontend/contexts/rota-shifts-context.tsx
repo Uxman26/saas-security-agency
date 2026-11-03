@@ -14,8 +14,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
-import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance } from '@/lib/rota-shifts-utils';
-import type { AttendanceRec, EmployeeRec, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
+import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance, shiftPayAmount } from '@/lib/rota-shifts-utils';
+import type { AttendanceRec, EmployeeRec, PayType, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS, classifyShiftType } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
 import { addDays } from 'date-fns';
@@ -164,6 +164,7 @@ type Ctx = {
   totalRotaPayable: number;
   empTotalPayable: (empId: string) => number;
   resolveShiftRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => number;
+  resolveShiftPayType: (sh: { payType?: PayType | null }, empId?: string) => PayType;
 };
 
 const RotaCtx = createContext<Ctx | null>(null);
@@ -315,6 +316,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
                 photoUrl: live.photoUrl ?? e.photoUrl,
                 phone: live.phone ?? e.phone,
                 hourlyRate: gRates[e.id] ?? e.hourlyRate ?? live.hourlyRate,
+                payType: live.payType ?? e.payType,
+                ratesByType: live.ratesByType ?? e.ratesByType,
               };
             }),
           };
@@ -354,6 +357,35 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       return 0;
     },
     [siteRateByName, guardRateById]
+  );
+
+  /** Profile job type for a staff member; legacy employees without one are hourly. */
+  const employeePayType = useCallback(
+    (s: RotaJsState, empId: string): PayType =>
+      s.employees.find((e) => e.id === empId)?.payType ?? poolRef.current.find((e) => e.id === empId)?.payType ?? 'hourly',
+    []
+  );
+
+  /** The staff member's profile rate for a job type, or null when none is set. */
+  const profileRateFor = useCallback(
+    (s: RotaJsState, empId: string, payType: PayType): number | null => {
+      const emp = s.employees.find((e) => e.id === empId) ?? poolRef.current.find((e) => e.id === empId);
+      const own = emp?.payType ?? 'hourly';
+      const r = payType === own ? guardRateById[empId] ?? emp?.hourlyRate : emp?.ratesByType?.[payType];
+      return r != null && Number(r) > 0 ? Number(r) : null;
+    },
+    [guardRateById]
+  );
+
+  /** A shift's job type: its own, else the staff profile's (shifts saved before job types). */
+  const employeesNow = state.employees;
+  const resolveShiftPayType = useCallback(
+    (sh: { payType?: PayType | null }, empId?: string): PayType =>
+      sh.payType ??
+      (empId
+        ? employeesNow.find((e) => e.id === empId)?.payType ?? poolRef.current.find((e) => e.id === empId)?.payType ?? 'hourly'
+        : 'hourly'),
+    [employeesNow]
   );
 
   const initRota = useCallback(
@@ -472,6 +504,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
             photoUrl: live.photoUrl ?? e.photoUrl,
             phone: live.phone ?? e.phone,
             hourlyRate: live.hourlyRate ?? e.hourlyRate,
+            payType: live.payType ?? e.payType,
+            ratesByType: live.ratesByType ?? e.ratesByType,
           };
         });
       };
@@ -741,10 +775,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         const attendance = { ...s.attendance };
         let preserved: AttendanceRec | undefined;
 
-        const empRate = (empId: string): number | null => {
-          const r = guardRateById[empId] ?? s.employees.find((e) => e.id === empId)?.hourlyRate;
-          return r != null && Number(r) > 0 ? Number(r) : null;
-        };
+        const empRate = (empId: string, payType: PayType): number | null => profileRateFor(s, empId, payType);
 
         const deleteAt = (empId: string, day: string, idx: number) => {
           const empShifts = { ...(shifts[empId] || {}) } as Record<string, ShiftRec[]>;
@@ -800,25 +831,26 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
         ids.forEach((id, i) => {
           const reassigned = !edit || id !== edit.empId;
+          const payType = sh.payType ?? employeePayType(s, id);
           let shiftRate: number | null;
           if (rates && Object.prototype.hasOwnProperty.call(rates, id)) {
             const r = Number(rates[id]);
             shiftRate = r > 0 ? r : null;
           } else if (reassigned) {
-            shiftRate = empRate(id);
+            shiftRate = empRate(id, payType);
           } else {
             shiftRate =
               sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate)) && Number(sh.shiftRate) > 0
                 ? Number(sh.shiftRate)
                 : null;
           }
-          addAt(id, dk, { ...sh, shiftRate }, i === 0 ? preserved : undefined);
+          addAt(id, dk, { ...sh, shiftRate, payType }, i === 0 ? preserved : undefined);
         });
 
         return { ...s, shifts, attendance };
       });
     },
-    [guardRateById, pushUndoSnapshot]
+    [profileRateFor, employeePayType, pushUndoSnapshot]
   );
 
   const deleteShift = useCallback((empId: string, dk: string, idx: number) => {
@@ -846,23 +878,17 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     });
   }, [pushUndoSnapshot]);
 
-  const staffRate = useCallback(
-    (s: RotaJsState, empId: string): number | null => {
-      const r = guardRateById[empId] ?? s.employees.find((e) => e.id === empId)?.hourlyRate;
-      return r != null && Number(r) > 0 ? Number(r) : null;
-    },
-    [guardRateById]
-  );
-
+  /** A shift handed to someone else takes their own terms: job type and rate. */
   const withStaffRate = useCallback(
     (s: RotaJsState, sh: ShiftRec, empId: string): ShiftRec => {
-      const rate = staffRate(s, empId);
+      const payType = employeePayType(s, empId);
       return {
         ...sh,
-        shiftRate: rate != null && rate > 0 ? rate : null,
+        payType,
+        shiftRate: profileRateFor(s, empId, payType),
       };
     },
-    [staffRate]
+    [employeePayType, profileRateFor]
   );
 
   const copyShiftToDates = useCallback((empId: string, dk: string, idx: number, targets: string[]) => {
@@ -1138,6 +1164,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
               ...(sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate))
                 ? { shift_rate: Number(sh.shiftRate) }
                 : {}),
+              pay_type: resolveShiftPayType(sh, empId),
             });
             created++;
           }
@@ -1152,7 +1179,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       }
       return { created, skipped, errors };
     },
-    [rotaPlanId, saveRotaPlan, state.shifts, setPublishedGuardIds]
+    [rotaPlanId, saveRotaPlan, state.shifts, setPublishedGuardIds, resolveShiftPayType]
   );
 
   const unpublishGuard = useCallback(
@@ -1247,12 +1274,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           const att = state.attendance[attKey(empId, dk, idx)];
           const hrs = payableHoursForAttendance(sh, att, state.inclBreaks);
           if (hrs <= 0) return;
-          t += hrs * resolveShiftRate(sh, empId);
+          t += shiftPayAmount(hrs, resolveShiftRate(sh, empId), resolveShiftPayType(sh, empId));
         });
       }
     }
     return t;
-  }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate]);
+  }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate, resolveShiftPayType]);
 
   const empPayableById = useMemo(() => {
     const m: Record<string, number> = {};
@@ -1263,13 +1290,13 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         (byD[dk] || []).forEach((sh, idx) => {
           const hrs = payableHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], state.inclBreaks);
           if (hrs <= 0) return;
-          t += hrs * resolveShiftRate(sh, empId);
+          t += shiftPayAmount(hrs, resolveShiftRate(sh, empId), resolveShiftPayType(sh, empId));
         });
       }
       m[empId] = t;
     }
     return m;
-  }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate]);
+  }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate, resolveShiftPayType]);
 
   const empTotalPayable = useCallback((empId: string) => empPayableById[empId] || 0, [empPayableById]);
 
@@ -1331,6 +1358,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       totalRotaPayable,
       empTotalPayable,
       resolveShiftRate,
+      resolveShiftPayType,
     }),
     [
       state,
@@ -1388,6 +1416,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       totalRotaPayable,
       empTotalPayable,
       resolveShiftRate,
+      resolveShiftPayType,
     ]
   );
 

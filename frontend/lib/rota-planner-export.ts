@@ -5,6 +5,7 @@ import {
   countedHoursForAttendance,
   normalizeAttStatus,
   payableHoursForAttendance,
+  shiftPayAmount,
   shiftSiteLine,
 } from '@/lib/rota-shifts-utils';
 import type { RotaJsState, ShiftRec } from '@/lib/rota-shifts-types';
@@ -66,7 +67,7 @@ export function downloadPlannerRotaCsv(
         const hours = countedHoursForAttendance(sh, a, state.inclBreaks);
         const payableHrs = payableHoursForAttendance(sh, a, state.inclBreaks);
         const rate = resolveShiftRate(sh, emp.id);
-        const payable = payableHrs * rate;
+        const payable = shiftPayAmount(payableHrs, rate, sh.payType ?? emp.payType);
         lines.push(
           [
             emp.name,

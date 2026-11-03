@@ -1,5 +1,5 @@
 import type { Guard } from './types';
-import type { EmployeeRec } from './rota-shifts-types';
+import type { EmployeeRec, PayType } from './rota-shifts-types';
 import { AVATAR_PALETTE } from './rota-shifts-types';
 
 const HOURLY = /hour|\bhr\b|\bp\/?h\b/i;
@@ -87,6 +87,22 @@ export function profileShiftRate(
   return profileHourlyRate(g);
 }
 
+/** Job type a new shift takes from the profile. Mirrors backend rate_service.profile_pay_type. */
+export function profilePayType(g: Pick<Guard, 'employment_pay_type' | 'pay_method' | 'per_job_rate'>): PayType {
+  const payType = String(g.employment_pay_type || '').trim().toLowerCase();
+  const method = String(g.pay_method || '').trim().toLowerCase();
+  const job = Number(g.per_job_rate);
+  if (payType === 'non_salaried' && method === 'per_job' && g.per_job_rate != null && !Number.isNaN(job) && job >= 0) {
+    return 'per_job';
+  }
+  return 'hourly';
+}
+
+function positiveOrNull(v: unknown): number | null {
+  const n = Number(v);
+  return v != null && !Number.isNaN(n) && n > 0 ? n : null;
+}
+
 export function guardToEmployee(g: Guard, i: number): EmployeeRec {
   return {
     id: String(g.id),
@@ -96,6 +112,11 @@ export function guardToEmployee(g: Guard, i: number): EmployeeRec {
     phone: g.phone || g.work_phone || undefined,
     photoUrl: g.photo_url ?? null,
     hourlyRate: profileShiftRate(g),
+    payType: profilePayType(g),
+    ratesByType: {
+      hourly: profileHourlyRate({ ...g, pay_method: 'per_hour' }) ?? positiveOrNull(g.hourly_rate),
+      per_job: positiveOrNull(g.per_job_rate),
+    },
   };
 }
 

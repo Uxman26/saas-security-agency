@@ -11,6 +11,24 @@ export type ShiftAdjustment = {
 
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'night';
 
+/**
+ * How a shift is paid. An hourly job pays `shiftRate` for each payable hour; a per-job
+ * shift pays `shiftRate` once, however long the shift runs.
+ */
+export type PayType = 'hourly' | 'per_job';
+
+export const PAY_TYPE_OPTS: ReadonlyArray<{ value: PayType; label: string }> = [
+  { value: 'hourly', label: 'Hourly job' },
+  { value: 'per_job', label: 'Per job' },
+];
+
+export function normalizePayType(value: unknown): PayType | null {
+  const v = String(value ?? '').trim().toLowerCase();
+  if (v === 'per_job') return 'per_job';
+  if (v === 'hourly') return 'hourly';
+  return null;
+}
+
 export type ShiftRec = {
   start: string;
   end: string;
@@ -23,6 +41,13 @@ export type ShiftRec = {
   /** Optional time-of-day band shown as a badge on the rota shift tile */
   shiftType?: ShiftType | null;
   shiftRate?: number | null;
+  /** Unset on shifts saved before job types existed; they follow the staff profile. */
+  payType?: PayType | null;
+  /**
+   * Bill the client for the full shift, ignoring the staff break. Staff are still paid net
+   * of their break. Unset is treated as true.
+   */
+  invoiceWithoutBreak?: boolean;
   scheduledEnd?: string;
   scheduledStart?: string;
   adjustments?: ShiftAdjustment[];
@@ -35,8 +60,12 @@ export type EmployeeRec = {
   avatarColor: string;
   phone?: string;
   photoUrl?: string | null;
-  /** Latest guard hourly rate (fallback for Payable when shift has no rate) */
+  /** Profile rate for the profile's own job type (per hour, or per job for per-job staff). */
   hourlyRate?: number | null;
+  /** Job type from Staff → Employment Details; new shifts start with it. */
+  payType?: PayType;
+  /** Profile rate for each job type, so switching type on a shift can autofill. */
+  ratesByType?: { hourly: number | null; per_job: number | null };
   /** Manual “pending rota” highlight on the staff name cell */
   rotaPending?: boolean;
 };

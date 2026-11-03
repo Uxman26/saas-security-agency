@@ -96,6 +96,7 @@ export default function InvoicesPage() {
   const [genStart, setGenStart] = useState('');
   const [genEnd, setGenEnd] = useState('');
   const [genLoading, setGenLoading] = useState(false);
+  const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
   const [customOpen, setCustomOpen] = useState(false);
 
   useEffect(() => {
@@ -309,6 +310,7 @@ export default function InvoicesPage() {
         period_start: genStart,
         period_end: genEnd,
         ...(force ? { force: true } : {}),
+        break_mode: genBreakMode,
         ...toWorkFilterParams(genNarrow),
         ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
@@ -317,6 +319,7 @@ export default function InvoicesPage() {
       setGenClientId('');
       setGenSiteId('');
       setGenNarrow(EMPTY_WORK_FILTERS);
+      setGenBreakMode('shift');
       setGenStart('');
       setGenEnd('');
       loadInvoices();
@@ -984,6 +987,23 @@ export default function InvoicesPage() {
                           onChange={(e) => setGenEnd(e.target.value)}
                         />
                       </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Breaks on this invoice</Label>
+                      <Select value={genBreakMode} onValueChange={(v) => setGenBreakMode(v as typeof genBreakMode)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="shift">As set on each rota shift</SelectItem>
+                          <SelectItem value="without_break">Without break — charge every shift in full</SelectItem>
+                          <SelectItem value="deduct">Deduct the staff break from every shift</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Client hours are worked out separately from staff pay. Staff are always paid net of
+                        their unpaid break; by default the client is charged the full shift.
+                      </p>
                     </div>
                     <div className="space-y-1">
                       <Label>Narrow by (optional)</Label>

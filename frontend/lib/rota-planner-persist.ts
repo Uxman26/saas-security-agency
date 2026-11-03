@@ -1,6 +1,6 @@
-import { agreedPaidHours, buildDayRange, calcHours, normalizeAttStatus } from './rota-shifts-utils';
+import { agreedPaidHours, buildDayRange, calcHours, normalizeAttStatus, shiftPayAmount } from './rota-shifts-utils';
 import type { AttendanceRec, RotaJsState, ShiftRec } from './rota-shifts-types';
-import { SHIFT_COLOR_OPTS, AVATAR_PALETTE, normalizeShiftType } from './rota-shifts-types';
+import { SHIFT_COLOR_OPTS, AVATAR_PALETTE, normalizePayType, normalizeShiftType } from './rota-shifts-types';
 
 export type PlannerPayload = {
   rotaView: RotaJsState['rotaView'];
@@ -43,6 +43,8 @@ function normalizeShift(sh: Partial<ShiftRec>, idx: number): ShiftRec {
     label: sh.label ?? '',
     shiftType: normalizeShiftType(sh.shiftType),
     shiftRate,
+    payType: normalizePayType(sh.payType),
+    invoiceWithoutBreak: sh.invoiceWithoutBreak !== false,
     scheduledEnd: sh.scheduledEnd || undefined,
     scheduledStart: sh.scheduledStart || undefined,
     adjustments: adjustments.length ? adjustments : undefined,
@@ -76,13 +78,14 @@ export function serializePlannerState(state: RotaJsState): string {
           status === 'cancelled_paid' ? agreedPaidHours(attendance) : calcHours(shift, state.inclBreaks);
         if (hours <= 0) return;
         const rate = Number(shift.shiftRate) || 0;
+        const payType = shift.payType ?? state.employees.find((e) => e.id === guardId)?.payType ?? 'hourly';
         payrollLines.push({
           guardId,
           date,
           site: shift.site || '',
           hours,
           rate,
-          amount: hours * rate,
+          amount: shiftPayAmount(hours, rate, payType),
           status,
         });
       });

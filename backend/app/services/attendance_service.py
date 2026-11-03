@@ -1028,7 +1028,32 @@ def sync_published_plan_attendance(db: Session, user_id: int, plan) -> None:
     company = get_company_by_user_id(db, user_id)
     shifts = payload.get("shifts") or {}
     changed = False
-    for key, record in (payload.get("attendance") or {}).items():
+    records = (payload.get("attendance") or {}).items()
+    # Every save of a published rota runs this, so the lookups are loaded in bulk rather
+    # than two queries per marked shift.
+    from app.services.shift_adjustment_service import AssignmentFinder
+
+    want_guards: set[int] = set()
+    want_dates: set[date] = set()
+    for key, _rec in records:
+        parts = str(key).split(":", 2)
+        try:
+            want_guards.add(int(parts[0]))
+            want_dates.add(date.fromisoformat(parts[1]))
+        except (TypeError, ValueError, IndexError):
+            continue
+    finder = AssignmentFinder(db, company.id, want_guards, want_dates)
+    found_ids = finder.assignment_ids()
+    existing: dict[tuple[int, int], Attendance] = {}
+    if found_ids:
+        for att in (
+            db.query(Attendance)
+            .filter(Attendance.assignment_id.in_(found_ids))
+            .order_by(Attendance.id.desc())
+            .all()
+        ):
+            existing[(att.assignment_id, att.guard_id)] = att
+    for key, record in records:
         if not isinstance(record, dict):
             continue
         parts = str(key).split(":", 2)
@@ -1056,27 +1081,14 @@ def sync_published_plan_attendance(db: Session, user_id: int, plan) -> None:
         # everywhere and prompting to be marked all over again.
         note = (record.get("note") or "").strip()
         scheduled_start = shift.get("scheduledStart") or shift.get("start") or ""
-        assignment = find_assignment(
-            db,
-            company.id,
-            guard_id,
-            shift_date,
-            scheduled_start,
-            shift.get("site") or "",
-        )
+        assignment = finder.find(guard_id, shift_date, scheduled_start, shift.get("site") or "")
         if not assignment:
             continue
-        attendance = (
-            db.query(Attendance)
-            .filter(
-                Attendance.assignment_id == assignment.id,
-                Attendance.guard_id == guard_id,
-            )
-            .first()
-        )
+        attendance = existing.get((assignment.id, guard_id))
         if not attendance:
             attendance = Attendance(assignment_id=assignment.id, guard_id=guard_id)
             db.add(attendance)
+            existing[(assignment.id, guard_id)] = attendance
         attendance.status = status
         attendance.note = note or None
         attendance.updated_by_user_id = user_id

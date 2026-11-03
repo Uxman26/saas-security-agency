@@ -33,6 +33,41 @@ def _payload(guard: GuardCreate, *, only_set: bool = False) -> dict[str, Any]:
     return data
 
 
+def _normalize_email(value: Optional[str]) -> str:
+    return (value or "").strip().lower()
+
+
+def _normalize_phone(value: Optional[str]) -> str:
+    """Digits only, with UK international prefixes folded to the national 0 form so
+    +44 7700 900123, 0044 7700 900123 and 07700 900123 all compare equal."""
+    digits = "".join(ch for ch in (value or "") if ch.isdigit())
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if digits.startswith("44") and len(digits) >= 11:
+        digits = "0" + digits[2:]
+    return digits
+
+
+def _assert_unique_contact(
+    db: Session, company_id: int, data: dict[str, Any], *, exclude_guard_id: Optional[int] = None
+) -> None:
+    """Reject a staff email (case-insensitive) or mobile number already used by another
+    staff member in the same company. Archived staff count, since they can be restored."""
+    email = _normalize_email(data.get("email"))
+    phone = _normalize_phone(data.get("phone"))
+    if not email and not phone:
+        return
+    q = db.query(Guard.id, Guard.full_name, Guard.email, Guard.phone).filter(Guard.company_id == company_id)
+    if exclude_guard_id is not None:
+        q = q.filter(Guard.id != exclude_guard_id)
+    for _gid, name, g_email, g_phone in q:
+        who = name or "another staff member"
+        if email and _normalize_email(g_email) == email:
+            raise HTTPException(status_code=400, detail=f"This email address is already used by {who}.")
+        if phone and _normalize_phone(g_phone) == phone:
+            raise HTTPException(status_code=400, detail=f"This mobile number is already used by {who}.")
+
+
 def _apply_contractor_fields(
     db: Session,
     company_id: int,
@@ -60,6 +95,7 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
     next_cid, next_main, next_sub = _apply_contractor_fields(db, company.id, data)
     if data.get("badge_number") and db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
         raise HTTPException(status_code=400, detail="Badge number already exists")
+    _assert_unique_contact(db, company.id, data)
     db_guard = Guard(
         **data,
         company_id=company.id,
@@ -260,6 +296,13 @@ def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -
     if data.get("badge_number") and data["badge_number"] != db_guard.badge_number:
         if db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
             raise HTTPException(status_code=400, detail="Badge number already exists")
+    if "email" in data or "phone" in data:
+        _assert_unique_contact(
+            db,
+            company.id,
+            {k: data[k] for k in ("email", "phone") if k in data},
+            exclude_guard_id=db_guard.id,
+        )
     for key, value in data.items():
         setattr(db_guard, key, value)
     audit_service.log_action(

@@ -289,6 +289,28 @@ def _restore_scheduled_assignment_times():
         logging.getLogger(__name__).exception("restore scheduled assignment times failed")
 
 
+def _ensure_payroll_status_column():
+    """Payroll records move pending -> approved -> processed before they are paid."""
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("payroll"):
+            return
+        cols = {c["name"] for c in insp.get_columns("payroll")}
+        if "status" in cols:
+            return
+        str_type = "VARCHAR(20)" if engine.dialect.name == "postgresql" else "TEXT"
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE payroll ADD COLUMN status {str_type} DEFAULT 'pending'"))
+            conn.execute(text("UPDATE payroll SET status = 'pending' WHERE status IS NULL"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("payroll.status migration failed")
+
+
 def _ensure_clock_in_location_columns():
     try:
         from sqlalchemy import inspect, text
@@ -369,6 +391,7 @@ def _run_migrations():
     _migrate_legacy_day_shift_type()
     _backfill_assignment_shift_types()
     _ensure_clock_in_location_columns()
+    _ensure_payroll_status_column()
     _ensure_unique_attendance()
     _restore_scheduled_assignment_times()
     path = get_db_path()

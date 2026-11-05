@@ -18,11 +18,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   DashboardHeader,
-  FilterBar,
   FilterField,
   Pill,
+  ProgressBar,
   QuickLinks,
   ResultsCard,
   RowActionsMenu,
@@ -36,18 +37,32 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import type { RotaPlanListItem } from '@/lib/types';
 import {
+  BarChart3,
+  CalendarCheck,
   CalendarDays,
   CalendarRange,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Copy,
+  Download,
   Grid3x3,
+  List as ListIcon,
   Loader2,
   Pencil,
   Plus,
   Send,
   Trash2,
   Users,
+  X,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  RotaPeriodCalendar,
+  addDaysKey,
+  addMonthsKey,
+  periodTitle,
+} from '@/components/rota/rota-period-calendar';
 import {
   EMPTY_WORK_FILTERS,
   WorkFilterBar,
@@ -58,6 +73,23 @@ import {
 } from '@/components/work-filter-bar';
 
 type Tab = 'active' | 'draft' | 'old';
+type RotaView = 'list' | 'week' | 'month';
+
+/** Planned shifts on the grid, and how many of them reached staff (published). */
+function coverage(r: RotaPlanListItem) {
+  const planned = Math.max(r.planned_shift_count ?? r.shift_count, 0);
+  const sent = r.status === 'published' ? Math.min(r.shift_count, planned || r.shift_count) : 0;
+  const total = planned || (r.status === 'published' ? r.shift_count : 0);
+  return { planned: total, sent, pct: total ? (sent / total) * 100 : 0 };
+}
+
+function coverageTone(pct: number) {
+  return pct >= 95 ? 'positive' : pct >= 60 ? 'warning' : 'danger';
+}
+
+function csvCell(v: unknown) {
+  return `"${String(v ?? '').replace(/"/g, '""')}"`;
+}
 
 function todayKey() {
   return localDateKey();
@@ -169,6 +201,9 @@ function RotaHubPage() {
   }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [view, setView] = useState<RotaView>('list');
+  // The day the date card and the week / month views are centred on.
+  const [focusDate, setFocusDate] = useState(() => todayKey());
 
   const load = useCallback(() => {
     setLoading(true);
@@ -225,6 +260,8 @@ function RotaHubPage() {
         return r.shift_count;
       case 'staff':
         return r.staff_count;
+      case 'coverage':
+        return coverage(r).pct;
       case 'status':
         return rotaStatus(r).label;
       case 'updated':
@@ -429,55 +466,122 @@ function RotaHubPage() {
 
   const activeRotas = rotas.filter((r) => !isEnded(r) && r.status === 'published');
   const draftRotas = rotas.filter((r) => !isEnded(r) && r.status !== 'published');
-  const liveNow = rotas.filter((r) => r.status === 'published' && isRunningNow(r));
+
+  const plannedShifts = tabRotas.reduce((n, r) => n + coverage(r).planned, 0);
+  const sentShifts = tabRotas.reduce((n, r) => n + coverage(r).sent, 0);
+  const unsentShifts = Math.max(plannedShifts - sentShifts, 0);
+  const sentPct = plannedShifts ? (sentShifts / plannedShifts) * 100 : 0;
+  const runningOnFocus = rotas.filter((r) => r.status === 'published' && r.start_date <= focusDate && r.end_date >= focusDate);
+  const isToday = focusDate === todayKey();
+  const stepFocus = (dir: 1 | -1) =>
+    setFocusDate((d) => (view === 'month' ? addMonthsKey(d, dir) : addDaysKey(d, view === 'week' ? 7 * dir : dir)));
 
   const statCards: StatCardSpec[] = [
     {
       key: 'active',
-      label: 'Active rotas',
+      label: activeRotas.length === 1 ? 'Active rota' : 'Active rotas',
       value: activeRotas.length,
       icon: CalendarRange,
-      tone: 'neutral',
+      tone: 'warning',
       caption: `${draftRotas.length} draft${draftRotas.length === 1 ? '' : 's'}`,
     },
     {
       key: 'shifts',
       label: 'Total shifts',
       value: tabRotas.reduce((n, r) => n + r.shift_count, 0),
-      icon: CalendarDays,
-      tone: 'info',
-      caption: 'in this view',
-    },
-    {
-      key: 'staff',
-      label: 'Staff assigned',
-      value: tabRotas.reduce((n, r) => n + r.staff_count, 0),
       icon: Users,
+      tone: 'warning',
+      caption: `${tabRotas.reduce((n, r) => n + r.staff_count, 0)} staff assigned`,
+    },
+    {
+      key: 'filled',
+      label: 'Published shifts',
+      value: sentShifts,
+      icon: CalendarCheck,
       tone: 'positive',
-      caption: 'across these rotas',
+      caption: `${Math.round(sentPct)}% coverage`,
+      progress: { value: sentPct, tone: 'positive' },
     },
     {
-      key: 'unmarked',
-      label: 'Unmarked attendance',
-      value: tabRotas.reduce((n, r) => n + (r.unmarked_attendance_count ?? 0), 0),
+      key: 'unfilled',
+      label: 'Unpublished shifts',
+      value: unsentShifts,
       icon: Clock,
-      tone: tabRotas.some((r) => (r.unmarked_attendance_count ?? 0) > 0) ? 'danger' : 'positive',
-      caption: 'shifts past with no mark',
+      tone: unsentShifts ? 'danger' : 'positive',
+      caption: plannedShifts
+        ? `${Math.round(100 - sentPct)}% not sent to staff · ${tabRotas.reduce((n, r) => n + (r.unmarked_attendance_count ?? 0), 0)} unmarked`
+        : 'nothing planned',
+      progress: { value: plannedShifts ? 100 - sentPct : 0, tone: 'danger' },
     },
     {
-      key: 'running',
-      label: 'Running today',
-      value: liveNow.length,
+      key: 'date',
+      label: 'Date',
+      value: '',
       icon: CalendarDays,
-      tone: liveNow.length ? 'positive' : 'muted',
-      caption: new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
+      tone: 'neutral',
+      body: (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left"
+            onClick={() => setFocusDate(todayKey())}
+            title="Back to today"
+          >
+            <p className="truncate text-sm text-muted-foreground">{isToday ? 'Today' : 'Viewing'}</p>
+            <p className="truncate text-base font-bold">
+              {new Date(`${focusDate}T00:00:00`).toLocaleDateString('en-GB', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {runningOnFocus.length} rota{runningOnFocus.length === 1 ? '' : 's'} running
+            </p>
+          </button>
+          <div className="flex shrink-0 gap-1">
+            <Button size="icon" variant="outline" className="size-8" onClick={() => stepFocus(-1)} aria-label="Previous">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button size="icon" variant="outline" className="size-8" onClick={() => stepFocus(1)} aria-label="Next">
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      ),
     },
   ];
+
+  const exportCsv = () => {
+    const rows = selectedIds.size ? tabRotas.filter((r) => selectedIds.has(r.id)) : tabRotas;
+    if (!rows.length) {
+      toast.warning('No rotas to export');
+      return;
+    }
+    const head = ['Rota', 'Start', 'End', 'Days', 'Type', 'Clients', 'Sites', 'Shifts', 'Staff', 'Coverage %', 'Status', 'Unmarked', 'Last updated'];
+    const body = rows.map((r) => [
+      r.name, r.start_date, r.end_date, r.day_count, rotaType(r).label, r.client_names.join('; '), r.site_names.join('; '),
+      r.shift_count, r.staff_count, Math.round(coverage(r).pct), rotaStatus(r).label, r.unmarked_attendance_count ?? 0,
+      r.updated_at ?? r.created_at,
+    ]);
+    const csv = [head, ...body].map((line) => line.map(csvCell).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rotas-${tab}-${todayKey()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${rows.length} rota${rows.length === 1 ? '' : 's'}`);
+  };
+
+  const filtersActive = !!(nameFilter || rangeFrom || rangeTo || statusFilter !== 'all' || hasWorkFilters(workFilters));
+  const selectedOne = selected.length === 1 ? tabRotas.find((r) => r.id === selected[0]) ?? null : null;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'active', label: 'Active rotas' },
     { id: 'draft', label: 'Draft rotas' },
-    { id: 'old', label: 'Old rotas' },
+    { id: 'old', label: 'Archived rotas' },
   ];
 
   const emptyText =
@@ -512,44 +616,46 @@ function RotaHubPage() {
 
             <StatCards cards={statCards} />
 
-            <div className="space-y-3">
-              <FilterBar onClear={clearFilters} showClear={!!(nameFilter || rangeFrom || rangeTo || statusFilter !== 'all' || hasWorkFilters(workFilters))}>
-                <FilterField label="From" className="flex-1">
-                  <Input type="date" value={rangeFrom} max={rangeTo || undefined} onChange={(e) => setRangeFrom(e.target.value)} />
-                </FilterField>
-                <FilterField label="To" className="flex-1">
-                  <Input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={(e) => setRangeTo(e.target.value)} />
-                </FilterField>
-                <FilterField label="Rota name" className="min-w-[220px] flex-[2]">
-                  <Input placeholder="Search rota name…" value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} />
-                </FilterField>
-                <FilterField label="Status" className="flex-1">
-                  <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
-                      <SelectItem value="published">Published</SelectItem>
-                      <SelectItem value="draft">Draft</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </FilterField>
-              </FilterBar>
-
-              <div className="rounded-lg border bg-card p-4 space-y-1">
-                <label className="block text-xs font-medium text-muted-foreground">
-                  Client, site, contractor, staff &amp; job title
-                </label>
+            <Card>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <FilterField label="From" className="flex-1">
+                    <Input type="date" value={rangeFrom} max={rangeTo || undefined} onChange={(e) => setRangeFrom(e.target.value)} />
+                  </FilterField>
+                  <FilterField label="To" className="flex-1">
+                    <Input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={(e) => setRangeTo(e.target.value)} />
+                  </FilterField>
+                  <FilterField label="Rota name" className="min-w-[220px] flex-[2]">
+                    <Input placeholder="Search rota name…" value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} />
+                  </FilterField>
+                  <FilterField label="Status" className="flex-1">
+                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="published">Published</SelectItem>
+                        <SelectItem value="draft">Draft</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                  <Button variant="outline" onClick={clearFilters} disabled={!filtersActive}>
+                    <X className="mr-1.5 size-4" />
+                    Clear
+                  </Button>
+                </div>
+                {/* Client / Site / Contractor / Sub-contractor / Staff / Job title, answered on the
+                    server: a rota is kept when any of its shifts match. */}
                 <WorkFilterBar
                   value={workFilters}
                   onChange={setWorkFilters}
                   options={filterOptions}
                   disabled={loading}
-                  className="flex flex-wrap items-center gap-2"
+                  className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6 [&>*]:!w-full"
                 />
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             <ResultsCard
               title={tabs.find((t) => t.id === tab)?.label ?? 'Rotas'}
@@ -560,47 +666,115 @@ function RotaHubPage() {
                 setPage(1);
               }}
               toolbar={
-                selected.length > 0 ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{selected.length} selected</span>
-                    {canPublishRota && selectedDrafts.length > 0 ? (
-                      <Button
-                        size="sm"
-                        disabled={bulkBusy}
-                        onClick={() =>
-                          runBulk(selectedDrafts.map((r) => r.id), 'Published', (id) => api.rotaPlans.publish(id))
-                        }
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="mr-1 inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="size-4 rounded border-input accent-primary"
+                      checked={allPageSelected}
+                      onChange={(e) => toggleSelectAll(e.target.checked)}
+                      disabled={view !== 'list' || pageIds.length === 0 || (!canDeleteRota && !canPublishRota)}
+                    />
+                    {selected.length ? `${selected.length} selected` : 'Select all'}
+                  </label>
+                  {canPublishRota ? (
+                    <Button
+                      size="sm"
+                      disabled={bulkBusy || selectedDrafts.length === 0}
+                      title={selectedDrafts.length ? undefined : 'Select one or more draft rotas'}
+                      onClick={() =>
+                        runBulk(selectedDrafts.map((r) => r.id), 'Published', (id) => api.rotaPlans.publish(id))
+                      }
+                    >
+                      {bulkBusy ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <Send className="size-3.5 mr-1.5" />}
+                      Publish{selectedDrafts.length ? ` (${selectedDrafts.length})` : ''}
+                    </Button>
+                  ) : null}
+                  {canCreateRota ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={bulkBusy || !selectedOne}
+                      title={selectedOne ? undefined : 'Select exactly one rota to duplicate'}
+                      onClick={() => selectedOne && onDuplicate(selectedOne)}
+                    >
+                      <Copy className="size-3.5 mr-1.5" />
+                      Duplicate
+                    </Button>
+                  ) : null}
+                  {canDeleteRota ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300"
+                      disabled={bulkBusy || selected.length === 0}
+                      onClick={() =>
+                        runBulk(selected, 'Deleted', (id) => api.rotaPlans.delete(id), {
+                          confirm: {
+                            message: `Delete ${selected.length} selected rota${selected.length === 1 ? '' : 's'}?`,
+                            label: 'Delete all',
+                            description: 'Published shifts linked to these rotas will also be removed.',
+                          },
+                        })
+                      }
+                    >
+                      <Trash2 className="size-3.5 mr-1.5" />
+                      Delete
+                    </Button>
+                  ) : null}
+                  <Button size="sm" variant="outline" onClick={exportCsv} disabled={!tabRotas.length}>
+                    <Download className="size-3.5 mr-1.5" />
+                    Export
+                  </Button>
+                  <div className="ml-1 inline-flex overflow-hidden rounded-md border">
+                    {(
+                      [
+                        { id: 'list', label: 'List view', icon: ListIcon },
+                        { id: 'week', label: 'Week view', icon: CalendarDays },
+                        { id: 'month', label: 'Month view', icon: CalendarRange },
+                      ] as const
+                    ).map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => setView(v.id)}
+                        aria-pressed={view === v.id}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 border-r px-2.5 py-1.5 text-xs font-medium last:border-r-0',
+                          view === v.id ? 'bg-orange-50 text-primary dark:bg-orange-950/30' : 'text-muted-foreground hover:bg-muted'
+                        )}
                       >
-                        {bulkBusy ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <Send className="size-3.5 mr-1.5" />}
-                        Publish ({selectedDrafts.length})
-                      </Button>
-                    ) : null}
-                    {canDeleteRota ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-destructive hover:text-destructive"
-                        disabled={bulkBusy}
-                        onClick={() =>
-                          runBulk(selected, 'Deleted', (id) => api.rotaPlans.delete(id), {
-                            confirm: {
-                              message: `Delete ${selected.length} selected rota${selected.length === 1 ? '' : 's'}?`,
-                              label: 'Delete all',
-                              description: 'Published shifts linked to these rotas will also be removed.',
-                            },
-                          })
-                        }
-                      >
-                        <Trash2 className="size-3.5 mr-1.5" />
-                        Delete
-                      </Button>
-                    ) : null}
+                        <v.icon className="size-3.5" />
+                        {v.label}
+                      </button>
+                    ))}
+                    <Link
+                      href="/rota/legacy"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
+                      title="Every live shift on a calendar grid"
+                    >
+                      <Grid3x3 className="size-3.5" />
+                      Shift calendar
+                    </Link>
                   </div>
-                ) : null
+                </div>
               }
             >
               <div className="p-4">
-                {loading ? (
+                {view !== 'list' && !loading ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Button size="icon" variant="outline" className="size-8" onClick={() => stepFocus(-1)} aria-label="Previous period">
+                        <ChevronLeft className="size-4" />
+                      </Button>
+                      <p className="text-sm font-semibold">{periodTitle(view, focusDate)}</p>
+                      <Button size="icon" variant="outline" className="size-8" onClick={() => stepFocus(1)} aria-label="Next period">
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                    <RotaPeriodCalendar rotas={tabRotas} mode={view} focus={focusDate} today={todayKey()} />
+                  </div>
+                ) : loading ? (
                   <InlineTableSkeleton rows={5} />
                 ) : total === 0 ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
@@ -632,6 +806,7 @@ function RotaHubPage() {
                           <SortableHead label="Client / Site" colKey="where" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Shifts" colKey="shifts" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Staff" colKey="staff" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                          <SortableHead label="Coverage" colKey="coverage" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Last updated" colKey="updated" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <TableHead className="text-right">Actions</TableHead>
@@ -712,6 +887,23 @@ function RotaHubPage() {
                               </TableCell>
                               <TableCell className="tabular-nums">{r.shift_count}</TableCell>
                               <TableCell className="tabular-nums">{r.staff_count}</TableCell>
+                              <TableCell className="min-w-[120px]">
+                                {(() => {
+                                  const c = coverage(r);
+                                  return (
+                                    <div
+                                      title={
+                                        c.planned
+                                          ? `${c.sent} of ${c.planned} planned shifts published to staff`
+                                          : 'No shifts planned'
+                                      }
+                                    >
+                                      <span className="text-sm font-semibold tabular-nums">{Math.round(c.pct)}%</span>
+                                      <ProgressBar className="mt-1 w-24" value={c.pct} tone={coverageTone(c.pct)} />
+                                    </div>
+                                  );
+                                })()}
+                              </TableCell>
                               <TableCell>
                                 <Pill tone={status.tone} dot>
                                   {status.label}
@@ -732,6 +924,37 @@ function RotaHubPage() {
                                       <Link href={`/rota/calendar?id=${r.id}`}>View</Link>
                                     </Button>
                                   )}
+                                  {canCreateRota ? (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="size-8"
+                                      title="Duplicate"
+                                      disabled={busy}
+                                      onClick={() => onDuplicate(r)}
+                                    >
+                                      <Copy className="size-4" />
+                                    </Button>
+                                  ) : null}
+                                  {canEditRota ? (
+                                    <Button size="icon" variant="ghost" className="size-8" title="Edit rota" asChild>
+                                      <Link href={`/rota/calendar?id=${r.id}`}>
+                                        <Pencil className="size-4" />
+                                      </Link>
+                                    </Button>
+                                  ) : null}
+                                  {canDeleteRota ? (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="size-8 text-red-600 hover:text-red-700"
+                                      title="Delete"
+                                      disabled={busy}
+                                      onClick={() => onDelete(r.id, r.name)}
+                                    >
+                                      <Trash2 className="size-4" />
+                                    </Button>
+                                  ) : null}
                                   <RowActionsMenu
                                     actions={[
                                       {
@@ -771,7 +994,7 @@ function RotaHubPage() {
                     </Table>
                   </div>
                 )}
-                {total > 0 ? (
+                {view === 'list' && total > 0 ? (
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
                     <ShowingCount rangeStart={rangeStart} rangeEnd={rangeEnd} total={total} noun="rotas" />
                     <TablePaginationBar
@@ -813,6 +1036,14 @@ function RotaHubPage() {
                   icon: Users,
                   tone: 'positive',
                   action: { label: 'Open assignments', href: '/assignments' },
+                },
+                {
+                  key: 'reports',
+                  title: 'Reports',
+                  description: 'Shift coverage, hours and attendance across any period.',
+                  icon: BarChart3,
+                  tone: 'warning',
+                  action: { label: 'Open reports', href: '/reports' },
                 },
               ]}
             />

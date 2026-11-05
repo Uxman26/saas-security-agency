@@ -30,45 +30,57 @@ SOFT_HEX = "#FFF4ED"
 PANEL_HEX = "#F1F5F9"
 
 
+def _line_timing(ln):
+    start = (ln.shift_start or "").strip()
+    end = (ln.shift_end or "").strip()
+    if start and end:
+        return f"{start} - {end}"
+    return start or end or None
+
+
 def _group_lines_by_day(lines, site_map) -> list:
-    """Roll invoice lines up per day, the way the bill is read.
+    """One row per kind of shift on a day (date, description, timing, rate, site).
 
     Mirrors groupInvoiceLines() in lib/invoice-lines.ts. Undated lines (allowances and
     anything entered by hand) keep a row each, after the work, since a flat charge has no
     day, no operatives and no hours to report.
     """
-    by_date: dict = {}
+    groups: dict = {}
     undated: list = []
     for ln in lines:
         if ln.shift_date:
-            by_date.setdefault(ln.shift_date, []).append(ln)
+            key = (
+                ln.shift_date,
+                (ln.description or "").strip().lower(),
+                _line_timing(ln) or "",
+                round(float(ln.rate or 0), 4),
+                ln.site_id or 0,
+            )
+            groups.setdefault(key, []).append(ln)
         else:
             undated.append(ln)
 
     rows = []
-    for day in sorted(by_date):
-        group = by_date[day]
+    ordered = sorted(groups.values(), key=lambda g: (g[0].shift_date, (g[0].shift_start or "")))
+    for group in ordered:
+        first = group[0]
+        day = first.shift_date
         hours = sum(float(l.hours or 0) for l in group)
         amount = sum(float(l.amount or 0) for l in group)
-        rates = {round(float(l.rate or 0), 4) for l in group}
-        uniform = next(iter(rates)) if len(rates) == 1 else None
-        starts = {(l.shift_start or "").strip() for l in group if (l.shift_start or "").strip()}
-        ends = {(l.shift_end or "").strip() for l in group if (l.shift_end or "").strip()}
-        timing = "—"
-        if len(starts) == 1 and len(ends) == 1:
-            timing = f"{next(iter(starts))} - {next(iter(ends))}"
+        guards = len({l.guard_id for l in group if l.guard_id})
+        qty = sum(float(l.quantity or 1) for l in group)
         rows.append(
             {
                 "shift_date": day,
                 "label": day.strftime("%d/%m/%Y"),
                 "site_names": sorted({site_map[l.site_id].name for l in group if l.site_id in site_map}),
-                "operatives": len({l.guard_id for l in group if l.guard_id}) or len(group),
+                "operatives": int(max(guards, qty)) or len(group),
                 "hours": round(hours, 2),
-                "rate": uniform if uniform is not None else (amount / hours if hours else None),
-                "rate_is_blended": uniform is None,
+                "rate": float(first.rate or 0),
+                "rate_is_blended": False,
                 "amount": round(amount, 2),
-                "timing": timing,
-                "description": "Security services",
+                "timing": _line_timing(first) or "—",
+                "description": (first.description or "").strip() or "Security services",
             }
         )
 
@@ -84,7 +96,7 @@ def _group_lines_by_day(lines, site_map) -> list:
                 "rate": float(ln.rate) if ln.rate else None,
                 "rate_is_blended": False,
                 "amount": round(float(ln.amount or 0), 2),
-                "timing": "—",
+                "timing": _line_timing(ln) or "—",
                 "description": label,
             }
         )

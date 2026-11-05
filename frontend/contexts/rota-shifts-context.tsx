@@ -159,6 +159,9 @@ type Ctx = {
   setPublishedGuardIds: (ids: number[] | string[]) => void;
   isEmployeePublished: (empId: string) => boolean;
   totalRotaHours: number;
+  /** Hours columns show the full shift span (breaks not deducted). Display only. */
+  showHoursWithoutBreak: boolean;
+  setShowHoursWithoutBreak: (v: boolean) => void;
   empTotalHours: (empId: string) => number;
   dayTotalHours: (dk: string) => number;
   totalRotaPayable: number;
@@ -1217,6 +1220,11 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     return result;
   }, [rotaPlanId, setPublishedGuardIds]);
 
+  // Display only: the hours columns can show the full shift span (breaks not taken
+  // off). Pay, saved hours and invoices keep using state.inclBreaks.
+  const [showHoursWithoutBreak, setShowHoursWithoutBreak] = useState(false);
+  const hoursInclBreaks = state.inclBreaks || showHoursWithoutBreak;
+
   const totalRotaHours = useMemo(() => {
     let t = 0;
     for (const empId of Object.keys(state.shifts)) {
@@ -1224,12 +1232,12 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       for (const dk of Object.keys(byD)) {
         (byD[dk] || []).forEach((sh, idx) => {
           const att = state.attendance[attKey(empId, dk, idx)];
-          t += countedHoursForAttendance(sh, att, state.inclBreaks);
+          t += countedHoursForAttendance(sh, att, hoursInclBreaks);
         });
       }
     }
     return t;
-  }, [state.shifts, state.attendance, state.inclBreaks]);
+  }, [state.shifts, state.attendance, hoursInclBreaks]);
 
   const empHoursById = useMemo(() => {
     const m: Record<string, number> = {};
@@ -1238,13 +1246,13 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       let t = 0;
       for (const dk of Object.keys(byD || {})) {
         (byD[dk] || []).forEach((sh, idx) => {
-          t += countedHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], state.inclBreaks);
+          t += countedHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], hoursInclBreaks);
         });
       }
       m[empId] = t;
     }
     return m;
-  }, [state.shifts, state.attendance, state.inclBreaks]);
+  }, [state.shifts, state.attendance, hoursInclBreaks]);
 
   const empTotalHours = useCallback((empId: string) => empHoursById[empId] || 0, [empHoursById]);
 
@@ -1255,13 +1263,13 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       for (const dk of Object.keys(byD || {})) {
         let t = m[dk] || 0;
         (byD[dk] || []).forEach((sh, idx) => {
-          t += countedHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], state.inclBreaks);
+          t += countedHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], hoursInclBreaks);
         });
         m[dk] = t;
       }
     }
     return m;
-  }, [state.shifts, state.attendance, state.inclBreaks]);
+  }, [state.shifts, state.attendance, hoursInclBreaks]);
 
   const dayTotalHours = useCallback((dk: string) => dayHoursByKey[dk] || 0, [dayHoursByKey]);
 
@@ -1353,6 +1361,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setPublishedGuardIds,
       isEmployeePublished,
       totalRotaHours,
+      showHoursWithoutBreak,
+      setShowHoursWithoutBreak,
       empTotalHours,
       dayTotalHours,
       totalRotaPayable,
@@ -1411,6 +1421,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       setPublishedGuardIds,
       isEmployeePublished,
       totalRotaHours,
+      showHoursWithoutBreak,
+      setShowHoursWithoutBreak,
       empTotalHours,
       dayTotalHours,
       totalRotaPayable,

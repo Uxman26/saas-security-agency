@@ -1268,6 +1268,9 @@ export const api = {
       data: Partial<Pick<Payroll, 'period_start' | 'period_end' | 'total_hours' | 'hourly_rate' | 'bank_amount' | 'cash_amount' | 'allowance_total' | 'payment_mode'>>
     ): Promise<Payroll> => request<Payroll>(`/payroll/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/payroll/${id}`, { method: 'DELETE' }),
+    /** Approve, mark processed or reopen several records at once. */
+    setStatus: (ids: number[], status: 'pending' | 'approved' | 'processed'): Promise<Payroll[]> =>
+      request<Payroll[]>('/payroll/status', { method: 'POST', body: JSON.stringify({ ids, status }) }),
   },
   invoices: {
     list: (params?: {

@@ -12,6 +12,9 @@ from app.services.work_filters import guard_ids_for_scope, resolve_work_scope
 from app.services.recycle_bin import archive as _bin_archive
 
 VALID_PAYMENT_MODES = {"100_bank", "100_cash", "split"}
+VALID_PAYROLL_STATUSES = {"pending", "approved", "processed"}
+# Editing any of these on an approved or processed record sends it back for approval.
+_PAY_FIELDS = ("period_start", "period_end", "total_hours", "hourly_rate", "bank_amount", "cash_amount", "allowance_total", "payment_mode")
 
 def _number(value, default: float = 0.0) -> float:
     try:
@@ -174,10 +177,14 @@ def _upsert_from_rota_lines(
         .first()
     )
     if existing:
+        before = (round(float(existing.total_hours or 0), 4), round(float(existing.bank_amount or 0) + float(existing.cash_amount or 0), 2))
         existing.total_hours = total_hours
         existing.hourly_rate = hourly_rate
         base = total_amount + float(existing.allowance_total or 0)
         _apply_payment_split(existing, base)
+        after = (round(float(existing.total_hours or 0), 4), round(float(existing.bank_amount or 0) + float(existing.cash_amount or 0), 2))
+        if before != after:
+            existing.status = "pending"
         return existing, False
 
     pr = Payroll(
@@ -675,8 +682,18 @@ def update_payroll(db: Session, payroll_id: int, data: PayrollUpdate, user_id: i
     for field in ("total_hours", "hourly_rate", "bank_amount", "cash_amount", "allowance_total"):
         if field in payload and payload[field] is not None and payload[field] < 0:
             raise HTTPException(status_code=400, detail=f"{field} cannot be negative")
+    if "status" in payload:
+        st = str(payload["status"] or "").strip().lower()
+        if st not in VALID_PAYROLL_STATUSES:
+            raise HTTPException(status_code=400, detail="status must be pending, approved or processed")
+        payload["status"] = st
+    figures_changed = any(
+        f in payload and payload[f] is not None and getattr(pr, f) != payload[f] for f in _PAY_FIELDS
+    )
     for k, v in payload.items():
         setattr(pr, k, v)
+    if figures_changed and "status" not in payload and (pr.status or "pending") != "pending":
+        pr.status = "pending"
     # Keep bank/cash consistent with payment mode when mode changes and amounts not both provided
     mode = pr.payment_mode or "100_bank"
     base = float(pr.total_hours or 0) * float(pr.hourly_rate or 0) + float(pr.allowance_total or 0)
@@ -689,3 +706,24 @@ def update_payroll(db: Session, payroll_id: int, data: PayrollUpdate, user_id: i
     db.commit()
     db.refresh(pr)
     return pr
+
+
+def set_payroll_status(db: Session, ids: list[int], status: str, user_id: int) -> list[Payroll]:
+    """Approve, process or reopen several records at once (company-scoped)."""
+    st = str(status or "").strip().lower()
+    if st not in VALID_PAYROLL_STATUSES:
+        raise HTTPException(status_code=400, detail="status must be pending, approved or processed")
+    if not ids:
+        return []
+    company = get_company_by_user_id(db, user_id)
+    rows = (
+        db.query(Payroll)
+        .filter(Payroll.id.in_(ids), Payroll.company_id == company.id, Payroll.deleted_at.is_(None))
+        .all()
+    )
+    for pr in rows:
+        pr.status = st
+    db.commit()
+    for pr in rows:
+        db.refresh(pr)
+    return rows

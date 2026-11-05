@@ -1204,6 +1204,9 @@ class Payroll(Base):
     cash_amount = Column(Float, default=0)
     allowance_total = Column(Float, default=0)
     payment_mode = Column(String, default="100_bank")
+    # pending -> approved -> processed (exported / paid). Any change to the figures
+    # sends an approved or processed record back to pending.
+    status = Column(String, default="pending")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     company = relationship("Company", back_populates="payrolls")

@@ -297,6 +297,7 @@ def _to_list_item(db: Session, plan: RotaPlan, *, include_counts: bool = True) -
         client_names=client_names,
         unmarked_attendance_count=_unmarked_attendance_count(db, plan) if include_counts else 0,
         unpublished_staff_count=_unpublished_staff_count(db, plan) if include_counts else 0,
+        planned_shift_count=_count_shifts_from_json(plan.planner_data),
         created_at=plan.created_at,
         updated_at=plan.updated_at,
         published_at=plan.published_at,
@@ -422,6 +423,7 @@ def _to_list_items(db: Session, plans: List[RotaPlan]) -> List[RotaPlanListItem]
                     client_names=sorted(client_set),
                     unmarked_attendance_count=int(unmarked.get(plan.id, 0) or 0),
                     unpublished_staff_count=unpublished,
+                    planned_shift_count=_count_shifts_from_json(plan.planner_data),
                     created_at=plan.created_at,
                     updated_at=plan.updated_at,
                     published_at=plan.published_at,
@@ -448,6 +450,7 @@ def _to_list_items(db: Session, plans: List[RotaPlan]) -> List[RotaPlanListItem]
                 client_names=clients,
                 unmarked_attendance_count=0,
                 unpublished_staff_count=0,
+                planned_shift_count=_count_shifts_from_json(plan.planner_data),
                 created_at=plan.created_at,
                 updated_at=plan.updated_at,
                 published_at=plan.published_at,
@@ -603,6 +606,8 @@ def list_rota_plans(
                     "budget": 0.0,
                     "unmarked_attendance_count": 0,
                     "unpublished_staff_count": 0,
+                    # Planner totals are company-wide; a portal login sees only its share.
+                    "planned_shift_count": shift_count,
                 }
             )
         )

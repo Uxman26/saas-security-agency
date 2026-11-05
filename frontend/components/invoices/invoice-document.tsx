@@ -33,14 +33,6 @@ function fmtLongDate(value?: string | null) {
   return formatDateUK(value) || '—';
 }
 
-function shiftTiming(ln: { shift_timing?: string | null; shift_start?: string | null; shift_end?: string | null }) {
-  if (ln.shift_timing) return ln.shift_timing;
-  const s = (ln.shift_start || '').trim();
-  const e = (ln.shift_end || '').trim();
-  if (s && e) return `${s} - ${e}`;
-  return s || e || '—';
-}
-
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground print:bg-slate-200 print:text-slate-700',
   sent: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 print:bg-blue-100 print:text-blue-800',
@@ -257,7 +249,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                   <tr key={row.key} className="border-b border-border print:border-slate-200" style={{ backgroundColor: idx % 2 ? PANEL : '#fff' }}>
                     <td className="p-3 whitespace-nowrap text-foreground print:text-slate-800">{row.shiftDate ? row.label : '—'}</td>
                     <td className="p-3 text-foreground print:text-slate-800">
-                      <span className="font-semibold">{row.shiftDate ? 'Security services' : row.label}</span>
+                      <span className="font-semibold">{row.description}</span>
                       {row.siteNames.length ? (
                         <span className="mt-0.5 block text-xs text-muted-foreground print:text-slate-500">{row.siteNames.join(', ')}</span>
                       ) : null}
@@ -265,7 +257,15 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                         <span className="mt-0.5 block text-xs text-slate-400">Blended rate</span>
                       ) : null}
                     </td>
-                    <td className="p-3 whitespace-nowrap tabular-nums text-foreground print:text-slate-800">—</td>
+                    <td className="p-3 whitespace-nowrap tabular-nums text-foreground print:text-slate-800">
+                      {row.timings.length
+                        ? row.timings.map((t) => (
+                            <span key={t} className="block">
+                              {t}
+                            </span>
+                          ))
+                        : '—'}
+                    </td>
                     <td className="p-3 text-center tabular-nums text-foreground print:text-slate-800">
                       {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
                     </td>

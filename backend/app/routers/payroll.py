@@ -204,6 +204,16 @@ def preview_pay(
     )
 
 
+class PayrollStatusRequest(BaseModel):
+    ids: List[int]
+    status: str  # pending | approved | processed
+
+
+@router.post("/status", response_model=List[PayrollResponse])
+def set_payroll_status(body: PayrollStatusRequest, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "edit"))):
+    return payroll_service.set_payroll_status(db, body.ids, body.status, current_user.id)
+
+
 @router.get("/{payroll_id}", response_model=PayrollResponse)
 def get_payroll(payroll_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payroll", "view"))):
     return payroll_service.get_payroll(db, payroll_id, current_user.id)

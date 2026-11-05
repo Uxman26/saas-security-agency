@@ -75,6 +75,8 @@ export default function InvoiceEditPage() {
   const [status, setStatus] = useState('draft');
   const [bankAccountId, setBankAccountId] = useState('');
   const [saving, setSaving] = useState(false);
+  // Lines edited on screen but not yet saved, so one button can save them all.
+  const [dirtyLineIds, setDirtyLineIds] = useState<Set<number>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
   const [newLine, setNewLine] = useState(emptyNewLine());
   const [lineSearch, setLineSearch] = useState('');
@@ -139,10 +141,7 @@ export default function InvoiceEditPage() {
     }
   };
 
-  const saveLine = async (line: InvoiceLine) => {
-    setSaving(true);
-    try {
-      await api.invoices.updateLine(id, line.id, {
+  const linePayload = (line: InvoiceLine) => ({
         site_id: line.site_id,
         guard_id: line.guard_id != null ? line.guard_id : null,
         shift_date: line.shift_date || null,
@@ -156,11 +155,61 @@ export default function InvoiceEditPage() {
         allowance_amount: line.allowance_amount,
         amount: line.amount,
       });
-      await load();
+
+  /** Reload from the server, but keep unsaved edits on other lines (except `doneId`). */
+  const reloadKeepingEdits = async (doneId: number) => {
+    const kept = (inv?.lines ?? []).filter((l) => l.id !== doneId && dirtyLineIds.has(l.id));
+    setDirtyLineIds((prev) => {
+      const next = new Set(prev);
+      next.delete(doneId);
+      return next;
+    });
+    await load();
+    if (kept.length) {
+      setInv((prev) =>
+        prev?.lines ? { ...prev, lines: prev.lines.map((l) => kept.find((k) => k.id === l.id) ?? l) } : prev
+      );
+    }
+  };
+
+  const saveLine = async (line: InvoiceLine) => {
+    setSaving(true);
+    try {
+      await api.invoices.updateLine(id, line.id, linePayload(line));
+      await reloadKeepingEdits(line.id);
       toast.success('Line saved');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Save failed');
     } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveAllLines = async () => {
+    const pending = (inv?.lines ?? []).filter((l) => dirtyLineIds.has(l.id));
+    if (!pending.length) {
+      toast.success('No unsaved line changes');
+      return;
+    }
+    setSaving(true);
+    let saved = 0;
+    try {
+      for (const line of pending) {
+        await api.invoices.updateLine(id, line.id, linePayload(line));
+        saved += 1;
+        setDirtyLineIds((prev) => {
+          const next = new Set(prev);
+          next.delete(line.id);
+          return next;
+        });
+      }
+      toast.success(`${saved} line${saved === 1 ? '' : 's'} saved`);
+    } catch (e) {
+      toast.error(
+        `${saved} of ${pending.length} saved. ` + (e instanceof Error ? e.message : 'Save failed')
+      );
+    } finally {
+      await load();
       setSaving(false);
     }
   };
@@ -170,7 +219,7 @@ export default function InvoiceEditPage() {
       setSaving(true);
       try {
         await api.invoices.deleteLine(id, lineId);
-        await load();
+        await reloadKeepingEdits(lineId);
         toast.success('Line removed');
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Remove failed');
@@ -211,6 +260,7 @@ export default function InvoiceEditPage() {
   };
 
   const updateLocalLine = (lineId: number, patch: Partial<InvoiceLine>) => {
+    setDirtyLineIds((prev) => (prev.has(lineId) ? prev : new Set(prev).add(lineId)));
     setInv((prev) => {
       if (!prev?.lines) return prev;
       return {
@@ -291,7 +341,7 @@ export default function InvoiceEditPage() {
     <ProtectedRoute>
       <AppShell>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="w-full px-4 py-8">
           <div className="flex flex-wrap items-center gap-3 mb-6">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/invoices">
@@ -413,9 +463,19 @@ export default function InvoiceEditPage() {
               <Card className="border-border/60">
                 <CardHeader className="flex flex-row items-center justify-between gap-4">
                   <CardTitle className="text-base">Line items</CardTitle>
-                  <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
-                    <Plus className="size-4 mr-1" /> Add line
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {dirtyLineIds.size > 0 ? (
+                      <span className="text-xs text-amber-600 dark:text-amber-400">
+                        {dirtyLineIds.size} unsaved change{dirtyLineIds.size === 1 ? '' : 's'}
+                      </span>
+                    ) : null}
+                    <Button size="sm" onClick={saveAllLines} disabled={saving || dirtyLineIds.size === 0}>
+                      <Save className="size-4 mr-1" /> Save all lines
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+                      <Plus className="size-4 mr-1" /> Add line
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="overflow-x-auto space-y-4">
                   <Input
@@ -561,7 +621,7 @@ export default function InvoiceEditPage() {
                           <TableCell className="space-x-1 whitespace-nowrap">
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant={dirtyLineIds.has(line.id) ? 'default' : 'secondary'}
                               onClick={() => {
                                 const l = inv.lines?.find((x) => x.id === line.id);
                                 if (l) saveLine(l);

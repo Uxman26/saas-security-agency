@@ -380,6 +380,8 @@ export function RotaCalendarClient() {
     setRotaView,
     setRotaName,
     totalRotaHours,
+    showHoursWithoutBreak,
+    setShowHoursWithoutBreak,
     empTotalHours,
     dayTotalHours,
     totalRotaPayable,
@@ -2729,7 +2731,7 @@ export function RotaCalendarClient() {
           <span className="shrink-0 whitespace-nowrap text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
             Total {formatHoursDecimal(totalRotaHours)}
             <span className="text-muted-foreground font-normal ml-1">
-              (excl. breaks)
+              {showHoursWithoutBreak ? '(incl. breaks)' : '(excl. breaks)'}
             </span>
           </span>
           {showPayable ? (
@@ -2858,10 +2860,24 @@ export function RotaCalendarClient() {
                   style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   <div className="font-semibold leading-tight">Total hours</div>
-                  {/* No toggle: an unpaid break comes off the shift, it never adds to it. */}
-                  <div className="mt-1 font-normal text-[9px] leading-tight text-muted-foreground">
-                    Breaks deducted
-                  </div>
+                  {/* Display only: pay and saved hours always take unpaid breaks off. */}
+                  <button
+                    type="button"
+                    onClick={() => setShowHoursWithoutBreak(!showHoursWithoutBreak)}
+                    aria-pressed={showHoursWithoutBreak}
+                    title={
+                      showHoursWithoutBreak
+                        ? 'Showing full shift hours (breaks not deducted). Click to deduct breaks.'
+                        : 'Showing hours with breaks deducted. Click to show hours without break.'
+                    }
+                    className={`mt-1 w-full rounded border px-1 py-0.5 text-[9px] font-medium leading-tight transition-colors ${
+                      showHoursWithoutBreak
+                        ? 'border-orange-500 bg-orange-500 text-white'
+                        : 'border-border bg-background text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {showHoursWithoutBreak ? 'Without break' : 'Breaks deducted'}
+                  </button>
                 </th>
                 {showPayable ? (
                   <th
@@ -4028,7 +4044,7 @@ export function RotaCalendarClient() {
                     {sh.notes ? <div className="text-[11px] text-muted-foreground italic line-clamp-2 break-all">{sh.notes}</div> : null}
                     <div className="text-[11px] text-muted-foreground">
                       Break {(sh.breakH || 0) > 0 || (sh.breakM || 0) > 0 ? `${sh.breakH}h ${sh.breakM}m` : 'none'} ·{' '}
-                      {formatHoursDecimal(calcHours(sh, state.inclBreaks))}
+                      {formatHoursDecimal(calcHours(sh, state.inclBreaks || showHoursWithoutBreak))}
                       {sh.shiftRate != null
                         ? ` · £${Number(sh.shiftRate).toFixed(2)}${payTypeRateSuffix(resolveShiftPayType(sh, viewShiftsEmpId ?? undefined))}`
                         : ''}

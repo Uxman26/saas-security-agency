@@ -17,7 +17,8 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { storageGet, storageRemove, storageSet } from '@/lib/safe-storage';
-import type { Payroll, Guard, PayrollPreview } from '@/lib/types';
+import type { Payroll, Guard, PayrollPreview, PayrollStatus } from '@/lib/types';
+import { localDateKey } from '@/lib/date-format';
 import { ATT_LABELS, HoursCell, PayPreviewDetail } from './pay-preview';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -34,7 +35,7 @@ import {
   StatCards,
   type StatCardSpec,
 } from '@/components/module-dashboard';
-import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Search, Calculator, Banknote, ChevronLeft, ChevronRight, Clock, Gift, Users } from 'lucide-react';
+import { PoundSterling, Download, Trash2, Pencil, Eye, FileInput, FileText, Search, Calculator, ChevronLeft, ChevronRight, Clock, Users, RefreshCw, RotateCcw, Hourglass, CheckCircle2, CircleCheckBig, Undo2, Wallet } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -119,6 +120,36 @@ function saveBlob(blob: Blob, filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+const STATUS_META: Record<PayrollStatus, { label: string; tone: 'warning' | 'positive' | 'info' }> = {
+  pending: { label: 'Pending', tone: 'warning' },
+  approved: { label: 'Approved', tone: 'positive' },
+  processed: { label: 'Processed', tone: 'info' },
+};
+
+function recStatus(p: Payroll): PayrollStatus {
+  return (p.status as PayrollStatus) || 'pending';
+}
+
+/** Date-range presets for the pay calculation. Weeks run Monday to Sunday. */
+type RangePreset = 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'custom';
+
+function presetRange(preset: Exclude<RangePreset, 'custom'>): [string, string] {
+  const today = new Date(`${localDateKey()}T00:00:00Z`);
+  const key = (d: Date) => d.toISOString().slice(0, 10);
+  const shift = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setUTCDate(x.getUTCDate() + n);
+    return x;
+  };
+  if (preset === 'this_week' || preset === 'last_week') {
+    const monday = shift(today, -((today.getUTCDay() + 6) % 7) - (preset === 'last_week' ? 7 : 0));
+    return [key(monday), key(shift(monday, 6))];
+  }
+  const first = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - (preset === 'last_month' ? 1 : 0), 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0));
+  return [key(first), key(last)];
 }
 
 function payableAmount(p: Payroll) {
@@ -281,7 +312,7 @@ export default function PayrollPage() {
   const [sites, setSites] = useState<Awaited<ReturnType<typeof api.sites.list>>>([]);
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
   const filterOptions = useWorkFilterOptions();
-  const [exportOpen, setExportOpen] = useState(false);
+
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -296,8 +327,22 @@ export default function PayrollPage() {
   const [editStart, setEditStart] = useState('');
   const [editEnd, setEditEnd] = useState('');
   const [editSaving, setEditSaving] = useState(false);
+  const [rangePreset, setRangePreset] = useState<RangePreset>('custom');
+  const [recSearch, setRecSearch] = useState('');
+  const [recStatusFilter, setRecStatusFilter] = useState<'all' | PayrollStatus>('all');
+  const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(() => new Set());
+  const [statusBusy, setStatusBusy] = useState(false);
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
+  const guardById = useMemo(() => new Map(guards.map((g) => [g.id, g])), [guards]);
+
+  const applyPreset = (preset: RangePreset) => {
+    setRangePreset(preset);
+    if (preset === 'custom') return;
+    const [a, b] = presetRange(preset);
+    setPvStart(a);
+    setPvEnd(b);
+  };
 
   const fetchPayrolls = useCallback(async (q: PayrollQuery) => {
     setLoading(true);
@@ -521,17 +566,59 @@ export default function PayrollPage() {
           return payableAmount(p);
         case 'mode':
           return p.payment_mode || '';
+        case 'status':
+          return ['pending', 'approved', 'processed'].indexOf(recStatus(p));
+        case 'job':
+          return guardById.get(p.guard_id)?.job_title ?? '';
         default:
           return '';
       }
     },
-    [guardMap]
+    [guardMap, guardById]
   );
+
+  // Name / payroll number / job title search and a status filter over the loaded records.
+  const visibleRecs = useMemo(() => {
+    const q = recSearch.trim().toLowerCase();
+    return payrolls.filter((p) => {
+      if (recStatusFilter !== 'all' && recStatus(p) !== recStatusFilter) return false;
+      if (!q) return true;
+      const g = guardById.get(p.guard_id);
+      return [g?.full_name, g?.payroll_number, g?.job_title, p.period_start, p.period_end]
+        .some((v) => (v ?? '').toLowerCase().includes(q));
+    });
+  }, [payrolls, recSearch, recStatusFilter, guardById]);
+
+  useEffect(() => {
+    setSelectedRecIds((prev) => {
+      if (!prev.size) return prev;
+      const ok = new Set(visibleRecs.map((p) => p.id));
+      const next = new Set([...prev].filter((id) => ok.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [visibleRecs]);
+
+  const changeStatus = async (ids: number[], status: PayrollStatus) => {
+    if (!ids.length) return;
+    setStatusBusy(true);
+    try {
+      const updated = await api.payroll.setStatus(ids, status);
+      const byId = new Map(updated.map((u) => [u.id, u]));
+      setPayrolls((prev) => prev.map((p) => byId.get(p.id) ?? p));
+      setSelectedRecIds(new Set());
+      const verb = status === 'approved' ? 'Approved' : status === 'processed' ? 'Marked processed' : 'Reopened';
+      toast.success(`${verb} ${updated.length} record${updated.length === 1 ? '' : 's'}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Status update failed');
+    } finally {
+      setStatusBusy(false);
+    }
+  };
 
   // Filtering is the API's job now, so the list goes in unfiltered — sorting and paging
   // only. An empty search term keeps useTableList from re-filtering what the server sent.
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
-    payrolls,
+    visibleRecs,
     '',
     sortKey,
     sortDir,
@@ -553,16 +640,21 @@ export default function PayrollPage() {
   const totalHours = summaryRows.reduce((sum, p) => sum + (p.total_hours ?? 0), 0);
   const employeeCount = new Set(summaryRows.map((p) => p.guard_id)).size;
 
-  /** The cards along the top, in the shape every module dashboard uses. Total pay leads,
-   *  because that is the number this screen exists to produce. */
+  const pendingRecs = payrolls.filter((p) => recStatus(p) === 'pending');
+  const approvedRecs = payrolls.filter((p) => recStatus(p) === 'approved');
+  const processedRecs = payrolls.filter((p) => recStatus(p) === 'processed');
+
+  /** The cards along the top. Total pay leads: it is the number this screen exists for. */
   const statCards: StatCardSpec[] = [
     {
       key: 'payable',
-      label: 'Total pay',
+      label: 'Total pay (period)',
       value: formatMoney(totalPayable),
       icon: PoundSterling,
       tone: 'warning',
-      caption: hasSearched ? 'bank + cash, this search' : 'calculate to load records',
+      caption: hasSearched
+        ? `bank ${formatMoney(totalBank)} · cash ${formatMoney(totalCash)}${totalAllowances ? ` · allow. ${formatMoney(totalAllowances)}` : ''}`
+        : 'calculate to load records',
     },
     {
       key: 'employees',
@@ -576,24 +668,26 @@ export default function PayrollPage() {
       key: 'hours',
       label: 'Total hours',
       value: totalHours.toFixed(2),
-      icon: Calculator,
+      icon: Clock,
       tone: 'info',
+      caption: preview ? `${preview.rota_hours.toFixed(2)} rota'd · ${preview.attended_hours.toFixed(2)} attended` : undefined,
     },
     {
-      key: 'split',
-      label: 'Bank / cash',
-      value: `${formatMoney(totalBank)} / ${formatMoney(totalCash)}`,
-      icon: Banknote,
+      key: 'pending',
+      label: 'Pending approval',
+      value: pendingRecs.length,
+      icon: Hourglass,
+      tone: pendingRecs.length ? 'danger' : 'muted',
+      caption: pendingRecs.length ? 'Requires review' : 'nothing waiting',
+      action: pendingRecs.length ? { label: 'View', onClick: () => setRecStatusFilter('pending') } : undefined,
+    },
+    {
+      key: 'processed',
+      label: 'Processed',
+      value: processedRecs.length,
+      icon: CheckCircle2,
       tone: 'positive',
-      caption: 'how it is paid out',
-    },
-    {
-      key: 'allowances',
-      label: 'Allowances',
-      value: formatMoney(totalAllowances),
-      icon: Gift,
-      tone: 'muted',
-      caption: 'included in total pay',
+      caption: approvedRecs.length ? `${approvedRecs.length} approved, ready for export` : 'approved & paid out',
     },
   ];
 
@@ -604,7 +698,7 @@ export default function PayrollPage() {
       toast.error('Nothing to export — search for records first');
       return;
     }
-    const headers = ['Guard', 'Period Start', 'Period End', 'Hours', 'Rate', 'Bank', 'Cash', 'Allowances', 'Payable', 'Payment Mode'];
+    const headers = ['Guard', 'Period Start', 'Period End', 'Hours', 'Rate', 'Bank', 'Cash', 'Allowances', 'Payable', 'Payment Mode', 'Status'];
     const lines = [headers.join(',')];
     for (const p of payrolls) {
       lines.push(
@@ -619,6 +713,7 @@ export default function PayrollPage() {
           (p.allowance_total ?? 0).toFixed(2),
           payableAmount(p).toFixed(2),
           PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode,
+          STATUS_META[recStatus(p)].label,
         ]
           .map((v) => `"${String(v).replace(/"/g, '""')}"`)
           .join(',')
@@ -631,7 +726,6 @@ export default function PayrollPage() {
     a.download = `payroll-export${appliedQuery.from ? `-${appliedQuery.from}` : ''}${appliedQuery.to ? `-to-${appliedQuery.to}` : ''}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    setExportOpen(false);
     toast.success(`Exported ${payrolls.length} record${payrolls.length === 1 ? '' : 's'}`);
   };
 
@@ -652,7 +746,6 @@ export default function PayrollPage() {
         blob,
         `payroll-export${appliedQuery.from ? `-${appliedQuery.from}` : ''}${appliedQuery.to ? `-to-${appliedQuery.to}` : ''}.pdf`
       );
-      setExportOpen(false);
       toast.success(`Exported ${payrolls.length} record${payrolls.length === 1 ? '' : 's'} as PDF`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'PDF export failed');
@@ -675,11 +768,12 @@ export default function PayrollPage() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
-                  onClick={clearSearch}
-                  disabled={loading || pvLoading}
-                  title="Clear the last payroll search and pay calculation"
+                  onClick={() => (preview ? void runPreview() : reloadCurrent())}
+                  disabled={loading || pvLoading || !hasSearched}
+                  title="Recalculate and reload the current period"
                 >
-                  {loading || pvLoading ? 'Loading...' : 'Clear search'}
+                  <RefreshCw className={cn('size-4 mr-2', (loading || pvLoading) && 'animate-spin')} />
+                  Refresh
                 </Button>
                 <Button variant="outline" onClick={exportCsv} disabled={!payrolls.length}>
                   <Download className="size-4 mr-2" />
@@ -689,50 +783,6 @@ export default function PayrollPage() {
                   <FileText className="size-4 mr-2" />
                   Export PDF
                 </Button>
-                <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" disabled={!payrolls.length}>
-                      <Download className="size-4 mr-2" />
-                      Export…
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Export payroll CSV</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">
-                        The file contains exactly the records your current search returned — every page of
-                        them, not just the one on screen. To export something else, change the filters and
-                        search again.
-                      </p>
-                      <dl className="rounded-md border p-3 text-sm space-y-1">
-                        <div className="flex justify-between gap-4">
-                          <dt className="text-muted-foreground">Filters</dt>
-                          <dd className="text-right font-medium">{describeQuery(appliedQuery, filterOptions) || 'None — all records'}</dd>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <dt className="text-muted-foreground">Records</dt>
-                          <dd className="text-right font-medium">{payrolls.length}</dd>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <dt className="text-muted-foreground">Total payable</dt>
-                          <dd className="text-right font-medium">{formatMoney(totalPayable)}</dd>
-                        </div>
-                      </dl>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button onClick={exportCsv} disabled={!payrolls.length}>
-                          <Download className="size-4 mr-2" />
-                          CSV ({payrolls.length})
-                        </Button>
-                        <Button variant="outline" onClick={() => void exportRecordsPdf()} disabled={!payrolls.length}>
-                          <FileText className="size-4 mr-2" />
-                          PDF ({payrolls.length})
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
                 <Dialog open={calcOpen} onOpenChange={setCalcOpen}>
                   {canCreateMod ? (
                     <DialogTrigger asChild>
@@ -883,7 +933,8 @@ export default function PayrollPage() {
 
           <StatCards cards={statCards} />
 
-          <Card>
+          <div className="grid gap-4 xl:grid-cols-3">
+          <Card className="xl:col-span-2 min-w-0">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Calculator className="size-4" /> Employee hours &amp; pay
@@ -895,6 +946,30 @@ export default function PayrollPage() {
               </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
+              <div className="inline-flex w-fit flex-wrap overflow-hidden rounded-md border">
+                {(
+                  [
+                    ['this_week', 'This week'],
+                    ['last_week', 'Last week'],
+                    ['this_month', 'Calendar month'],
+                    ['last_month', 'Last month'],
+                    ['custom', 'Custom'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => applyPreset(id)}
+                    aria-pressed={rangePreset === id}
+                    className={cn(
+                      'border-r px-3 py-1.5 text-xs font-medium last:border-r-0',
+                      rangePreset === id ? 'bg-orange-50 text-primary dark:bg-orange-950/30' : 'text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1 min-w-56">
                   <Label>Employee</Label>
@@ -909,11 +984,11 @@ export default function PayrollPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>From</Label>
-                  <Input type="date" value={pvStart} onChange={(e) => setPvStart(e.target.value)} className="min-w-0 w-full sm:w-auto" />
+                  <Input type="date" value={pvStart} onChange={(e) => { setPvStart(e.target.value); setRangePreset('custom'); }} className="min-w-0 w-full sm:w-auto" />
                 </div>
                 <div className="space-y-1">
                   <Label>To</Label>
-                  <Input type="date" value={pvEnd} onChange={(e) => setPvEnd(e.target.value)} className="min-w-0 w-full sm:w-auto" />
+                  <Input type="date" value={pvEnd} onChange={(e) => { setPvEnd(e.target.value); setRangePreset('custom'); }} className="min-w-0 w-full sm:w-auto" />
                 </div>
                 <div className="space-y-1 w-full">
                   <Label>Filter by</Label>
@@ -946,16 +1021,12 @@ export default function PayrollPage() {
                       <FileText className="size-4 mr-1.5" />
                       Export PDF
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearSearch}
-                    >
-                      Clear
-                    </Button>
                   </>
                 )}
+                <Button type="button" variant="outline" onClick={clearSearch} disabled={pvLoading || loading}>
+                  <RotateCcw className="size-4 mr-1.5" />
+                  Reset
+                </Button>
               </div>
 
               {preview && (
@@ -1032,9 +1103,139 @@ export default function PayrollPage() {
             </CardContent>
           </Card>
 
+          <Card className="h-fit">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Quick actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
+              {(
+                [
+                  {
+                    key: 'import',
+                    title: 'Import from Rota',
+                    sub: 'Load & sync hours',
+                    icon: FileInput,
+                    onClick: () => setCalcOpen(true),
+                    disabled: !canCreateMod,
+                  },
+                  {
+                    key: 'approve',
+                    title: 'Approve pending',
+                    sub: `${pendingRecs.length} waiting`,
+                    icon: CircleCheckBig,
+                    onClick: () => void changeStatus(pendingRecs.map((p) => p.id), 'approved'),
+                    disabled: !canEditMod || !pendingRecs.length || statusBusy,
+                  },
+                  {
+                    key: 'process',
+                    title: 'Mark processed',
+                    sub: `${approvedRecs.length} approved`,
+                    icon: CheckCircle2,
+                    onClick: () =>
+                      toast.confirm(
+                        `Mark ${approvedRecs.length} approved record${approvedRecs.length === 1 ? '' : 's'} as processed?`,
+                        () => changeStatus(approvedRecs.map((p) => p.id), 'processed'),
+                        { label: 'Mark processed', description: 'Use this once they have been paid or sent to your payroll provider.' }
+                      ),
+                    disabled: !canEditMod || !approvedRecs.length || statusBusy,
+                  },
+                  {
+                    key: 'csv',
+                    title: 'Export CSV',
+                    sub: 'Current records',
+                    icon: Download,
+                    onClick: exportCsv,
+                    disabled: !payrolls.length,
+                  },
+                  {
+                    key: 'pdf',
+                    title: 'Export PDF',
+                    sub: 'Current records',
+                    icon: FileText,
+                    onClick: () => void exportRecordsPdf(),
+                    disabled: !payrolls.length,
+                  },
+                  {
+                    key: 'rates',
+                    title: 'Pay rates',
+                    sub: 'Staff rates & bank',
+                    icon: Wallet,
+                    onClick: () => router.push('/guards'),
+                    disabled: false,
+                  },
+                ] as const
+              ).map((a) => (
+                <button
+                  key={a.key}
+                  type="button"
+                  onClick={a.onClick}
+                  disabled={a.disabled}
+                  className="flex flex-col items-center gap-1 rounded-lg border bg-card p-3 text-center transition-colors hover:border-primary/50 hover:bg-orange-50/50 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-orange-950/20"
+                >
+                  <a.icon className="size-5 text-primary" />
+                  <span className="text-xs font-semibold leading-tight">{a.title}</span>
+                  <span className="text-[11px] leading-tight text-muted-foreground">{a.sub}</span>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+          </div>
+
           <ResultsCard
             title="Payroll records"
             count={hasSearched ? total : undefined}
+            toolbar={
+              hasSearched && payrolls.length ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={recSearch}
+                      onChange={(e) => {
+                        setRecSearch(e.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="Search employee, payroll no., job title…"
+                      className="h-9 w-64 pl-8"
+                    />
+                  </div>
+                  <Select
+                    value={recStatusFilter}
+                    onValueChange={(v) => {
+                      setRecStatusFilter(v as typeof recStatusFilter);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="processed">Processed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {selectedRecIds.size > 0 && canEditMod ? (
+                    <>
+                      <span className="text-sm text-muted-foreground">{selectedRecIds.size} selected</span>
+                      <Button size="sm" disabled={statusBusy} onClick={() => void changeStatus([...selectedRecIds], 'approved')}>
+                        <CircleCheckBig className="size-3.5 mr-1.5" />
+                        Approve
+                      </Button>
+                      <Button size="sm" variant="outline" disabled={statusBusy} onClick={() => void changeStatus([...selectedRecIds], 'processed')}>
+                        <CheckCircle2 className="size-3.5 mr-1.5" />
+                        Mark processed
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={statusBusy} onClick={() => void changeStatus([...selectedRecIds], 'pending')}>
+                        <Undo2 className="size-3.5 mr-1.5" />
+                        Reopen
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null
+            }
             pageSize={pageSize}
             onPageSizeChange={(n) => {
               setPageSize(n);
@@ -1054,6 +1255,8 @@ export default function PayrollPage() {
                   Pick an employee and period above and press <strong>Calculate</strong> to load the saved payroll
                   records for the same period and filters.
                 </div>
+              ) : total === 0 && payrolls.length > 0 ? (
+                <div className="text-center py-12 text-muted-foreground">No records match this search or status.</div>
               ) : total === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   {describeQuery(appliedQuery, filterOptions)
@@ -1065,60 +1268,120 @@ export default function PayrollPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <SortableHead label="Guard" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead className="w-10">
+                          <input
+                            type="checkbox"
+                            className="size-4 rounded border-input accent-primary"
+                            aria-label="Select all records on this page"
+                            disabled={!canEditMod}
+                            checked={pageRows.length > 0 && pageRows.every((p) => selectedRecIds.has(p.id))}
+                            onChange={(e) =>
+                              setSelectedRecIds((prev) => {
+                                const next = new Set(prev);
+                                pageRows.forEach((p) => (e.target.checked ? next.add(p.id) : next.delete(p.id)));
+                                return next;
+                              })
+                            }
+                          />
+                        </TableHead>
+                        <SortableHead label="Employee" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Job title" colKey="job" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Period" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Hours" colKey="hours" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Bank" colKey="bank" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Cash" colKey="cash" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Allowances" colKey="allowances" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Payable" colKey="payable" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Payment Mode" colKey="mode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead>Actions</TableHead>
+                        <SortableHead label="Total hours" colKey="hours" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                        <SortableHead label="Rate" colKey="rate" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                        <SortableHead label="Pay total" colKey="payable" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                        <SortableHead label="Payment" colKey="mode" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pageRows.map((p) => (
-                        <TableRow key={p.id}>
+                      {pageRows.map((p) => {
+                        const g = guardById.get(p.guard_id);
+                        const name = g?.full_name ?? guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`;
+                        const st = recStatus(p);
+                        return (
+                        <TableRow key={p.id} data-state={selectedRecIds.has(p.id) ? 'selected' : undefined}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              className="size-4 rounded border-input accent-primary"
+                              aria-label={`Select ${name}`}
+                              disabled={!canEditMod}
+                              checked={selectedRecIds.has(p.id)}
+                              onChange={(e) =>
+                                setSelectedRecIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(p.id);
+                                  else next.delete(p.id);
+                                  return next;
+                                })
+                              }
+                            />
+                          </TableCell>
                           <TableCell className="font-medium whitespace-nowrap">
                             <span className="flex items-center gap-2">
-                              <RecordAvatar name={guardMap.get(p.guard_id) ?? `Guard ${p.guard_id}`} />
+                              <RecordAvatar name={name} />
                               <span className="min-w-0">
-                                <span className="block truncate">
-                                  {guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`}
-                                </span>
-                                <span className="block text-xs font-normal text-muted-foreground tabular-nums">
-                                  {(p.total_hours ?? 0).toFixed(2)}h @ {formatMoney(p.hourly_rate ?? 0)}
+                                <span className="block truncate">{name}</span>
+                                <span className="block text-xs font-normal text-muted-foreground">
+                                  {g?.payroll_number ? `#${g.payroll_number}` : `ID ${p.guard_id}`}
                                 </span>
                               </span>
                             </span>
                           </TableCell>
+                          <TableCell className="text-sm">{g?.job_title || '—'}</TableCell>
                           <TableCell className="whitespace-nowrap text-sm">
                             {p.period_start} – {p.period_end}
                           </TableCell>
-                          <TableCell>{(p.total_hours ?? 0).toFixed(2)}h</TableCell>
-                          <TableCell className="font-medium">{formatMoney(p.bank_amount)}</TableCell>
-                          <TableCell className="font-medium">{formatMoney(p.cash_amount)}</TableCell>
-                          <TableCell>{formatMoney(p.allowance_total)}</TableCell>
-                          <TableCell className="font-semibold">{formatMoney(payableAmount(p))}</TableCell>
+                          <TableCell className="text-right tabular-nums">{(p.total_hours ?? 0).toFixed(2)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{formatMoney(p.hourly_rate ?? 0)}</TableCell>
+                          <TableCell className="text-right">
+                            <span className="block font-semibold tabular-nums">{formatMoney(payableAmount(p))}</span>
+                            {p.cash_amount || p.allowance_total ? (
+                              <span className="block text-[11px] text-muted-foreground tabular-nums">
+                                {p.cash_amount ? `bank ${formatMoney(p.bank_amount)} · cash ${formatMoney(p.cash_amount)}` : ''}
+                                {p.cash_amount && p.allowance_total ? ' · ' : ''}
+                                {p.allowance_total ? `incl. ${formatMoney(p.allowance_total)} allow.` : ''}
+                              </span>
+                            ) : null}
+                          </TableCell>
                           <TableCell>
                             <Pill tone={p.payment_mode === '100_cash' ? 'info' : p.payment_mode === 'split' ? 'warning' : 'neutral'}>
                               {PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}
                             </Pill>
                           </TableCell>
                           <TableCell>
+                            <Pill tone={STATUS_META[st].tone} dot>
+                              {STATUS_META[st].label}
+                            </Pill>
+                          </TableCell>
+                          <TableCell>
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => setViewRec(p)}
-                                title="View record"
-                              >
-                                <Eye className="size-4" />
+                              <Button variant="outline" size="sm" onClick={() => setViewRec(p)}>
+                                View
                               </Button>
                               <RowActionsMenu
                                 actions={[
                                   { label: 'View record', icon: Eye, onSelect: () => setViewRec(p) },
+                                  {
+                                    label: 'Approve',
+                                    icon: CircleCheckBig,
+                                    onSelect: () => void changeStatus([p.id], 'approved'),
+                                    disabled: !canEditMod || st === 'approved' || statusBusy,
+                                  },
+                                  {
+                                    label: 'Mark processed',
+                                    icon: CheckCircle2,
+                                    onSelect: () => void changeStatus([p.id], 'processed'),
+                                    disabled: !canEditMod || st === 'processed' || statusBusy,
+                                  },
+                                  {
+                                    label: 'Reopen (pending)',
+                                    icon: Undo2,
+                                    onSelect: () => void changeStatus([p.id], 'pending'),
+                                    disabled: !canEditMod || st === 'pending' || statusBusy,
+                                  },
                                   {
                                     label: 'Edit record',
                                     icon: Pencil,
@@ -1143,7 +1406,8 @@ export default function PayrollPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -1291,6 +1555,7 @@ export default function PayrollPage() {
                 <div><dt className="text-muted-foreground">Allowances</dt><dd>{formatMoney(viewRec.allowance_total)}</dd></div>
                 <div><dt className="text-muted-foreground">Payable</dt><dd className="font-semibold">{formatMoney(payableAmount(viewRec))}</dd></div>
                 <div><dt className="text-muted-foreground">Payment mode</dt><dd>{PAYMENT_MODE_LABELS[viewRec.payment_mode] ?? viewRec.payment_mode}</dd></div>
+                <div><dt className="text-muted-foreground">Status</dt><dd><Pill tone={STATUS_META[recStatus(viewRec)].tone} dot>{STATUS_META[recStatus(viewRec)].label}</Pill></dd></div>
               </dl>
               <DialogFooter>
                 <Button

@@ -919,6 +919,9 @@ class RotaPlanListItem(BaseModel):
     # Staff on a published rota whose own shifts were never published. Publishing is
     # per-employee, so "Published" does not mean everyone on it was sent.
     unpublished_staff_count: int = 0
+    # Shifts on the planner grid. shift_count is what reached staff (published
+    # assignments) on a published rota, so shift_count / planned is the coverage.
+    planned_shift_count: int = 0
     created_at: datetime
     updated_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
@@ -1576,11 +1579,14 @@ class PayrollUpdate(BaseModel):
     cash_amount: Optional[float] = None
     allowance_total: Optional[float] = None
     payment_mode: Optional[str] = None
+    status: Optional[str] = None
 
 class PayrollResponse(PayrollBase):
     id: int
     company_id: int
+    status: Optional[str] = "pending"
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -105,7 +105,30 @@ export type StatCardSpec = {
   caption?: string;
   /** The "View" affordance on the right of the card. */
   action?: { label: string; onClick: () => void };
+  /** A thin bar under the caption, 0–100 — coverage, completion. */
+  progress?: { value: number; tone?: StatTone };
+  /** Replace the value/caption block entirely (e.g. a date navigator). */
+  body?: React.ReactNode;
 };
+
+const BAR_STYLES: Record<StatTone, string> = {
+  neutral: 'bg-sky-500',
+  positive: 'bg-green-500',
+  muted: 'bg-muted-foreground/50',
+  warning: 'bg-amber-500',
+  info: 'bg-violet-500',
+  danger: 'bg-red-500',
+};
+
+/** A slim 0–100 bar, shared by stat cards and table cells. */
+export function ProgressBar({ value, tone = 'positive', className }: { value: number; tone?: StatTone; className?: string }) {
+  const pct = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  return (
+    <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-muted', className)} role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+      <div className={cn('h-full rounded-full transition-all', BAR_STYLES[tone])} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
 
 export function StatCards({ cards, className }: { cards: StatCardSpec[]; className?: string }) {
   if (!cards.length) return null;
@@ -126,11 +149,16 @@ export function StatCards({ cards, className }: { cards: StatCardSpec[]; classNa
               <span className={cn('flex size-11 shrink-0 items-center justify-center rounded-xl', tone.tile)}>
                 <Icon className="size-5" />
               </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-muted-foreground">{c.label}</p>
-                <p className={cn('truncate text-2xl font-bold tabular-nums', tone.value)}>{c.value}</p>
-                {c.caption ? <p className="truncate text-xs text-muted-foreground">{c.caption}</p> : null}
-              </div>
+              {c.body ? (
+                <div className="min-w-0 flex-1">{c.body}</div>
+              ) : (
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-muted-foreground">{c.label}</p>
+                  <p className={cn('truncate text-2xl font-bold tabular-nums', tone.value)}>{c.value}</p>
+                  {c.caption ? <p className="truncate text-xs text-muted-foreground">{c.caption}</p> : null}
+                  {c.progress ? <ProgressBar className="mt-1.5" value={c.progress.value} tone={c.progress.tone ?? c.tone} /> : null}
+                </div>
+              )}
               {c.action ? (
                 <button
                   type="button"
@@ -447,7 +475,7 @@ export type QuickLinkSpec = {
 export function QuickLinks({ links }: { links: QuickLinkSpec[] }) {
   if (!links.length) return null;
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className={cn('grid gap-3 md:grid-cols-2', links.length === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-3')}>
       {links.map((l) => {
         const tone = TONE_STYLES[l.tone ?? 'neutral'];
         const Icon = l.icon;

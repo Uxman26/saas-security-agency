@@ -1045,6 +1045,8 @@ export interface RotaPlanListItem {
   unmarked_attendance_count: number;
   /** Staff on a published rota whose own shifts were never published. */
   unpublished_staff_count: number;
+  /** Shifts on the planner grid; shift_count / planned_shift_count is the coverage. */
+  planned_shift_count?: number;
   created_at: string;
   updated_at?: string | null;
   published_at?: string | null;
@@ -1680,8 +1682,13 @@ export interface Payroll {
   cash_amount: number;
   allowance_total: number;
   payment_mode: string;
+  /** pending → approved → processed. Editing the figures sends it back to pending. */
+  status?: PayrollStatus | null;
   created_at: string;
+  updated_at?: string | null;
 }
+
+export type PayrollStatus = 'pending' | 'approved' | 'processed';
 
 export interface PayrollPreviewShift {
   assignment_id: number;

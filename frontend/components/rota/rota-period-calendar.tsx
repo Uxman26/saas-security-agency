@@ -41,6 +41,7 @@ export function periodTitle(mode: 'week' | 'month', focus: string) {
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function chipClass(r: RotaPlanListItem, today: string) {
+  if ((r.unmarked_attendance_count ?? 0) > 0) return 'border-rose-400 bg-rose-50 text-rose-900 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200';
   if (r.status !== 'published') return 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200';
   if (r.start_date <= today && r.end_date >= today) return 'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200';
   return 'border-green-300 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-950/40 dark:text-green-200';
@@ -118,7 +119,7 @@ export function RotaPeriodCalendar({
                 <Link
                   key={r.id}
                   href={`/rota/calendar?id=${r.id}`}
-                  title={`${r.name} · ${r.shift_count} shifts · ${r.staff_count} staff`}
+                  title={`${r.name} · ${r.shift_count} shifts · ${r.staff_count} staff${(r.unmarked_attendance_count ?? 0) > 0 ? ` · ${r.unmarked_attendance_count} shifts need attendance` : ''}`}
                   className={cn('block truncate rounded border px-1.5 py-0.5 text-[11px] font-medium hover:underline', chipClass(r, today))}
                 >
                   {r.name}
@@ -135,6 +136,7 @@ export function RotaPeriodCalendar({
         <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-sky-400" /> Active now</span>
         <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-green-400" /> Published</span>
         <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-amber-400" /> Draft</span>
+        <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-rose-500" /> Attendance not marked</span>
       </div>
     </div>
   );

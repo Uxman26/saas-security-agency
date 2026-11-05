@@ -179,6 +179,8 @@ function RotaHubPage() {
   const [rangeFrom, setRangeFrom] = useState('');
   const [rangeTo, setRangeTo] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published'>('all');
+  // Only rotas with past shifts nobody marked attendance for.
+  const [needsMarking, setNeedsMarking] = useState(false);
   // Client / Site / Contractor / Sub-contractor / Staff / Job title. Answered on the
   // server, which keeps a rota when any of its shifts match — and a client match covers
   // every site assigned to that client.
@@ -221,7 +223,7 @@ function RotaHubPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [tab, nameFilter, rangeFrom, rangeTo, statusFilter, workFilters]);
+  }, [tab, nameFilter, rangeFrom, rangeTo, statusFilter, needsMarking, workFilters]);
 
   const tabRotas = useMemo(
     () =>
@@ -231,11 +233,30 @@ function RotaHubPage() {
         if (tab === 'draft' && (ended || r.status === 'published')) return false;
         if (tab === 'old' && !ended) return false;
         if (statusFilter !== 'all' && (statusFilter === 'published') !== (r.status === 'published')) return false;
+        if (needsMarking && !(r.unmarked_attendance_count > 0)) return false;
         if (nameFilter.trim() && !r.name.toLowerCase().includes(nameFilter.trim().toLowerCase())) return false;
         return overlapsRange(r, rangeFrom, rangeTo);
       }),
-    [rotas, tab, statusFilter, nameFilter, rangeFrom, rangeTo]
+    [rotas, tab, statusFilter, needsMarking, nameFilter, rangeFrom, rangeTo]
   );
+
+  // Rotas per tab still waiting on attendance, counted before the page's own filters so
+  // the tab badge stays put while the user narrows the list.
+  const unmarkedByTab = useMemo(() => {
+    const out: Record<Tab, { rotas: number; shifts: number }> = {
+      active: { rotas: 0, shifts: 0 },
+      draft: { rotas: 0, shifts: 0 },
+      old: { rotas: 0, shifts: 0 },
+    };
+    for (const r of rotas) {
+      const n = r.unmarked_attendance_count ?? 0;
+      if (n <= 0) continue;
+      const t: Tab = isEnded(r) ? 'old' : r.status === 'published' ? 'active' : 'draft';
+      out[t].rotas += 1;
+      out[t].shifts += n;
+    }
+    return out;
+  }, [rotas]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
@@ -291,6 +312,7 @@ function RotaHubPage() {
     setRangeFrom('');
     setRangeTo('');
     setStatusFilter('all');
+    setNeedsMarking(false);
     setWorkFilters(EMPTY_WORK_FILTERS);
   };
 
@@ -575,14 +597,17 @@ function RotaHubPage() {
     toast.success(`Exported ${rows.length} rota${rows.length === 1 ? '' : 's'}`);
   };
 
-  const filtersActive = !!(nameFilter || rangeFrom || rangeTo || statusFilter !== 'all' || hasWorkFilters(workFilters));
+  const filtersActive = !!(nameFilter || rangeFrom || rangeTo || statusFilter !== 'all' || needsMarking || hasWorkFilters(workFilters));
   const selectedOne = selected.length === 1 ? tabRotas.find((r) => r.id === selected[0]) ?? null : null;
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'active', label: 'Active rotas' },
+  const unmarkedTitle = (t: Tab) =>
+    `${unmarkedByTab[t].rotas} rota${unmarkedByTab[t].rotas === 1 ? '' : 's'} with ${unmarkedByTab[t].shifts} shift${unmarkedByTab[t].shifts === 1 ? '' : 's'} where attendance was never marked`;
+  const tabs: { id: Tab; label: string; badge?: number; badgeTitle?: string }[] = [
+    { id: 'active', label: 'Active rotas', badge: unmarkedByTab.active.rotas, badgeTitle: unmarkedTitle('active') },
     { id: 'draft', label: 'Draft rotas' },
-    { id: 'old', label: 'Archived rotas' },
+    { id: 'old', label: 'Archived rotas', badge: unmarkedByTab.old.rotas, badgeTitle: unmarkedTitle('old') },
   ];
+  const tabUnmarked = unmarkedByTab[tab];
 
   const emptyText =
     tab === 'draft'
@@ -656,6 +681,27 @@ function RotaHubPage() {
                 />
               </CardContent>
             </Card>
+
+            {tabUnmarked.rotas > 0 ? (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
+                <Clock className="size-4 shrink-0" />
+                <p className="flex-1">
+                  <span className="font-semibold">
+                    {tabUnmarked.rotas} rota{tabUnmarked.rotas === 1 ? '' : 's'} still need{tabUnmarked.rotas === 1 ? 's' : ''} attendance marking
+                  </span>{' '}
+                  · {tabUnmarked.shifts} past shift{tabUnmarked.shifts === 1 ? '' : 's'} with no attendance. They count as unworked for pay and
+                  invoicing until marked.
+                </p>
+                <Button
+                  size="sm"
+                  variant={needsMarking ? 'default' : 'outline'}
+                  className={needsMarking ? 'bg-rose-600 hover:bg-rose-700' : 'border-rose-300 bg-white text-rose-800 hover:bg-rose-100 dark:bg-transparent dark:text-rose-200'}
+                  onClick={() => setNeedsMarking((v) => !v)}
+                >
+                  {needsMarking ? 'Show all rotas' : 'Show only these'}
+                </Button>
+              </div>
+            ) : null}
 
             <ResultsCard
               title={tabs.find((t) => t.id === tab)?.label ?? 'Rotas'}
@@ -832,7 +878,7 @@ function RotaHubPage() {
                                     : undefined
                               }
                             >
-                              <TableCell>
+                              <TableCell className={cn(unmarked > 0 && 'shadow-[inset_4px_0_0_0_#e11d48]')}>
                                 <input
                                   type="checkbox"
                                   className="size-4 rounded border-input"
@@ -866,7 +912,7 @@ function RotaHubPage() {
                                     title={`${unmarked} shift${unmarked === 1 ? '' : 's'} in this rota have been and gone with no attendance marked. They count as unworked until they are marked.`}
                                   >
                                     <Clock className="size-3" />
-                                    {unmarked} unmarked
+                                    {unmarked} shift{unmarked === 1 ? '' : 's'} need attendance
                                   </Link>
                                 ) : null}
                               </TableCell>

@@ -35,7 +35,13 @@ export function ModuleHeader({
   );
 }
 
-type TabItem<T extends string> = { id: T; label: string };
+type TabItem<T extends string> = {
+  id: T;
+  label: string;
+  /** Small red count beside the label, for something on that tab needing attention. */
+  badge?: number;
+  badgeTitle?: string;
+};
 
 export function ModuleTabs<T extends string>({
   tabs,
@@ -48,17 +54,25 @@ export function ModuleTabs<T extends string>({
 }) {
   return (
     <div className="flex flex-wrap gap-1 border-b">
-      {tabs.map(({ id, label }) => (
+      {tabs.map(({ id, label, badge, badgeTitle }) => (
         <button
           key={id}
           type="button"
           onClick={() => onChange(id)}
           className={cn(
-            'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            'inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
             value === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
           {label}
+          {badge ? (
+            <span
+              className="inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-semibold leading-5 text-white"
+              title={badgeTitle}
+            >
+              {badge}
+            </span>
+          ) : null}
         </button>
       ))}
     </div>

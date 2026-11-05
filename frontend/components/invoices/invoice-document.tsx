@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Globe, Mail, MapPin, Phone } from 'lucide-react';
+import { Globe, Mail, MapPin, Phone } from 'lucide-react';
 import type { Invoice } from '@/lib/types';
 import { formatDateUK } from '@/lib/date-format';
 import { hasInvoiceAccountDetails } from '@/lib/invoice-account';
@@ -9,10 +9,10 @@ import { groupInvoiceLines } from '@/lib/invoice-lines';
 import { storageGet } from '@/lib/safe-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const ACCENT = '#F45100';
-const NAVY = '#0F172A';
-const SOFT = '#FFF4ED';
-const PANEL = '#F1F5F9';
+const ACCENT = '#D7141A';
+const DARK = '#1F1F1F';
+const SOFT = '#FDECEC';
+const PANEL = '#F4F4F5';
 
 const DEFAULT_HEADERS = {
   date: 'Date',
@@ -28,9 +28,34 @@ function fmtMoney(n: number) {
   return `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** "07 September 2026". Date-only values are read as calendar days, so no timezone shift. */
 function fmtLongDate(value?: string | null) {
   if (!value) return '—';
-  return formatDateUK(value) || '—';
+  const iso = value.slice(0, 10);
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return formatDateUK(value) || '—';
+  return d.toLocaleDateString('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function fmtHours(n: number) {
+  return Number(n.toFixed(2)).toString();
+}
+
+const DEFAULT_DESCRIPTION = 'security services';
+
+/** Slanted red-on-charcoal strip used as the top and bottom edge of the page. */
+function EdgeBand({ side }: { side: 'top' | 'bottom' }) {
+  return (
+    <div className="relative h-4 w-full" style={{ backgroundColor: DARK }}>
+      <div
+        className={`absolute inset-y-0 w-[28%] ${side === 'top' ? 'left-0' : 'right-0'}`}
+        style={{
+          backgroundColor: ACCENT,
+          clipPath: side === 'top' ? 'polygon(0 0, 100% 0, 88% 100%, 0 100%)' : 'polygon(12% 0, 100% 0, 100% 100%, 0 100%)',
+        }}
+      />
+    </div>
+  );
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -91,143 +116,142 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
   const amountDue = paid > 0 || credited > 0 ? balance : invoice.total;
   const statusStyle = STATUS_STYLES[invoice.status] || 'bg-muted text-muted-foreground print:bg-slate-200 print:text-slate-700';
   const invoiceDate = invoice.invoice_date || invoice.created_at;
+  // Site names only say something when the bill covers more than one site.
+  const multiSite = new Set(dayRows.flatMap((r) => r.siteNames)).size > 1;
 
   const meta: { label: string; value: string }[] = [
     { label: 'Invoice Number', value: `#${invoice.id}` },
     { label: 'Invoice Date', value: fmtLongDate(invoiceDate) },
     { label: 'Payment Due', value: fmtLongDate(invoice.due_date) },
-    { label: 'Invoice Period', value: `${fmtLongDate(invoice.period_start)} – ${fmtLongDate(invoice.period_end)}` },
+    { label: 'Purchase Order', value: invoice.po_number || '' },
   ];
-  if (invoice.po_number) meta.push({ label: 'PO Number', value: invoice.po_number });
+
+  const columns = [
+    ['date', headers.date, 'text-left'],
+    ['operatives', headers.operatives, 'text-center'],
+    ['hours', headers.hours, 'text-center'],
+    ['rate', headers.rate, 'text-center'],
+    ['amount', headers.amount, 'text-right'],
+  ] as const;
+
+  const hasNotes = !!(invoice.notes?.trim() || invoice.rota_review?.trim());
 
   return (
     <div
       id={printId}
-      className="mx-auto max-w-4xl overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm print:max-w-none print:rounded-none print:border-0 print:bg-white print:text-slate-900 print:shadow-none [print-color-adjust:exact] [-webkit-print-color-adjust:exact]"
+      className="mx-auto max-w-4xl overflow-hidden rounded-lg border bg-white text-slate-900 shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none [print-color-adjust:exact] [-webkit-print-color-adjust:exact]"
     >
-      <div className="flex flex-col gap-6 p-8 sm:flex-row sm:items-start sm:justify-between sm:p-10">
-        <div className="flex min-w-0 gap-4">
-          {logoSrc ? <img src={logoSrc} alt="" className="h-20 w-20 shrink-0 object-contain object-left" /> : null}
+      <EdgeBand side="top" />
+
+      {/* Header: logo and company details, a divider, then the word INVOICE. */}
+      <div className="flex flex-col gap-6 px-8 pb-6 pt-8 sm:flex-row sm:items-stretch sm:justify-between sm:px-10">
+        <div className="flex min-w-0 items-start gap-5">
+          {logoSrc ? <img src={logoSrc} alt="" className="h-24 w-28 shrink-0 object-contain object-left" /> : null}
           <div className="min-w-0 space-y-1.5">
-            <h2 className="text-lg font-bold uppercase tracking-tight text-foreground print:text-slate-900 sm:text-xl">
+            <h2 className="text-xl font-extrabold uppercase tracking-tight" style={{ color: DARK }}>
               {invoice.company_name ?? 'Company'}
             </h2>
             {invoice.company_address ? (
-              <p className="flex items-start gap-2 text-sm text-muted-foreground print:text-slate-600">
-                <MapPin className="mt-0.5 size-3.5 shrink-0" style={{ color: ACCENT }} />
+              <p className="flex items-start gap-2 text-sm text-slate-600">
+                <MapPin className="mt-0.5 size-3.5 shrink-0" style={{ color: DARK }} />
                 <span className="whitespace-pre-line">{invoice.company_address}</span>
               </p>
             ) : null}
             {invoice.company_phone ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground print:text-slate-600">
-                <Phone className="size-3.5 shrink-0" style={{ color: ACCENT }} />
+              <p className="flex items-center gap-2 text-sm text-slate-600">
+                <Phone className="size-3.5 shrink-0" style={{ color: DARK }} />
                 {invoice.company_phone}
               </p>
             ) : null}
             {invoice.company_email ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground print:text-slate-600">
-                <Mail className="size-3.5 shrink-0" style={{ color: ACCENT }} />
+              <p className="flex items-center gap-2 text-sm text-slate-600">
+                <Mail className="size-3.5 shrink-0" style={{ color: DARK }} />
                 {invoice.company_email}
               </p>
             ) : null}
             {invoice.company_website ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground print:text-slate-600">
-                <Globe className="size-3.5 shrink-0" style={{ color: ACCENT }} />
+              <p className="flex items-center gap-2 text-sm text-slate-600">
+                <Globe className="size-3.5 shrink-0" style={{ color: DARK }} />
                 {invoice.company_website}
               </p>
             ) : null}
           </div>
         </div>
-        <div className="shrink-0 sm:text-right">
-          <p className="text-3xl font-extrabold tracking-tight sm:text-4xl" style={{ color: NAVY }}>
-            INVOICE
-          </p>
-          <div className="mt-1.5 h-1 w-full rounded-full sm:ml-auto" style={{ backgroundColor: ACCENT }} />
-          <span className={`mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${statusStyle}`}>
-            {invoice.status}
-          </span>
+        <div className="flex shrink-0 items-start gap-6 sm:border-l sm:border-slate-200 sm:pl-8">
+          <div>
+            <p className="text-4xl font-black tracking-tight sm:text-5xl" style={{ color: DARK }}>
+              INVOICE
+            </p>
+            <div className="mt-2 h-1.5 w-3/4 rounded-full" style={{ backgroundColor: ACCENT }} />
+            <span className={`mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide print:hidden ${statusStyle}`}>
+              {invoice.status}
+            </span>
+          </div>
         </div>
       </div>
 
+      {/* Bill to and the invoice facts. */}
       <div className="grid gap-5 px-8 pb-8 sm:grid-cols-2 sm:px-10">
-        <div className="relative rounded-lg p-5" style={{ backgroundColor: PANEL }}>
-          <Building2 className="absolute right-4 top-4 size-5 text-slate-300" />
+        <div className="rounded-xl p-5" style={{ backgroundColor: PANEL }}>
           <p className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: ACCENT }}>
             Bill to
           </p>
-          <p className="text-base font-bold uppercase" style={{ color: NAVY }}>
+          <p className="text-base font-extrabold uppercase" style={{ color: DARK }}>
             {invoice.client_name ?? `Client #${invoice.client_id}`}
           </p>
-          {invoice.client_contact_person ? (
-            <p className="mt-1 text-sm text-muted-foreground print:text-slate-600">{invoice.client_contact_person}</p>
-          ) : null}
-          {invoice.client_address ? (
-            <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground print:text-slate-600">{invoice.client_address}</p>
-          ) : null}
-          {invoice.client_phone ? (
-            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground print:text-slate-600">
-              <Phone className="size-3.5 shrink-0" style={{ color: ACCENT }} />
-              {invoice.client_phone}
-            </p>
-          ) : null}
-          {invoice.client_email ? (
-            <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground print:text-slate-600">
-              <Mail className="size-3.5 shrink-0" style={{ color: ACCENT }} />
-              {invoice.client_email}
-            </p>
+          {invoice.client_contact_person ? <p className="mt-1 text-sm text-slate-600">{invoice.client_contact_person}</p> : null}
+          {invoice.client_address ? <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{invoice.client_address}</p> : null}
+          {invoice.client_phone || invoice.client_email ? (
+            <div className="mt-5 space-y-1.5">
+              {invoice.client_phone ? (
+                <p className="flex items-center gap-2.5 text-sm text-slate-700">
+                  <Phone className="size-3.5 shrink-0" style={{ color: DARK }} />
+                  {invoice.client_phone}
+                </p>
+              ) : null}
+              {invoice.client_email ? (
+                <p className="flex items-center gap-2.5 text-sm text-slate-700">
+                  <Mail className="size-3.5 shrink-0" style={{ color: DARK }} />
+                  {invoice.client_email}
+                </p>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
-        <div className="rounded-lg border border-border print:border-slate-200 p-5">
-          <dl className="space-y-0">
+        <div className="rounded-xl border border-slate-200 p-5">
+          <dl>
             {meta.map((m) => (
-              <div key={m.label} className="flex items-baseline justify-between gap-4 border-b border-slate-100 py-2 last:border-b-0">
-                <dt className="text-sm font-semibold text-foreground/90 print:text-slate-700">{m.label}:</dt>
-                <dd className="text-right text-sm text-muted-foreground print:text-slate-600">{m.value}</dd>
+              <div key={m.label} className="flex items-baseline justify-between gap-4 border-b border-slate-200 py-2">
+                <dt className="text-sm font-semibold text-slate-800">{m.label}:</dt>
+                <dd className="text-right text-sm text-slate-700">{m.value || ' '}</dd>
               </div>
             ))}
           </dl>
-          <div className="mt-3 flex items-center justify-between gap-4 rounded-md p-3" style={{ backgroundColor: SOFT }}>
+          <div className="mt-4 flex items-center justify-between gap-4 rounded-lg px-3 py-3" style={{ backgroundColor: SOFT }}>
             <span className="text-sm font-bold" style={{ color: ACCENT }}>
-              Amount Due (GBP):
+              {paid > 0 || credited > 0 ? 'Balance Due (GBP):' : 'Amount Due (GBP):'}
             </span>
-            <span className="text-xl font-extrabold tabular-nums" style={{ color: NAVY }}>
+            <span className="text-2xl font-extrabold tabular-nums" style={{ color: DARK }}>
               {fmtMoney(amountDue)}
             </span>
           </div>
         </div>
       </div>
 
+      {/* Lines: one row per kind of shift per day. */}
       <div className="px-8 sm:px-10">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-t-lg">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr style={{ backgroundColor: ACCENT }}>
-                {(
-                  [
-                    ['date', headers.date],
-                    ['description', headers.description],
-                    ['shift_timing', headers.shift_timing],
-                    ['operatives', headers.operatives],
-                    ['hours', headers.hours],
-                    ['rate', headers.rate],
-                    ['amount', headers.amount],
-                  ] as const
-                ).map(([key, label]) => (
-                  <th
-                    key={key}
-                    className={`p-3 text-xs font-bold uppercase tracking-wider text-white ${
-                      key === 'operatives' ? 'text-center' : key === 'hours' || key === 'rate' || key === 'amount' ? 'text-right' : 'text-left'
-                    }`}
-                  >
+                {columns.map(([key, label, align]) => (
+                  <th key={key} className={`px-4 py-3 text-xs font-bold uppercase tracking-wider text-white ${align}`}>
                     {editableHeaders && onHeadersChange ? (
                       <input
-                        className="w-full bg-transparent text-center uppercase outline-none placeholder:text-white/70"
+                        className={`w-full bg-transparent uppercase outline-none placeholder:text-white/70 ${align}`}
                         value={label}
-                        onChange={(e) => {
-                          const next = { ...headers, [key]: e.target.value };
-                          setHeaders(next);
-                        }}
+                        onChange={(e) => setHeaders({ ...headers, [key]: e.target.value })}
                         onBlur={(e) => onHeadersChange({ ...headers, [key]: e.target.value })}
                       />
                     ) : (
@@ -240,131 +264,125 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
             <tbody>
               {dayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="border-b border-slate-200 p-6 text-center text-muted-foreground print:text-slate-500">
+                  <td colSpan={columns.length} className="border-b border-slate-200 p-6 text-center text-slate-500">
                     No line items
                   </td>
                 </tr>
               ) : (
-                dayRows.map((row, idx) => (
-                  <tr key={row.key} className="border-b border-border print:border-slate-200" style={{ backgroundColor: idx % 2 ? PANEL : '#fff' }}>
-                    <td className="p-3 whitespace-nowrap text-foreground print:text-slate-800">{row.shiftDate ? row.label : '—'}</td>
-                    <td className="p-3 text-foreground print:text-slate-800">
-                      <span className="font-semibold">{row.description}</span>
-                      {row.siteNames.length ? (
-                        <span className="mt-0.5 block text-xs text-muted-foreground print:text-slate-500">{row.siteNames.join(', ')}</span>
-                      ) : null}
-                      {row.rateIsBlended ? (
-                        <span className="mt-0.5 block text-xs text-slate-400">Blended rate</span>
-                      ) : null}
-                    </td>
-                    <td className="p-3 whitespace-nowrap tabular-nums text-foreground print:text-slate-800">
-                      {row.timings.length
-                        ? row.timings.map((t) => (
-                            <span key={t} className="block">
-                              {t}
-                            </span>
-                          ))
-                        : '—'}
-                    </td>
-                    <td className="p-3 text-center tabular-nums text-foreground print:text-slate-800">
-                      {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
-                    </td>
-                    <td className="p-3 text-right tabular-nums text-foreground print:text-slate-800">
-                      {row.hours > 0 ? Number(row.hours).toFixed(2) : '—'}
-                    </td>
-                    <td className="p-3 text-right tabular-nums text-foreground print:text-slate-800">
-                      {row.rate != null ? fmtMoney(row.rate) : '—'}
-                    </td>
-                    <td className="p-3 text-right font-semibold tabular-nums text-foreground print:text-slate-900">{fmtMoney(row.amount)}</td>
-                  </tr>
-                ))
+                dayRows.map((row, idx) => {
+                  const desc = row.description && row.description.trim().toLowerCase() !== DEFAULT_DESCRIPTION ? row.description : '';
+                  const detail = [
+                    row.shiftDate ? desc : '',
+                    row.timings.join(', '),
+                    multiSite ? row.siteNames.join(', ') : '',
+                  ].filter(Boolean);
+                  return (
+                    <tr key={row.key} className="border-b border-slate-200" style={{ backgroundColor: idx % 2 ? PANEL : '#fff' }}>
+                      <td className="px-4 py-3.5 text-slate-800">
+                        <span className={row.shiftDate ? 'whitespace-nowrap' : 'font-semibold'}>
+                          {row.shiftDate ? fmtLongDate(row.shiftDate) : row.description || row.label}
+                        </span>
+                        {detail.length ? <span className="mt-0.5 block text-xs text-slate-500">{detail.join(' · ')}</span> : null}
+                      </td>
+                      <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">
+                        {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
+                      </td>
+                      <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.hours > 0 ? fmtHours(row.hours) : '—'}</td>
+                      <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.rate != null ? fmtMoney(row.rate) : '—'}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-slate-800">{fmtMoney(row.amount)}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
+      {/* Notes (only when there are some) and the totals panel. */}
       <div className="grid gap-5 px-8 py-6 sm:grid-cols-2 sm:px-10">
-        <div className="rounded-lg p-4" style={{ backgroundColor: PANEL }}>
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: ACCENT }}>
-            Notes / Terms
-          </p>
-          <p className="whitespace-pre-line text-sm text-foreground/90 print:text-slate-700">
-            {invoice.notes || 'Payment is due within 30 days of the invoice date.\nPlease quote the invoice number as your payment reference.\nThank you for your business.'}
-          </p>
-          {invoice.rota_review ? (
-            <div className="mt-3 border-t border-border print:border-slate-200 pt-3">
-              <p className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground print:text-slate-500">Rota Review</p>
-              <p className="whitespace-pre-line text-sm text-muted-foreground print:text-slate-600">{invoice.rota_review}</p>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="w-full sm:justify-self-end sm:max-w-sm">
-          <div className="rounded-lg bg-card print:bg-white p-4 text-sm">
-            <div className="flex justify-between py-1">
-              <span className="text-muted-foreground print:text-slate-600">Subtotal:</span>
-              <span className="font-semibold tabular-nums">{fmtMoney(invoice.subtotal)}</span>
-            </div>
-            <div className="flex justify-between border-b border-border print:border-slate-200 py-1 pb-2">
-              <span className="text-muted-foreground print:text-slate-600">VAT {invoice.tax_rate}%:</span>
-              <span className="font-semibold tabular-nums">{fmtMoney(invoice.tax_amount)}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between rounded-md p-3" style={{ backgroundColor: SOFT }}>
-              <span className="font-bold" style={{ color: ACCENT }}>
-                Total Due (GBP):
-              </span>
-              <span className="text-xl font-extrabold tabular-nums" style={{ color: NAVY }}>
-                {fmtMoney(invoice.total)}
-              </span>
-            </div>
-            {paid > 0 || credited > 0 ? (
-              <div className="mt-2 space-y-1">
-                {paid > 0 ? (
-                  <div className="flex justify-between text-green-700">
-                    <span>Amount paid</span>
-                    <span className="tabular-nums">{fmtMoney(paid)}</span>
-                  </div>
-                ) : null}
-                {credited > 0 ? (
-                  <div className="flex justify-between text-sky-700">
-                    <span>Credits applied</span>
-                    <span className="tabular-nums">{fmtMoney(credited)}</span>
-                  </div>
-                ) : null}
-                <div className="flex justify-between font-semibold" style={{ color: ACCENT }}>
-                  <span>Balance due</span>
-                  <span className="tabular-nums">{fmtMoney(balance)}</span>
-                </div>
+        {hasNotes ? (
+          <div className="rounded-xl p-4" style={{ backgroundColor: PANEL }}>
+            {invoice.notes?.trim() ? (
+              <>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: ACCENT }}>
+                  Notes
+                </p>
+                <p className="whitespace-pre-line text-sm text-slate-700">{invoice.notes}</p>
+              </>
+            ) : null}
+            {invoice.rota_review?.trim() ? (
+              <div className={invoice.notes?.trim() ? 'mt-3 border-t border-slate-200 pt-3' : ''}>
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Rota Review</p>
+                <p className="whitespace-pre-line text-sm text-slate-600">{invoice.rota_review}</p>
               </div>
             ) : null}
           </div>
+        ) : (
+          <div className="hidden sm:block" />
+        )}
+
+        <div className="w-full rounded-xl p-4 text-sm sm:justify-self-end sm:max-w-sm" style={{ backgroundColor: PANEL }}>
+          <div className="flex justify-between py-1.5">
+            <span className="text-slate-700">Subtotal:</span>
+            <span className="font-bold tabular-nums">{fmtMoney(invoice.subtotal)}</span>
+          </div>
+          <div className="flex justify-between border-b border-slate-200 py-1.5 pb-3">
+            <span className="text-slate-700">VAT {invoice.tax_rate}%:</span>
+            <span className="font-bold tabular-nums">{fmtMoney(invoice.tax_amount)}</span>
+          </div>
+          <div className="mt-3 flex items-center justify-between rounded-lg px-3 py-3" style={{ backgroundColor: SOFT }}>
+            <span className="font-bold" style={{ color: ACCENT }}>
+              TOTAL DUE (GBP):
+            </span>
+            <span className="text-2xl font-extrabold tabular-nums" style={{ color: DARK }}>
+              {fmtMoney(invoice.total)}
+            </span>
+          </div>
+          {paid > 0 || credited > 0 ? (
+            <div className="mt-2 space-y-1">
+              {paid > 0 ? (
+                <div className="flex justify-between text-green-700">
+                  <span>Amount paid</span>
+                  <span className="tabular-nums">{fmtMoney(paid)}</span>
+                </div>
+              ) : null}
+              {credited > 0 ? (
+                <div className="flex justify-between text-sky-700">
+                  <span>Credits applied</span>
+                  <span className="tabular-nums">{fmtMoney(credited)}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between font-semibold" style={{ color: ACCENT }}>
+                <span>Balance due</span>
+                <span className="tabular-nums">{fmtMoney(balance)}</span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
       {showAccountFooter ? (
         <div className="px-8 pb-6 sm:px-10">
-          <div className="grid gap-4 rounded-lg p-5 text-white sm:grid-cols-4" style={{ backgroundColor: NAVY }}>
-            <div className="border-l-4 pl-3 sm:col-span-1" style={{ borderColor: ACCENT }}>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-300">Payment details</p>
-              {invoice.bank_name ? <p className="mt-1 text-sm font-semibold">{invoice.bank_name}</p> : null}
+          <div className="flex flex-col gap-4 rounded-xl p-5 text-white sm:flex-row sm:items-center sm:justify-between" style={{ backgroundColor: DARK }}>
+            <div className="border-l-4 pl-4" style={{ borderColor: ACCENT }}>
+              <p className="text-sm font-bold uppercase tracking-wider">Payment details</p>
+              {invoice.bank_name ? <p className="mt-1.5 text-sm font-semibold">{invoice.bank_name}</p> : null}
               {invoice.account_name ? <p className="text-sm text-slate-300">Account Name: {invoice.account_name}</p> : null}
             </div>
-            {invoice.account_number ? (
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">Account Number</p>
-                <p className="text-base font-bold tabular-nums">{invoice.account_number}</p>
-              </div>
-            ) : null}
-            {invoice.sort_code ? (
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-400">Sort Code</p>
-                <p className="text-base font-bold tabular-nums">{invoice.sort_code}</p>
-              </div>
-            ) : null}
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Payment Reference</p>
-              <p className="text-base font-bold">INV-{invoice.id}</p>
+            <div className="flex flex-wrap gap-3">
+              {invoice.account_number ? (
+                <div className="min-w-[150px] rounded-lg bg-white/10 px-4 py-2.5">
+                  <p className="text-xs text-slate-300">Account No.</p>
+                  <p className="text-lg font-bold tabular-nums">{invoice.account_number}</p>
+                </div>
+              ) : null}
+              {invoice.sort_code ? (
+                <div className="min-w-[130px] rounded-lg bg-white/10 px-4 py-2.5">
+                  <p className="text-xs text-slate-300">Sort Code</p>
+                  <p className="text-lg font-bold tabular-nums">{invoice.sort_code}</p>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -372,15 +390,15 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
 
       {(invoice.credit_notes?.filter((c) => c.status !== 'cancelled').length ?? 0) > 0 ? (
         <div className="px-8 pb-8 sm:px-10">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground print:text-slate-500">Credit notes</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Credit notes</p>
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-muted/50 print:bg-slate-50">
-                <th className="border border-border print:border-slate-200 p-2 text-left">Date</th>
-                <th className="border border-border print:border-slate-200 p-2 text-left">Number</th>
-                <th className="border border-border print:border-slate-200 p-2 text-left">Reason</th>
-                <th className="border border-border print:border-slate-200 p-2 text-left">Status</th>
-                <th className="border border-border print:border-slate-200 p-2 text-right">Amount</th>
+              <tr className="bg-slate-50">
+                <th className="border border-slate-200 p-2 text-left">Date</th>
+                <th className="border border-slate-200 p-2 text-left">Number</th>
+                <th className="border border-slate-200 p-2 text-left">Reason</th>
+                <th className="border border-slate-200 p-2 text-left">Status</th>
+                <th className="border border-slate-200 p-2 text-right">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -388,13 +406,11 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                 .filter((c) => c.status !== 'cancelled')
                 .map((c) => (
                   <tr key={c.id}>
-                    <td className="border border-border print:border-slate-200 p-2">
-                      {c.credit_date ? formatDateUK(c.credit_date) : '—'}
-                    </td>
-                    <td className="border border-border print:border-slate-200 p-2">{c.number}</td>
-                    <td className="border border-border print:border-slate-200 p-2">{c.reason || '—'}</td>
-                    <td className="border border-border print:border-slate-200 p-2 capitalize">{c.status}</td>
-                    <td className="border border-border print:border-slate-200 p-2 text-right tabular-nums">{fmtMoney(c.total)}</td>
+                    <td className="border border-slate-200 p-2">{c.credit_date ? formatDateUK(c.credit_date) : '—'}</td>
+                    <td className="border border-slate-200 p-2">{c.number}</td>
+                    <td className="border border-slate-200 p-2">{c.reason || '—'}</td>
+                    <td className="border border-slate-200 p-2 capitalize">{c.status}</td>
+                    <td className="border border-slate-200 p-2 text-right tabular-nums">{fmtMoney(c.total)}</td>
                   </tr>
                 ))}
             </tbody>
@@ -402,18 +418,17 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
         </div>
       ) : null}
 
-      <div className="relative flex flex-col gap-2 border-t border-slate-200 px-8 py-5 text-xs text-muted-foreground print:text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-10">
+      <div className="mx-8 flex flex-col gap-2 border-t border-slate-200 py-5 text-xs text-slate-600 sm:mx-10 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-0.5">
           {invoice.company_vat_number ? <p>VAT Registration Number: {invoice.company_vat_number}</p> : null}
-          {invoice.company_registration_number ? (
-            <p>Company Registration Number: {invoice.company_registration_number}</p>
-          ) : null}
+          {invoice.company_registration_number ? <p>Company Registration Number: {invoice.company_registration_number}</p> : null}
         </div>
-        <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm font-bold tracking-wide text-foreground/90 print:text-slate-700">
-          ControlOps
+        <p className="border-slate-300 sm:border-l sm:pl-4">
+          Invoice #{invoice.id} <span className="mx-1.5 text-slate-300">|</span> Page 1 of 1
         </p>
-        <p>Invoice #{invoice.id}</p>
       </div>
+
+      <EdgeBand side="bottom" />
     </div>
   );
 }

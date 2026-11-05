@@ -25,6 +25,7 @@ def _company_contact(company: Company, admin: Optional[User]) -> tuple[str, str,
 
 ACCENT_HEX = "#D7141A"
 DARK_HEX = "#1F1F1F"
+NAVY_HEX = DARK_HEX  # statement PDF still imports the old name
 SOFT_HEX = "#FDECEC"
 PANEL_HEX = "#F4F4F5"
 DEFAULT_DESCRIPTION = "security services"

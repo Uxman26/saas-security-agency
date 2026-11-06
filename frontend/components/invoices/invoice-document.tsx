@@ -7,6 +7,7 @@ import { formatDateUK } from '@/lib/date-format';
 import { hasInvoiceAccountDetails } from '@/lib/invoice-account';
 import { groupInvoiceLines } from '@/lib/invoice-lines';
 import { storageGet } from '@/lib/safe-storage';
+import { formatInvoiceMoney, invoiceCurrencyCode } from '@/lib/invoice-currency';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ACCENT = '#F45100';
@@ -23,10 +24,6 @@ const DEFAULT_HEADERS = {
   rate: 'Rate',
   amount: 'Amount',
 };
-
-function fmtMoney(n: number) {
-  return `£${n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function fmtLongDate(value?: string | null) {
   if (!value) return '—';
@@ -59,6 +56,8 @@ type Props = {
 };
 
 export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHeaders, onHeadersChange }: Props) {
+  const currencyCode = invoiceCurrencyCode(invoice.currency);
+  const fmtMoney = (n: number) => formatInvoiceMoney(n, currencyCode);
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
   const [headers, setHeaders] = useState({ ...DEFAULT_HEADERS, ...(invoice.column_headers || {}) });
 
@@ -197,7 +196,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
           </dl>
           <div className="mt-3 flex items-center justify-between gap-4 rounded-md p-3" style={{ backgroundColor: SOFT }}>
             <span className="text-sm font-bold" style={{ color: ACCENT }}>
-              Amount Due (GBP):
+              Amount Due ({currencyCode}):
             </span>
             <span className="text-xl font-extrabold tabular-nums" style={{ color: NAVY }}>
               {fmtMoney(amountDue)}
@@ -312,7 +311,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
             </div>
             <div className="mt-2 flex items-center justify-between rounded-md p-3" style={{ backgroundColor: SOFT }}>
               <span className="font-bold" style={{ color: ACCENT }}>
-                Total Due (GBP):
+                Total Due ({currencyCode}):
               </span>
               <span className="text-xl font-extrabold tabular-nums" style={{ color: NAVY }}>
                 {fmtMoney(invoice.total)}

@@ -84,10 +84,68 @@ def ensure_roles_for_company(db: Session, company_id: int) -> None:
         # This function runs whenever a site, client or staff login is created, so that
         # would quietly undo permission changes days after they were made.
         if db.query(RoleModuleAction.id).filter(RoleModuleAction.role_id == role.id).first():
+            if role.slug == "staff":
+                _grant_staff_task_access(db, role)
             continue
         coarse = matrix_from_permissions_json(role.permissions_json)
         sync_role_permissions_from_matrix(db, role, expand_coarse_matrix_to_app_modules(coarse, modules))
+        if role.slug == "staff":
+            _grant_staff_task_access(db, role)
     db.flush()
+
+
+def _tasks_matrix_cell(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    matrix = data.get("matrix") if isinstance(data, dict) else None
+    if not isinstance(matrix, dict):
+        return None
+    cell = matrix.get("tasks")
+    return cell if isinstance(cell, dict) else None
+
+
+def _grant_staff_task_access(db: Session, role: Role) -> None:
+    from app.models import AppModule, RoleModuleAction
+
+    cell = _tasks_matrix_cell(role.permissions_json)
+    if cell is not None and cell.get("view") is False:
+        return
+    module = db.query(AppModule).filter(AppModule.key == "tasks").first()
+    if not module:
+        return
+    rows = {
+        row.action_key: row
+        for row in db.query(RoleModuleAction)
+        .filter(RoleModuleAction.role_id == role.id, RoleModuleAction.module_id == module.id)
+        .all()
+    }
+    custom = any(rows.get(key) and rows[key].allowed for key in ("create", "edit", "delete", "assign"))
+    both_off = all(rows.get(key) is None or not rows[key].allowed for key in ("view", "complete"))
+    may_fill = not custom and (cell is None or (cell.get("view") is True and both_off))
+    changed = False
+    for key in ("view", "complete"):
+        row = rows.get(key)
+        if row is None:
+            db.add(RoleModuleAction(role_id=role.id, module_id=module.id, action_key=key, allowed=True))
+            changed = True
+        elif not row.allowed and may_fill:
+            row.allowed = True
+            changed = True
+    if changed and cell is None:
+        try:
+            data = json.loads(role.permissions_json or "{}")
+        except json.JSONDecodeError:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        matrix = data.get("matrix") if isinstance(data.get("matrix"), dict) else {}
+        matrix["tasks"] = {"view": True, "create": False, "edit": False, "delete": False}
+        data["matrix"] = matrix
+        role.permissions_json = json.dumps(data, sort_keys=True)
 
 
 def ensure_roles_for_all_companies(db: Session) -> None:

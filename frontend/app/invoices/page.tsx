@@ -24,6 +24,7 @@ import { can, canModule } from '@/lib/permissions';
 import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
 import { formatDateUK, localDateKey } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
+import { INVOICE_CURRENCIES, formatInvoiceMoney, invoiceCurrencyCode } from '@/lib/invoice-currency';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
 import {
   DashboardHeader,
@@ -75,10 +76,10 @@ const emptyCustomLine = (): CustomLineDraft => ({
   rate: '0',
 });
 
-function formatGbp(n: unknown): string {
+function formatGbp(n: unknown, currency = 'GBP'): string {
   const v = typeof n === 'number' ? n : Number(n);
-  if (!Number.isFinite(v) || Math.abs(v) > 1e12) return '£—';
-  return `£${v.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (!Number.isFinite(v) || Math.abs(v) > 1e12) return '—';
+  return formatInvoiceMoney(v, currency);
 }
 
 export default function InvoicesPage() {
@@ -97,6 +98,8 @@ export default function InvoicesPage() {
   const [genEnd, setGenEnd] = useState('');
   const [genLoading, setGenLoading] = useState(false);
   const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
+  const [genCurrency, setGenCurrency] = useState('GBP');
+  const [customCurrency, setCustomCurrency] = useState('GBP');
   const [customOpen, setCustomOpen] = useState(false);
 
   useEffect(() => {
@@ -267,6 +270,7 @@ export default function InvoicesPage() {
         rota_review: customRotaReview.trim() || undefined,
         client_bank_account_id: customBankId ? parseInt(customBankId, 10) : undefined,
         tax_rate: parseFloat(customTaxRate) || 0,
+        currency: customCurrency,
         lines: lines.map((l) => {
           const hours = parseFloat(l.hours) || 0;
           const rate = parseFloat(l.rate) || 0;
@@ -311,6 +315,7 @@ export default function InvoicesPage() {
         period_end: genEnd,
         ...(force ? { force: true } : {}),
         break_mode: genBreakMode,
+        currency: genCurrency,
         ...toWorkFilterParams(genNarrow),
         ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
@@ -486,6 +491,45 @@ export default function InvoicesPage() {
 
   const unpaidCount = invoiceStats.filter((i) => ['sent', 'unpaid', 'overdue', 'partial'].includes(i.status)).length;
   const draftCount = invoiceStats.filter((i) => i.status === 'draft').length;
+  const currencyCodes = new Set(invoiceStats.map((i) => invoiceCurrencyCode(i.currency)));
+  const statMoney = (n: number) => (currencyCodes.size > 1 ? 'Mixed' : formatGbp(n, [...currencyCodes][0] || 'GBP'));
+  const openInvoices = invoiceStats.filter((i) => ['sent', 'unpaid', 'overdue', 'partial'].includes(i.status));
+  const overdueAmount = openInvoices
+    .filter((i) => i.status === 'overdue' || isInvoicePastDue(i))
+    .reduce((sum, i) => sum + (i.balance_due ?? Math.max(0, i.total - (i.amount_paid ?? 0) - (i.credit_applied ?? 0))), 0);
+  const dueSoonAmount = openInvoices
+    .filter((i) => {
+      if (!i.due_date || i.status === 'overdue' || isInvoicePastDue(i)) return false;
+      const due = new Date(`${i.due_date}T12:00:00`).getTime();
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
+      const diff = Math.round((due - today.getTime()) / 86400000);
+      return diff >= 0 && diff <= 30;
+    })
+    .reduce((sum, i) => sum + (i.balance_due ?? Math.max(0, i.total - (i.amount_paid ?? 0) - (i.credit_applied ?? 0))), 0);
+  const paidForAverage = invoiceStats.filter((i) => i.status === 'paid' && i.created_at && i.updated_at);
+  const averageDays =
+    paidForAverage.length === 0
+      ? null
+      : Math.round(
+          paidForAverage.reduce((sum, i) => {
+            const start = new Date(i.created_at).getTime();
+            const end = new Date(i.updated_at || i.created_at).getTime();
+            return sum + Math.max(0, (end - start) / 86400000);
+          }, 0) / paidForAverage.length
+        );
+  const unpaidShare = new Map<number, string>();
+  const byCustomer = new Map<string, Invoice[]>();
+  for (const inv of openInvoices) {
+    const key = String(inv.client_id ?? inv.client_name ?? 'none');
+    const list = byCustomer.get(key) ?? [];
+    list.push(inv);
+    byCustomer.set(key, list);
+  }
+  for (const list of byCustomer.values()) {
+    if (list.length < 2) continue;
+    list.forEach((inv, index) => unpaidShare.set(inv.id, `${index + 1} of ${list.length}`));
+  }
 
   const formatInvoiceDate = (inv: Invoice) => {
     const raw = inv.created_at ?? inv.period_end;
@@ -554,7 +598,7 @@ export default function InvoicesPage() {
     {
       key: 'total',
       label: 'Total invoiced',
-      value: formatGbp(totalAmount),
+      value: statMoney(totalAmount),
       icon: ReceiptText,
       tone: 'neutral',
       caption: `${invoiceStats.length} invoice${invoiceStats.length === 1 ? '' : 's'}`,
@@ -562,14 +606,14 @@ export default function InvoicesPage() {
     {
       key: 'paid',
       label: 'Paid',
-      value: formatGbp(paidAmount),
+      value: statMoney(paidAmount),
       icon: CheckCircle2,
       tone: 'positive',
     },
     {
       key: 'outstanding',
       label: 'Outstanding',
-      value: formatGbp(outstanding),
+      value: statMoney(outstanding),
       icon: Wallet,
       tone: 'warning',
       caption: `${unpaidCount} unpaid`,
@@ -588,7 +632,7 @@ export default function InvoicesPage() {
     {
       key: 'draft',
       label: 'Draft',
-      value: formatGbp(draftTotal),
+      value: statMoney(draftTotal),
       icon: FilePlus2,
       tone: 'muted',
       caption: `${draftCount} draft${draftCount === 1 ? '' : 's'}`,
@@ -687,6 +731,21 @@ export default function InvoicesPage() {
                             value={customTaxRate}
                             onChange={(e) => setCustomTaxRate(e.target.value)}
                           />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Currency</Label>
+                          <Select value={customCurrency} onValueChange={setCustomCurrency}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {INVOICE_CURRENCIES.map((c) => (
+                                <SelectItem key={c.code} value={c.code}>
+                                  {c.code} — {c.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="space-y-1 sm:col-span-2">
                           <Label>Bank account</Label>
@@ -1006,6 +1065,24 @@ export default function InvoicesPage() {
                       </p>
                     </div>
                     <div className="space-y-1">
+                      <Label>Currency</Label>
+                      <Select value={genCurrency} onValueChange={setGenCurrency}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {INVOICE_CURRENCIES.map((c) => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.code} — {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Amounts stay in this currency. They are not converted.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
                       <Label>Narrow by (optional)</Label>
                       <p className="text-xs text-muted-foreground">
                         Leave blank to bill every shift in the period. Generating by client already
@@ -1044,6 +1121,21 @@ export default function InvoicesPage() {
           />
 
           <StatCards cards={statCards} />
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">Overdue</p>
+              <p className="text-lg font-semibold tabular-nums">{statMoney(overdueAmount)}</p>
+            </div>
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">Due within 30 days</p>
+              <p className="text-lg font-semibold tabular-nums">{statMoney(dueSoonAmount)}</p>
+            </div>
+            <div className="rounded-lg border bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">Average days to get paid</p>
+              <p className="text-lg font-semibold tabular-nums">{averageDays == null ? '—' : averageDays}</p>
+            </div>
+          </div>
 
           <ModuleTabs
             tabs={[
@@ -1166,7 +1258,7 @@ export default function InvoicesPage() {
                           {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
                         </Pill>
                       </div>
-                      <p className="mt-3 text-xl font-bold tabular-nums">{formatGbp(inv.total)}</p>
+                      <p className="mt-3 text-xl font-bold tabular-nums">{formatGbp(inv.total, inv.currency)}</p>
                       <p className="text-xs text-muted-foreground">Due {formatDueLabel(inv)}</p>
                       <div className="mt-3 flex justify-end">
                         <RowActionsMenu actions={rowActions(inv)} label={`Invoice ${inv.id} actions`} />
@@ -1184,6 +1276,7 @@ export default function InvoicesPage() {
                         <SortableHead label="Date" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Number" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Customer" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <TableHead>Unpaid by customer</TableHead>
                         <SortableHead label="Amount due" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead className="text-right w-[120px]">Actions</TableHead>
                       </TableRow>
@@ -1228,10 +1321,20 @@ export default function InvoicesPage() {
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>
                           <TableCell className="font-medium tabular-nums">#{inv.id}</TableCell>
-                          <TableCell className="font-medium max-w-[200px] truncate" title={customer}>
-                            {customer}
+                          <TableCell className="font-medium max-w-[220px]">
+                            <div className="group relative truncate" title={customer}>
+                              {customer}
+                              <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-64 rounded-md border bg-popover p-3 text-xs text-popover-foreground shadow-md group-hover:block">
+                                <p className="font-medium">{customer}</p>
+                                <p className="mt-1 text-muted-foreground">{inv.account_name || 'No bank account on this invoice'}</p>
+                                {inv.bank_name ? <p>{inv.bank_name}</p> : null}
+                                {inv.sort_code ? <p>Sort code {inv.sort_code}</p> : null}
+                                {inv.account_number ? <p>Account {inv.account_number}</p> : null}
+                              </div>
+                            </div>
                           </TableCell>
-                          <TableCell className="font-semibold whitespace-nowrap tabular-nums">{formatGbp(safeBalance)}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{unpaidShare.get(inv.id) || '—'}</TableCell>
+                          <TableCell className="font-semibold whitespace-nowrap tabular-nums">{formatGbp(safeBalance, inv.currency)}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
                               <Button variant="ghost" size="icon" className="size-8" asChild title="View invoice">
@@ -1308,7 +1411,7 @@ export default function InvoicesPage() {
               <DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader>
               {payInvoice && (
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Invoice #{payInvoice.id} — balance £{(payInvoice.balance_due ?? payInvoice.total).toFixed(2)}</p>
+                  <p className="text-sm text-muted-foreground">Invoice #{payInvoice.id} — balance {formatGbp(payInvoice.balance_due ?? payInvoice.total, payInvoice.currency)}</p>
                   <div className="space-y-1">
                     <Label>Amount</Label>
                     <Input type="number" step="0.01" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />

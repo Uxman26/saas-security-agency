@@ -34,7 +34,7 @@ import {
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, type SortDir } from '@/lib/use-table-list';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import type { RotaPlanListItem } from '@/lib/types';
+import type { RotaDetail, RotaPlanListItem } from '@/lib/types';
 import {
   CalendarDays,
   CalendarRange,
@@ -169,6 +169,9 @@ function RotaHubPage() {
   }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
+  const [onlyNeedsMark, setOnlyNeedsMark] = useState(false);
+  const [markShifts, setMarkShifts] = useState<RotaDetail[] | null>(null);
+  const [markShiftsLoading, setMarkShiftsLoading] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -186,7 +189,7 @@ function RotaHubPage() {
   useEffect(() => {
     setPage(1);
     setSelectedIds(new Set());
-  }, [tab, nameFilter, rangeFrom, rangeTo, statusFilter, workFilters]);
+  }, [tab, nameFilter, rangeFrom, rangeTo, statusFilter, workFilters, onlyNeedsMark]);
 
   const tabRotas = useMemo(
     () =>
@@ -202,14 +205,22 @@ function RotaHubPage() {
     [rotas, tab, statusFilter, nameFilter, rangeFrom, rangeTo]
   );
 
+  const unmarkedRotas = useMemo(
+    () => tabRotas.filter((r) => (r.unmarked_attendance_count ?? 0) > 0),
+    [tabRotas]
+  );
+  const unmarkedShiftTotal = unmarkedRotas.reduce((n, r) => n + (r.unmarked_attendance_count ?? 0), 0);
+  const showOnlyMarks = onlyNeedsMark && unmarkedShiftTotal > 0;
+  const listedRotas = showOnlyMarks ? unmarkedRotas : tabRotas;
+
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(tabRotas.map((r) => r.id));
+      const valid = new Set(listedRotas.map((r) => r.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [tabRotas]);
+  }, [listedRotas]);
 
   const getSortValue = useCallback((r: RotaPlanListItem, key: string) => {
     switch (key) {
@@ -235,7 +246,7 @@ function RotaHubPage() {
   }, []);
 
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
-    tabRotas,
+    listedRotas,
     '',
     sortKey,
     sortDir,
@@ -244,6 +255,45 @@ function RotaHubPage() {
     (r) => r.name,
     getSortValue
   );
+
+  useEffect(() => {
+    if (!showOnlyMarks) {
+      setMarkShifts(null);
+      return;
+    }
+    if (unmarkedRotas.length === 0) {
+      setMarkShifts([]);
+      return;
+    }
+    const start = [...unmarkedRotas.map((r) => r.start_date)].sort()[0];
+    const londonToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
+    let cancelled = false;
+    setMarkShiftsLoading(true);
+    api.assignments
+      .rotaDetail({ start_date: start, end_date: londonToday, ...toWorkFilterParams(workFilters) })
+      .then((rows) => {
+        if (cancelled) return;
+        const planIds = new Set(unmarkedRotas.map((r) => r.id));
+        setMarkShifts(
+          rows.filter(
+            (s) =>
+              s.id > 0 &&
+              planIds.has(s.rota_plan_id ?? -1) &&
+              s.attendance_marked !== true &&
+              s.attendance_status !== 'scheduled'
+          )
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setMarkShifts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMarkShiftsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showOnlyMarks, unmarkedRotas, workFilters]);
 
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount));
@@ -462,7 +512,7 @@ function RotaHubPage() {
       value: tabRotas.reduce((n, r) => n + (r.unmarked_attendance_count ?? 0), 0),
       icon: Clock,
       tone: tabRotas.some((r) => (r.unmarked_attendance_count ?? 0) > 0) ? 'danger' : 'positive',
-      caption: 'shifts past with no mark',
+      caption: 'started with no mark',
     },
     {
       key: 'running',
@@ -551,6 +601,25 @@ function RotaHubPage() {
               </div>
             </div>
 
+            {unmarkedShiftTotal > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100">
+                <p>
+                  {unmarkedRotas.length} rota{unmarkedRotas.length === 1 ? '' : 's'} still{' '}
+                  {unmarkedRotas.length === 1 ? 'needs' : 'need'} attendance marking · {unmarkedShiftTotal} shift
+                  {unmarkedShiftTotal === 1 ? '' : 's'} started with no attendance. They count as unworked for pay and
+                  invoicing until marked.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={onlyNeedsMark ? 'default' : 'outline'}
+                  onClick={() => setOnlyNeedsMark((on) => !on)}
+                >
+                  {onlyNeedsMark ? 'Show all rotas' : 'Show only these'}
+                </Button>
+              </div>
+            ) : null}
+
             <ResultsCard
               title={tabs.find((t) => t.id === tab)?.label ?? 'Rotas'}
               count={total}
@@ -600,6 +669,52 @@ function RotaHubPage() {
               }
             >
               <div className="p-4">
+                {showOnlyMarks ? (
+                  <div className="mb-4 overflow-x-auto rounded-md border">
+                    <div className="border-b px-3 py-2 text-sm font-medium">Shifts needing attendance</div>
+                    {markShiftsLoading ? (
+                      <p className="px-3 py-6 text-sm text-muted-foreground">Loading shifts…</p>
+                    ) : !markShifts || markShifts.length === 0 ? (
+                      <p className="px-3 py-6 text-sm text-muted-foreground">
+                        No shifts need a mark. A shift is listed here only after its UK start time has passed and
+                        attendance is still missing.
+                      </p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Staff</TableHead>
+                            <TableHead>Site</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Start</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Open</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {markShifts.map((s) => (
+                            <TableRow key={s.id}>
+                              <TableCell className="font-medium">{s.guard_name}</TableCell>
+                              <TableCell>{s.site_name}</TableCell>
+                              <TableCell className="whitespace-nowrap">{s.date}</TableCell>
+                              <TableCell className="whitespace-nowrap">{s.shift_start || '—'}</TableCell>
+                              <TableCell className="capitalize">{s.attendance_status.replace('_', ' ')}</TableCell>
+                              <TableCell className="text-right">
+                                <Button size="sm" variant="outline" asChild>
+                                  <Link
+                                    href={`/rota/calendar?id=${s.rota_plan_id ?? ''}&emp=${s.guard_id}&date=${s.date}&start=${encodeURIComponent(s.shift_start || '')}&fix=attendance`}
+                                  >
+                                    Mark
+                                  </Link>
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                ) : null}
                 {loading ? (
                   <InlineTableSkeleton rows={5} />
                 ) : total === 0 ? (

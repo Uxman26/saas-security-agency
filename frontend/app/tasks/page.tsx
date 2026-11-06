@@ -31,7 +31,7 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
-import { formatDateUK } from '@/lib/date-format';
+import { formatDateTimeUK, formatDateUK } from '@/lib/date-format';
 
 const PRIORITIES = [
   { key: 'low', label: 'Low' },
@@ -320,8 +320,11 @@ export default function TasksPage() {
                             >
                               {STATUSES.find((s) => s.key === t.status)?.label ?? t.status}
                             </Pill>
-                            {t.status === 'done' && t.completed_by_name ? (
-                              <div className="text-muted-foreground">by {t.completed_by_name}</div>
+                            {t.status === 'done' && (t.completed_by_name || t.completed_at) ? (
+                              <div className="text-muted-foreground">
+                                {t.completed_by_name ? `by ${t.completed_by_name}` : 'Completed'}
+                                {t.completed_at ? ` · ${formatDateTimeUK(t.completed_at)}` : ''}
+                              </div>
                             ) : null}
                           </TableCell>
                           <TableCell>

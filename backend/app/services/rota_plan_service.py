@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, load_only
 
 from app.models import Assignment, Attendance, Client, Guard, RotaPlan, ShiftLateLog, Site
@@ -14,6 +14,7 @@ from app.services.company_service import get_company_by_user_id
 from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID
 from app.services.rate_service import normalize_pay_type
 from app.services.rota_service import _late_minutes, normalize_shift_type
+from app.services.shift_clock import london_now, shift_has_started
 from app.services.work_filters import WorkScope, resolve_work_scope
 
 
@@ -230,38 +231,41 @@ def _unpublished_staff_count(db: Session, plan: RotaPlan) -> int:
     return len(with_shifts - set(_published_guard_ids(db, plan.id)))
 
 
+def _unmarked_counts(db: Session, plan_ids: List[int], now: datetime) -> dict:
+    if not plan_ids:
+        return {}
+    rows = (
+        db.query(Assignment)
+        .filter(Assignment.rota_plan_id.in_(plan_ids), Assignment.date <= now.date())
+        .all()
+    )
+    if not rows:
+        return {}
+    ids = [row.id for row in rows]
+    att_map = {}
+    for att in db.query(Attendance).filter(Attendance.assignment_id.in_(ids)).all():
+        att_map.setdefault(att.assignment_id, att)
+    late_ids = {
+        row[0]
+        for row in db.query(ShiftLateLog.assignment_id).filter(ShiftLateLog.assignment_id.in_(ids)).distinct()
+    }
+    counts: dict = {}
+    for row in rows:
+        if row.id in late_ids:
+            continue
+        att = att_map.get(row.id)
+        if att and (att.booked_at or (att.status or "").strip()):
+            continue
+        if not shift_has_started(row.date, row.shift_start, now):
+            continue
+        counts[row.rota_plan_id] = counts.get(row.rota_plan_id, 0) + 1
+    return counts
+
+
 def _unmarked_attendance_count(db: Session, plan: RotaPlan) -> int:
-    """Shifts in this rota that have been and gone with nobody marking attendance.
-
-    A past shift with no attendance record reports as "absent" everywhere it is shown,
-    exactly like a deliberately marked absence — and it is held back from pay the same
-    way. Counting it here lets the rota list flag the rota that still needs marking,
-    instead of the omission only surfacing when payroll comes up short.
-
-    Drafts hold no assignments, so there is nothing to mark until they are published.
-    Matches the payroll preview's rule: anything not still in the future counts.
-    """
     if plan.status != "published":
         return 0
-    return (
-        db.query(func.count(func.distinct(Assignment.id)))
-        .outerjoin(Attendance, Attendance.assignment_id == Assignment.id)
-        .outerjoin(ShiftLateLog, ShiftLateLog.assignment_id == Assignment.id)
-        .filter(
-            Assignment.rota_plan_id == plan.id,
-            Assignment.date <= date.today(),
-            ShiftLateLog.id.is_(None),
-            or_(
-                Attendance.id.is_(None),
-                and_(
-                    Attendance.booked_at.is_(None),
-                    or_(Attendance.status.is_(None), Attendance.status == ""),
-                ),
-            ),
-        )
-        .scalar()
-        or 0
-    )
+    return int(_unmarked_counts(db, [plan.id], london_now()).get(plan.id, 0) or 0)
 
 
 def _to_list_item(db: Session, plan: RotaPlan, *, include_counts: bool = True) -> RotaPlanListItem:
@@ -359,25 +363,7 @@ def _to_list_items(db: Session, plans: List[RotaPlan]) -> List[RotaPlanListItem]
             .distinct()
         ):
             published_guards.setdefault(pid, set()).add(int(gid))
-        for pid, n in (
-            db.query(Assignment.rota_plan_id, func.count(func.distinct(Assignment.id)))
-            .outerjoin(Attendance, Attendance.assignment_id == Assignment.id)
-            .outerjoin(ShiftLateLog, ShiftLateLog.assignment_id == Assignment.id)
-            .filter(
-                Assignment.rota_plan_id.in_(published_ids),
-                Assignment.date <= date.today(),
-                ShiftLateLog.id.is_(None),
-                or_(
-                    Attendance.id.is_(None),
-                    and_(
-                        Attendance.booked_at.is_(None),
-                        or_(Attendance.status.is_(None), Attendance.status == ""),
-                    ),
-                ),
-            )
-            .group_by(Assignment.rota_plan_id)
-        ):
-            unmarked[pid] = n
+        unmarked = _unmarked_counts(db, published_ids, london_now())
 
     draft_site_lower: dict = {}
     company_id = plans[0].company_id

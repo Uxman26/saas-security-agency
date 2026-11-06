@@ -1103,6 +1103,8 @@ export interface RotaDetail {
   actual_hours?: number | null;
   payable_hours?: number | null;
   attendance_status: string;
+  attendance_marked?: boolean;
+  rota_plan_id?: number | null;
   late_minutes?: number | null;
 }
 
@@ -1785,6 +1787,7 @@ export interface Invoice {
   tax_rate: number;
   subtotal: number;
   tax_amount: number;
+  currency?: string;
   pdf_path?: string;
   created_at: string;
   updated_at?: string;
@@ -2203,6 +2206,7 @@ export interface RecurringInvoice {
   end_date?: string | null;
   next_run?: string | null;
   tax_rate: number;
+  currency?: string;
   notes?: string | null;
   template_json?: string | null;
   status: string;

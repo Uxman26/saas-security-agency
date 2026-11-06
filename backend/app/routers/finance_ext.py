@@ -154,6 +154,7 @@ class RecurringIn(BaseModel):
     notes: Optional[str] = None
     template_json: str = "[]"
     status: str = "active"
+    currency: str = "GBP"
 
 
 @router.get("/recurring-invoices")
@@ -171,6 +172,7 @@ def list_recurring(db: Session = Depends(get_db), user: User = Depends(require_m
             "end_date": r.end_date.isoformat() if r.end_date else None,
             "next_run": r.next_run.isoformat() if r.next_run else None,
             "tax_rate": r.tax_rate,
+            "currency": (getattr(r, "currency", None) or "GBP").upper(),
             "notes": r.notes,
             "template_json": r.template_json,
             "status": r.status,
@@ -183,7 +185,11 @@ def list_recurring(db: Session = Depends(get_db), user: User = Depends(require_m
 @router.post("/recurring-invoices", status_code=201)
 def create_recurring(body: RecurringIn, db: Session = Depends(get_db), user: User = Depends(require_module("recurring_invoices", "create"))):
     company = get_company_by_user_id(db, user.id)
-    row = RecurringInvoice(company_id=company.id, next_run=body.start_date, **body.model_dump())
+    from app.services.invoice_currency import normalize_invoice_currency
+
+    payload = body.model_dump()
+    payload["currency"] = normalize_invoice_currency(payload.get("currency"))
+    row = RecurringInvoice(company_id=company.id, next_run=body.start_date, **payload)
     db.add(row)
     db.commit()
     db.refresh(row)

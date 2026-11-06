@@ -21,6 +21,7 @@ from app.services.attendance_service import (
 )
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import normalize_pay_type
+from app.services.shift_clock import attendance_if_unmarked, london_now
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
 _CANONICAL_SHIFT_TYPES = frozenset({"morning", "afternoon", "evening", "night"})
@@ -161,7 +162,13 @@ def _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, s
     return q
 
 
-def _attendance_status(a: Assignment, att: Optional[Attendance], late_log: Optional[ShiftLateLog], today: date) -> str:
+def _attendance_status(
+    a: Assignment,
+    att: Optional[Attendance],
+    late_log: Optional[ShiftLateLog],
+    today: date,
+    now: Optional[datetime] = None,
+) -> str:
     # A cancellation is a decision about whether the shift happens at all, so it outranks
     # the calendar, a book-on that was recorded before it was called off, and any lateness
     # logged against the original start.
@@ -179,11 +186,8 @@ def _attendance_status(a: Assignment, att: Optional[Attendance], late_log: Optio
     # while an overnight shift is still running, is still worked time.
     if att and att.booked_at:
         return "late" if att.status == "late" else "on_time"
-    if a.date > today:
-        return "scheduled"
-    if a.date < today:
-        return "absent"
-    return "pending"
+    clock = now or london_now()
+    return attendance_if_unmarked(a.date, a.shift_start, clock)
 
 
 def _late_minutes(
@@ -248,7 +252,8 @@ def list_rota_details(
     q = _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, scope)
     rows = q.order_by(Assignment.date, Guard.full_name).all()
     zone = _company_zone(company)
-    today = datetime.now(zone).date()
+    now = datetime.now(zone)
+    today = now.date()
     att_map = {}
     late_map = {}
     ot_map = {}
@@ -296,7 +301,7 @@ def list_rota_details(
         cli: Optional[Client] = site.client if site else None
         hrs = shift_hours(a)
         st = normalize_shift_type(a.shift_type, a.shift_start)
-        status = _attendance_status(a, att, late_log, today)
+        status = _attendance_status(a, att, late_log, today, now=now)
         late_m = _late_minutes(a, att, late_log, zone=zone)
         actual = compute_worked_hours(
             shift_date=a.date,
@@ -373,6 +378,7 @@ def list_rota_details(
                 seen,
                 today,
                 scope=scope,
+                now=now,
             )
         )
     out.sort(key=lambda d: (d.date, (d.guard_name or "").lower(), d.shift_start or ""))
@@ -417,6 +423,7 @@ def _planner_shift_details(
     seen: set,
     today: date,
     scope: WorkScope = EMPTY_SCOPE,
+    now: Optional[datetime] = None,
 ) -> List[RotaDetailResponse]:
     """Load shifts from unpublished rota plans overlapping the report period."""
     plans = (
@@ -478,10 +485,7 @@ def _planner_shift_details(
                     seen.add(fp)
                     break_m = int(sh.get("breakM") or 0) + int(sh.get("breakH") or 0) * 60
                     hrs = calc_shift_hours(start_t, end_t, break_m)
-                    if d > today:
-                        status = "scheduled"
-                    else:
-                        status = "pending"
+                    status = attendance_if_unmarked(d, start_t, now or london_now())
                     cli = site.client if site else None
                     out.append(
                         RotaDetailResponse(

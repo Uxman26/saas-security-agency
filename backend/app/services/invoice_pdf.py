@@ -13,8 +13,21 @@ from app.services.image_avif_service import AVIF_EXT
 from app.storage_paths import resolve_storage_path
 
 
-def _money(v: float) -> str:
-    return f"£{float(v):,.2f}"
+def _money(v: float, currency: str = "GBP") -> str:
+    code = (currency or "GBP").upper()
+    symbols = {
+        "GBP": "£",
+        "USD": "$",
+        "EUR": "€",
+        "JPY": "¥",
+        "INR": "₹",
+        "NGN": "₦",
+        "TRY": "₺",
+        "ZAR": "R",
+    }
+    decimals = 0 if code == "JPY" else 2
+    prefix = symbols.get(code, f"{code} ")
+    return f"{prefix}{float(v):,.{decimals}f}"
 
 
 def _company_contact(company: Company, admin: Optional[User]) -> tuple[str, str, str]:
@@ -191,6 +204,7 @@ def render_invoice_pdf(
     credited = invoice_credit_applied(db, inv.id)
     balance = invoice_balance_due(db, inv)
     amount_due = balance if (paid > 0 or credited > 0) else float(inv.total or 0)
+    code = (getattr(inv, "currency", None) or "GBP").upper()
 
     inv_date = inv.invoice_date or (inv.created_at.date() if inv.created_at else None)
     meta_rows = [
@@ -211,7 +225,7 @@ def render_invoice_pdf(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
     ]))
-    t_due = Table([["Amount Due (GBP):", _money(amount_due)]], colWidths=[4.4 * cm, 3.6 * cm])
+    t_due = Table([[f"Amount Due ({code}):", _money(amount_due, code)]], colWidths=[4.4 * cm, 3.6 * cm])
     t_due.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(SOFT_HEX)),
         ("TEXTCOLOR", (0, 0), (0, 0), ACCENT),
@@ -276,8 +290,8 @@ def render_invoice_pdf(
             row.get("timing") or "—",
             str(ops) if ops else "—",
             f"{hours:g}" if hours else "—",
-            (_money(float(rate)) + (" *" if row.get("rate_is_blended") else "")) if rate is not None else "—",
-            _money(row["amount"] or 0),
+            (_money(float(rate), code) + (" *" if row.get("rate_is_blended") else "")) if rate is not None else "—",
+            _money(row["amount"] or 0, code),
         ])
     tw = [2.6 * cm, 4.6 * cm, 2.6 * cm, 1.4 * cm, 1.8 * cm, 2.4 * cm, 2.6 * cm]
     t_lines = Table(data, colWidths=tw, repeatRows=1)
@@ -317,11 +331,11 @@ def render_invoice_pdf(
         ("TOPPADDING", (0, 0), (-1, -1), 10),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
     ]))
-    sums = [["Subtotal:", _money(inv.subtotal or 0)], [f"VAT {inv.tax_rate or 0:g}%:", _money(inv.tax_amount or 0)]]
+    sums = [["Subtotal:", _money(inv.subtotal or 0, code)], [f"VAT {inv.tax_rate or 0:g}%:", _money(inv.tax_amount or 0, code)]]
     if paid > 0:
-        sums.append(["Amount paid:", _money(paid)])
+        sums.append(["Amount paid:", _money(paid, code)])
     if credited > 0:
-        sums.append(["Credits applied:", _money(credited)])
+        sums.append(["Credits applied:", _money(credited, code)])
     t_sums = Table(sums, colWidths=[4.6 * cm, 3.4 * cm])
     t_sums.setStyle(TableStyle([
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
@@ -330,7 +344,7 @@ def render_invoice_pdf(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     t_total = Table(
-        [["Balance Due (GBP):" if (paid > 0 or credited > 0) else "Total Due (GBP):", _money(amount_due)]],
+        [[f"Balance Due ({code}):" if (paid > 0 or credited > 0) else f"Total Due ({code}):", _money(amount_due, code)]],
         colWidths=[4.6 * cm, 3.4 * cm],
     )
     t_total.setStyle(TableStyle([
@@ -365,7 +379,7 @@ def render_invoice_pdf(
                     cn.credit_date.isoformat() if cn.credit_date else "—",
                     cn.number or f"CN-{cn.id}",
                     (cn.reason or "—")[:40],
-                    _money(cn.total or 0),
+                    _money(cn.total or 0, code),
                 ]
             )
         t_cn = Table(cn_data, colWidths=[3 * cm, 3 * cm, 6 * cm, 3 * cm])

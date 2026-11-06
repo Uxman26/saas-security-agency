@@ -5,6 +5,7 @@ from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
 from app.authz import assert_owned_by_company
 from app.models import Allowance, AuditLog, Client, ClientBankAccount, CreditNote, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
+from app.services.invoice_currency import normalize_invoice_currency
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
@@ -169,6 +170,7 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     payload = data.model_dump() if hasattr(data, "model_dump") else data.dict()
     lines_data = payload.pop("lines", None) or []
     bank_account_id = payload.pop("client_bank_account_id", None)
+    payload["currency"] = normalize_invoice_currency(payload.get("currency"))
     inv = Invoice(company_id=company.id, **payload)
     if not inv.invoice_date:
         inv.invoice_date = date_cls.today()
@@ -641,6 +643,7 @@ def generate_from_rota(
     job_title: Optional[str] = None,
     force: bool = False,
     break_mode: str = "shift",
+    currency: str = "GBP",
 ) -> Invoice:
     """Create a draft invoice from published rota planner shifts for a client/site period.
 
@@ -757,6 +760,7 @@ def generate_from_rota(
         tax_rate=DEFAULT_INVOICE_VAT_RATE,
         tax_amount=0,
         status="draft",
+        currency=normalize_invoice_currency(currency),
         notes="Payment is due within 30 days of the invoice date.\nPlease quote the invoice number as your payment reference.\nThank you for your business.",
         rota_review="Generated from published rota. Please review shift timings and hours before sending.",
     )
@@ -898,6 +902,7 @@ def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
         tax_amount=src.tax_amount,
         total=src.total,
         status="draft",
+        currency=normalize_invoice_currency(getattr(src, "currency", None)),
     )
     db.add(inv)
     db.flush()

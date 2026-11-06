@@ -215,6 +215,7 @@ def _serialize_invoice(
         tax_rate=inv.tax_rate or 0,
         subtotal=inv.subtotal or 0,
         tax_amount=inv.tax_amount or 0,
+        currency=(getattr(inv, "currency", None) or "GBP").upper(),
         pdf_path=inv.pdf_path,
         created_at=inv.created_at,
         updated_at=inv.updated_at,
@@ -282,6 +283,7 @@ def generate_invoice(
     job_title: Optional[str] = None,
     force: bool = False,
     break_mode: str = "shift",
+    currency: str = "GBP",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("invoices", "generate")),
 ):
@@ -304,6 +306,7 @@ def generate_invoice(
         job_title=job_title,
         force=force,
         break_mode=break_mode,
+        currency=currency,
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)

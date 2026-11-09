@@ -122,7 +122,7 @@ export default function InvoicesPage() {
   const [genNarrow, setGenNarrow] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
   const [sites, setSites] = useState<Site[]>([]);
   const [pageTab, setPageTab] = useState<'overview' | 'invoices'>('invoices');
-  const [listTab, setListTab] = useState<'unpaid' | 'draft' | 'all'>('unpaid');
+  const [listTab, setListTab] = useState<'unpaid' | 'draft' | 'all'>('all');
   // Client / Site / Contractor / Sub-contractor / Staff / Job title, in any combination.
   // The Client control is the old "All customers" dropdown: it now covers every site
   // assigned to that client rather than only invoices raised against the client record.

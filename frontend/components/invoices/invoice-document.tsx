@@ -17,7 +17,7 @@ const PANEL = '#F4F4F5';
 const DEFAULT_HEADERS = {
   date: 'Date',
   description: 'Description',
-  shift_timing: 'Shift Timing',
+  shift_timing: 'Timings',
   operatives: 'Operatives',
   hours: 'Hours',
   rate: 'Rate',
@@ -130,6 +130,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
     ['date', headers.date, 'text-left'],
     ['operatives', headers.operatives, 'text-center'],
     ['hours', headers.hours, 'text-center'],
+    ['shift_timing', headers.shift_timing, 'text-center'],
     ['rate', headers.rate, 'text-center'],
     ['amount', headers.amount, 'text-right'],
   ] as const;
@@ -271,11 +272,12 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
               ) : (
                 dayRows.map((row, idx) => {
                   const desc = row.description && row.description.trim().toLowerCase() !== DEFAULT_DESCRIPTION ? row.description : '';
+                  // Timings have their own column; keep description / multi-site under Date.
                   const detail = [
                     row.shiftDate ? desc : '',
-                    row.timings.join(', '),
                     multiSite ? row.siteNames.join(', ') : '',
                   ].filter(Boolean);
+                  const timingLabel = row.timings.length ? row.timings.join(', ') : '—';
                   return (
                     <tr key={row.key} className="border-b border-slate-200" style={{ backgroundColor: idx % 2 ? PANEL : '#fff' }}>
                       <td className="px-4 py-3.5 text-slate-800">
@@ -288,6 +290,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                         {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.hours > 0 ? fmtHours(row.hours) : '—'}</td>
+                      <td className="px-4 py-3.5 text-center tabular-nums whitespace-nowrap text-slate-800">{timingLabel}</td>
                       <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.rate != null ? fmtMoney(row.rate) : '—'}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-slate-800">{fmtMoney(row.amount)}</td>
                     </tr>

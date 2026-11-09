@@ -36,7 +36,7 @@ import { TimeHmField } from '@/components/ui/time-hm-field';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { ShiftTypeBadge } from '@/components/rota/shift-rota-sections';
-import type { ShiftType } from '@/lib/rota-shifts-types';
+import { classifyShiftType, type ShiftType } from '@/lib/rota-shifts-types';
 
 type AssignmentShiftType = 'morning' | 'afternoon' | 'evening' | 'night' | 'weekend';
 
@@ -59,6 +59,31 @@ function AssignmentForm({
   const guardId = watch('guard_id');
   const siteId = watch('site_id');
   const shiftType = watch('shift_type');
+  const shiftStart = watch('shift_start') || '';
+  const shiftEnd = watch('shift_end') || '';
+  // Manual type picks (e.g. weekend) stick until times move away from the last auto value.
+  const [shiftTypeTouched, setShiftTypeTouched] = useState(() => {
+    const auto = classifyShiftType(shiftStart, shiftEnd);
+    return Boolean(shiftType && shiftType !== auto);
+  });
+
+  const applyTimes = (patch: { shift_start?: string; shift_end?: string }) => {
+    const nextStart = patch.shift_start ?? shiftStart;
+    const nextEnd = patch.shift_end ?? shiftEnd;
+    const prevAuto = classifyShiftType(shiftStart, shiftEnd);
+    const auto = classifyShiftType(nextStart, nextEnd);
+    if (patch.shift_start !== undefined) {
+      setValue('shift_start', patch.shift_start, { shouldValidate: true });
+    }
+    if (patch.shift_end !== undefined) {
+      setValue('shift_end', patch.shift_end, { shouldValidate: true });
+    }
+    if (!auto) return;
+    const followAuto = !shiftTypeTouched || !shiftType || shiftType === prevAuto;
+    if (followAuto) {
+      setValue('shift_type', auto, { shouldValidate: true });
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -94,7 +119,13 @@ function AssignmentForm({
         </div>
         <div className="space-y-1">
           <Label>Shift Type</Label>
-          <Select value={shiftType || ''} onValueChange={(v) => setValue('shift_type', v as AssignmentShiftType)}>
+          <Select
+            value={shiftType || ''}
+            onValueChange={(v) => {
+              setShiftTypeTouched(true);
+              setValue('shift_type', v as AssignmentShiftType);
+            }}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
@@ -111,8 +142,8 @@ function AssignmentForm({
           <Label>Shift Start</Label>
           <TimeHmField
             aria-label="Shift start"
-            value={watch('shift_start') || '00:00'}
-            onChange={(v) => setValue('shift_start', v, { shouldValidate: true })}
+            value={shiftStart || '00:00'}
+            onChange={(v) => applyTimes({ shift_start: v })}
           />
           {errors.shift_start && <p className="text-xs text-destructive">{errors.shift_start.message}</p>}
         </div>
@@ -120,8 +151,8 @@ function AssignmentForm({
           <Label>Shift End</Label>
           <TimeHmField
             aria-label="Shift end"
-            value={watch('shift_end') || '00:00'}
-            onChange={(v) => setValue('shift_end', v, { shouldValidate: true })}
+            value={shiftEnd || '00:00'}
+            onChange={(v) => applyTimes({ shift_end: v })}
           />
           {errors.shift_end && <p className="text-xs text-destructive">{errors.shift_end.message}</p>}
         </div>
@@ -197,18 +228,24 @@ export default function AssignmentsPage() {
 
   const openEdit = (a: Assignment) => {
     setEditingAssignment(a);
+    const start = a.shift_start ?? '';
+    const end = a.shift_end ?? '';
+    const stored = (a.shift_type === 'holiday'
+      ? 'weekend'
+      : a.shift_type === 'day'
+        ? 'morning'
+        : a.shift_type) as AssignmentShiftType | undefined;
+    const auto = classifyShiftType(start, end);
     editForm.reset({
       guard_id: a.guard_id,
       site_id: a.site_id,
       date: a.date,
-      shift_start: a.shift_start ?? '',
-      shift_end: a.shift_end ?? '',
+      shift_start: start,
+      shift_end: end,
       break_minutes: a.break_minutes ?? undefined,
-      shift_type: (a.shift_type === 'holiday'
-        ? 'weekend'
-        : a.shift_type === 'day'
-          ? 'morning'
-          : a.shift_type) as AssignmentShiftType | undefined,
+      // Prefer stored type; fall back to start-time classification so edit forms
+      // never open with a blank type when times are known.
+      shift_type: (stored || auto || 'morning') as AssignmentShiftType,
     });
     setEditOpen(true);
   };
@@ -335,6 +372,7 @@ export default function AssignmentsPage() {
                     <DialogTitle>Add New Assignment</DialogTitle>
                   </DialogHeader>
                   <AssignmentForm
+                    key={addOpen ? 'add-open' : 'add-closed'}
                     form={addForm}
                     guards={assignableGuards}
                     sites={assignableSites}
@@ -524,6 +562,7 @@ export default function AssignmentsPage() {
               <DialogTitle>Edit Assignment</DialogTitle>
             </DialogHeader>
             <AssignmentForm
+              key={editingAssignment ? `edit-${editingAssignment.id}` : 'edit'}
               form={editForm}
               guards={guardsForEdit}
               sites={sitesForEdit}

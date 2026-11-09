@@ -350,13 +350,20 @@ def render_invoice_pdf(
     story.append(t_top)
     story.append(Spacer(1, 18))
 
-    # ── Lines: Date | Operatives | Hours | Rate | Amount ─────────────────────────
+    # ── Lines: Date | Operatives | Hours | Timings | Rate | Amount ───────────────
     site_ids = list({ln.site_id for ln in lines if ln.site_id})
     site_map = {s.id: s for s in db.query(Site).filter(Site.id.in_(site_ids)).all()} if site_ids else {}
     cell = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8.5, leading=10.5, textColor=DARK)
     cell_bold = ParagraphStyle("CellB", parent=cell, fontName="Helvetica-Bold")
     cell_muted = ParagraphStyle("CellMuted", parent=styles["Normal"], fontSize=7, leading=9, textColor=colors.HexColor("#71717a"))
-    hdr = {"date": "DATE", "operatives": "OPERATIVES", "hours": "HOURS", "rate": "RATE", "amount": "AMOUNT"}
+    hdr = {
+        "date": "DATE",
+        "operatives": "OPERATIVES",
+        "hours": "HOURS",
+        "shift_timing": "TIMINGS",
+        "rate": "RATE",
+        "amount": "AMOUNT",
+    }
     headers_json = getattr(inv, "column_headers_json", None)
     if headers_json:
         try:
@@ -369,15 +376,20 @@ def render_invoice_pdf(
 
     rows = _group_lines_by_day(lines, site_map)
     multi_site = len({n for r in rows for n in r["site_names"]}) > 1
-    data = [[hdr["date"], hdr["operatives"], hdr["hours"], hdr["rate"], hdr["amount"]]]
+    data = [[
+        hdr["date"],
+        hdr["operatives"],
+        hdr["hours"],
+        hdr["shift_timing"],
+        hdr["rate"],
+        hdr["amount"],
+    ]]
     for row in rows:
         dated = row.get("shift_date") is not None
         desc = (row.get("description") or "").strip()
         detail = []
         if dated and desc and desc.lower() != DEFAULT_DESCRIPTION:
             detail.append(desc)
-        if row.get("timing") and row["timing"] != "—":
-            detail.append(row["timing"])
         if multi_site and row["site_names"]:
             detail.append(", ".join(row["site_names"]))
         first = [Paragraph(_long_date(row["shift_date"]) if dated else (desc or row["label"]), cell if dated else cell_bold)]
@@ -386,24 +398,30 @@ def render_invoice_pdf(
         hours = float(row["hours"] or 0)
         rate = row["rate"]
         ops = int(row["operatives"] or 0)
+        timing = row.get("timing") or "—"
         data.append([
             first,
             str(ops) if ops else "—",
             _hours(hours) if hours else "—",
+            timing,
             _money(float(rate)) if rate is not None else "—",
             _money(row["amount"] or 0),
         ])
     if len(data) == 1:
-        data.append([Paragraph("No line items", cell_muted), "", "", "", ""])
-    t_lines = Table(data, colWidths=[6.0 * cm, 3.0 * cm, 2.8 * cm, 3.0 * cm, 3.2 * cm], repeatRows=1)
+        data.append([Paragraph("No line items", cell_muted), "", "", "", "", ""])
+    t_lines = Table(
+        data,
+        colWidths=[4.6 * cm, 2.4 * cm, 2.2 * cm, 3.0 * cm, 2.6 * cm, 3.2 * cm],
+        repeatRows=1,
+    )
     style_cmds = [
         ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
         ("TEXTCOLOR", (1, 1), (-1, -1), DARK),
-        ("ALIGN", (1, 0), (3, -1), "CENTER"),
-        ("ALIGN", (4, 0), (4, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (4, -1), "CENTER"),
+        ("ALIGN", (5, 0), (5, -1), "RIGHT"),
         ("LINEBELOW", (0, 1), (-1, -1), 0.4, LINE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 8),

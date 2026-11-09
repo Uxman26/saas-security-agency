@@ -948,6 +948,10 @@ class RotaResponse(BaseModel):
     guard_name: str
     site_id: int
     site_name: str
+    # Derived from the site so mobile Shifts filters can list clients without a
+    # second round-trip. Optional for open / unlinked sites.
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
     date: date
     shift_start: Optional[str] = None
     shift_end: Optional[str] = None

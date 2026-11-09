@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import Assignment, Guard, Site, User
+from app.models import Assignment, Client, Guard, Site, User
 from app.schemas import AssignmentCreate, RotaResponse
 from app.services import shift_audit_service
 from app.services.company_service import get_company_by_user_id
@@ -129,17 +129,25 @@ def get_rota(
 ) -> List[RotaResponse]:
     company = get_company_by_user_id(db, user_id)
     
-    query = db.query(
-        Assignment.guard_id,
-        Guard.full_name.label("guard_name"),
-        Assignment.site_id,
-        Site.name.label("site_name"),
-        Assignment.date,
-        Assignment.shift_start,
-        Assignment.shift_end,
-        Assignment.break_minutes,
-        Assignment.shift_type
-    ).join(Guard).join(Site).filter(Guard.company_id == company.id)
+    query = (
+        db.query(
+            Assignment.guard_id,
+            Guard.full_name.label("guard_name"),
+            Assignment.site_id,
+            Site.name.label("site_name"),
+            Site.client_id.label("client_id"),
+            Client.name.label("client_name"),
+            Assignment.date,
+            Assignment.shift_start,
+            Assignment.shift_end,
+            Assignment.break_minutes,
+            Assignment.shift_type,
+        )
+        .join(Guard)
+        .join(Site)
+        .outerjoin(Client, Client.id == Site.client_id)
+        .filter(Guard.company_id == company.id)
+    )
 
     # Same portal narrowing get_assignments applies. Without it this endpoint handed a
     # guard the whole company's rota — every colleague's name, site and shift — because
@@ -174,11 +182,13 @@ def get_rota(
             guard_name=r.guard_name,
             site_id=r.site_id,
             site_name=r.site_name,
+            client_id=r.client_id,
+            client_name=r.client_name,
             date=r.date,
             shift_start=r.shift_start,
             shift_end=r.shift_end,
             break_minutes=r.break_minutes,
-            shift_type=r.shift_type
+            shift_type=r.shift_type,
         )
         for r in results
     ]

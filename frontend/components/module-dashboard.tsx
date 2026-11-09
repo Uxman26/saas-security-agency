@@ -153,21 +153,27 @@ export function StatCards({ cards, className }: { cards: StatCardSpec[]; classNa
                 <div className="min-w-0 flex-1">{c.body}</div>
               ) : (
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-muted-foreground">{c.label}</p>
-                  <p className={cn('truncate text-2xl font-bold tabular-nums', tone.value)}>{c.value}</p>
+                  {/* Keep View beside the label so long currency values are not
+                      squeezed by a side action into truncate ellipsis. */}
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate text-sm text-muted-foreground">{c.label}</p>
+                    {c.action ? (
+                      <button
+                        type="button"
+                        onClick={c.action.onClick}
+                        className="shrink-0 text-sm font-medium text-primary hover:underline"
+                      >
+                        {c.action.label}
+                      </button>
+                    ) : null}
+                  </div>
+                  <p className={cn('text-2xl font-bold tabular-nums leading-tight break-words', tone.value)}>
+                    {c.value}
+                  </p>
                   {c.caption ? <p className="truncate text-xs text-muted-foreground">{c.caption}</p> : null}
                   {c.progress ? <ProgressBar className="mt-1.5" value={c.progress.value} tone={c.progress.tone ?? c.tone} /> : null}
                 </div>
               )}
-              {c.action ? (
-                <button
-                  type="button"
-                  onClick={c.action.onClick}
-                  className="shrink-0 text-sm font-medium text-primary hover:underline"
-                >
-                  {c.action.label}
-                </button>
-              ) : null}
             </CardContent>
           </Card>
         );

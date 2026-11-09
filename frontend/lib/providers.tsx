@@ -2,7 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, useTheme } from 'next-themes';
-import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { ReactNode, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { LeadNotificationsProvider } from '@/components/lead-notifications-provider';
 import { HelpAssistant } from '@/components/help/help-assistant';
@@ -10,25 +11,29 @@ import { Toaster } from '@/components/ui/sonner';
 import { GaBootstrap } from '@/components/analytics/ga-bootstrap';
 import { CookieConsentBanner } from '@/components/analytics/cookie-consent-banner';
 import { GaPageViews } from '@/components/analytics/ga-page-views';
-import { Suspense } from 'react';
 import { api } from '@/lib/api';
 import {
-  THEME_GUEST_KEY,
   bindUserTheme,
   clearActiveThemeUser,
+  isPublicThemePath,
   isThemePreference,
+  persistPublicThemeLocal,
   persistUserThemeLocal,
-  readActiveThemeUserId,
-  themeStorageKey,
+  resolveThemeStorageKey,
 } from '@/lib/user-theme';
 
 function UserThemeProvider({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
-  const storageKey = useMemo(() => {
-    if (user) return themeStorageKey(user.id);
-    if (loading) return themeStorageKey(readActiveThemeUserId());
-    return THEME_GUEST_KEY;
-  }, [user?.id, loading]);
+  const pathname = usePathname();
+  const storageKey = useMemo(
+    () =>
+      resolveThemeStorageKey({
+        pathname,
+        userId: user?.id,
+        loading,
+      }),
+    [pathname, user?.id, loading]
+  );
 
   const userId = user?.id ?? null;
 
@@ -39,31 +44,38 @@ function UserThemeProvider({ children }: { children: ReactNode }) {
   }, [loading, userId]);
 
   return (
+    // Remount when the storage scope changes (public ↔ user, or user A ↔ user B)
+    // so one preference never leaks into another localStorage key / session.
     <ThemeProvider
       key={storageKey}
       storageKey={storageKey}
       attribute="class"
       defaultTheme="system"
       enableSystem
-      disableTransitionOnChange={false}
+      enableColorScheme
+      disableTransitionOnChange
     >
-      <ThemePreferenceSync />
+      <ThemePreferenceSync storageKey={storageKey} />
       {children}
     </ThemeProvider>
   );
 }
 
-function ThemePreferenceSync() {
+function ThemePreferenceSync({ storageKey }: { storageKey: string }) {
   const { user } = useAuth();
+  const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const appliedId = useRef<number | null>(null);
   const lastSent = useRef<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const onPublicSite = isPublicThemePath(pathname);
 
   useEffect(() => setMounted(true), []);
 
+  // Apply the signed-in user's saved preference when entering the app shell.
+  // Never adopt the previous session's theme into a user with no preference.
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || onPublicSite) return;
     if (!user) {
       appliedId.current = null;
       lastSent.current = null;
@@ -75,12 +87,21 @@ function ThemePreferenceSync() {
       lastSent.current = user.theme_preference;
       if (theme !== user.theme_preference) setTheme(user.theme_preference);
     } else {
-      lastSent.current = isThemePreference(theme) ? theme : null;
+      lastSent.current = 'system';
+      if (theme !== 'system') setTheme('system');
     }
-  }, [mounted, user, theme, setTheme]);
+  }, [mounted, user, theme, setTheme, onPublicSite]);
 
+  // Persist changes: user account on app routes, public key on marketing/auth routes.
   useEffect(() => {
-    if (!mounted || !user || !isThemePreference(theme)) return;
+    if (!mounted || !isThemePreference(theme)) return;
+
+    if (onPublicSite) {
+      persistPublicThemeLocal(theme);
+      return;
+    }
+
+    if (!user) return;
     if (appliedId.current !== user.id) return;
     if (theme === lastSent.current) return;
     lastSent.current = theme;
@@ -88,7 +109,7 @@ function ThemePreferenceSync() {
     void api.auth.updateTheme(theme).catch(() => {
       lastSent.current = null;
     });
-  }, [mounted, theme, user]);
+  }, [mounted, theme, user, onPublicSite, storageKey]);
 
   return null;
 }

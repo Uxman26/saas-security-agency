@@ -1093,6 +1093,11 @@ export const api = {
       message?: string;
       path?: string;
       confirm_proposal?: Record<string, unknown> | null;
+      clarify_selection?: {
+        clarification_type: string;
+        selected_id: number;
+        partial?: Record<string, unknown>;
+      } | null;
     }) =>
       request<{
         reply: string;

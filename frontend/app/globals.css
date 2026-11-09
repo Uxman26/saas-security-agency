@@ -281,7 +281,9 @@
     color-scheme: dark;
   }
   body {
-    @apply bg-background text-foreground font-sans text-base antialiased transition-colors duration-200;
+    /* No color transition on load — a 200ms fade made the light→dark refresh flash
+       more obvious while the theme class was catching up. */
+    @apply bg-background text-foreground font-sans text-base antialiased;
     min-height: 100dvh;
     overflow-x: clip;
     -webkit-tap-highlight-color: transparent;

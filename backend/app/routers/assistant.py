@@ -16,6 +16,8 @@ class AssistantChatRequest(BaseModel):
     message: str = Field(default="", max_length=2000)
     path: Optional[str] = Field(default=None, max_length=200)
     confirm_proposal: Optional[dict[str, Any]] = None
+    # Structured follow-up when the assistant asked which site/staff to use.
+    clarify_selection: Optional[dict[str, Any]] = None
 
 
 class AssistantChatResponse(BaseModel):
@@ -40,5 +42,6 @@ def assistant_chat(
         body.message,
         path=body.path,
         confirm_proposal=body.confirm_proposal,
+        clarify_selection=body.clarify_selection,
     )
     return AssistantChatResponse(**out)

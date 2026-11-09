@@ -280,12 +280,13 @@ def chat(
     *,
     path: Optional[str] = None,
     confirm_proposal: Optional[dict] = None,
+    clarify_selection: Optional[dict] = None,
 ) -> dict[str, Any]:
     _rate_limit(user.id)
     msg = (message or "").strip()
     if len(msg) > 2000:
         raise HTTPException(status_code=422, detail="Message too long (max 2000 characters)")
-    if not msg and not confirm_proposal:
+    if not msg and not confirm_proposal and not clarify_selection:
         raise HTTPException(status_code=422, detail="Message required")
 
     actions: list[dict] = []
@@ -310,9 +311,69 @@ def chat(
             "mode": "tools",
         }
 
-    # Rota NL create intent
-    if re.search(r"\b(create|add|schedule|make)\b.*\bshift", lower) or (
-        "create" in lower and "shift" in lower
+    # Structured clarification (site/guard pick) — avoids re-parsing incomplete NL.
+    if clarify_selection and isinstance(clarify_selection, dict):
+        if not _can_module(db, user, "rota", "create"):
+            raise HTTPException(status_code=403, detail="Missing rota.create permission")
+        ctype = str(clarify_selection.get("clarification_type") or "")
+        selected_id = clarify_selection.get("selected_id")
+        partial = clarify_selection.get("partial") or {}
+        if ctype not in ("site", "guard") or selected_id is None:
+            raise HTTPException(status_code=422, detail="Invalid clarification selection")
+        try:
+            proposal = assistant_rota.apply_clarification(
+                db,
+                user,
+                clarification_type=ctype,
+                selected_id=int(selected_id),
+                partial=partial if isinstance(partial, dict) else {},
+            )
+            if proposal.get("needs_clarification"):
+                reply = proposal.get("message") or "Please clarify which record to use."
+                options = proposal.get("options") or []
+                if options:
+                    reply += "\n" + "\n".join(f"- {o.get('name')}" for o in options)
+                actions.append({"type": "rota_clarify", "clarification_type": proposal.get("clarification_type")})
+            else:
+                warn = proposal.get("warnings") or []
+                reply = (
+                    f"Proposed: {proposal['summary']}\n"
+                    + (f"Warnings: {'; '.join(warn)}\n" if warn else "")
+                    + "Confirm to create these assignments through ControlOps validation, or cancel."
+                )
+                actions.append({"type": "rota_propose", "requires_confirm": True})
+        except HTTPException as e:
+            reply = str(e.detail)
+            proposal = None
+        audit_service.log_action(
+            db,
+            company_id=getattr(get_company_by_user_id(db, user.id), "id", None)
+            if (user.role or "") != "super_admin"
+            else None,
+            user_id=user.id,
+            action="assistant_chat",
+            entity_type="assistant",
+            meta={"path": path, "intent": "rota_clarify"},
+        )
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        return {
+            "reply": _sanitize_output(reply),
+            "sources": [],
+            "navigation": [{"label": "Rota", "href": "/rota"}],
+            "proposal": proposal,
+            "actions": actions,
+            "mode": "tools",
+        }
+
+    # Rota NL create intent (broad phrasing + compact "Name at Site tomorrow 09:00-17:00")
+    # Also covers modify/recurring asks so we can refuse safely without inventing shifts.
+    if (
+        assistant_rota.looks_like_rota_create(msg)
+        or assistant_rota.looks_like_rota_modify(msg)
+        or assistant_rota.looks_like_rota_recurring(msg)
     ):
         if not _can_module(db, user, "rota", "create"):
             reply = "You do not have permission to create shifts. Ask a manager with Rota create access."
@@ -322,7 +383,8 @@ def chat(
                 if proposal.get("needs_clarification"):
                     reply = proposal.get("message") or "Please clarify which record to use."
                     options = proposal.get("options") or []
-                    reply += "\n" + "\n".join(f"- {o.get('name')}" for o in options)
+                    if options:
+                        reply += "\n" + "\n".join(f"- {o.get('name')}" for o in options)
                     actions.append({"type": "rota_clarify", "clarification_type": proposal.get("clarification_type")})
                 else:
                     warn = proposal.get("warnings") or []

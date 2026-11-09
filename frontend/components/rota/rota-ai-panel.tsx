@@ -14,8 +14,9 @@ export function RotaAiPanel() {
       <ControlOpsAssistant
         embedded
         defaultOpen
-        title={t('assistantTitle')}
-        className="shadow-none border-0 rounded-none min-h-[380px] max-h-[420px]"
+        rotaMode
+        title={t('aiRotaTitle')}
+        className="shadow-none border-0 rounded-none min-h-[420px] max-h-[min(640px,70vh)]"
       />
     </div>
   );

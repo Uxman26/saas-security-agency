@@ -1,16 +1,40 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bot, Loader2, Send, Sparkles, X } from 'lucide-react';
+import { Bot, ChevronDown, ChevronUp, Loader2, Mic, MicOff, Send, Sparkles, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { storageGet, storageSet } from '@/lib/safe-storage';
+import {
+  ROTA_AI_EXAMPLE_GROUPS,
+  ROTA_AI_INSTRUCTIONS,
+} from '@/components/rota/rota-ai-examples';
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as Window & {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  };
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
 
 type Msg = {
   id: string;
@@ -69,7 +93,7 @@ function clampFabPos(x: number, y: number) {
 }
 
 const SUGGESTIONS_BY_PATH: { match: RegExp; tips: string[] }[] = [
-  { match: /^\/rota/, tips: ['How do I publish a rota?', 'Create morning shifts for Site next Monday', 'Explain rota conflicts'] },
+  { match: /^\/rota/, tips: ['How do I publish a rota?', 'Explain rota conflicts', 'How do AI Rota proposals work?'] },
   { match: /^\/attendance/, tips: ['Summarise attendance exceptions', 'What does late status mean?', 'How does clock-in work?'] },
   { match: /^\/payroll/, tips: ['How is payroll calculated?', 'Explain missing rates', 'Payroll vs rota hours'] },
   { match: /^\/invoices/, tips: ['How do invoices work?', 'Summarise outstanding invoices', 'What are credit notes?'] },
@@ -91,11 +115,14 @@ export function ControlOpsAssistant({
   embedded = false,
   defaultOpen = false,
   title = 'ControlOps Assistant',
+  rotaMode = false,
 }: {
   className?: string;
   embedded?: boolean;
   defaultOpen?: boolean;
   title?: string;
+  /** Dedicated AI Rota panel: examples + optional browser speech (no server STT). */
+  rotaMode?: boolean;
 }) {
   const { user } = useAuth();
   const pathname = usePathname();
@@ -105,6 +132,10 @@ export function ControlOpsAssistant({
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [pendingProposal, setPendingProposal] = useState<Record<string, unknown> | null>(null);
+  const [examplesOpen, setExamplesOpen] = useState(true);
+  const [listening, setListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [voiceHint, setVoiceHint] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: 'welcome',
@@ -113,6 +144,8 @@ export function ControlOpsAssistant({
     },
   ]);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [fabPos, setFabPos] = useState(defaultFabPos);
   const [portalReady, setPortalReady] = useState(false);
   const dragRef = useRef<{
@@ -123,6 +156,8 @@ export function ControlOpsAssistant({
     origY: number;
     moved: boolean;
   } | null>(null);
+
+  const showRotaExamples = rotaMode || (pathname || '').startsWith('/rota');
 
   useEffect(() => {
     setPortalReady(true);
@@ -137,29 +172,114 @@ export function ControlOpsAssistant({
   }, [pathname]);
 
   useEffect(() => {
-    setMessages((m) =>
-      m.map((msg) => (msg.id === 'welcome' ? { ...msg, text: t('assistantWelcome') } : msg))
-    );
-  }, [t]);
+    const welcome = rotaMode ? t('aiRotaWelcome') : t('assistantWelcome');
+    setMessages((m) => m.map((msg) => (msg.id === 'welcome' ? { ...msg, text: welcome } : msg)));
+  }, [t, rotaMode]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
 
+  useEffect(() => {
+    setVoiceSupported(Boolean(getSpeechRecognitionCtor()));
+    return () => {
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        /* ignore */
+      }
+      recognitionRef.current = null;
+    };
+  }, []);
+
+  const fillExample = useCallback((prompt: string) => {
+    setInput(prompt);
+    setVoiceHint(null);
+    // Populate only — never auto-create or send.
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
+
+  const toggleVoice = useCallback(() => {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) {
+      setVoiceHint(t('aiRotaVoiceUnsupported'));
+      return;
+    }
+    if (listening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* ignore */
+      }
+      setListening(false);
+      return;
+    }
+    try {
+      const rec = new Ctor();
+      rec.lang = typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en-GB';
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.onresult = (event) => {
+        const chunk = Array.from(event.results || [])
+          .map((r) => r[0]?.transcript || '')
+          .join(' ')
+          .trim();
+        if (!chunk) return;
+        setInput((prev) => (prev.trim() ? `${prev.trim()} ${chunk}` : chunk));
+        setVoiceHint(null);
+      };
+      rec.onerror = () => {
+        setListening(false);
+        setVoiceHint(t('aiRotaVoiceError'));
+      };
+      rec.onend = () => setListening(false);
+      recognitionRef.current = rec;
+      rec.start();
+      setListening(true);
+      setVoiceHint(t('aiRotaVoiceListening'));
+    } catch {
+      setListening(false);
+      setVoiceHint(t('aiRotaVoiceError'));
+    }
+  }, [listening, t]);
+
+  const exampleGroups = useMemo(() => ROTA_AI_EXAMPLE_GROUPS, []);
+
   const send = useCallback(
-    async (text: string, confirm?: Record<string, unknown> | null) => {
+    async (
+      text: string,
+      confirm?: Record<string, unknown> | null,
+      clarify?: {
+        clarification_type: string;
+        selected_id: number;
+        partial?: Record<string, unknown>;
+      } | null
+    ) => {
       const trimmed = text.trim();
-      if ((!trimmed && !confirm) || busy || !user) return;
+      if ((!trimmed && !confirm && !clarify) || busy || !user) return;
       if (trimmed) {
         setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', text: trimmed }]);
         setInput('');
+      } else if (clarify) {
+        const label =
+          (clarify.partial as { options_label?: string } | undefined)?.options_label ||
+          `Selected #${clarify.selected_id}`;
+        setMessages((m) => [
+          ...m,
+          {
+            id: `u-${Date.now()}`,
+            role: 'user',
+            text: `Use ${clarify.clarification_type}: ${label}`,
+          },
+        ]);
       }
       setBusy(true);
       try {
         const res = await api.assistant.chat({
-          message: trimmed || (confirm ? 'Confirm proposal' : ''),
+          message: trimmed || (confirm ? 'Confirm proposal' : clarify ? 'Clarify selection' : ''),
           path: pathname || undefined,
           confirm_proposal: confirm || undefined,
+          clarify_selection: clarify || undefined,
         });
         setPendingProposal(res.proposal || null);
         setMessages((m) => [
@@ -221,8 +341,12 @@ export function ControlOpsAssistant({
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles className="size-4 text-orange-600 shrink-0" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold truncate">{title === 'ControlOps Assistant' ? t('assistantTitle') : title}</p>
-            <p className="text-xs text-muted-foreground truncate">{t('assistantHint')}</p>
+            <p className="text-sm font-semibold truncate">
+              {rotaMode ? t('aiRotaTitle') : title === 'ControlOps Assistant' ? t('assistantTitle') : title}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {rotaMode ? t('aiRotaHint') : t('assistantHint')}
+            </p>
           </div>
         </div>
         {!embedded ? (
@@ -294,7 +418,9 @@ export function ControlOpsAssistant({
                 </Button>
               </div>
             ) : null}
-            {m.proposal && (m.proposal as { needs_clarification?: boolean }).needs_clarification ? (
+            {m.proposal &&
+            (m.proposal as { needs_clarification?: boolean }).needs_clarification &&
+            ((m.proposal as { options?: { id: number; name: string }[] }).options || []).length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {((m.proposal as { options?: { id: number; name: string }[] }).options || []).map((o) => (
                   <Button
@@ -306,11 +432,13 @@ export function ControlOpsAssistant({
                     onClick={() => {
                       const ctype = (m.proposal as { clarification_type?: string }).clarification_type;
                       const partial = (m.proposal as { partial?: Record<string, unknown> }).partial || {};
-                      const msg =
-                        ctype === 'site'
-                          ? `Create shift at ${o.name} on ${partial.date || ''} ${partial.shift_start || ''}-${partial.shift_end || ''}`
-                          : `Create ${o.name} shift at ${partial.site_name || ''} ${partial.shift_start || ''}-${partial.shift_end || ''} on ${partial.date || ''}`;
-                      void send(msg);
+                      if (!ctype || (ctype !== 'site' && ctype !== 'guard')) return;
+                      // Structured clarify keeps staff/site/date/times — do not rebuild fragile NL.
+                      void send('', null, {
+                        clarification_type: ctype,
+                        selected_id: o.id,
+                        partial: { ...partial, options_label: o.name },
+                      });
                     }}
                   >
                     {o.name}
@@ -328,16 +456,60 @@ export function ControlOpsAssistant({
         <div ref={endRef} />
       </div>
 
-      {!messages.some((m) => m.role === 'user') ? (
+      {showRotaExamples ? (
+        <div className="border-t bg-muted/20">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-muted/40"
+            onClick={() => setExamplesOpen((v) => !v)}
+            aria-expanded={examplesOpen}
+          >
+            <span>{t('aiRotaExamplesTitle')}</span>
+            {examplesOpen ? <ChevronUp className="size-3.5 shrink-0" /> : <ChevronDown className="size-3.5 shrink-0" />}
+          </button>
+          {examplesOpen ? (
+            <div className="max-h-[min(240px,38vh)] space-y-3 overflow-y-auto px-3 pb-3">
+              <ol className="list-decimal space-y-1 ps-4 text-[11px] leading-snug text-muted-foreground">
+                {ROTA_AI_INSTRUCTIONS.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ol>
+              {exampleGroups.map((group) => (
+                <div key={group.id} className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-foreground/80">{group.title}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {group.examples.map((ex) => (
+                      <button
+                        key={ex.id}
+                        type="button"
+                        className={cn(
+                          'max-w-full rounded-md border bg-background px-2 py-1 text-left text-[11px] leading-snug hover:bg-muted',
+                          ex.guidanceOnly && 'border-dashed text-muted-foreground'
+                        )}
+                        title={ex.prompt}
+                        onClick={() => fillExample(ex.prompt)}
+                      >
+                        <span className="font-medium text-foreground">{ex.label}</span>
+                        <span className="mt-0.5 block truncate text-muted-foreground">{ex.prompt}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground">{t('aiRotaExamplesFillHint')}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : !messages.some((m) => m.role === 'user') ? (
         <div className="px-3 pb-2 flex flex-wrap gap-1">
-          {tips.map((t) => (
+          {tips.map((tip) => (
             <button
-              key={t}
+              key={tip}
               type="button"
               className="text-xs rounded-full border px-2 py-1 hover:bg-muted text-left"
-              onClick={() => void send(t)}
+              onClick={() => void send(tip)}
             >
-              {t}
+              {tip}
             </button>
           ))}
         </div>
@@ -351,17 +523,35 @@ export function ControlOpsAssistant({
         }}
       >
         <input
-          className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
+          ref={inputRef}
+          className="flex-1 min-w-0 rounded-md border bg-background px-2 py-1.5 text-sm"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={t('assistantPlaceholder')}
+          placeholder={rotaMode || showRotaExamples ? t('aiRotaPlaceholder') : t('assistantPlaceholder')}
           maxLength={2000}
           disabled={busy}
+          aria-label={rotaMode || showRotaExamples ? t('aiRotaPlaceholder') : t('assistantPlaceholder')}
         />
+        {(rotaMode || showRotaExamples) && voiceSupported ? (
+          <Button
+            type="button"
+            size="icon"
+            variant={listening ? 'default' : 'outline'}
+            className="shrink-0"
+            disabled={busy}
+            onClick={toggleVoice}
+            aria-label={listening ? t('aiRotaVoiceStop') : t('aiRotaVoiceStart')}
+            aria-pressed={listening}
+            title={t('aiRotaVoiceClientOnly')}
+          >
+            {listening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+          </Button>
+        ) : null}
         <Button type="submit" size="icon" className="shrink-0" disabled={busy || !input.trim()}>
           <Send className="size-4" />
         </Button>
       </form>
+      {voiceHint ? <p className="px-3 pb-1 text-xs text-muted-foreground">{voiceHint}</p> : null}
       {pendingProposal ? (
         <p className="px-3 pb-2 text-xs text-muted-foreground">{t('proposalWaiting')}</p>
       ) : null}

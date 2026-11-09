@@ -110,6 +110,8 @@ def send_to_user(
     title: str,
     body: str,
     data: Optional[dict[str, Any]] = None,
+    sound: bool = True,
+    tag: Optional[str] = None,
 ) -> int:
     """Send a data+notification message to every registered token for this user.
 
@@ -142,10 +144,12 @@ def send_to_user(
             priority="high",
             notification=messaging.AndroidNotification(
                 channel_id="controlops_ops",
-                sound="default",
-                default_sound=True,
+                sound="default" if sound else None,
+                default_sound=bool(sound),
                 default_vibrate_timings=True,
                 priority="high",
+                visibility="public",
+                tag=tag,
             ),
         ),
         apns=messaging.APNSConfig(
@@ -153,7 +157,7 @@ def send_to_user(
             payload=messaging.APNSPayload(
                 aps=messaging.Aps(
                     alert=messaging.ApsAlert(title=title, body=body),
-                    sound="default",
+                    sound="default" if sound else None,
                     badge=1,
                     content_available=True,
                 )
@@ -194,17 +198,26 @@ def notify_after_app_notification(
     body: str,
     entity_type: Optional[str] = None,
     entity_id: Optional[int] = None,
+    sound: bool = True,
+    tag: Optional[str] = None,
+    data: Optional[dict[str, Any]] = None,
 ) -> None:
+    payload = {
+        "type": kind,
+        "notification_id": notification_id,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "screen": "rota" if entity_type in {"rota", "assignment"} else entity_type,
+        "sound": "1" if sound else "0",
+    }
+    if data:
+        payload.update({k: v for k, v in data.items() if v is not None})
     send_to_user(
         db,
         user_id,
         title=title,
         body=body or "",
-        data={
-            "type": kind,
-            "notification_id": notification_id,
-            "entity_type": entity_type,
-            "entity_id": entity_id,
-            "screen": "rota" if entity_type in {"rota", "assignment"} else entity_type,
-        },
+        data=payload,
+        sound=sound,
+        tag=tag,
     )

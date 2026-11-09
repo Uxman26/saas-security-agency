@@ -9,14 +9,15 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import AppNotification, Assignment, Attendance, Company, Guard, Site
 from app.services.attendance_service import (
     CANCELLED_STATUSES,
-    EARLY_BOOK_ON_MINUTES,
     _assignment_shift_start_dt,
     _company_zone,
 )
 
 logger = logging.getLogger(__name__)
 
-SHIFT_REMINDER_MINUTES = EARLY_BOOK_ON_MINUTES
+SHIFT_REMINDER_MINUTES = 30
+_OVERSIGHT_TOKENS = ("admin", "controller", "manager", "supervisor")
+_PORTAL_SLUGS = {"client", "staff", "guard"}
 
 
 def assignment_start_utc(assignment: Assignment, zone) -> Optional[datetime]:
@@ -26,6 +27,19 @@ def assignment_start_utc(assignment: Assignment, zone) -> Optional[datetime]:
     if start.tzinfo is None:
         return start.replace(tzinfo=zone).astimezone(timezone.utc)
     return start.astimezone(timezone.utc)
+
+
+def is_shift_oversight_user(user) -> bool:
+    if getattr(user, "is_active", True) is False:
+        return False
+    role_row = getattr(user, "role_row", None)
+    slug = (getattr(role_row, "slug", None) or "").lower().strip()
+    name = (getattr(role_row, "name", None) or "").lower()
+    raw = (getattr(user, "role", None) or "").lower().strip()
+    if slug in _PORTAL_SLUGS or raw in _PORTAL_SLUGS:
+        return False
+    blob = f"{slug} {name} {raw}"
+    return any(token in blob for token in _OVERSIGHT_TOKENS)
 
 
 def should_send_shift_reminder(
@@ -76,11 +90,7 @@ def sweep_shift_reminders(db: Session) -> dict:
                 if status in CANCELLED_STATUSES or att.booked_at or att.booked_off_at:
                     skipped += 1
                     continue
-            start_hm = (assignment.shift_start or "")[:5]
-            if _already_sent(db, company.id, assignment, start_hm, now_utc):
-                skipped += 1
-                continue
-            if _send_one(db, company, assignment, start_utc, zone):
+            if _send_one(db, company, assignment, start_utc, zone, now_utc):
                 sent += 1
                 logger.info(
                     "shift_reminder assignment=%s intended_utc=%s local=%s now_utc=%s tz=%s",
@@ -103,29 +113,60 @@ def _attendance_for(assignment: Assignment) -> Optional[Attendance]:
     return rows[0]
 
 
-def _already_sent(db: Session, company_id: int, assignment: Assignment, start_hm: str, now_utc: datetime) -> bool:
+def _already_sent_to(db: Session, company_id: int, user_id: int, assignment_id: int, now_utc: datetime) -> bool:
     since = now_utc - timedelta(hours=18)
-    rows = (
-        db.query(AppNotification)
+    return (
+        db.query(AppNotification.id)
         .filter(
             AppNotification.company_id == company_id,
+            AppNotification.user_id == user_id,
             AppNotification.kind == "shift_reminder",
             AppNotification.entity_type == "assignment",
-            AppNotification.entity_id == assignment.id,
+            AppNotification.entity_id == assignment_id,
             AppNotification.created_at >= since,
         )
-        .all()
+        .first()
+        is not None
     )
-    for row in rows:
-        body = (row.body or "")
-        if not start_hm or start_hm in body:
-            return True
-    return False
 
 
-def _send_one(db: Session, company: Company, assignment: Assignment, start_utc: datetime, zone) -> bool:
-    from app.services import email_trigger_service, fcm_push_service, membership_service, sms_trigger_service
+def _oversight_user_ids(db: Session, company: Company, site_id: Optional[int]) -> list[int]:
+    from app.services import membership_service
+    from app.services.portal_access import pinned_site_ids
+
+    ids: list[int] = []
+    seen: set[int] = set()
+    for user in membership_service.users_in_company(db, company.id):
+        if user.id in seen or getattr(user, "is_active", True) is False:
+            continue
+        pinned = pinned_site_ids(db, user)
+        if pinned is not None and site_id not in pinned and user.id != company.admin_id:
+            continue
+        if user.id == company.admin_id or is_shift_oversight_user(user):
+            ids.append(user.id)
+            seen.add(user.id)
+    return ids
+
+
+def _staff_user_id(db: Session, company: Company, guard: Guard) -> Optional[int]:
+    from app.services import membership_service
     from app.services.portal_access import get_linked_guard, is_staff_portal_user
+
+    uid = next(iter(membership_service.user_ids_for_guard(db, company.id, guard.id)), None)
+    if uid is not None:
+        return uid
+    for user in membership_service.users_in_company(db, company.id):
+        if not is_staff_portal_user(user):
+            continue
+        linked = get_linked_guard(db, user)
+        if linked and linked.id == guard.id:
+            return user.id
+    return None
+
+
+def _send_one(db: Session, company: Company, assignment: Assignment, start_utc: datetime, zone, now_utc: datetime) -> bool:
+    from app.models import User
+    from app.services import email_trigger_service, fcm_push_service, sms_trigger_service
 
     guard = assignment.guard or db.query(Guard).filter(Guard.id == assignment.guard_id).first()
     if not guard:
@@ -135,24 +176,37 @@ def _send_one(db: Session, company: Company, assignment: Assignment, start_utc: 
         site = db.query(Site).filter(Site.id == assignment.site_id).first()
     site_name = site.name if site else "site"
     local_start = start_utc.astimezone(zone)
-    date_str = assignment.date.isoformat() if assignment.date else local_start.date().isoformat()
+    shift_date = assignment.date or local_start.date()
+    date_str = shift_date.isoformat()
+    date_label = shift_date.strftime("%d/%m/%Y")
     start = (assignment.shift_start or local_start.strftime("%H:%M")).strip()
     end = (assignment.shift_end or "").strip()
     shift = f"{start}–{end}" if start and end else start or "scheduled"
+    zone_key = getattr(zone, "key", "local")
+    staff_name = (getattr(guard, "full_name", None) or getattr(guard, "name", None) or "Staff").strip()
     title = "Shift reminder"
-    body = f"Your shift at {site_name} starts at {start} ({getattr(zone, 'key', 'local')})."
+    staff_body = f"Your shift at {site_name} on {date_label} starts at {start} ({zone_key})."
+    oversight_body = f"{staff_name} at {site_name} on {date_label} starts at {shift} ({zone_key})."
 
-    uid = next(iter(membership_service.user_ids_for_guard(db, company.id, guard.id)), None)
-    if uid is None:
-        for user in membership_service.users_in_company(db, company.id):
-            if not is_staff_portal_user(user):
-                continue
-            linked = get_linked_guard(db, user)
-            if linked and linked.id == guard.id:
-                uid = user.id
-                break
+    staff_uid = _staff_user_id(db, company, guard)
+    recipients: list[tuple[int, str]] = []
+    seen: set[int] = set()
+    if staff_uid:
+        recipients.append((staff_uid, staff_body))
+        seen.add(staff_uid)
+    for uid in _oversight_user_ids(db, company, assignment.site_id):
+        if uid in seen:
+            continue
+        recipients.append((uid, oversight_body))
+        seen.add(uid)
+    if not recipients:
+        return False
 
-    if uid:
+    delivered = False
+    staff_notified = False
+    for uid, body in recipients:
+        if _already_sent_to(db, company.id, uid, assignment.id, now_utc):
+            continue
         row = AppNotification(
             company_id=company.id,
             user_id=uid,
@@ -164,6 +218,11 @@ def _send_one(db: Session, company: Company, assignment: Assignment, start_utc: 
         )
         db.add(row)
         db.flush()
+        delivered = True
+        if uid == staff_uid:
+            staff_notified = True
+        user = db.query(User).filter(User.id == uid).first()
+        muted = bool(getattr(user, "notification_sound_muted", False))
         try:
             fcm_push_service.notify_after_app_notification(
                 db,
@@ -174,16 +233,25 @@ def _send_one(db: Session, company: Company, assignment: Assignment, start_utc: 
                 body=body[:500],
                 entity_type="assignment",
                 entity_id=assignment.id,
+                sound=not muted,
+                tag=f"shift30-{assignment.id}",
+                data={
+                    "shift_date": date_str,
+                    "shift_start": start,
+                    "shift_end": end,
+                    "site": site_name,
+                    "staff": staff_name,
+                    "timezone": zone_key,
+                },
             )
         except Exception:
             logger.exception("shift_reminder FCM failed assignment=%s user=%s", assignment.id, uid)
 
-    actor_id = uid or company.admin_id
-    if actor_id:
+    if staff_notified and staff_uid:
         try:
             email_trigger_service._safe_send(
                 db,
-                actor_id,
+                staff_uid,
                 email_trigger_service._guard_email(guard),
                 title,
                 "shift_reminder",
@@ -196,7 +264,7 @@ def _send_one(db: Session, company: Company, assignment: Assignment, start_utc: 
         try:
             sms_trigger_service._safe_send(
                 db,
-                actor_id,
+                staff_uid,
                 sms_trigger_service._guard_phone(guard),
                 "shift_reminder",
                 date=date_str,
@@ -205,4 +273,4 @@ def _send_one(db: Session, company: Company, assignment: Assignment, start_utc: 
             )
         except Exception:
             logger.exception("shift_reminder SMS failed assignment=%s", assignment.id)
-    return True
+    return delivered

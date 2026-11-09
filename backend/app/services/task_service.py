@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Guard, Site, Task, User
+from app.models import Assignment, Guard, Site, Task, User
 from app.schemas import TaskCounts, TaskCreate, TaskResponse, TaskUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.portal_access import (
@@ -41,18 +42,69 @@ def _out(row: Task) -> TaskResponse:
     )
 
 
+def _minutes(value: Optional[str]) -> Optional[int]:
+    raw = (value or "").strip()
+    if "T" in raw:
+        raw = raw.split("T", 1)[1]
+    raw = raw[:5]
+    if not raw or ":" not in raw:
+        return None
+    hour, minute = raw.split(":", 1)
+    try:
+        h, m = int(hour), int(minute)
+    except ValueError:
+        return None
+    if h < 0 or m < 0:
+        return None
+    return h * 60 + m
+
+
+def _overnight(start: Optional[str], end: Optional[str]) -> bool:
+    start_m = _minutes(start)
+    end_m = _minutes(end)
+    return start_m is not None and end_m is not None and end_m < start_m
+
+
+def active_shift_site_ids(db: Session, company_id: int, guard_id: int, today: date) -> set[int]:
+    yesterday = today - timedelta(days=1)
+    rows = (
+        db.query(Assignment)
+        .join(Site, Site.id == Assignment.site_id)
+        .filter(
+            Site.company_id == company_id,
+            Assignment.guard_id == guard_id,
+            Assignment.date.in_([today, yesterday]),
+        )
+        .all()
+    )
+    sites: set[int] = set()
+    for row in rows:
+        if row.date == today or (row.date == yesterday and _overnight(row.shift_start, row.shift_end)):
+            sites.add(row.site_id)
+    return sites
+
+
 def _scope(db: Session, user: User, q):
     """What this login may see.
 
-    Staff see only what is assigned to them — a to-do list is personal, and showing a
-    guard the whole company's jobs would be the same leak the rota had. Clients see
-    tasks at their own sites, which is the scope every other client-facing module uses.
+    Staff see tasks assigned to them, plus unassigned tasks at a site where they have
+    a shift today (or an overnight shift that started yesterday). Another person's task
+    stays hidden. Clients see tasks at their own sites.
     """
     if is_staff_portal_user(user):
         guard = get_linked_guard(db, user)
         if not guard:
             return q.filter(Task.id < 0)
-        return q.filter(Task.guard_id == guard.id)
+        from app.models import Company
+        from app.services.attendance_service import _company_zone
+
+        company = db.query(Company).filter(Company.id == user.company_id).first()
+        today = datetime.now(_company_zone(company)).date() if company else date.today()
+        site_ids = active_shift_site_ids(db, user.company_id, guard.id, today)
+        personal = Task.guard_id == guard.id
+        if not site_ids:
+            return q.filter(personal)
+        return q.filter(or_(personal, and_(Task.guard_id.is_(None), Task.site_id.in_(site_ids))))
     if is_client_portal_user(user):
         allowed = {
             r[0]
@@ -187,6 +239,8 @@ def update_task(db: Session, user: User, task_id: int, data: TaskUpdate) -> Task
 
 
 def _apply_status(row: Task, status: str, user: User) -> None:
+    if status == "done" and row.status == "done" and row.completed_by_user_id:
+        return
     row.status = status
     if status == "done":
         row.completed_at = datetime.now(timezone.utc)

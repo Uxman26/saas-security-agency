@@ -1645,6 +1645,7 @@ class InvoiceBase(BaseModel):
     tax_rate: float = 20
     subtotal: float = 0
     tax_amount: float = 0
+    currency: str = "GBP"
 
 class InvoiceCreate(InvoiceBase):
     lines: Optional[list[InvoiceLineBase]] = None

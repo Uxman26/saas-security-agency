@@ -764,6 +764,7 @@ def run_recurring_invoices(db: Session) -> dict:
                 period_end=ri.next_run,
                 tax_rate=ri.tax_rate or 20,
                 notes=ri.notes,
+                currency=(getattr(ri, "currency", None) or "GBP"),
                 lines=lines,
             )
             inv = invoice_service.create_invoice(db, data, admin.id)

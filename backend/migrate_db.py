@@ -481,6 +481,8 @@ def _run_migrations():
         ("invoices", "subtotal", "REAL DEFAULT 0"),
         ("invoices", "tax_rate", "REAL DEFAULT 0"),
         ("invoices", "tax_amount", "REAL DEFAULT 0"),
+        ("invoices", "currency", "TEXT DEFAULT 'GBP'"),
+        ("recurring_invoices", "currency", "TEXT DEFAULT 'GBP'"),
         # Tenant lifecycle: archived companies keep their data but cannot sign in.
         ("companies", "archived_at", "TEXT"),
         ("companies", "archived_by_user_id", "INTEGER"),

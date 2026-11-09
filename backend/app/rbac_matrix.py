@@ -310,6 +310,7 @@ def default_matrix_staff_portal() -> Dict[str, Any]:
     base["rota"] = {"view": True, "create": False, "edit": True, "delete": False}
     # create unlocks attendance.book / book_by_shift used by mobile book on/off.
     base["attendance"] = {"view": True, "create": True, "edit": False, "delete": False}
+    base["tasks"] = {"view": True, "create": False, "edit": False, "delete": False}
     return base
 
 

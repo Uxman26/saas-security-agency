@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
+import { formatInvoiceMoney } from '@/lib/invoice-currency';
 import type { ClientBankAccount, Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
 import { ArrowLeft, Eye, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -442,15 +443,15 @@ export default function InvoiceEditPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                    <span>Subtotal £{(inv.subtotal ?? 0).toFixed(2)}</span>
-                    <span>Tax £{(inv.tax_amount ?? 0).toFixed(2)}</span>
+                    <span>Subtotal {formatInvoiceMoney(inv.subtotal ?? 0, inv.currency)}</span>
+                    <span>Tax {formatInvoiceMoney(inv.tax_amount ?? 0, inv.currency)}</span>
                     <span className="font-semibold text-foreground">
-                      Total £{(inv.total ?? 0).toFixed(2)}
+                      Total {formatInvoiceMoney(inv.total ?? 0, inv.currency)}
                     </span>
                     {(inv.amount_paid ?? 0) > 0 && (
                       <>
-                        <span className="text-green-700">Paid £{(inv.amount_paid ?? 0).toFixed(2)}</span>
-                        <span className="font-semibold text-red-700">Balance £{(inv.balance_due ?? 0).toFixed(2)}</span>
+                        <span className="text-green-700">Paid {formatInvoiceMoney(inv.amount_paid ?? 0, inv.currency)}</span>
+                        <span className="font-semibold text-red-700">Balance {formatInvoiceMoney(inv.balance_due ?? 0, inv.currency)}</span>
                       </>
                     )}
                   </div>
@@ -585,7 +586,7 @@ export default function InvoiceEditPage() {
                               }
                             />
                           </TableCell>
-                          <TableCell className="whitespace-nowrap">£{line.amount.toFixed(2)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{formatInvoiceMoney(line.amount, inv.currency)}</TableCell>
                           <TableCell>
                             <SearchableSelect
                               className="w-[140px]"
@@ -764,7 +765,7 @@ export default function InvoiceEditPage() {
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Amount: £{((parseFloat(newLine.hours) || 0) * (parseFloat(newLine.rate) || 0)).toFixed(2)}
+                      Amount: {formatInvoiceMoney((parseFloat(newLine.hours) || 0) * (parseFloat(newLine.rate) || 0), inv.currency)}
                     </p>
                   </div>
                   <DialogFooter>

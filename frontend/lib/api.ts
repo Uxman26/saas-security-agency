@@ -1370,6 +1370,7 @@ export const api = {
       force?: boolean;
       /** Client break billing: each shift's own setting, full span, or less the staff break. */
       break_mode?: 'shift' | 'without_break' | 'deduct';
+      currency?: string;
     } & WorkFilterParams): Promise<Invoice> => {
       const q = appendWorkFilters(
         new URLSearchParams({ period_start: params.period_start, period_end: params.period_end }),
@@ -1377,6 +1378,7 @@ export const api = {
       );
       if (params.force) q.append('force', 'true');
       if (params.break_mode && params.break_mode !== 'shift') q.append('break_mode', params.break_mode);
+      if (params.currency) q.append('currency', params.currency);
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),

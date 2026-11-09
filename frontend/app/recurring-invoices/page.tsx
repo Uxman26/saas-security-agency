@@ -9,10 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ModuleHeader, ModulePage } from '@/components/module-layout';
+import { ModulePage } from '@/components/module-layout';
+import { DashboardHeader, Pill, StatCards } from '@/components/module-dashboard';
+import { INVOICE_CURRENCIES } from '@/lib/invoice-currency';
 import { api } from '@/lib/api';
 import type { Client, RecurringInvoice, Site } from '@/lib/types';
-import { Plus, Trash2 } from 'lucide-react';
+import { List, Pause, Plus, Repeat, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -30,6 +32,7 @@ const empty = () => ({
   hours: '0',
   rate: '0',
   amount: '',
+  currency: 'GBP',
 });
 
 export default function RecurringInvoicesPage() {
@@ -42,6 +45,7 @@ export default function RecurringInvoicesPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty());
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'paused' | 'cancelled'>('all');
 
   const load = useCallback(async () => {
     try {
@@ -95,6 +99,7 @@ export default function RecurringInvoicesPage() {
         notes: form.notes || undefined,
         template_json: JSON.stringify(template),
         status: 'active',
+        currency: form.currency,
       });
       setOpen(false);
       setForm(empty());
@@ -106,14 +111,16 @@ export default function RecurringInvoicesPage() {
   };
 
   const clientName = (id?: number | null) => clients.find((c) => c.id === id)?.name || '—';
+  const visible = statusFilter === 'all' ? rows : rows.filter((r) => r.status === statusFilter);
+  const activeCount = rows.filter((r) => r.status === 'active').length;
 
   return (
     <ProtectedRoute>
       <AppShell>
         <ModulePage>
-          <ModuleHeader
+          <DashboardHeader
             title="Recurring Invoices"
-            description="Schedule automatic invoice generation for clients and sites."
+            description="Schedule automatic invoice generation for clients and sites. Creating a schedule does not change an invoice that was already raised."
             actions={
               canWrite ? (
                 <Dialog open={open} onOpenChange={setOpen}>
@@ -187,6 +194,22 @@ export default function RecurringInvoicesPage() {
                         </div>
                       </div>
                       <div>
+                        <Label>Currency</Label>
+                        <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INVOICE_CURRENCIES.map((c) => (
+                              <SelectItem key={c.code} value={c.code}>
+                                {c.code} — {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="mt-1 text-xs text-muted-foreground">Stored with each invoice this schedule raises. Amounts are not converted.</p>
+                      </div>
+                      <div>
                         <Label>Line description</Label>
                         <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
                       </div>
@@ -213,6 +236,25 @@ export default function RecurringInvoicesPage() {
               ) : null
             }
           />
+          <StatCards
+            cards={[
+              { key: 'active', label: 'Active schedules', value: activeCount, icon: Repeat, tone: 'positive' },
+              { key: 'paused', label: 'Paused', value: rows.filter((r) => r.status === 'paused').length, icon: Pause, tone: 'warning' },
+              { key: 'all', label: 'All schedules', value: rows.length, icon: List, tone: 'neutral' },
+            ]}
+          />
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'active', 'paused', 'cancelled'] as const).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setStatusFilter(id)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium ${statusFilter === id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+              >
+                {id === 'all' ? 'All' : id.charAt(0).toUpperCase() + id.slice(1)}
+              </button>
+            ))}
+          </div>
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
@@ -221,23 +263,29 @@ export default function RecurringInvoicesPage() {
                   <TableHead>Frequency</TableHead>
                   <TableHead>Next run</TableHead>
                   <TableHead>Tax</TableHead>
+                  <TableHead>Currency</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.length === 0 ? (
+                {visible.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6}>No recurring invoices yet.</TableCell>
+                    <TableCell colSpan={7}>No recurring invoices yet.</TableCell>
                   </TableRow>
                 ) : (
-                  rows.map((r) => (
+                  visible.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{clientName(r.client_id)}</TableCell>
                       <TableCell>{r.frequency}</TableCell>
                       <TableCell>{r.next_run || '—'}</TableCell>
                       <TableCell>{r.tax_rate}%</TableCell>
-                      <TableCell>{r.status}</TableCell>
+                      <TableCell>{r.currency || 'GBP'}</TableCell>
+                      <TableCell>
+                        <Pill tone={r.status === 'active' ? 'positive' : r.status === 'paused' ? 'warning' : 'muted'}>
+                          {r.status}
+                        </Pill>
+                      </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           {canEdit && r.status !== 'cancelled' ? (

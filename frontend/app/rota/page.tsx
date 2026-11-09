@@ -35,7 +35,7 @@ import {
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, type SortDir } from '@/lib/use-table-list';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
-import type { RotaPlanListItem } from '@/lib/types';
+import type { RotaDetail, RotaPlanListItem } from '@/lib/types';
 import {
   BarChart3,
   CalendarCheck,
@@ -181,6 +181,8 @@ function RotaHubPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'published'>('all');
   // Only rotas with past shifts nobody marked attendance for.
   const [needsMarking, setNeedsMarking] = useState(false);
+  const [markShifts, setMarkShifts] = useState<RotaDetail[] | null>(null);
+  const [markShiftsLoading, setMarkShiftsLoading] = useState(false);
   // Client / Site / Contractor / Sub-contractor / Staff / Job title. Answered on the
   // server, which keeps a rota when any of its shifts match — and a client match covers
   // every site assigned to that client.
@@ -233,12 +235,30 @@ function RotaHubPage() {
         if (tab === 'draft' && (ended || r.status === 'published')) return false;
         if (tab === 'old' && !ended) return false;
         if (statusFilter !== 'all' && (statusFilter === 'published') !== (r.status === 'published')) return false;
-        if (needsMarking && !(r.unmarked_attendance_count > 0)) return false;
         if (nameFilter.trim() && !r.name.toLowerCase().includes(nameFilter.trim().toLowerCase())) return false;
         return overlapsRange(r, rangeFrom, rangeTo);
       }),
-    [rotas, tab, statusFilter, needsMarking, nameFilter, rangeFrom, rangeTo]
+    [rotas, tab, statusFilter, nameFilter, rangeFrom, rangeTo]
   );
+
+  // Same population as the rose banner: tab membership + unmarked count only.
+  // Do not also require name/date filters here — that left "Show only these" empty
+  // while the banner still counted the rota.
+  const unmarkedRotas = useMemo(
+    () =>
+      rotas.filter((r) => {
+        const n = Number(r.unmarked_attendance_count ?? 0);
+        if (!(n > 0)) return false;
+        const ended = isEnded(r);
+        if (tab === 'active') return !ended && r.status === 'published';
+        if (tab === 'draft') return !ended && r.status !== 'published';
+        return ended;
+      }),
+    [rotas, tab]
+  );
+  const unmarkedShiftTotal = unmarkedRotas.reduce((n, r) => n + Number(r.unmarked_attendance_count ?? 0), 0);
+  const showOnlyMarks = needsMarking && unmarkedShiftTotal > 0;
+  const listedRotas = showOnlyMarks ? unmarkedRotas : tabRotas;
 
   // Rotas per tab still waiting on attendance, counted before the page's own filters so
   // the tab badge stays put while the user narrows the list.
@@ -249,8 +269,8 @@ function RotaHubPage() {
       old: { rotas: 0, shifts: 0 },
     };
     for (const r of rotas) {
-      const n = r.unmarked_attendance_count ?? 0;
-      if (n <= 0) continue;
+      const n = Number(r.unmarked_attendance_count ?? 0);
+      if (!(n > 0)) continue;
       const t: Tab = isEnded(r) ? 'old' : r.status === 'published' ? 'active' : 'draft';
       out[t].rotas += 1;
       out[t].shifts += n;
@@ -261,11 +281,55 @@ function RotaHubPage() {
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(tabRotas.map((r) => r.id));
+      const valid = new Set(listedRotas.map((r) => r.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [tabRotas]);
+  }, [listedRotas]);
+
+  useEffect(() => {
+    if (!showOnlyMarks) {
+      setMarkShifts(null);
+      return;
+    }
+    if (unmarkedRotas.length === 0) {
+      setMarkShifts([]);
+      return;
+    }
+    const planIds = unmarkedRotas.map((r) => r.id);
+    const startDate = [...unmarkedRotas.map((r) => r.start_date)].filter(Boolean).sort()[0] || todayKey();
+    // Match the company clock used for unmarked counts (Europe/London), not the browser's local day.
+    const londonToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date());
+    const endDate = [londonToday, ...unmarkedRotas.map((r) => r.end_date)].filter(Boolean).sort().at(-1) || londonToday;
+    let cancelled = false;
+    setMarkShiftsLoading(true);
+    api.assignments
+      .rotaDetail({
+        start_date: startDate,
+        end_date: endDate,
+        unmarked_only: true,
+        rota_plan_ids: planIds,
+        ...toWorkFilterParams(workFilters),
+      })
+      .then((rows) => {
+        if (cancelled) return;
+        const needing = [...rows].sort((a, b) => {
+          const byDate = String(a.date).localeCompare(String(b.date));
+          if (byDate) return byDate;
+          return String(a.shift_start || '').localeCompare(String(b.shift_start || ''));
+        });
+        setMarkShifts(needing);
+      })
+      .catch(() => {
+        if (!cancelled) setMarkShifts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMarkShiftsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showOnlyMarks, unmarkedRotas, workFilters]);
 
   const getSortValue = useCallback((r: RotaPlanListItem, key: string) => {
     switch (key) {
@@ -293,7 +357,7 @@ function RotaHubPage() {
   }, []);
 
   const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
-    tabRotas,
+    listedRotas,
     '',
     sortKey,
     sortDir,
@@ -484,13 +548,13 @@ function RotaHubPage() {
   };
 
   const selected = [...selectedIds];
-  const selectedDrafts = tabRotas.filter((r) => selectedIds.has(r.id) && r.status !== 'published');
+  const selectedDrafts = listedRotas.filter((r) => selectedIds.has(r.id) && r.status !== 'published');
 
   const activeRotas = rotas.filter((r) => !isEnded(r) && r.status === 'published');
   const draftRotas = rotas.filter((r) => !isEnded(r) && r.status !== 'published');
 
-  const plannedShifts = tabRotas.reduce((n, r) => n + coverage(r).planned, 0);
-  const sentShifts = tabRotas.reduce((n, r) => n + coverage(r).sent, 0);
+  const plannedShifts = listedRotas.reduce((n, r) => n + coverage(r).planned, 0);
+  const sentShifts = listedRotas.reduce((n, r) => n + coverage(r).sent, 0);
   const unsentShifts = Math.max(plannedShifts - sentShifts, 0);
   const sentPct = plannedShifts ? (sentShifts / plannedShifts) * 100 : 0;
   const runningOnFocus = rotas.filter((r) => r.status === 'published' && r.start_date <= focusDate && r.end_date >= focusDate);
@@ -510,10 +574,10 @@ function RotaHubPage() {
     {
       key: 'shifts',
       label: 'Total shifts',
-      value: tabRotas.reduce((n, r) => n + r.shift_count, 0),
+      value: listedRotas.reduce((n, r) => n + r.shift_count, 0),
       icon: Users,
       tone: 'warning',
-      caption: `${tabRotas.reduce((n, r) => n + r.staff_count, 0)} staff assigned`,
+      caption: `${listedRotas.reduce((n, r) => n + r.staff_count, 0)} staff assigned`,
     },
     {
       key: 'filled',
@@ -531,7 +595,7 @@ function RotaHubPage() {
       icon: Clock,
       tone: unsentShifts ? 'danger' : 'positive',
       caption: plannedShifts
-        ? `${Math.round(100 - sentPct)}% not sent to staff · ${tabRotas.reduce((n, r) => n + (r.unmarked_attendance_count ?? 0), 0)} unmarked`
+        ? `${Math.round(100 - sentPct)}% not sent to staff · ${listedRotas.reduce((n, r) => n + Number(r.unmarked_attendance_count ?? 0), 0)} unmarked`
         : 'nothing planned',
       progress: { value: plannedShifts ? 100 - sentPct : 0, tone: 'danger' },
     },
@@ -576,7 +640,7 @@ function RotaHubPage() {
   ];
 
   const exportCsv = () => {
-    const rows = selectedIds.size ? tabRotas.filter((r) => selectedIds.has(r.id)) : tabRotas;
+    const rows = selectedIds.size ? listedRotas.filter((r) => selectedIds.has(r.id)) : listedRotas;
     if (!rows.length) {
       toast.warning('No rotas to export');
       return;
@@ -598,7 +662,7 @@ function RotaHubPage() {
   };
 
   const filtersActive = !!(nameFilter || rangeFrom || rangeTo || statusFilter !== 'all' || needsMarking || hasWorkFilters(workFilters));
-  const selectedOne = selected.length === 1 ? tabRotas.find((r) => r.id === selected[0]) ?? null : null;
+  const selectedOne = selected.length === 1 ? listedRotas.find((r) => r.id === selected[0]) ?? null : null;
 
   const unmarkedTitle = (t: Tab) =>
     `${unmarkedByTab[t].rotas} rota${unmarkedByTab[t].rotas === 1 ? '' : 's'} with ${unmarkedByTab[t].shifts} shift${unmarkedByTab[t].shifts === 1 ? '' : 's'} where attendance was never marked`;
@@ -609,8 +673,9 @@ function RotaHubPage() {
   ];
   const tabUnmarked = unmarkedByTab[tab];
 
-  const emptyText =
-    tab === 'draft'
+  const emptyText = showOnlyMarks
+    ? 'No rotas with unmarked attendance in this tab.'
+    : tab === 'draft'
       ? 'No draft rotas. Create one and publish it when it is ready.'
       : tab === 'old'
         ? 'No rotas have ended yet. They move here once their end date passes.'
@@ -693,18 +758,83 @@ function RotaHubPage() {
                   invoicing until marked.
                 </p>
                 <Button
+                  type="button"
                   size="sm"
-                  variant={needsMarking ? 'default' : 'outline'}
-                  className={needsMarking ? 'bg-rose-600 hover:bg-rose-700' : 'border-rose-300 bg-white text-rose-800 hover:bg-rose-100 dark:bg-transparent dark:text-rose-200'}
+                  variant={showOnlyMarks ? 'default' : 'outline'}
+                  className={showOnlyMarks ? 'bg-rose-600 hover:bg-rose-700' : 'border-rose-300 bg-white text-rose-800 hover:bg-rose-100 dark:bg-transparent dark:text-rose-200'}
                   onClick={() => setNeedsMarking((v) => !v)}
                 >
-                  {needsMarking ? 'Show all rotas' : 'Show only these'}
+                  {showOnlyMarks ? 'Show all rotas' : 'Show only these'}
                 </Button>
               </div>
             ) : null}
 
+            {showOnlyMarks ? (
+              <Card>
+                <CardContent className="space-y-3 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">Shifts needing attendance</p>
+                      <p className="text-sm text-muted-foreground">
+                        Started shifts with no mark in the rotas below. Mark each one so pay and invoicing stay correct.
+                      </p>
+                    </div>
+                    {markShiftsLoading ? (
+                      <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <Pill tone="danger">{markShifts?.length ?? 0} shown</Pill>
+                    )}
+                  </div>
+                  {markShiftsLoading ? (
+                    <InlineTableSkeleton rows={4} />
+                  ) : !markShifts?.length ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      No started unmarked shifts were returned for these rotas. Open a rota to review attendance on the calendar.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Staff</TableHead>
+                            <TableHead>Site</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Start</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {markShifts.map((s) => {
+                            const start = (s.shift_start || '').slice(0, 5);
+                            const href =
+                              `/rota/calendar?id=${s.rota_plan_id ?? ''}` +
+                              `&emp=${s.guard_id}&date=${s.date}&start=${encodeURIComponent(start)}&fix=attendance`;
+                            return (
+                              <TableRow key={`${s.id}-${s.date}-${start}`}>
+                                <TableCell className="font-medium">{s.guard_name || '—'}</TableCell>
+                                <TableCell>{s.site_name || '—'}</TableCell>
+                                <TableCell className="whitespace-nowrap">{formatDateUK(s.date)}</TableCell>
+                                <TableCell className="whitespace-nowrap">{start || '—'}</TableCell>
+                                <TableCell className="capitalize">{(s.attendance_status || 'pending').replaceAll('_', ' ')}</TableCell>
+                                <TableCell className="text-right">
+                                  <Button size="sm" variant="outline" asChild>
+                                    <Link href={href}>Mark</Link>
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+
             <ResultsCard
-              title={tabs.find((t) => t.id === tab)?.label ?? 'Rotas'}
+              title={showOnlyMarks ? 'Rotas needing attendance' : tabs.find((t) => t.id === tab)?.label ?? 'Rotas'}
               count={total}
               pageSize={pageSize}
               onPageSizeChange={(n) => {
@@ -768,7 +898,7 @@ function RotaHubPage() {
                       Delete
                     </Button>
                   ) : null}
-                  <Button size="sm" variant="outline" onClick={exportCsv} disabled={!tabRotas.length}>
+                  <Button size="sm" variant="outline" onClick={exportCsv} disabled={!listedRotas.length}>
                     <Download className="size-3.5 mr-1.5" />
                     Export
                   </Button>
@@ -818,7 +948,7 @@ function RotaHubPage() {
                         <ChevronRight className="size-4" />
                       </Button>
                     </div>
-                    <RotaPeriodCalendar rotas={tabRotas} mode={view} focus={focusDate} today={todayKey()} />
+                    <RotaPeriodCalendar rotas={listedRotas} mode={view} focus={focusDate} today={todayKey()} />
                   </div>
                 ) : loading ? (
                   <InlineTableSkeleton rows={5} />

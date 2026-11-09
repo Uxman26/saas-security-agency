@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -74,6 +74,8 @@ def get_rota_detail(
     contractor_id: Optional[str] = None,
     sub_contractor_id: Optional[str] = None,
     job_title: Optional[str] = None,
+    unmarked_only: bool = False,
+    rota_plan_id: Optional[list[int]] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("rota", "detail_view")),
 ):
@@ -88,6 +90,8 @@ def get_rota_detail(
         contractor_id=contractor_id,
         sub_contractor_id=sub_contractor_id,
         job_title=job_title,
+        unmarked_only=unmarked_only,
+        rota_plan_ids=rota_plan_id,
     )
 
 

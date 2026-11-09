@@ -311,6 +311,39 @@ def _ensure_payroll_status_column():
         logging.getLogger(__name__).exception("payroll.status migration failed")
 
 
+def _ensure_invoice_currency_columns():
+    """Invoice + recurring-invoice currency (default GBP, no FX).
+
+    Must run after table creation. The SQLite alters list also mentions these columns, but
+    ``recurring_invoices`` is created later in ``_run_migrations`` without ``currency``, so the
+    early ALTER is skipped and list/create endpoints 500 with "no such column: currency".
+    """
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        dialect = engine.dialect.name
+        str_type = "VARCHAR(8)" if dialect == "postgresql" else "TEXT"
+        for table in ("invoices", "recurring_invoices"):
+            if not insp.has_table(table):
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            if "currency" in cols:
+                with engine.begin() as conn:
+                    conn.execute(
+                        text(f"UPDATE {table} SET currency = 'GBP' WHERE currency IS NULL OR trim(currency) = ''")
+                    )
+                continue
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN currency {str_type} DEFAULT 'GBP'"))
+                conn.execute(text(f"UPDATE {table} SET currency = 'GBP' WHERE currency IS NULL"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("invoice currency columns migration failed")
+
+
 def _ensure_clock_in_location_columns():
     try:
         from sqlalchemy import inspect, text
@@ -394,8 +427,13 @@ def _run_migrations():
     _ensure_payroll_status_column()
     _ensure_unique_attendance()
     _restore_scheduled_assignment_times()
+    # Early pass for DBs that already have the tables (covers Postgres, where the
+    # SQLite-only alters below never run). A second pass runs after table creates.
+    _ensure_invoice_currency_columns()
     path = get_db_path()
     if not path:
+        # Non-SQLite: remaining migrations are SQLite-specific DDL. Currency ensure above
+        # is the critical path for invoice / recurring-invoice list endpoints.
         return
     parent = os.path.dirname(path)
     if parent:
@@ -2599,6 +2637,7 @@ def _run_migrations():
                 end_date TEXT,
                 next_run TEXT,
                 tax_rate REAL DEFAULT 20,
+                currency TEXT DEFAULT 'GBP',
                 notes TEXT,
                 template_json TEXT,
                 status TEXT DEFAULT 'active',
@@ -2841,6 +2880,9 @@ def _run_migrations():
 
     conn.commit()
     conn.close()
+    # Recurring invoices are created above; ensure currency exists even on DBs that
+    # already had the table before the column was added to the CREATE DDL.
+    _ensure_invoice_currency_columns()
     _ensure_company_login_ids()
     try:
         from app.database import SessionLocal

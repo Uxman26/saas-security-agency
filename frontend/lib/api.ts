@@ -474,10 +474,21 @@ export const api = {
       if (params?.end_date) query.append('end_date', params.end_date);
       return request<Rota[]>(`/assignments/rota?${query.toString()}`);
     },
-    rotaDetail: (params: { start_date: string; end_date: string } & WorkFilterParams): Promise<RotaDetail[]> => {
+    rotaDetail: (
+      params: {
+        start_date: string;
+        end_date: string;
+        unmarked_only?: boolean;
+        rota_plan_ids?: number[];
+      } & WorkFilterParams
+    ): Promise<RotaDetail[]> => {
       const query = appendWorkFilters(new URLSearchParams(), params);
       query.append('start_date', params.start_date);
       query.append('end_date', params.end_date);
+      if (params.unmarked_only) query.append('unmarked_only', 'true');
+      for (const id of params.rota_plan_ids || []) {
+        if (Number.isFinite(id)) query.append('rota_plan_id', String(id));
+      }
       return request<RotaDetail[]>(`/assignments/rota/detail?${query.toString()}`);
     },
     rotaSummary: (params: { start_date: string; end_date: string } & WorkFilterParams): Promise<RotaSummary[]> => {

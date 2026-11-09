@@ -21,7 +21,7 @@ from app.services.attendance_service import (
 )
 from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import normalize_pay_type
-from app.services.shift_clock import attendance_if_unmarked, london_now
+from app.services.shift_clock import attendance_if_unmarked, london_now, shift_has_started
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
 
 _CANONICAL_SHIFT_TYPES = frozenset({"morning", "afternoon", "evening", "night"})
@@ -229,12 +229,17 @@ def list_rota_details(
     contractor_id: Optional[str] = None,
     sub_contractor_id: Optional[str] = None,
     job_title: Optional[str] = None,
+    unmarked_only: bool = False,
+    rota_plan_ids: Optional[List[int]] = None,
 ) -> List[RotaDetailResponse]:
     """Every rota'd shift in the window, filtered by any combination of client, site,
     contractor, sub-contractor, staff member and job title.
 
     Picking a client covers all of that client's sites — the scope resolves the client
     to its site ids before anything queries.
+
+    ``unmarked_only`` keeps started shifts with no attendance mark, using the same
+    Europe/London clock as rota-plan unmarked counts so "Show only these" matches the banner.
     """
     company = get_company_by_user_id(db, user_id)
     scope = resolve_work_scope(
@@ -250,10 +255,15 @@ def list_rota_details(
     q = _assignment_base_query(db, company.id)
     q = _scope_for_portal_user(db, user_id, q)
     q = _apply_rota_filters(q, guard_id, site_id, client_id, start_date, end_date, scope)
+    if rota_plan_ids:
+        q = q.filter(Assignment.rota_plan_id.in_(rota_plan_ids))
     rows = q.order_by(Assignment.date, Guard.full_name).all()
+    # Unmarked attendance is defined on the London clock (same as rota plan badges).
+    # Detail status otherwise follows the company zone for display.
     zone = _company_zone(company)
     now = datetime.now(zone)
     today = now.date()
+    mark_clock = london_now() if unmarked_only else now
     att_map = {}
     late_map = {}
     ot_map = {}
@@ -296,12 +306,19 @@ def list_rota_details(
         late_log = late_map.get(a.id)
         ot_log = ot_map.get(a.id)
         ef_log = ef_map.get(a.id)
+        # Same rules as rota_plan_service._unmarked_counts.
+        marked = bool(late_log) or bool(att and (att.booked_at or (att.status or "").strip()))
+        if unmarked_only:
+            if marked:
+                continue
+            if not shift_has_started(a.date, a.shift_start, mark_clock):
+                continue
         g = a.guard
         site = a.site
         cli: Optional[Client] = site.client if site else None
         hrs = shift_hours(a)
         st = normalize_shift_type(a.shift_type, a.shift_start)
-        status = _attendance_status(a, att, late_log, today, now=now)
+        status = _attendance_status(a, att, late_log, today, now=mark_clock if unmarked_only else now)
         late_m = _late_minutes(a, att, late_log, zone=zone)
         actual = compute_worked_hours(
             shift_date=a.date,
@@ -324,9 +341,6 @@ def list_rota_details(
             early_finish_end=ef_log.actual_end if ef_log else None,
             cap_early_start=True,
         )
-        # A past shift nobody touched also reports "absent", so the status alone cannot
-        # tell a recorded absence from a forgotten mark. This says whether anyone marked it.
-        marked = bool(late_log) or bool(att and (att.booked_at or att.status))
         out.append(
             RotaDetailResponse(
                 id=a.id,
@@ -367,8 +381,9 @@ def list_rota_details(
 
     # Draft planner shifts are for internal controllers only. Portal logins see published
     # assignments (and open slots already mirrored as assignments), matching the rota-plan
-    # portal path that hides unpublished trees.
-    if start_date and end_date and not skip_drafts:
+    # portal path that hides unpublished trees. Unmarked attendance only applies to published
+    # assignments, so skip drafts when filtering for that list.
+    if start_date and end_date and not skip_drafts and not unmarked_only:
         out.extend(
             _planner_shift_details(
                 db,

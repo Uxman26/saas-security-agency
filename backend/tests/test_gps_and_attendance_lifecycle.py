@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from app.services.attendance_service import gps_verified_for, parse_gps_accuracy_m
 from app.services.rota_service import _attendance_status
-from app.services.shift_reminder_service import should_send_shift_reminder
+from app.services.shift_reminder_service import is_shift_oversight_user, should_send_shift_reminder
 
 
 def test_parse_accuracy_from_gps_note():
@@ -40,14 +40,35 @@ def test_rota_status_clocked_out_is_completed():
 def test_shift_reminder_window_is_before_start_not_after():
     start = datetime(2026, 10, 22, 13, 20, tzinfo=timezone.utc)
     assert should_send_shift_reminder(
+        now_utc=datetime(2026, 10, 22, 12, 50, tzinfo=timezone.utc),
+        start_utc=start,
+    )
+    assert should_send_shift_reminder(
         now_utc=datetime(2026, 10, 22, 13, 0, tzinfo=timezone.utc),
         start_utc=start,
     )
     assert not should_send_shift_reminder(
-        now_utc=datetime(2026, 10, 22, 12, 50, tzinfo=timezone.utc),
+        now_utc=datetime(2026, 10, 22, 12, 49, tzinfo=timezone.utc),
         start_utc=start,
     )
     assert not should_send_shift_reminder(
         now_utc=datetime(2026, 10, 22, 13, 20, tzinfo=timezone.utc),
         start_utc=start,
     )
+
+
+def test_shift_oversight_includes_admin_and_controller_not_portal_roles():
+    def user(role, slug, name, active=True):
+        return SimpleNamespace(
+            is_active=active,
+            role=role,
+            role_row=SimpleNamespace(slug=slug, name=name),
+        )
+
+    assert is_shift_oversight_user(user("admin", "admin", "Admin"))
+    assert is_shift_oversight_user(user("custom", "site_controller", "Controller"))
+    assert is_shift_oversight_user(user("manager", "manager", "Manager"))
+    assert not is_shift_oversight_user(user("staff", "staff", "Staff"))
+    assert not is_shift_oversight_user(user("guard", "guard", "Guard"))
+    assert not is_shift_oversight_user(user("client", "client", "Client"))
+    assert not is_shift_oversight_user(user("admin", "admin", "Admin", active=False))

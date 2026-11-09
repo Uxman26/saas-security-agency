@@ -238,15 +238,19 @@ _ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "guard": _GUARD_LEGACY,
     "client": _CLIENT_LEGACY,
     "staff": _STAFF_LEGACY,
+    # Fail-closed bag for unrecognised legacy role strings (never company_admin).
+    "unknown": frozenset(),
 }
 
 
 def effective_role(user: User) -> str:
-    r = (user.role or "company_admin").lower().strip()
-    if r == "admin":
-        r = "company_admin"
-    if r not in _ROLE_PERMISSIONS:
+    r = (user.role or "").lower().strip()
+    if not r:
         return "company_admin"
+    if r == "admin":
+        return "company_admin"
+    if r not in _ROLE_PERMISSIONS:
+        return "unknown"
     return r
 
 
@@ -352,6 +356,8 @@ def permissions_for_user_db(db: Session, user: User) -> list[str]:
             # company_admin and hand a deliberately locked-down role every permission.
             return sorted(module_permission_codes_for_role(db, r.id))
         return []
+    # Legacy users without role_id: only known static role strings get a bag.
+    # Custom slugs (e.g. controller) without a Role row must not inherit company_admin.
     return permissions_for_user(user)
 
 

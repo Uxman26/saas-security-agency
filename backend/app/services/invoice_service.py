@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
@@ -12,7 +12,7 @@ from app.services.company_service import get_company_by_user_id
 from app.services.rate_service import resolve_billing_rate
 from app.services.special_day_service import special_date_set
 from app.services.rota_service import calc_shift_hours, normalize_shift_type
-from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID
+from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID, _company_zone
 from app.services.work_filters import resolve_work_scope
 from app.services.recycle_bin import archive as _bin_archive
 
@@ -644,6 +644,7 @@ def generate_from_rota(
     force: bool = False,
     break_mode: str = "shift",
     currency: str = "GBP",
+    due_date: Optional[date] = None,
 ) -> Invoice:
     """Create a draft invoice from published rota planner shifts for a client/site period.
 
@@ -749,13 +750,20 @@ def generate_from_rota(
             )
     # Counted from today when billing a past period; counting from the period end made
     # any invoice raised more than 30 days after it overdue the moment it was created.
-    due = max(period_end, date.today()) + timedelta(days=30)
+    today = datetime.now(_company_zone(company)).date()
+    due = due_date or max(period_end, today) + timedelta(days=30)
+    term_days = (due - today).days
+    payment_terms = (
+        f"Payment is due within {term_days} day{'' if term_days == 1 else 's'} of the invoice date."
+        if term_days > 0
+        else f"Payment is due by {due:%d/%m/%Y}."
+    )
     inv = Invoice(
         company_id=company.id,
         client_id=client_id,
         period_start=period_start,
         period_end=period_end,
-        invoice_date=period_end,
+        invoice_date=today,
         due_date=due,
         total=0,
         subtotal=0,
@@ -763,7 +771,7 @@ def generate_from_rota(
         tax_amount=0,
         status="draft",
         currency=normalize_invoice_currency(currency),
-        notes="Payment is due within 30 days of the invoice date.\nPlease quote the invoice number as your payment reference.\nThank you for your business.",
+        notes=f"{payment_terms}\nPlease quote the invoice number as your payment reference.\nThank you for your business.",
         rota_review="Generated from published rota. Please review shift timings and hours before sending.",
     )
     from app.services import client_bank_service
@@ -887,6 +895,28 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
         sms_trigger_service.notify_invoice_sent(db, user_id, inv)
         email_trigger_service.notify_invoice_sent(db, user_id, inv)
     return inv
+
+
+def send_overdue_reminder(db: Session, invoice_id: int, user_id: int) -> str:
+    """Email the client a reminder for an overdue invoice and return the recipient."""
+    from app.services import email_trigger_service
+    from app.services.invoice_payment_service import invoice_balance_due
+
+    inv = get_invoice(db, invoice_id, user_id)
+    company = get_company_by_user_id(db, user_id)
+    today = datetime.now(_company_zone(company)).date()
+    past_due = (
+        inv.status in ("sent", "unpaid", "partial") and inv.due_date is not None and inv.due_date < today
+    )
+    if inv.status != "overdue" and not past_due:
+        raise HTTPException(status_code=400, detail="Reminders can only be sent for overdue invoices")
+    balance = invoice_balance_due(db, inv)
+    if balance <= 0:
+        raise HTTPException(status_code=400, detail="This invoice has no balance outstanding")
+    recipient = email_trigger_service.send_payment_reminder(db, user_id, inv, balance)
+    log_invoice_audit(db, company.id, user_id, inv.id, "reminder_sent", {"recipient": recipient, "balance": balance})
+    db.commit()
+    return recipient
 
 
 def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:

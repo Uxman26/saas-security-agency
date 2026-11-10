@@ -284,6 +284,7 @@ def generate_invoice(
     force: bool = False,
     break_mode: str = "shift",
     currency: str = "GBP",
+    due_date: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("invoices", "generate")),
 ):
@@ -307,6 +308,7 @@ def generate_invoice(
         force=force,
         break_mode=break_mode,
         currency=currency,
+        due_date=due_date,
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)
@@ -515,6 +517,16 @@ def update_status(
     inv = invoice_service.update_invoice_status(db, invoice_id, status, current_user.id)
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)
+
+
+@router.post("/{invoice_id}/send-reminder")
+def send_invoice_reminder(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("invoices", "send")),
+):
+    recipient = invoice_service.send_overdue_reminder(db, invoice_id, current_user.id)
+    return {"message": f"Reminder sent to {recipient}", "recipient": recipient}
 
 
 @router.post("/{invoice_id}/lines", response_model=InvoiceLineResponse, status_code=status.HTTP_201_CREATED)

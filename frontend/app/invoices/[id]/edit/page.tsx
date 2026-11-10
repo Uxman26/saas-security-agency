@@ -8,6 +8,8 @@ import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { DueDateField } from '@/components/invoices/due-date-field';
+import { syncPaymentTermsNote } from '@/lib/invoice-utils';
 import { Label } from '@/components/ui/label';
 import {
   Table,
@@ -369,11 +371,25 @@ export default function InvoiceEditPage() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <Label>Invoice date</Label>
-                      <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+                      <Input
+                        type="date"
+                        value={invoiceDate}
+                        onChange={(e) => {
+                          setInvoiceDate(e.target.value);
+                          setNotes((n) => syncPaymentTermsNote(n, e.target.value, due));
+                        }}
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>Due date</Label>
-                      <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+                      <DueDateField
+                        invoiceDate={invoiceDate}
+                        value={due}
+                        onChange={(next) => {
+                          setDue(next);
+                          setNotes((n) => syncPaymentTermsNote(n, invoiceDate, next));
+                        }}
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label>PO number</Label>

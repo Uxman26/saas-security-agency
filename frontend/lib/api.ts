@@ -1387,6 +1387,7 @@ export const api = {
       /** Client break billing: each shift's own setting, full span, or less the staff break. */
       break_mode?: 'shift' | 'without_break' | 'deduct';
       currency?: string;
+      due_date?: string;
     } & WorkFilterParams): Promise<Invoice> => {
       const q = appendWorkFilters(
         new URLSearchParams({ period_start: params.period_start, period_end: params.period_end }),
@@ -1395,9 +1396,12 @@ export const api = {
       if (params.force) q.append('force', 'true');
       if (params.break_mode && params.break_mode !== 'shift') q.append('break_mode', params.break_mode);
       if (params.currency) q.append('currency', params.currency);
+      if (params.due_date) q.append('due_date', params.due_date);
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
+    sendReminder: (id: number): Promise<{ message: string; recipient: string }> =>
+      request<{ message: string; recipient: string }>(`/invoices/${id}/send-reminder`, { method: 'POST' }),
     addLine: (
       invoiceId: number,
       data: {

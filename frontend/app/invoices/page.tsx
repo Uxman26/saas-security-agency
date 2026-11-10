@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -17,12 +17,12 @@ import { api } from '@/lib/api';
 import type { Invoice, Client, Site, ClientBankAccount } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, Plus, FileMinus2 } from 'lucide-react';
+import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, Plus, FileMinus2, Send } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
-import { formatDueDate, isInvoicePastDue } from '@/lib/invoice-utils';
-import { formatDateUK, localDateKey } from '@/lib/date-format';
+import { canSendInvoiceReminder, formatDueCountdown, isInvoiceOpen, isInvoicePastDue } from '@/lib/invoice-utils';
+import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { INVOICE_CURRENCIES, formatInvoiceMoney, invoiceCurrencyCode } from '@/lib/invoice-currency';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -41,6 +41,7 @@ import {
 } from '@/components/module-dashboard';
 import { StatusPieChart } from '@/components/charts/status-chart';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { DueDateField } from '@/components/invoices/due-date-field';
 import {
   EMPTY_WORK_FILTERS,
   WorkFilterBar,
@@ -96,6 +97,7 @@ export default function InvoicesPage() {
   const [genSiteId, setGenSiteId] = useState('');
   const [genStart, setGenStart] = useState('');
   const [genEnd, setGenEnd] = useState('');
+  const [genDueDate, setGenDueDate] = useState(() => localDateOffset(30));
   const [genLoading, setGenLoading] = useState(false);
   const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
   const [genCurrency, setGenCurrency] = useState('GBP');
@@ -107,7 +109,7 @@ export default function InvoicesPage() {
   }, [searchParams]);
   const [customLoading, setCustomLoading] = useState(false);
   const [customClientId, setCustomClientId] = useState('');
-  const [customInvoiceDate, setCustomInvoiceDate] = useState('');
+  const [customInvoiceDate, setCustomInvoiceDate] = useState(() => localDateKey());
   const [customPeriodStart, setCustomPeriodStart] = useState('');
   const [customPeriodEnd, setCustomPeriodEnd] = useState('');
   const [customDueDate, setCustomDueDate] = useState('');
@@ -135,6 +137,8 @@ export default function InvoicesPage() {
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payLoading, setPayLoading] = useState(false);
+  const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
+  const [reminderSending, setReminderSending] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -233,7 +237,7 @@ export default function InvoicesPage() {
 
   const resetCustomForm = () => {
     setCustomClientId('');
-    setCustomInvoiceDate('');
+    setCustomInvoiceDate(localDateKey());
     setCustomPeriodStart('');
     setCustomPeriodEnd('');
     setCustomDueDate('');
@@ -316,6 +320,7 @@ export default function InvoicesPage() {
         ...(force ? { force: true } : {}),
         break_mode: genBreakMode,
         currency: genCurrency,
+        ...(genDueDate ? { due_date: genDueDate } : {}),
         ...toWorkFilterParams(genNarrow),
         ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
@@ -327,6 +332,7 @@ export default function InvoicesPage() {
       setGenBreakMode('shift');
       setGenStart('');
       setGenEnd('');
+      setGenDueDate(localDateOffset(30));
       loadInvoices();
       const shifts = (inv.lines ?? []).filter((l) => l.shift_date).length;
       toast.success(
@@ -537,18 +543,30 @@ export default function InvoicesPage() {
     return formatDateUK(raw) || '—';
   };
 
-  const formatDueLabel = (inv: Invoice) => {
-    if (!inv.due_date) return '—';
-    const due = new Date(`${inv.due_date}T12:00:00`);
-    const today = new Date();
-    today.setHours(12, 0, 0, 0);
-    const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
-    if (diff < 0) return `${Math.abs(diff)} days ago`;
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Tomorrow';
-    if (diff <= 7) return `In ${diff} days`;
-    return formatDueDate(inv.due_date);
+  const canSendReminder = canModule(user, 'invoices', 'send');
+
+  const handleSendReminder = async () => {
+    if (!reminderInvoice || reminderSending) return;
+    setReminderSending(true);
+    try {
+      const { message } = await api.invoices.sendReminder(reminderInvoice.id);
+      toast.success(message);
+      setReminderInvoice(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not send the reminder');
+    } finally {
+      setReminderSending(false);
+    }
   };
+
+  const reminderButton = (inv: Invoice) =>
+    canSendReminder && canSendInvoiceReminder(inv) ? (
+      <Button variant="outline" size="sm" className="whitespace-nowrap" onClick={() => setReminderInvoice(inv)}>
+        <Send className="size-3.5" />
+        Send Reminder
+      </Button>
+    ) : null;
+
   /**
    * What one invoice can have done to it. Defined once so the table rows and the card
    * grid offer exactly the same menu, and so a permission is checked in one place.
@@ -699,7 +717,7 @@ export default function InvoicesPage() {
                         </div>
                         <div className="space-y-1">
                           <Label>Due date</Label>
-                          <Input type="date" value={customDueDate} onChange={(e) => setCustomDueDate(e.target.value)} />
+                          <DueDateField invoiceDate={customInvoiceDate} value={customDueDate} onChange={setCustomDueDate} />
                         </div>
                         <div className="space-y-1">
                           <Label>Period start <span className="text-destructive">*</span></Label>
@@ -1048,6 +1066,10 @@ export default function InvoicesPage() {
                       </div>
                     </div>
                     <div className="space-y-1">
+                      <Label>Due date</Label>
+                      <DueDateField invoiceDate="" value={genDueDate} onChange={setGenDueDate} />
+                    </div>
+                    <div className="space-y-1">
                       <Label>Breaks on this invoice</Label>
                       <Select value={genBreakMode} onValueChange={(v) => setGenBreakMode(v as typeof genBreakMode)}>
                         <SelectTrigger className="w-full">
@@ -1259,8 +1281,11 @@ export default function InvoicesPage() {
                         </Pill>
                       </div>
                       <p className="mt-3 text-xl font-bold tabular-nums">{formatGbp(inv.total, inv.currency)}</p>
-                      <p className="text-xs text-muted-foreground">Due {formatDueLabel(inv)}</p>
-                      <div className="mt-3 flex justify-end">
+                      <p className="text-xs text-muted-foreground">
+                        {isInvoiceOpen(inv) ? formatDueCountdown(inv) : `Due ${formatDueCountdown(inv)}`}
+                      </p>
+                      <div className="mt-3 flex items-center justify-end gap-1">
+                        {reminderButton(inv)}
                         <RowActionsMenu actions={rowActions(inv)} label={`Invoice ${inv.id} actions`} />
                       </div>
                     </div>
@@ -1278,7 +1303,7 @@ export default function InvoicesPage() {
                         <SortableHead label="Customer" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Unpaid by customer</TableHead>
                         <SortableHead label="Amount due" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead className="text-right w-[120px]">Actions</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1317,7 +1342,7 @@ export default function InvoicesPage() {
                             </Pill>
                           </TableCell>
                           <TableCell className={cn('text-sm whitespace-nowrap', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
-                            {formatDueLabel(inv)}
+                            {formatDueCountdown(inv)}
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>
                           <TableCell className="font-medium tabular-nums">#{inv.id}</TableCell>
@@ -1337,6 +1362,7 @@ export default function InvoicesPage() {
                           <TableCell className="font-semibold whitespace-nowrap tabular-nums">{formatGbp(safeBalance, inv.currency)}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {reminderButton(inv)}
                               <Button variant="ghost" size="icon" className="size-8" asChild title="View invoice">
                                 <Link href={`/invoices/${inv.id}/view`}>
                                   <Eye className="size-4" />
@@ -1421,6 +1447,23 @@ export default function InvoicesPage() {
                   </Button>
                 </div>
               )}
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={!!reminderInvoice} onOpenChange={(open) => !open && !reminderSending && setReminderInvoice(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Send reminder</DialogTitle>
+                <DialogDescription>Are you sure you want to send a reminder email to this client?</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setReminderInvoice(null)} disabled={reminderSending}>
+                  Cancel
+                </Button>
+                <Button onClick={() => void handleSendReminder()} disabled={reminderSending}>
+                  {reminderSending ? 'Sending…' : 'Yes'}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
           </>

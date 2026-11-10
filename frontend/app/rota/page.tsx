@@ -23,7 +23,6 @@ import {
   DashboardHeader,
   FilterField,
   Pill,
-  ProgressBar,
   QuickLinks,
   ResultsCard,
   RowActionsMenu,
@@ -81,10 +80,6 @@ function coverage(r: RotaPlanListItem) {
   const sent = r.status === 'published' ? Math.min(r.shift_count, planned || r.shift_count) : 0;
   const total = planned || (r.status === 'published' ? r.shift_count : 0);
   return { planned: total, sent, pct: total ? (sent / total) * 100 : 0 };
-}
-
-function coverageTone(pct: number) {
-  return pct >= 95 ? 'positive' : pct >= 60 ? 'warning' : 'danger';
 }
 
 function csvCell(v: unknown) {
@@ -345,8 +340,6 @@ function RotaHubPage() {
         return r.shift_count;
       case 'staff':
         return r.staff_count;
-      case 'coverage':
-        return coverage(r).pct;
       case 'status':
         return rotaStatus(r).label;
       case 'updated':
@@ -645,10 +638,10 @@ function RotaHubPage() {
       toast.warning('No rotas to export');
       return;
     }
-    const head = ['Rota', 'Start', 'End', 'Days', 'Type', 'Clients', 'Sites', 'Shifts', 'Staff', 'Coverage %', 'Status', 'Unmarked', 'Last updated'];
+    const head = ['Rota', 'Start', 'End', 'Days', 'Type', 'Clients', 'Sites', 'Shifts', 'Staff', 'Status', 'Unmarked', 'Last updated'];
     const body = rows.map((r) => [
       r.name, r.start_date, r.end_date, r.day_count, rotaType(r).label, r.client_names.join('; '), r.site_names.join('; '),
-      r.shift_count, r.staff_count, Math.round(coverage(r).pct), rotaStatus(r).label, r.unmarked_attendance_count ?? 0,
+      r.shift_count, r.staff_count, rotaStatus(r).label, r.unmarked_attendance_count ?? 0,
       r.updated_at ?? r.created_at,
     ]);
     const csv = [head, ...body].map((line) => line.map(csvCell).join(',')).join('\n');
@@ -982,7 +975,6 @@ function RotaHubPage() {
                           <SortableHead label="Client / Site" colKey="where" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Shifts" colKey="shifts" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Staff" colKey="staff" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                          <SortableHead label="Coverage" colKey="coverage" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Last updated" colKey="updated" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <TableHead className="text-right">Actions</TableHead>
@@ -1063,23 +1055,6 @@ function RotaHubPage() {
                               </TableCell>
                               <TableCell className="tabular-nums">{r.shift_count}</TableCell>
                               <TableCell className="tabular-nums">{r.staff_count}</TableCell>
-                              <TableCell className="min-w-[120px]">
-                                {(() => {
-                                  const c = coverage(r);
-                                  return (
-                                    <div
-                                      title={
-                                        c.planned
-                                          ? `${c.sent} of ${c.planned} planned shifts published to staff`
-                                          : 'No shifts planned'
-                                      }
-                                    >
-                                      <span className="text-sm font-semibold tabular-nums">{Math.round(c.pct)}%</span>
-                                      <ProgressBar className="mt-1 w-24" value={c.pct} tone={coverageTone(c.pct)} />
-                                    </div>
-                                  );
-                                })()}
-                              </TableCell>
                               <TableCell>
                                 <Pill tone={status.tone} dot>
                                   {status.label}

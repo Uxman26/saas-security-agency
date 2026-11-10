@@ -1,12 +1,14 @@
 from datetime import date, datetime, timedelta
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.html_safe import esc_map
 from app.models import Assignment, Client, Guard, Invoice, Site, User
 from app.services import email_config_service, email_service
 from app.services.company_service import get_company_by_user_id
+from app.services.invoice_currency import INVOICE_CURRENCIES
 from app.services.module_service import is_module_enabled
 
 
@@ -95,6 +97,36 @@ def notify_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: fl
         invoice_id=inv.id,
         amount=f"£{balance:.2f}",
     )
+
+
+def send_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: float) -> str:
+    """Email a reminder someone asked for and return the recipient.
+
+    Unlike the automatic notify_* helpers this raises on failure, so the person who
+    clicked Send is never told an email went out when it did not.
+    """
+    client = db.query(Client).filter(Client.id == inv.client_id).first()
+    recipient = _client_email(client) if client else None
+    if not recipient:
+        raise HTTPException(
+            status_code=400,
+            detail="This client has no email address. Add one to the client record first.",
+        )
+    company = get_company_by_user_id(db, user_id)
+    code = (inv.currency or "GBP").upper()
+    symbol = INVOICE_CURRENCIES.get(code, f"{code} ")
+    template = email_config_service.parse_templates(company.email_templates_json)["payment_reminder"]
+    try:
+        body = template.format(**esc_map({"invoice_id": inv.id, "amount": f"{symbol}{balance:,.2f}"}))
+    except (KeyError, IndexError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="The payment reminder template is invalid. Check it in Email settings.",
+        )
+    email_config_service.send_tenant_email(
+        db, user_id, recipient, f"Payment reminder — invoice #{inv.id}", body, "payment_reminder"
+    )
+    return recipient
 
 
 def notify_contract_expiry(db: Session, company_id: int, admin: User, site_name: str, end_date: date) -> None:

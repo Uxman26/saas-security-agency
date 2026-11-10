@@ -188,5 +188,5 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
     ]))
     story.append(closing)
 
-    build_branded(doc, story)
+    build_branded(doc, story, powered_by=True)
     return buf.getvalue()

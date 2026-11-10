@@ -59,6 +59,8 @@ def _to_response(exp: Expense) -> dict:
         "vat_exempt": bool(exp.vat_exempt),
         "payment_method": exp.payment_method,
         "payment_status": exp.payment_status,
+        "paid_on": exp.paid_on,
+        "vendor_email": exp.vendor.email if exp.vendor else None,
         "has_document": bool(resolve_storage_path(exp.document_path)),
         "created_at": exp.created_at,
         "updated_at": exp.updated_at,
@@ -129,6 +131,7 @@ def create_expense(db: Session, data: ExpenseCreate, user_id: int) -> dict:
         vat_exempt=exempt,
         payment_method=data.payment_method,
         payment_status=data.payment_status or "pending",
+        paid_on=data.expense_date if data.payment_status == "paid" else None,
     )
     db.add(exp)
     db.commit()
@@ -160,6 +163,8 @@ def update_expense(db: Session, expense_id: int, data: ExpenseUpdate, user_id: i
         payload["vat_amount"] = vat
         payload["total_amount"] = total
         payload["vat_exempt"] = is_exempt
+    if "payment_status" in payload and payload["payment_status"] != exp.payment_status:
+        payload["paid_on"] = date.today() if payload["payment_status"] == "paid" else None
     for k, v in payload.items():
         setattr(exp, k, v)
     db.commit()

@@ -1389,6 +1389,8 @@ class Expense(Base):
     vat_exempt = Column(Boolean, default=False, nullable=False)
     payment_method = Column(String)
     payment_status = Column(String, default="pending")
+    # When it was marked paid, for the remittance. Null on older rows; those use expense_date.
+    paid_on = Column(Date, nullable=True)
     document_path = Column(String)
     document_mime = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -363,7 +363,7 @@ def render_subscription_invoice_pdf(inv: SubscriptionInvoice, company: Optional[
     story.append(totals_table)
     story.append(Spacer(1, 24))
     story.append(Paragraph("Thank you for your subscription. Download this invoice for your records.", muted))
-    build_branded(doc, story)
+    build_branded(doc, story, powered_by=True)
     return buf.getvalue()
 
 

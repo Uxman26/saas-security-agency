@@ -19,9 +19,10 @@ from app.schemas import (
     InvoiceStatementResponse,
     PaymentResponse,
     CreditNoteResponse,
+    SendPaymentDocumentRequest,
 )
 from app.rbac import require_module, require_internal_module, user_has_permission_db
-from app.services import invoice_service
+from app.services import invoice_service, payment_documents
 from app.services.invoice_pdf import render_invoice_pdf
 from app.services.invoice_statement_service import build_statement
 from app.services.invoice_statement_pdf import render_statement_pdf
@@ -529,6 +530,32 @@ def send_invoice_reminder(
 ):
     recipient = invoice_service.send_overdue_reminder(db, invoice_id, current_user.id)
     return {"message": f"Reminder sent to {recipient}", "recipient": recipient}
+
+
+@router.get("/{invoice_id}/receipt/pdf")
+def invoice_receipt_pdf(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("invoices", "pdf_download")),
+):
+    inv = invoice_service.get_invoice(db, invoice_id, current_user.id)
+    body = payment_documents.render_invoice_receipt(db, inv)
+    return Response(
+        content=body,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{payment_documents.receipt_filename(inv)}"'},
+    )
+
+
+@router.post("/{invoice_id}/send-receipt")
+def send_invoice_receipt(
+    invoice_id: int,
+    data: SendPaymentDocumentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("invoices", "send")),
+):
+    recipient = payment_documents.send_invoice_receipt(db, invoice_id, current_user.id, data.to)
+    return {"message": f"Receipt sent to {recipient}", "recipient": recipient}
 
 
 @router.post("/{invoice_id}/lines", response_model=InvoiceLineResponse, status_code=status.HTTP_201_CREATED)

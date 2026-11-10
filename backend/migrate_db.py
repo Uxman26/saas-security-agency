@@ -393,6 +393,7 @@ def _ensure_payment_and_early_finish_columns():
                 ("early_payable_hours", float_type),
                 ("early_chargeable_hours", float_type),
             ],
+            "expenses": [("paid_on", "DATE")],
         }
         for table, columns in wanted.items():
             if not insp.has_table(table):

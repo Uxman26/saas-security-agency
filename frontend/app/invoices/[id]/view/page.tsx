@@ -1,5 +1,7 @@
 'use client';
 
+import { downloadBlob } from '@/lib/download-blob';
+import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -11,7 +13,7 @@ import { api } from '@/lib/api';
 import type { CreditNote, Invoice, InvoiceAuditEntry } from '@/lib/types';
 import { InvoiceDocument } from '@/components/invoices/invoice-document';
 import { CreditNoteDialog } from '@/components/invoices/credit-note-dialog';
-import { ArrowLeft, Download, FileMinus2, History, Pencil, Printer, Settings } from 'lucide-react';
+import { ArrowLeft, Download, FileMinus2, History, Pencil, Printer, ReceiptText, Send, Settings } from 'lucide-react';
 import { canModule } from '@/lib/permissions';
 import { useAuth } from '@/contexts/auth-context';
 import { toast } from '@/lib/toast';
@@ -31,6 +33,9 @@ export default function InvoiceViewPage() {
   const [cnOpen, setCnOpen] = useState(false);
   const [editingCn, setEditingCn] = useState<CreditNote | null>(null);
 
+  const [sendRequest, setSendRequest] = useState<SendDocumentRequest | null>(null);
+  const canDownloadReceipt = !!user && canModule(user, 'invoices', 'pdf_download');
+  const canSendReceipt = !!user && canModule(user, 'invoices', 'send');
   const canEdit = !!user && canModule(user, 'invoices', 'edit');
   const canCreateCn = !!user && canModule(user, 'invoices', 'credit_note_create');
   const canEditCn = !!user && canModule(user, 'invoices', 'credit_note_edit');
@@ -68,6 +73,14 @@ export default function InvoiceViewPage() {
       toast.error(e instanceof Error ? e.message : 'Download failed');
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const downloadReceipt = async () => {
+    try {
+      downloadBlob(await api.invoices.receiptPdf(id), `receipt-invoice-${id}.pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not download the receipt');
     }
   };
 
@@ -128,6 +141,27 @@ export default function InvoiceViewPage() {
                     <Button variant="outline" size="sm" onClick={() => void downloadPdf()} disabled={downloading}>
                       <Download className="size-4 mr-1" /> {downloading ? 'Downloading…' : 'Download PDF'}
                     </Button>
+                    {(inv.amount_paid ?? 0) > 0 && canDownloadReceipt ? (
+                      <Button variant="outline" size="sm" onClick={() => void downloadReceipt()}>
+                        <ReceiptText className="size-4 mr-1" /> Download receipt
+                      </Button>
+                    ) : null}
+                    {(inv.amount_paid ?? 0) > 0 && canSendReceipt ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setSendRequest({
+                            title: `Send receipt for invoice #${inv.id}`,
+                            description: 'The payment receipt is emailed as a PDF attachment.',
+                            email: inv.client_email,
+                            send: (to) => api.invoices.sendReceipt(inv.id, to),
+                          })
+                        }
+                      >
+                        <Send className="size-4 mr-1" /> Send receipt
+                      </Button>
+                    ) : null}
                     {canCreateCn && inv.status !== 'draft' && inv.status !== 'cancelled' ? (
                       <Button
                         variant="outline"
@@ -160,6 +194,7 @@ export default function InvoiceViewPage() {
             </div>
 
             {err && <p className="text-destructive mb-4 print:hidden">{err}</p>}
+            <SendDocumentDialog request={sendRequest} onClose={() => setSendRequest(null)} />
 
             {inv && (
               <InvoiceDocument

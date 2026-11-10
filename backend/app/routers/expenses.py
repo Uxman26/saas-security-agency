@@ -2,7 +2,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -14,9 +14,10 @@ from app.schemas import (
     ExpenseReportResponse,
     ExpenseResponse,
     ExpenseUpdate,
+    SendPaymentDocumentRequest,
     VatReportResponse,
 )
-from app.services import expense_service
+from app.services import expense_service, payment_documents
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
@@ -113,6 +114,32 @@ def delete_expense(
 ):
     expense_service.delete_expense(db, expense_id, current_user.id)
     return None
+
+
+@router.get("/{expense_id}/remittance/pdf")
+def remittance_pdf(
+    expense_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("expenses", "view")),
+):
+    exp = expense_service._get_expense(db, expense_id, current_user.id)
+    body = payment_documents.render_remittance(db, exp)
+    return Response(
+        content=body,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{payment_documents.remittance_filename(exp)}"'},
+    )
+
+
+@router.post("/{expense_id}/send-remittance")
+def send_remittance(
+    expense_id: int,
+    data: SendPaymentDocumentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("expenses", "edit")),
+):
+    recipient = payment_documents.send_remittance(db, expense_id, current_user.id, data.to)
+    return {"message": f"Remittance advice sent to {recipient}", "recipient": recipient}
 
 
 @router.post("/{expense_id}/document", response_model=ExpenseResponse)

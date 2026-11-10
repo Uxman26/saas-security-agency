@@ -1400,6 +1400,12 @@ export const api = {
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
+    receiptPdf: (id: number): Promise<Blob> => requestBlob(`/invoices/${id}/receipt/pdf`),
+    sendReceipt: (id: number, to: string): Promise<{ message: string; recipient: string }> =>
+      request<{ message: string; recipient: string }>(`/invoices/${id}/send-receipt`, {
+        method: 'POST',
+        body: JSON.stringify({ to: to || null }),
+      }),
     sendReminder: (id: number): Promise<{ message: string; recipient: string }> =>
       request<{ message: string; recipient: string }>(`/invoices/${id}/send-reminder`, { method: 'POST' }),
     addLine: (
@@ -1479,6 +1485,12 @@ export const api = {
   },
   expenses: {
     meta: (): Promise<ExpenseMeta> => request<ExpenseMeta>('/expenses/meta'),
+    remittancePdf: (id: number): Promise<Blob> => requestBlob(`/expenses/${id}/remittance/pdf`),
+    sendRemittance: (id: number, to: string): Promise<{ message: string; recipient: string }> =>
+      request<{ message: string; recipient: string }>(`/expenses/${id}/send-remittance`, {
+        method: 'POST',
+        body: JSON.stringify({ to: to || null }),
+      }),
     list: (params?: {
       start_date?: string;
       end_date?: string;

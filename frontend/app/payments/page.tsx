@@ -25,7 +25,9 @@ import {
   type StatCardSpec,
 } from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { BarChart3, Building2, CreditCard, FileText, Plus, Trash2, Pencil } from 'lucide-react';
+import { BarChart3, Building2, CreditCard, FileText, Plus, Send, Trash2, Pencil } from 'lucide-react';
+import { downloadBlob } from '@/lib/download-blob';
+import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -40,6 +42,16 @@ export default function PaymentsPage() {
   const canCreateMod = canModule(permUser, 'payments', 'create');
   const canEditMod = canModule(permUser, 'payments', 'edit');
   const canDeleteMod = canModule(permUser, 'payments', 'delete');
+  const canDownloadReceipt = canModule(permUser, 'invoices', 'pdf_download');
+  const canSendReceipt = canModule(permUser, 'invoices', 'send');
+  const [sendRequest, setSendRequest] = useState<SendDocumentRequest | null>(null);
+  const downloadReceipt = async (invoiceId: number) => {
+    try {
+      downloadBlob(await api.invoices.receiptPdf(invoiceId), `receipt-invoice-${invoiceId}.pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not download the receipt');
+    }
+  };
   const [payments, setPayments] = useState<Payment[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -441,6 +453,28 @@ export default function PaymentsPage() {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
+                                {p.invoice_id && canDownloadReceipt ? (
+                                  <Button variant="ghost" size="sm" onClick={() => void downloadReceipt(p.invoice_id!)} title="Download receipt">
+                                    <FileText className="size-4" />
+                                  </Button>
+                                ) : null}
+                                {p.invoice_id && canSendReceipt ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title="Send receipt"
+                                    onClick={() =>
+                                      setSendRequest({
+                                        title: `Send receipt for invoice #${p.invoice_id}`,
+                                        description: 'The payment receipt is emailed as a PDF attachment.',
+                                        email: inv?.client_email,
+                                        send: (to) => api.invoices.sendReceipt(p.invoice_id!, to),
+                                      })
+                                    }
+                                  >
+                                    <Send className="size-4" />
+                                  </Button>
+                                ) : null}
                                 {canEditMod ? (
                                   <Button variant="ghost" size="sm" onClick={() => openEdit(p)} title="Edit payment">
                                     <Pencil className="size-4" />

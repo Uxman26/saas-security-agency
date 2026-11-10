@@ -1,15 +1,11 @@
 from datetime import date
 from io import BytesIO
-import os
 from typing import List, Optional
 
-from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard, User, Payment
 from app.services.invoice_payment_service import invoice_amount_paid
-from app.services.image_avif_service import AVIF_EXT
-from app.storage_paths import resolve_storage_path
 
 
 def _money(v: float) -> str:
@@ -61,7 +57,7 @@ def _draw_edge_bands(canvas, doc) -> None:
     p.close()
     canvas.drawPath(p, stroke=0, fill=1)
 
-    # Bottom strip sits just above the ControlOps banner that build_branded draws.
+    # Bottom strip sits just above the "Powered by ControlOps" banner.
     y = 44
     canvas.setFillColor(dark)
     canvas.rect(0, y, w, EDGE_BAND, stroke=0, fill=1)
@@ -192,9 +188,9 @@ def render_invoice_pdf(
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
-    from reportlab.platypus import Image as RLImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    from app.services.pdf_branding import branded_bottom_margin, build_branded
+    from app.services.pdf_branding import branded_bottom_margin, build_branded, company_logo_flowable
 
     buf = BytesIO()
     doc = SimpleDocTemplate(
@@ -213,20 +209,7 @@ def render_invoice_pdf(
     LINE = colors.HexColor("#e4e4e7")
     story = []
 
-    logo_flowable = None
-    logo_resolved = resolve_storage_path(company.logo_path)
-    if logo_resolved:
-        try:
-            ext = os.path.splitext(logo_resolved)[1].lower()
-            if ext == AVIF_EXT:
-                avif_buf = BytesIO()
-                Image.open(logo_resolved).save(avif_buf, format="PNG")
-                avif_buf.seek(0)
-                logo_flowable = RLImage(avif_buf, width=3.0 * cm, height=2.6 * cm, kind="proportional")
-            else:
-                logo_flowable = RLImage(logo_resolved, width=3.0 * cm, height=2.6 * cm, kind="proportional")
-        except Exception:
-            logo_flowable = None
+    logo_flowable = company_logo_flowable(company, 3.0 * cm, 2.6 * cm)
 
     # ── Header: logo | company details | divider | INVOICE ───────────────────────
     name_style = ParagraphStyle("CoName", parent=styles["Normal"], fontSize=13, leading=16, fontName="Helvetica-Bold", textColor=DARK)
@@ -627,5 +610,5 @@ def render_invoice_pdf(
 
     canvas_cls = _numbered_canvas_class()
     canvas_cls.footer_ref = f"Invoice #{inv.id}"
-    build_branded(doc, story, onFirstPage=_draw_edge_bands, onLaterPages=_draw_edge_bands, canvasmaker=canvas_cls)
+    build_branded(doc, story, onFirstPage=_draw_edge_bands, onLaterPages=_draw_edge_bands, canvasmaker=canvas_cls, powered_by=True)
     return buf.getvalue()

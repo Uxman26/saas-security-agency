@@ -28,12 +28,14 @@ import {
   type StatCardSpec,
 } from '@/components/module-dashboard';
 import { StatusBarChart } from '@/components/charts/status-chart';
-import { Download, Pencil, Plus, Receipt, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import { Download, Pencil, Plus, Receipt, ReceiptText, Send, Trash2, TrendingDown, TrendingUp } from 'lucide-react';
+import { downloadBlob } from '@/lib/download-blob';
+import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
-import { localDateKey } from '@/lib/date-format';
+import { localDateKey, localDateOffset } from '@/lib/date-format';
 import { storageGet } from '@/lib/safe-storage';
 
 const VAT_RATE = 0.2;
@@ -142,6 +144,25 @@ export default function ExpensesPage() {
   const [docFile, setDocFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [sendRequest, setSendRequest] = useState<SendDocumentRequest | null>(null);
+
+  const downloadRemittance = async (e: Expense) => {
+    try {
+      downloadBlob(await api.expenses.remittancePdf(e.id), `remittance-${e.id}.pdf`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not download the remittance');
+    }
+  };
+
+  // Arriving from a vendor's row: show that vendor's paid expenses from the past year.
+  useEffect(() => {
+    const vendor = new URLSearchParams(window.location.search).get('vendor');
+    if (!vendor) return;
+    setSearch(vendor);
+    setStatusFilter('paid');
+    setStartDate(localDateOffset(-365));
+    setEndDate(localDateKey());
+  }, []);
 
   const vatPreview = useMemo(() => {
     const n = parseFloat(form.amount_ex_vat);
@@ -717,7 +738,7 @@ export default function ExpensesPage() {
                             <SortableHead label="VAT" colKey="vat" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                            <TableHead className="w-28">Actions</TableHead>
+                            <TableHead className="w-44">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -748,6 +769,29 @@ export default function ExpensesPage() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex gap-1">
+                                  {e.payment_status === 'paid' && e.vendor_name ? (
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => void downloadRemittance(e)} title="Download remittance advice">
+                                      <ReceiptText className="size-4" />
+                                    </Button>
+                                  ) : null}
+                                  {e.payment_status === 'paid' && e.vendor_name && canWrite ? (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Send remittance advice"
+                                      onClick={() =>
+                                        setSendRequest({
+                                          title: `Send remittance to ${e.vendor_name}`,
+                                          description: 'The remittance advice is emailed as a PDF attachment.',
+                                          email: e.vendor_email,
+                                          send: (to) => api.expenses.sendRemittance(e.id, to),
+                                        })
+                                      }
+                                    >
+                                      <Send className="size-4" />
+                                    </Button>
+                                  ) : null}
                                   {e.has_document && (
                                     <Button type="button" variant="ghost" size="icon" onClick={() => downloadDoc(e.id)} title="Download document">
                                       <Download className="size-4" />
@@ -787,8 +831,18 @@ export default function ExpensesPage() {
                 </div>
               </ResultsCard>
 
+              <SendDocumentDialog request={sendRequest} onClose={() => setSendRequest(null)} />
+
               <QuickLinks
                 links={[
+                  {
+                    key: 'vendors',
+                    title: 'Vendors',
+                    description: 'Vendor contact details, and the payments made to each one.',
+                    icon: Receipt,
+                    tone: 'neutral',
+                    action: { label: 'View vendors', href: '/vendors' },
+                  },
                   {
                     key: 'invoices',
                     title: 'Invoices',

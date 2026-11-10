@@ -14,6 +14,8 @@ DEFAULT_TEMPLATES = {
     "rota_change": "<p>Your rota has been updated.</p><p>{message}</p><p>{date} · {site} · {shift}</p>",
     "invoice_sent": "<p>Invoice #{invoice_id} for {amount} is due on {due_date}.</p>",
     "payment_reminder": "<p>Payment reminder: {amount} outstanding on invoice #{invoice_id}.</p>",
+    "payment_receipt": "<p>Thank you for your payment. Your receipt for invoice #{invoice_id}, showing {amount} received, is attached.</p>",
+    "remittance_advice": "<p>Please find attached our remittance advice confirming a payment of {amount}, reference {reference}.</p>",
     "appointment": "<p>Appointment reminder for {date} at {time}.</p>",
     "alert": "<p>{message}</p>",
 }
@@ -102,10 +104,11 @@ def send_tenant_email(
     subject: str,
     body: str,
     template_key: Optional[str] = None,
+    attachments: Optional[list[tuple[str, bytes]]] = None,
 ) -> EmailLog:
     company = get_company_by_user_id(db, user_id)
     if not is_module_enabled(company, "email"):
         raise HTTPException(status_code=403, detail="Email module is not enabled")
     if not email_service.is_company_configured(company):
         raise HTTPException(status_code=400, detail="SMTP not configured. Add your mail server settings first.")
-    return email_service.send_and_log(db, company.id, to_email.strip(), subject, body, template_key)
+    return email_service.send_and_log(db, company.id, to_email.strip(), subject, body, template_key, attachments)

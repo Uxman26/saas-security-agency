@@ -21,7 +21,9 @@ import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTr
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
-import { canSendInvoiceReminder, formatDueCountdown, isInvoiceOpen, isInvoicePastDue } from '@/lib/invoice-utils';
+import { canSendInvoiceReminder, formatDueCountdown, isInvoiceOpen, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
+import { downloadBlob } from '@/lib/download-blob';
+import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { INVOICE_CURRENCIES, formatInvoiceMoney, invoiceCurrencyCode } from '@/lib/invoice-currency';
@@ -493,6 +495,8 @@ export default function InvoicesPage() {
     }
   };
 
+  const [sendRequest, setSendRequest] = useState<SendDocumentRequest | null>(null);
+
   const openRecordPayment = (inv: Invoice) => {
     setPayInvoice(inv);
     setPayDate(localDateKey());
@@ -547,7 +551,7 @@ export default function InvoicesPage() {
     if (next === 'sent') {
       toast.confirm('Mark this invoice as sent?', () => applyStatusChange(inv, next), {
         label: 'Mark as sent',
-        description: 'The client is notified by email or SMS when those notifications are switched on.',
+        description: 'The client is told by email or SMS when those notifications are switched on.',
       });
       return;
     }
@@ -644,13 +648,82 @@ export default function InvoicesPage() {
     }
   };
 
-  const reminderButton = (inv: Invoice) =>
-    canSendReminder && canSendInvoiceReminder(inv) ? (
-      <Button variant="outline" size="sm" className="whitespace-nowrap" onClick={() => setReminderInvoice(inv)}>
-        <Send className="size-3.5" />
-        Send Reminder
+  const canSendInvoice = canModule(user, 'invoices', 'status_change') && canSendReminder;
+  const canRecordPayment = canModule(user, 'payments', 'create');
+
+  const openSendReceipt = (inv: Invoice) =>
+    setSendRequest({
+      title: `Send receipt for invoice #${inv.id}`,
+      description: 'The payment receipt is emailed as a PDF attachment.',
+      email: inv.client_email,
+      send: (to) => api.invoices.sendReceipt(inv.id, to),
+    });
+
+  const downloadReceipt = async (inv: Invoice) => {
+    try {
+      downloadBlob(await api.invoices.receiptPdf(inv.id), `receipt-invoice-${inv.id}.pdf`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not download the receipt');
+    }
+  };
+
+  /** Moves an invoice on from where it is now, without leaving the list. */
+  const nextActionButtons = (inv: Invoice) => {
+    const button = 'whitespace-nowrap';
+    const view = (
+      <Button variant="ghost" size="sm" className={button} asChild>
+        <Link href={`/invoices/${inv.id}/view`}>
+          <Eye className="size-3.5" />
+          View
+        </Link>
       </Button>
-    ) : null;
+    );
+    const next = nextInvoiceAction(inv);
+    if (next === 'send' && canSendInvoice) {
+      return (
+        <Button variant="outline" size="sm" className={button} onClick={() => handleStatusChange(inv, 'sent')}>
+          <Send className="size-3.5" />
+          Send
+        </Button>
+      );
+    }
+    if (next === 'record_payment' && canRecordPayment) {
+      return (
+        <Button variant="outline" size="sm" className={button} onClick={() => openRecordPayment(inv)}>
+          <CreditCard className="size-3.5" />
+          Record payment
+        </Button>
+      );
+    }
+    if (next === 'send_reminder' && canSendReminder) {
+      return (
+        <Button variant="outline" size="sm" className={button} onClick={() => setReminderInvoice(inv)}>
+          <Send className="size-3.5" />
+          Send reminder
+        </Button>
+      );
+    }
+    if (next === 'paid' && canSendReminder) {
+      const hasPayment = (inv.amount_paid ?? 0) > 0;
+      return (
+        <>
+          {view}
+          <Button
+            variant="outline"
+            size="sm"
+            className={button}
+            disabled={!hasPayment}
+            title={hasPayment ? undefined : 'Record the payment on this invoice to issue a receipt'}
+            onClick={() => openSendReceipt(inv)}
+          >
+            <Send className="size-3.5" />
+            Send receipt
+          </Button>
+        </>
+      );
+    }
+    return view;
+  };
 
   /**
    * What one invoice can have done to it. Defined once so the table rows and the card
@@ -670,10 +743,22 @@ export default function InvoicesPage() {
       icon: CreditCard,
       onSelect: () => openRecordPayment(inv),
       disabled:
-        !can(user, 'invoices.write') ||
-        inv.status === 'paid' ||
+        !canRecordPayment ||
         inv.status === 'draft' ||
-        inv.status === 'cancelled',
+        inv.status === 'cancelled' ||
+        (inv.status === 'paid' && (inv.balance_due ?? 0) <= 0),
+    },
+    {
+      label: 'Download receipt',
+      icon: ReceiptText,
+      onSelect: () => void downloadReceipt(inv),
+      disabled: !((inv.amount_paid ?? 0) > 0) || !canModule(user, 'invoices', 'pdf_download'),
+    },
+    {
+      label: 'Send receipt',
+      icon: Send,
+      onSelect: () => openSendReceipt(inv),
+      disabled: !((inv.amount_paid ?? 0) > 0) || !canSendReminder,
     },
     {
       label: 'Credit note',
@@ -1361,7 +1446,7 @@ export default function InvoicesPage() {
                         {isInvoiceOpen(inv) ? formatDueCountdown(inv) : `Due ${formatDueCountdown(inv)}`}
                       </p>
                       <div className="mt-3 flex items-center justify-end gap-1">
-                        {reminderButton(inv)}
+                        {nextActionButtons(inv)}
                         <RowActionsMenu actions={rowActions(inv)} label={`Invoice ${inv.id} actions`} />
                       </div>
                     </div>
@@ -1423,12 +1508,7 @@ export default function InvoicesPage() {
                           <TableCell className="font-semibold whitespace-nowrap tabular-nums">{formatGbp(safeBalance, inv.currency)}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {reminderButton(inv)}
-                              <Button variant="ghost" size="icon" className="size-8" asChild title="View invoice">
-                                <Link href={`/invoices/${inv.id}/view`}>
-                                  <Eye className="size-4" />
-                                </Link>
-                              </Button>
+                              {nextActionButtons(inv)}
                               <RowActionsMenu actions={rowActions(inv)} label={`Invoice ${inv.id} actions`} />
                             </div>
                           </TableCell>
@@ -1593,6 +1673,8 @@ export default function InvoicesPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+
+          <SendDocumentDialog request={sendRequest} onClose={() => setSendRequest(null)} />
           </>
           )}
         </ModulePage>

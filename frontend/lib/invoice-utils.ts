@@ -15,6 +15,17 @@ export function canSendInvoiceReminder(inv: Invoice): boolean {
   return inv.status === 'overdue' || (isInvoiceOpen(inv) && isInvoicePastDue(inv));
 }
 
+export type InvoiceNextAction = 'send' | 'record_payment' | 'send_reminder' | 'paid' | 'view';
+
+/** The step an invoice is waiting on, which the Actions column offers as its main button. */
+export function nextInvoiceAction(inv: Invoice): InvoiceNextAction {
+  if (inv.status === 'draft') return 'send';
+  if (inv.status === 'paid') return 'paid';
+  if (canSendInvoiceReminder(inv)) return 'send_reminder';
+  if (isInvoiceOpen(inv)) return 'record_payment';
+  return 'view';
+}
+
 /** "Due in 10 Days" / "2 Days Overdue" for open invoices; other statuses keep the date. */
 export function formatDueCountdown(inv: Invoice): string {
   if (!inv.due_date) return '—';

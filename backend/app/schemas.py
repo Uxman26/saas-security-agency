@@ -2238,6 +2238,17 @@ class ExpenseUpdate(BaseModel):
     payment_status: Optional[str] = None
 
 
+class SendPaymentDocumentRequest(BaseModel):
+    """Who to email a receipt or remittance to. Blank uses the address on record."""
+
+    to: Optional[EmailStr] = None
+
+    @field_validator("to", mode="before")
+    @classmethod
+    def _blank_is_none(cls, v):
+        return v.strip() or None if isinstance(v, str) else v
+
+
 class ExpenseResponse(BaseModel):
     id: int
     company_id: int
@@ -2253,6 +2264,8 @@ class ExpenseResponse(BaseModel):
     vat_exempt: bool = False
     payment_method: Optional[str] = None
     payment_status: str
+    paid_on: Optional[date] = None
+    vendor_email: Optional[str] = None
     has_document: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None

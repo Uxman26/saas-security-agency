@@ -7,6 +7,7 @@ import { formatDateUK } from '@/lib/date-format';
 import { hasInvoiceAccountDetails } from '@/lib/invoice-account';
 import { groupInvoiceLines } from '@/lib/invoice-lines';
 import { storageGet } from '@/lib/safe-storage';
+import { PoweredByControlOps } from '@/components/invoices/powered-by';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ACCENT = '#D7141A';
@@ -431,6 +432,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
         </p>
       </div>
 
+      <PoweredByControlOps />
       <EdgeBand side="bottom" />
     </div>
   );

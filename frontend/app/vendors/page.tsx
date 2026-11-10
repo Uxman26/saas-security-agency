@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
 import { api } from '@/lib/api';
 import type { Vendor } from '@/lib/types';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Pencil, ReceiptText, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
@@ -128,7 +129,7 @@ export default function VendorsPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-24" />
+                  <TableHead className="w-32" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -148,6 +149,11 @@ export default function VendorsPage() {
                       <TableCell>{v.phone || '—'}</TableCell>
                       <TableCell>{v.status}</TableCell>
                       <TableCell className="flex gap-1">
+                        <Button size="icon" variant="ghost" asChild title="Payments and remittances">
+                          <Link href={`/expenses?vendor=${encodeURIComponent(v.name)}`}>
+                            <ReceiptText className="size-4" />
+                          </Link>
+                        </Button>
                         {canEdit ? (
                           <Button
                             size="icon"

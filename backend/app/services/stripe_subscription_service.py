@@ -1009,7 +1009,7 @@ def render_billing_receipt_pdf(r: BillingReceipt, company: Company | None = None
     story.append(table)
     story.append(Spacer(1, 24))
     story.append(Paragraph("This receipt confirms a subscription charge on your ControlOps account.", muted))
-    build_branded(doc, story)
+    build_branded(doc, story, powered_by=True)
     return buf.getvalue()
 
 

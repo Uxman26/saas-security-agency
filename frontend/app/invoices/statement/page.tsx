@@ -1,5 +1,6 @@
 'use client';
 
+import { PoweredByControlOps } from '@/components/invoices/powered-by';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -345,6 +346,7 @@ export default function InvoiceStatementPage() {
                     </div>
                   </div>
                 </div>
+                <PoweredByControlOps />
               </div>
             ) : null}
           </div>

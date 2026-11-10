@@ -5,9 +5,10 @@ import os
 import smtplib
 import socket
 import ssl
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -233,7 +234,13 @@ def open_smtp(cfg: dict[str, Any]) -> smtplib.SMTP:
     raise last_exc
 
 
-def send_with_config(cfg: dict[str, Any], to_email: str, subject: str, body: str) -> None:
+def send_with_config(
+    cfg: dict[str, Any],
+    to_email: str,
+    subject: str,
+    body: str,
+    attachments: Optional[list[tuple[str, bytes]]] = None,
+) -> None:
     mail_from = (cfg.get("mail_from") or cfg.get("mail_username") or "").strip()
     from_name = (cfg.get("mail_from_name") or "ControlOps").strip()
     username = cfg.get("mail_username") or ""
@@ -243,6 +250,10 @@ def send_with_config(cfg: dict[str, Any], to_email: str, subject: str, body: str
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "html"))
+    for filename, content in attachments or []:
+        part = MIMEApplication(content, _subtype="pdf")
+        part.add_header("Content-Disposition", "attachment", filename=filename)
+        msg.attach(part)
     server = None
     try:
         server = open_smtp(cfg)

@@ -278,13 +278,13 @@ export const HELP_ARTICLES: HelpArticle[] = [
       { type: 'heading', text: 'Payments' },
       {
         type: 'paragraph',
-        text: 'Record and track client payments received against invoices.',
+        text: 'Record and track client payments received against invoices. Once a payment is recorded, download or email the client a receipt from Invoices or Transactions. The Actions column on Invoices always offers the next step: Send for a draft, Record payment once sent, Send reminder when overdue, and View with Send receipt when paid.',
       },
       { type: 'heading', text: 'Expenses and allowances' },
       {
         type: 'bullets',
         items: [
-          'Expenses — log business expenses and VAT for reporting.',
+          'Expenses — log business expenses and VAT for reporting. A paid expense with a vendor can have a remittance advice downloaded or emailed to that vendor. Each vendor on the Vendors page links to their payments.',
           'Allowances — configure rates and allowance amounts; mark which feed into payroll.',
         ],
       },

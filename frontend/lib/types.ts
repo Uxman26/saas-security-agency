@@ -2175,6 +2175,8 @@ export interface Expense {
   vat_exempt?: boolean;
   payment_method?: string | null;
   payment_status: string;
+  paid_on?: string | null;
+  vendor_email?: string | null;
   has_document: boolean;
   created_at: string;
   updated_at?: string | null;

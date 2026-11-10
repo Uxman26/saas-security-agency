@@ -159,6 +159,8 @@ def _serialize_invoice(
                     invoice_id=p.invoice_id,
                     amount=p.amount,
                     method=p.method,
+                    account_id=p.account_id,
+                    memo=p.memo,
                     paid_at=p.paid_at,
                     created_at=p.created_at,
                 )

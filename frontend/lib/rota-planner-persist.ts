@@ -1,4 +1,4 @@
-import { agreedPaidHours, buildDayRange, calcHours, normalizeAttStatus, shiftPayAmount } from './rota-shifts-utils';
+import { buildDayRange, normalizeAttStatus, payableHoursForAttendance, shiftPayAmount } from './rota-shifts-utils';
 import type { AttendanceRec, RotaJsState, ShiftRec } from './rota-shifts-types';
 import { SHIFT_COLOR_OPTS, AVATAR_PALETTE, normalizePayType, normalizeShiftType } from './rota-shifts-types';
 
@@ -31,6 +31,8 @@ function normalizeShift(sh: Partial<ShiftRec>, idx: number): ShiftRec {
     reason: a.reason,
     at: a.at,
     synced: a.synced,
+    payableHours: a.payableHours,
+    chargeableHours: a.chargeableHours,
   }));
   return {
     start: sh.start ?? '09:00',
@@ -71,11 +73,9 @@ export function serializePlannerState(state: RotaJsState): string {
       (shifts || []).forEach((shift, index) => {
         const attendance = state.attendance[`${guardId}:${date}:${index}`];
         const status = normalizeAttStatus(attendance?.status ?? null);
-        if (status !== 'on_time' && status !== 'late' && status !== 'cancelled_paid') return;
         // Always derive from shift + inclBreaks (ignore stored attendance.hours), except
-        // on a paid cancellation, which is paid on the hours agreed when it was called off.
-        const hours =
-          status === 'cancelled_paid' ? agreedPaidHours(attendance) : calcHours(shift, state.inclBreaks);
+        // where hours were agreed: a paid cancellation or an early finish.
+        const hours = payableHoursForAttendance(shift, attendance, state.inclBreaks);
         if (hours <= 0) return;
         const rate = Number(shift.shiftRate) || 0;
         const payType = shift.payType ?? state.employees.find((e) => e.id === guardId)?.payType ?? 'hourly';
@@ -86,7 +86,7 @@ export function serializePlannerState(state: RotaJsState): string {
           hours,
           rate,
           amount: shiftPayAmount(hours, rate, payType),
-          status,
+          status: status ?? 'on_time',
         });
       });
     }

@@ -149,10 +149,9 @@ export function formatDurationMins(mins: number): string {
   return `${h}h ${rem}m`;
 }
 
-export function latestShiftAdjustment(
-  sh: { adjustments?: { type: string; scheduledEnd: string; actualEnd: string; reason: string; at: string }[] },
-  type: 'overtime' | 'early_finish'
-) {
+export function latestShiftAdjustment<
+  A extends { type: string; scheduledEnd: string; actualEnd: string; reason: string; at: string },
+>(sh: { adjustments?: A[] }, type: 'overtime' | 'early_finish') {
   const list = (sh.adjustments || []).filter((a) => a.type === type);
   if (!list.length) return null;
   return list[list.length - 1];
@@ -342,8 +341,30 @@ export function clientChargeableHours(s: ShiftRec): number {
 }
 
 /**
+ * Payable / Chargeable Hours entered when this shift finished early, each null when none
+ * were entered. A recorded outcome that says the shift was not worked outranks them.
+ */
+export function agreedEarlyFinishHours(
+  sh: ShiftRec,
+  att: { status?: string } | null | undefined
+): { payable: number | null; chargeable: number | null } {
+  const status = normalizeAttStatus(att?.status ?? null);
+  const early = latestShiftAdjustment(sh, 'early_finish');
+  if (!early || status === 'absent' || status === 'no_show' || status === 'cancelled' || status === 'cancelled_paid') {
+    return { payable: null, chargeable: null };
+  }
+  const read = (v: string | undefined): number | null => {
+    const raw = String(v ?? '').trim();
+    const n = Number(raw);
+    return raw !== '' && Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  return { payable: read(early.payableHours), chargeable: read(early.chargeableHours) };
+}
+
+/**
  * Hours the client is invoiced for, by the same rules as the invoice run: scheduled span
- * unless the shift was cancelled unpaid (none) or cancelled paid (the agreed client hours).
+ * unless the shift was cancelled unpaid (none), cancelled paid (the agreed client hours)
+ * or finished early with Chargeable Hours entered.
  */
 export function chargeableHoursForAttendance(
   sh: ShiftRec,
@@ -359,7 +380,7 @@ export function chargeableHoursForAttendance(
       return Number.isFinite(n) && n > 0 ? n : 0;
     }
   }
-  return clientChargeableHours(sh);
+  return agreedEarlyFinishHours(sh, att).chargeable ?? clientChargeableHours(sh);
 }
 
 export function shiftPayable(
@@ -388,13 +409,16 @@ export function countedHoursForAttendance(
   const status = normalizeAttStatus(att?.status ?? null);
   if (status === 'absent' || status === 'no_show' || status === 'cancelled') return 0;
   if (status === 'cancelled_paid') return agreedPaidHours(att);
+  const agreedEarly = agreedEarlyFinishHours(sh, att).payable;
+  if (agreedEarly != null) return agreedEarly;
   // Always derive from the shift + inclBreaks so the Incl./Excl. breaks toggle works.
   // (Stored att.hours often ignored the toggle and froze totals.)
   return calcHours(sh, inclBreaks);
 }
 
 /**
- * Payable hours for a shift: On time / Late pay the shift, a paid cancellation pays its
+ * Payable hours for a shift: Payable Hours entered on an early finish are paid as entered.
+ * Otherwise On time / Late pay the shift, a paid cancellation pays its
  * agreed hours, and Absent / No show / unpaid cancellation / unmarked pay nothing.
  */
 export function payableHoursForAttendance(
@@ -404,6 +428,8 @@ export function payableHoursForAttendance(
 ): number {
   const status = normalizeAttStatus(att?.status ?? null);
   if (status === 'cancelled_paid') return agreedPaidHours(att);
+  const agreedEarly = agreedEarlyFinishHours(sh, att).payable;
+  if (agreedEarly != null) return agreedEarly;
   if (status !== 'on_time' && status !== 'late') return 0;
   return calcHours(sh, inclBreaks);
 }

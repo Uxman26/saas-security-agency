@@ -9,6 +9,7 @@ from app.services.invoice_currency import normalize_invoice_currency
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
 from app.services.company_service import get_company_by_user_id
+from app.services.early_finish_hours import agreed_early_finish_hours, agreed_hours_apply
 from app.services.rate_service import resolve_billing_rate
 from app.services.special_day_service import special_date_set
 from app.services.rota_service import calc_shift_hours, normalize_shift_type
@@ -36,14 +37,17 @@ def _parse_att_hours(raw) -> Optional[float]:
         return None
 
 
-def _billable_hours_for_shift(scheduled_hours: float, att: Optional[dict]) -> Optional[float]:
+def _billable_hours_for_shift(
+    scheduled_hours: float, att: Optional[dict], agreed_early: Optional[float] = None
+) -> Optional[float]:
     """Hours to bill for one planner shift, or None when the shift must not be invoiced.
 
     Unpaid cancellations are never billed. Paid cancellations bill the agreed client
-    hours (which may differ from staff paid hours). Everything else keeps the scheduled span.
+    hours (which may differ from staff paid hours). An early finish bills the Chargeable
+    Hours entered for it. Everything else keeps the scheduled span.
     """
     if not isinstance(att, dict):
-        return scheduled_hours
+        return scheduled_hours if agreed_early is None else agreed_early
     status = str(att.get("status") or "").strip().lower().replace(" ", "_")
     if status == "cancelled_unpaid":
         status = CANCELLED_UNPAID
@@ -58,6 +62,8 @@ def _billable_hours_for_shift(scheduled_hours: float, att: Optional[dict]) -> Op
         if client is None:
             return scheduled_hours
         return max(0.0, client)
+    if agreed_early is not None and agreed_hours_apply(status):
+        return agreed_early
     return scheduled_hours
 
 # How breaks are treated on a rota invoice. Staff payroll always deducts the unpaid
@@ -603,7 +609,11 @@ def _rota_invoice_shift_lines(
                     scheduled = calc_shift_hours(sh.get("start"), sh.get("end"), break_m)
                     att_key = f"{emp_id}:{day_key}:{idx}"
                     att = attendance.get(att_key) if isinstance(attendance, dict) else None
-                    hours = _billable_hours_for_shift(scheduled, att if isinstance(att, dict) else None)
+                    hours = _billable_hours_for_shift(
+                        scheduled,
+                        att if isinstance(att, dict) else None,
+                        agreed_early_finish_hours(sh)[1],
+                    )
                     if hours is None or hours <= 0:
                         continue
                     start = str(sh.get("start") or "").strip() or None

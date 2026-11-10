@@ -20,6 +20,7 @@ from app.services.attendance_service import (
     parse_gps_accuracy_m,
 )
 from app.services.company_service import get_company_by_user_id
+from app.services.early_finish_hours import agreed_hours_apply
 from app.services.rate_service import normalize_pay_type
 from app.services.shift_clock import attendance_if_unmarked, london_now, shift_has_started
 from app.services.work_filters import EMPTY_SCOPE, WorkScope, resolve_work_scope
@@ -341,6 +342,14 @@ def list_rota_details(
             early_finish_end=ef_log.actual_end if ef_log else None,
             cap_early_start=True,
         )
+        agreed_early = None
+        agreed_early_client = None
+        # The recorded mark, not `status`: an unmarked past shift also reads as absent there.
+        if agreed_hours_apply(att.status if att else None):
+            agreed_early = a.early_payable_hours
+            agreed_early_client = a.early_chargeable_hours
+        if agreed_early is not None:
+            payable = agreed_early
         out.append(
             RotaDetailResponse(
                 id=a.id,
@@ -364,8 +373,10 @@ def list_rota_details(
                 shift_rate=None if redact_rates else a.shift_rate,
                 pay_type=None if redact_rates else a.pay_type,
                 rota_plan_id=a.rota_plan_id,
-                paid_hours=att.paid_hours if att and status == CANCELLED_PAID else None,
-                client_hours=att.client_hours if att and status == CANCELLED_PAID else None,
+                paid_hours=(
+                    att.paid_hours if att and status == CANCELLED_PAID else None if redact_rates else agreed_early
+                ),
+                client_hours=att.client_hours if att and status == CANCELLED_PAID else agreed_early_client,
                 note=(att.note if att and att.note else None),
                 gps_verified=gps_verified_for(
                     getattr(att, "latitude", None),

@@ -30,16 +30,8 @@ import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { formatDateUK, localDateKey } from '@/lib/date-format';
+import { METHOD_LABELS, PAYMENT_METHODS } from '@/lib/payment-methods';
 
-const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'card', 'direct_debit', 'other'];
-const METHOD_LABELS: Record<string, string> = {
-  bank_transfer: 'Bank Transfer',
-  cash: 'Cash',
-  cheque: 'Cheque',
-  card: 'Card',
-  direct_debit: 'Direct Debit',
-  other: 'Other',
-};
 
 export default function PaymentsPage() {
   // The API is the real boundary; these stop the UI offering actions it

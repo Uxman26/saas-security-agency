@@ -1060,6 +1060,11 @@ class Assignment(Base):
     # shift whatever its length. Null on rows published before the choice existed, which
     # fall back to the staff profile's payment method.
     pay_type = Column(String, nullable=True)
+    # Hours agreed when the shift finished early, mirrored from the planner's adjustment:
+    # payroll pays the first and invoices bill the second. Null means no figure was agreed
+    # and the shift's own times decide.
+    early_payable_hours = Column(Float, nullable=True)
+    early_chargeable_hours = Column(Float, nullable=True)
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -1307,6 +1312,10 @@ class Payment(Base):
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
     amount = Column(Float, nullable=False)
     method = Column(String)
+    # The account head the money landed in. Null on payments recorded before the choice
+    # existed; those post to the default Bank account.
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=True)
+    memo = Column(Text, nullable=True)
     paid_at = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     company = relationship("Company", back_populates="payments")

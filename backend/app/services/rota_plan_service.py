@@ -12,6 +12,7 @@ from app.services import shift_audit_service
 from app.services.recycle_bin import archive as _bin_archive
 from app.services.company_service import get_company_by_user_id
 from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID
+from app.services.early_finish_hours import agreed_early_finish_hours
 from app.services.rate_service import normalize_pay_type
 from app.services.rota_service import _late_minutes, normalize_shift_type
 from app.services.shift_clock import london_now, shift_has_started
@@ -775,11 +776,18 @@ def _enforce_rates_on_reassign(db: Session, company_id: int, old_json: Optional[
         block = blocks[slot]
         if not isinstance(block, dict):
             continue
-        # The shift takes the new person's own terms: their job type and their rate.
+        cur = _parse_shift_rate(block.get("shiftRate"))
+        # A rate that differs from the one the shift had was chosen for this person in the
+        # shift dialog: whatever the rate box showed is what gets saved.
+        if cur is not None and cur != _parse_shift_rate((ev.get("before") or {}).get("rate")):
+            continue
+        # Otherwise the shift takes the new person's own terms: their job type and rate.
         guard = db.query(Guard).filter(Guard.id == int(gid), Guard.company_id == company_id).first()
         pay_type = profile_pay_type(guard)
         rate = _employee_profile_rate(db, company_id, int(gid), on_date, pay_type=pay_type)
-        cur = _parse_shift_rate(block.get("shiftRate"))
+        # No profile rate to take: keep the shift's rate rather than blanking it.
+        if rate is None:
+            continue
         if cur != rate:
             block["shiftRate"] = rate
             changed = True
@@ -1705,6 +1713,11 @@ def _sync_published_pay_terms(db: Session, plan: RotaPlan, data: dict) -> bool:
                 if pay_type is not None and a.pay_type != pay_type:
                     a.pay_type = pay_type
                     changed = True
+                payable, chargeable = agreed_early_finish_hours(sh)
+                if a.early_payable_hours != payable or a.early_chargeable_hours != chargeable:
+                    a.early_payable_hours = payable
+                    a.early_chargeable_hours = chargeable
+                    changed = True
     return changed
 
 
@@ -1879,6 +1892,7 @@ def _publish_guards(
                             pay_type=pay_type,
                         )
                     locked_rate = rate_cache[cache_key]
+                early_payable, early_chargeable = agreed_early_finish_hours(sh)
                 assignment = Assignment(
                         guard_id=emp_guard_id,
                         site_id=site_id,
@@ -1893,6 +1907,8 @@ def _publish_guards(
                         ),
                         shift_rate=locked_rate,
                         pay_type=pay_type,
+                        early_payable_hours=early_payable,
+                        early_chargeable_hours=early_chargeable,
                         created_by_user_id=user_id,
                     )
                 db.add(assignment)

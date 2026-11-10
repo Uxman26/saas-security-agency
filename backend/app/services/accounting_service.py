@@ -147,11 +147,43 @@ def _post_entry(
     db.commit()
 
 
+# Current assets that hold money owed or prepaid rather than funds in hand.
+_NON_FUNDS_CURRENT_ASSETS = ("1130", "1200", "1300")
+
+
+def _funds_accounts(db: Session, company_id: int):
+    """Current-asset accounts that hold money: Bank, Cash and any the company added."""
+    ensure_default_coa(db, company_id)
+    current_assets = _acct(db, company_id, "1100")
+    return db.query(Account).filter(
+        Account.company_id == company_id,
+        Account.parent_id == (current_assets.id if current_assets else -1),
+        Account.code.notin_(_NON_FUNDS_CURRENT_ASSETS),
+    )
+
+
+def deposit_accounts(db: Session, company_id: int) -> list[Account]:
+    """Account heads a customer payment can be paid into."""
+    return (
+        _funds_accounts(db, company_id)
+        .filter(Account.status == "active")
+        .order_by(Account.code)
+        .all()
+    )
+
+
 def post_payment(db: Session, company_id: int, payment: Payment) -> None:
     ensure_default_coa(db, company_id)
     if _already_posted(db, company_id, "payment", payment.id):
         return
-    bank = _acct(db, company_id, "1110")
+    bank = None
+    if payment.account_id:
+        bank = (
+            db.query(Account)
+            .filter(Account.id == payment.account_id, Account.company_id == company_id)
+            .first()
+        )
+    bank = bank or _acct(db, company_id, "1110")
     ar = _acct(db, company_id, "1130")
     if not bank or not ar:
         return
@@ -164,7 +196,7 @@ def post_payment(db: Session, company_id: int, payment: Payment) -> None:
         company_id,
         entry_date=paid_date,
         reference=f"PAY-{payment.id}",
-        memo="Customer payment",
+        memo=(payment.memo or "").strip() or "Customer payment",
         source_type="payment",
         source_id=payment.id,
         lines=[(bank, amt, 0.0), (ar, 0.0, amt)],
@@ -377,12 +409,8 @@ def balance_sheet(db: Session, company_id: int, as_of: Optional[date] = None) ->
 
 
 def cash_flow(db: Session, company_id: int, date_from: Optional[date] = None, date_to: Optional[date] = None) -> dict:
-    ensure_default_coa(db, company_id)
-    bank_codes = {"1110", "1120"}
-    bank_ids = [
-        row[0]
-        for row in db.query(Account.id).filter(Account.company_id == company_id, Account.code.in_(bank_codes)).all()
-    ]
+    # Undeposited funds have been received but have not reached the bank yet.
+    bank_ids = [a.id for a in _funds_accounts(db, company_id).filter(Account.code != "1140").all()]
     if not bank_ids:
         return {
             "inflows": 0.0,

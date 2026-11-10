@@ -2600,8 +2600,16 @@ export const api = {
       if (params?.invoice_id) q.append('invoice_id', params.invoice_id.toString());
       return request<Payment[]>(`/payments?${q.toString()}`);
     },
-    create: (data: { invoice_id?: number; amount: number; method: string; paid_at: string }): Promise<Payment> =>
-      request<Payment>('/payments', { method: 'POST', body: JSON.stringify(data) }),
+    create: (data: {
+      invoice_id?: number;
+      amount: number;
+      method: string;
+      paid_at: string;
+      account_id?: number;
+      memo?: string;
+    }): Promise<Payment> => request<Payment>('/payments', { method: 'POST', body: JSON.stringify(data) }),
+    depositAccounts: (): Promise<{ id: number; code: string; name: string }[]> =>
+      request<{ id: number; code: string; name: string }[]>('/payments/deposit-accounts'),
     update: (
       id: number,
       data: { invoice_id?: number | null; amount?: number; method?: string; paid_at?: string }

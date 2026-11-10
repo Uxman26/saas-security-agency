@@ -2102,6 +2102,8 @@ export interface Payment {
   invoice_id?: number;
   amount: number;
   method: string;
+  account_id?: number | null;
+  memo?: string | null;
   paid_at: string;
   created_at: string;
 }

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from typing import List, Optional
 from datetime import date
-from app.models import Payment, Invoice
+from app.models import Account, Payment, Invoice
 from app.schemas import PaymentCreate, PaymentUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.invoice_payment_service import sync_invoice_payment_status
@@ -44,6 +44,22 @@ def _assert_within_balance(
         )
 
 
+def _assert_deposit_account(db: Session, company_id: int, account_id: Optional[int]) -> None:
+    if account_id is None:
+        return
+    from app.services import accounting_service
+
+    if account_id not in {a.id for a in accounting_service.deposit_accounts(db, company_id)}:
+        raise HTTPException(status_code=400, detail="Choose an account that can receive payments")
+
+
+def deposit_accounts(db: Session, user_id: int) -> List[Account]:
+    from app.services import accounting_service
+
+    company = get_company_by_user_id(db, user_id)
+    return accounting_service.deposit_accounts(db, company.id)
+
+
 def create_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
     company = get_company_by_user_id(db, user_id)
     if data.amount is None or data.amount <= 0:
@@ -70,7 +86,9 @@ def create_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
             detail="Cannot record a payment against a draft or cancelled invoice",
         )
     _assert_within_balance(db, inv, float(data.amount))
+    _assert_deposit_account(db, company.id, data.account_id)
     payload = data.model_dump() if hasattr(data, "model_dump") else data.dict()
+    payload["memo"] = (payload.get("memo") or "").strip() or None
     pay = Payment(company_id=company.id, **payload)
     db.add(pay)
     db.flush()
@@ -125,6 +143,7 @@ def update_payment(db: Session, payment_id: int, data: PaymentUpdate, user_id: i
         raise HTTPException(status_code=404, detail="Payment not found")
     payload = data.model_dump(exclude_unset=True) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
     old_inv_id = pay.invoice_id
+    _assert_deposit_account(db, company.id, payload.get("account_id"))
     if "amount" in payload and payload["amount"] is not None and payload["amount"] <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than zero")
     if "amount" in payload and payload["amount"] is not None and payload["amount"] > 99_999_999.99:

@@ -40,6 +40,7 @@ import {
   type StatCardSpec,
 } from '@/components/module-dashboard';
 import { StatusPieChart } from '@/components/charts/status-chart';
+import { METHOD_LABELS, PAYMENT_METHODS } from '@/lib/payment-methods';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DueDateField } from '@/components/invoices/due-date-field';
 import {
@@ -52,6 +53,18 @@ import {
 import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
+
+function statusLabel(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function invoiceStatusTone(status: string): 'positive' | 'danger' | 'muted' | 'warning' | 'neutral' {
+  if (status === 'paid') return 'positive';
+  if (status === 'overdue') return 'danger';
+  if (status === 'draft') return 'muted';
+  if (status === 'partial') return 'warning';
+  return 'neutral';
+}
 
 type CustomLineDraft = {
   site_id: string;
@@ -136,6 +149,12 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState('');
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState('');
+  const [payDate, setPayDate] = useState('');
+  const [payMethod, setPayMethod] = useState('');
+  const [payAccountId, setPayAccountId] = useState('');
+  const [payMemo, setPayMemo] = useState('');
+  const [payAccounts, setPayAccounts] = useState<{ id: number; code: string; name: string }[]>([]);
+  const [statusSavingId, setStatusSavingId] = useState<number | null>(null);
   const [payLoading, setPayLoading] = useState(false);
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
   const [reminderSending, setReminderSending] = useState(false);
@@ -474,15 +493,30 @@ export default function InvoicesPage() {
     }
   };
 
+  const openRecordPayment = (inv: Invoice) => {
+    setPayInvoice(inv);
+    setPayDate(localDateKey());
+    setPayAmount(String(inv.balance_due ?? inv.total));
+    setPayMethod('');
+    setPayAccountId('');
+    setPayMemo('');
+    api.payments
+      .depositAccounts()
+      .then(setPayAccounts)
+      .catch((e) => toast.error(e instanceof Error ? e.message : 'Could not load payment accounts'));
+  };
+
   const handleRecordPayment = async () => {
-    if (!payInvoice || !payAmount) return;
+    if (!payInvoice || !payAmount || !payDate || !payMethod || !payAccountId) return;
     setPayLoading(true);
     try {
       await api.payments.create({
         invoice_id: payInvoice.id,
         amount: parseFloat(payAmount),
-        method: 'bank_transfer',
-        paid_at: localDateKey(),
+        method: payMethod,
+        account_id: Number(payAccountId),
+        memo: payMemo.trim() || undefined,
+        paid_at: `${payDate}T00:00:00`,
       });
       setPayInvoice(null);
       setPayAmount('');
@@ -493,6 +527,57 @@ export default function InvoicesPage() {
     } finally {
       setPayLoading(false);
     }
+  };
+
+  const applyStatusChange = async (inv: Invoice, next: string) => {
+    setStatusSavingId(inv.id);
+    try {
+      await api.invoices.updateStatus(inv.id, next);
+      loadInvoices();
+      toast.success(`Invoice marked as ${next}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not change the status');
+    } finally {
+      setStatusSavingId(null);
+    }
+  };
+
+  const handleStatusChange = (inv: Invoice, next: string) => {
+    if (next === inv.status) return;
+    if (next === 'sent') {
+      toast.confirm('Mark this invoice as sent?', () => applyStatusChange(inv, next), {
+        label: 'Mark as sent',
+        description: 'The client is notified by email or SMS when those notifications are switched on.',
+      });
+      return;
+    }
+    void applyStatusChange(inv, next);
+  };
+
+  const renderStatus = (inv: Invoice) => {
+    const pill = (
+      <Pill dot tone={invoiceStatusTone(inv.status)}>
+        {statusLabel(inv.status)}
+      </Pill>
+    );
+    if (!canModule(user, 'invoices', 'status_change')) return pill;
+    return (
+      <Select value={inv.status} onValueChange={(v) => handleStatusChange(inv, v)} disabled={statusSavingId === inv.id}>
+        <SelectTrigger
+          aria-label={`Change status of invoice ${inv.id}`}
+          className="h-auto gap-1 border-0 bg-transparent p-0 shadow-none hover:opacity-80 data-[size=default]:h-auto dark:bg-transparent dark:hover:bg-transparent"
+        >
+          {pill}
+        </SelectTrigger>
+        <SelectContent>
+          {STATUS_OPTIONS.map((s) => (
+            <SelectItem key={s} value={s} disabled={s === 'sent' && !canModule(user, 'invoices', 'send')}>
+              {statusLabel(s)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
   };
 
   const unpaidCount = invoiceStats.filter((i) => ['sent', 'unpaid', 'overdue', 'partial'].includes(i.status)).length;
@@ -583,8 +668,12 @@ export default function InvoicesPage() {
     {
       label: 'Record payment',
       icon: CreditCard,
-      onSelect: () => setPayInvoice(inv),
-      disabled: !can(user, 'invoices.write') || inv.status === 'paid',
+      onSelect: () => openRecordPayment(inv),
+      disabled:
+        !can(user, 'invoices.write') ||
+        inv.status === 'paid' ||
+        inv.status === 'draft' ||
+        inv.status === 'cancelled',
     },
     {
       label: 'Credit note',
@@ -1265,20 +1354,7 @@ export default function InvoicesPage() {
                             {customerLabel(inv) ?? '—'}
                           </p>
                         </div>
-                        <Pill
-                          tone={
-                            inv.status === 'paid'
-                              ? 'positive'
-                              : inv.status === 'overdue'
-                                ? 'danger'
-                                : inv.status === 'draft'
-                                  ? 'muted'
-                                  : 'neutral'
-                          }
-                          dot
-                        >
-                          {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
-                        </Pill>
+                        {renderStatus(inv)}
                       </div>
                       <p className="mt-3 text-xl font-bold tabular-nums">{formatGbp(inv.total, inv.currency)}</p>
                       <p className="text-xs text-muted-foreground">
@@ -1324,22 +1400,7 @@ export default function InvoicesPage() {
                           className={cn(pastDue && 'bg-red-50/60 dark:bg-red-950/20')}
                         >
                           <TableCell>
-                            <Pill
-                              dot
-                              tone={
-                                inv.status === 'paid'
-                                  ? 'positive'
-                                  : inv.status === 'overdue'
-                                    ? 'danger'
-                                    : inv.status === 'draft'
-                                      ? 'muted'
-                                      : inv.status === 'partial'
-                                        ? 'warning'
-                                        : 'neutral'
-                              }
-                            >
-                              {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
-                            </Pill>
+                            {renderStatus(inv)}
                           </TableCell>
                           <TableCell className={cn('text-sm whitespace-nowrap', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
                             {formatDueCountdown(inv)}
@@ -1434,19 +1495,85 @@ export default function InvoicesPage() {
 
           <Dialog open={!!payInvoice} onOpenChange={(open) => !open && setPayInvoice(null)}>
             <DialogContent className="sm:max-w-md">
-              <DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader>
-              {payInvoice && (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">Invoice #{payInvoice.id} — balance {formatGbp(payInvoice.balance_due ?? payInvoice.total, payInvoice.currency)}</p>
-                  <div className="space-y-1">
-                    <Label>Amount</Label>
-                    <Input type="number" step="0.01" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+              <DialogHeader><DialogTitle>Record a payment for this invoice</DialogTitle></DialogHeader>
+              {payInvoice && (() => {
+                const balance = Number(payInvoice.balance_due ?? payInvoice.total);
+                const amount = Number(payAmount);
+                const overBalance = amount > balance + 0.005;
+                const fullyPaid = !overBalance && Math.abs(amount - balance) < 0.005;
+                return (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Invoice #{payInvoice.id} — balance {formatGbp(balance, payInvoice.currency)}
+                    </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="pay-date">Date</Label>
+                      <Input id="pay-date" type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="pay-amount">Amount</Label>
+                      <Input
+                        id="pay-amount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                      />
+                      {fullyPaid ? <p className="text-xs text-emerald-700 dark:text-emerald-400">Invoice will be fully paid</p> : null}
+                      {overBalance ? <p className="text-xs text-destructive">Amount is more than the balance due</p> : null}
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Method</Label>
+                      <Select value={payMethod} onValueChange={setPayMethod}>
+                        <SelectTrigger className="w-full" aria-label="Payment method">
+                          <SelectValue placeholder="Select a payment method…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHODS.map((m) => (
+                            <SelectItem key={m} value={m}>{METHOD_LABELS[m]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Account</Label>
+                      <Select value={payAccountId} onValueChange={setPayAccountId}>
+                        <SelectTrigger className="w-full" aria-label="Payment account">
+                          <SelectValue placeholder="Select a payment account…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {payAccounts.map((a) => (
+                            <SelectItem key={a.id} value={String(a.id)}>{a.code} · {a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">The account head this payment is deposited into.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="pay-memo">Memo (optional)</Label>
+                      <textarea
+                        id="pay-memo"
+                        maxLength={1000}
+                        className="w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={payMemo}
+                        onChange={(e) => setPayMemo(e.target.value)}
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setPayInvoice(null)} disabled={payLoading}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => void handleRecordPayment()}
+                        disabled={payLoading || !payDate || !payMethod || !payAccountId || !(amount > 0) || overBalance}
+                      >
+                        {payLoading ? 'Saving…' : 'Submit'}
+                      </Button>
+                    </DialogFooter>
                   </div>
-                  <Button className="w-full" onClick={() => void handleRecordPayment()} disabled={payLoading || !payAmount}>
-                    {payLoading ? 'Saving…' : 'Record payment'}
-                  </Button>
-                </div>
-              )}
+                );
+              })()}
             </DialogContent>
           </Dialog>
 

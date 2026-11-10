@@ -6,6 +6,7 @@ from typing import List, Optional
 from datetime import date
 from app.models import Client, Payroll, Guard, Site, RotaPlan
 from app.schemas import PayrollCreate, PayrollUpdate, PayrollResponse
+from app.services.early_finish_hours import agreed_early_finish_hours, agreed_hours_apply
 from app.services.attendance_service import CANCELLED_PAID
 from app.services.company_service import get_company_by_user_id
 from app.services.work_filters import guard_ids_for_scope, resolve_work_scope
@@ -79,10 +80,13 @@ def _planner_payroll_lines(
                 status = str(record.get("status") or "").strip().lower().replace(" ", "_")
                 if status == "present":
                     status = "on_time"
-                if status not in PAYABLE_STATUSES:
+                agreed = agreed_early_finish_hours(shift)[0] if agreed_hours_apply(status) else None
+                if status not in PAYABLE_STATUSES and agreed is None:
                     continue
                 if status == CANCELLED_PAID:
                     hours = max(0.0, _number(record.get("paidHours")))
+                elif agreed is not None:
+                    hours = agreed
                 else:
                     hours = _hours_from_shift(shift)
                 if hours <= 0:
@@ -522,9 +526,11 @@ def preview_pay(
         actual = getattr(d, "payable_hours", None)
         if actual is None:
             actual = getattr(d, "actual_hours", None)
+        # paid_hours is only set on a paid cancellation or an agreed early finish.
+        agreed_hours = d.attendance_status == CANCELLED_PAID or d.paid_hours is not None
         hours = (
             round(max(0.0, _number(d.paid_hours)), 2)
-            if d.attendance_status == CANCELLED_PAID
+            if agreed_hours
             else (
                 round(float(actual), 2)
                 if actual is not None and float(actual) > 0
@@ -547,7 +553,7 @@ def preview_pay(
         rate = float(pay.get("rate") or 0)
         gross = float(pay.get("amount") or 0)
         pay_type = "per_job" if pay.get("basis") == "per_job" else "hourly"
-        payable = d.attendance_status in PAYABLE_STATUSES
+        payable = d.attendance_status in PAYABLE_STATUSES or d.paid_hours is not None
         amount = gross if payable else 0.0
         if payable and rate <= 0:
             missing_rate += 1

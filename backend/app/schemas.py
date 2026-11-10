@@ -1811,11 +1811,22 @@ class InvoiceAuditEntry(BaseModel):
     action: str
     meta: Optional[dict[str, Any]] = None
 
+def _payment_date_to_datetime(value: Any) -> Any:
+    """A payment is dated by day; accept a bare YYYY-MM-DD as well as a full timestamp."""
+    if isinstance(value, str) and len(value.strip()) == 10:
+        return f"{value.strip()}T00:00:00"
+    return value
+
+
 class PaymentBase(BaseModel):
     invoice_id: Optional[int] = None
     amount: float = Field(..., gt=0, le=99_999_999.99)
     method: Optional[str] = None
+    account_id: Optional[int] = None
+    memo: Optional[str] = Field(None, max_length=1000)
     paid_at: Optional[datetime] = None
+
+    _normalize_paid_at = field_validator("paid_at", mode="before")(_payment_date_to_datetime)
 
 class PaymentCreate(PaymentBase):
     invoice_id: int
@@ -1824,7 +1835,19 @@ class PaymentUpdate(BaseModel):
     invoice_id: Optional[int] = None
     amount: Optional[float] = Field(None, gt=0, le=99_999_999.99)
     method: Optional[str] = None
+    account_id: Optional[int] = None
+    memo: Optional[str] = Field(None, max_length=1000)
     paid_at: Optional[datetime] = None
+
+    _normalize_paid_at = field_validator("paid_at", mode="before")(_payment_date_to_datetime)
+
+class PaymentAccountOption(BaseModel):
+    id: int
+    code: str
+    name: str
+
+    class Config:
+        from_attributes = True
 
 class PaymentResponse(PaymentBase):
     id: int

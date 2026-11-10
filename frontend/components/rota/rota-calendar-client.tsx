@@ -631,6 +631,8 @@ export function RotaCalendarClient() {
   const [efCtx, setEfCtx] = useState<{ empId: string; dk: string; idx: number } | null>(null);
   const [efEnd, setEfEnd] = useState('');
   const [efReason, setEfReason] = useState('');
+  const [efPayable, setEfPayable] = useState('');
+  const [efChargeable, setEfChargeable] = useState('');
   const [adjSaving, setAdjSaving] = useState(false);
   const [attSaving, setAttSaving] = useState(false);
   const [shiftMenu, setShiftMenu] = useState<{ empId: string; dk: string; idx: number } | null>(null);
@@ -1676,6 +1678,9 @@ export function RotaCalendarClient() {
     setEfCtx({ empId, dk, idx });
     setEfEnd(scheduled);
     setEfReason('');
+    const previous = latestShiftAdjustment(sh, 'early_finish');
+    setEfPayable(previous?.payableHours ?? '');
+    setEfChargeable(previous?.chargeableHours ?? '');
     setEfOpen(true);
   };
 
@@ -1745,7 +1750,8 @@ export function RotaCalendarClient() {
     ctx: { empId: string; dk: string; idx: number },
     kind: 'overtime' | 'early_finish',
     actualEnd: string,
-    reason: string
+    reason: string,
+    agreed?: { payableHours: string; chargeableHours: string }
   ) => {
     const sh = state.shifts[ctx.empId]?.[ctx.dk]?.[ctx.idx];
     if (!sh) return false;
@@ -1776,6 +1782,7 @@ export function RotaCalendarClient() {
       reason: reason.trim(),
       at: new Date().toISOString(),
       synced: isEmployeePublished(ctx.empId) || undefined,
+      ...agreed,
     };
     updateShift(ctx.empId, ctx.dk, ctx.idx, {
       ...sh,
@@ -1842,8 +1849,23 @@ export function RotaCalendarClient() {
       toast.warning(`Actual end time must be before scheduled end (${scheduled})`);
       return;
     }
+    const readHours = (raw: string): string | null => {
+      const text = raw.trim();
+      const n = Number(text);
+      return text !== '' && Number.isFinite(n) && n >= 0 && n <= 24 ? n.toFixed(2) : null;
+    };
+    const payableHours = readHours(efPayable);
+    if (payableHours == null) {
+      toast.error('Enter the Payable Hours (0–24) for this shift');
+      return;
+    }
+    const chargeableHours = readHours(efChargeable);
+    if (chargeableHours == null) {
+      toast.error('Enter the Chargeable Hours (0–24) for this shift');
+      return;
+    }
     setAdjSaving(true);
-    const ok = await applyShiftAdjustment(efCtx, 'early_finish', efEnd, reason);
+    const ok = await applyShiftAdjustment(efCtx, 'early_finish', efEnd, reason, { payableHours, chargeableHours });
     setAdjSaving(false);
     if (ok) {
       setEfOpen(false);
@@ -4510,6 +4532,36 @@ export function RotaCalendarClient() {
             <div className="space-y-1">
               <LabelMini>Actual end time</LabelMini>
               <TimeHmField aria-label="Early finish end time" value={efEnd} onChange={setEfEnd} />
+            </div>
+            <div className="space-y-1">
+              <LabelMini>Payable Hours</LabelMini>
+              <Input
+                type="number"
+                min={0}
+                max={24}
+                step="0.25"
+                inputMode="decimal"
+                aria-label="Payable Hours"
+                placeholder="Payable Hours"
+                value={efPayable}
+                onChange={(e) => setEfPayable(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">This is what payroll pays for this shift.</p>
+            </div>
+            <div className="space-y-1">
+              <LabelMini>Chargeable Hours</LabelMini>
+              <Input
+                type="number"
+                min={0}
+                max={24}
+                step="0.25"
+                inputMode="decimal"
+                aria-label="Chargeable Hours"
+                placeholder="Chargeable Hours"
+                value={efChargeable}
+                onChange={(e) => setEfChargeable(e.target.value)}
+              />
+              <p className="text-[11px] text-muted-foreground">This is what the client invoice bills for this shift.</p>
             </div>
             <div className="space-y-1">
               <LabelMini>Reason (required)</LabelMini>

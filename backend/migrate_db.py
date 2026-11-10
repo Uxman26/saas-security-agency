@@ -379,6 +379,35 @@ def _ensure_clock_in_location_columns():
         logging.getLogger(__name__).exception("clock-in location columns migration failed")
 
 
+def _ensure_payment_and_early_finish_columns():
+    """Payment account/memo and the agreed hours on an early-finished shift."""
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        float_type = "DOUBLE PRECISION" if engine.dialect.name == "postgresql" else "REAL"
+        wanted = {
+            "payments": [("account_id", "INTEGER REFERENCES accounts(id)"), ("memo", "TEXT")],
+            "assignments": [
+                ("early_payable_hours", float_type),
+                ("early_chargeable_hours", float_type),
+            ],
+        }
+        for table, columns in wanted.items():
+            if not insp.has_table(table):
+                continue
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for name, typedef in columns:
+                if name not in existing:
+                    with engine.begin() as conn:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {typedef}"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("payment / early finish columns migration failed")
+
+
 def _backfill_assignment_shift_types():
     try:
         from sqlalchemy import inspect, text
@@ -424,6 +453,7 @@ def _run_migrations():
     _migrate_legacy_day_shift_type()
     _backfill_assignment_shift_types()
     _ensure_clock_in_location_columns()
+    _ensure_payment_and_early_finish_columns()
     _ensure_payroll_status_column()
     _ensure_unique_attendance()
     _restore_scheduled_assignment_times()

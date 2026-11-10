@@ -892,11 +892,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const withStaffRate = useCallback(
     (s: RotaJsState, sh: ShiftRec, empId: string): ShiftRec => {
       const payType = employeePayType(s, empId);
-      return {
-        ...sh,
-        payType,
-        shiftRate: profileRateFor(s, empId, payType),
-      };
+      const shiftRate = profileRateFor(s, empId, payType);
+      // No profile rate to take: keep what the shift already pays rather than blanking it.
+      return shiftRate != null ? { ...sh, payType, shiftRate } : { ...sh };
     },
     [employeePayType, profileRateFor]
   );

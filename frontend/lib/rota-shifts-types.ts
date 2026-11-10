@@ -7,6 +7,10 @@ export type ShiftAdjustment = {
   reason: string;
   at: string;
   synced?: boolean;
+  /** Early finish only: hours payroll pays, as entered. Absent on older records. */
+  payableHours?: string;
+  /** Early finish only: hours the client invoice bills, as entered. */
+  chargeableHours?: string;
 };
 
 export type ShiftType = 'morning' | 'afternoon' | 'evening' | 'night';

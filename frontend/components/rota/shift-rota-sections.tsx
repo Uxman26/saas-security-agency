@@ -159,6 +159,12 @@ export function ShiftRotaSections({ shift, attendance, compact, className }: Pro
               <div className={cn(labelCls, 'text-amber-700 dark:text-amber-300 whitespace-normal break-words normal-case')} title={earlyLine}>
                 {earlyLine}
               </div>
+              {early?.payableHours != null || early?.chargeableHours != null ? (
+                <div className={cn(bodyCls, 'text-muted-foreground')}>
+                  Payable: {Number(early?.payableHours ?? 0).toFixed(2)}h · Chargeable:{' '}
+                  {Number(early?.chargeableHours ?? 0).toFixed(2)}h
+                </div>
+              ) : null}
               {(early?.reason || '').trim() ? (
                 <div className={noteCls}>Note: {(early?.reason || '').trim()}</div>
               ) : null}

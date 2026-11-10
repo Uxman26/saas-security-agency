@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
 from app.models import User
-from app.schemas import PaymentCreate, PaymentUpdate, PaymentResponse
+from app.schemas import PaymentAccountOption, PaymentCreate, PaymentUpdate, PaymentResponse
 from app.rbac import require_internal_module
 from app.services import payment_service
 
@@ -16,6 +16,10 @@ def create_payment(data: PaymentCreate, db: Session = Depends(get_db), current_u
 @router.get("", response_model=List[PaymentResponse])
 def list_payments(invoice_id: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payments", "view"))):
     return payment_service.get_payments(db, current_user.id, invoice_id)
+
+@router.get("/deposit-accounts", response_model=List[PaymentAccountOption])
+def list_deposit_accounts(db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payments", "create"))):
+    return payment_service.deposit_accounts(db, current_user.id)
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
 def get_payment(payment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payments", "view"))):

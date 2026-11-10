@@ -16,6 +16,7 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       FRONTEND_URL: https://controlops.co.uk
+      API_PUBLIC_URL: https://controlops.co.uk/api
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

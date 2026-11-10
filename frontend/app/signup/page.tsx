@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Auth3DShell } from '@/components/auth/auth-3d-shell';
+import { GoogleIcon } from '@/components/auth/google-icon';
 import { signupSchema } from '@/lib/validation';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
@@ -47,6 +48,7 @@ function SignupForm() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
+  const [googleEnabled, setGoogleEnabled] = useState(false);
   const completedRef = useRef(false);
 
   const industryLabels = tb.raw('industries') as string[];
@@ -55,6 +57,23 @@ function SignupForm() {
   useEffect(() => {
     if (!tierParam) router.replace('/pricing');
   }, [tierParam, router]);
+
+  useEffect(() => {
+    api.auth
+      .oauthProviders()
+      .then((res) => setGoogleEnabled(res.providers.some((p) => p.provider === 'google' && p.enabled)))
+      .catch(() => undefined);
+  }, []);
+
+  const startGoogleSignup = () => {
+    if (!subscription_tier) return;
+    completedRef.current = true;
+    window.location.href = api.auth.oauthStartUrl('google', true, '', {
+      tier: subscription_tier,
+      cycle: billing_cycle,
+      trial: wantsTrial,
+    });
+  };
 
   useEffect(() => {
     if (!tierParam) return;
@@ -183,6 +202,23 @@ function SignupForm() {
         </>
       }
     >
+      {googleEnabled && (
+        <div className="mb-4 space-y-4">
+          <button
+            type="button"
+            onClick={startGoogleSignup}
+            className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-white transition-colors hover:bg-white/10"
+          >
+            <GoogleIcon className="size-5" />
+            {t('continueWithGoogle')}
+          </button>
+          <div className="flex items-center gap-3">
+            <span className="h-px flex-1 bg-white/10" />
+            <span className="text-xs text-white/40">{t('orDivider')}</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+        </div>
+      )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5">
         <div className="space-y-1.5">
           <Label htmlFor="full_name" className={authDarkLabelClass}>

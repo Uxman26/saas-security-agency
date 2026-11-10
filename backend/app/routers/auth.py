@@ -13,6 +13,7 @@ from app.schemas import (
     MessageResponse,
     MfaConfirmRequest,
     MfaVerifyRequest,
+    OAuthCompleteSignupRequest,
     ChangePasswordRequest,
     ProfileUpdate,
     ThemeUpdate,
@@ -54,9 +55,7 @@ from app.services.image_avif_service import AVIF_EXT, AVIF_MIME
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
-def signup(user_data: UserCreate, db: Session = Depends(get_db)):
-    user, receipt, needs_verify, trial = auth_service.signup_with_receipt(db, user_data)
+def _signup_response(db: Session, user: User, receipt, needs_verify: bool, trial: dict) -> SignupResponse:
     co = db.query(Company).filter(Company.id == user.company_id).first()
     from app.services.company_login_id_service import ensure_company_login_id
 
@@ -82,6 +81,12 @@ def signup(user_data: UserCreate, db: Session = Depends(get_db)):
         trial=TrialStartedOut(**trial),
         company_login_id=company_login_id,
     )
+
+
+@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
+def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+    user, receipt, needs_verify, trial = auth_service.signup_with_receipt(db, user_data)
+    return _signup_response(db, user, receipt, needs_verify, trial)
 
 
 @router.post("/check-email", response_model=EmailAvailabilityResponse)
@@ -145,10 +150,35 @@ def oauth_providers():
     return {"providers": oauth_service.list_enabled_providers()}
 
 
+@router.post("/oauth/complete-signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
+def oauth_complete_signup(body: OAuthCompleteSignupRequest, db: Session = Depends(get_db)):
+    user, receipt, trial = oauth_service.complete_oauth_signup(
+        db,
+        signup_token=body.signup_token,
+        company_name=body.company_name,
+        subscription_tier=body.subscription_tier,
+        billing_cycle=body.billing_cycle,
+        start_trial=body.start_trial,
+    )
+    return _signup_response(db, user, receipt, False, trial)
+
+
 @router.get("/oauth/{provider}/start")
-def oauth_start(provider: str, remember_me: bool = True, company_id: str = ""):
+def oauth_start(
+    provider: str,
+    remember_me: bool = True,
+    company_id: str = "",
+    tier: str = "",
+    cycle: str = "",
+    trial: bool = False,
+):
     url = oauth_service.authorization_url(
-        provider.lower().strip(), remember_me=remember_me, company_id=company_id
+        provider.lower().strip(),
+        remember_me=remember_me,
+        company_id=company_id,
+        tier=tier,
+        cycle=cycle,
+        trial=trial,
     )
     return RedirectResponse(url=url, status_code=302)
 
@@ -186,6 +216,8 @@ def _oauth_finish(
             user_agent=ua,
             apple_user=apple_user,
         )
+        if result.get("signup_token"):
+            return RedirectResponse(oauth_service.frontend_signup_url(result), status_code=302)
         if result.get("payment_pending"):
             return RedirectResponse(
                 oauth_service.frontend_callback_url(

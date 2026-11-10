@@ -18,6 +18,7 @@ from app.auth import (
     AUTH_PROVIDER_LOCAL,
     AUTH_PROVIDER_MICROSOFT,
     OAUTH_AUTH_PROVIDERS,
+    SUPER_ADMIN_ROLE,
     create_access_token,
     get_password_hash,
 )
@@ -27,6 +28,9 @@ from app.plan_config import normalize_tier
 from app.services.module_service import dump_modules, modules_from_plan
 from app.services.receipt_service import company_login_blocked, create_receipt_for_signup, latest_pending_receipt
 from app.services.role_service import ensure_roles_for_company, get_role_by_slug
+
+OAUTH_SIGNUP_TOKEN_MINUTES = 30
+OAUTH_SIGNUP_EXPIRED_DETAIL = "Your sign-up link has expired. Please start again."
 
 PROVIDERS = {
     AUTH_PROVIDER_GOOGLE: {
@@ -139,13 +143,24 @@ def _apple_client_secret() -> str:
     )
 
 
-def create_oauth_state(*, provider: str, remember_me: bool = True, company_id: str | None = None) -> str:
+def create_oauth_state(
+    *,
+    provider: str,
+    remember_me: bool = True,
+    company_id: str | None = None,
+    tier: str = "",
+    cycle: str = "",
+    trial: bool = False,
+) -> str:
     return jwt.encode(
         {
             "type": "oauth_state",
             "provider": provider,
             "remember_me": remember_me,
             "company_id": company_id or "",
+            "tier": tier,
+            "cycle": cycle,
+            "trial": trial,
             "nonce": secrets.token_urlsafe(16),
             "exp": datetime.utcnow() + timedelta(minutes=15),
         },
@@ -164,7 +179,44 @@ def parse_oauth_state(state: str) -> dict:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from e
 
 
-def authorization_url(provider: str, *, remember_me: bool = True, company_id: str | None = None) -> str:
+def create_oauth_signup_token(provider: str, profile: dict) -> str:
+    """Proof of a verified provider identity, held while the user names their company.
+
+    Deliberately has no ``sub`` claim, so it can never be accepted as an access token.
+    """
+    return jwt.encode(
+        {
+            "type": "oauth_signup",
+            "provider": provider,
+            "oauth_sub": profile.get("sub") or "",
+            "email": profile["email"],
+            "full_name": profile.get("full_name") or "",
+            "exp": datetime.utcnow() + timedelta(minutes=OAUTH_SIGNUP_TOKEN_MINUTES),
+        },
+        settings.secret_key,
+        algorithm=settings.algorithm,
+    )
+
+
+def parse_oauth_signup_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(token.strip(), settings.secret_key, algorithms=[settings.algorithm])
+    except JWTError as e:
+        raise HTTPException(status_code=400, detail=OAUTH_SIGNUP_EXPIRED_DETAIL) from e
+    if payload.get("type") != "oauth_signup" or not payload.get("email"):
+        raise HTTPException(status_code=400, detail=OAUTH_SIGNUP_EXPIRED_DETAIL)
+    return payload
+
+
+def authorization_url(
+    provider: str,
+    *,
+    remember_me: bool = True,
+    company_id: str | None = None,
+    tier: str = "",
+    cycle: str = "",
+    trial: bool = False,
+) -> str:
     if provider not in PROVIDERS:
         raise HTTPException(status_code=400, detail="Unsupported OAuth provider")
     if not provider_configured(provider):
@@ -172,10 +224,15 @@ def authorization_url(provider: str, *, remember_me: bool = True, company_id: st
     from app.services.company_login_id_service import normalize_login_id
 
     public_company_id = normalize_login_id(company_id)
-    if not public_company_id:
-        raise HTTPException(status_code=400, detail="Enter your Company ID before signing in with social login.")
     meta = PROVIDERS[provider]
-    state = create_oauth_state(provider=provider, remember_me=remember_me, company_id=public_company_id)
+    state = create_oauth_state(
+        provider=provider,
+        remember_me=remember_me,
+        company_id=public_company_id,
+        tier=tier,
+        cycle=cycle,
+        trial=trial,
+    )
     redirect_uri = redirect_uri_for(provider)
     if provider == AUTH_PROVIDER_MICROSOFT:
         auth_url = meta["auth_url"].format(tenant=settings.microsoft_oauth_tenant_id or "common")
@@ -233,7 +290,7 @@ def _google_profile(access_token: str) -> dict:
         "sub": str(data.get("sub") or ""),
         "email": email,
         "full_name": (data.get("name") or email.split("@")[0]).strip(),
-        "email_verified": bool(data.get("email_verified", True)),
+        "email_verified": str(data.get("email_verified")).lower() == "true",
     }
 
 
@@ -312,6 +369,15 @@ def _oauth_subject_key(provider: str, sub: str) -> str:
     return f"{provider}:{sub}"
 
 
+def _default_company_login_id(db: Session, user: User) -> str:
+    from app.services.company_login_id_service import ensure_company_login_id
+
+    company = db.query(Company).filter(Company.id == user.company_id).first() if user.company_id else None
+    if company is None:
+        raise HTTPException(status_code=403, detail="This account is not linked to a company.")
+    return ensure_company_login_id(db, company)
+
+
 def _issue_session(
     db: Session,
     user: User,
@@ -320,31 +386,26 @@ def _issue_session(
     ip_address: Optional[str],
     user_agent: Optional[str],
     company_login_id: str | None = None,
-    created_new_tenant: bool = False,
 ) -> dict:
     from app.services import login_log_service
-    from app.services.auth_service import bind_user_to_login_company, issue_access_session, send_welcome_email
+    from app.services.auth_service import bind_user_to_login_company, issue_access_session
     from app.services.company_login_id_service import LOGIN_FAILED_DETAIL
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
-    if created_new_tenant:
-        tenant_company_id = user.company_id
-        try:
-            send_welcome_email(user, "")
-        except Exception:
-            pass
-    else:
-        if not company_login_id:
-            raise HTTPException(status_code=400, detail="Enter your Company ID before signing in with social login.")
-        try:
-            tenant_company_id = bind_user_to_login_company(db, user, company_login_id)
-        except HTTPException as exc:
-            if exc.status_code == 401:
-                raise HTTPException(status_code=401, detail=LOGIN_FAILED_DETAIL) from exc
-            raise
-        db.commit()
-        db.refresh(user)
+    if user.role == SUPER_ADMIN_ROLE:
+        # Social sign-in has no MFA step, so platform admins must use the admin login.
+        raise HTTPException(status_code=403, detail="Platform administrators must use the admin login page.")
+    try:
+        tenant_company_id = bind_user_to_login_company(
+            db, user, company_login_id or _default_company_login_id(db, user)
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            raise HTTPException(status_code=401, detail=LOGIN_FAILED_DETAIL) from exc
+        raise
+    db.commit()
+    db.refresh(user)
     block = company_login_blocked(db, user)
     if block:
         # Mirror email/password login: payment-pending accounts cannot receive a session.
@@ -382,8 +443,21 @@ def complete_oauth_login(
     company_login_id = (st.get("company_id") or "").strip()
     tokens = _exchange_code(provider, code)
     profile = fetch_profile(provider, tokens, apple_user=apple_user)
-    existed = _oauth_user_exists(db, provider, profile)
-    user = resolve_or_create_user(db, provider, profile)
+    if not profile.get("email_verified"):
+        raise HTTPException(status_code=400, detail=f"Your {provider.title()} email address is not verified.")
+    user = link_existing_user(db, provider, profile)
+    if user is None:
+        if not profile.get("email"):
+            raise HTTPException(
+                status_code=400,
+                detail="This Apple account did not share an email. Sign in once with email sharing enabled, or use another method.",
+            )
+        return {
+            "signup_token": create_oauth_signup_token(provider, profile),
+            "tier": st.get("tier") or "",
+            "cycle": st.get("cycle") or "",
+            "trial": bool(st.get("trial")),
+        }
     try:
         return _issue_session(
             db,
@@ -392,7 +466,6 @@ def complete_oauth_login(
             ip_address=ip_address,
             user_agent=user_agent,
             company_login_id=company_login_id,
-            created_new_tenant=not existed,
         )
     except HTTPException as e:
         if e.status_code == 402 and isinstance(e.detail, dict) and e.detail.get("code") == "payment_pending":
@@ -428,11 +501,33 @@ def frontend_callback_url(
     return f"{base}/auth/callback?{urlencode(params)}"
 
 
-def _create_tenant_for_oauth(db: Session, *, email: str, full_name: str, provider: str, oauth_subject: str) -> User:
+def frontend_signup_url(result: dict) -> str:
+    """Where a verified provider identity with no account finishes signing up."""
+    params: dict[str, str] = {"token": result["signup_token"]}
+    if result.get("tier"):
+        params["tier"] = result["tier"]
+    if result.get("cycle"):
+        params["cycle"] = result["cycle"]
+    if result.get("trial"):
+        params["trial"] = "1"
+    return f"{settings.frontend_url.rstrip('/')}/signup/complete?{urlencode(params)}"
+
+
+def _create_tenant_for_oauth(
+    db: Session,
+    *,
+    email: str,
+    full_name: str,
+    provider: str,
+    oauth_subject: str,
+    company_name: str,
+    subscription_tier: Optional[str],
+    billing_cycle: Optional[str],
+) -> tuple[User, Any]:
     from app.services.email_uniqueness import assert_email_available
 
     email = assert_email_available(db, email)
-    tier = normalize_tier("basic")
+    tier = normalize_tier(subscription_tier)
     user = User(
         email=email,
         password_hash=get_password_hash(secrets.token_urlsafe(48)),
@@ -444,9 +539,8 @@ def _create_tenant_for_oauth(db: Session, *, email: str, full_name: str, provide
     )
     db.add(user)
     db.flush()
-    company_name = f"{full_name}'s Company" if full_name else f"{email.split('@')[0]} Company"
     company = Company(
-        name=company_name[:120],
+        name=company_name,
         admin_id=user.id,
         subscription_tier=tier,
         subscription_status="pending",
@@ -463,24 +557,49 @@ def _create_tenant_for_oauth(db: Session, *, email: str, full_name: str, provide
     ar = get_role_by_slug(db, company.id, "admin")
     if ar:
         user.role_id = ar.id
-    create_receipt_for_signup(db, company, user, tier)
+    receipt = create_receipt_for_signup(db, company, user, tier)
+    if billing_cycle:
+        receipt.billing_cycle = billing_cycle
     db.commit()
     db.refresh(user)
-    return user
+    return user, receipt
 
 
-def _oauth_user_exists(db: Session, provider: str, profile: dict) -> bool:
-    sub = profile.get("sub") or ""
-    email = (profile.get("email") or "").strip().lower()
-    subject_key = _oauth_subject_key(provider, sub) if sub else None
-    if subject_key and db.query(User.id).filter(User.oauth_subject == subject_key).first():
-        return True
-    if email and db.query(User.id).filter(func.lower(User.email) == email).first():
-        return True
-    return False
+def complete_oauth_signup(
+    db: Session,
+    *,
+    signup_token: str,
+    company_name: str,
+    subscription_tier: Optional[str],
+    billing_cycle: Optional[str],
+    start_trial: bool,
+) -> tuple[User, Any, dict]:
+    from app.services.auth_service import send_welcome_email, start_signup_trial
+
+    claims = parse_oauth_signup_token(signup_token)
+    provider = claims.get("provider") or ""
+    email = claims["email"]
+    sub = claims.get("oauth_sub") or ""
+    user, receipt = _create_tenant_for_oauth(
+        db,
+        email=email,
+        full_name=claims.get("full_name") or email.split("@")[0],
+        provider=provider,
+        oauth_subject=_oauth_subject_key(provider, sub) if sub else f"{provider}:{email}",
+        company_name=company_name,
+        subscription_tier=subscription_tier,
+        billing_cycle=billing_cycle,
+    )
+    trial = start_signup_trial(db, user) if start_trial else {"started": False, "reason": "Trial not requested"}
+    try:
+        send_welcome_email(user, company_name)
+    except Exception:
+        pass
+    return user, receipt, trial
 
 
-def resolve_or_create_user(db: Session, provider: str, profile: dict) -> User:
+def link_existing_user(db: Session, provider: str, profile: dict) -> User | None:
+    """Find the account for a verified provider identity, or None if it is new."""
     sub = profile.get("sub") or ""
     email = (profile.get("email") or "").strip().lower()
     full_name = (profile.get("full_name") or "").strip() or (email.split("@")[0] if email else "User")
@@ -491,24 +610,16 @@ def resolve_or_create_user(db: Session, provider: str, profile: dict) -> User:
         user = db.query(User).filter(User.oauth_subject == subject_key).first()
     if not user and email:
         user = db.query(User).filter(func.lower(User.email) == email).first()
+    if not user:
+        return None
 
-    if user:
-        if subject_key and not user.oauth_subject:
-            user.oauth_subject = subject_key
-        if (user.auth_provider or AUTH_PROVIDER_LOCAL) != AUTH_PROVIDER_LOCAL:
-            user.auth_provider = provider
-        user.email_verified = True
-        if full_name and (not user.full_name or user.full_name == user.email.split("@")[0]):
-            user.full_name = full_name
-        db.commit()
-        db.refresh(user)
-        return user
-
-    if not email:
-        raise HTTPException(
-            status_code=400,
-            detail="This Apple account did not share an email. Sign in once with email sharing enabled, or use another method.",
-        )
-    return _create_tenant_for_oauth(
-        db, email=email, full_name=full_name, provider=provider, oauth_subject=subject_key or f"{provider}:{email}"
-    )
+    if subject_key and not user.oauth_subject:
+        user.oauth_subject = subject_key
+    if (user.auth_provider or AUTH_PROVIDER_LOCAL) != AUTH_PROVIDER_LOCAL:
+        user.auth_provider = provider
+    user.email_verified = True
+    if full_name and (not user.full_name or user.full_name == user.email.split("@")[0]):
+        user.full_name = full_name
+    db.commit()
+    db.refresh(user)
+    return user

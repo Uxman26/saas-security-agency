@@ -238,13 +238,34 @@ export const api = {
       if (company) sanitized.company_id = company;
       return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
     },
+    completeOAuthSignup: (data: {
+      signup_token: string;
+      company_name: string;
+      subscription_tier?: string;
+      start_trial: boolean;
+      billing_cycle: 'monthly' | 'yearly';
+    }): Promise<SignupResponse> =>
+      request<SignupResponse>('/auth/oauth/complete-signup', {
+        method: 'POST',
+        body: JSON.stringify({ ...data, company_name: sanitizeInput(data.company_name) }),
+      }),
     oauthProviders: (): Promise<{ providers: { provider: string; enabled: boolean }[] }> =>
       request<{ providers: { provider: string; enabled: boolean }[] }>('/auth/oauth/providers'),
-    oauthStartUrl: (provider: string, rememberMe = true, companyId = '') => {
+    oauthStartUrl: (
+      provider: string,
+      rememberMe = true,
+      companyId = '',
+      plan?: { tier: string; cycle: 'monthly' | 'yearly'; trial: boolean }
+    ) => {
       const q = new URLSearchParams({
         remember_me: rememberMe ? 'true' : 'false',
         company_id: companyId.trim(),
       });
+      if (plan) {
+        q.set('tier', plan.tier);
+        q.set('cycle', plan.cycle);
+        q.set('trial', plan.trial ? 'true' : 'false');
+      }
       return `${API_URL}/auth/oauth/${encodeURIComponent(provider)}/start?${q.toString()}`;
     },
     checkEmail: (

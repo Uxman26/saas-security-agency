@@ -35,6 +35,14 @@ class UserBase(BaseModel):
     email: EmailStr = Field(max_length=EMAIL_MAX)
     full_name: str
 
+class OAuthCompleteSignupRequest(StrictModel):
+    signup_token: str = Field(min_length=1, max_length=4096)
+    company_name: CompanyNameStr
+    subscription_tier: Optional[ShortTextStr] = None
+    start_trial: bool = False
+    billing_cycle: Optional[Literal["monthly", "yearly"]] = None
+
+
 class UserCreate(StrictModel):
     email: EmailStr = Field(max_length=EMAIL_MAX)
     full_name: NameStr

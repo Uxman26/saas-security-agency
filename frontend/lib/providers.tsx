@@ -22,6 +22,13 @@ import {
   resolveThemeStorageKey,
 } from '@/lib/user-theme';
 
+/**
+ * Keeps next-themes' own inline script from executing. The server can't read localStorage,
+ * so it renders that script with the public key; on app routes it then overwrites the
+ * correct theme set by THEME_INIT_SCRIPT, flashing the wrong theme until hydration.
+ */
+const INERT_THEME_SCRIPT_PROPS = { type: 'text/plain' };
+
 function UserThemeProvider({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
@@ -54,6 +61,7 @@ function UserThemeProvider({ children }: { children: ReactNode }) {
       enableSystem
       enableColorScheme
       disableTransitionOnChange
+      scriptProps={INERT_THEME_SCRIPT_PROPS}
     >
       <ThemePreferenceSync storageKey={storageKey} />
       {children}

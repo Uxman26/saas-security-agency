@@ -484,6 +484,7 @@ select:-webkit-autofill {
   --rota-day-w: 168px;
   --rota-hours-w: 72px;
   --rota-pay-w: 96px;
+  --rota-charge-w: 96px;
   --rota-publish-w: 96px;
 }
 
@@ -580,6 +581,7 @@ select:-webkit-autofill {
     --rota-day-w: 116px;
     --rota-hours-w: 64px;
     --rota-pay-w: 88px;
+    --rota-charge-w: 88px;
     --rota-publish-w: 88px;
   }
 

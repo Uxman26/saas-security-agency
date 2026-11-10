@@ -235,7 +235,12 @@ export function ShiftDialog({
       dk,
       // Several staff with no job type picked: each keeps their own profile type and rate.
       normalizeShiftForm({ ...shift, site: resolvedName, shiftRate: rateValue, payType: perStaffRates && !payTypeTouched ? null : payType }),
-      perStaffRates ? Object.fromEntries(assigneeStaffRates.map((r) => [r.id, r.rate])) : undefined
+      // Whatever the rate box shows is what gets saved, profile rate or not.
+      perStaffRates
+        ? Object.fromEntries(assigneeStaffRates.map((r) => [r.id, r.rate]))
+        : rateValue != null && rateValue > 0
+          ? Object.fromEntries(assignees.map((id) => [id, rateValue]))
+          : undefined
     );
     onOpenChange(false);
   };

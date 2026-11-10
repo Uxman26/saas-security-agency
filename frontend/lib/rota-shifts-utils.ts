@@ -341,6 +341,27 @@ export function clientChargeableHours(s: ShiftRec): number {
   return calcHours({ ...s, breakH: 0, breakM: 0 });
 }
 
+/**
+ * Hours the client is invoiced for, by the same rules as the invoice run: scheduled span
+ * unless the shift was cancelled unpaid (none) or cancelled paid (the agreed client hours).
+ */
+export function chargeableHoursForAttendance(
+  sh: ShiftRec,
+  att: { status?: string; paidHours?: string; clientHours?: string } | null | undefined
+): number {
+  const status = normalizeAttStatus(att?.status ?? null);
+  if (status === 'cancelled') return 0;
+  if (status === 'cancelled_paid') {
+    // Older paid cancellations only stored staff hours.
+    const agreed = [att?.clientHours, att?.paidHours].map((v) => String(v ?? '').trim()).find(Boolean);
+    if (agreed !== undefined) {
+      const n = Number(agreed);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+  }
+  return clientChargeableHours(sh);
+}
+
 export function shiftPayable(
   sh: ShiftRec,
   inclBreaks = false,

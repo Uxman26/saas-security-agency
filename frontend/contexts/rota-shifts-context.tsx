@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
-import { buildDayRange, attKey, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance, shiftPayAmount } from '@/lib/rota-shifts-utils';
+import { buildDayRange, attKey, chargeableHoursForAttendance, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance, shiftPayAmount } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, PayType, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS, classifyShiftType } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
@@ -166,6 +166,8 @@ type Ctx = {
   dayTotalHours: (dk: string) => number;
   totalRotaPayable: number;
   empTotalPayable: (empId: string) => number;
+  totalRotaChargeable: number;
+  empTotalChargeable: (empId: string) => number;
   resolveShiftRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => number;
   resolveShiftPayType: (sh: { payType?: PayType | null }, empId?: string) => PayType;
 };
@@ -182,6 +184,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   const [siteNames, setSiteNames] = useState<string[]>([]);
   const [siteRateByName, setSiteRateByName] = useState<Record<string, number>>({});
   const [guardRateById, setGuardRateById] = useState<Record<string, number>>({});
+  const [siteBillRateByName, setSiteBillRateByName] = useState<Record<string, number>>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -285,15 +288,18 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
         setPool(freshPool);
         setSiteNames(sites.map((s) => s.name));
         const rates: Record<string, number> = {};
+        const billRates: Record<string, number> = {};
         for (const s of sites) {
           const staff = s.staff_hourly_rate != null && !Number.isNaN(Number(s.staff_hourly_rate)) ? Number(s.staff_hourly_rate) : null;
           const siteRate = s.default_hourly_rate != null && !Number.isNaN(Number(s.default_hourly_rate)) ? Number(s.default_hourly_rate) : null;
+          if (siteRate != null && siteRate > 0) billRates[s.name.trim().toLowerCase()] = siteRate;
           const pay = staff != null && staff > 0 ? staff : siteRate;
           if (pay != null && pay > 0) {
             rates[s.name.trim().toLowerCase()] = pay;
           }
         }
         setSiteRateByName(rates);
+        setSiteBillRateByName(billRates);
 
         if (cancelled) return;
         const gRates: Record<string, number> = {};
@@ -334,6 +340,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           setPool([]);
           setSiteNames([]);
           setSiteRateByName({});
+          setSiteBillRateByName({});
           setGuardRateById({});
         }
       } finally {
@@ -902,7 +909,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       const emp = { ...s.shifts[empId] } as Record<string, ShiftRec[]>;
       for (const t of targets) {
         if (!s.days.includes(t)) continue;
-        emp[t] = [...(emp[t] || []), withStaffRate(s, src, empId)];
+        // Same person, so the shift keeps the rate it already has.
+        emp[t] = [...(emp[t] || []), { ...src }];
       }
       return { ...s, shifts: { ...s.shifts, [empId]: emp } };
     });
@@ -923,7 +931,7 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           const byDay = { ...(shifts[empId] || {}) } as Record<string, ShiftRec[]>;
           for (const day of targetDays) {
             if (empId === fromId && day === dk) continue;
-            byDay[day] = [...(byDay[day] || []), withStaffRate(s, src, empId)];
+            byDay[day] = [...(byDay[day] || []), empId === fromId ? { ...src } : withStaffRate(s, src, empId)];
           }
           shifts[empId] = byDay;
         }
@@ -1308,6 +1316,30 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
 
   const empTotalPayable = useCallback((empId: string) => empPayableById[empId] || 0, [empPayableById]);
 
+  /** What the client is billed per staff member: site billing rate, else the pay rate, as invoices do. */
+  const empChargeableById = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const empId of Object.keys(state.shifts)) {
+      const byD = state.shifts[empId];
+      let t = 0;
+      for (const dk of Object.keys(byD || {})) {
+        (byD[dk] || []).forEach((sh, idx) => {
+          const hrs = chargeableHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)]);
+          if (hrs <= 0) return;
+          t += hrs * (siteBillRateByName[(sh.site || '').trim().toLowerCase()] ?? resolveShiftRate(sh, empId));
+        });
+      }
+      m[empId] = t;
+    }
+    return m;
+  }, [state.shifts, state.attendance, siteBillRateByName, resolveShiftRate]);
+
+  const empTotalChargeable = useCallback((empId: string) => empChargeableById[empId] || 0, [empChargeableById]);
+  const totalRotaChargeable = useMemo(
+    () => Object.values(empChargeableById).reduce((sum, v) => sum + v, 0),
+    [empChargeableById]
+  );
+
   const value = useMemo(
     () => ({
       state,
@@ -1367,6 +1399,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       dayTotalHours,
       totalRotaPayable,
       empTotalPayable,
+      totalRotaChargeable,
+      empTotalChargeable,
       resolveShiftRate,
       resolveShiftPayType,
     }),
@@ -1427,6 +1461,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       dayTotalHours,
       totalRotaPayable,
       empTotalPayable,
+      totalRotaChargeable,
+      empTotalChargeable,
       resolveShiftRate,
       resolveShiftPayType,
     ]

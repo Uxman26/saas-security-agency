@@ -72,6 +72,7 @@ const EMP_MENU_H = 348;
    reach every column in fewer swipes. These constants stay the desktop values and are
    only used for scroll maths, which is a no-op on mobile where nothing is frozen. */
 const ROTA_PAY_COL_W = 96;
+const ROTA_CHARGE_COL_W = 96;
 const ROTA_HOURS_COL_W = 72;
 const ROTA_PUBLISH_COL_W = 96;
 const ROTA_EMP_COL_W = 210;
@@ -82,6 +83,7 @@ const COL_VAR = {
   day: 'var(--rota-day-w)',
   hours: 'var(--rota-hours-w)',
   pay: 'var(--rota-pay-w)',
+  charge: 'var(--rota-charge-w)',
   publish: 'var(--rota-publish-w)',
 } as const;
 /** Timeline: px per hour — wide enough that the day is horizontally scrollable */
@@ -343,7 +345,7 @@ export function RotaCalendarClient() {
   const [showAi, setShowAi] = useState(false);
   /** Payable money is a separate permission — the column collapses entirely without it. */
   const showPayable = canModule(user, 'rota_payable', 'view');
-  const payColW = showPayable ? ROTA_PAY_COL_W : 0;
+  const payColW = showPayable ? ROTA_PAY_COL_W + ROTA_CHARGE_COL_W : 0;
   const stickyRightW = ROTA_HOURS_COL_W + payColW + ROTA_PUBLISH_COL_W;
   const createGuard = useCreateGuard();
   const { data: dirRows = [] } = useDirectoryContractorsList({ is_active: true });
@@ -386,6 +388,8 @@ export function RotaCalendarClient() {
     dayTotalHours,
     totalRotaPayable,
     empTotalPayable,
+    totalRotaChargeable,
+    empTotalChargeable,
     resolveShiftRate,
     resolveShiftPayType,
     deleteShift,
@@ -2739,6 +2743,11 @@ export function RotaCalendarClient() {
               Payable {formatMoney(totalRotaPayable)}
             </span>
           ) : null}
+          {showPayable ? (
+            <span className="shrink-0 whitespace-nowrap text-xs rounded-full bg-sky-100 dark:bg-sky-950/50 text-sky-900 dark:text-sky-100 px-2 py-1 tabular-nums">
+              Chargeable {formatMoney(totalRotaChargeable)}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -2766,7 +2775,7 @@ export function RotaCalendarClient() {
               // Widths come from CSS vars so the mobile media query can shrink the
               // whole grid in one place and keep min-width in step with the columns.
               minWidth: `calc(${COL_VAR.emp} + ${tableDays.length} * ${COL_VAR.day} + ${COL_VAR.hours}${
-                showPayable ? ` + ${COL_VAR.pay}` : ''
+                showPayable ? ` + ${COL_VAR.pay} + ${COL_VAR.charge}` : ''
               } + ${COL_VAR.publish})`,
               width: '100%',
             }}
@@ -2778,6 +2787,7 @@ export function RotaCalendarClient() {
               ))}
               <col style={{ width: COL_VAR.hours, minWidth: COL_VAR.hours }} />
               {showPayable ? <col style={{ width: COL_VAR.pay, minWidth: COL_VAR.pay }} /> : null}
+              {showPayable ? <col style={{ width: COL_VAR.charge, minWidth: COL_VAR.charge }} /> : null}
               <col style={{ width: COL_VAR.publish, minWidth: COL_VAR.publish }} />
             </colgroup>
             <thead>
@@ -2857,7 +2867,7 @@ export function RotaCalendarClient() {
                 })}
                 <th
                   className="rota-sticky-hours sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                  style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
+                  style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay} + ${COL_VAR.charge}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   <div className="font-semibold leading-tight">Total hours</div>
                   {/* Display only: pay and saved hours always take unpaid breaks off. */}
@@ -2882,9 +2892,17 @@ export function RotaCalendarClient() {
                 {showPayable ? (
                   <th
                     className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-visible isolate"
-                    style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
+                    style={{ right: `calc(${COL_VAR.publish} + ${COL_VAR.charge})`, ...ROTA_STICKY_PAY_BG }}
                   >
                     <div className="font-semibold leading-tight">Payable</div>
+                  </th>
+                ) : null}
+                {showPayable ? (
+                  <th
+                    className="rota-sticky-pay sticky top-0 z-[60] p-1.5 text-center text-[11px] border-l border-b align-top shadow-[0_2px_4px_-2px_rgba(0,0,0,0.1),-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-visible isolate"
+                    style={{ right: `${COL_VAR.publish}`, ...ROTA_STICKY_PAY_BG }}
+                  >
+                    <div className="font-semibold leading-tight">Chargeable</div>
                   </th>
                 ) : null}
                 <th
@@ -3157,16 +3175,24 @@ export function RotaCalendarClient() {
                   })}
                   <td
                     className="rota-sticky-hours sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-hidden isolate"
-                    style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
+                    style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay} + ${COL_VAR.charge}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                   >
                     {formatHoursDecimal(empTotalHours(emp.id))}
                   </td>
                   {showPayable ? (
                     <td
                       className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-visible isolate"
-                      style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
+                      style={{ right: `calc(${COL_VAR.publish} + ${COL_VAR.charge})`, ...ROTA_STICKY_PAY_BG }}
                     >
                       {formatMoney(empTotalPayable(emp.id))}
+                    </td>
+                  ) : null}
+                  {showPayable ? (
+                    <td
+                      className="rota-sticky-pay sticky z-50 text-center align-top p-1.5 border-l border-b text-[11px] tabular-nums font-medium whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18)] overflow-visible isolate"
+                      style={{ right: `${COL_VAR.publish}`, ...ROTA_STICKY_PAY_BG }}
+                    >
+                      {formatMoney(empTotalChargeable(emp.id))}
                     </td>
                   ) : null}
                   <td
@@ -3214,16 +3240,24 @@ export function RotaCalendarClient() {
                 })}
                 <td
                   className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
-                  style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
+                  style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay} + ${COL_VAR.charge}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   {formatHoursDecimal(totalRotaHours)}
                 </td>
                 {showPayable ? (
                   <td
                     className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-visible isolate"
-                    style={{ right: COL_VAR.publish, ...ROTA_STICKY_PAY_BG }}
+                    style={{ right: `calc(${COL_VAR.publish} + ${COL_VAR.charge})`, ...ROTA_STICKY_PAY_BG }}
                   >
                     {formatMoney(totalRotaPayable)}
+                  </td>
+                ) : null}
+                {showPayable ? (
+                  <td
+                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-visible isolate"
+                    style={{ right: `${COL_VAR.publish}`, ...ROTA_STICKY_PAY_BG }}
+                  >
+                    {formatMoney(totalRotaChargeable)}
                   </td>
                 ) : null}
                 <td

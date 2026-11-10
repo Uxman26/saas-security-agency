@@ -747,7 +747,9 @@ def generate_from_rota(
                     f"({period_start} to {period_end}). Generate another only if you meant to."
                 ),
             )
-    due = period_end + timedelta(days=30)
+    # Counted from today when billing a past period; counting from the period end made
+    # any invoice raised more than 30 days after it overdue the moment it was created.
+    due = max(period_end, date.today()) + timedelta(days=30)
     inv = Invoice(
         company_id=company.id,
         client_id=client_id,

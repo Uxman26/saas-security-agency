@@ -91,7 +91,7 @@ export function SearchableSelect({
             disabled={disabled}
             className="w-full justify-between font-normal"
           >
-            <span className="truncate">{selectedLabel}</span>
+            <span className="truncate" title={selectedLabel}>{selectedLabel}</span>
             <ChevronsUpDown className="size-4 opacity-50 shrink-0" />
           </Button>
         </Popover.Trigger>
@@ -106,7 +106,9 @@ export function SearchableSelect({
           align="start"
           sideOffset={4}
           collisionPadding={8}
-          className="z-[110] w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+          // At least as wide as the field, growing to fit long names (full site / client
+          // names were unreadable at the field's width) but never past the screen.
+          className="z-[110] w-max min-w-[var(--radix-popover-trigger-width)] max-w-[min(32rem,var(--radix-popover-content-available-width,32rem))] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
           // The trigger keeps focus so the field is not scrolled out of view on open;
           // focus is moved into the search box by its own autoFocus instead.
           onOpenAutoFocus={(e) => e.preventDefault()}
@@ -138,7 +140,7 @@ export function SearchableSelect({
                   }}
                 >
                   <Check className={cn('size-3.5 shrink-0', value === o.value ? 'opacity-100' : 'opacity-0')} />
-                  <span className="truncate">{o.label}</span>
+                  <span className="whitespace-normal break-words">{o.label}</span>
                 </button>
               </li>
             ))}

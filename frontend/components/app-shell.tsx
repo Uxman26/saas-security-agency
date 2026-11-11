@@ -18,6 +18,7 @@ import { useTranslations } from 'next-intl';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { useModulePathGuard } from '@/components/module-guard';
 import { api } from '@/lib/api';
+import { fetchDashboardAlerts } from '@/hooks/use-dashboard';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { TrialBanner } from '@/components/trial-banner';
 import { usePlatformPermissions } from '@/hooks/use-platform-permissions';
@@ -26,12 +27,14 @@ import { ControlOpsAssistant } from '@/components/assistant/controlops-assistant
 import { ReportIssueDialog } from '@/components/feedback/report-issue-dialog';
 import { QuickActionsMenu } from '@/components/quick-actions-menu';
 import { GlobalSearch } from '@/components/global-search';
+import { PageTitle } from '@/components/page-title';
 import { AdminSidebarNav, TenantSidebarNav } from '@/components/sidebar-nav';
 import { groupTenantNavSections } from '@/lib/sidebar-sections';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const tc = useTranslations('common');
+  const tShell = useTranslations('dashboard.shell');
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -90,13 +93,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     });
     void queryClient.prefetchQuery({
       queryKey: ['dashboard-alerts', 30],
-      queryFn: async () => {
-        const [compliance, contracts] = await Promise.all([
-          api.reports.compliance(30),
-          api.reports.contractsExpiring(30),
-        ]);
-        return { compliance, contracts };
-      },
+      queryFn: fetchDashboardAlerts,
       staleTime: 60_000,
     });
   }, [user, isSuperAdmin, queryClient]);
@@ -107,8 +104,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ImpersonationBanner />
         <TrialBanner />
-        <header className="app-header-safe z-40 flex min-h-12 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 dark:bg-card">
-          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden md:hidden">
+        <header className="app-header-safe z-40 flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 sm:px-4">
+          <div className="flex min-w-0 flex-1 shrink-0 items-center gap-2 overflow-hidden md:hidden">
             <Button
               type="button"
               variant="ghost"
@@ -123,15 +120,21 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
             <CompanyBrand className="min-w-0 text-primary text-sm [&_span]:text-primary" />
           </div>
-          <div className="flex shrink-0 items-center md:flex-1 md:justify-center md:px-4">
-            <GlobalSearch className="w-auto md:w-full md:max-w-sm" />
+          <div className="hidden min-w-0 flex-1 md:flex">{isSuperAdmin ? null : <PageTitle />}</div>
+          <div className="flex shrink-0 items-center md:w-full md:min-w-[17rem] md:max-w-sm md:shrink">
+            <GlobalSearch className="w-auto md:w-full" />
           </div>
-          <div className="flex shrink-0 items-center gap-1 overflow-visible py-1 sm:gap-1.5 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
+          <div className="flex shrink-0 items-center gap-1 overflow-visible py-1 sm:gap-2 md:flex-1 md:justify-end [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
             <QuickActionsMenu />
-            <LanguageSwitcher />
-            <ThemeToggle />
+            <div role="group" aria-label={tShell('utilities')} className="hidden items-center gap-1 sm:flex">
+              <LanguageSwitcher />
+              <ThemeToggle />
+            </div>
+            <span aria-hidden className="mx-0.5 hidden h-6 w-px bg-border sm:block" />
             <AlertsPanel />
-            <EmailDialog />
+            <div className="hidden shrink-0 whitespace-nowrap sm:block">
+              <EmailDialog />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -172,6 +175,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </Button>
                 </div>
                 <CompanySwitcher />
+                <div role="group" aria-label={tShell('utilities')} className="flex flex-wrap items-center gap-1.5 sm:hidden">
+                  <LanguageSwitcher />
+                  <ThemeToggle />
+                  <EmailDialog />
+                </div>
               </div>
               <nav
                 ref={mobileNavRef}

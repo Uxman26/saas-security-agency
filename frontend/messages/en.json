@@ -857,5 +857,309 @@
         { "q": "Can we see the platform before subscribing?", "a": "Yes. <hl>Book a demonstration</hl> to see the most relevant ControlOps workflows for your business." }
       ]
     }
+  },
+  "dashboard": {
+    "shell": {
+      "collapse": "Collapse sidebar",
+      "expand": "Expand sidebar",
+      "breadcrumb": "Breadcrumb",
+      "utilities": "Preferences"
+    },
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}",
+      "morningPlain": "Good morning",
+      "afternoonPlain": "Good afternoon",
+      "eveningPlain": "Good evening"
+    },
+    "status": {
+      "healthy": "All systems operational",
+      "degraded": "Some data couldn't load",
+      "updated": "Updated {when}",
+      "refresh": "Refresh"
+    },
+    "cta": {
+      "label": "Quick actions",
+      "createShift": "Plan shifts",
+      "addStaff": "Add staff",
+      "newIncident": "New incident",
+      "generateInvoice": "Generate invoice"
+    },
+    "range": {
+      "label": "Date range",
+      "today": "Today",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To",
+      "invalid": "Choose a start date on or before the end date, no more than a year apart."
+    },
+    "customise": {
+      "button": "Customise",
+      "title": "Customise dashboard",
+      "description": "Show, hide and reorder widgets. Saved for your account on this device.",
+      "up": "Move {name} up",
+      "down": "Move {name} down",
+      "show": "Show {name}",
+      "hide": "Hide {name}",
+      "reset": "Reset to default",
+      "done": "Done",
+      "allHidden": "All widgets are hidden."
+    },
+    "widgets": {
+      "live": "Live status",
+      "kpis": "Key metrics",
+      "shifts": "Shifts & coverage",
+      "attendance": "Attendance",
+      "finance": "Finance overview",
+      "sites": "Coverage by site",
+      "actions": "Action centre",
+      "activity": "Activity",
+      "today": "Today's shifts",
+      "partners": "Contractors & clients",
+      "quick": "Quick access"
+    },
+    "error": {
+      "message": "This widget couldn't load. The rest of the dashboard is unaffected.",
+      "retry": "Try again"
+    },
+    "live": {
+      "title": "Live now",
+      "shiftsToday": "{count, plural, one {# shift} other {# shifts}} today",
+      "present": "Present now",
+      "late": "Late today",
+      "absent": "Absent today",
+      "inProgress": "Shifts in progress",
+      "openIncidents": "Open incidents",
+      "loneWorkers": "Lone workers active"
+    },
+    "kpi": {
+      "label": "Key metrics",
+      "since": "Change since {date}",
+      "staff": "Staff",
+      "sites": "Sites",
+      "clients": "Clients",
+      "rotas": "Active rotas",
+      "contracts": "Contracts ending",
+      "compliance": "Compliance score",
+      "staffCaption": "Directory total",
+      "sitesCaption": "Locations",
+      "clientsCaption": "Client accounts",
+      "rotasCaption": "of {total} rotas",
+      "rotasCaptionPlain": "Running today or later",
+      "contractsCaption": "Within 30 days",
+      "complianceCaption": "Staff fully in date"
+    },
+    "shifts": {
+      "title": "Shifts & coverage",
+      "subtitle": "Daily shifts in the selected period",
+      "subtitleAhead": "Selected period plus the next {days} days scheduled",
+      "metricLabel": "Chart metric",
+      "metric": {
+        "shifts": "Shifts",
+        "hours": "Hours",
+        "coverage": "Coverage"
+      },
+      "stat": {
+        "worked": "Shifts to date",
+        "hoursWorked": "Hours to date",
+        "avgCoverage": "Avg coverage",
+        "scheduledAhead": "Scheduled ahead"
+      },
+      "aria": "Area chart of daily {metric}",
+      "today": "Today",
+      "scheduled": "Scheduled",
+      "open": "Open rota"
+    },
+    "attendance": {
+      "title": "Attendance",
+      "subtitle": "Recorded shifts in the selected period",
+      "empty": "No attendance yet",
+      "emptyHint": "Clock-ins appear here once shifts are worked.",
+      "open": "Open attendance",
+      "onTimeRate": "On-time rate",
+      "vsPrevious": "vs previous period",
+      "aria": "Donut chart: {total} attendance records, {rate}% on time",
+      "records": "records",
+      "status": {
+        "on_time": "On time",
+        "late": "Late",
+        "absent": "Absent",
+        "cancelled": "Cancelled",
+        "unrecorded": "Not recorded"
+      }
+    },
+    "finance": {
+      "title": "Finance overview",
+      "subtitle": "Selected period compared with the one before",
+      "open": "Invoices",
+      "kpi": {
+        "invoiced": "Invoiced",
+        "collected": "Collected",
+        "outstanding": "Outstanding",
+        "payroll": "Payroll"
+      },
+      "overdue": "{amount} overdue",
+      "prevValue": "Previous: {amount}",
+      "allOpen": "All open invoices",
+      "vsPrevious": "vs previous period",
+      "chartTitle": "Last 6 months",
+      "series": {
+        "invoiced": "Invoiced",
+        "collected": "Collected",
+        "payroll": "Payroll"
+      },
+      "aria": "Monthly invoiced and collected totals as bars, payroll as a line, in pounds",
+      "empty": "No invoices, payments or payroll in the last 6 months",
+      "footer": "All time: invoiced {invoiced} · payroll {payroll} · payroll this month {mtd}",
+      "footerInvoiced": "All-time invoiced: {invoiced}"
+    },
+    "sites": {
+      "title": "Coverage by site",
+      "subtitle": "{count, plural, =0 {No sites rostered today} one {# site rostered today} other {# sites rostered today}}",
+      "empty": "No shifts today",
+      "emptyHint": "Nothing is rostered for today.",
+      "plan": "Plan a rota",
+      "rowAria": "{site}: {covered} of {total} shifts covered",
+      "more": "+{count} more sites"
+    },
+    "shiftStatus": {
+      "scheduled": "Scheduled",
+      "on_duty": "On duty",
+      "late": "Late",
+      "completed": "Completed",
+      "absent": "Absent",
+      "cancelled": "Cancelled"
+    },
+    "today": {
+      "title": "Today's shifts",
+      "subtitle": "{count, plural, =0 {Nothing rostered} one {# shift} other {# shifts}}",
+      "filterLabel": "Filter shifts",
+      "filter": {
+        "all": "All",
+        "active": "On duty",
+        "attention": "Needs attention"
+      },
+      "empty": "No shifts today",
+      "emptyHint": "Shifts scheduled for today will show here.",
+      "plan": "Plan a rota",
+      "noneFiltered": "Nothing here. All good.",
+      "col": {
+        "staff": "Staff",
+        "site": "Site",
+        "time": "Time",
+        "status": "Status"
+      },
+      "open": "Open rota"
+    },
+    "activity": {
+      "title": "Activity",
+      "subtitle": "Last 14 days",
+      "empty": "No recent activity",
+      "emptyHint": "Clock-ins, incidents, documents and payments will appear here.",
+      "someone": "A client",
+      "event": {
+        "clock_in": "{actor} clocked in at {target}",
+        "clock_in_late": "{actor} clocked in late at {target}",
+        "clock_out": "{actor} clocked out of {target}",
+        "incident": "Incident at {actor}: {target}",
+        "incidentNoSite": "Incident reported: {target}",
+        "document": "{actor}: {target} uploaded",
+        "payment": "{amount} received from {actor}",
+        "request": "{actor} requested staff for {target}"
+      }
+    },
+    "actions": {
+      "title": "Action centre",
+      "subtitle": "Everything that needs a decision, most urgent first",
+      "subtitleCritical": "{count, plural, one {# critical item needs} other {# critical items need}} attention",
+      "tabsLabel": "Filter actions",
+      "tab": {
+        "all": "All",
+        "compliance": "Compliance",
+        "requests": "Requests",
+        "invoices": "Invoices"
+      },
+      "empty": {
+        "all": "All clear 🎉",
+        "compliance": "Everyone is compliant 🎉",
+        "requests": "No pending staff requests",
+        "invoices": "No overdue invoices 🎉"
+      },
+      "emptyHint": "Anything new that needs you will show up here.",
+      "badge": {
+        "expired": "Expired {days}d ago",
+        "today": "Today",
+        "in": "In {days}d",
+        "overdue": "{days}d overdue"
+      },
+      "detail": {
+        "document": "{type} · expires {date}",
+        "sia": "SIA licence · expires {date}",
+        "contract": "Client contract ends {date}",
+        "request": "{count} staff · {site} · {date} {time}",
+        "invoice": "Invoice #{id} · {amount} · due {date}",
+        "invoiceNo": "Invoice #{id}"
+      },
+      "severity": {
+        "critical": "Critical",
+        "warning": "Warning",
+        "info": "Info"
+      },
+      "remind": "Remind",
+      "remindFailed": "Couldn't send the reminder",
+      "view": "View",
+      "partial": "Some compliance alerts couldn't load."
+    },
+    "partners": {
+      "title": "Contractors & clients",
+      "subtitle": "Directory health and top clients",
+      "active": "{active}/{total} active",
+      "main": "Main contractors",
+      "sub": "Sub-contractors",
+      "topClients": "Top clients by revenue (12 months)",
+      "noRevenue": "No invoiced revenue in the last 12 months."
+    },
+    "quick": {
+      "title": "Quick access",
+      "subtitle": "Jump straight to a module",
+      "tile": {
+        "staff": "Staff",
+        "sites": "Sites",
+        "clients": "Clients",
+        "assignments": "Assignments",
+        "rota": "Rotas & shifts",
+        "attendance": "Attendance",
+        "documents": "Documents",
+        "contractors": "Contractors",
+        "payroll": "Payroll",
+        "reports": "Reports",
+        "invoices": "Invoices",
+        "payments": "Payments",
+        "allowances": "Allowances",
+        "specialDays": "Special days",
+        "roles": "Roles & users"
+      },
+      "desc": {
+        "staff": "Staff & compliance",
+        "sites": "Deployment sites",
+        "clients": "Client accounts",
+        "assignments": "Schedule shifts",
+        "rota": "Planner & grid",
+        "attendance": "Clock-ins & lateness",
+        "documents": "Documents & expiry",
+        "contractors": "Main & sub onboarding",
+        "payroll": "Calculate & approve",
+        "reports": "Staff, finance & usage",
+        "invoices": "Client billing",
+        "payments": "Money received",
+        "allowances": "Rates & allowances",
+        "specialDays": "Bank holidays",
+        "roles": "Permissions & users"
+      }
+    }
   }
 }

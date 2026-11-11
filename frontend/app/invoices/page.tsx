@@ -147,7 +147,7 @@ export default function InvoicesPage() {
   const filterOptions = useWorkFilterOptions();
   const [dueFrom, setDueFrom] = useState('');
   const [dueTo, setDueTo] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') ?? '');
   const [search, setSearch] = useState('');
   const [payInvoice, setPayInvoice] = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState('');

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,7 +19,7 @@ from app.schemas import (
     SubscriptionReportSummary,
     UsageSummaryResponse,
 )
-from app.services import report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service, shift_adjustment_service, shift_audit_service
+from app.services import dashboard_insights_service, report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service, shift_adjustment_service, shift_audit_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -27,6 +27,22 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 @router.get("/dashboard", response_model=DashboardOverview)
 def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("reports", "view"))):
     return report_service.get_dashboard_overview(db, current_user.id)
+
+
+@router.get("/dashboard/insights")
+def dashboard_insights(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("reports", "view")),
+):
+    end = end or date.today()
+    start = start or end - timedelta(days=29)
+    if start > end:
+        raise HTTPException(status_code=422, detail="start must be on or before end")
+    if (end - start).days > 366:
+        raise HTTPException(status_code=422, detail="Range cannot exceed one year")
+    return dashboard_insights_service.get_dashboard_insights(db, current_user, start, end)
 
 
 @router.get("/compliance", response_model=List[ComplianceAlert])

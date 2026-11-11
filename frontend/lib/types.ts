@@ -1659,6 +1659,88 @@ export interface DashboardOverview {
   operations_compare: ChartPoint[];
 }
 
+export interface KpiMetric {
+  value: number;
+  previous: number | null;
+  series: number[];
+}
+
+export type TodayShiftStatus = 'scheduled' | 'on_duty' | 'late' | 'completed' | 'absent' | 'cancelled';
+
+export type ActivityType = 'clock_in' | 'clock_in_late' | 'clock_out' | 'incident' | 'document' | 'payment' | 'request';
+
+export interface DashboardInsights {
+  range: { start: string; end: string; previous_start: string; previous_end: string; today: string };
+  generated_at: string;
+  live: {
+    shifts_today: number;
+    present: number;
+    late: number;
+    absent: number;
+    in_progress: number;
+    open_incidents: number | null;
+    lone_workers_active: number | null;
+  };
+  kpis: {
+    staff: KpiMetric;
+    sites: KpiMetric;
+    clients: KpiMetric;
+    rotas_active: KpiMetric;
+    contracts_expiring: KpiMetric;
+    compliance_score: KpiMetric | null;
+  };
+  shifts: { date: string; shifts: number; hours: number; coverage: number | null }[];
+  attendance: {
+    on_time: number;
+    late: number;
+    absent: number;
+    cancelled: number;
+    unrecorded: number;
+    on_time_rate: number | null;
+    previous_on_time_rate: number | null;
+  };
+  today_shifts: {
+    id: number;
+    guard_id: number;
+    guard_name: string;
+    site_id: number;
+    site_name: string;
+    site_color: string | null;
+    start: string | null;
+    end: string | null;
+    status: TodayShiftStatus;
+  }[];
+  finance: {
+    invoiced: number;
+    invoiced_previous: number;
+    collected: number;
+    collected_previous: number;
+    payroll: number | null;
+    payroll_previous: number | null;
+    invoiced_all_time: number;
+    outstanding: number;
+    overdue_amount: number;
+    overdue_count: number;
+    months: { month: string; invoiced: number; collected: number; payroll: number | null }[];
+    overdue_invoices: { id: number; client_name: string; outstanding: number; due_date: string; days_overdue: number }[];
+    top_clients: { id: number; name: string; revenue: number; share: number }[];
+  } | null;
+  staff_requests: {
+    count: number;
+    items: {
+      id: number;
+      client_name: string;
+      site_name: string;
+      shift_date: string;
+      shift_start: string;
+      shift_end: string;
+      staff_count: number;
+    }[];
+  } | null;
+  sia_alerts: { guard_id: number; guard_name: string; expiry_date: string }[] | null;
+  activity: { type: ActivityType; at: string; actor: string; target: string; amount?: number; href: string }[];
+}
+
 export interface ContractExpiryAlert {
   client_id: number;
   client_name: string;

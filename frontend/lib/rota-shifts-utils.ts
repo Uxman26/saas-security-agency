@@ -383,6 +383,18 @@ export function chargeableHoursForAttendance(
   return agreedEarlyFinishHours(sh, att).chargeable ?? clientChargeableHours(sh);
 }
 
+/**
+ * Chargeable hours for the rota's Chargeable column: nothing is charged until attendance
+ * is marked (or agreed hours were entered on an early finish), then the invoice rules.
+ */
+export function chargeableHoursForRota(
+  sh: ShiftRec,
+  att: { status?: string; paidHours?: string; clientHours?: string } | null | undefined
+): number {
+  if (!isAttendanceMarked(att?.status) && agreedEarlyFinishHours(sh, att).chargeable == null) return 0;
+  return chargeableHoursForAttendance(sh, att);
+}
+
 export function shiftPayable(
   sh: ShiftRec,
   inclBreaks = false,

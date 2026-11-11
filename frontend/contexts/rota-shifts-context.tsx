@@ -14,7 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
-import { buildDayRange, attKey, chargeableHoursForAttendance, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance, shiftPayAmount } from '@/lib/rota-shifts-utils';
+import { buildDayRange, attKey, chargeableHoursForRota, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance, shiftPayAmount } from '@/lib/rota-shifts-utils';
 import type { AttendanceRec, EmployeeRec, PayType, RotaJsState, RotaViewMode, ShiftRec } from '@/lib/rota-shifts-types';
 import { SHIFT_COLOR_OPTS, classifyShiftType } from '@/lib/rota-shifts-types';
 import type { RotaPlanDetail } from '@/lib/types';
@@ -173,7 +173,17 @@ type Ctx = {
   totalRotaChargeable: number;
   empTotalChargeable: (empId: string) => number;
   resolveShiftRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => number;
+  explainShiftRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => RateExplanation;
+  explainChargeRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => RateExplanation;
+  /** Hours columns deduct breaks unless this is true (display toggle or rota setting). */
+  hoursInclBreaks: boolean;
   resolveShiftPayType: (sh: { payType?: PayType | null }, empId?: string) => PayType;
+};
+
+export type RateExplanation = {
+  rate: number;
+  /** shift / staff / site = pay rate source; site_bill / pay_fallback = charge rate source. */
+  source: 'shift' | 'staff' | 'site' | 'site_bill' | 'pay_fallback' | 'none';
 };
 
 const RotaCtx = createContext<Ctx | null>(null);
@@ -356,21 +366,38 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     };
   }, [queryClient]);
 
-  const resolveShiftRate = useCallback(
-    (sh: { site?: string; shiftRate?: number | null }, empId?: string) => {
+  /** The pay rate a shift resolves to and where it came from: shift → staff → site. */
+  const explainShiftRate = useCallback(
+    (sh: { site?: string; shiftRate?: number | null }, empId?: string): RateExplanation => {
       if (sh.shiftRate != null && !Number.isNaN(Number(sh.shiftRate)) && Number(sh.shiftRate) > 0) {
-        return Number(sh.shiftRate);
+        return { rate: Number(sh.shiftRate), source: 'shift' };
       }
       if (empId && guardRateById[empId] != null && guardRateById[empId] > 0) {
-        return guardRateById[empId];
+        return { rate: guardRateById[empId], source: 'staff' };
       }
       const key = (sh.site || '').trim().toLowerCase();
       if (key && siteRateByName[key] != null && siteRateByName[key] > 0) {
-        return siteRateByName[key];
+        return { rate: siteRateByName[key], source: 'site' };
       }
-      return 0;
+      return { rate: 0, source: 'none' };
     },
     [siteRateByName, guardRateById]
+  );
+
+  const resolveShiftRate = useCallback(
+    (sh: { site?: string; shiftRate?: number | null }, empId?: string) => explainShiftRate(sh, empId).rate,
+    [explainShiftRate]
+  );
+
+  /** What the client is billed per hour: the site's client rate, else the pay rate, as invoices do. */
+  const explainChargeRate = useCallback(
+    (sh: { site?: string; shiftRate?: number | null }, empId?: string): RateExplanation => {
+      const bill = siteBillRateByName[(sh.site || '').trim().toLowerCase()];
+      if (bill != null) return { rate: bill, source: bill > 0 ? 'site_bill' : 'none' };
+      const pay = explainShiftRate(sh, empId);
+      return pay.rate > 0 ? { rate: pay.rate, source: 'pay_fallback' } : { rate: 0, source: 'none' };
+    },
+    [siteBillRateByName, explainShiftRate]
   );
 
   /** Profile job type for a staff member; legacy employees without one are hourly. */
@@ -1338,15 +1365,15 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       let t = 0;
       for (const dk of Object.keys(byD || {})) {
         (byD[dk] || []).forEach((sh, idx) => {
-          const hrs = chargeableHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)]);
+          const hrs = chargeableHoursForRota(sh, state.attendance[attKey(empId, dk, idx)]);
           if (hrs <= 0) return;
-          t += hrs * (siteBillRateByName[(sh.site || '').trim().toLowerCase()] ?? resolveShiftRate(sh, empId));
+          t += hrs * explainChargeRate(sh, empId).rate;
         });
       }
       m[empId] = t;
     }
     return m;
-  }, [state.shifts, state.attendance, siteBillRateByName, resolveShiftRate]);
+  }, [state.shifts, state.attendance, explainChargeRate]);
 
   const empTotalChargeable = useCallback((empId: string) => empChargeableById[empId] || 0, [empChargeableById]);
   const totalRotaChargeable = useMemo(
@@ -1418,6 +1445,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       totalRotaChargeable,
       empTotalChargeable,
       resolveShiftRate,
+      explainShiftRate,
+      explainChargeRate,
+      hoursInclBreaks,
       resolveShiftPayType,
     }),
     [
@@ -1482,6 +1512,9 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       totalRotaChargeable,
       empTotalChargeable,
       resolveShiftRate,
+      explainShiftRate,
+      explainChargeRate,
+      hoursInclBreaks,
       resolveShiftPayType,
     ]
   );

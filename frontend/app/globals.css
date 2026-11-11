@@ -26,7 +26,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   /* Readable type scale — lifts every text-xs / text-sm / text-base without
      touching component files. Dense micro labels should use text-xs, not px. */
@@ -482,9 +482,9 @@ select:-webkit-autofill {
 .rota-grid-table {
   --rota-emp-w: 210px;
   --rota-day-w: 168px;
-  --rota-hours-w: 72px;
-  --rota-pay-w: 96px;
-  --rota-charge-w: 96px;
+  --rota-hours-w: 60px;
+  --rota-pay-w: 72px;
+  --rota-charge-w: 72px;
   --rota-publish-w: 96px;
 }
 
@@ -579,9 +579,9 @@ select:-webkit-autofill {
        leaves so little room that names wrap one character per line. */
     --rota-emp-w: 200px;
     --rota-day-w: 116px;
-    --rota-hours-w: 64px;
-    --rota-pay-w: 88px;
-    --rota-charge-w: 88px;
+    --rota-hours-w: 56px;
+    --rota-pay-w: 68px;
+    --rota-charge-w: 68px;
     --rota-publish-w: 88px;
   }
 
@@ -848,4 +848,171 @@ select:-webkit-autofill {
 }
 .legal-prose :where(table) :where(td) {
   line-height: 1.55;
+}
+
+@theme inline {
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-viz-1: var(--viz-1);
+  --color-viz-2: var(--viz-2);
+  --color-viz-3: var(--viz-3);
+  --color-viz-ontime: var(--viz-ontime);
+  --color-viz-late: var(--viz-late);
+  --color-viz-absent: var(--viz-absent);
+  --color-viz-neutral: var(--viz-neutral);
+  --color-viz-faint: var(--viz-faint);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hairline: var(--hairline);
+  --shadow-card: var(--elev-1);
+  --shadow-card-hover: var(--elev-2);
+  --shadow-pop: var(--elev-3);
+}
+
+/* Dashboard design tokens. Brand scale is the #F45100 orange stepped 50–900;
+   semantic and viz hues were checked for colour-vision separation in both themes. */
+:root {
+  --brand-50: #FFF4ED;
+  --brand-100: #FFE6D5;
+  --brand-200: #FFC9A8;
+  --brand-300: #FFA370;
+  --brand-400: #FF7A38;
+  --brand-500: #F45100;
+  --brand-600: #D84300;
+  --brand-700: #B33600;
+  --brand-800: #8F2E0A;
+  --brand-900: #74280C;
+  --success: #15803D;
+  --success-soft: #DCFCE7;
+  --warning: #B45309;
+  --warning-soft: #FEF3C7;
+  --danger: #DC2626;
+  --danger-soft: #FEE2E2;
+  --info: #2563EB;
+  --info-soft: #DBEAFE;
+  --viz-1: #F45100;
+  --viz-2: #0E9F9A;
+  --viz-3: #6366F1;
+  --viz-ontime: #2A78D6;
+  --viz-late: #D98A00;
+  --viz-absent: #D6336C;
+  --viz-neutral: #94A3B8;
+  --viz-faint: #E2E8F0;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --hairline: rgb(15 23 42 / 0.08);
+  --elev-1: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.04), 0 8px 24px -12px rgb(15 23 42 / 0.08);
+  --elev-2: 0 2px 4px rgb(15 23 42 / 0.04), 0 12px 32px -12px rgb(15 23 42 / 0.16);
+  --elev-3: 0 16px 48px -12px rgb(15 23 42 / 0.22);
+  --dash-canvas: radial-gradient(1200px 480px at 12% -8%, rgb(244 81 0 / 0.07), transparent 60%),
+    radial-gradient(900px 420px at 100% 0%, rgb(99 102 241 / 0.05), transparent 60%), #F6F7FB;
+}
+
+.dark {
+  --brand-50: #2A1306;
+  --brand-100: #3B1D0A;
+  --brand-200: #5C2A0C;
+  --brand-300: #8A3A0E;
+  --brand-400: #C24E12;
+  --brand-500: #FF6A1F;
+  --brand-600: #FF8A4C;
+  --brand-700: #FFA673;
+  --brand-800: #FFC5A0;
+  --brand-900: #FFE3D0;
+  --success: #4ADE80;
+  --success-soft: rgb(34 197 94 / 0.14);
+  --warning: #FBBF24;
+  --warning-soft: rgb(245 158 11 / 0.14);
+  --danger: #F87171;
+  --danger-soft: rgb(239 68 68 / 0.15);
+  --info: #60A5FA;
+  --info-soft: rgb(59 130 246 / 0.15);
+  --viz-1: #F05A14;
+  --viz-2: #14A89A;
+  --viz-3: #7178EE;
+  --viz-ontime: #3987E5;
+  --viz-late: #C98500;
+  --viz-absent: #E0457E;
+  --viz-neutral: #64748B;
+  --viz-faint: #273349;
+  --surface: #131C2E;
+  --surface-raised: #182338;
+  --hairline: rgb(148 163 184 / 0.12);
+  --elev-1: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --elev-2: 0 1px 0 rgb(255 255 255 / 0.05) inset, 0 0 0 1px rgb(255 106 31 / 0.18), 0 18px 40px -16px rgb(0 0 0 / 0.7);
+  --elev-3: 0 24px 60px -12px rgb(0 0 0 / 0.75);
+  --dash-canvas: radial-gradient(1100px 520px at 10% -10%, rgb(255 106 31 / 0.10), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, rgb(113 120 238 / 0.10), transparent 60%), #0B1220;
+}
+
+.dash-canvas {
+  background: var(--dash-canvas);
+}
+
+.dash-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 1rem;
+  box-shadow: var(--elev-1);
+}
+
+.dark .dash-card {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%), var(--surface);
+}
+
+.dash-glass {
+  background: color-mix(in oklab, var(--surface) 72%, transparent);
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border: 1px solid var(--hairline);
+  border-radius: 1rem;
+  box-shadow: var(--elev-1);
+}
+
+@keyframes dash-ping {
+  0% { transform: scale(1); opacity: 0.6; }
+  80%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+.dash-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: dash-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.dash-scroll-x {
+  scrollbar-width: none;
+}
+.dash-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-live-dot::after {
+    animation: none;
+  }
+  .dash-motion,
+  .dash-motion * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

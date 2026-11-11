@@ -1137,6 +1137,8 @@ export const api = {
   },
   reports: {
     dashboard: (): Promise<DashboardOverview> => request<DashboardOverview>('/reports/dashboard'),
+    insights: (start: string, end: string) =>
+      request<import('./types').DashboardInsights>(`/reports/dashboard/insights?start=${start}&end=${end}`),
     compliance: (days?: number): Promise<ComplianceAlert[]> => request<ComplianceAlert[]>(`/reports/compliance${days != null ? `?days=${days}` : ''}`),
     contractsExpiring: (days?: number): Promise<ContractExpiryAlert[]> =>
       request<ContractExpiryAlert[]>(`/reports/contracts-expiring${days != null ? `?days=${days}` : ''}`),

@@ -601,7 +601,7 @@ export function ControlOpsAssistant({
       <Button
         type="button"
         size="icon"
-        className="fixed z-[80] size-12 cursor-grab touch-none rounded-full shadow-lg bg-primary hover:bg-primary-hover text-primary-foreground active:cursor-grabbing"
+        className="fixed z-[80] size-12 cursor-grab touch-none rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-[0_12px_28px_-8px_rgb(244_81_0/0.6)] ring-4 ring-white/80 transition-[transform,box-shadow] hover:scale-105 hover:shadow-[0_16px_36px_-8px_rgb(244_81_0/0.7)] active:cursor-grabbing dark:from-brand-500 dark:to-brand-400 dark:text-[#0F172A] dark:ring-white/10"
         style={{ left: fabPos.x, top: fabPos.y }}
         onPointerDown={onFabPointerDown}
         onPointerMove={onFabPointerMove}

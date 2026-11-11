@@ -68,7 +68,10 @@ export default function IncidentsPage() {
   const [items, setItems] = useState<Incident[]>([]);
   const [allItems, setAllItems] = useState<Incident[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    const q = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('status');
+    return q && ['open', 'reviewing', 'reported', 'closed'].includes(q) ? q : 'all';
+  });
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Incident | null>(null);
   const [form, setForm] = useState({

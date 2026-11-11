@@ -856,5 +856,309 @@
         { "q": "هل يمكننا رؤية المنصة قبل الاشتراك؟", "a": "نعم. احجز عرضاً توضيحياً لرؤية سير عمل ControlOps الأكثر صلة بعملك." }
       ]
     }
+  },
+  "dashboard": {
+    "shell": {
+      "collapse": "طي الشريط الجانبي",
+      "expand": "توسيع الشريط الجانبي",
+      "breadcrumb": "مسار التنقل",
+      "utilities": "التفضيلات"
+    },
+    "greeting": {
+      "morning": "صباح الخير، {name}",
+      "afternoon": "مساء الخير، {name}",
+      "evening": "مساء الخير، {name}",
+      "morningPlain": "صباح الخير",
+      "afternoonPlain": "مساء الخير",
+      "eveningPlain": "مساء الخير"
+    },
+    "status": {
+      "healthy": "جميع الأنظمة تعمل",
+      "degraded": "تعذّر تحميل بعض البيانات",
+      "updated": "آخر تحديث {when}",
+      "refresh": "تحديث"
+    },
+    "cta": {
+      "label": "إجراءات سريعة",
+      "createShift": "تخطيط المناوبات",
+      "addStaff": "إضافة موظف",
+      "newIncident": "حادث جديد",
+      "generateInvoice": "إنشاء فاتورة"
+    },
+    "range": {
+      "label": "النطاق الزمني",
+      "today": "اليوم",
+      "7d": "٧ أيام",
+      "30d": "٣٠ يومًا",
+      "90d": "٩٠ يومًا",
+      "custom": "مخصص",
+      "from": "من",
+      "to": "إلى",
+      "invalid": "اختر تاريخ بداية قبل تاريخ النهاية أو مساويًا له، وبفارق لا يتجاوز سنة."
+    },
+    "customise": {
+      "button": "تخصيص",
+      "title": "تخصيص لوحة التحكم",
+      "description": "أظهر الأدوات أو أخفها وأعد ترتيبها. تُحفظ لحسابك على هذا الجهاز.",
+      "up": "نقل {name} للأعلى",
+      "down": "نقل {name} للأسفل",
+      "show": "إظهار {name}",
+      "hide": "إخفاء {name}",
+      "reset": "استعادة الافتراضي",
+      "done": "تم",
+      "allHidden": "جميع الأدوات مخفية."
+    },
+    "widgets": {
+      "live": "الحالة المباشرة",
+      "kpis": "المؤشرات الرئيسية",
+      "shifts": "المناوبات والتغطية",
+      "attendance": "الحضور",
+      "finance": "نظرة مالية",
+      "sites": "التغطية حسب الموقع",
+      "actions": "مركز الإجراءات",
+      "activity": "النشاط",
+      "today": "مناوبات اليوم",
+      "partners": "المقاولون والعملاء",
+      "quick": "وصول سريع"
+    },
+    "error": {
+      "message": "تعذّر تحميل هذه الأداة. بقية لوحة التحكم لم تتأثر.",
+      "retry": "إعادة المحاولة"
+    },
+    "live": {
+      "title": "مباشر الآن",
+      "shiftsToday": "{count, plural, one {مناوبة واحدة} other {# مناوبات}} اليوم",
+      "present": "حاضرون الآن",
+      "late": "متأخرون اليوم",
+      "absent": "غائبون اليوم",
+      "inProgress": "مناوبات جارية",
+      "openIncidents": "حوادث مفتوحة",
+      "loneWorkers": "عاملون منفردون نشطون"
+    },
+    "kpi": {
+      "label": "المؤشرات الرئيسية",
+      "since": "التغيّر منذ {date}",
+      "staff": "الموظفون",
+      "sites": "المواقع",
+      "clients": "العملاء",
+      "rotas": "الجداول النشطة",
+      "contracts": "عقود تنتهي",
+      "compliance": "درجة الامتثال",
+      "staffCaption": "إجمالي الدليل",
+      "sitesCaption": "المواقع",
+      "clientsCaption": "حسابات العملاء",
+      "rotasCaption": "من أصل {total} جدول",
+      "rotasCaptionPlain": "سارية اليوم أو بعده",
+      "contractsCaption": "خلال ٣٠ يومًا",
+      "complianceCaption": "موظفون مستنداتهم سارية"
+    },
+    "shifts": {
+      "title": "المناوبات والتغطية",
+      "subtitle": "المناوبات اليومية في الفترة المحددة",
+      "subtitleAhead": "الفترة المحددة مع الأيام الـ{days} القادمة المجدولة",
+      "metricLabel": "مقياس الرسم",
+      "metric": {
+        "shifts": "المناوبات",
+        "hours": "الساعات",
+        "coverage": "التغطية"
+      },
+      "stat": {
+        "worked": "المناوبات حتى الآن",
+        "hoursWorked": "الساعات حتى الآن",
+        "avgCoverage": "متوسط التغطية",
+        "scheduledAhead": "مجدولة قادمًا"
+      },
+      "aria": "رسم مساحي يومي لـ{metric}",
+      "today": "اليوم",
+      "scheduled": "مجدولة",
+      "open": "فتح الجدول"
+    },
+    "attendance": {
+      "title": "الحضور",
+      "subtitle": "المناوبات المسجّلة في الفترة المحددة",
+      "empty": "لا يوجد حضور بعد",
+      "emptyHint": "ستظهر تسجيلات الدخول هنا بعد العمل في المناوبات.",
+      "open": "فتح الحضور",
+      "onTimeRate": "نسبة الالتزام بالوقت",
+      "vsPrevious": "مقارنة بالفترة السابقة",
+      "aria": "رسم دائري: {total} سجل حضور، {rate}% في الوقت",
+      "records": "سجل",
+      "status": {
+        "on_time": "في الوقت",
+        "late": "متأخر",
+        "absent": "غائب",
+        "cancelled": "ملغاة",
+        "unrecorded": "غير مسجّل"
+      }
+    },
+    "finance": {
+      "title": "نظرة مالية",
+      "subtitle": "الفترة المحددة مقارنة بالفترة السابقة",
+      "open": "الفواتير",
+      "kpi": {
+        "invoiced": "المفوتر",
+        "collected": "المحصّل",
+        "outstanding": "المستحق",
+        "payroll": "الرواتب"
+      },
+      "overdue": "{amount} متأخر السداد",
+      "prevValue": "السابق: {amount}",
+      "allOpen": "كل الفواتير المفتوحة",
+      "vsPrevious": "مقارنة بالفترة السابقة",
+      "chartTitle": "آخر ٦ أشهر",
+      "series": {
+        "invoiced": "المفوتر",
+        "collected": "المحصّل",
+        "payroll": "الرواتب"
+      },
+      "aria": "إجمالي المفوتر والمحصّل شهريًا كأعمدة، والرواتب كخط، بالجنيه الإسترليني",
+      "empty": "لا فواتير أو مدفوعات أو رواتب في آخر ٦ أشهر",
+      "footer": "الإجمالي: مفوتر {invoiced} · رواتب {payroll} · رواتب هذا الشهر {mtd}",
+      "footerInvoiced": "إجمالي المفوتر: {invoiced}"
+    },
+    "sites": {
+      "title": "التغطية حسب الموقع",
+      "subtitle": "{count, plural, =0 {لا مواقع مجدولة اليوم} one {موقع واحد مجدول اليوم} other {# مواقع مجدولة اليوم}}",
+      "empty": "لا مناوبات اليوم",
+      "emptyHint": "لا شيء مجدول لهذا اليوم.",
+      "plan": "تخطيط جدول",
+      "rowAria": "{site}: {covered} من {total} مناوبات مغطاة",
+      "more": "+{count} مواقع أخرى"
+    },
+    "shiftStatus": {
+      "scheduled": "مجدولة",
+      "on_duty": "في الخدمة",
+      "late": "متأخر",
+      "completed": "مكتملة",
+      "absent": "غائب",
+      "cancelled": "ملغاة"
+    },
+    "today": {
+      "title": "مناوبات اليوم",
+      "subtitle": "{count, plural, =0 {لا شيء مجدول} one {مناوبة واحدة} other {# مناوبات}}",
+      "filterLabel": "تصفية المناوبات",
+      "filter": {
+        "all": "الكل",
+        "active": "في الخدمة",
+        "attention": "تحتاج انتباهًا"
+      },
+      "empty": "لا مناوبات اليوم",
+      "emptyHint": "ستظهر هنا المناوبات المجدولة لليوم.",
+      "plan": "تخطيط جدول",
+      "noneFiltered": "لا شيء هنا. كل شيء على ما يرام.",
+      "col": {
+        "staff": "الموظف",
+        "site": "الموقع",
+        "time": "الوقت",
+        "status": "الحالة"
+      },
+      "open": "فتح الجدول"
+    },
+    "activity": {
+      "title": "النشاط",
+      "subtitle": "آخر ١٤ يومًا",
+      "empty": "لا نشاط حديث",
+      "emptyHint": "ستظهر هنا تسجيلات الدخول والحوادث والمستندات والمدفوعات.",
+      "someone": "عميل",
+      "event": {
+        "clock_in": "سجّل {actor} الدخول في {target}",
+        "clock_in_late": "سجّل {actor} الدخول متأخرًا في {target}",
+        "clock_out": "سجّل {actor} الخروج من {target}",
+        "incident": "حادث في {actor}: {target}",
+        "incidentNoSite": "تم الإبلاغ عن حادث: {target}",
+        "document": "{actor}: تم رفع {target}",
+        "payment": "استلام {amount} من {actor}",
+        "request": "طلب {actor} موظفين ليوم {target}"
+      }
+    },
+    "actions": {
+      "title": "مركز الإجراءات",
+      "subtitle": "كل ما يحتاج قرارًا، الأكثر إلحاحًا أولًا",
+      "subtitleCritical": "{count, plural, one {عنصر حرج واحد يحتاج} other {# عناصر حرجة تحتاج}} انتباهًا",
+      "tabsLabel": "تصفية الإجراءات",
+      "tab": {
+        "all": "الكل",
+        "compliance": "الامتثال",
+        "requests": "الطلبات",
+        "invoices": "الفواتير"
+      },
+      "empty": {
+        "all": "لا شيء معلّق 🎉",
+        "compliance": "الجميع ممتثلون 🎉",
+        "requests": "لا طلبات موظفين معلّقة",
+        "invoices": "لا فواتير متأخرة 🎉"
+      },
+      "emptyHint": "سيظهر هنا أي شيء جديد يحتاجك.",
+      "badge": {
+        "expired": "انتهى منذ {days} يوم",
+        "today": "اليوم",
+        "in": "خلال {days} يوم",
+        "overdue": "متأخرة {days} يوم"
+      },
+      "detail": {
+        "document": "{type} · تنتهي {date}",
+        "sia": "رخصة SIA · تنتهي {date}",
+        "contract": "ينتهي عقد العميل {date}",
+        "request": "{count} موظف · {site} · {date} {time}",
+        "invoice": "فاتورة #{id} · {amount} · تستحق {date}",
+        "invoiceNo": "فاتورة #{id}"
+      },
+      "severity": {
+        "critical": "حرج",
+        "warning": "تحذير",
+        "info": "معلومة"
+      },
+      "remind": "تذكير",
+      "remindFailed": "تعذّر إرسال التذكير",
+      "view": "عرض",
+      "partial": "تعذّر تحميل بعض تنبيهات الامتثال."
+    },
+    "partners": {
+      "title": "المقاولون والعملاء",
+      "subtitle": "حالة الدليل وأبرز العملاء",
+      "active": "{active}/{total} نشط",
+      "main": "المقاولون الرئيسيون",
+      "sub": "المقاولون الفرعيون",
+      "topClients": "أبرز العملاء حسب الإيراد (١٢ شهرًا)",
+      "noRevenue": "لا إيرادات مفوترة في آخر ١٢ شهرًا."
+    },
+    "quick": {
+      "title": "وصول سريع",
+      "subtitle": "انتقل مباشرة إلى أي وحدة",
+      "tile": {
+        "staff": "الموظفون",
+        "sites": "المواقع",
+        "clients": "العملاء",
+        "assignments": "التكليفات",
+        "rota": "الجداول والمناوبات",
+        "attendance": "الحضور",
+        "documents": "المستندات",
+        "contractors": "المقاولون",
+        "payroll": "الرواتب",
+        "reports": "التقارير",
+        "invoices": "الفواتير",
+        "payments": "المدفوعات",
+        "allowances": "البدلات",
+        "specialDays": "الأيام الخاصة",
+        "roles": "الأدوار والمستخدمون"
+      },
+      "desc": {
+        "staff": "الموظفون والامتثال",
+        "sites": "مواقع النشر",
+        "clients": "حسابات العملاء",
+        "assignments": "جدولة المناوبات",
+        "rota": "المخطط والشبكة",
+        "attendance": "الحضور والتأخير",
+        "documents": "المستندات والانتهاء",
+        "contractors": "تسجيل المقاولين",
+        "payroll": "الحساب والاعتماد",
+        "reports": "الموظفون والمالية",
+        "invoices": "فوترة العملاء",
+        "payments": "الأموال المستلمة",
+        "allowances": "الأسعار والبدلات",
+        "specialDays": "العطل الرسمية",
+        "roles": "الصلاحيات والمستخدمون"
+      }
+    }
   }
 }

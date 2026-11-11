@@ -1,11 +1,14 @@
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/lib/providers';
 import { NextIntlClientProvider } from 'next-intl';
 import { isRtl } from '@/i18n/config';
 import { SiteJsonLd } from '@/components/marketing/site-json-ld';
 import { THEME_INIT_SCRIPT } from '@/lib/user-theme';
+
+const inter = Inter({ subsets: ['latin'], display: 'swap', variable: '--font-inter' });
 
 /** Without this, mobile browsers assume a ~980px canvas and shrink every page to fit.
  *  User scaling stays enabled deliberately — capping zoom locks out low-vision users. */
@@ -58,7 +61,7 @@ export default async function RootLayout({
   const dir = isRtl(locale) ? 'rtl' : 'ltr';
 
   return (
-    <html lang={locale} dir={dir} suppressHydrationWarning>
+    <html lang={locale} dir={dir} className={inter.variable} suppressHydrationWarning>
       <head>
         {/* Apply saved theme before first paint — prevents light flash on dark refresh. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />

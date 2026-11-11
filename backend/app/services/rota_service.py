@@ -320,6 +320,10 @@ def list_rota_details(
         hrs = shift_hours(a)
         st = normalize_shift_type(a.shift_type, a.shift_start)
         status = _attendance_status(a, att, late_log, today, now=mark_clock if unmarked_only else now)
+        if unmarked_only:
+            # Nobody has marked these yet; the calendar fallback reads a past shift as
+            # "absent", which is a guess, not a recorded outcome.
+            status = "pending"
         late_m = _late_minutes(a, att, late_log, zone=zone)
         actual = compute_worked_hours(
             shift_date=a.date,

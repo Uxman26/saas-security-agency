@@ -95,12 +95,53 @@ function readCollapsed(): Set<string> {
 
 function navLinkClass(isActive: boolean, compact: boolean) {
   return cn(
-    'flex items-center gap-2.5 rounded-md border-s-[3px] border-transparent transition-colors outline-none',
+    'relative flex items-center gap-2.5 rounded-lg transition-colors outline-none',
     'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar',
     compact ? 'px-2.5 py-2 text-[15px] leading-5' : 'px-3 py-2.5 text-[15px] leading-5',
     isActive
-      ? 'border-s-sidebar-primary bg-sidebar-accent font-semibold text-sidebar-primary shadow-sm'
-      : 'text-sidebar-foreground hover:bg-sidebar-accent/80 hover:text-sidebar-primary'
+      ? 'bg-sidebar-accent font-semibold text-sidebar-primary before:absolute before:inset-y-1.5 before:start-0 before:w-[3px] before:rounded-full before:bg-sidebar-primary'
+      : 'text-sidebar-foreground/85 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
+  );
+}
+
+function CountBadge({ value }: { value?: number }) {
+  if (!value) return null;
+  return (
+    <span className="ms-auto shrink-0 rounded-full bg-amber-500/15 px-1.5 py-px text-[11px] font-semibold tabular-nums text-amber-700 dark:text-amber-300">
+      {value > 99 ? '99+' : value}
+    </span>
+  );
+}
+
+type RailItem = { key: string; href: string; label: string; icon: LucideIcon; active: boolean; badge?: number };
+
+function RailNav({ groups, onNavigate }: { groups: { key: string; label: string; items: RailItem[] }[]; onNavigate?: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {groups.map((g, gi) => (
+        <div key={g.key} role="group" aria-label={g.label} className="flex w-full flex-col items-center gap-1">
+          {gi ? <span aria-hidden className="my-1.5 h-px w-6 bg-sidebar-border" /> : null}
+          {g.items.map(({ key, href, label, icon: Icon, active, badge }) => (
+            <Link
+              key={key}
+              href={href}
+              scroll={false}
+              title={label}
+              aria-label={badge ? `${label} (${badge})` : label}
+              aria-current={active ? 'page' : undefined}
+              onClick={onNavigate}
+              className={cn(
+                'relative flex size-10 items-center justify-center rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+                active ? 'bg-sidebar-accent text-sidebar-primary' : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
+              )}
+            >
+              <Icon className="size-[1.125rem]" aria-hidden />
+              {badge ? <span aria-hidden className="absolute end-1.5 top-1.5 size-2 rounded-full bg-amber-500 ring-2 ring-sidebar" /> : null}
+            </Link>
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -123,22 +164,22 @@ function SectionHeading({
       onClick={onToggle}
       aria-expanded={open}
       className={cn(
-        'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-start transition-colors',
-        'text-[13px] font-semibold tracking-wide',
-        'text-sidebar-foreground/90 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
+        'group/sh flex w-full items-center gap-2 rounded-md px-2.5 pt-2 pb-1.5 text-start transition-colors',
+        'text-[11px] font-semibold uppercase tracking-[0.08em]',
+        'text-sidebar-foreground/55 hover:text-sidebar-foreground',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-        hasActive && 'text-sidebar-primary'
+        hasActive && 'text-sidebar-foreground/80'
       )}
     >
+      {leading}
+      <span className="min-w-0 flex-1 truncate">{title}</span>
       <ChevronDown
         className={cn(
-          'size-3.5 shrink-0 transition-transform duration-200',
-          !open && '-rotate-90'
+          'size-3.5 shrink-0 opacity-60 transition-[transform,opacity] duration-200 group-hover/sh:opacity-100',
+          !open && '-rotate-90 rtl:rotate-90'
         )}
         aria-hidden
       />
-      {leading}
-      <span className="min-w-0 flex-1 truncate">{title}</span>
     </button>
   );
 }
@@ -186,10 +227,14 @@ export function TenantSidebarNav({
   sections,
   onNavigate,
   compact = true,
+  rail = false,
+  badges,
 }: {
   sections: { titleKey: string; items: ModuleAccess[] }[];
   onNavigate?: () => void;
   compact?: boolean;
+  rail?: boolean;
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
   const ts = useTranslations('sidebar');
@@ -204,8 +249,28 @@ export function TenantSidebarNav({
 
   const { isOpen, toggle } = useSectionCollapse(activeSectionKey);
 
+  if (rail) {
+    return (
+      <RailNav
+        onNavigate={onNavigate}
+        groups={sections.map((section) => ({
+          key: section.titleKey,
+          label: ts(section.titleKey),
+          items: section.items.map((m) => ({
+            key: m.key,
+            href: m.sidebar_path,
+            label: moduleLabel(m.key, m.name),
+            icon: moduleIcon(m.icon),
+            active: isNavPathActive(pathname, m.sidebar_path),
+            badge: badges?.[m.key],
+          })),
+        }))}
+      />
+    );
+  }
+
   return (
-    <div className={cn('space-y-3', !compact && 'space-y-4')}>
+    <div className={cn('space-y-2', !compact && 'space-y-3')}>
       {sections.map((section) => {
         const open = isOpen(section.titleKey);
         const hasActive = section.titleKey === activeSectionKey;
@@ -240,6 +305,7 @@ export function TenantSidebarNav({
                       <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">
                         {moduleLabel(m.key, m.name)}
                       </span>
+                      <CountBadge value={badges?.[m.key]} />
                     </Link>
                   );
                 })}
@@ -256,10 +322,12 @@ export function AdminSidebarNav({
   sections,
   onNavigate,
   compact = true,
+  rail = false,
 }: {
   sections: { titleKey: string; items: AdminNavItem[] }[];
   onNavigate?: () => void;
   compact?: boolean;
+  rail?: boolean;
 }) {
   const pathname = usePathname();
   const ts = useTranslations('sidebar');
@@ -273,8 +341,27 @@ export function AdminSidebarNav({
 
   const { isOpen, toggle } = useSectionCollapse(activeSectionKey);
 
+  if (rail) {
+    return (
+      <RailNav
+        onNavigate={onNavigate}
+        groups={sections.map((section) => ({
+          key: section.titleKey,
+          label: ts(section.titleKey),
+          items: section.items.map((item) => ({
+            key: item.href,
+            href: item.href,
+            label: ts(item.labelKey),
+            icon: item.icon,
+            active: isAdminNavActive(pathname, item.href),
+          })),
+        }))}
+      />
+    );
+  }
+
   return (
-    <div className={cn('space-y-3', !compact && 'space-y-4')}>
+    <div className={cn('space-y-2', !compact && 'space-y-3')}>
       {sections.map((section) => {
         const open = isOpen(section.titleKey);
         const hasActive = section.titleKey === activeSectionKey;

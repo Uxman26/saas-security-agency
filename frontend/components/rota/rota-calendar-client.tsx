@@ -21,6 +21,7 @@ import { ShiftDialog } from '@/components/rota/shift-dialog';
 import { DeleteShiftsDialog } from '@/components/rota/delete-shifts-dialog';
 import { ShiftPreviewDialog } from '@/components/rota/shift-preview-dialog';
 import { RatePreviewDialog } from '@/components/rota/rate-preview-dialog';
+import { HoursBreakdownDialog, type BreakdownFocus } from '@/components/rota/hours-breakdown-dialog';
 import { ShiftRotaSections, ShiftTypeBadge } from '@/components/rota/shift-rota-sections';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { useCreateGuard } from '@/hooks/use-guards';
@@ -71,9 +72,9 @@ const EMP_MENU_H = 348;
    on `.rota-grid-table` in globals.css, which narrows them below `sm` so a phone can
    reach every column in fewer swipes. These constants stay the desktop values and are
    only used for scroll maths, which is a no-op on mobile where nothing is frozen. */
-const ROTA_PAY_COL_W = 96;
-const ROTA_CHARGE_COL_W = 96;
-const ROTA_HOURS_COL_W = 72;
+const ROTA_PAY_COL_W = 72;
+const ROTA_CHARGE_COL_W = 72;
+const ROTA_HOURS_COL_W = 60;
 const ROTA_PUBLISH_COL_W = 96;
 const ROTA_EMP_COL_W = 210;
 const ROTA_DAY_COL_W = 160;
@@ -443,6 +444,7 @@ export function RotaCalendarClient() {
   const [switchingPlan, setSwitchingPlan] = useState<'prev' | 'next' | null>(null);
   const [previewEmpId, setPreviewEmpId] = useState<string | null>(null);
   const [ratePreviewEmpId, setRatePreviewEmpId] = useState<string | null>(null);
+  const [breakdown, setBreakdown] = useState<{ empId: string; focus: BreakdownFocus | null } | null>(null);
   const previewEmployee = useMemo(() => {
     if (!previewEmpId) return null;
     const emp = state.employees.find((e) => e.id === previewEmpId);
@@ -852,6 +854,20 @@ export function RotaCalendarClient() {
       return fromPool?.photoUrl ? { ...e, photoUrl: fromPool.photoUrl } : e;
     });
   }, [state.employees, empFilter, jobTitleFilter, empMatchesShiftFilters, poolById]);
+
+  /** With a filter on, how many of the staff shown are booked on each day (shifts that match). */
+  const bookedByDay = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const dk of state.days) {
+      let n = 0;
+      for (const e of rows) {
+        const list = state.shifts[e.id]?.[dk] || [];
+        if (list.some((sh, idx) => shiftMatchesFilters(e.id, dk, idx, sh))) n += 1;
+      }
+      m[dk] = n;
+    }
+    return m;
+  }, [state.days, state.shifts, rows, shiftMatchesFilters]);
 
   const activeFilterCount =
     (statusFilter !== 'all' ? 1 : 0) +
@@ -2880,6 +2896,14 @@ export function RotaCalendarClient() {
                       <span className="block whitespace-nowrap text-[11px] font-bold tabular-nums tracking-tight">
                         {dayParts.date}
                       </span>
+                      {!mark && activeFilterCount > 0 && (bookedByDay[dk] ?? 0) > 0 ? (
+                        <span
+                          className="mt-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap"
+                          title="Staff booked on this day that match the current filters"
+                        >
+                          {bookedByDay[dk]} staff booked
+                        </span>
+                      ) : null}
                       {mark === 'adding' ? <span className="text-[9px] font-semibold no-underline tracking-wide">ADD</span> : null}
                       {mark === 'removing' ? <span className="text-[9px] font-semibold no-underline tracking-wide">REMOVE</span> : null}
                       {!mark && dayHasConflict.has(dk) ? (
@@ -3202,6 +3226,16 @@ export function RotaCalendarClient() {
                     style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay} + ${COL_VAR.charge}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                   >
                     {formatHoursDecimal(empTotalHours(emp.id))}
+                    <div>
+                      <button
+                        type="button"
+                        className="mt-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-muted"
+                        onClick={() => setBreakdown({ empId: emp.id, focus: null })}
+                        title="See how this was calculated"
+                      >
+                        Breakdown
+                      </button>
+                    </div>
                   </td>
                   {showPayable ? (
                     <td
@@ -3276,14 +3310,14 @@ export function RotaCalendarClient() {
                   );
                 })}
                 <td
-                  className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
+                  className="rota-sticky-hours sticky bottom-0 z-[55] text-center p-1 border-l border-t text-[10px] tabular-nums shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-hidden isolate"
                   style={{ right: `calc(${COL_VAR.publish}${showPayable ? ` + ${COL_VAR.pay} + ${COL_VAR.charge}` : ''})`, ...ROTA_STICKY_HOURS_BG }}
                 >
                   {formatHoursDecimal(totalRotaHours)}
                 </td>
                 {showPayable ? (
                   <td
-                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-visible isolate"
+                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1 border-l border-t text-[10px] tabular-nums whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-visible isolate"
                     style={{ right: `calc(${COL_VAR.publish} + ${COL_VAR.charge})`, ...ROTA_STICKY_PAY_BG }}
                   >
                     {formatMoney(totalRotaPayable)}
@@ -3291,7 +3325,7 @@ export function RotaCalendarClient() {
                 ) : null}
                 {showPayable ? (
                   <td
-                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1.5 border-l border-t tabular-nums whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-visible isolate"
+                    className="rota-sticky-pay sticky bottom-0 z-[55] text-center p-1 border-l border-t text-[10px] tabular-nums whitespace-nowrap shadow-[-2px_0_8px_-2px_rgba(0,0,0,0.18),0_-2px_4px_-2px_rgba(0,0,0,0.12)] overflow-visible isolate"
                     style={{ right: `${COL_VAR.publish}`, ...ROTA_STICKY_PAY_BG }}
                   >
                     {formatMoney(totalRotaChargeable)}
@@ -4820,6 +4854,12 @@ export function RotaCalendarClient() {
         onOpenChange={(o) => !o && setPreviewEmpId(null)}
         employee={previewEmployee}
         state={state}
+      />
+      <HoursBreakdownDialog
+        empId={breakdown?.empId ?? null}
+        focus={breakdown?.focus ?? null}
+        onClose={() => setBreakdown(null)}
+        showMoney={showPayable}
       />
       <RatePreviewDialog
         open={!!ratePreviewEmpId}

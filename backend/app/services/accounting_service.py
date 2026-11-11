@@ -172,6 +172,22 @@ def deposit_accounts(db: Session, company_id: int) -> list[Account]:
     )
 
 
+def unpost(db: Session, company_id: int, source_type: str, source_id: int) -> int:
+    """Remove the journal entries a document posted (used when it is reverted). Caller commits."""
+    entries = (
+        db.query(JournalEntry)
+        .filter(
+            JournalEntry.company_id == company_id,
+            JournalEntry.source_type == source_type,
+            JournalEntry.source_id == source_id,
+        )
+        .all()
+    )
+    for e in entries:
+        db.delete(e)
+    return len(entries)
+
+
 def post_payment(db: Session, company_id: int, payment: Payment) -> None:
     ensure_default_coa(db, company_id)
     if _already_posted(db, company_id, "payment", payment.id):

@@ -1420,6 +1420,8 @@ export const api = {
       if (params.due_date) q.append('due_date', params.due_date);
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
+    revertPayments: (id: number): Promise<Invoice> =>
+      request<Invoice>(`/invoices/${id}/revert-payments`, { method: 'POST' }),
     updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
     receiptPdf: (id: number): Promise<Blob> => requestBlob(`/invoices/${id}/receipt/pdf`),
     sendReceipt: (id: number, to: string): Promise<{ message: string; recipient: string }> =>
@@ -2649,6 +2651,8 @@ export const api = {
     ): Promise<Payment> =>
       request<Payment>(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number): Promise<void> => request<void>(`/payments/${id}`, { method: 'DELETE' }),
+    setReviewed: (id: number, reviewed: boolean): Promise<Payment> =>
+      request<Payment>(`/payments/${id}/review`, { method: 'PUT', body: JSON.stringify({ reviewed }) }),
   },
   creditNotes: {
     list: (params?: {

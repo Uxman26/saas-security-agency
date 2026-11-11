@@ -2106,6 +2106,13 @@ export interface Payment {
   memo?: string | null;
   paid_at: string;
   created_at: string;
+  /** Null until someone marks the transaction as reviewed. */
+  reviewed_at?: string | null;
+  reviewed_by_user_id?: number | null;
+  reviewed_by_name?: string | null;
+  /** Sites on the linked invoice's lines. */
+  site_names?: string[];
+  client_name?: string | null;
 }
 
 export interface GuardRate {

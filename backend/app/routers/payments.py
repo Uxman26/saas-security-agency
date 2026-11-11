@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
 from app.models import User
-from app.schemas import PaymentAccountOption, PaymentCreate, PaymentUpdate, PaymentResponse
+from app.schemas import PaymentAccountOption, PaymentCreate, PaymentUpdate, PaymentResponse, PaymentReviewUpdate
 from app.rbac import require_internal_module
 from app.services import payment_service
 
@@ -28,6 +28,10 @@ def get_payment(payment_id: int, db: Session = Depends(get_db), current_user: Us
 @router.put("/{payment_id}", response_model=PaymentResponse)
 def update_payment(payment_id: int, data: PaymentUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payments", "edit"))):
     return payment_service.update_payment(db, payment_id, data, current_user.id)
+
+@router.put("/{payment_id}/review", response_model=PaymentResponse)
+def review_payment(payment_id: int, data: PaymentReviewUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payments", "edit"))):
+    return payment_service.set_payment_reviewed(db, payment_id, data.reviewed, current_user.id)
 
 @router.delete("/{payment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_payment(payment_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("payments", "delete"))):

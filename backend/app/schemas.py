@@ -1861,6 +1861,15 @@ class PaymentResponse(PaymentBase):
     id: int
     company_id: int
     created_at: datetime
+    reviewed_at: Optional[datetime] = None
+    reviewed_by_user_id: Optional[int] = None
+    reviewed_by_name: Optional[str] = None
+    site_names: List[str] = []
+    client_name: Optional[str] = None
+
+
+class PaymentReviewUpdate(BaseModel):
+    reviewed: bool
 
     class Config:
         from_attributes = True

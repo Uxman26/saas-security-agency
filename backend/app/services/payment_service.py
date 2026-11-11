@@ -1,9 +1,9 @@
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from fastapi import HTTPException
 from typing import List, Optional
-from datetime import date
-from app.models import Account, Payment, Invoice
+from datetime import date, datetime, timezone
+from app.models import Account, Payment, Invoice, InvoiceLine
 from app.schemas import PaymentCreate, PaymentUpdate
 from app.services.company_service import get_company_by_user_id
 from app.services.invoice_payment_service import sync_invoice_payment_status
@@ -106,7 +106,15 @@ def create_payment(db: Session, data: PaymentCreate, user_id: int) -> Payment:
 
 def get_payments(db: Session, user_id: int, invoice_id: Optional[int] = None) -> List[Payment]:
     company = get_company_by_user_id(db, user_id)
-    q = db.query(Payment).filter(Payment.company_id == company.id, Payment.deleted_at.is_(None))
+    q = (
+        db.query(Payment)
+        .options(
+            selectinload(Payment.invoice).selectinload(Invoice.lines).selectinload(InvoiceLine.site),
+            selectinload(Payment.invoice).selectinload(Invoice.client),
+            selectinload(Payment.reviewed_by),
+        )
+        .filter(Payment.company_id == company.id, Payment.deleted_at.is_(None))
+    )
     if invoice_id:
         q = q.filter(Payment.invoice_id == invoice_id)
     return q.order_by(Payment.paid_at.desc()).all()
@@ -127,6 +135,7 @@ def delete_payment(db: Session, payment_id: int, user_id: int) -> None:
         raise HTTPException(status_code=404, detail="Payment not found")
     inv_id = pay.invoice_id
     _bin_archive(pay, user_id)
+    _unpost_payment(db, company.id, pay.id)
     db.flush()
     if inv_id:
         inv = db.query(Invoice).filter(Invoice.id == inv_id, Invoice.company_id == company.id).first()
@@ -134,6 +143,44 @@ def delete_payment(db: Session, payment_id: int, user_id: int) -> None:
             sync_invoice_payment_status(db, inv, user_id)
             log_invoice_audit(db, company.id, user_id, inv.id, "payment_deleted", {"payment_id": payment_id})
     db.commit()
+
+
+def _unpost_payment(db: Session, company_id: int, payment_id: int) -> None:
+    """Take a removed payment's money back out of the ledger."""
+    from app.services import accounting_service
+
+    accounting_service.unpost(db, company_id, "payment", payment_id)
+
+
+def revert_invoice_payments(db: Session, invoice_id: int, user_id: int) -> Invoice:
+    """Undo every payment recorded on an invoice. The payments go to the recycle bin, their
+    ledger entries are removed, and the invoice drops back to Sent / Overdue."""
+    company = get_company_by_user_id(db, user_id)
+    inv = db.query(Invoice).filter(
+        Invoice.id == invoice_id, Invoice.company_id == company.id, Invoice.deleted_at.is_(None)
+    ).first()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    pays = db.query(Payment).filter(
+        Payment.invoice_id == inv.id, Payment.company_id == company.id, Payment.deleted_at.is_(None)
+    ).all()
+    if not pays:
+        raise HTTPException(status_code=400, detail="This invoice has no payments to revert")
+    prev = inv.status
+    reverted = []
+    for pay in pays:
+        _bin_archive(pay, user_id)
+        _unpost_payment(db, company.id, pay.id)
+        reverted.append({"payment_id": pay.id, "amount": float(pay.amount or 0)})
+    db.flush()
+    sync_invoice_payment_status(db, inv, user_id)
+    log_invoice_audit(
+        db, company.id, user_id, inv.id, "payments_reverted",
+        {"payments": reverted, "from": prev, "to": inv.status},
+    )
+    db.commit()
+    db.refresh(inv)
+    return inv
 
 
 def update_payment(db: Session, payment_id: int, data: PaymentUpdate, user_id: int) -> Payment:
@@ -177,6 +224,20 @@ def update_payment(db: Session, payment_id: int, data: PaymentUpdate, user_id: i
         if inv:
             sync_invoice_payment_status(db, inv, user_id)
             log_invoice_audit(db, company.id, user_id, inv.id, "payment_updated", {"payment_id": pay.id, "amount": pay.amount})
+    db.commit()
+    db.refresh(pay)
+    return pay
+
+
+def set_payment_reviewed(db: Session, payment_id: int, reviewed: bool, user_id: int) -> Payment:
+    """Tick a transaction off as checked (or undo it). Changes nothing else on the payment."""
+    pay = get_payment(db, payment_id, user_id)
+    if reviewed:
+        pay.reviewed_at = datetime.now(timezone.utc)
+        pay.reviewed_by_user_id = user_id
+    else:
+        pay.reviewed_at = None
+        pay.reviewed_by_user_id = None
     db.commit()
     db.refresh(pay)
     return pay

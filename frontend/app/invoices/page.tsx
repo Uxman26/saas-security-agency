@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 import type { Invoice, Client, Site, ClientBankAccount } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, Plus, FileMinus2, Send } from 'lucide-react';
+import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, Plus, FileMinus2, Send, Undo2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
@@ -546,8 +546,40 @@ export default function InvoicesPage() {
     }
   };
 
+  const handleMarkUnsent = (inv: Invoice) => {
+    toast.confirm(`Mark invoice #${inv.id} as unsent?`, () => applyStatusChange(inv, 'draft'), {
+      label: 'Mark as unsent',
+      description: 'It goes back to Draft and comes out of the accounts until it is sent again. The client is not notified.',
+    });
+  };
+
+  const handleRevertPayments = (inv: Invoice) => {
+    const paid = inv.amount_paid ?? 0;
+    toast.confirm(
+      `Revert ${paid > 0 ? `£${paid.toFixed(2)} of ` : ''}payments on invoice #${inv.id}?`,
+      async () => {
+        try {
+          await api.invoices.revertPayments(inv.id);
+          loadInvoices();
+          toast.success('Payments reverted — the invoice is open again');
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : 'Could not revert the payments');
+        }
+      },
+      {
+        label: 'Revert payments',
+        description:
+          'Every payment recorded on this invoice is removed (they can be restored from the recycle bin) and taken out of the accounts.',
+      }
+    );
+  };
+
   const handleStatusChange = (inv: Invoice, next: string) => {
     if (next === inv.status) return;
+    if (next === 'draft' && inv.status !== 'draft') {
+      handleMarkUnsent(inv);
+      return;
+    }
     if (next === 'sent') {
       toast.confirm('Mark this invoice as sent?', () => applyStatusChange(inv, next), {
         label: 'Mark as sent',
@@ -747,6 +779,23 @@ export default function InvoicesPage() {
         inv.status === 'draft' ||
         inv.status === 'cancelled' ||
         (inv.status === 'paid' && (inv.balance_due ?? 0) <= 0),
+    },
+    {
+      label: 'Revert payment',
+      icon: Undo2,
+      onSelect: () => handleRevertPayments(inv),
+      disabled: !((inv.amount_paid ?? 0) > 0) || !canModule(user, 'payments', 'delete'),
+    },
+    {
+      label: 'Mark as unsent',
+      icon: Undo2,
+      onSelect: () => handleMarkUnsent(inv),
+      disabled:
+        !canModule(user, 'invoices', 'status_change') ||
+        inv.status === 'draft' ||
+        inv.status === 'cancelled' ||
+        (inv.amount_paid ?? 0) > 0 ||
+        (inv.credit_applied ?? 0) > 0,
     },
     {
       label: 'Download receipt',

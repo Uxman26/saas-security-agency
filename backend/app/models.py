@@ -1318,8 +1318,33 @@ class Payment(Base):
     memo = Column(Text, nullable=True)
     paid_at = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Set when someone ticks the transaction off as checked; null = not reviewed yet.
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     company = relationship("Company", back_populates="payments")
     invoice = relationship("Invoice", back_populates="payments")
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])
+
+    @property
+    def site_names(self):
+        """Distinct sites on the linked invoice's lines, in line order."""
+        names = []
+        for line in (self.invoice.lines if self.invoice else []):
+            name = line.site.name if line.site else None
+            if name and name not in names:
+                names.append(name)
+        return names
+
+    @property
+    def client_name(self):
+        return self.invoice.client.name if self.invoice and self.invoice.client else None
+
+    @property
+    def reviewed_by_name(self):
+        u = self.reviewed_by
+        if not u:
+            return None
+        return u.full_name or u.email
 
 class MainContractor(Base):
     __tablename__ = "main_contractors"

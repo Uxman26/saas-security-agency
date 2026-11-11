@@ -388,7 +388,12 @@ def _ensure_payment_and_early_finish_columns():
         insp = inspect(engine)
         float_type = "DOUBLE PRECISION" if engine.dialect.name == "postgresql" else "REAL"
         wanted = {
-            "payments": [("account_id", "INTEGER REFERENCES accounts(id)"), ("memo", "TEXT")],
+            "payments": [
+                ("account_id", "INTEGER REFERENCES accounts(id)"),
+                ("memo", "TEXT"),
+                ("reviewed_at", "TIMESTAMP WITH TIME ZONE" if engine.dialect.name == "postgresql" else "TEXT"),
+                ("reviewed_by_user_id", "INTEGER REFERENCES users(id)"),
+            ],
             "assignments": [
                 ("early_payable_hours", float_type),
                 ("early_chargeable_hours", float_type),

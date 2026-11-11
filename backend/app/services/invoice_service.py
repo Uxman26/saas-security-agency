@@ -889,6 +889,31 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
     inv = get_invoice(db, invoice_id, user_id)
     company = get_company_by_user_id(db, user_id)
     prev = inv.status
+    if status == "draft" and prev != "draft":
+        # Unsending: refuse while money or credit is recorded against it, else the
+        # ledger and the invoice would disagree. Revert payments first.
+        from app.models import CreditNote, Payment as _Payment
+
+        has_pay = db.query(_Payment.id).filter(
+            _Payment.invoice_id == inv.id, _Payment.deleted_at.is_(None)
+        ).first()
+        if has_pay:
+            raise HTTPException(
+                status_code=400,
+                detail="This invoice has payments recorded. Revert the payments before marking it as draft.",
+            )
+        has_cn = db.query(CreditNote.id).filter(
+            CreditNote.invoice_id == inv.id, CreditNote.deleted_at.is_(None)
+        ).first()
+        if has_cn:
+            raise HTTPException(
+                status_code=400,
+                detail="This invoice has a credit note. Remove the credit note before marking it as draft.",
+            )
+        from app.services import accounting_service
+
+        # Back out the "invoice issued" entry; marking it sent again re-posts it.
+        accounting_service.unpost(db, company.id, "invoice", inv.id)
     inv.status = status
     db.commit()
     db.refresh(inv)

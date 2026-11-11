@@ -502,6 +502,18 @@ def get_invoice(
     return _serialize_invoice(inv, True, db)
 
 
+@router.post("/{invoice_id}/revert-payments", response_model=InvoiceResponse)
+def revert_payments(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("payments", "delete")),
+):
+    from app.services import payment_service
+
+    payment_service.revert_invoice_payments(db, invoice_id, current_user.id)
+    return _serialize_invoice(invoice_service.get_invoice(db, invoice_id, current_user.id), True, db)
+
+
 @router.patch("/{invoice_id}/status", response_model=InvoiceResponse)
 def update_status(
     invoice_id: int,

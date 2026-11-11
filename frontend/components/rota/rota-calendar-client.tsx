@@ -388,6 +388,8 @@ export function RotaCalendarClient() {
     dayTotalHours,
     totalRotaPayable,
     empTotalPayable,
+    empPayableHours,
+    empUnratedPayableHours,
     totalRotaChargeable,
     empTotalChargeable,
     resolveShiftRate,
@@ -3207,6 +3209,19 @@ export function RotaCalendarClient() {
                       style={{ right: `calc(${COL_VAR.publish} + ${COL_VAR.charge})`, ...ROTA_STICKY_PAY_BG }}
                     >
                       {formatMoney(empTotalPayable(emp.id))}
+                      {empPayableHours(emp.id) > 0 ? (
+                        <div className="text-[10px] font-normal text-muted-foreground leading-tight whitespace-normal">
+                          {formatHoursDecimal(empPayableHours(emp.id))}
+                        </div>
+                      ) : null}
+                      {empUnratedPayableHours(emp.id) > 0 ? (
+                        <div
+                          className="text-[10px] font-semibold text-amber-600 leading-tight whitespace-normal"
+                          title="Some payable hours have no pay rate. Set a rate on the shift, the staff profile or the site's staff rate."
+                        >
+                          {formatHoursDecimal(empUnratedPayableHours(emp.id))} no rate
+                        </div>
+                      ) : null}
                     </td>
                   ) : null}
                   {showPayable ? (

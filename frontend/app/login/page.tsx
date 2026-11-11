@@ -210,6 +210,15 @@ function LoginForm() {
     }
   };
 
+  // Only providers with credentials configured on the backend get a button.
+  const socialButtons = (
+    [
+      { id: 'microsoft', label: 'Sign in with Microsoft', Icon: MicrosoftIcon },
+      { id: 'google', label: 'Sign in with Google', Icon: GoogleIcon },
+      { id: 'apple', label: 'Sign in with Apple', Icon: AppleIcon },
+    ] as const
+  ).filter(({ id }) => oauthProviders[id]);
+
   const startOAuth = (provider: string) => {
     if (!oauthProviders[provider]) {
       toast.error(`${provider[0].toUpperCase()}${provider.slice(1)} Sign In is not configured yet.`);
@@ -436,6 +445,8 @@ function LoginForm() {
                   </Button>
                 </form>
 
+                {socialButtons.length > 0 && (
+                <>
                 <div className="my-5 flex items-center gap-3">
                   <span className="h-px flex-1 bg-neutral-200" />
                   <span className="text-xs text-neutral-400">or</span>
@@ -443,28 +454,21 @@ function LoginForm() {
                 </div>
 
                 <div className="space-y-2.5">
-                  {(
-                    [
-                      { id: 'microsoft', label: 'Sign in with Microsoft', Icon: MicrosoftIcon },
-                      { id: 'google', label: 'Sign in with Google', Icon: GoogleIcon },
-                      { id: 'apple', label: 'Sign in with Apple', Icon: AppleIcon },
-                    ] as const
-                  ).map(({ id, label, Icon }) => (
+                  {socialButtons.map(({ id, label, Icon }) => (
                     <button
                       key={id}
                       type="button"
                       onClick={() => startOAuth(id)}
                       disabled={loading}
-                      className={cn(
-                        'flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-neutral-200 bg-white text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50',
-                        !oauthProviders[id] && 'opacity-70'
-                      )}
+                      className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-neutral-200 bg-white text-sm font-medium text-neutral-800 transition-colors hover:bg-neutral-50"
                     >
                       <Icon className="size-5 shrink-0" />
                       <span>{label}</span>
                     </button>
                   ))}
                 </div>
+                </>
+                )}
 
                 <p className="mt-5 text-center text-sm text-neutral-500">
                   {tc('dontHaveAccount')}{' '}

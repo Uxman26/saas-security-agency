@@ -166,6 +166,10 @@ type Ctx = {
   dayTotalHours: (dk: string) => number;
   totalRotaPayable: number;
   empTotalPayable: (empId: string) => number;
+  /** Payable hours (attendance-aware) behind the Payable £ figure. */
+  empPayableHours: (empId: string) => number;
+  /** Payable hours that resolved to no pay rate, so they add £0. */
+  empUnratedPayableHours: (empId: string) => number;
   totalRotaChargeable: number;
   empTotalChargeable: (empId: string) => number;
   resolveShiftRate: (sh: { site?: string; shiftRate?: number | null }, empId?: string) => number;
@@ -1295,24 +1299,36 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
     return t;
   }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate, resolveShiftPayType]);
 
-  const empPayableById = useMemo(() => {
+  const { empPayableById, empPayableHoursById, empUnratedHoursById } = useMemo(() => {
     const m: Record<string, number> = {};
+    const hm: Record<string, number> = {};
+    const um: Record<string, number> = {};
     for (const empId of Object.keys(state.shifts)) {
       const byD = state.shifts[empId];
       let t = 0;
+      let h = 0;
+      let u = 0;
       for (const dk of Object.keys(byD || {})) {
         (byD[dk] || []).forEach((sh, idx) => {
           const hrs = payableHoursForAttendance(sh, state.attendance[attKey(empId, dk, idx)], state.inclBreaks);
           if (hrs <= 0) return;
-          t += shiftPayAmount(hrs, resolveShiftRate(sh, empId), resolveShiftPayType(sh, empId));
+          const rate = resolveShiftRate(sh, empId);
+          h += hrs;
+          // Payable hours with no pay rate on the shift, staff profile or site pay £0.
+          if (rate <= 0) u += hrs;
+          t += shiftPayAmount(hrs, rate, resolveShiftPayType(sh, empId));
         });
       }
       m[empId] = t;
+      hm[empId] = h;
+      um[empId] = u;
     }
-    return m;
+    return { empPayableById: m, empPayableHoursById: hm, empUnratedHoursById: um };
   }, [state.shifts, state.attendance, state.inclBreaks, resolveShiftRate, resolveShiftPayType]);
 
   const empTotalPayable = useCallback((empId: string) => empPayableById[empId] || 0, [empPayableById]);
+  const empPayableHours = useCallback((empId: string) => empPayableHoursById[empId] || 0, [empPayableHoursById]);
+  const empUnratedPayableHours = useCallback((empId: string) => empUnratedHoursById[empId] || 0, [empUnratedHoursById]);
 
   /** What the client is billed per staff member: site billing rate, else the pay rate, as invoices do. */
   const empChargeableById = useMemo(() => {
@@ -1397,6 +1413,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       dayTotalHours,
       totalRotaPayable,
       empTotalPayable,
+      empPayableHours,
+      empUnratedPayableHours,
       totalRotaChargeable,
       empTotalChargeable,
       resolveShiftRate,
@@ -1459,6 +1477,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
       dayTotalHours,
       totalRotaPayable,
       empTotalPayable,
+      empPayableHours,
+      empUnratedPayableHours,
       totalRotaChargeable,
       empTotalChargeable,
       resolveShiftRate,

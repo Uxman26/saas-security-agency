@@ -1682,6 +1682,7 @@ class InvoiceResponse(InvoiceBase):
     pdf_path: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    sent_at: Optional[datetime] = None
     client_name: Optional[str] = None
     company_name: Optional[str] = None
     company_email: Optional[str] = None

@@ -1,9 +1,15 @@
 import { formatDateUK, localDateKey, localDateOffset } from './date-format';
 import type { Invoice } from './types';
 
+/** Past its due date and still awaiting payment. Drafts were never sent, so they never are. */
 export function isInvoicePastDue(inv: Invoice): boolean {
-  if (!inv.due_date || ['paid', 'cancelled'].includes(inv.status)) return false;
+  if (!inv.due_date || ['draft', 'paid', 'cancelled'].includes(inv.status)) return false;
   return inv.due_date.slice(0, 10) < localDateKey();
+}
+
+/** Red highlighting is for Overdue invoices only (sent, unpaid, 90+ days since sending). */
+export function isInvoiceOverdue(inv: Invoice): boolean {
+  return inv.status === 'overdue';
 }
 
 /** Issued to the client and still awaiting payment. */
@@ -36,7 +42,8 @@ export function formatDueCountdown(inv: Invoice): string {
   const days = Math.round((due.getTime() - today.getTime()) / 86400000);
   if (days === 0) return 'Due Today';
   const count = `${Math.abs(days)} ${Math.abs(days) === 1 ? 'Day' : 'Days'}`;
-  return days < 0 ? `${count} Overdue` : `Due in ${count}`;
+  if (days >= 0) return `Due in ${count}`;
+  return inv.status === 'overdue' ? `${count} Overdue` : `${count} Past Due`;
 }
 
 /** The date `days` after an invoice date, as YYYY-MM-DD. */

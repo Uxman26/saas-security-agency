@@ -21,7 +21,7 @@ import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTr
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
-import { canSendInvoiceReminder, formatDueCountdown, isInvoiceOpen, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
+import { canSendInvoiceReminder, formatDueCountdown, isInvoiceOpen, isInvoiceOverdue, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
@@ -622,7 +622,7 @@ export default function InvoicesPage() {
   const statMoney = (n: number) => (currencyCodes.size > 1 ? 'Mixed' : formatGbp(n, [...currencyCodes][0] || 'GBP'));
   const openInvoices = invoiceStats.filter((i) => ['sent', 'unpaid', 'overdue', 'partial'].includes(i.status));
   const overdueAmount = openInvoices
-    .filter((i) => i.status === 'overdue' || isInvoicePastDue(i))
+    .filter((i) => i.status === 'overdue')
     .reduce((sum, i) => sum + (i.balance_due ?? Math.max(0, i.total - (i.amount_paid ?? 0) - (i.credit_applied ?? 0))), 0);
   const dueSoonAmount = openInvoices
     .filter((i) => {
@@ -1519,7 +1519,7 @@ export default function InvoicesPage() {
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((inv) => {
-                        const pastDue = isInvoicePastDue(inv);
+                        const overdue = isInvoiceOverdue(inv);
                         const rawBalance =
                           inv.balance_due ??
                           Math.max(0, inv.total - (inv.amount_paid ?? 0) - (inv.credit_applied ?? 0));
@@ -1532,12 +1532,12 @@ export default function InvoicesPage() {
                         return (
                         <TableRow
                           key={inv.id}
-                          className={cn(pastDue && 'bg-red-50/60 dark:bg-red-950/20')}
+                          className={cn(overdue && 'bg-red-50/60 dark:bg-red-950/20')}
                         >
                           <TableCell>
                             {renderStatus(inv)}
                           </TableCell>
-                          <TableCell className={cn('text-sm whitespace-nowrap', pastDue && 'text-red-600 dark:text-red-400 font-medium')}>
+                          <TableCell className={cn('text-sm whitespace-nowrap', overdue && 'text-red-600 dark:text-red-400 font-medium')}>
                             {formatDueCountdown(inv)}
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>

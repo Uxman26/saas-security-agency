@@ -344,6 +344,48 @@ def _ensure_invoice_currency_columns():
         logging.getLogger(__name__).exception("invoice currency columns migration failed")
 
 
+def _ensure_invoice_sent_at_column():
+    """invoices.sent_at: the overdue clock (90 days) starts when an invoice is sent.
+
+    Backfills invoices already past draft from the first "status_changed -> sent" audit
+    row, else the invoice date, else the creation time. Drafts stay NULL.
+    """
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("invoices"):
+            return
+        cols = {c["name"] for c in insp.get_columns("invoices")}
+        if "sent_at" in cols:
+            return
+        pg = engine.dialect.name == "postgresql"
+        col_type = "TIMESTAMP WITH TIME ZONE" if pg else "TEXT"
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE invoices ADD COLUMN sent_at {col_type}"))
+            if not pg:
+                return
+            conn.execute(
+                text(
+                    """
+                    UPDATE invoices i SET sent_at = COALESCE(
+                        (SELECT MIN(a.created_at) FROM audit_logs a
+                          WHERE a.entity_type = 'invoice' AND a.entity_id = i.id
+                            AND a.action = 'status_changed' AND a.meta LIKE '%"to": "sent"%'),
+                        i.invoice_date::timestamptz,
+                        i.created_at
+                    )
+                    WHERE i.status NOT IN ('draft', 'cancelled') AND i.sent_at IS NULL
+                    """
+                )
+            )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("invoices.sent_at migration failed")
+
+
 def _ensure_clock_in_location_columns():
     try:
         from sqlalchemy import inspect, text
@@ -466,6 +508,7 @@ def _run_migrations():
     # Early pass for DBs that already have the tables (covers Postgres, where the
     # SQLite-only alters below never run). A second pass runs after table creates.
     _ensure_invoice_currency_columns()
+    _ensure_invoice_sent_at_column()
     path = get_db_path()
     if not path:
         # Non-SQLite: remaining migrations are SQLite-specific DDL. Currency ensure above

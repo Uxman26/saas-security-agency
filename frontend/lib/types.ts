@@ -1869,6 +1869,8 @@ export interface Invoice {
   invoice_date?: string | null;
   total: number;
   status: string;
+  /** When the invoice was first sent; null for drafts. Overdue is counted from here. */
+  sent_at?: string | null;
   due_date?: string | null;
   po_number?: string | null;
   notes?: string | null;

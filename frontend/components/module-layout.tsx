@@ -25,10 +25,10 @@ export function ModuleHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
-        {description && <p className="mt-1.5 text-base text-muted-foreground">{description}</p>}
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="text-[1.625rem] font-semibold leading-tight tracking-[-0.02em] sm:text-[1.875rem]">{title}</h1>
+        {description && <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions}
     </div>
@@ -53,21 +53,23 @@ export function ModuleTabs<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1 border-b">
+    <div className="dash-scroll-x flex gap-1 overflow-x-auto border-b border-hairline">
       {tabs.map(({ id, label, badge, badgeTitle }) => (
         <button
           key={id}
           type="button"
           onClick={() => onChange(id)}
           className={cn(
-            'inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-            value === id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            '-mb-px inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            value === id
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:border-foreground/15 hover:text-foreground'
           )}
         >
           {label}
           {badge ? (
             <span
-              className="inline-flex min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-semibold leading-5 text-white"
+              className="inline-flex min-w-5 items-center justify-center rounded-full bg-danger-soft px-1.5 text-[11px] font-semibold leading-5 text-danger"
               title={badgeTitle}
             >
               {badge}

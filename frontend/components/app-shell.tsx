@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ImpersonationBanner />
         <TrialBanner />
-        <header className="app-header-safe z-40 flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-3 sm:px-4">
+        <header className="app-header-safe @container/header z-40 flex min-h-14 shrink-0 items-center justify-between gap-2 border-b @5xl/header:gap-3 border-border bg-card px-3 sm:px-4">
           <div className="flex min-w-0 flex-1 shrink-0 items-center gap-2 overflow-hidden md:hidden">
             <Button
               type="button"
@@ -121,30 +121,30 @@ export function AppShell({ children }: { children: ReactNode }) {
             <CompanyBrand className="min-w-0 text-primary text-sm [&_span]:text-primary" />
           </div>
           <div className="hidden min-w-0 flex-1 md:flex">{isSuperAdmin ? null : <PageTitle />}</div>
-          <div className="flex shrink-0 items-center md:w-full md:min-w-[17rem] md:max-w-sm md:shrink">
+          <div className="flex shrink-0 items-center md:w-full md:min-w-[9rem] md:max-w-xs md:shrink @7xl/header:max-w-sm">
             <GlobalSearch className="w-auto md:w-full" />
           </div>
-          <div className="flex shrink-0 items-center gap-1 overflow-visible py-1 sm:gap-2 md:flex-1 md:justify-end [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
-            <QuickActionsMenu />
+          <div className="flex shrink-0 items-center gap-1 overflow-visible py-1 sm:gap-1.5 md:justify-end @6xl/header:gap-2 [&_button]:transition-colors [&_button:hover]:border-primary/30 [&_button:hover]:bg-primary/10 [&_button:hover]:text-primary">
+            <QuickActionsMenu collapseLabel />
             <div role="group" aria-label={tShell('utilities')} className="hidden items-center gap-1 sm:flex">
-              <LanguageSwitcher />
+              <LanguageSwitcher collapseLabel />
               <ThemeToggle />
             </div>
             <span aria-hidden className="mx-0.5 hidden h-6 w-px bg-border sm:block" />
             <AlertsPanel />
             <div className="hidden shrink-0 whitespace-nowrap sm:block">
-              <EmailDialog />
+              <EmailDialog collapseLabel />
             </div>
             <Button
               variant="outline"
               size="sm"
               aria-label={tc('logout')}
               title={tc('logout')}
-              className="px-2.5 sm:px-3"
+              className="px-2.5 @5xl/header:px-3"
               onClick={() => void logout()}
             >
-              <LogOut className="size-4 sm:hidden" />
-              <span className="sr-only sm:not-sr-only">{tc('logout')}</span>
+              <LogOut className="size-4 @5xl/header:hidden" />
+              <span className="sr-only @5xl/header:not-sr-only">{tc('logout')}</span>
             </Button>
           </div>
         </header>
@@ -195,7 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         ) : null}
-        <main className="app-main-safe flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+        <main className="app-main-safe dash-canvas flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
           {children}
         </main>
         {user ? <ControlOpsAssistant /> : null}

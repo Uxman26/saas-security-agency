@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
 import { guardsToEmployees } from '@/lib/rota-guards-pool';
 import { applyPlannerPayload, serializePlannerState } from '@/lib/rota-planner-persist';
 import { buildDayRange, attKey, chargeableHoursForRota, countedHoursForAttendance, dateKey, normalizeSiteKey, parseDateKey, payableHoursForAttendance, shiftPayAmount } from '@/lib/rota-shifts-utils';
@@ -208,6 +209,10 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   siteNamesRef.current = siteNames;
   const lastSavedPayloadRef = useRef<string | null>(null);
   const saveGenRef = useRef(0);
+  const rotaPlanIdRef = useRef<number | null>(null);
+  /** Bumped after a failed autosave so the save effect runs again. */
+  const [saveRetryTick, setSaveRetryTick] = useState(0);
+  const saveFailedRef = useRef(false);
   const undoStackRef = useRef<
     { label: string; shifts: RotaJsState['shifts']; attendance: RotaJsState['attendance'] }[]
   >([]);
@@ -458,6 +463,8 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
   );
 
   const resetRota = useCallback(() => {
+    flushPendingSave();
+    rotaPlanIdRef.current = null;
     setRotaPlanId(null);
     setPublishedGuardIdsState(new Set());
     setState(defaultState());
@@ -508,21 +515,83 @@ export function RotaShiftsProvider({ children }: { children: ReactNode }) {
           ...(undoOf ? { is_undo: true, undo_of: undoOf } : {}),
         })
         .then((updated) => {
+          if (saveFailedRef.current) {
+            saveFailedRef.current = false;
+            toast.success('Rota changes saved');
+          }
           if (gen !== saveGenRef.current) return;
           lastSavedPayloadRef.current = nextPayload;
           if (updated.published_guard_ids) {
             setPublishedGuardIds(updated.published_guard_ids);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          // Used to be swallowed: the change stayed on screen but never reached the
+          // server, so it vanished on the next open. Say so and keep retrying.
+          if (undoOf && !pendingUndoLabelRef.current) pendingUndoLabelRef.current = undoOf;
+          if (!saveFailedRef.current) {
+            saveFailedRef.current = true;
+            toast.error('Rota changes could not be saved — retrying. Do not close this page.');
+          }
+          setTimeout(() => setSaveRetryTick((t) => t + 1), 5000);
+        });
     }, 1500);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+  }, [rotaPlanId, state, setPublishedGuardIds, saveRetryTick]);
+
+  rotaPlanIdRef.current = rotaPlanId;
+
+  /**
+   * Send a debounced save now instead of dropping it. Leaving the rota, or switching to
+   * another rota, inside the 1.5 s debounce used to cancel the save, so a rate entered
+   * just before was lost.
+   */
+  const flushPendingSave = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    const planId = rotaPlanIdRef.current;
+    const s = stateRef.current;
+    if (!planId || s.days.length === 0) return;
+    const payload = serializePlannerState(s);
+    if (payload === lastSavedPayloadRef.current) return;
+    const undoOf = pendingUndoLabelRef.current;
+    pendingUndoLabelRef.current = null;
+    lastSavedPayloadRef.current = payload;
+    void api.rotaPlans
+      .update(planId, {
+        name: s.rotaName,
+        view_mode: s.rotaView,
+        budget: s.budget,
+        day_count: s.days.length,
+        start_date: s.days[0],
+        planner_data: payload,
+        ...(undoOf ? { is_undo: true, undo_of: undoOf } : {}),
+      })
+      .catch(() => toast.error(`Your last change to "${s.rotaName || 'the rota'}" could not be saved. Open it and check.`));
+  }, []);
+
+  // Leaving the rota screens: save what is pending rather than drop it.
+  useEffect(() => () => flushPendingSave(), [flushPendingSave]);
+
+  // Closing or reloading the tab with unsaved changes: save now and ask the browser to confirm.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      const planId = rotaPlanIdRef.current;
+      if (!planId || stateRef.current.days.length === 0) return;
+      if (serializePlannerState(stateRef.current) === lastSavedPayloadRef.current) return;
+      flushPendingSave();
+      e.preventDefault();
+      e.returnValue = '';
     };
-  }, [rotaPlanId, state, setPublishedGuardIds]);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [flushPendingSave]);
 
   const loadRotaPlan = useCallback(
     (plan: RotaPlanDetail, bootstrap?: InitPayload) => {
+      // Switching rota: the previous one's pending change is sent, not thrown away.
+      if (rotaPlanIdRef.current !== plan.id) flushPendingSave();
       saveGenRef.current += 1;
       if (saveTimer.current) {
         clearTimeout(saveTimer.current);

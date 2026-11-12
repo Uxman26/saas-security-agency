@@ -169,7 +169,7 @@ function roleBucket(role?: string): 'super_admin' | 'tenant' | 'staff' | 'client
   return 'tenant';
 }
 
-export function QuickActionsMenu() {
+export function QuickActionsMenu({ collapseLabel = false }: { collapseLabel?: boolean } = {}) {
   const { user } = useAuth();
   const t = useTranslations('quickActions');
   const tc = useTranslations('common');
@@ -209,7 +209,7 @@ export function QuickActionsMenu() {
         type="button"
         variant="outline"
         size="sm"
-        className="gap-1.5 px-2.5 sm:px-3"
+        className={cn('gap-1.5 px-2.5', collapseLabel ? '@[84rem]/header:px-3' : 'sm:px-3')}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={t('title')}
@@ -217,7 +217,7 @@ export function QuickActionsMenu() {
         onClick={() => setOpen((v) => !v)}
       >
         <Zap className="size-4 shrink-0" />
-        <span className="hidden sm:inline">{t('title')}</span>
+        <span className={cn('hidden', collapseLabel ? '@[84rem]/header:inline' : 'sm:inline')}>{t('title')}</span>
       </Button>
       {open ? (
         <div

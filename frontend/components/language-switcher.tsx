@@ -15,9 +15,11 @@ import { isRtl } from '@/i18n/config';
 type Props = {
   className?: string;
   variant?: 'default' | 'auth' | 'dark';
+  /** Show the label based on the app header's width (container query) instead of the viewport. */
+  collapseLabel?: boolean;
 };
 
-export function LanguageSwitcher({ className }: Props) {
+export function LanguageSwitcher({ className, collapseLabel = false }: Props) {
   const locale = useLocale();
   const router = useRouter();
   const t = useTranslations('common');
@@ -46,7 +48,7 @@ export function LanguageSwitcher({ className }: Props) {
         aria-label={t('language')}
         className={cn(
           'h-9 w-auto shrink-0 gap-1.5 rounded-full border-border/80 bg-muted/70 px-2.5 text-sm font-medium shadow-sm',
-          'sm:min-w-[8.25rem] sm:gap-2 sm:px-3.5',
+          collapseLabel ? '@[84rem]/header:min-w-[8.25rem] @[84rem]/header:gap-2 @[84rem]/header:px-3.5' : 'sm:min-w-[8.25rem] sm:gap-2 sm:px-3.5',
           'hover:bg-muted dark:border-white/12 dark:bg-[#1a1f28] dark:hover:bg-[#222833]',
           'data-[size=sm]:h-9 [&_svg]:opacity-60',
           className
@@ -56,7 +58,9 @@ export function LanguageSwitcher({ className }: Props) {
           <span className="text-base leading-none" aria-hidden>
             {current.flag}
           </span>
-          <span className="sr-only sm:not-sr-only sm:truncate">{current.label}</span>
+          <span className={cn('sr-only', collapseLabel ? '@[84rem]/header:not-sr-only @[84rem]/header:truncate' : 'sm:not-sr-only sm:truncate')}>
+            {current.label}
+          </span>
         </span>
       </SelectTrigger>
 

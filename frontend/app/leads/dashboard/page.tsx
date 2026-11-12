@@ -7,7 +7,8 @@ import { InlineDashboardSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLeadDashboard } from '@/hooks/use-leads';
-import { ArrowLeft, Target, TrendingUp, Users } from 'lucide-react';
+import { ArrowLeft, PoundSterling, Target, TrendingUp, Users } from 'lucide-react';
+import { StatCards } from '@/components/module-dashboard';
 
 function statusLabel(s: string) {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -34,32 +35,14 @@ export default function LeadsDashboardPage() {
             <InlineDashboardSkeleton />
           ) : (
             <>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Total leads</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-3xl font-bold tabular-nums">{data.total_leads}</CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Conversion rate</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-3xl font-bold tabular-nums">{data.conversion_rate}%</CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Revenue forecast</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-3xl font-bold tabular-nums">£{data.revenue_forecast.toLocaleString()}</CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Missed follow-ups</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-3xl font-bold tabular-nums text-amber-600">{data.missed_follow_ups}</CardContent>
-                </Card>
-              </div>
+              <StatCards
+                cards={[
+                  { key: 'total', label: 'Total leads', value: data.total_leads, icon: Users, tone: 'neutral' },
+                  { key: 'conversion', label: 'Conversion rate', value: `${data.conversion_rate}%`, icon: TrendingUp, tone: 'positive' },
+                  { key: 'forecast', label: 'Revenue forecast', value: `£${data.revenue_forecast.toLocaleString('en-GB')}`, icon: PoundSterling, tone: 'info' },
+                  { key: 'missed', label: 'Missed follow-ups', value: data.missed_follow_ups, icon: Target, tone: data.missed_follow_ups > 0 ? 'warning' : 'muted' },
+                ]}
+              />
 
               <div className="grid lg:grid-cols-2 gap-4">
                 <Card>

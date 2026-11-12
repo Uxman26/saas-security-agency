@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { Shield } from 'lucide-react';
-import { BorderBeam } from '@/components/ui/border-beam';
 import { BlurFade } from '@/components/ui/blur-fade';
 import { cn } from '@/lib/utils';
 
@@ -15,13 +14,10 @@ type Pill = {
 };
 
 const TONE: Record<Pill['tone'], string> = {
-  amber:
-    'bg-primary/10 text-primary ring-primary/25 hover:bg-primary/15 dark:bg-primary/15 dark:text-primary dark:ring-primary/30',
-  orange:
-    'bg-orange-500/10 text-orange-800 ring-orange-500/25 hover:bg-orange-500/15 dark:text-orange-200 dark:ring-orange-400/30',
-  emerald:
-    'bg-emerald-500/10 text-emerald-800 ring-emerald-500/25 hover:bg-emerald-500/15 dark:text-emerald-200',
-  red: 'bg-red-500/10 text-red-800 ring-red-500/25 hover:bg-red-500/15 dark:text-red-200',
+  amber: 'bg-brand-50 text-brand-700 ring-brand-200/70 hover:bg-brand-100 dark:text-brand-700',
+  orange: 'bg-warning-soft text-warning ring-warning/20 hover:brightness-95',
+  emerald: 'bg-success-soft text-success ring-success/20 hover:brightness-95',
+  red: 'bg-danger-soft text-danger ring-danger/20 hover:brightness-95',
 };
 
 type Props = {
@@ -35,37 +31,20 @@ type Props = {
 export function DashboardHero({ title, subtitle, description, pills }: Props) {
   return (
     <BlurFade delay={0.04} inView>
-      <div
-        className={cn(
-          'relative overflow-hidden rounded-2xl border border-border/80 bg-card p-6 shadow-sm md:p-8',
-          'dark:border-border dark:shadow-[0_0_0_1px_oklch(0.374_0.01_67.558/0.5)]'
-        )}
-      >
+      <div className="dash-card relative overflow-hidden p-6 md:p-7">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 70% 80% at 0% 0%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 55%), radial-gradient(ellipse 45% 55% at 100% 100%, oklch(0.55 0.12 66 / 0.08), transparent 50%)',
-          }}
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_90%_at_0%_0%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_60%)]"
         />
-        <BorderBeam
-          size={120}
-          duration={10}
-          colorFrom="#F45100"
-          colorTo="#FF6A1F"
-          borderWidth={1.5}
-        />
-
         <div className="relative flex flex-wrap items-center gap-4">
-          <div className="flex size-12 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/25">
+          <div className="flex size-12 items-center justify-center rounded-xl bg-brand-50 ring-1 ring-brand-200/60 dark:ring-brand-300/30">
             <Shield className="size-6 text-primary" />
           </div>
           <div className="min-w-[200px] flex-1">
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl md:text-4xl">
+            <h1 className="text-[1.75rem] font-semibold leading-tight tracking-[-0.02em] text-foreground sm:text-[2rem]">
               {title}
             </h1>
-            <p className="mt-1.5 text-base font-semibold text-foreground/80 sm:text-lg">
+            <p className="mt-1 text-[15px] font-medium text-foreground/80">
               {subtitle}
             </p>
             {description ? (
@@ -80,7 +59,7 @@ export function DashboardHero({ title, subtitle, description, pills }: Props) {
                   key={p.label}
                   href={p.href}
                   className={cn(
-                    'rounded-full px-3 py-1.5 ring-1 transition-colors',
+                    'rounded-full px-3 py-1.5 text-[13px] ring-1 transition-[filter,background-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     TONE[p.tone]
                   )}
                 >

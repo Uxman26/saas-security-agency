@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
+import { PatrolKpiCards } from '@/components/patrol-kpi-cards';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -98,25 +99,7 @@ export default function PatrolReportsPage() {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-            {[
-              { label: 'Scheduled', value: kpis.total_scheduled },
-              { label: 'Completed', value: kpis.completed },
-              { label: 'On time', value: kpis.on_time },
-              { label: 'Late', value: kpis.late },
-              { label: 'Missed', value: kpis.missed },
-              { label: 'Pending', value: kpis.pending },
-              { label: 'Avg lateness', value: `${kpis.average_lateness_minutes}m` },
-              { label: 'Completion', value: `${kpis.completion_rate_pct}%` },
-            ].map((c) => (
-              <Card key={c.label}>
-                <CardContent className="pt-4 pb-3">
-                  <div className="text-xs text-muted-foreground">{c.label}</div>
-                  <div className="text-xl font-semibold tabular-nums mt-1">{c.value}</div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <PatrolKpiCards kpis={kpis} />
 
           <Card>
             <CardHeader>

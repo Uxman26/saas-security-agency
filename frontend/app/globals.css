@@ -482,7 +482,7 @@ select:-webkit-autofill {
 .rota-grid-table {
   --rota-emp-w: 210px;
   --rota-day-w: 168px;
-  --rota-hours-w: 60px;
+  --rota-hours-w: 66px;
   --rota-pay-w: 72px;
   --rota-charge-w: 72px;
   --rota-publish-w: 96px;
@@ -579,7 +579,7 @@ select:-webkit-autofill {
        leaves so little room that names wrap one character per line. */
     --rota-emp-w: 200px;
     --rota-day-w: 116px;
-    --rota-hours-w: 56px;
+    --rota-hours-w: 62px;
     --rota-pay-w: 68px;
     --rota-charge-w: 68px;
     --rota-publish-w: 88px;
@@ -961,28 +961,30 @@ select:-webkit-autofill {
     radial-gradient(900px 480px at 100% 0%, rgb(113 120 238 / 0.10), transparent 60%), #0B1220;
 }
 
-.dash-canvas {
-  background: var(--dash-canvas);
-}
+@layer components {
+  .dash-canvas {
+    background: var(--dash-canvas);
+  }
 
-.dash-card {
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: 1rem;
-  box-shadow: var(--elev-1);
-}
+  .dash-card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 1rem;
+    box-shadow: var(--elev-1);
+  }
 
-.dark .dash-card {
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%), var(--surface);
-}
+  .dark .dash-card {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent 40%), var(--surface);
+  }
 
-.dash-glass {
-  background: color-mix(in oklab, var(--surface) 72%, transparent);
-  backdrop-filter: saturate(160%) blur(14px);
-  -webkit-backdrop-filter: saturate(160%) blur(14px);
-  border: 1px solid var(--hairline);
-  border-radius: 1rem;
-  box-shadow: var(--elev-1);
+  .dash-glass {
+    background: color-mix(in oklab, var(--surface) 72%, transparent);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    border: 1px solid var(--hairline);
+    border-radius: 1rem;
+    box-shadow: var(--elev-1);
+  }
 }
 
 @keyframes dash-ping {

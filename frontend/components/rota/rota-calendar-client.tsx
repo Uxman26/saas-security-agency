@@ -74,7 +74,7 @@ const EMP_MENU_H = 348;
    only used for scroll maths, which is a no-op on mobile where nothing is frozen. */
 const ROTA_PAY_COL_W = 72;
 const ROTA_CHARGE_COL_W = 72;
-const ROTA_HOURS_COL_W = 60;
+const ROTA_HOURS_COL_W = 66;
 const ROTA_PUBLISH_COL_W = 96;
 const ROTA_EMP_COL_W = 210;
 const ROTA_DAY_COL_W = 160;
@@ -3229,7 +3229,7 @@ export function RotaCalendarClient() {
                     <div>
                       <button
                         type="button"
-                        className="mt-1 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-muted"
+                        className="mt-1 max-w-full rounded border border-border bg-background px-1 py-0.5 text-[10px] font-medium text-foreground hover:bg-muted"
                         onClick={() => setBreakdown({ empId: emp.id, focus: null })}
                         title="See how this was calculated"
                       >

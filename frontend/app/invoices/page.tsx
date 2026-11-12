@@ -685,10 +685,11 @@ export default function InvoicesPage() {
 
   const openSendReceipt = (inv: Invoice) =>
     setSendRequest({
-      title: `Send receipt for invoice #${inv.id}`,
-      description: 'The payment receipt is emailed as a PDF attachment.',
+      title: `Receipt for invoice #${inv.id}`,
+      description: 'Check the receipt, then email it to the customer as a PDF, download it or print it.',
       email: inv.client_email,
       send: (to) => api.invoices.sendReceipt(inv.id, to),
+      pdf: { load: () => api.invoices.receiptPdf(inv.id), filename: `receipt-invoice-${inv.id}.pdf` },
     });
 
   const downloadReceipt = async (inv: Invoice) => {
@@ -1367,18 +1368,18 @@ export default function InvoicesPage() {
 
           <StatCards cards={statCards} />
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border bg-card px-4 py-3">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="dash-card px-5 py-4">
               <p className="text-xs text-muted-foreground">Overdue</p>
-              <p className="text-lg font-semibold tabular-nums">{statMoney(overdueAmount)}</p>
+              <p className="mt-1 text-lg font-semibold tracking-tight tabular-nums">{statMoney(overdueAmount)}</p>
             </div>
-            <div className="rounded-lg border bg-card px-4 py-3">
+            <div className="dash-card px-5 py-4">
               <p className="text-xs text-muted-foreground">Due within 30 days</p>
-              <p className="text-lg font-semibold tabular-nums">{statMoney(dueSoonAmount)}</p>
+              <p className="mt-1 text-lg font-semibold tracking-tight tabular-nums">{statMoney(dueSoonAmount)}</p>
             </div>
-            <div className="rounded-lg border bg-card px-4 py-3">
+            <div className="dash-card px-5 py-4">
               <p className="text-xs text-muted-foreground">Average days to get paid</p>
-              <p className="text-lg font-semibold tabular-nums">{averageDays == null ? '—' : averageDays}</p>
+              <p className="mt-1 text-lg font-semibold tracking-tight tabular-nums">{averageDays == null ? '—' : averageDays}</p>
             </div>
           </div>
 

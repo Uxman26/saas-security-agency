@@ -19,10 +19,13 @@ export function EmailDialog({
   defaultEmail,
   defaultName,
   compact,
+  collapseLabel = false,
 }: {
   defaultEmail?: string;
   defaultName?: string;
   compact?: boolean;
+  /** Show the label based on the app header's width (container query) instead of the viewport. */
+  collapseLabel?: boolean;
 }) {
   const { user } = useAuth();
   const t = useTranslations('app');
@@ -75,12 +78,16 @@ export function EmailDialog({
           title={t('emailDialogTitle')}
           aria-label={t('emailDialogTitle')}
           className={cn(
-            compact ? 'size-8 p-0' : 'px-2.5 sm:px-3',
+            compact ? 'size-8 p-0' : collapseLabel ? 'px-2.5 @[84rem]/header:px-3' : 'px-2.5 sm:px-3',
             'transition-colors hover:border-primary/30 hover:bg-primary/10 hover:text-primary'
           )}
         >
-          <Mail className={compact ? 'size-4' : 'h-4 w-4 sm:me-2'} />
-          {!compact && <span className="sr-only sm:not-sr-only">{tc('sendEmail')}</span>}
+          <Mail className={compact ? 'size-4' : cn('h-4 w-4', collapseLabel ? '@[84rem]/header:me-2' : 'sm:me-2')} />
+          {!compact && (
+            <span className={cn('sr-only', collapseLabel ? '@[84rem]/header:not-sr-only' : 'sm:not-sr-only')}>
+              {tc('sendEmail')}
+            </span>
+          )}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

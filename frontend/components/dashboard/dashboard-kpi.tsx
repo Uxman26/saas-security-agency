@@ -1,10 +1,11 @@
 'use client';
 
+import { useCallback } from 'react';
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRight } from 'lucide-react';
-import { MagicCard } from '@/components/ui/magic-card';
-import { NumberTicker } from '@/components/ui/number-ticker';
+import { ArrowUpRight } from 'lucide-react';
+import { CountUp } from '@/components/dashboard/kit/count-up';
+import { fmtNum } from '@/lib/dashboard/format';
 import { cn } from '@/lib/utils';
 
 export function DashboardSection({
@@ -21,7 +22,7 @@ export function DashboardSection({
   return (
     <section className={cn('space-y-3', className)}>
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {title}
         </h2>
         {description ? (
@@ -46,7 +47,6 @@ type KpiProps = {
   delay?: number;
 };
 
-/** Stats card — 21st.dev Magic Card + Number Ticker pattern. */
 export function DashboardKpi({
   label,
   value,
@@ -56,81 +56,47 @@ export function DashboardKpi({
   warn,
   accent,
   href,
-  delay = 0,
 }: KpiProps) {
-  const clickable = Boolean(href);
-
+  const format = useCallback((v: number) => `${prefix ?? ''}${fmtNum(v)}`, [prefix]);
   const inner = (
-    <MagicCard
+    <div
       className={cn(
-        'h-full rounded-2xl',
-        warn && '[&]:border-amber-500/40'
+        'dash-card relative flex h-full min-h-[8.5rem] flex-col overflow-hidden p-5 transition-[transform,box-shadow] duration-300 ease-out',
+        href && 'group-hover/kpi:-translate-y-0.5 group-hover/kpi:shadow-card-hover'
       )}
-      gradientSize={220}
-      gradientFrom={warn ? '#F59E0B' : '#F45100'}
-      gradientTo={warn ? '#FBBF24' : '#FF6A1F'}
-      gradientColor="rgba(224,78,0,0.08)"
-      gradientOpacity={0.55}
     >
-      <div
-        className={cn(
-          'relative flex h-full min-h-[7.75rem] flex-col p-4 transition-transform duration-200',
-          clickable && 'group-hover/kpi:-translate-y-0.5'
-        )}
-      >
-        <div className="flex items-start justify-between gap-2 pe-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-            {label}
-          </p>
-          <div
+      {warn ? (
+        <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-warning/80 via-warning/40 to-transparent" />
+      ) : null}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
             className={cn(
-              'rounded-xl p-2 ring-1 ring-border/60',
-              warn
-                ? 'bg-amber-500/15 ring-amber-500/25 dark:bg-amber-500/20'
-                : 'bg-muted/70 dark:bg-primary/15'
+              'flex size-8 shrink-0 items-center justify-center rounded-lg ring-1',
+              warn ? 'bg-warning-soft text-warning ring-warning/20' : 'bg-brand-50 ring-brand-200/60 dark:ring-brand-300/30'
             )}
           >
-            <Icon className={cn('size-4', accent ?? 'text-primary')} />
-          </div>
+            <Icon className={cn('size-4', warn ? 'text-warning' : accent ?? 'text-brand-600')} />
+          </span>
+          <p className="truncate text-[13px] font-medium text-muted-foreground">{label}</p>
         </div>
-
-        <p
-          className={cn(
-            'mt-3 flex items-baseline gap-0.5 text-2xl font-bold tracking-tight tabular-nums sm:text-[1.65rem]',
-            warn && 'text-amber-700 dark:text-amber-400'
-          )}
-        >
-          {prefix ? <span>{prefix}</span> : null}
-          <NumberTicker
-            value={value}
-            delay={delay}
-            className={cn(
-              'tracking-tight text-foreground',
-              warn && 'text-amber-700 dark:text-amber-400'
-            )}
-          />
-        </p>
-
-        {sub ? (
-          <p className="mt-auto pt-2 text-xs font-medium leading-snug text-muted-foreground line-clamp-2">
-            {sub}
-          </p>
-        ) : (
-          <div className="mt-auto" />
-        )}
-
-        {clickable ? (
-          <ArrowRight className="absolute end-3 top-4 size-3.5 text-muted-foreground/60 transition-all group-hover/kpi:translate-x-0.5 group-hover/kpi:text-primary rtl:group-hover/kpi:-translate-x-0.5" />
+        {href ? (
+          <ArrowUpRight className="size-4 shrink-0 text-muted-foreground/0 transition-all group-hover/kpi:text-primary rtl:-scale-x-100" aria-hidden />
         ) : null}
       </div>
-    </MagicCard>
+      <p className={cn('mt-4 text-[1.625rem] font-semibold leading-none tracking-tight tabular-nums', warn ? 'text-warning' : 'text-foreground')}>
+        <CountUp value={value} format={format} />
+        <span className="sr-only">{`${prefix ?? ''}${fmtNum(value)}`}</span>
+      </p>
+      {sub ? <p className="mt-auto pt-2.5 text-xs text-muted-foreground line-clamp-2">{sub}</p> : null}
+    </div>
   );
 
   if (href) {
     return (
       <Link
         href={href}
-        className="group/kpi block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        className="group/kpi block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {inner}
       </Link>

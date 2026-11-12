@@ -152,10 +152,11 @@ export default function InvoiceViewPage() {
                         size="sm"
                         onClick={() =>
                           setSendRequest({
-                            title: `Send receipt for invoice #${inv.id}`,
-                            description: 'The payment receipt is emailed as a PDF attachment.',
+                            title: `Receipt for invoice #${inv.id}`,
+                            description: 'Check the receipt, then email it to the customer as a PDF, download it or print it.',
                             email: inv.client_email,
                             send: (to) => api.invoices.sendReceipt(inv.id, to),
+                            pdf: { load: () => api.invoices.receiptPdf(inv.id), filename: `receipt-invoice-${inv.id}.pdf` },
                           })
                         }
                       >

@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { GA_MEASUREMENT_ID } from '@/lib/site';
 import {
   applyConsentDefaults,
+  ensureGtag,
   readConsent,
   trackPageView,
   updateConsent,
@@ -16,12 +17,9 @@ function loadGtagScript(id: string) {
   s.async = true;
   s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
   document.head.appendChild(s);
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = function gtag(...args: unknown[]) {
-    window.dataLayer?.push(args);
-  };
-  window.gtag('js', new Date());
-  window.gtag('config', id, {
+  ensureGtag();
+  window.gtag?.('js', new Date());
+  window.gtag?.('config', id, {
     anonymize_ip: true,
     send_page_view: false,
   });

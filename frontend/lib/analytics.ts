@@ -71,13 +71,16 @@ export function hasAnalyticsConsent(): boolean {
   return Boolean(GA_MEASUREMENT_ID) && readConsent() === 'accepted';
 }
 
-function ensureGtag() {
+export function ensureGtag() {
   if (typeof window === 'undefined') return;
   window.dataLayer = window.dataLayer || [];
   if (!window.gtag) {
-    window.gtag = function gtag(...args: unknown[]) {
-      window.dataLayer?.push(args);
-    };
+    // gtag.js only processes Arguments objects from dataLayer; a plain array (e.g. from
+    // rest params) is silently ignored, so no hits are ever sent.
+    window.gtag = function gtag() {
+      // eslint-disable-next-line prefer-rest-params
+      window.dataLayer?.push(arguments);
+    } as GtagCommand;
   }
 }
 

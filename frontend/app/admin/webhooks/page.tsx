@@ -33,7 +33,7 @@ export default function AdminWebhooksPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8">
           <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
             <div>
               <h1 className="text-3xl font-bold">Webhooks</h1>

@@ -161,7 +161,7 @@ export default function DocumentDetailPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto space-y-5 px-4 py-8">
+        <div className="mx-auto w-full space-y-5 px-4 sm:px-6 lg:px-8 xl:px-10 py-8">
           <h1 className="text-2xl font-bold">Documents</h1>
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <Link href="/documents" className="text-primary hover:underline">

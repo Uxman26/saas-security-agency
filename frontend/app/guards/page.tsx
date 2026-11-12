@@ -511,7 +511,7 @@ export default function GuardsPage() {
     <ProtectedRoute>
       <AppShell>
       <div>
-        <div className="container mx-auto space-y-6 px-4 py-8">
+        <div className="mx-auto w-full space-y-6 px-4 sm:px-6 lg:px-8 xl:px-10 py-8">
           <DashboardHeader
             title="Employee hub"
             hint="Teams View and List View show the same people — only the grouping changes. Terminated staff stay in the hub behind the switch; archived staff leave it entirely."
@@ -907,7 +907,7 @@ export default function GuardsPage() {
           )}
         </div>
 
-        <div className="container mx-auto px-4 pb-8">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 pb-8">
           <QuickLinks
             links={[
               {

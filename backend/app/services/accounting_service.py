@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import func
@@ -813,6 +813,7 @@ def run_recurring_invoices(db: Session) -> dict:
             )
             inv = invoice_service.create_invoice(db, data, admin.id)
             inv.status = "sent"
+            inv.sent_at = datetime.now(timezone.utc)
             db.commit()
             ri.last_invoice_id = inv.id
             try:

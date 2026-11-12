@@ -40,7 +40,7 @@ export default function LeadsCalendarPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Button variant="ghost" size="sm" asChild>

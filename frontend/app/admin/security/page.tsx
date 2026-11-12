@@ -172,7 +172,7 @@ export default function AdminSecurityPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6">
           <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold">Security</h1>
             <Button variant="outline" size="sm" onClick={() => void load()}>Refresh</Button>

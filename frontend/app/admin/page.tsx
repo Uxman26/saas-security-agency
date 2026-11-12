@@ -84,7 +84,7 @@ export default function AdminHqPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6">
           <DashboardHero
             title="Platform HQ"
             subtitle="SaaS headquarters — tenants, billing, trials, and operations"

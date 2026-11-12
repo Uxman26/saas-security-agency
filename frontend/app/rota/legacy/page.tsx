@@ -292,7 +292,7 @@ export default function RotaPage() {
     <ProtectedRoute>
       <AppShell>
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-        <div className="container mx-auto px-4 py-8 space-y-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">

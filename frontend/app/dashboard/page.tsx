@@ -140,7 +140,7 @@ export default function DashboardPage() {
       <AppShell>
         <MotionConfig reducedMotion="user">
           <div className="dash-canvas dash-motion min-h-full">
-            <div className="mx-auto w-full max-w-[1680px] space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+            <div className="w-full space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
               <CommandHeader
                 range={range}
                 onRange={setRange}

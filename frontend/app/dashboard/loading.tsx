@@ -8,7 +8,7 @@ export default function DashboardLoading() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="h-14 shrink-0 border-b border-border bg-card" />
         <main className="dash-canvas min-h-0 flex-1 overflow-y-auto" aria-busy>
-          <div className="mx-auto w-full max-w-[1680px] space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="w-full space-y-6 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
             <div className="space-y-3">
               <Shimmer className="h-4 w-56" />
               <Shimmer className="h-9 w-80" />

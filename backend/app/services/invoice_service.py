@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
@@ -134,11 +134,11 @@ def recalc_invoice_totals(db: Session, inv: Invoice) -> None:
 
 
 def maybe_mark_overdue(db: Session, inv: Invoice) -> bool:
-    from app.services.invoice_payment_service import sync_invoice_payment_status
+    from app.services.invoice_payment_service import is_overdue_since_sent, sync_invoice_payment_status
     if inv.status in ("paid", "partial", "cancelled", "draft"):
         sync_invoice_payment_status(db, inv)
         return False
-    if inv.due_date and inv.due_date < date.today() and inv.status in ("sent", "unpaid"):
+    if inv.status in ("sent", "unpaid") and is_overdue_since_sent(inv):
         inv.status = "overdue"
         return True
     sync_invoice_payment_status(db, inv)
@@ -915,6 +915,10 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
         # Back out the "invoice issued" entry; marking it sent again re-posts it.
         accounting_service.unpost(db, company.id, "invoice", inv.id)
     inv.status = status
+    if status == "draft":
+        inv.sent_at = None
+    elif status != "cancelled" and inv.sent_at is None:
+        inv.sent_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(inv)
     log_invoice_audit(db, company.id, user_id, inv.id, "status_changed", {"from": prev, "to": status})

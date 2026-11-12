@@ -635,7 +635,7 @@ export default function SitesPage() {
     <ProtectedRoute>
       <AppShell>
       <div>
-        <div className="container mx-auto space-y-6 px-4 py-8">
+        <div className="mx-auto w-full space-y-6 px-4 sm:px-6 lg:px-8 xl:px-10 py-8">
           <DashboardHeader
             title="Sites"
             hint="A site belongs to one client and is covered by one contractor. Archiving a site hides it everywhere while its shifts, invoices and patrol history stay readable."

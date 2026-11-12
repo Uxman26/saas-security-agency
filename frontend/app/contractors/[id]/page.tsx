@@ -71,7 +71,7 @@ export default function ContractorDetailPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6 min-w-0 max-w-full overflow-x-hidden">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6 min-w-0 max-w-full overflow-x-hidden">
           <div className="flex flex-wrap gap-4 items-center min-w-0">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/contractors">

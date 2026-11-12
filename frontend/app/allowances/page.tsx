@@ -255,7 +255,7 @@ export default function AllowancesPage() {
     <ProtectedRoute>
       <AppShell>
       <div>
-        <div className="container mx-auto space-y-6 px-4 py-8">
+        <div className="mx-auto w-full space-y-6 px-4 sm:px-6 lg:px-8 xl:px-10 py-8">
           <DashboardHeader
             title="Allowances"
             hint="An allowance can apply to payroll, to invoices, or to both — the two flags are independent, so a cost you absorb need not be billed on."

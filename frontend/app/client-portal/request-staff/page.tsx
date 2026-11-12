@@ -181,7 +181,7 @@ function RequestStaffPage() {
     return (
       <ProtectedRoute>
         <AppShell>
-          <div className="container mx-auto px-4 py-12 text-center text-muted-foreground">
+          <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-12 text-center text-muted-foreground">
             You do not have permission to view staff requests.
           </div>
         </AppShell>
@@ -193,7 +193,7 @@ function RequestStaffPage() {
     return (
       <ProtectedRoute>
         <AppShell>
-          <div className="container mx-auto px-4 py-12 text-center space-y-3">
+          <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-12 text-center space-y-3">
             <p className="text-muted-foreground">You do not have permission to submit staff requests.</p>
             <Button variant="outline" asChild>
               <Link href="/client-portal/request-staff?tab=history">View my requests</Link>
@@ -207,7 +207,7 @@ function RequestStaffPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8 space-y-6">
+        <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8 space-y-6">
           <Button variant="ghost" size="sm" className="-ml-2" asChild>
             <Link href="/client-portal">
               <ArrowLeft className="size-4 mr-1" />

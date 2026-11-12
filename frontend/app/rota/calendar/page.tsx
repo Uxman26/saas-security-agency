@@ -8,7 +8,7 @@ import { InlineFormSkeleton } from '@/components/skeletons';
 
 function CalendarFallback() {
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="mx-auto w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-8">
       <InlineFormSkeleton />
     </div>
   );

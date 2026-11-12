@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import func
@@ -67,6 +67,19 @@ def invoice_balance_due(
     return round(max(0, total - settled), 2)
 
 
+# An unpaid invoice turns overdue this many days after it was sent. Drafts have no
+# sent_at, so they never do, whatever their due date.
+OVERDUE_AFTER_SENT_DAYS = 90
+
+
+def is_overdue_since_sent(inv: Invoice, today: Optional[date] = None) -> bool:
+    sent_at = getattr(inv, "sent_at", None)
+    if sent_at is None:
+        return False
+    sent_day = sent_at.date() if isinstance(sent_at, datetime) else sent_at
+    return ((today or date.today()) - sent_day).days >= OVERDUE_AFTER_SENT_DAYS
+
+
 def sync_invoice_payment_status(db: Session, inv: Invoice, user_id: Optional[int] = None) -> str:
     if inv.status in ("draft", "cancelled"):
         return inv.status
@@ -81,7 +94,7 @@ def sync_invoice_payment_status(db: Session, inv: Invoice, user_id: Optional[int
         inv.status = "paid"
     elif settled > 0:
         inv.status = "partial"
-    elif inv.due_date and inv.due_date < date.today():
+    elif is_overdue_since_sent(inv):
         inv.status = "overdue"
     elif prev == "unpaid":
         inv.status = "unpaid"

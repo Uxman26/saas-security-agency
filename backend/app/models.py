@@ -1244,6 +1244,9 @@ class Invoice(Base):
     tax_amount = Column(Float, default=0)
     total = Column(Float, default=0)
     status = Column(String, default="draft")
+    # When the invoice was first sent to the client. The overdue clock runs from here,
+    # so a draft (never sent) can never become overdue.
+    sent_at = Column(DateTime(timezone=True), nullable=True)
     currency = Column(String, default="GBP", nullable=False)
     pdf_path = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

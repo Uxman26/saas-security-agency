@@ -295,6 +295,28 @@ def _notify_guard(db: Session, *, company_id: int, guard_id: int, title: str, bo
     )
 
 
+def _patrol_oversight_users(db: Session, company_id: int, *, limit: int = 8) -> list:
+    """Controllers / Tenant Admins / managers — not legacy User.role string only."""
+    from app.models import Company
+    from app.services import membership_service
+    from app.services.shift_reminder_service import is_shift_oversight_user
+
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        return []
+    out = []
+    seen: set[int] = set()
+    for u in membership_service.users_in_company(db, company_id):
+        if u.id in seen or getattr(u, "is_active", True) is False:
+            continue
+        if u.id == company.admin_id or is_shift_oversight_user(u):
+            out.append(u)
+            seen.add(u.id)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def _notify_supervisors(
     db: Session,
     *,
@@ -305,15 +327,7 @@ def _notify_supervisors(
     kind: str = "patrol_missed",
     entity_type: str = "patrol_occurrence",
 ) -> None:
-    users = (
-        db.query(User)
-        .filter(
-            User.company_id == company_id,
-            User.role.in_(("company_admin", "manager", "supervisor", "admin")),
-        )
-        .limit(8)
-        .all()
-    )
+    users = _patrol_oversight_users(db, company_id, limit=8)
     now = datetime.now(timezone.utc)
     for u in users:
         dup = (
@@ -542,15 +556,7 @@ def _sweep_patrol_schedule_locked(db: Session) -> dict:
             try:
                 from app.services import email_service
 
-                for u in (
-                    db.query(User)
-                    .filter(
-                        User.company_id == occ.company_id,
-                        User.role.in_(("company_admin", "manager", "supervisor", "admin")),
-                    )
-                    .limit(5)
-                    .all()
-                ):
+                for u in _patrol_oversight_users(db, occ.company_id, limit=5):
                     if u.email:
                         email_service.send_email_async(u.email, "Missed patrol alert", msg)
             except Exception:

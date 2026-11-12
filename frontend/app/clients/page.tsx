@@ -525,7 +525,7 @@ export default function ClientsPage() {
     <ProtectedRoute>
       <AppShell>
       <div>
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto space-y-6 px-4 py-8">
           <DashboardHeader
             title="Clients"
             hint="A client can own many sites. Anything filtered by client — invoices, payroll, rota — covers every site assigned to it."

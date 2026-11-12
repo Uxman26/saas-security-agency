@@ -184,7 +184,9 @@ export function StatCards({ cards, className }: { cards: StatCardSpec[]; classNa
       )}
     >
       {cards.map((c) => {
-        const tone = TONE_STYLES[c.tone ?? 'neutral'];
+        const zero = parseFigure(c.value)?.n === 0;
+        const base = TONE_STYLES[c.tone ?? 'neutral'];
+        const tone = zero && base.accent ? { ...base, value: '', accent: undefined } : base;
         const Icon = c.icon;
         return (
           <div

@@ -350,7 +350,7 @@ export default function AssignmentsPage() {
     <ProtectedRoute>
       <AppShell>
       <div>
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto space-y-6 px-4 py-8">
           <DashboardHeader
             title="Assignments"
             hint="An assignment is one shift for one person at one site. Both the staff member and the site need a contractor linked before one can be created."

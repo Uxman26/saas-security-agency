@@ -284,7 +284,7 @@ export default function DocumentsPage() {
   return (
     <ProtectedRoute>
       <AppShell>
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto space-y-6 px-4 py-8">
           <DashboardHeader
             title="Documents"
             hint="Documents are filed against a staff member. Open one to set its folder, follow-up date and whether the employee must accept it."

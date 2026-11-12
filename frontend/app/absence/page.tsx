@@ -237,7 +237,7 @@ export default function AbsencePage() {
     <ProtectedRoute>
       <AppShell>
         <div>
-          <div className="container mx-auto px-4 py-8">
+          <div className="container mx-auto space-y-6 px-4 py-8">
             <DashboardHeader
               title="Absence"
               hint="Absences are recorded against an employee, where their entitlement and balance are shown. This register is every employee's absence in one place."

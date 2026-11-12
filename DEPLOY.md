@@ -108,3 +108,9 @@ s.quit()
 If port 587 fails from Docker, try `MAIL_PORT=25` and `MAIL_USE_TLS=false` (Plesk Postfix often allows relay from Docker subnet without auth).
 
 After changing `.env`: `docker compose up -d --build backend worker`
+
+## Mobile push (FCM) and shift reminders
+
+1. Keep the **`worker`** container running — it runs `sweep_shift_reminders` every minute (30 minutes before shift start).
+2. Set Firebase Admin credentials on the backend/worker (see `backend/.env.example` `FIREBASE_*`). Without them, device tokens still register but FCM sends are skipped.
+3. Staff / Controllers / Tenant Admins must open the mobile app once after login so the FCM token is posted to `POST /portal/devices/push-token` and local 4h/30m reminders are scheduled.

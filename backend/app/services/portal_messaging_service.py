@@ -388,6 +388,11 @@ def post_message(
         entity_type="message_thread",
         entity_id=thread.id,
     )
+    # Persist invalid-token cleanup from FCM (notification row already committed).
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
     return _message_out(db, msg)
 
 

@@ -673,11 +673,17 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         if att.booked_off_at:
             if mobile_client:
                 return _att_out(att, site=site, accuracy=accuracy)
+            out = _att_out(att, site=site, accuracy=accuracy)
             raise HTTPException(
                 status_code=400,
                 detail={
                     "code": "already_clocked_out",
                     "message": "This shift is already clocked out.",
+                    "attendance_id": out.id,
+                    "assignment_id": out.assignment_id,
+                    "status": out.status,
+                    "booked_at": out.booked_at.isoformat() if out.booked_at else None,
+                    "booked_off_at": out.booked_off_at.isoformat() if out.booked_off_at else None,
                 },
             )
         if not att.booked_at and staff_portal:
@@ -763,11 +769,17 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         if att.booked_at:
             if mobile_client:
                 return _att_out(att, site=site, accuracy=accuracy)
+            out = _att_out(att, site=site, accuracy=accuracy)
             raise HTTPException(
                 status_code=400,
                 detail={
                     "code": "already_clocked_in",
                     "message": "This shift is already clocked in.",
+                    "attendance_id": out.id,
+                    "assignment_id": out.assignment_id,
+                    "status": out.status,
+                    "booked_at": out.booked_at.isoformat() if out.booked_at else None,
+                    "booked_off_at": out.booked_off_at.isoformat() if out.booked_off_at else None,
                 },
             )
         att.booked_at = now_utc

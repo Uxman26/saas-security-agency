@@ -176,17 +176,32 @@ def _notify(
         dup_q = dup_q.filter(AppNotification.entity_id == entity_id)
     if dup_q.first():
         return
-    db.add(
-        AppNotification(
-            company_id=company_id,
+    row = AppNotification(
+        company_id=company_id,
+        user_id=user_id,
+        kind=kind,
+        title=title,
+        body=body,
+        entity_type=entity_type,
+        entity_id=entity_id,
+    )
+    db.add(row)
+    try:
+        db.flush()
+        from app.services import fcm_push_service
+
+        fcm_push_service.notify_after_app_notification(
+            db,
             user_id=user_id,
+            notification_id=getattr(row, "id", None),
             kind=kind,
             title=title,
-            body=body,
+            body=body or "",
             entity_type=entity_type,
             entity_id=entity_id,
         )
-    )
+    except Exception:
+        pass
     if lead and actor_id:
         email_for_lead_event(db, actor_id, lead, kind, body or title, user_id)
 

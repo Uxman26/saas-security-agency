@@ -9,52 +9,16 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.auth import get_password_hash
-from app.database import SessionLocal
 from app.main import app
-from app.models import Company, Role, User
-from app.services.company_login_id_service import ensure_company_login_id
-from app.services.module_service import dump_modules, parse_modules
+from tests.helpers_company import ensure_staff_user
 
 
 def _ensure_staff_user() -> tuple[str, str, str]:
-    db = SessionLocal()
-    try:
-        co = db.get(Company, 1)
-        assert co is not None
-        login_id = ensure_company_login_id(db, co)
-        if not co.subscription_status or co.subscription_status == "pending":
-            co.subscription_status = "active"
-        co.enabled_modules_json = dump_modules(
-            {**parse_modules(co.enabled_modules_json), "mobile_apps": True}
-        )
-        staff_role = db.query(Role).filter(Role.slug == "staff").first()
-        email = "staff.mobile.regression@example.com"
-        password = "StaffTest1!"
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            user = User(
-                email=email,
-                full_name="Staff Mobile Regression",
-                password_hash=get_password_hash(password),
-                role="staff",
-                role_id=staff_role.id if staff_role else None,
-                company_id=co.id,
-                is_active=True,
-                email_verified=True,
-            )
-            db.add(user)
-        else:
-            user.password_hash = get_password_hash(password)
-            user.is_active = True
-            user.email_verified = True
-            user.role = "staff"
-            user.role_id = staff_role.id if staff_role else user.role_id
-            user.company_id = co.id
-        db.commit()
-        return email, password, login_id
-    finally:
-        db.close()
+    email, password, login_id, _ = ensure_staff_user(
+        email="staff.mobile.regression@example.com",
+        full_name="Staff Mobile Regression",
+    )
+    return email, password, login_id
 
 
 def test_staff_mobile_login_then_me():

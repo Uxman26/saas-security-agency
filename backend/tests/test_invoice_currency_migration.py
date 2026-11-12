@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
+from importlib import reload
 
 import pytest
 from sqlalchemy import inspect, text
@@ -54,14 +56,22 @@ def broken_currency_db(tmp_path, monkeypatch):
     conn.commit()
     conn.close()
     url = f"sqlite:///{path}"
+    previous = os.environ.get("DATABASE_URL")
     monkeypatch.setenv("DATABASE_URL", url)
-    # Settings / engine are imported lazily inside the ensure helper.
-    return url
+    yield url
+    # Restore process-wide engine so later tests do not hit the temp SQLite file.
+    if previous is None:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+    else:
+        monkeypatch.setenv("DATABASE_URL", previous)
+    import app.config as cfg
+    import app.database as dbmod
+
+    reload(cfg)
+    reload(dbmod)
 
 
 def test_ensure_invoice_currency_columns_adds_missing(broken_currency_db):
-    from importlib import reload
-
     import app.config as cfg
     import app.database as dbmod
 

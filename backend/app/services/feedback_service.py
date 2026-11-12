@@ -111,17 +111,32 @@ def _notify(
     )
     if dup:
         return
-    db.add(
-        AppNotification(
-            company_id=company_id,
+    row = AppNotification(
+        company_id=company_id,
+        user_id=user_id,
+        kind=kind,
+        title=title,
+        body=body,
+        entity_type="feedback",
+        entity_id=entity_id,
+    )
+    db.add(row)
+    try:
+        db.flush()
+        from app.services import fcm_push_service
+
+        fcm_push_service.notify_after_app_notification(
+            db,
             user_id=user_id,
+            notification_id=getattr(row, "id", None),
             kind=kind,
             title=title,
-            body=body,
+            body=body or "",
             entity_type="feedback",
             entity_id=entity_id,
         )
-    )
+    except Exception:
+        pass
 
 
 def _notify_super_admins_email(subject: str, body: str) -> None:

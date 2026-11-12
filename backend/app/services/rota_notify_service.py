@@ -159,6 +159,62 @@ def _guard_user_id(db: Session, company_id: int, guard_id: int) -> Optional[int]
     return next(iter(ids), None)
 
 
+def _oversight_recipient_ids(
+    db: Session,
+    company,
+    *,
+    actor_user_id: int,
+    site_id: Optional[int] = None,
+) -> list[int]:
+    """Controllers / Tenant Admins who should see rota change alerts (not the actor).
+
+    When ``site_id`` is set, respect site-pin scoping. When unset (plan-level
+    summary), include all active oversight users in the company.
+    """
+    from app.services.shift_reminder_service import is_shift_oversight_user
+    from app.services import membership_service
+    from app.services.portal_access import pinned_site_ids
+
+    ids: list[int] = []
+    seen: set[int] = set()
+    for user in membership_service.users_in_company(db, company.id):
+        if user.id == actor_user_id or user.id in seen:
+            continue
+        if getattr(user, "is_active", True) is False:
+            continue
+        if not (user.id == company.admin_id or is_shift_oversight_user(user)):
+            continue
+        if site_id is not None:
+            pinned = pinned_site_ids(db, user)
+            if pinned is not None and site_id not in pinned and user.id != company.admin_id:
+                continue
+        ids.append(user.id)
+        seen.add(user.id)
+    return ids
+
+
+def _oversight_change_summary(plan_name: str, changes: Iterable[ShiftChange]) -> tuple[str, str]:
+    items = list(changes)
+    counts: Dict[str, int] = {}
+    for c in items:
+        counts[c.kind] = counts.get(c.kind, 0) + 1
+    parts = []
+    for kind, label in (
+        ("removed", "cancelled"),
+        ("added", "added"),
+        ("time_changed", "time changed"),
+        ("site_changed", "site changed"),
+        ("changed", "updated"),
+    ):
+        n = counts.get(kind, 0)
+        if n:
+            parts.append(f"{n} {label}")
+    detail = ", ".join(parts) if parts else f"{len(items)} change(s)"
+    title = f"Rota update — {plan_name}"
+    body = f"{detail} on {plan_name}."
+    return title, body
+
+
 def _send_channels(
     db: Session,
     actor_user_id: int,
@@ -287,6 +343,26 @@ def notify_shift_changes(
             first.detail,
         )
 
+    # One summary for Controllers / Tenant Admins (excluding the actor who made the change).
+    all_changes = [c for items in by_guard.values() for c in items]
+    oversight_title, oversight_body = _oversight_change_summary(plan.name, all_changes)
+    staff_uids = set(portal_users.values())
+    for uid in _oversight_recipient_ids(db, company, actor_user_id=actor_user_id):
+        if uid in staff_uids:
+            continue
+        db.add(
+            AppNotification(
+                company_id=company.id,
+                user_id=uid,
+                kind="rota_change",
+                title=oversight_title,
+                body=oversight_body[:500],
+                entity_type="rota",
+                entity_id=plan.id,
+            )
+        )
+        fcm_jobs.append((uid, oversight_title, oversight_body[:500]))
+
     try:
         db.commit()
     except Exception:
@@ -312,6 +388,11 @@ def notify_shift_changes(
             if sent == 0:
                 logger = __import__("logging").getLogger(__name__)
                 logger.info("FCM rota notify user=%s sent=0 (no token or Firebase not configured)", uid)
+        # Persist any invalid-token deletes performed during send (session already committed).
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
     except Exception:
         pass
 
@@ -354,6 +435,7 @@ def notify_assignment_event(
                 uid = u.id
                 break
 
+    fcm_jobs: list[tuple[int, Optional[object], str, str]] = []
     if uid:
         row = AppNotification(
             company_id=company.id,
@@ -365,26 +447,56 @@ def notify_assignment_event(
             entity_id=assignment.id,
         )
         db.add(row)
-        try:
-            db.commit()
-            db.refresh(row)
-        except Exception:
-            db.rollback()
-            row = None
-        try:
-            from app.services import fcm_push_service
+        fcm_jobs.append((uid, row, title, body[:500]))
 
+    # Controllers / Tenant Admins (except the actor) get the same assignment alert.
+    for oversight_uid in _oversight_recipient_ids(
+        db, company, actor_user_id=actor_user_id, site_id=assignment.site_id
+    ):
+        if uid is not None and oversight_uid == uid:
+            continue
+        row = AppNotification(
+            company_id=company.id,
+            user_id=oversight_uid,
+            kind="rota_change",
+            title=title,
+            body=body[:500],
+            entity_type="assignment",
+            entity_id=assignment.id,
+        )
+        db.add(row)
+        fcm_jobs.append((oversight_uid, row, title, body[:500]))
+
+    try:
+        db.commit()
+        for _, row, _, _ in fcm_jobs:
+            try:
+                db.refresh(row)
+            except Exception:
+                pass
+    except Exception:
+        db.rollback()
+        fcm_jobs = []
+
+    try:
+        from app.services import fcm_push_service
+
+        for target_uid, row, t, b in fcm_jobs:
             fcm_push_service.notify_after_app_notification(
                 db,
-                user_id=uid,
+                user_id=target_uid,
                 notification_id=getattr(row, "id", None),
                 kind="rota_change",
-                title=title,
-                body=body[:500],
+                title=t,
+                body=b,
                 entity_type="assignment",
                 entity_id=assignment.id,
             )
+        try:
+            db.commit()
         except Exception:
-            pass
+            db.rollback()
+    except Exception:
+        pass
 
     _send_channels(db, actor_user_id, guard, title, body, date_str, site_name, f"{start}–{end}")

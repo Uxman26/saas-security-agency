@@ -30,9 +30,12 @@ def _activate_company(co: Company) -> None:
 
 
 def test_same_email_can_join_second_tenant_and_switch():
+    from tests.helpers_company import ensure_test_company
+
+    co_seed = ensure_test_company(name="ControlOps Test Co")
     db = SessionLocal()
     try:
-        co_a = db.get(Company, 1)
+        co_a = db.get(Company, co_seed.id)
         assert co_a is not None
         _activate_company(co_a)
         role_a = _staff_role(db, co_a.id)

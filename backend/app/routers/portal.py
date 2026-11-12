@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import MobileAnnouncement, MobileDeviceToken, User
+from app.auth import get_current_user
 from app.rbac import require_module
 from app.schemas import (
     BookingOnOff,
@@ -231,9 +232,14 @@ async def portal_create_incident_with_images(
 def portal_notifications(
     unread_only: bool = False,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(get_current_user),
 ):
-    """In-app inbox for portal/mobile users (rota changes, patrol reminders, etc.)."""
+    """In-app inbox for mobile/web users (own rows only).
+
+    Authenticated company users — Staff, Controller, Tenant Admin — can read their
+    own AppNotification feed. Do not gate on my_portal.view: Controllers often lack
+    the portal module but still receive shift reminders and ops alerts.
+    """
     rows = lead_service.list_notifications(db, current_user.id, unread_only)
     return [_portal_notification_out(n) for n in rows]
 
@@ -241,7 +247,7 @@ def portal_notifications(
 @router.get("/notifications/unread-count")
 def portal_notifications_unread_count(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(get_current_user),
 ):
     return {"count": lead_service.unread_notification_count(db, current_user.id)}
 
@@ -249,7 +255,7 @@ def portal_notifications_unread_count(
 @router.post("/notifications/read-all")
 def portal_notifications_read_all(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(get_current_user),
 ):
     updated = lead_service.mark_all_notifications_read(db, current_user.id)
     return {"updated": updated}
@@ -258,7 +264,7 @@ def portal_notifications_read_all(
 @router.post("/notifications/clear-all")
 def portal_notifications_clear_all(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(get_current_user),
 ):
     updated = lead_service.clear_all_notifications(db, current_user.id)
     return {"updated": updated}
@@ -268,7 +274,7 @@ def portal_notifications_clear_all(
 def portal_notification_read(
     notification_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(get_current_user),
 ):
     n = lead_service.mark_notification_read(db, current_user.id, notification_id)
     return _portal_notification_out(n)
@@ -278,9 +284,13 @@ def portal_notification_read(
 def portal_register_push_token(
     body: PortalPushTokenRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_module("my_portal", "view")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Register / refresh an FCM device token for this portal user.
+    """Register / refresh an FCM device token for the signed-in user.
+
+    Available to Staff, Controller, and Tenant Admin (any authenticated company user).
+    Not gated on my_portal — Controllers must register tokens to receive FCM shift
+    reminders while the app is backgrounded or terminated.
 
     Tokens are never reassigned across users: if another account already owns
     this FCM token (or this device_id), that row is cleared/updated only for the
@@ -347,14 +357,55 @@ def portal_register_push_token(
             device_id=body.device_id,
         )
         db.add(row)
+        db.flush()
     else:
         row.fcm_token = token
         row.platform = platform
         if body.device_id:
             row.device_id = body.device_id
         row.updated_at = now
+        db.flush()
+
+    # Collapse duplicates for this user (same token or same device) so multicast
+    # does not deliver the same push multiple times.
+    dup_q = db.query(MobileDeviceToken).filter(
+        MobileDeviceToken.company_id == company.id,
+        MobileDeviceToken.user_id == current_user.id,
+        MobileDeviceToken.id != row.id,
+    )
+    if body.device_id:
+        dup_q = dup_q.filter(
+            (MobileDeviceToken.fcm_token == token)
+            | (MobileDeviceToken.device_id == body.device_id)
+        )
+    else:
+        dup_q = dup_q.filter(MobileDeviceToken.fcm_token == token)
+    dup_q.delete(synchronize_session=False)
+
     db.commit()
     return {"message": "Push token registered."}
+
+
+@router.delete("/devices/push-token", response_model=MessageResponse)
+def portal_unregister_push_token(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    device_id: Optional[str] = None,
+    fcm_token: Optional[str] = None,
+):
+    """Remove this device's FCM token so pushes stop after sign-out / user switch."""
+    company = get_company_by_user_id(db, current_user.id)
+    q = db.query(MobileDeviceToken).filter(
+        MobileDeviceToken.company_id == company.id,
+        MobileDeviceToken.user_id == current_user.id,
+    )
+    if device_id and device_id.strip():
+        q = q.filter(MobileDeviceToken.device_id == device_id.strip())
+    elif fcm_token and fcm_token.strip():
+        q = q.filter(MobileDeviceToken.fcm_token == fcm_token.strip())
+    deleted = q.delete(synchronize_session=False)
+    db.commit()
+    return {"message": f"Push token removed ({deleted})."}
 
 
 @router.get("/announcements/active", response_model=PortalAnnouncementResponse)

@@ -17,41 +17,12 @@ from app.services.module_service import dump_modules, parse_modules
 
 
 def _staff_login() -> tuple[str, str, str, int]:
-    db = SessionLocal()
-    try:
-        co = db.get(Company, 1)
-        assert co is not None
-        if not co.subscription_status or co.subscription_status == "pending":
-            co.subscription_status = "active"
-        co.enabled_modules_json = dump_modules(
-            {**parse_modules(co.enabled_modules_json), "mobile_apps": True}
-        )
-        login_id = ensure_company_login_id(db, co)
-        staff_role = db.query(Role).filter(Role.slug == "staff").first()
-        email = "company.login.id.staff@example.com"
-        password = "StaffTest1!"
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            user = User(
-                email=email,
-                full_name="Company Login Staff",
-                password_hash=get_password_hash(password),
-                role="staff",
-                role_id=staff_role.id if staff_role else None,
-                company_id=co.id,
-                is_active=True,
-                email_verified=True,
-            )
-            db.add(user)
-        else:
-            user.password_hash = get_password_hash(password)
-            user.is_active = True
-            user.email_verified = True
-            user.company_id = co.id
-        db.commit()
-        return email, password, login_id, co.id
-    finally:
-        db.close()
+    from tests.helpers_company import ensure_staff_user
+
+    return ensure_staff_user(
+        email="company.login.id.staff@example.com",
+        full_name="Company Login Staff",
+    )
 
 
 def test_company_login_id_is_not_the_database_id():
@@ -110,6 +81,9 @@ def test_welcome_template_includes_company_id():
 
 
 def test_existing_numeric_ids_are_internal_and_not_used_at_login():
+    from tests.helpers_company import ensure_test_company
+
+    ensure_test_company(name="ControlOps Test Co")
     db = SessionLocal()
     try:
         from sqlalchemy.exc import IntegrityError
@@ -127,26 +101,24 @@ def test_existing_numeric_ids_are_internal_and_not_used_at_login():
         if all(code for _, code in before):
             assert assigned == 0
             assert after == before
-        ids = [c.id for c in rows]
         codes = [c.login_id for c in rows]
-        assert 1 in ids
         assert all(code and not str(code).isdigit() for code in codes)
         assert all(str(c.id) != (c.login_id or "") for c in rows)
         assert len(codes) == len(set(codes))
-        first = db.get(Company, 1)
-        assert first is not None
+        first = rows[0]
         kept = first.login_id
         pk = first.id
         assert ensure_company_login_id(db, first) == kept
         assert first.id == pk
         admin = company_admin_out(db, first)
-        assert admin["id"] == 1
+        assert admin["id"] == pk
         assert admin["login_id"] == kept
-        assert admin["login_id"] != "1"
+        assert admin["login_id"] != str(pk)
 
-        second = db.get(Company, 2)
+        second = rows[1] if len(rows) > 1 else None
         if second is not None and first.login_id:
             original = second.login_id
+            second_id = second.id
             second.login_id = first.login_id
             try:
                 db.flush()
@@ -154,10 +126,10 @@ def test_existing_numeric_ids_are_internal_and_not_used_at_login():
             except IntegrityError:
                 db.rollback()
             db.expire_all()
-            second = db.get(Company, 2)
+            second = db.get(Company, second_id)
             assert second is not None
             assert second.login_id == original
-            assert second.id == 2
+            assert second.id == second_id
     finally:
         db.close()
 

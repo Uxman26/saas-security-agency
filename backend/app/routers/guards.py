@@ -19,6 +19,7 @@ from app.schemas import (
 from app.rbac import require_internal_module, user_has_permission_db
 from app.services import emergency_contact_service, employee_hub_service, guard_service, team_service
 from app.services.portal_login_view import portal_login_out
+from app.services.required_fields import require_on_create, require_on_update
 from app.storage_paths import GUARD_PHOTOS_DIR, ensure_upload_dirs, resolve_storage_path
 from app.services.image_avif_service import AVIF_EXT, is_image_filename, save_upload_as_avif
 
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/guards", tags=["guards"])
 
 @router.post("", response_model=GuardResponse, status_code=status.HTTP_201_CREATED)
 def create_guard(guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "create"))):
+    require_on_create(guard.phone, "Mobile number")
     return guard_service.create_guard(db, guard, current_user.id)
 
 @router.get("", response_model=List[GuardResponse])
@@ -173,6 +175,8 @@ def update_guard(guard_id: int, guard: GuardCreate, db: Session = Depends(get_db
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A portal login cannot be created from an edit. Use Roles & Permissions → Users.",
         )
+    existing = guard_service.get_guard_by_id(db, guard_id, current_user.id)
+    require_on_update(guard.phone, existing.phone, "Mobile number")
     return guard_service.update_guard(db, guard_id, guard, current_user.id)
 
 

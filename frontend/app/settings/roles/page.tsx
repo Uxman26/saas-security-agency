@@ -57,7 +57,6 @@ import {
   Shield,
   Trash2,
   UserPlus,
-  Eye,
   Pencil,
   KeyRound,
   ChevronDown,
@@ -1153,7 +1152,7 @@ export default function RolesSettingsPage() {
                     </TableHeader>
                     <TableBody>
                       {userList.pageRows.map((u) => (
-                        <TableRow key={u.id}>
+                        <TableRow key={u.id} onRowClick={() => setViewUser(u)}>
                           <TableCell className="text-sm">{u.email}</TableCell>
                           <TableCell>{u.full_name}</TableCell>
                           <TableCell>
@@ -1184,10 +1183,6 @@ export default function RolesSettingsPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1 flex-wrap">
-                              <Button variant="ghost" size="sm" onClick={() => setViewUser(u)}>
-                                <Eye className="size-3.5 mr-1" />
-                                View
-                              </Button>
                               {canEditUsers && (
                                 <Button variant="ghost" size="sm" onClick={() => openEditUser(u)}>
                                   <Pencil className="size-3.5 mr-1" />

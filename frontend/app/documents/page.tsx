@@ -461,7 +461,7 @@ export default function DocumentsPage() {
                         const isStored = doc.file_path && !doc.file_path.startsWith('http');
                         const isBundle = (doc.file_name || '').endsWith('.zip');
                         return (
-                          <TableRow key={doc.id}>
+                          <TableRow key={doc.id} href={`/documents/${doc.id}`}>
                             <TableCell className="font-medium whitespace-nowrap">
                               <div>{guardMap.get(doc.guard_id) ?? `Guard #${doc.guard_id}`}</div>
                               {(guardDocCounts.get(doc.guard_id) ?? 0) > 1 && (

@@ -241,12 +241,20 @@ export default function IncidentsPage() {
                     <TableHead>Notes</TableHead>
                     <TableHead>Called</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {items.map((inc) => (
-                    <TableRow key={inc.id}>
+                    <TableRow
+                      key={inc.id}
+                      onRowClick={async () => {
+                        try {
+                          setDetail(await api.incidents.get(inc.id));
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : 'Load failed');
+                        }
+                      }}
+                    >
                       <TableCell className="text-xs tabular-nums whitespace-nowrap">
                         {new Date(inc.occurred_at).toLocaleString()}
                       </TableCell>
@@ -263,26 +271,11 @@ export default function IncidentsPage() {
                           {statusLabel(inc.status)}
                         </Pill>
                       </TableCell>
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            try {
-                              setDetail(await api.incidents.get(inc.id));
-                            } catch (e) {
-                              toast.error(e instanceof Error ? e.message : 'Load failed');
-                            }
-                          }}
-                        >
-                          View
-                        </Button>
-                      </TableCell>
                     </TableRow>
                   ))}
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                         No incidents found.
                       </TableCell>
                     </TableRow>

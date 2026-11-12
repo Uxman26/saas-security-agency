@@ -322,7 +322,7 @@ export default function AdminTrialsPage() {
                   </TableHeader>
                   <TableBody>
                     {trials.map((t) => (
-                      <TableRow key={t.id}>
+                      <TableRow key={t.id} href={`/admin/companies/${t.company_id}`}>
                         <TableCell>{t.id}</TableCell>
                         <TableCell>
                           <Link

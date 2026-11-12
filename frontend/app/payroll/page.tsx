@@ -1301,7 +1301,7 @@ export default function PayrollPage() {
                         const name = g?.full_name ?? guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`;
                         const st = recStatus(p);
                         return (
-                        <TableRow key={p.id} data-state={selectedRecIds.has(p.id) ? 'selected' : undefined}>
+                        <TableRow key={p.id} onRowClick={() => setViewRec(p)} data-state={selectedRecIds.has(p.id) ? 'selected' : undefined}>
                           <TableCell>
                             <input
                               type="checkbox"
@@ -1358,9 +1358,6 @@ export default function PayrollPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
-                              <Button variant="outline" size="sm" onClick={() => setViewRec(p)}>
-                                View
-                              </Button>
                               <RowActionsMenu
                                 actions={[
                                   { label: 'View record', icon: Eye, onSelect: () => setViewRec(p) },

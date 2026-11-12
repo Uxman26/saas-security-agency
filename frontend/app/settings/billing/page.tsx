@@ -15,7 +15,7 @@ import { Pill } from '@/components/module-dashboard';
 import { api } from '@/lib/api';
 import type { BillingReceipt, PackageFeature, PlanTier, SubscriptionInvoice, TrialStatus } from '@/lib/types';
 import { DEFAULT_PLAN_TIERS } from '@/lib/plan-tiers';
-import { CreditCard, Download, Eye, FileText, Loader2, Package, Receipt } from 'lucide-react';
+import { CreditCard, Download, FileText, Loader2, Package, Receipt } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
@@ -393,7 +393,7 @@ export default function BillingSettingsPage() {
                       </TableHeader>
                       <TableBody>
                         {invoices.map((inv) => (
-                          <TableRow key={inv.id}>
+                          <TableRow key={inv.id} onRowClick={() => setSelectedInvoice(inv)}>
                             <TableCell className="font-medium font-mono text-xs">{inv.invoice_number}</TableCell>
                             <TableCell className="capitalize hidden sm:table-cell">
                               {(inv.subscription_tier || '').replace(/_/g, ' ')} · {inv.billing_cycle}
@@ -409,14 +409,6 @@ export default function BillingSettingsPage() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSelectedInvoice(inv)}
-                                  title={tb('viewDetails')}
-                                >
-                                  <Eye className="size-4" />
-                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -468,7 +460,7 @@ export default function BillingSettingsPage() {
                       </TableHeader>
                       <TableBody>
                         {receipts.map((r) => (
-                          <TableRow key={r.id}>
+                          <TableRow key={r.id} onRowClick={() => setSelectedReceipt(r)}>
                             <TableCell className="font-medium font-mono text-xs">{r.receipt_number}</TableCell>
                             <TableCell className="hidden sm:table-cell">
                               {r.plan_name || 'Subscription'}
@@ -484,14 +476,6 @@ export default function BillingSettingsPage() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setSelectedReceipt(r)}
-                                  title={tb('viewDetails')}
-                                >
-                                  <Eye className="size-4" />
-                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"

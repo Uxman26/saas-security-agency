@@ -18,11 +18,13 @@ from app.rbac import require_internal_module, user_has_permission_db
 from app.services import client_service
 from app.services import client_bank_service
 from app.services.portal_login_view import portal_login_out
+from app.services.required_fields import require_on_create, require_on_update
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
 @router.post("", response_model=ClientResponse, status_code=status.HTTP_201_CREATED)
 def create_client(client: ClientCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("clients", "create"))):
+    require_on_create(client.email, "Email")
     return client_service.create_client(db, client, current_user.id)
 
 @router.get("", response_model=list[ClientResponse])
@@ -49,6 +51,8 @@ def update_client(client_id: int, client: ClientCreate, db: Session = Depends(ge
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A portal login cannot be created from an edit. Use Roles & Permissions → Users.",
         )
+    existing = client_service.get_client_by_id(db, client_id, current_user.id)
+    require_on_update(client.email, existing.email, "Email")
     return client_service.update_client(db, client_id, client, current_user.id)
 
 @router.get("/{client_id}/portal-logins", response_model=list[PortalLoginOut])

@@ -209,12 +209,14 @@ export default function AdminAuditPage() {
                           <SortableHead label="Target" colKey="target" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Company" colKey="company" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <TableHead>IP</TableHead>
-                          <TableHead className="text-right">Detail</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {list.pageRows.map((r) => (
-                          <TableRow key={r.id}>
+                          <TableRow
+                            key={r.id}
+                            onRowClick={r.before_json || r.after_json || r.note ? () => setSelected(r) : undefined}
+                          >
                             <TableCell className="text-sm tabular-nums whitespace-nowrap">
                               {new Date(r.created_at).toLocaleString()}
                             </TableCell>
@@ -231,13 +233,6 @@ export default function AdminAuditPage() {
                             <TableCell className="text-sm">{r.company_name || '—'}</TableCell>
                             <TableCell className="text-xs font-mono text-muted-foreground">
                               {r.ip_address || '—'}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {r.before_json || r.after_json || r.note ? (
-                                <Button variant="ghost" size="sm" onClick={() => setSelected(r)}>
-                                  View
-                                </Button>
-                              ) : null}
                             </TableCell>
                           </TableRow>
                         ))}

@@ -1,6 +1,7 @@
 import type { User, Guard, JobTitle, Site, Assignment, Rota, RotaDetail, RotaSummary, RotaPlanListItem, RotaPlanDetail, RotaPlanPublishResult, LoginResponse, Client, MainContractor, SubContractor, DashboardOverview, ComplianceAlert, ContractExpiryAlert, ClientContractRenewal, PortalLogin, Payroll, PayrollPreview, Invoice, Allowance, GuardDocument, Attendance, Payment, GuardRate, SiteRate, Role, CompanyUser, PermissionMatrix, SpecialDay, DirectoryContractor, DirectoryContractorList, DirectoryContractorAssignment, SignupResponse, VerifyEmailResult, SubscriptionReceipt, ReceiptPublic, AdminUserDetail, AdminUserListItem, AdminPayment, PlanTier, Expense, ExpenseMeta, ExpenseDashboard, ExpenseReport, VatReport, WorkFilterParams, MfaStatus, MfaSetupResponse, MfaConfirmResponse, ApiUsageSummary, PaymentRefund, RefundPolicy, RefundPreview, NotificationTemplate, NotificationLogItem, RetentionPolicy, PasswordPolicy, MaintenanceConfig, SuspiciousEvent, PlatformRoleAssignment, AdminReportsTimeseries, AbsenceKind, AbsenceRecord, AbsenceSummary, DeleteImpact, DocumentDetail, DocumentReceipt, EmergencyContact, EmployeeHub, RecordView, Team, SubscriptionInvoice, BillingReceipt } from './types';
 import { storageGet, storageRemove } from '@/lib/safe-storage';
 import { loginPathForSession } from '@/lib/auth-routes';
+import { consumeTurnstileHeader } from '@/lib/turnstile';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -219,7 +220,11 @@ export const api = {
         ...(data.start_trial !== undefined && { start_trial: data.start_trial }),
         ...(data.billing_cycle && { billing_cycle: data.billing_cycle }),
       };
-      return request<SignupResponse>('/auth/signup', { method: 'POST', body: JSON.stringify(sanitized) });
+      return request<SignupResponse>('/auth/signup', {
+        method: 'POST',
+        headers: consumeTurnstileHeader(),
+        body: JSON.stringify(sanitized),
+      });
     },
     login: (data: {
       company_id?: string;
@@ -236,7 +241,11 @@ export const api = {
         remember_me: data.remember_me ?? true,
       };
       if (company) sanitized.company_id = company;
-      return request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(sanitized) });
+      return request<LoginResponse>('/auth/login', {
+        method: 'POST',
+        headers: consumeTurnstileHeader(),
+        body: JSON.stringify(sanitized),
+      });
     },
     completeOAuthSignup: (data: {
       signup_token: string;
@@ -312,6 +321,7 @@ export const api = {
     forgotPassword: (email: string): Promise<{ message: string }> =>
       request<{ message: string }>('/auth/forgot-password', {
         method: 'POST',
+        headers: consumeTurnstileHeader(),
         body: JSON.stringify({ email: sanitizeInput(email) }),
       }),
     resetPassword: (token: string, new_password: string): Promise<{ message: string }> =>

@@ -204,23 +204,17 @@ export default function FeedbackPage() {
                         <TableHead>Subject</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Submitted</TableHead>
-                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {rows.map((r) => (
-                        <TableRow key={r.id}>
+                        <TableRow key={r.id} onRowClick={() => openDetail(r.id)}>
                           <TableCell className="font-mono text-xs">{r.reference}</TableCell>
                           <TableCell className="capitalize">{r.category.replace(/_/g, ' ')}</TableCell>
                           <TableCell>{r.subject}</TableCell>
                           <TableCell>{statusLabel(r.status)}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {r.created_at ? new Date(r.created_at).toLocaleString() : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <Button size="sm" variant="outline" onClick={() => openDetail(r.id)}>
-                              View
-                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}

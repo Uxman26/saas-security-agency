@@ -1,12 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { InlineTableSkeleton } from '@/components/skeletons';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -156,12 +154,11 @@ export default function AdminFeedbackPage() {
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Submitted" colKey="created" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Updated" colKey="updated" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((r) => (
-                        <TableRow key={r.id}>
+                        <TableRow key={r.id} href={`/admin/feedback/${r.id}`}>
                           <TableCell className="font-mono text-xs">{r.reference}</TableCell>
                           <TableCell>{r.company_name || '—'}</TableCell>
                           <TableCell>{r.company_id}</TableCell>
@@ -174,11 +171,6 @@ export default function AdminFeedbackPage() {
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {r.updated_at ? new Date(r.updated_at).toLocaleString() : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <Button asChild size="sm" variant="outline">
-                              <Link href={`/admin/feedback/${r.id}`}>Open</Link>
-                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}

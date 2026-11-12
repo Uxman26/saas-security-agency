@@ -1,7 +1,7 @@
 'use client';
 import { InlineTableSkeleton } from '@/components/skeletons';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -25,7 +25,7 @@ import { PortalLoginPanel } from '@/components/portal-login-panel';
 import { ClientBankAccountsPanel } from '@/components/client-bank-accounts-panel';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { clientSchema, clientRenewSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
+import { clientCreateSchema, clientSchema, clientRenewSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
 import type { Client, RecordView } from '@/lib/types';
 import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
 import type { z } from 'zod';
@@ -106,7 +106,7 @@ function ClientForm({
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
         <div className="space-y-1">
-          <Label>Email</Label>
+          <Label>Email <span className="text-destructive">*</span></Label>
           <Input type="email" {...register('email')} placeholder="contact@client.com" />
           {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
         </div>
@@ -296,11 +296,19 @@ export default function ClientsPage() {
     login_password: '',
   };
   const addForm = useForm<ClientFormData>({
-    resolver: zodResolver(clientSchema) as Resolver<ClientFormData>,
+    resolver: zodResolver(clientCreateSchema) as Resolver<ClientFormData>,
     defaultValues: clientDefaults,
   });
+  // Email is mandatory, but legacy clients saved without one can still be edited;
+  // once an email is on file it cannot be cleared (mirrors the API rule).
+  const editHadEmail = useRef(false);
   const editForm = useForm<ClientFormData>({
-    resolver: zodResolver(clientSchema) as Resolver<ClientFormData>,
+    resolver: ((values, ctx, opts) =>
+      (zodResolver(editHadEmail.current ? clientCreateSchema : clientSchema) as Resolver<ClientFormData>)(
+        values,
+        ctx,
+        opts
+      )) as Resolver<ClientFormData>,
     defaultValues: clientDefaults,
   });
   const renewForm = useForm<RenewFormData>({
@@ -328,6 +336,7 @@ export default function ClientsPage() {
 
   const openEdit = (client: Client) => {
     setEditingClient(client);
+    editHadEmail.current = Boolean(client.email?.trim());
     editForm.reset({
       name: client.name,
       email: client.email ?? '',
@@ -689,6 +698,7 @@ export default function ClientsPage() {
                         return (
                           <TableRow
                             key={client.id}
+                            onRowClick={canViewMod ? () => setViewClient(client) : undefined}
                             className={expiredRow ? 'bg-red-500/10 dark:bg-red-950/25 border-red-500/20' : undefined}
                           >
                             <TableCell className="font-medium whitespace-nowrap">{client.name}</TableCell>
@@ -702,27 +712,6 @@ export default function ClientsPage() {
                             <TableCell className="max-w-[160px] truncate">{client.address || '-'}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5 flex-wrap">
-                                {canViewMod ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setViewClient(client)}
-                                    title="View client"
-                                  >
-                                    <Eye className="size-4" />
-                                  </Button>
-                                ) : null}
-                                {canViewMod ? (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8"
-                                    onClick={() => setViewClient(client)}
-                                    title="View details"
-                                  >
-                                    <Eye className="size-4" />
-                                  </Button>
-                                ) : null}
                                 {client.email ? (
                                   <EmailDialog defaultEmail={client.email} defaultName={client.name} />
                                 ) : null}

@@ -395,7 +395,7 @@ export default function ContractorsDirectoryPage() {
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((r) => (
-                        <TableRow key={r.id}>
+                        <TableRow key={r.id} href={canViewRow(r) ? `/contractors/${r.id}` : undefined}>
                           <TableCell className="max-w-[240px] font-medium">
                             <div className="flex items-center gap-2">
                               <RecordAvatar name={r.name} className="size-8" />
@@ -425,13 +425,6 @@ export default function ContractorsDirectoryPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
-                              {canViewRow(r) ? (
-                                <Button variant="ghost" size="icon" className="size-8" asChild title="View contractor">
-                                  <Link href={`/contractors/${r.id}`}>
-                                    <Eye className="size-4" />
-                                  </Link>
-                                </Button>
-                              ) : null}
                               <RowActionsMenu actions={contractorActions(r)} label={`${r.name} actions`} />
                             </div>
                           </TableCell>

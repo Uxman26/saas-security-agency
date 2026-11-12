@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { can } from '@/lib/permissions';
@@ -8,7 +7,7 @@ import { designationLabel, leadLabel, priorityClass, priorityLabel, statusClass 
 import type { Lead } from '@/lib/types';
 import type { User } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { Eye, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 
 type Props = {
   leads: Lead[];
@@ -51,7 +50,7 @@ export function LeadsTable({ leads, isLoading, user, onEdit, onDelete, showDates
           </TableRow>
         ) : (
           leads.map((l) => (
-            <TableRow key={l.id} className="hover:bg-muted/50">
+            <TableRow key={l.id} href={`/leads/${l.id}`}>
               <TableCell>
                 <div className="font-medium">{l.organization || l.title}</div>
                 <div className="text-xs text-muted-foreground">{[l.city, l.postcode].filter(Boolean).join(', ') || '—'}</div>
@@ -78,12 +77,6 @@ export function LeadsTable({ leads, isLoading, user, onEdit, onDelete, showDates
               <TableCell className="tabular-nums">£{(l.estimated_value || 0).toLocaleString()}</TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href={`/leads/${l.id}`}>
-                      <Eye className="size-4 mr-1" />
-                      View
-                    </Link>
-                  </Button>
                   {can(user, 'leads.write') ? (
                     <Button variant="ghost" size="sm" onClick={() => onEdit(l)}>
                       <Pencil className="size-4 mr-1" />

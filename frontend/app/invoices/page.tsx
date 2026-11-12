@@ -703,14 +703,6 @@ export default function InvoicesPage() {
   /** Moves an invoice on from where it is now, without leaving the list. */
   const nextActionButtons = (inv: Invoice) => {
     const button = 'whitespace-nowrap';
-    const view = (
-      <Button variant="ghost" size="sm" className={button} asChild>
-        <Link href={`/invoices/${inv.id}/view`}>
-          <Eye className="size-3.5" />
-          View
-        </Link>
-      </Button>
-    );
     const next = nextInvoiceAction(inv);
     if (next === 'send' && canSendInvoice) {
       return (
@@ -739,23 +731,20 @@ export default function InvoicesPage() {
     if (next === 'paid' && canSendReminder) {
       const hasPayment = (inv.amount_paid ?? 0) > 0;
       return (
-        <>
-          {view}
-          <Button
-            variant="outline"
-            size="sm"
-            className={button}
-            disabled={!hasPayment}
-            title={hasPayment ? undefined : 'Record the payment on this invoice to issue a receipt'}
-            onClick={() => openSendReceipt(inv)}
-          >
-            <Send className="size-3.5" />
-            Send receipt
-          </Button>
-        </>
+        <Button
+          variant="outline"
+          size="sm"
+          className={button}
+          disabled={!hasPayment}
+          title={hasPayment ? undefined : 'Record the payment on this invoice to issue a receipt'}
+          onClick={() => openSendReceipt(inv)}
+        >
+          <Send className="size-3.5" />
+          Send receipt
+        </Button>
       );
     }
-    return view;
+    return null;
   };
 
   /**
@@ -1532,6 +1521,7 @@ export default function InvoicesPage() {
                         return (
                         <TableRow
                           key={inv.id}
+                          href={`/invoices/${inv.id}/view`}
                           className={cn(overdue && 'bg-red-50/60 dark:bg-red-950/20')}
                         >
                           <TableCell>

@@ -376,7 +376,7 @@ export function GuardFormWizard({
                 {errors.last_name && <p className="text-xs text-destructive">{errors.last_name.message}</p>}
               </div>
               <div className="space-y-1 min-w-0">
-                <Label>Mobile number</Label>
+                <Label>Mobile number <span className="text-destructive">*</span></Label>
                 <PhoneInput
                   value={watch('phone') || ''}
                   onChange={(v) => setValue('phone', v, { shouldValidate: true })}

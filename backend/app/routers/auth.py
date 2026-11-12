@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.services.turnstile_service import require_turnstile
 from app.models import User, Company
 from app.schemas import (
     EmailAvailabilityRequest,
@@ -84,7 +85,7 @@ def _signup_response(db: Session, user: User, receipt, needs_verify: bool, trial
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
-def signup(user_data: UserCreate, db: Session = Depends(get_db)):
+def signup(user_data: UserCreate, db: Session = Depends(get_db), _ts: None = Depends(require_turnstile)):
     user, receipt, needs_verify, trial = auth_service.signup_with_receipt(db, user_data)
     return _signup_response(db, user, receipt, needs_verify, trial)
 
@@ -114,7 +115,7 @@ def check_email(
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
+def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db), _ts: None = Depends(require_turnstile)):
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
     from app.middleware.client_source import get_client_source
@@ -375,7 +376,7 @@ def logout_all(db: Session = Depends(get_db), current_user: User = Depends(get_c
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
-def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db), _ts: None = Depends(require_turnstile)):
     auth_service.request_password_reset(db, body.email)
     return {"message": "If an account exists for that email, a reset link has been sent."}
 

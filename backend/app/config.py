@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     login_max_attempts_per_ip: int = 20
     login_attempt_window_minutes: int = 15
     login_lockout_minutes: int = 15
+    # Cloudflare Turnstile on browser login / signup / forgot-password. Blank = disabled.
+    # The mobile app (non-browser User-Agent) is not challenged.
+    turnstile_secret_key: str = ""
     mail_username: str = ""
     mail_password: str = ""
     mail_from: str = "noreply@securityagency.com"

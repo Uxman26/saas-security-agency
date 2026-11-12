@@ -804,7 +804,7 @@ function RotaHubPage() {
                               `/rota/calendar?id=${s.rota_plan_id ?? ''}` +
                               `&emp=${s.guard_id}&date=${s.date}&start=${encodeURIComponent(start)}&fix=attendance`;
                             return (
-                              <TableRow key={`${s.id}-${s.date}-${start}`}>
+                              <TableRow key={`${s.id}-${s.date}-${start}`} href={href}>
                                 <TableCell className="font-medium">{s.guard_name || '—'}</TableCell>
                                 <TableCell>{s.site_name || '—'}</TableCell>
                                 <TableCell className="whitespace-nowrap">{formatDateUK(s.date)}</TableCell>
@@ -990,6 +990,7 @@ function RotaHubPage() {
                           return (
                             <TableRow
                               key={r.id}
+                              href={`/rota/calendar?id=${r.id}`}
                               // Unmarked attendance wins the tint: it is already costing money,
                               // where unpublished staff is work not yet sent.
                               className={
@@ -1000,7 +1001,7 @@ function RotaHubPage() {
                                     : undefined
                               }
                             >
-                              <TableCell className={cn(unmarked > 0 && 'shadow-[inset_4px_0_0_0_#e11d48]')}>
+                              <TableCell data-row-click-ignore className={cn(unmarked > 0 && 'shadow-[inset_4px_0_0_0_#e11d48]')}>
                                 <input
                                   type="checkbox"
                                   className="size-4 rounded border-input"
@@ -1070,11 +1071,7 @@ function RotaHubPage() {
                                       {busy ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : null}
                                       Publish
                                     </Button>
-                                  ) : (
-                                    <Button size="sm" variant="outline" asChild>
-                                      <Link href={`/rota/calendar?id=${r.id}`}>View</Link>
-                                    </Button>
-                                  )}
+                                  ) : null}
                                   {canCreateRota ? (
                                     <Button
                                       size="icon"

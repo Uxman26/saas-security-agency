@@ -2,7 +2,6 @@
 import { InlineTableSkeleton } from '@/components/skeletons';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/contexts/auth-context';
@@ -15,7 +14,7 @@ import { api } from '@/lib/api';
 import type { SubscriptionInvoice } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Eye, Mail, Zap } from 'lucide-react';
+import { Mail, Zap } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { formatDateUK } from '@/lib/date-format';
@@ -173,12 +172,11 @@ export default function AdminInvoicesPage() {
                         <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Email</TableHead>
-                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((inv) => (
-                        <TableRow key={inv.id}>
+                        <TableRow key={inv.id} href={`/admin/invoices/${inv.id}`}>
                           <TableCell className="font-mono text-xs">{inv.invoice_number}</TableCell>
                           <TableCell>{inv.company_name}</TableCell>
                           <TableCell className="capitalize">{inv.subscription_tier}</TableCell>
@@ -198,11 +196,6 @@ export default function AdminInvoicesPage() {
                             </Select>
                           </TableCell>
                           <TableCell>{inv.email_sent ? <Mail className="size-4 text-green-600" /> : '—'}</TableCell>
-                          <TableCell>
-                            <Link href={`/admin/invoices/${inv.id}`}>
-                              <Button size="sm" variant="outline"><Eye className="size-4" /></Button>
-                            </Link>
-                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

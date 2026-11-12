@@ -22,6 +22,7 @@ import {
 } from '@/lib/auth-styles';
 import { ArrowLeft, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth');
@@ -75,6 +76,7 @@ export default function ForgotPasswordPage() {
             </div>
             {errors.email && <p className={authDarkErrorClass}>{errors.email.message as string}</p>}
           </div>
+          <TurnstileWidget action="forgot_password" />
           <Button type="submit" className={authDarkBtnClass} disabled={loading}>
             {loading ? t('sending') : t('sendResetLink')}
           </Button>

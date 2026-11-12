@@ -164,7 +164,7 @@ export default function AdminTicketsPage() {
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((t) => (
-                        <TableRow key={t.id}>
+                        <TableRow key={t.id} href={`/admin/tickets/${t.id}`}>
                           <TableCell className="font-mono text-xs">{t.ticket_number}</TableCell>
                           <TableCell className="font-medium">
                             <Link href={`/admin/tickets/${t.id}`} className="hover:underline text-primary">

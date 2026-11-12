@@ -1,7 +1,7 @@
 'use client';
 import { InlineTableSkeleton } from '@/components/skeletons';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -17,7 +17,7 @@ import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
 import { TEXT_LIMITS } from '@/lib/text-limits';
-import { PASSWORD_REQUIREMENTS_MSG, siteSchema, type SiteFormData } from '@/lib/validation';
+import { PASSWORD_REQUIREMENTS_MSG, siteCreateSchema, siteSchema, type SiteFormData } from '@/lib/validation';
 import { PasswordInput } from '@/components/ui/password-input';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
 import type { Client, RecordView, Site } from '@/lib/types';
@@ -202,8 +202,9 @@ function SiteForm({
           {errors.address && <p className="text-xs text-destructive">{errors.address.message}</p>}
         </div>
         <div className="space-y-1 sm:col-span-2">
-          <Label>Postcode</Label>
+          <Label>Postcode <span className="text-destructive">*</span></Label>
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
+          {errors.postcode && <p className="text-xs text-destructive">{errors.postcode.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Latitude</Label>
@@ -378,7 +379,7 @@ export default function SitesPage() {
   }, [dirRows, legMains, legSubs]);
 
   const addForm = useForm<SiteFormData>({
-    resolver: zodResolver(siteSchema) as Resolver<SiteFormData>,
+    resolver: zodResolver(siteCreateSchema) as Resolver<SiteFormData>,
     defaultValues: {
       client_id: null,
       site_type: 1,
@@ -393,7 +394,17 @@ export default function SitesPage() {
     },
   });
 
-  const editForm = useForm<SiteFormData>({ resolver: zodResolver(siteSchema) as Resolver<SiteFormData> });
+  // Postcode is mandatory, but legacy sites saved without one can still be edited;
+  // once a postcode is on file it cannot be cleared (mirrors the API rule).
+  const editHadPostcode = useRef(false);
+  const editForm = useForm<SiteFormData>({
+    resolver: ((values, ctx, opts) =>
+      (zodResolver(editHadPostcode.current ? siteCreateSchema : siteSchema) as Resolver<SiteFormData>)(
+        values,
+        ctx,
+        opts
+      )) as Resolver<SiteFormData>,
+  });
 
   const sanitize = (data: SiteFormData): Omit<Site, 'id' | 'company_id' | 'created_at'> => {
     const o: Omit<Site, 'id' | 'company_id' | 'created_at'> = {
@@ -462,6 +473,7 @@ export default function SitesPage() {
 
   const openEdit = (site: Site) => {
     setEditingSite(site);
+    editHadPostcode.current = Boolean(site.postcode?.trim());
     editForm.reset({
       name: site.name,
       color: site.color || DEFAULT_SITE_COLOR,
@@ -783,7 +795,10 @@ export default function SitesPage() {
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((site) => (
-                        <TableRow key={site.id}>
+                        <TableRow
+                          key={site.id}
+                          onRowClick={canEditSites && site.deleted_at == null ? () => openEdit(site) : undefined}
+                        >
                           <TableCell className="font-medium whitespace-nowrap">{site.name}</TableCell>
                           <TableCell>
                             <span

@@ -205,7 +205,7 @@ export default function AdminCompaniesPage() {
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((c) => (
-                        <TableRow key={c.id}>
+                        <TableRow key={c.id} href={`/admin/companies/${c.id}`}>
                           <TableCell className="text-muted-foreground tabular-nums" title="Internal record number. Not used at login.">
                             {c.id}
                           </TableCell>

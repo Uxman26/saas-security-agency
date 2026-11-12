@@ -22,6 +22,7 @@ import { setLocale } from '@/actions/locale';
 import { Building2, ChevronRight, Eye, EyeOff, Globe, Lock, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LoginHeroPanel } from '@/components/auth/login-hero-panel';
+import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 
 const ORANGE = '#F45100';
 
@@ -423,6 +424,8 @@ function LoginForm() {
                       </p>
                     </div>
                   )}
+
+                  <TurnstileWidget action="login" />
 
                   <Button
                     type="submit"

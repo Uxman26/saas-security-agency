@@ -3,7 +3,7 @@ import { InlineTableSkeleton } from '@/components/skeletons';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -16,7 +16,7 @@ import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard, useRestoreGu
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
-import { guardSchema, guardSubmitSchema, type GuardFormData } from '@/lib/validation';
+import { guardCreateSchema, guardSchema, guardSubmitSchema, type GuardFormData } from '@/lib/validation';
 import { guardFormDefaults, guardToForm, formToGuardPayload } from '@/lib/guard-form-map';
 import type { EmployeeHub, EmployeeHubRow, Guard, RecordView, Team } from '@/lib/types';
 import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
@@ -173,11 +173,21 @@ export default function GuardsPage() {
   }, [guardsError]);
 
   const addForm = useForm<GuardFormData>({
-    resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData>,
+    resolver: zodResolver(guardCreateSchema) as Resolver<GuardFormData>,
     defaultValues: guardFormDefaults,
   });
 
-  const editForm = useForm<GuardFormData>({ resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData> });
+  // Mobile number is mandatory, but legacy staff saved without one can still be edited;
+  // once a number is on file it cannot be cleared (mirrors the API rule).
+  const editHadPhone = useRef(false);
+  const editForm = useForm<GuardFormData>({
+    resolver: ((values, ctx, opts) =>
+      (zodResolver(editHadPhone.current ? guardCreateSchema : guardSubmitSchema) as Resolver<GuardFormData>)(
+        values,
+        ctx,
+        opts
+      )) as Resolver<GuardFormData>,
+  });
 
   const handleCreate = async (data: GuardFormData) => {
     try {
@@ -206,6 +216,7 @@ export default function GuardsPage() {
 
   const openEdit = (guard: Guard) => {
     setEditingGuard(guard);
+    editHadPhone.current = Boolean(guard.phone?.trim());
     editForm.reset(guardToForm(guard));
     setEditOpen(true);
   };
@@ -396,6 +407,25 @@ export default function GuardsPage() {
   /** What one employee can have done to them, defined once for every view. */
   const guardActions = (guard: Guard) => [
     { label: 'View full profile', icon: UserRound, onSelect: () => router.push(`/guards/${guard.id}`) },
+    {
+      label: 'Quick view',
+      icon: Eye,
+      onSelect: () =>
+        setQuickView(
+          hub?.employees.find((e) => e.id === guard.id) ?? {
+            id: guard.id,
+            full_name: guard.full_name,
+            job_title: guard.job_title,
+            email: guard.email,
+            phone: guard.phone,
+            photo_url: guard.photo_url,
+            teams: [],
+            terminated: false,
+            registered: false,
+            archived: guard.deleted_at != null,
+          }
+        ),
+    },
     {
       label: 'Edit staff',
       icon: Pencil,
@@ -772,7 +802,7 @@ export default function GuardsPage() {
                         const siaStatus = getSiaStatus(guard.sia_expiry_date);
                         const visaStatus = getSiaStatus(guard.visa_expiry_date);
                         return (
-                          <TableRow key={guard.id}>
+                          <TableRow key={guard.id} href={`/guards/${guard.id}`}>
                             <TableCell className="font-medium whitespace-nowrap">
                               <Link href={`/guards/${guard.id}`} className="flex items-center gap-2 hover:underline">
                                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -839,35 +869,6 @@ export default function GuardsPage() {
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               <div className="flex items-center gap-0.5 flex-nowrap">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="size-8 p-0"
-                                  onClick={() =>
-                                    setQuickView(
-                                      hub?.employees.find((e) => e.id === guard.id) ?? {
-                                        id: guard.id,
-                                        full_name: guard.full_name,
-                                        job_title: guard.job_title,
-                                        email: guard.email,
-                                        phone: guard.phone,
-                                        photo_url: guard.photo_url,
-                                        teams: [],
-                                        terminated: false,
-                                        registered: false,
-                                        archived: guard.deleted_at != null,
-                                      }
-                                    )
-                                  }
-                                  title="Quick view"
-                                >
-                                  <Eye className="size-4" />
-                                </Button>
-                                <Button variant="ghost" size="sm" className="size-8 p-0" asChild title="View full profile">
-                                  <Link href={`/guards/${guard.id}`}>
-                                    <UserRound className="size-4" />
-                                  </Link>
-                                </Button>
                                 {guard.email ? (
                                   <EmailDialog defaultEmail={guard.email} defaultName={guard.full_name} compact />
                                 ) : null}

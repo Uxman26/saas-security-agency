@@ -30,6 +30,7 @@ import {
 import { INDUSTRY_VALUES, WORKFORCE_VALUES } from '@/lib/industry-options';
 import { cn } from '@/lib/utils';
 import { analytics } from '@/lib/analytics';
+import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 
 const INDUSTRIES = INDUSTRY_VALUES;
 const WORKFORCE = WORKFORCE_VALUES;
@@ -357,6 +358,7 @@ function SignupForm() {
           </Link>
           .
         </p>
+        <TurnstileWidget action="signup" />
         <Button type="submit" className={authDarkBtnClass} disabled={loading}>
           {loading ? t('creatingAccount') : t('createAccount')}
         </Button>

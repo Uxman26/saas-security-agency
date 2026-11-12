@@ -2,6 +2,8 @@
 
 import * as React from "react"
 
+import { useRouter } from "next/navigation"
+
 import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
@@ -23,7 +25,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      className={cn("[&_tr]:border-b [&_tr]:hover:bg-transparent", className)}
       {...props}
     />
   )
@@ -52,12 +54,62 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   )
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+/** Clicks on these inside a row keep their own behaviour instead of opening the row. */
+const ROW_CLICK_IGNORE =
+  'a, button, input, select, textarea, label, summary, [role="button"], [role="checkbox"], [role="menuitem"], [role="switch"], [role="combobox"], [role="option"], [data-row-click-ignore]'
+
+type TableRowProps = React.ComponentProps<"tr"> & {
+  /** Opens this page when the row is clicked (Ctrl/Cmd-click opens a new tab). */
+  href?: string
+  /** Runs when the row itself is clicked (not a button, link or menu inside it). */
+  onRowClick?: () => void
+}
+
+function TableRow({ className, href, onRowClick, onClick, onKeyDown, ...props }: TableRowProps) {
+  const router = useRouter()
+  const clickable = Boolean(href || onRowClick)
+
+  const open = (newTab: boolean) => {
+    if (href) {
+      if (newTab) window.open(href, "_blank", "noopener")
+      else router.push(href)
+    } else {
+      onRowClick?.()
+    }
+  }
+
+  const handleClick = (e: React.MouseEvent<HTMLTableRowElement>) => {
+    onClick?.(e)
+    if (!clickable || e.defaultPrevented) return
+    const target = e.target as Element
+    // React bubbles clicks out of portals (menus, dialogs); only react to clicks really in the row.
+    if (!e.currentTarget.contains(target)) return
+    if (target.closest(ROW_CLICK_IGNORE)) return
+    // Let people select text in a row without opening it.
+    if (window.getSelection()?.toString()) return
+    open(e.ctrlKey || e.metaKey)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+    onKeyDown?.(e)
+    if (!clickable || e.defaultPrevented || e.target !== e.currentTarget) return
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      open(false)
+    }
+  }
+
   return (
     <tr
       data-slot="table-row"
+      data-clickable={clickable || undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       className={cn(
-        "hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors",
+        "hover:bg-primary/10 data-[state=selected]:bg-muted border-b transition-colors",
+        clickable &&
+          "cursor-pointer focus-visible:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",
         className
       )}
       {...props}

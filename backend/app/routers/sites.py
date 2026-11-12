@@ -14,11 +14,13 @@ from app.rbac import require_internal_module, require_module, user_has_permissio
 from app.services import site_service
 from app.services.portal_access import redact_sites_for_portal
 from app.services.portal_login_view import portal_login_out
+from app.services.required_fields import require_on_create, require_on_update
 
 router = APIRouter(prefix="/sites", tags=["sites"])
 
 @router.post("", response_model=SiteResponse, status_code=status.HTTP_201_CREATED)
 def create_site(site: SiteCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "create"))):
+    require_on_create(site.postcode, "Postcode")
     return site_service.create_site(db, site, current_user.id)
 
 @router.get("", response_model=List[SiteResponse])
@@ -47,6 +49,8 @@ def update_site(site_id: int, site: SiteCreate, db: Session = Depends(get_db), c
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A portal login cannot be created from an edit. Use Roles & Permissions → Users.",
         )
+    existing = site_service.get_site_by_id(db, site_id, current_user.id)
+    require_on_update(site.postcode, existing.postcode, "Postcode")
     return site_service.update_site(db, site_id, site, current_user.id)
 
 @router.get("/{site_id}/portal-logins", response_model=List[PortalLoginOut])

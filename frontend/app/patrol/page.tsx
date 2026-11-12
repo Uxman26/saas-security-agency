@@ -258,7 +258,7 @@ export default function PatrolPage() {
                 </TableHeader>
                 <TableBody>
                   {routes.map((r) => (
-                    <TableRow key={r.id}>
+                    <TableRow key={r.id} href={`/patrol/routes/${r.id}`}>
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell>{r.site_name}</TableCell>
                       <TableCell className="tabular-nums">

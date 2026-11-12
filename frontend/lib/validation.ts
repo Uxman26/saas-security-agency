@@ -333,6 +333,15 @@ export const guardSubmitSchema = guardSchema
 
 export type GuardFormData = z.infer<typeof guardSchema>;
 
+const isBlank = (v: unknown) => v == null || String(v).trim() === '';
+
+/** New staff must have a mobile number. Edits use this only when one is already on file. */
+export const guardCreateSchema = guardSubmitSchema.superRefine((v, ctx) => {
+  if (isBlank(v.phone)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phone'], message: 'Mobile number is required' });
+  }
+});
+
 export const siteSchema = z
   .object({
     name: z
@@ -477,4 +486,18 @@ export const mainContractorSchema = z.object({
 
 export const subContractorSchema = mainContractorSchema.extend({
   main_contractor_id: z.number().int().positive('Select a main contractor'),
+});
+
+/** New sites must have a postcode. Edits use this only when one is already on file. */
+export const siteCreateSchema = siteSchema.superRefine((v, ctx) => {
+  if (v.postcode == null || String(v.postcode).trim() === '') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['postcode'], message: 'Postcode is required' });
+  }
+});
+
+/** New clients must have an email. Edits use this only when one is already on file. */
+export const clientCreateSchema = clientSchema.superRefine((v, ctx) => {
+  if (v.email == null || String(v.email).trim() === '') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['email'], message: 'Email is required' });
+  }
 });

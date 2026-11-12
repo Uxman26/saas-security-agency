@@ -364,7 +364,7 @@ export default function AbsencePage() {
                       </TableHeader>
                       <TableBody>
                         {pageRows.map((r) => (
-                          <TableRow key={r.id}>
+                          <TableRow key={r.id} href={`/guards/${r.guard_id}?tab=absence`}>
                             <TableCell className="font-medium">
                               <Link
                                 href={`/guards/${r.guard_id}?tab=absence`}

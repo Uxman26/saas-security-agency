@@ -158,7 +158,7 @@ function ActionCentreInner({ documents, contracts, sia, requests, invoices, part
       subtitle={critical ? t('subtitleCritical', { count: critical }) : t('subtitle')}
       bodyClassName="flex flex-col"
     >
-      <div className="dash-scroll-x -mx-1 mb-3 overflow-x-auto px-1">
+      <div className="dash-scroll-x -mx-1 -my-1 mb-2 overflow-x-auto px-1 py-1">
         <Segmented label={t('tabsLabel')} value={tab} onChange={setTab} options={tabs} />
       </div>
       {!list.length ? (

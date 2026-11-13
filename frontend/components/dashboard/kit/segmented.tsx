@@ -39,10 +39,10 @@ export function Segmented<T extends string>({ value, options, onChange, label, s
             onKeyDown={(e) => onKey(e, i)}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex items-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
               size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-8 px-3 text-[13px]',
               on
-                ? 'bg-surface-raised text-foreground shadow-sm ring-1 ring-hairline'
+                ? 'bg-surface-raised text-foreground shadow-sm ring-1 ring-hairline dark:bg-white/10'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >

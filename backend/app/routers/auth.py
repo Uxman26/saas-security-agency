@@ -160,6 +160,9 @@ def oauth_complete_signup(body: OAuthCompleteSignupRequest, db: Session = Depend
         subscription_tier=body.subscription_tier,
         billing_cycle=body.billing_cycle,
         start_trial=body.start_trial,
+        phone=body.phone,
+        workforce_size=body.workforce_size,
+        postcode=body.postcode,
     )
     return _signup_response(db, user, receipt, False, trial)
 

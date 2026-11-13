@@ -573,6 +573,9 @@ def complete_oauth_signup(
     subscription_tier: Optional[str],
     billing_cycle: Optional[str],
     start_trial: bool,
+    phone: str,
+    workforce_size: str,
+    postcode: str,
 ) -> tuple[User, Any, dict]:
     from app.services.auth_service import send_welcome_email, start_signup_trial
 
@@ -590,6 +593,14 @@ def complete_oauth_signup(
         subscription_tier=subscription_tier,
         billing_cycle=billing_cycle,
     )
+    company = db.query(Company).filter(Company.id == user.company_id).first()
+    if company is not None:
+        company.phone = phone
+        company.workforce_size = workforce_size
+        company.postcode = postcode
+        if not company.email:
+            company.email = email
+        db.commit()
     trial = start_signup_trial(db, user) if start_trial else {"started": False, "reason": "Trial not requested"}
     try:
         send_welcome_email(user, company_name)

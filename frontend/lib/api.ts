@@ -253,10 +253,18 @@ export const api = {
       subscription_tier?: string;
       start_trial: boolean;
       billing_cycle: 'monthly' | 'yearly';
+      phone: string;
+      workforce_size: string;
+      postcode: string;
     }): Promise<SignupResponse> =>
       request<SignupResponse>('/auth/oauth/complete-signup', {
         method: 'POST',
-        body: JSON.stringify({ ...data, company_name: sanitizeInput(data.company_name) }),
+        body: JSON.stringify({
+          ...data,
+          company_name: sanitizeInput(data.company_name),
+          phone: sanitizeInput(data.phone),
+          postcode: sanitizeInput(data.postcode),
+        }),
       }),
     oauthProviders: (): Promise<{ providers: { provider: string; enabled: boolean }[] }> =>
       request<{ providers: { provider: string; enabled: boolean }[] }>('/auth/oauth/providers'),

@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 from datetime import date, datetime
 from typing import Any, List, Literal, Optional
@@ -41,6 +42,28 @@ class OAuthCompleteSignupRequest(StrictModel):
     subscription_tier: Optional[ShortTextStr] = None
     start_trial: bool = False
     billing_cycle: Optional[Literal["monthly", "yearly"]] = None
+    # Google only gives us a name and an email, so these are asked for before the
+    # tenant is created. Stored on the company record.
+    phone: str = Field(min_length=7, max_length=20)
+    workforce_size: Literal["1–19", "20–49", "50–199", "200–999", "1000+"]
+    postcode: str = Field(min_length=3, max_length=10)
+
+    @field_validator("phone")
+    @classmethod
+    def check_phone(cls, v: str) -> str:
+        v = v.strip()
+        digits = re.sub(r"\D", "", v)
+        if not re.fullmatch(r"\+?[0-9 ()\-]+", v) or not 7 <= len(digits) <= 15:
+            raise ValueError("Enter a valid phone number")
+        return v
+
+    @field_validator("postcode")
+    @classmethod
+    def check_postcode(cls, v: str) -> str:
+        v = " ".join(v.strip().upper().split())
+        if not re.fullmatch(r"[A-Z0-9][A-Z0-9 \-]{1,8}[A-Z0-9]", v):
+            raise ValueError("Enter a valid postcode")
+        return v
 
 
 class UserCreate(StrictModel):

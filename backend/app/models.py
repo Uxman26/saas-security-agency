@@ -203,6 +203,8 @@ class Company(Base):
     phone = Column(String)
     address = Column(String)
     postcode = Column(String)
+    # Approximate headcount band picked at signup (e.g. "20–49").
+    workforce_size = Column(String, nullable=True)
     website = Column(String)
     registration_number = Column(String)
     vat_number = Column(String)

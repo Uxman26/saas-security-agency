@@ -493,6 +493,26 @@ def _backfill_assignment_shift_types():
         logging.getLogger(__name__).exception("assignment shift_type backfill failed")
 
 
+def _ensure_company_workforce_size():
+    """Headcount band collected on Google signup (works on SQLite and Postgres)."""
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        if not insp.has_table("companies"):
+            return
+        cols = {c["name"] for c in insp.get_columns("companies")}
+        if "workforce_size" not in cols:
+            str_type = "VARCHAR(40)" if engine.dialect.name == "postgresql" else "TEXT"
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE companies ADD COLUMN workforce_size {str_type}"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("companies.workforce_size migration failed")
+
+
 def _run_migrations():
     _ensure_user_theme_preference()
     _ensure_user_notification_sound_muted()
@@ -509,6 +529,7 @@ def _run_migrations():
     # SQLite-only alters below never run). A second pass runs after table creates.
     _ensure_invoice_currency_columns()
     _ensure_invoice_sent_at_column()
+    _ensure_company_workforce_size()
     path = get_db_path()
     if not path:
         # Non-SQLite: remaining migrations are SQLite-specific DDL. Currency ensure above
@@ -620,6 +641,7 @@ def _run_migrations():
         ("user_sessions", "impersonation_reason", "TEXT"),
         ("user_sessions", "company_id", "INTEGER REFERENCES companies(id)"),
         ("companies", "login_id", "TEXT"),
+        ("companies", "workforce_size", "TEXT"),
         # Audit rows record the real actor as well as the acting user, so an action taken
         # while impersonating is never attributed to the customer.
         ("audit_logs", "actor_user_id", "INTEGER"),

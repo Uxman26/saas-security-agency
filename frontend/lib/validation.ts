@@ -110,7 +110,6 @@ export const signupSchema = z.object({
   company_name: requiredText('Company name', { min: 2, max: TEXT_LIMITS.companyName }),
   industry: z.string().min(1, 'Select an industry'),
   workforce_size: z.string().min(1, 'Select workforce size'),
-  verification_code: z.string().max(50).optional().or(z.literal('')),
 });
 
 const optPosInt = z.preprocess(

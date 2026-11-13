@@ -14,7 +14,6 @@ export const WIDGETS = [
   { id: 'activity', span: 'lg:col-span-5' },
   { id: 'today', span: 'lg:col-span-8' },
   { id: 'partners', span: 'lg:col-span-4' },
-  { id: 'quick', span: 'lg:col-span-12' },
 ] as const;
 
 export type WidgetId = (typeof WIDGETS)[number]['id'];

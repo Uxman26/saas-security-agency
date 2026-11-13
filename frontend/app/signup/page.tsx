@@ -48,7 +48,6 @@ function SignupForm() {
   const wantsTrial = searchParams.get('trial') === '1';
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const completedRef = useRef(false);
 
@@ -105,7 +104,6 @@ function SignupForm() {
     company_name: string;
     industry: string;
     workforce_size: string;
-    verification_code?: string;
   }) => {
     setLoading(true);
     try {
@@ -123,8 +121,6 @@ function SignupForm() {
       const ref = encodeURIComponent(res.receipt.ref_id);
       const email = encodeURIComponent(data.email);
       const cycleQ = `&cycle=${billing_cycle}`;
-      const code = (data.verification_code || verificationCode).trim();
-      const couponQ = code ? `&coupon=${encodeURIComponent(code)}` : '';
       if (res.company_login_id) {
         toast.success(`Your Company ID is ${res.company_login_id}. Keep it for sign-in.`);
       }
@@ -132,15 +128,15 @@ function SignupForm() {
         toast.success(t('accountCreatedTrial', { days: trialDays }));
         router.push(
           res.email_verification_required
-            ? `/verify-email?email=${email}&ref=${ref}${cycleQ}${couponQ}&sent=1`
-            : `/payment-pending?ref=${ref}${cycleQ}${couponQ}&checkout=1`
+            ? `/verify-email?email=${email}&ref=${ref}${cycleQ}&sent=1`
+            : `/payment-pending?ref=${ref}${cycleQ}&checkout=1`
         );
       } else if (res.email_verification_required) {
         toast.success(t('accountCreatedVerify'));
-        router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}${couponQ}&sent=1`);
+        router.push(`/verify-email?email=${email}&ref=${ref}${cycleQ}&sent=1`);
       } else {
         toast.success(t('accountCreatedPayment'));
-        router.push(`/payment-pending?ref=${ref}&cycle=${billing_cycle}${couponQ}&checkout=1`);
+        router.push(`/payment-pending?ref=${ref}&cycle=${billing_cycle}&checkout=1`);
       }
     } catch (err: unknown) {
       const verify = parseEmailVerificationRequired(err);
@@ -148,8 +144,6 @@ function SignupForm() {
         const q = new URLSearchParams({ email: verify.email });
         if (verify.receipt_ref) q.set('ref', verify.receipt_ref);
         q.set('cycle', billing_cycle);
-        const code = verificationCode.trim();
-        if (code) q.set('coupon', code);
         q.set('sent', '1');
         toast.info(t('accountCreatedVerify'));
         router.push(`/verify-email?${q.toString()}`);
@@ -331,21 +325,6 @@ function SignupForm() {
           {errors.workforce_size && (
             <p className={authDarkErrorClass}>{errors.workforce_size.message as string}</p>
           )}
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="verification_code" className={authDarkLabelClass}>
-            Verification / promo code (optional)
-          </Label>
-          <Input
-            id="verification_code"
-            placeholder="Enter code if you have one"
-            className={cn(authDarkFieldClass, 'h-11')}
-            value={verificationCode}
-            onChange={(e) => {
-              setVerificationCode(e.target.value);
-              setValue('verification_code', e.target.value);
-            }}
-          />
         </div>
         <p className="text-xs leading-relaxed text-white/45">
           {t('signupPrivacyPrefix')}{' '}

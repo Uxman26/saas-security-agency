@@ -25,7 +25,6 @@ import { ActionCentre } from '@/components/dashboard/widgets/action-centre';
 import { ActivityFeed } from '@/components/dashboard/widgets/activity-feed';
 import { TodayShifts } from '@/components/dashboard/widgets/today-shifts';
 import { Partners } from '@/components/dashboard/widgets/partners';
-import { QuickAccess } from '@/components/dashboard/widgets/quick-access';
 
 const chartSkeleton = () => <SkeletonCard className="h-full min-h-[26rem]" rows={6} />;
 const ShiftsChart = dynamic(() => import('@/components/dashboard/widgets/shifts-chart'), { ssr: false, loading: chartSkeleton });
@@ -128,8 +127,6 @@ export default function DashboardPage() {
         return needInsights(title, <SkeletonCard className="h-full" rows={4} />, () => (
           <Partners stats={stats} clients={d!.finance?.top_clients ?? null} showContractors={showContractors} />
         ));
-      case 'quick':
-        return <QuickAccess />;
     }
   };
 

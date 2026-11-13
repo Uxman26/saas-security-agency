@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { homePathForRole } from '@/lib/nav-modules';
 import { useAuth } from '@/contexts/auth-context';
@@ -11,8 +11,14 @@ function OAuthCallbackInner() {
   const searchParams = useSearchParams();
   const { loginWithToken } = useAuth();
   const [message, setMessage] = useState('Completing sign-in…');
+  // loginWithToken is a fresh function on every AuthProvider render, and logging in
+  // re-renders the provider. Without this guard the effect re-ran after every setUser,
+  // cancelled the in-flight attempt and started another, so the redirect never fired.
+  const started = useRef(false);
 
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
     const token = searchParams.get('token');
     const ref = searchParams.get('ref');
     const err = searchParams.get('oauth_error') || searchParams.get('error');
@@ -26,26 +32,22 @@ function OAuthCallbackInner() {
       router.replace('/login');
       return;
     }
-    let cancelled = false;
+    // Drop the token from the address bar so it is not kept in history or sent as a Referer.
+    window.history.replaceState(null, '', '/auth/callback');
     void (async () => {
       try {
         const user = await loginWithToken(token);
-        if (cancelled) return;
         if (ref) {
           router.replace(`/payment-pending?ref=${encodeURIComponent(ref)}`);
           return;
         }
         router.replace(homePathForRole(user.role));
       } catch (e) {
-        if (cancelled) return;
         setMessage('Sign-in failed');
         toast.error(e instanceof Error ? e.message : 'Sign-in failed');
         router.replace('/login');
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [searchParams, loginWithToken, router]);
 
   return (

@@ -51,7 +51,6 @@ function CompleteOAuthSignup() {
   const [companyName, setCompanyName] = useState('');
   const [tier, setTier] = useState(tierParam);
   const [tiers, setTiers] = useState<PlanTier[]>([]);
-  const [promoCode, setPromoCode] = useState('');
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -94,10 +93,8 @@ function CompleteOAuthSignup() {
         toast.success(t('oauthCompanyIdNotice', { id: res.company_login_id }));
       }
       toast.success(trialDays ? t('accountCreatedTrial', { days: trialDays }) : t('accountCreatedPayment'));
-      const code = promoCode.trim();
-      const couponQ = code ? `&coupon=${encodeURIComponent(code)}` : '';
       router.push(
-        `/payment-pending?ref=${encodeURIComponent(res.receipt.ref_id)}&cycle=${billing_cycle}${couponQ}&checkout=1`
+        `/payment-pending?ref=${encodeURIComponent(res.receipt.ref_id)}&cycle=${billing_cycle}&checkout=1`
       );
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : t('signupFailed'));
@@ -149,19 +146,6 @@ function CompleteOAuthSignup() {
             </Select>
           </div>
         )}
-        <div className="space-y-1.5">
-          <Label htmlFor="promo_code" className={authDarkLabelClass}>
-            {t('oauthCompletePromo')}
-          </Label>
-          <Input
-            id="promo_code"
-            placeholder={t('oauthCompletePromoPlaceholder')}
-            maxLength={50}
-            className={cn(authDarkFieldClass, 'h-11')}
-            value={promoCode}
-            onChange={(e) => setPromoCode(e.target.value)}
-          />
-        </div>
         {formError && <p className={authDarkErrorClass}>{formError}</p>}
         <Button type="submit" className={authDarkBtnClass} disabled={loading}>
           {loading ? t('creatingAccount') : t('createAccount')}

@@ -57,6 +57,7 @@ import {
   Undo2,
   UserPlus,
   Sparkles,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
@@ -645,6 +646,8 @@ export function RotaCalendarClient() {
   const [empMenuAnchor, setEmpMenuAnchor] = useState<{ x: number; y: number; w: number; maxH: number } | null>(null);
   const [selectedEmpIds, setSelectedEmpIds] = useState<Set<string>>(() => new Set());
   const [employeeSelectMode, setEmployeeSelectMode] = useState(false);
+  /** Phones only: the filter dropdowns fold away behind a toggle so the grid gets the screen. */
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const shiftMenuPortalRef = useRef<HTMLDivElement>(null);
   const empMenuPortalRef = useRef<HTMLDivElement>(null);
@@ -2417,8 +2420,8 @@ export function RotaCalendarClient() {
   }
 
   return (
-    <div className="rota-density flex min-h-0 w-full max-w-none flex-1 flex-col gap-3 overflow-hidden px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 lg:px-5 lg:py-5 xl:px-6">
-      <div className="flex shrink-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="rota-density flex min-h-0 w-full min-w-0 max-w-none flex-1 flex-col gap-3 overflow-x-hidden overflow-y-auto sm:overflow-hidden px-3 py-3 sm:gap-4 sm:px-4 sm:py-4 lg:px-5 lg:py-5 xl:px-6">
+      <div className="flex shrink-0 flex-col gap-2 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-1">
           <Button variant="ghost" size="sm" className="-ml-2 h-8" type="button" onClick={() => router.push('/rota')}>
             <ArrowLeft className="size-4 mr-1" />
@@ -2483,7 +2486,7 @@ export function RotaCalendarClient() {
               Press Enter to save the new name, or Esc to cancel.
             </p>
           ) : null}
-          <p className="text-sm text-muted-foreground">{meta}</p>
+          <p className="text-xs text-muted-foreground sm:text-sm">{meta}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <Button variant="outline" size="sm" type="button" onClick={() => setShowAi((v) => !v)}>
@@ -2531,13 +2534,13 @@ export function RotaCalendarClient() {
           </div>
           {canEditRota && (
             <>
-              <Button variant="outline" size="sm" type="button" onClick={openReorder}>
-                <ArrowUpDown className="size-3.5 mr-1" />
-                Reorder employees
+              <Button variant="outline" size="sm" type="button" onClick={openReorder} title="Reorder employees">
+                <ArrowUpDown className="size-3.5 sm:mr-1" />
+                <span className="max-sm:sr-only">Reorder employees</span>
               </Button>
-              <Button variant="outline" size="sm" type="button" onClick={openDaysEditor}>
-                <CalendarPlus className="size-3.5 mr-1" />
-                Add days
+              <Button variant="outline" size="sm" type="button" onClick={openDaysEditor} title="Add days">
+                <CalendarPlus className="size-3.5 sm:mr-1" />
+                <span className="max-sm:sr-only">Add days</span>
               </Button>
               <Button
                 variant="outline"
@@ -2551,8 +2554,8 @@ export function RotaCalendarClient() {
                   });
                 }}
               >
-                <Undo2 className="size-3.5 mr-1" />
-                Undo
+                <Undo2 className="size-3.5 sm:mr-1" />
+                <span className="max-sm:sr-only">Undo</span>
               </Button>
             </>
           )}
@@ -2563,9 +2566,10 @@ export function RotaCalendarClient() {
               type="button"
               onClick={() => setExportMenuOpen((open) => !open)}
               disabled={!state.days.length || exporting}
+              title="Export rota"
             >
-              <Download className="size-3.5 mr-1" />
-              Export rota
+              <Download className="size-3.5 sm:mr-1" />
+              <span className="max-sm:sr-only">Export rota</span>
               <ChevronDown className="size-3.5 ml-1 opacity-70" />
             </Button>
             {exportMenuOpen ? (
@@ -2601,9 +2605,9 @@ export function RotaCalendarClient() {
             {switchingPlan === 'prev' ? (
               <Loader2 className="size-3.5 mr-1 animate-spin" />
             ) : (
-              <ChevronLeft className="size-3.5 mr-1" />
+              <ChevronLeft className="size-3.5 sm:mr-1" />
             )}
-            View Previous Rota
+            <span className="max-sm:sr-only">View Previous Rota</span>
           </Button>
           <Button
             variant="outline"
@@ -2613,11 +2617,11 @@ export function RotaCalendarClient() {
             disabled={!nextPlan || !!switchingPlan}
             title={nextPlan ? `Open ${planRangeLabel(nextPlan)}` : 'No later rota'}
           >
-            View Next Rota
+            <span className="max-sm:sr-only">View Next Rota</span>
             {switchingPlan === 'next' ? (
-              <Loader2 className="size-3.5 ml-1 animate-spin" />
+              <Loader2 className="size-3.5 sm:ml-1 animate-spin" />
             ) : (
-              <ChevronRight className="size-3.5 ml-1" />
+              <ChevronRight className="size-3.5 sm:ml-1" />
             )}
           </Button>
           {!canEditRota ? null : employeeSelectMode ? (
@@ -2646,13 +2650,31 @@ export function RotaCalendarClient() {
               onClick={() => setEmployeeSelectMode(true)}
               disabled={rows.length === 0}
             >
-              Select employees
+              <span className="sm:hidden">Select</span>
+              <span className="max-sm:hidden">Select employees</span>
             </Button>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <Button
+            size="sm"
+            variant={mobileFiltersOpen || activeFilterCount > 0 ? 'secondary' : 'outline'}
+            type="button"
+            className="sm:hidden"
+            aria-expanded={mobileFiltersOpen}
+            onClick={() => setMobileFiltersOpen((v) => !v)}
+          >
+            <SlidersHorizontal className="size-3.5 mr-1" />
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+          </Button>
+          <div
+            className={cn(
+              'max-sm:order-last max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:gap-2 sm:contents',
+              !mobileFiltersOpen && 'max-sm:hidden'
+            )}
+          >
           <select
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs max-sm:h-9 max-sm:w-full max-sm:min-w-0"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as 'all' | AttStatus)}
             aria-label="Status"
@@ -2666,7 +2688,7 @@ export function RotaCalendarClient() {
           </select>
           {jobTitleOptions.length > 0 ? (
             <select
-              className="h-8 max-w-[150px] rounded-md border border-input bg-background px-2 text-xs"
+              className="h-8 max-w-[150px] rounded-md border border-input bg-background px-2 text-xs max-sm:h-9 max-sm:w-full max-sm:min-w-0 max-sm:max-w-none"
               value={jobTitleFilter}
               onChange={(e) => setJobTitleFilter(e.target.value)}
               aria-label="Job title"
@@ -2681,7 +2703,7 @@ export function RotaCalendarClient() {
           ) : null}
           {siteOptions.length > 0 ? (
             <select
-              className="h-8 max-w-[150px] rounded-md border border-input bg-background px-2 text-xs"
+              className="h-8 max-w-[150px] rounded-md border border-input bg-background px-2 text-xs max-sm:h-9 max-sm:w-full max-sm:min-w-0 max-sm:max-w-none"
               value={siteFilter}
               onChange={(e) => setSiteFilter(e.target.value)}
               aria-label="Site"
@@ -2696,7 +2718,7 @@ export function RotaCalendarClient() {
           ) : null}
           {contractorOptions.length > 0 ? (
             <select
-              className="h-8 max-w-[170px] rounded-md border border-input bg-background px-2 text-xs"
+              className="h-8 max-w-[170px] rounded-md border border-input bg-background px-2 text-xs max-sm:h-9 max-sm:w-full max-sm:min-w-0 max-sm:max-w-none"
               value={contractorFilter}
               onChange={(e) => setContractorFilter(e.target.value)}
               aria-label="Contractor"
@@ -2711,7 +2733,7 @@ export function RotaCalendarClient() {
           ) : null}
           {subContractorOptions.length > 0 ? (
             <select
-              className="h-8 max-w-[170px] rounded-md border border-input bg-background px-2 text-xs"
+              className="h-8 max-w-[170px] rounded-md border border-input bg-background px-2 text-xs max-sm:h-9 max-sm:w-full max-sm:min-w-0 max-sm:max-w-none"
               value={subContractorFilter}
               onChange={(e) => setSubContractorFilter(e.target.value)}
               aria-label="Sub-contractor"
@@ -2726,7 +2748,7 @@ export function RotaCalendarClient() {
           ) : null}
           {typeOptions.length > 0 ? (
             <select
-              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs max-sm:h-9 max-sm:w-full max-sm:min-w-0"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as 'all' | ShiftType)}
               aria-label="Shift period"
@@ -2743,14 +2765,15 @@ export function RotaCalendarClient() {
             <>
               {/* Totals are a property of the rota, not of the filter, so they keep
                   counting every shift — say so rather than let the numbers look wrong. */}
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground max-sm:col-span-2">
                 {rows.length} of {state.employees.length} staff · totals cover the whole rota
               </span>
-              <Button size="sm" variant="ghost" type="button" onClick={clearFilters} className="h-8 text-xs">
+              <Button size="sm" variant="ghost" type="button" onClick={clearFilters} className="h-8 text-xs max-sm:col-span-2">
                 Clear filters ({activeFilterCount})
               </Button>
             </>
           ) : null}
+          </div>
           {canPublishRota ? (
             <Button
               size="sm"
@@ -2792,7 +2815,7 @@ export function RotaCalendarClient() {
       </div>
 
       {state.rotaView === 'table' && (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card max-sm:h-[78svh] max-sm:flex-none">
           {daysOpen ? (
             <div className="flex shrink-0 flex-wrap items-center gap-3 border-b bg-muted/40 px-3 py-2 text-xs">
               <span className="font-medium">Day length preview</span>
@@ -3345,7 +3368,7 @@ export function RotaCalendarClient() {
       )}
 
       {state.rotaView === 'timeline' && (
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card max-sm:h-[78svh] max-sm:flex-none">
           <div className="rota-grid-scroll min-h-[min(50vh,420px)] flex-1 space-y-3 p-3 sm:min-h-[min(60vh,520px)] lg:min-h-0">
             <p className="text-xs text-muted-foreground shrink-0">
               Scroll each day left/right along the 24-hour axis. Today auto-scrolls to the current time.

@@ -446,14 +446,17 @@ export default function GuardsPage() {
       label: 'Restore staff member',
       icon: ArchiveRestore,
       onSelect: () => void restoreGuard.mutateAsync(guard.id),
-      disabled: !can(user, 'guards.delete') || guard.deleted_at == null,
+      disabled: !canModule(user, 'guards', 'restore') || guard.deleted_at == null,
     },
     {
       label: guard.deleted_at != null ? 'Delete permanently' : 'Archive or delete',
       icon: Trash2,
       onSelect: () => handleDelete(guard),
       destructive: true,
-      disabled: !can(user, 'guards.delete'),
+      disabled:
+        guard.deleted_at != null
+          ? !canModule(user, 'guards', 'delete_permanent')
+          : !canModule(user, 'guards', 'archive') && !canModule(user, 'guards', 'delete_permanent'),
     },
   ];
 
@@ -982,8 +985,8 @@ export default function GuardsPage() {
           loadImpact={api.guards.deleteImpact}
           onArchive={(id) => deleteGuard.mutateAsync({ id })}
           onDeletePermanently={(id) => deleteGuard.mutateAsync({ id, permanent: true })}
-          canArchive={can(user, 'guards.delete')}
-          canDeletePermanently={can(user, 'guards.delete')}
+          canArchive={canModule(user, 'guards', 'archive')}
+          canDeletePermanently={canModule(user, 'guards', 'delete_permanent')}
         />
       </div>
     </AppShell>

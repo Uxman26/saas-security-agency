@@ -255,7 +255,10 @@ export default function ClientsPage() {
   const { user: permUser } = useAuth();
   const canCreateMod = canModule(permUser, 'clients', 'create');
   const canEditMod = canModule(permUser, 'clients', 'edit');
-  const canDeleteMod = canModule(permUser, 'clients', 'delete');
+  // Each mirrors the exact right the API checks, so nobody is offered an action it will refuse.
+  const canArchiveMod = canModule(permUser, 'clients', 'archive');
+  const canRestoreMod = canModule(permUser, 'clients', 'restore');
+  const canPurgeMod = canModule(permUser, 'clients', 'delete_permanent');
   const canViewMod = canModule(permUser, 'clients', 'view');
   const [viewClient, setViewClient] = useState<Client | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -465,14 +468,14 @@ export default function ClientsPage() {
       label: 'Restore client',
       icon: ArchiveRestore,
       onSelect: () => void restoreClient.mutateAsync(client.id),
-      disabled: !canDeleteMod || client.deleted_at == null,
+      disabled: !canRestoreMod || client.deleted_at == null,
     },
     {
       label: client.deleted_at != null ? 'Delete permanently' : 'Archive or delete',
       icon: Trash2,
       onSelect: () => handleDelete(client),
       destructive: true,
-      disabled: !canDeleteMod,
+      disabled: client.deleted_at != null ? !canPurgeMod : !canArchiveMod && !canPurgeMod,
     },
   ];
 
@@ -853,8 +856,8 @@ export default function ClientsPage() {
           loadImpact={api.clients.deleteImpact}
           onArchive={(id) => deleteClient.mutateAsync({ id })}
           onDeletePermanently={(id) => deleteClient.mutateAsync({ id, permanent: true })}
-          canArchive={canDeleteMod}
-          canDeletePermanently={canDeleteMod}
+          canArchive={canArchiveMod}
+          canDeletePermanently={canPurgeMod}
         />
       </div>
     </AppShell>

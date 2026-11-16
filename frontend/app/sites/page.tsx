@@ -357,7 +357,10 @@ export default function SitesPage() {
   const { user } = useAuth();
   const canCreateSites = canModule(user, 'sites', 'create');
   const canEditSites = canModule(user, 'sites', 'edit');
-  const canDeleteSites = canModule(user, 'sites', 'delete');
+  // Each mirrors the exact right the API checks, so nobody is offered an action it will refuse.
+  const canArchiveSites = canModule(user, 'sites', 'archive');
+  const canRestoreSites = canModule(user, 'sites', 'restore');
+  const canPurgeSites = canModule(user, 'sites', 'delete_permanent');
   // Staff pay rate is the company's own cost base and is redacted for portal logins,
   // so the column would only ever render "-" for them.
   const showStaffRate = !isPortalRole(user);
@@ -587,14 +590,14 @@ export default function SitesPage() {
       label: 'Restore site',
       icon: ArchiveRestore,
       onSelect: () => void restoreSite.mutateAsync(site.id),
-      disabled: !canDeleteSites || site.deleted_at == null,
+      disabled: !canRestoreSites || site.deleted_at == null,
     },
     {
       label: site.deleted_at != null ? 'Delete permanently' : 'Archive or delete',
       icon: Trash2,
       onSelect: () => handleDelete(site),
       destructive: true,
-      disabled: !canDeleteSites,
+      disabled: site.deleted_at != null ? !canPurgeSites : !canArchiveSites && !canPurgeSites,
     },
   ];
 
@@ -927,8 +930,8 @@ export default function SitesPage() {
           loadImpact={api.sites.deleteImpact}
           onArchive={(id) => deleteSite.mutateAsync({ id })}
           onDeletePermanently={(id) => deleteSite.mutateAsync({ id, permanent: true })}
-          canArchive={canDeleteSites}
-          canDeletePermanently={canDeleteSites}
+          canArchive={canArchiveSites}
+          canDeletePermanently={canPurgeSites}
         />
       </div>
     </AppShell>

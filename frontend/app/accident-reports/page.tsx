@@ -367,7 +367,7 @@ export default function AccidentReportsPage() {
                           r.ambulance_informed ? 'Ambulance' : null,
                         ].filter(Boolean);
                         return (
-                          <TableRow key={r.id} className="align-middle">
+                          <TableRow key={r.id} className="align-middle" onRowClick={canEdit ? () => openEdit(r) : undefined}>
                             <TableCell className="font-mono text-xs font-medium">{r.reference ?? '—'}</TableCell>
                             <TableCell className="whitespace-nowrap tabular-nums text-sm">{r.report_date}</TableCell>
                             <TableCell className="max-w-[10rem] truncate">{r.site_name ?? '—'}</TableCell>

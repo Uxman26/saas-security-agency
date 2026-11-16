@@ -326,7 +326,7 @@ export default function AllowancesPage() {
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((a) => (
-                        <TableRow key={a.id}>
+                        <TableRow key={a.id} onRowClick={canEditMod ? () => openEdit(a) : undefined}>
                           <TableCell className="font-medium">{a.name}</TableCell>
                           <TableCell>
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${

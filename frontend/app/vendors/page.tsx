@@ -30,6 +30,19 @@ export default function VendorsPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState(empty());
 
+  const openEditVendor = (v: Vendor) => {
+    setEditId(v.id);
+    setForm({
+      name: v.name,
+      email: v.email || '',
+      phone: v.phone || '',
+      address: v.address || '',
+      notes: v.notes || '',
+      status: v.status,
+    });
+    setOpen(true);
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -143,7 +156,7 @@ export default function VendorsPage() {
                   </TableRow>
                 ) : (
                   rows.map((v) => (
-                    <TableRow key={v.id}>
+                    <TableRow key={v.id} onRowClick={canEdit ? () => openEditVendor(v) : undefined}>
                       <TableCell className="font-medium">{v.name}</TableCell>
                       <TableCell>{v.email || '—'}</TableCell>
                       <TableCell>{v.phone || '—'}</TableCell>
@@ -158,18 +171,7 @@ export default function VendorsPage() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => {
-                              setEditId(v.id);
-                              setForm({
-                                name: v.name,
-                                email: v.email || '',
-                                phone: v.phone || '',
-                                address: v.address || '',
-                                notes: v.notes || '',
-                                status: v.status,
-                              });
-                              setOpen(true);
-                            }}
+                            onClick={() => openEditVendor(v)}
                           >
                             <Pencil className="size-4" />
                           </Button>

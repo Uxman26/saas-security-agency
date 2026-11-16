@@ -107,9 +107,11 @@ function TableRow({ className, href, onRowClick, onClick, onKeyDown, ...props }:
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={cn(
-        "hover:bg-primary/10 data-[state=selected]:bg-muted border-b transition-colors",
-        clickable &&
-          "cursor-pointer focus-visible:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",
+        "data-[state=selected]:bg-muted border-b transition-colors",
+        // Rows that open something turn orange (like the active sidebar item); others only grey.
+        clickable
+          ? "cursor-pointer hover:bg-primary/15 hover:text-foreground dark:hover:bg-primary/20 hover:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-primary)] focus-visible:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
+          : "hover:bg-muted/50",
         className
       )}
       {...props}

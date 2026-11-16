@@ -325,7 +325,7 @@ export default function OccurrenceSheetsPage() {
                       {rows.map((s) => {
                         const status = s.status === 'submitted' ? 'reported' : s.status;
                         return (
-                          <TableRow key={s.id}>
+                          <TableRow key={s.id} onRowClick={canEdit ? () => void openEdit(s) : undefined}>
                             <TableCell className="font-mono text-xs">{s.reference ?? '—'}</TableCell>
                             <TableCell className="whitespace-nowrap">{s.sheet_date}</TableCell>
                             <TableCell>{s.site_name ?? '—'}</TableCell>

@@ -462,7 +462,7 @@ export default function AssignmentsPage() {
                     </TableHeader>
                     <TableBody>
                       {pageRows.map((a) => (
-                        <TableRow key={a.id}>
+                        <TableRow key={a.id} onRowClick={canEditMod ? () => openEdit(a) : undefined}>
                           <TableCell className="font-medium whitespace-nowrap">{guardMap.get(a.guard_id) || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap">{siteMap.get(a.site_id) || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap">{a.date}</TableCell>

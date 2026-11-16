@@ -276,7 +276,7 @@ export default function TasksPage() {
                         </TableRow>
                       ) : null}
                       {rows.map((t) => (
-                        <TableRow key={t.id} className={cn(t.status === 'done' && 'opacity-60')}>
+                        <TableRow key={t.id} className={cn(t.status === 'done' && 'opacity-60')} onRowClick={canEdit ? () => openEdit(t) : undefined}>
                           <TableCell>
                             <input
                               type="checkbox"

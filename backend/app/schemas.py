@@ -1641,6 +1641,8 @@ class InvoiceLineBase(BaseModel):
     allowance_amount: float = 0
 
 class InvoiceLineResponse(InvoiceLineBase):
+    # None once the line's site has been permanently deleted.
+    site_id: Optional[int] = None
     id: int
     invoice_id: int
     created_at: datetime

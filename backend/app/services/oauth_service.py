@@ -31,6 +31,9 @@ from app.services.role_service import ensure_roles_for_company, get_role_by_slug
 
 OAUTH_SIGNUP_TOKEN_MINUTES = 30
 OAUTH_SIGNUP_EXPIRED_DETAIL = "Your sign-up link has expired. Please start again."
+COMPANY_ID_REQUIRED_DETAIL = (
+    "An account already exists for this email. Enter your Company ID, then sign in again."
+)
 
 PROVIDERS = {
     AUTH_PROVIDER_GOOGLE: {
@@ -458,6 +461,13 @@ def complete_oauth_login(
             "cycle": st.get("cycle") or "",
             "trial": bool(st.get("trial")),
         }
+    if not company_login_id:
+        # An account already exists for this identity, so this is a sign-in, not a
+        # sign-up — and signing in always needs the Company ID, exactly as the
+        # email/password form does. Only a brand-new identity (handled above) may
+        # come through without one. The frontend reads ``company_required`` to put
+        # the cursor in the Company ID field.
+        raise HTTPException(status_code=400, detail=COMPANY_ID_REQUIRED_DETAIL)
     try:
         return _issue_session(
             db,
@@ -490,7 +500,10 @@ def frontend_callback_url(
 ) -> str:
     base = settings.frontend_url.rstrip("/")
     if error:
-        return f"{base}/login?{urlencode({'oauth_error': error})}"
+        params = {"oauth_error": error}
+        if error == COMPANY_ID_REQUIRED_DETAIL:
+            params["company_required"] = "1"
+        return f"{base}/login?{urlencode(params)}"
     if payment_pending and receipt_ref:
         return f"{base}/payment-pending?{urlencode({'ref': receipt_ref})}"
     if not token:

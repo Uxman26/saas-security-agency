@@ -513,8 +513,29 @@ def _ensure_company_workforce_size():
         logging.getLogger(__name__).exception("companies.workforce_size migration failed")
 
 
+def _ensure_invoice_line_site_nullable():
+    """Let an invoice line outlive its site (permanent site delete detaches the line)."""
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        if engine.dialect.name != "postgresql":
+            return
+        insp = inspect(engine)
+        if not insp.has_table("invoice_lines"):
+            return
+        col = next((c for c in insp.get_columns("invoice_lines") if c["name"] == "site_id"), None)
+        if col is None or col.get("nullable"):
+            return
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE invoice_lines ALTER COLUMN site_id DROP NOT NULL"))
+    except Exception:
+        pass
+
+
 def _run_migrations():
     _ensure_user_theme_preference()
+    _ensure_invoice_line_site_nullable()
     _ensure_user_notification_sound_muted()
     _ensure_notification_cleared_at()
     _ensure_user_company_memberships()

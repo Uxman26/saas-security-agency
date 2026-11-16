@@ -3,6 +3,13 @@ import { api } from '@/lib/api';
 import { toast, toastMutationError } from '@/lib/toast';
 import type { RecordView, Site } from '@/lib/types';
 
+/** Rotas, shifts and payroll show site names, so a rename or delete must refresh them. */
+function invalidateSiteDependents(qc: ReturnType<typeof useQueryClient>) {
+  for (const key of ['assignments', 'rota', 'rotaDetail', 'rotaSummary', 'rota-plans', 'rotaPlans']) {
+    qc.invalidateQueries({ queryKey: [key] });
+  }
+}
+
 /** Live sites by default; pass 'archived' or 'all' for the Archived tab. */
 export function useSites(view: RecordView = 'active') {
   return useQuery({
@@ -42,6 +49,7 @@ export function useUpdateSite() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.invalidateQueries({ queryKey: ['sites', variables.id] });
+      invalidateSiteDependents(queryClient);
       toast.success('Site updated');
     },
     onError: (err) => toastMutationError(err),
@@ -57,6 +65,7 @@ export function useDeleteSite() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sites'] });
       queryClient.refetchQueries({ queryKey: ['sites'] });
+      if (variables.permanent) invalidateSiteDependents(queryClient);
       toast.success(variables.permanent ? 'Site permanently deleted' : 'Site archived');
     },
     onError: (err) => toastMutationError(err),

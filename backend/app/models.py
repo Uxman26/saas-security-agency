@@ -1291,7 +1291,8 @@ class InvoiceLine(Base):
     __tablename__ = "invoice_lines"
     id = Column(Integer, primary_key=True, index=True)
     invoice_id = Column(Integer, ForeignKey("invoices.id"), nullable=False)
-    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False)
+    # Nullable so an issued invoice survives its site being permanently deleted.
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=True)
     guard_id = Column(Integer, ForeignKey("guards.id"))
     shift_date = Column(Date)
     shift_start = Column(String, nullable=True)

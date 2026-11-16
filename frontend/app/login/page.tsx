@@ -99,6 +99,9 @@ function LoginForm() {
     if (err) toast.error(err);
   }, [searchParams]);
 
+  // The account already exists, so social sign-in sent the user back for their Company ID.
+  const companyRequired = searchParams.get('company_required') === '1';
+
   useEffect(() => {
     if (lockoutSeconds <= 0) return;
     const id = window.setInterval(() => {
@@ -122,6 +125,8 @@ function LoginForm() {
     register,
     handleSubmit,
     watch,
+    setError,
+    setFocus,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginSchema),
@@ -129,6 +134,12 @@ function LoginForm() {
   });
   const rememberMe = watch('remember_me');
   const companyId = watch('company_id');
+
+  useEffect(() => {
+    if (!companyRequired) return;
+    setError('company_id', { type: 'manual', message: 'Enter your Company ID to sign in' });
+    setFocus('company_id');
+  }, [companyRequired, setError, setFocus]);
 
   const goAfterLogin = (role?: string | null) => {
     router.push(homePathForRole(role));
@@ -225,7 +236,16 @@ function LoginForm() {
       toast.error(`${provider[0].toUpperCase()}${provider.slice(1)} Sign In is not configured yet.`);
       return;
     }
-    window.location.href = api.auth.oauthStartUrl(provider, !!rememberMe, (companyId || '').trim());
+    // Signing in always needs the Company ID — the same as the email/password form.
+    // Brand-new users sign up from the Sign up page, which does not ask for one.
+    const cid = (companyId || '').trim();
+    if (cid.length < 3) {
+      setError('company_id', { type: 'manual', message: 'Enter your Company ID to sign in' });
+      setFocus('company_id');
+      toast.error('Enter your Company ID first, then sign in.');
+      return;
+    }
+    window.location.href = api.auth.oauthStartUrl(provider, !!rememberMe, cid);
   };
 
   const fieldClass =

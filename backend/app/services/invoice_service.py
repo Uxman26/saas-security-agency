@@ -170,11 +170,24 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     from app.services import client_bank_service
 
     company = get_company_by_user_id(db, user_id)
-    client = db.query(Client).filter(Client.id == data.client_id, Client.company_id == company.id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client not found")
     payload = data.model_dump() if hasattr(data, "model_dump") else data.dict()
     lines_data = payload.pop("lines", None) or []
+    invoice_site_id = payload.pop("site_id", None)
+    # Billing a site: the invoice belongs to that site's client when it has one, and
+    # otherwise carries no client (the site name stands in, as for rota invoices).
+    invoice_site = None
+    if invoice_site_id:
+        invoice_site = db.query(Site).filter(Site.id == invoice_site_id, Site.company_id == company.id).first()
+        if not invoice_site:
+            raise HTTPException(status_code=404, detail="Site not found")
+        payload["client_id"] = invoice_site.client_id
+    elif not payload.get("client_id"):
+        raise HTTPException(status_code=400, detail="client_id or site_id required")
+    client = None
+    if payload.get("client_id"):
+        client = db.query(Client).filter(Client.id == payload["client_id"], Client.company_id == company.id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
     bank_account_id = payload.pop("client_bank_account_id", None)
     payload["currency"] = normalize_invoice_currency(payload.get("currency"))
     inv = Invoice(company_id=company.id, **payload)
@@ -183,7 +196,7 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     if not inv.subtotal and inv.total:
         inv.subtotal = inv.total
     account = None
-    if bank_account_id:
+    if bank_account_id and client:
         account = (
             db.query(ClientBankAccount)
             .filter(
@@ -195,17 +208,22 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
         )
         if not account:
             raise HTTPException(status_code=404, detail="Bank account not found")
-    else:
+    elif client:
         account = client_bank_service.get_default_account(db, client.id, company.id)
     client_bank_service.apply_account_to_invoice(db, inv, account=account, company=company if not account else None)
     db.add(inv)
     db.flush()
     for ld in lines_data:
         site_id = ld.get("site_id") if isinstance(ld, dict) else ld.site_id
-        site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
-        if not site:
-            raise HTTPException(status_code=404, detail=f"Site not found: {site_id}")
-        _assert_site_matches_client(site, client.id)
+        if invoice_site is not None:
+            site_id = invoice_site.id
+        elif site_id:
+            site = db.query(Site).filter(Site.id == site_id, Site.company_id == company.id).first()
+            if not site:
+                raise HTTPException(status_code=404, detail=f"Site not found: {site_id}")
+            _assert_site_matches_client(site, client.id if client else None)
+        else:
+            site_id = None
         hours = float(ld.get("hours") if isinstance(ld, dict) else ld.hours or 0)
         rate = float(ld.get("rate") if isinstance(ld, dict) else ld.rate or 0)
         allowance = float(ld.get("allowance_amount") if isinstance(ld, dict) else getattr(ld, "allowance_amount", 0) or 0)
@@ -437,10 +455,11 @@ def add_invoice_line(db: Session, invoice_id: int, data: InvoiceLineBase, user_i
     inv = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.company_id == company.id).first()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    site = db.query(Site).filter(Site.id == data.site_id, Site.company_id == company.id).first()
-    if not site:
-        raise HTTPException(status_code=404, detail="Site not found")
-    _assert_site_matches_client(site, inv.client_id)
+    if data.site_id:
+        site = db.query(Site).filter(Site.id == data.site_id, Site.company_id == company.id).first()
+        if not site:
+            raise HTTPException(status_code=404, detail="Site not found")
+        _assert_site_matches_client(site, inv.client_id)
     assert_owned_by_company(db, Guard, data.guard_id, company.id, field_name="guard_id")
     hours = float(data.hours or 0)
     rate = float(data.rate or 0)

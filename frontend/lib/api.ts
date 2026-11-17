@@ -1402,7 +1402,7 @@ export const api = {
       invoiceId: number,
       lineId: number,
       data: {
-        site_id?: number;
+        site_id?: number | null;
         guard_id?: number | null;
         shift_date?: string | null;
         shift_start?: string | null;
@@ -1454,7 +1454,7 @@ export const api = {
     addLine: (
       invoiceId: number,
       data: {
-        site_id: number;
+        site_id?: number;
         guard_id?: number;
         shift_date?: string | null;
         shift_start?: string | null;

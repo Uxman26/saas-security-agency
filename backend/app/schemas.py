@@ -1627,7 +1627,8 @@ class PayrollResponse(PayrollBase):
         from_attributes = True
 
 class InvoiceLineBase(BaseModel):
-    site_id: int
+    # Optional: a manual line on a client invoice need not name a site.
+    site_id: Optional[int] = None
     guard_id: Optional[int] = None
     shift_date: Optional[date] = None
     shift_start: Optional[str] = None
@@ -1685,6 +1686,10 @@ class InvoiceBase(BaseModel):
     currency: str = "GBP"
 
 class InvoiceCreate(InvoiceBase):
+    # Bill a client, or a single site (client_id then follows the site's own client,
+    # if it has one, and every line is put on that site). One of the two is required.
+    client_id: Optional[int] = None
+    site_id: Optional[int] = None
     lines: Optional[list[InvoiceLineBase]] = None
 
 class InvoiceUpdate(BaseModel):

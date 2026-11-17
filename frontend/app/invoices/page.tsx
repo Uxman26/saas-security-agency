@@ -9,15 +9,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import type { Invoice, Client, Site } from '@/lib/types';
+import type { Invoice, Client, Site, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, FileMinus2, Send, Undo2 } from 'lucide-react';
+import { Building2, CalendarDays, Clock, Coffee, Filter, PoundSterling, Users, FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, FileMinus2, Send, Undo2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
@@ -26,7 +26,7 @@ import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
-import { INVOICE_CURRENCIES, formatInvoiceMoney, invoiceCurrencyCode } from '@/lib/invoice-currency';
+import { formatInvoiceMoney, invoiceCurrencyCode } from '@/lib/invoice-currency';
 import { ModulePage, ModuleTabs } from '@/components/module-layout';
 import {
   DashboardHeader,
@@ -45,7 +45,22 @@ import { StatusPieChart } from '@/components/charts/status-chart';
 import { METHOD_LABELS, PAYMENT_METHODS } from '@/lib/payment-methods';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DueDateField } from '@/components/invoices/due-date-field';
-import { InvoiceFormDialog } from '@/components/invoices/invoice-form-dialog';
+import {
+  BillToTabs,
+  CurrencySelect,
+  INVOICE_DIALOG_BODY_CLASS,
+  INVOICE_DIALOG_CONTENT_CLASS,
+  InvoiceDialogHeader,
+  InvoiceFieldLabel,
+  InvoiceFormCard,
+  InvoiceFormDialog,
+  LineItemsEditor,
+  addLinePayload,
+  isBlankLine,
+  linePayload,
+  lineSiteOptions,
+  type FormLine,
+} from '@/components/invoices/invoice-form-dialog';
 import {
   EMPTY_WORK_FILTERS,
   WorkFilterBar,
@@ -116,6 +131,9 @@ export default function InvoicesPage() {
   const [genLoading, setGenLoading] = useState(false);
   const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
   const [genCurrency, setGenCurrency] = useState('GBP');
+  // Manual lines added to a rota invoice for work that isn't on the rota.
+  const [genLines, setGenLines] = useState<FormLine[]>([]);
+  const [guards, setGuards] = useState<Guard[]>([]);
   const [customOpen, setCustomOpen] = useState(false);
   // Invoice open in the shared form dialog for editing; null when closed.
   const [editInvoiceId, setEditInvoiceId] = useState<number | null>(null);
@@ -189,6 +207,12 @@ export default function InvoicesPage() {
     [genMode, genSiteId, invoiceableSites]
   );
 
+  useEffect(() => {
+    if (genOpen && guards.length === 0) api.guards.list().then(setGuards).catch(() => {});
+  }, [genOpen, guards.length]);
+  const genGuardOptions = useMemo(() => guards.map((g) => ({ value: String(g.id), label: g.full_name })), [guards]);
+  const genLineSiteOptions = useMemo(() => lineSiteOptions(sites, clients, genClientId), [sites, clients, genClientId]);
+
   const loadInvoices = useCallback(() => {
     setLoading(true);
     const shared = {
@@ -218,6 +242,30 @@ export default function InvoicesPage() {
     api.sites.list().then(setSites).catch(() => {});
   }, [loadInvoices]);
 
+  const createFromManualLines = async (manual: FormLine[], forcedSite?: string) => {
+    setGenLoading(true);
+    try {
+      const inv = await api.invoices.create({
+        ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : { client_id: parseInt(genClientId, 10) }),
+        period_start: genStart,
+        period_end: genEnd,
+        due_date: genDueDate || undefined,
+        currency: genCurrency,
+        lines: manual.map((l) => linePayload(l, forcedSite)),
+      });
+      setGenOpen(false);
+      setGenLines([]);
+      loadInvoices();
+      toast.success(`Invoice #${inv.id} created from manual lines`);
+      rememberNewInvoice(inv.id);
+      router.push(`/invoices/${inv.id}/view`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Create failed');
+    } finally {
+      setGenLoading(false);
+    }
+  };
+
   const handleGenerate = async (force = false) => {
     if (!genStart || !genEnd) return;
     if (genMode === 'client' && !genClientId) return;
@@ -226,9 +274,11 @@ export default function InvoicesPage() {
       toast.error('Period start cannot be after period end');
       return;
     }
+    const manual = genLines.filter((l) => !isBlankLine(l));
+    const forcedSite = genMode === 'site' ? genSiteId : undefined;
     setGenLoading(true);
     try {
-      const inv = await api.invoices.generate({
+      let inv = await api.invoices.generate({
         period_start: genStart,
         period_end: genEnd,
         ...(force ? { force: true } : {}),
@@ -239,7 +289,10 @@ export default function InvoicesPage() {
         ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
       });
+      for (const l of manual) await api.invoices.addLine(inv.id, addLinePayload(l, forcedSite));
+      if (manual.length) inv = await api.invoices.get(inv.id);
       setGenOpen(false);
+      setGenLines([]);
       setGenClientId('');
       setGenSiteId('');
       setGenNarrow(EMPTY_WORK_FILTERS);
@@ -265,6 +318,16 @@ export default function InvoicesPage() {
           err instanceof Error ? err.message : 'An invoice already covers this period.',
           () => handleGenerate(true),
           { label: 'Generate anyway', description: 'A second invoice will be raised for the same period.' }
+        );
+        return;
+      }
+      // No rota shifts, but the user typed lines of their own: offer to raise the
+      // invoice from those alone rather than lose them.
+      if (status === 400 && manual.length && /No published rota shifts/i.test(err instanceof Error ? err.message : '')) {
+        toast.confirm(
+          err instanceof Error ? err.message : 'No rota shifts found.',
+          () => createFromManualLines(manual, forcedSite),
+          { label: 'Use manual lines only', description: `Raise the invoice from your ${manual.length} manual line${manual.length === 1 ? '' : 's'}.` }
         );
         return;
       }
@@ -827,43 +890,34 @@ export default function InvoicesPage() {
                     router.push(`/invoices/${inv.id}/view`);
                   }}
                 />
+                <Button onClick={() => setGenOpen(true)}>
+                  <Zap className="size-4 mr-2" />
+                  Generate Invoice
+                </Button>
                 <Dialog open={genOpen} onOpenChange={setGenOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Zap className="size-4 mr-2" />
-                      Generate Invoice
-                    </Button>
-                  </DialogTrigger>
-                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Generate Invoice from Rota</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 py-2">
-                    <p className="text-sm text-muted-foreground">
-                      Generate an invoice from published rota shift hours in the selected period.
-                    </p>
-                    <div className="space-y-1">
-                      <Label>Generate by</Label>
-                      <Select
-                        value={genMode}
-                        onValueChange={(v) => {
-                          setGenMode(v as 'client' | 'site');
-                          setGenClientId('');
-                          setGenSiteId('');
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="client">By client</SelectItem>
-                          <SelectItem value="site">By site</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {genMode === 'client' ? (
-                      <div className="space-y-1">
-                        <Label>Client <span className="text-destructive">*</span></Label>
+                <DialogContent className={INVOICE_DIALOG_CONTENT_CLASS}>
+                  <InvoiceDialogHeader
+                    icon={Zap}
+                    title="Generate Invoice from Rota"
+                    description="Bills published rota shift hours in the period. Add manual lines for anything not on the rota."
+                  />
+                  <div className={INVOICE_DIALOG_BODY_CLASS}>
+                    {/* Who it's for */}
+                    <InvoiceFormCard className="space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <InvoiceFieldLabel icon={genMode === 'client' ? Users : Building2} required>
+                          Invoice for
+                        </InvoiceFieldLabel>
+                        <BillToTabs
+                          value={genMode}
+                          onChange={(v) => {
+                            setGenMode(v);
+                            setGenClientId('');
+                            setGenSiteId('');
+                          }}
+                        />
+                      </div>
+                      {genMode === 'client' ? (
                         <SearchableSelect
                           value={genClientId}
                           options={clientOptions}
@@ -871,109 +925,105 @@ export default function InvoicesPage() {
                           searchPlaceholder="Search clients…"
                           onChange={setGenClientId}
                         />
+                      ) : (
+                        <>
+                          <SearchableSelect
+                            value={genSiteId}
+                            options={siteOptions}
+                            placeholder={sites.length ? 'Select site' : 'No sites yet'}
+                            searchPlaceholder="Search sites…"
+                            emptyText="No matching sites"
+                            onChange={setGenSiteId}
+                            disabled={sites.length === 0}
+                          />
+                          {selectedSiteUnlinked ? (
+                            <p className="text-xs text-muted-foreground">
+                              This site has no client, so the invoice will carry the site name as the customer.{' '}
+                              <Link href="/sites" className="text-primary underline underline-offset-2">
+                                Edit sites
+                              </Link>{' '}
+                              to assign a client instead.
+                            </p>
+                          ) : null}
+                        </>
+                      )}
+                    </InvoiceFormCard>
+
+                    {/* Period & due date */}
+                    <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1fr_1fr_1.6fr]">
+                      <div className="space-y-1.5">
+                        <InvoiceFieldLabel icon={CalendarDays} required>Period start</InvoiceFieldLabel>
+                        <Input type="date" value={genStart} max={genEnd || undefined} onChange={(e) => setGenStart(e.target.value)} />
                       </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <Label>Site <span className="text-destructive">*</span></Label>
-                        <SearchableSelect
-                          value={genSiteId}
-                          options={siteOptions}
-                          placeholder={sites.length ? 'Select site' : 'No sites yet'}
-                          searchPlaceholder="Search sites…"
-                          emptyText="No matching sites"
-                          onChange={setGenSiteId}
-                          disabled={sites.length === 0}
-                        />
-                        {selectedSiteUnlinked ? (
-                          <p className="text-xs text-muted-foreground">
-                            This site has no client, so the invoice will carry the site name as the
-                            customer.{' '}
-                            <Link href="/sites" className="text-primary underline underline-offset-2">
-                              Edit sites
-                            </Link>{' '}
-                            to assign a client instead.
-                          </p>
-                        ) : null}
+                      <div className="space-y-1.5">
+                        <InvoiceFieldLabel icon={CalendarDays} required>Period end</InvoiceFieldLabel>
+                        <Input type="date" value={genEnd} min={genStart || undefined} onChange={(e) => setGenEnd(e.target.value)} />
                       </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label>Period Start <span className="text-destructive">*</span></Label>
-                        <Input
-                          type="date"
-                          value={genStart}
-                          max={genEnd || undefined}
-                          onChange={(e) => setGenStart(e.target.value)}
-                        />
+                      <div className="space-y-1.5">
+                        <InvoiceFieldLabel icon={Clock}>Due date</InvoiceFieldLabel>
+                        <DueDateField invoiceDate="" value={genDueDate} onChange={setGenDueDate} />
                       </div>
-                      <div className="space-y-1">
-                        <Label>Period End <span className="text-destructive">*</span></Label>
-                        <Input
-                          type="date"
-                          value={genEnd}
-                          min={genStart || undefined}
-                          onChange={(e) => setGenEnd(e.target.value)}
-                        />
+                      {genStart && genEnd && genStart > genEnd ? (
+                        <p className="text-sm text-destructive sm:col-span-3">Period start cannot be after period end</p>
+                      ) : null}
+                    </InvoiceFormCard>
+
+                    {/* Breaks & currency */}
+                    <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1.6fr_1fr]">
+                      <div className="space-y-1.5">
+                        <InvoiceFieldLabel icon={Coffee}>Breaks on this invoice</InvoiceFieldLabel>
+                        <Select value={genBreakMode} onValueChange={(v) => setGenBreakMode(v as typeof genBreakMode)}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="shift">As set on each rota shift</SelectItem>
+                            <SelectItem value="without_break">Without break — charge every shift in full</SelectItem>
+                            <SelectItem value="deduct">Deduct the staff break from every shift</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Client hours are worked out separately from staff pay. Staff are always paid net of their unpaid
+                          break; by default the client is charged the full shift.
+                        </p>
                       </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Due date</Label>
-                      <DueDateField invoiceDate="" value={genDueDate} onChange={setGenDueDate} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Breaks on this invoice</Label>
-                      <Select value={genBreakMode} onValueChange={(v) => setGenBreakMode(v as typeof genBreakMode)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="shift">As set on each rota shift</SelectItem>
-                          <SelectItem value="without_break">Without break — charge every shift in full</SelectItem>
-                          <SelectItem value="deduct">Deduct the staff break from every shift</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-1.5">
+                        <InvoiceFieldLabel icon={PoundSterling}>Currency</InvoiceFieldLabel>
+                        <CurrencySelect value={genCurrency} onChange={setGenCurrency} />
+                        <p className="text-xs text-muted-foreground">Amounts stay in this currency. They are not converted.</p>
+                      </div>
+                    </InvoiceFormCard>
+
+                    {/* Narrow by */}
+                    <InvoiceFormCard title="Narrow by (optional)" icon={Filter} bodyClassName="p-3 space-y-2">
                       <p className="text-xs text-muted-foreground">
-                        Client hours are worked out separately from staff pay. Staff are always paid net of
-                        their unpaid break; by default the client is charged the full shift.
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Currency</Label>
-                      <Select value={genCurrency} onValueChange={setGenCurrency}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {INVOICE_CURRENCIES.map((c) => (
-                            <SelectItem key={c.code} value={c.code}>
-                              {c.code} — {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Amounts stay in this currency. They are not converted.
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Narrow by (optional)</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Leave blank to bill every shift in the period. Generating by client already
-                        covers all of that client&rsquo;s sites.
+                        Leave blank to bill every shift in the period. Generating by client already covers all of that
+                        client&rsquo;s sites.
                       </p>
                       <WorkFilterBar
                         value={genNarrow}
                         onChange={setGenNarrow}
                         options={filterOptions}
                         keys={['contractor', 'subContractor', 'guard', 'jobTitle']}
-                        className="flex flex-wrap items-center gap-2 pt-1"
+                        className="flex flex-wrap items-center gap-2"
                       />
-                    </div>
-                    {genStart && genEnd && genStart > genEnd ? (
-                      <p className="text-sm text-destructive">Period start cannot be after period end</p>
-                    ) : null}
+                    </InvoiceFormCard>
+
+                    {/* Manual lines, added on top of the rota shifts */}
+                    <LineItemsEditor
+                      title="Manual lines (optional)"
+                      lines={genLines}
+                      onChange={setGenLines}
+                      allowEmpty
+                      showSite={genMode === 'client'}
+                      siteOptions={genLineSiteOptions}
+                      guardOptions={genGuardOptions}
+                      money={(n) => formatGbp(n, genCurrency)}
+                      emptyText="No manual lines. Use “Add line” for work that isn’t on the rota."
+                    />
+
                     <Button
-                      className="w-full"
+                      className="w-full h-11 text-base shadow-sm"
                       onClick={() => void handleGenerate()}
                       disabled={
                         genLoading ||
@@ -984,7 +1034,8 @@ export default function InvoicesPage() {
                         (genMode === 'site' && !genSiteId)
                       }
                     >
-                      {genLoading ? 'Generating...' : 'Generate Invoice'}
+                      <Zap className="size-4 mr-2" />
+                      {genLoading ? 'Generating…' : 'Generate Invoice'}
                     </Button>
                   </div>
                 </DialogContent>

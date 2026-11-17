@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
     google_oauth_redirect_uri: str = ""
+    # Optional native client IDs accepted as Google ID-token audiences (mobile Sign-In).
+    google_oauth_android_client_id: str = ""
+    google_oauth_ios_client_id: str = ""
 
     microsoft_oauth_client_id: str = ""
     microsoft_oauth_client_secret: str = ""

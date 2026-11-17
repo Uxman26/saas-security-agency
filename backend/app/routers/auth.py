@@ -25,6 +25,7 @@ from app.schemas import (
     TrialStartedOut,
     SubscriptionReceiptResponse,
     TokenResponse,
+    GoogleMobileLoginRequest,
     UserCreate,
     UserLogin,
     SwitchCompanyRequest,
@@ -151,6 +152,7 @@ def oauth_providers():
     return {"providers": oauth_service.list_enabled_providers()}
 
 
+<<<<<<< HEAD
 @router.post("/oauth/complete-signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 def oauth_complete_signup(body: OAuthCompleteSignupRequest, db: Session = Depends(get_db)):
     user, receipt, trial = oauth_service.complete_oauth_signup(
@@ -165,6 +167,39 @@ def oauth_complete_signup(body: OAuthCompleteSignupRequest, db: Session = Depend
         postcode=body.postcode,
     )
     return _signup_response(db, user, receipt, False, trial)
+=======
+@router.post("/oauth/google/mobile", response_model=TokenResponse)
+def oauth_google_mobile(
+    body: GoogleMobileLoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Mobile Google Sign-In — verifies Google ID token using existing OAuth account linking."""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    result = oauth_service.complete_google_id_token_login(
+        db,
+        id_token=body.id_token,
+        company_id=body.company_id or "",
+        remember_me=bool(body.remember_me),
+        ip_address=ip,
+        user_agent=ua,
+        allow_create_tenant=False,
+    )
+    if result.get("payment_pending"):
+        raise HTTPException(status_code=402, detail=result)
+    if result.get("mfa_required"):
+        return TokenResponse(
+            access_token=None,
+            token_type="bearer",
+            mfa_required=True,
+            mfa_token=result.get("mfa_token"),
+        )
+    token = result.get("access_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Google sign-in failed")
+    return TokenResponse(access_token=token, token_type="bearer", mfa_required=False)
+>>>>>>> 3f42ab7548e51755c47c1614ddd700533d8d0bb1
 
 
 @router.get("/oauth/{provider}/start")

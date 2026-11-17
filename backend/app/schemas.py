@@ -120,6 +120,24 @@ class TokenResponse(BaseModel):
     mfa_token: Optional[str] = None
 
 
+class GoogleMobileLoginRequest(StrictModel):
+    """Native Google Sign-In: Google ID token + Company ID (reuses web OAuth account linking)."""
+
+    id_token: str = Field(min_length=20, max_length=8192)
+    company_id: str = Field(min_length=3, max_length=32)
+    remember_me: Optional[bool] = True
+
+    @field_validator("company_id")
+    @classmethod
+    def company_login_id_rules(cls, v: str) -> str:
+        from app.services.company_login_id_service import normalize_login_id
+
+        code = normalize_login_id(v)
+        if not code or len(code) < 3:
+            raise ValueError("Company ID is required")
+        return code
+
+
 class MfaVerifyRequest(BaseModel):
     mfa_token: str
     code: str

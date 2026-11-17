@@ -429,6 +429,122 @@ def _issue_session(
     return out
 
 
+def google_id_token_audiences() -> list[str]:
+    """Web + optional native client IDs accepted as Google ID-token audiences."""
+    out: list[str] = []
+    for value in (
+        settings.google_oauth_client_id,
+        settings.google_oauth_android_client_id,
+        settings.google_oauth_ios_client_id,
+    ):
+        cleaned = (value or "").strip()
+        if cleaned and cleaned not in out:
+            out.append(cleaned)
+    return out
+
+
+def verify_google_id_token(id_token: str) -> dict:
+    """Verify a Google ID token (mobile Sign-In) and return a profile dict.
+
+    Reuses the same profile shape as the browser OAuth path so
+    ``resolve_or_create_user`` / ``_issue_session`` stay shared.
+    """
+    if not provider_configured(AUTH_PROVIDER_GOOGLE):
+        raise HTTPException(status_code=503, detail="Google Sign In is not configured")
+    token = (id_token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing Google ID token")
+    audiences = google_id_token_audiences()
+    if not audiences:
+        raise HTTPException(status_code=503, detail="Google Sign In is not configured")
+
+    with httpx.Client(timeout=20.0) as client:
+        resp = client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": token},
+        )
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=401, detail="Invalid Google ID token")
+    data = resp.json() if resp.content else {}
+    aud = str(data.get("aud") or "").strip()
+    if aud not in audiences:
+        raise HTTPException(status_code=401, detail="Google token audience mismatch")
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email")
+    if str(data.get("email_verified") or "").lower() in {"false", "0"}:
+        raise HTTPException(status_code=400, detail="Google email is not verified")
+    sub = str(data.get("sub") or "").strip()
+    if not sub:
+        raise HTTPException(status_code=400, detail="Google account missing subject")
+    return {
+        "sub": sub,
+        "email": email,
+        "full_name": (data.get("name") or email.split("@")[0]).strip(),
+        "email_verified": True,
+    }
+
+
+def complete_google_id_token_login(
+    db: Session,
+    *,
+    id_token: str,
+    company_id: str,
+    remember_me: bool = True,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    allow_create_tenant: bool = False,
+) -> dict:
+    """Mobile Google Sign-In: verify ID token, then reuse existing OAuth session issuance."""
+    from app.services.auth_service import _assert_mobile_app_entitled
+    from app.services.company_login_id_service import normalize_login_id
+    from app.middleware.client_source import get_client_source
+
+    public_company_id = normalize_login_id(company_id)
+    if not public_company_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Enter your Company ID before signing in with social login.",
+        )
+    profile = verify_google_id_token(id_token)
+    existed = _oauth_user_exists(db, AUTH_PROVIDER_GOOGLE, profile)
+    if not existed and not allow_create_tenant:
+        raise HTTPException(
+            status_code=401,
+            detail="No ControlOps account is linked to this Google email. Ask your administrator to invite you, or sign in with email and password.",
+        )
+    user = resolve_or_create_user(db, AUTH_PROVIDER_GOOGLE, profile)
+    _assert_mobile_app_entitled(
+        db,
+        user,
+        get_client_source(),
+        ip_address,
+        user_agent,
+    )
+    try:
+        return _issue_session(
+            db,
+            user,
+            remember_me=remember_me,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            company_login_id=public_company_id,
+            created_new_tenant=not existed and allow_create_tenant,
+        )
+    except HTTPException as e:
+        if e.status_code == 402 and isinstance(e.detail, dict) and e.detail.get("code") == "payment_pending":
+            return {
+                "access_token": None,
+                "token_type": "bearer",
+                "mfa_required": False,
+                "mfa_token": None,
+                "user_id": user.id,
+                "receipt_ref": e.detail.get("receipt_ref"),
+                "payment_pending": True,
+            }
+        raise
+
+
 def complete_oauth_login(
     db: Session,
     *,

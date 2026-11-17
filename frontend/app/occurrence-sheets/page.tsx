@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleGuard } from '@/components/module-guard';
@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { OccurrenceEntry, OccurrenceSheet, Site } from '@/lib/types';
 import { NotebookPen, Plus, Printer, Download, Trash2, Pencil, Search } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -241,6 +242,11 @@ export default function OccurrenceSheetsPage() {
     },
   ];
 
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => rows.map((s) => s.id), [rows]);
+  const bulkPageIds = useMemo(() => rows.map((s) => s.id), [rows]);
+  const selection = useBulkSelection(bulkAllIds);
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -300,10 +306,26 @@ export default function OccurrenceSheetsPage() {
 
             <ResultsCard title="Occurrence sheets" count={loading ? undefined : rows.length}>
               <div className="p-4">
+                {canBulk ? (
+                  <BulkActionBar selection={selection} noun="sheet" allIds={bulkAllIds}>
+                    <BulkDeleteButton
+                      selection={selection}
+                      noun="sheet"
+                      deleteOne={(id) => api.occurrenceSheets.remove(id)}
+                      onDone={() => { load(); }}
+                      description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+                    />
+                  </BulkActionBar>
+                ) : null}
                 <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                          </TableHead>
+                        ) : null}
                         <TableHead>Reference</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead>Site</TableHead>
@@ -317,7 +339,7 @@ export default function OccurrenceSheetsPage() {
                     <TableBody>
                       {rows.length === 0 && !loading ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                          <TableCell colSpan={canBulk ? 9 : 8} className="text-center text-muted-foreground py-8">
                             No occurrence sheets for these dates.
                           </TableCell>
                         </TableRow>
@@ -326,6 +348,11 @@ export default function OccurrenceSheetsPage() {
                         const status = s.status === 'submitted' ? 'reported' : s.status;
                         return (
                           <TableRow key={s.id} onRowClick={canEdit ? () => void openEdit(s) : undefined}>
+                            {canBulk ? (
+                              <TableCell className="w-8">
+                                <RowCheckbox selection={selection} id={s.id} label={`Select ${s.reference ?? s.id}`} />
+                              </TableCell>
+                            ) : null}
                             <TableCell className="font-mono text-xs">{s.reference ?? '—'}</TableCell>
                             <TableCell className="whitespace-nowrap">{s.sheet_date}</TableCell>
                             <TableCell>{s.site_name ?? '—'}</TableCell>

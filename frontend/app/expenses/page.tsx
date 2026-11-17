@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { Expense, ExpenseDashboard, ExpenseMeta, ExpenseReport, VatReport, Vendor } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
@@ -374,7 +375,7 @@ export default function ExpensesPage() {
     }
   }, []);
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     filtered,
     search,
     sortKey,
@@ -588,6 +589,11 @@ export default function ExpensesPage() {
       ]
     : [];
 
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => filteredRows.map((e) => e.id), [filteredRows]);
+  const bulkPageIds = useMemo(() => pageRows.map((e) => e.id), [pageRows]);
+  const selection = useBulkSelection(bulkAllIds);
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -727,9 +733,25 @@ export default function ExpensesPage() {
                     </div>
                   ) : (
                     <>
+                      {canBulk ? (
+                        <BulkActionBar selection={selection} noun="expense" allIds={bulkAllIds}>
+                          <BulkDeleteButton
+                            selection={selection}
+                            noun="expense"
+                            deleteOne={(id) => api.expenses.delete(id)}
+                            onDone={() => { void loadAll(); }}
+                            description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+                          />
+                        </BulkActionBar>
+                      ) : null}
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            {canBulk ? (
+                              <TableHead className="w-8">
+                                <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                              </TableHead>
+                            ) : null}
                             <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <SortableHead label="Category" colKey="category" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                             <SortableHead label="Vendor" colKey="vendor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -744,6 +766,11 @@ export default function ExpensesPage() {
                         <TableBody>
                           {pageRows.map((e: Expense) => (
                             <TableRow key={e.id}>
+                              {canBulk ? (
+                                <TableCell className="w-8">
+                                  <RowCheckbox selection={selection} id={e.id} label={`Select expense ${e.id}`} />
+                                </TableCell>
+                              ) : null}
                               <TableCell>{e.expense_date}</TableCell>
                               <TableCell>{CAT_LABELS[e.category] || e.category}</TableCell>
                               <TableCell className="max-w-[12rem] truncate" title={e.vendor_name || undefined}>{e.vendor_name || '—'}</TableCell>

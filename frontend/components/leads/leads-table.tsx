@@ -8,6 +8,7 @@ import type { Lead } from '@/lib/types';
 import type { User } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Pencil } from 'lucide-react';
+import { RowCheckbox, SelectAllCheckbox, type BulkSelection } from '@/components/bulk-select';
 
 type Props = {
   leads: Lead[];
@@ -16,14 +17,21 @@ type Props = {
   onEdit: (lead: Lead) => void;
   onDelete?: (id: number) => void;
   showDates?: boolean;
+  /** When given, a checkbox column is shown for bulk actions. */
+  selection?: BulkSelection;
 };
 
-export function LeadsTable({ leads, isLoading, user, onEdit, onDelete, showDates }: Props) {
-  const cols = showDates ? 9 : 8;
+export function LeadsTable({ leads, isLoading, user, onEdit, onDelete, showDates, selection }: Props) {
+  const cols = (showDates ? 9 : 8) + (selection ? 1 : 0);
   return (
     <Table>
       <TableHeader>
         <TableRow>
+          {selection ? (
+            <TableHead className="w-8 pl-4">
+              <SelectAllCheckbox selection={selection} ids={leads.map((l) => l.id)} />
+            </TableHead>
+          ) : null}
           <TableHead>Organization</TableHead>
           <TableHead>Contact</TableHead>
           <TableHead>Designation</TableHead>
@@ -50,7 +58,12 @@ export function LeadsTable({ leads, isLoading, user, onEdit, onDelete, showDates
           </TableRow>
         ) : (
           leads.map((l) => (
-            <TableRow key={l.id} href={`/leads/${l.id}`}>
+            <TableRow key={l.id} href={`/leads/${l.id}`} className={selection?.isSelected(l.id) ? 'bg-primary/5' : undefined}>
+              {selection ? (
+                <TableCell className="w-8 pl-4">
+                  <RowCheckbox selection={selection} id={l.id} label={`Select ${l.organization || l.title}`} />
+                </TableCell>
+              ) : null}
               <TableCell>
                 <div className="font-medium">{l.organization || l.title}</div>
                 <div className="text-xs text-muted-foreground">{[l.city, l.postcode].filter(Boolean).join(', ') || '—'}</div>

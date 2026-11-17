@@ -22,7 +22,8 @@ import { localDateKey } from '@/lib/date-format';
 import { ATT_LABELS, HoursCell, PayPreviewDetail } from './pay-preview';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
-import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { BulkConfirmDialog, runBulk } from '@/components/bulk-select';
+import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ModulePage } from '@/components/module-layout';
 import {
   DashboardHeader,
@@ -313,7 +314,7 @@ export default function PayrollPage() {
   const [rotas, setRotas] = useState<Awaited<ReturnType<typeof api.rotaPlans.list>>>([]);
   const filterOptions = useWorkFilterOptions();
 
-  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const { sortKey, sortDir, toggleSort } = useTableSort('guard');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
   const [viewRec, setViewRec] = useState<Payroll | null>(null);
@@ -331,6 +332,7 @@ export default function PayrollPage() {
   const [recSearch, setRecSearch] = useState('');
   const [recStatusFilter, setRecStatusFilter] = useState<'all' | PayrollStatus>('all');
   const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
 
   const guardMap = useMemo(() => new Map(guards.map((g) => [g.id, g.full_name])), [guards]);
@@ -417,6 +419,7 @@ export default function PayrollPage() {
     if (calcMode === 'client' && !calcClientId) return;
     if (calcMode === 'rota' && !calcRotaId) return;
     setCalcLoading(true);
+    const importedPeriod = { from: calcStart, to: calcEnd };
     try {
       let imported: Payroll[] = [];
       const narrow = toWorkFilterParams(calcNarrow);
@@ -465,7 +468,11 @@ export default function PayrollPage() {
       setCalcStart('');
       setCalcEnd('');
       setCalcPaymentMode('100_bank');
-      reloadCurrent();
+      // Before any search there is no list to refresh, so the imported period is loaded
+      // instead — otherwise the new records would be nowhere on screen.
+      if (hasSearched) reloadCurrent();
+      else if (imported.length) void fetchPayrolls({ ...EMPTY_QUERY, ...importedPeriod });
+      if (imported.length) focusRows(imported.map((r) => r.id));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Import from rota failed');
     } finally {
@@ -617,7 +624,7 @@ export default function PayrollPage() {
 
   // Filtering is the API's job now, so the list goes in unfiltered — sorting and paging
   // only. An empty search term keeps useTableList from re-filtering what the server sent.
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     visibleRecs,
     '',
     sortKey,
@@ -631,6 +638,9 @@ export default function PayrollPage() {
   useEffect(() => {
     setPage((x) => Math.min(x, pageCount));
   }, [pageCount]);
+
+  const getRecId = useCallback((p: Payroll) => p.id, []);
+  const { focusRows, isHighlighted } = useScrollToNewRow(filteredRows, getRecId, pageSize, setPage);
 
   const summaryRows = payrolls;
   const totalBank = summaryRows.reduce((sum, p) => sum + p.bank_amount, 0);
@@ -1216,9 +1226,17 @@ export default function PayrollPage() {
                       <SelectItem value="processed">Processed</SelectItem>
                     </SelectContent>
                   </Select>
-                  {selectedRecIds.size > 0 && canEditMod ? (
+                  {selectedRecIds.size > 0 && (canEditMod || canDeleteMod) ? (
                     <>
                       <span className="text-sm text-muted-foreground">{selectedRecIds.size} selected</span>
+                      {canDeleteMod ? (
+                        <Button size="sm" variant="destructive" disabled={statusBusy} onClick={() => setBulkDeleteOpen(true)}>
+                          <Trash2 className="size-3.5 mr-1.5" />
+                          Delete
+                        </Button>
+                      ) : null}
+                      {canEditMod ? (
+                      <>
                       <Button size="sm" disabled={statusBusy} onClick={() => void changeStatus([...selectedRecIds], 'approved')}>
                         <CircleCheckBig className="size-3.5 mr-1.5" />
                         Approve
@@ -1231,6 +1249,23 @@ export default function PayrollPage() {
                         <Undo2 className="size-3.5 mr-1.5" />
                         Reopen
                       </Button>
+                      </>
+                      ) : null}
+                      <BulkConfirmDialog
+                        open={bulkDeleteOpen}
+                        onOpenChange={setBulkDeleteOpen}
+                        title={`Delete ${selectedRecIds.size} payroll record${selectedRecIds.size === 1 ? '' : 's'}?`}
+                        description="Records the server won't allow to be deleted are skipped and listed afterwards. This cannot be undone."
+                        onConfirm={async () => {
+                          const res = await runBulk([...selectedRecIds], (id) => api.payroll.delete(id), {
+                            noun: 'payroll record',
+                          });
+                          const gone = new Set(res.ok);
+                          setPayrolls((prev) => prev.filter((p) => !gone.has(p.id)));
+                          setSelectedRecIds((prev) => new Set([...prev].filter((id) => !gone.has(id))));
+                          reloadCurrent();
+                        }}
+                      />
                     </>
                   ) : null}
                 </div>
@@ -1273,7 +1308,7 @@ export default function PayrollPage() {
                             type="checkbox"
                             className="size-4 rounded border-input accent-primary"
                             aria-label="Select all records on this page"
-                            disabled={!canEditMod}
+                            disabled={!canEditMod && !canDeleteMod}
                             checked={pageRows.length > 0 && pageRows.every((p) => selectedRecIds.has(p.id))}
                             onChange={(e) =>
                               setSelectedRecIds((prev) => {
@@ -1301,13 +1336,19 @@ export default function PayrollPage() {
                         const name = g?.full_name ?? guardMap.get(p.guard_id) ?? `Guard #${p.guard_id}`;
                         const st = recStatus(p);
                         return (
-                        <TableRow key={p.id} onRowClick={() => setViewRec(p)} data-state={selectedRecIds.has(p.id) ? 'selected' : undefined}>
+                        <TableRow
+                          key={p.id}
+                          onRowClick={() => setViewRec(p)}
+                          data-row-id={p.id}
+                          data-state={selectedRecIds.has(p.id) ? 'selected' : undefined}
+                          className={isHighlighted(p.id) ? NEW_ROW_HIGHLIGHT_CLASS : undefined}
+                        >
                           <TableCell>
                             <input
                               type="checkbox"
                               className="size-4 rounded border-input accent-primary"
                               aria-label={`Select ${name}`}
-                              disabled={!canEditMod}
+                              disabled={!canEditMod && !canDeleteMod}
                               checked={selectedRecIds.has(p.id)}
                               onChange={(e) =>
                                 setSelectedRecIds((prev) => {

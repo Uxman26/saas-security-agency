@@ -37,6 +37,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { ShiftTypeBadge } from '@/components/rota/shift-rota-sections';
 import { classifyShiftType, type ShiftType } from '@/lib/rota-shifts-types';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
+import { api } from '@/lib/api';
 
 type AssignmentShiftType = 'morning' | 'afternoon' | 'evening' | 'night' | 'weekend';
 
@@ -309,7 +311,7 @@ export default function AssignmentsPage() {
     [guardMap, siteMap]
   );
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     byShift,
     search,
     sortKey,
@@ -345,6 +347,11 @@ export default function AssignmentsPage() {
       tone: 'muted',
     },
   ];
+
+  const canBulk = canDeleteMod;
+  const bulkAllIds = useMemo(() => filteredRows.map((a) => a.id), [filteredRows]);
+  const bulkPageIds = useMemo(() => pageRows.map((a) => a.id), [pageRows]);
+  const selection = useBulkSelection(bulkAllIds);
 
   return (
     <ProtectedRoute>
@@ -448,9 +455,25 @@ export default function AssignmentsPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
+                  {canBulk ? (
+                    <BulkActionBar selection={selection} noun="assignment" allIds={bulkAllIds}>
+                      <BulkDeleteButton
+                        selection={selection}
+                        noun="assignment"
+                        deleteOne={(id) => api.assignments.delete(id)}
+                        onDone={() => { void refetch(); }}
+                        description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+                      />
+                    </BulkActionBar>
+                  ) : null}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                          </TableHead>
+                        ) : null}
                         <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Date" colKey="date" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -463,6 +486,11 @@ export default function AssignmentsPage() {
                     <TableBody>
                       {pageRows.map((a) => (
                         <TableRow key={a.id} onRowClick={canEditMod ? () => openEdit(a) : undefined}>
+                          {canBulk ? (
+                            <TableCell className="w-8">
+                              <RowCheckbox selection={selection} id={a.id} label={`Select assignment ${a.id}`} />
+                            </TableCell>
+                          ) : null}
                           <TableCell className="font-medium whitespace-nowrap">{guardMap.get(a.guard_id) || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap">{siteMap.get(a.site_id) || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap">{a.date}</TableCell>

@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { Attendance, Guard, Assignment, Site } from '@/lib/types';
 import { attStatusLabel, normalizeAttStatus } from '@/lib/rota-shifts-utils';
 import { isCancelledStatus } from '@/lib/rota-shifts-types';
@@ -374,7 +375,7 @@ export default function AttendancePage() {
     [guardMap]
   );
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     listSource,
     '',
     sortKey,
@@ -507,6 +508,11 @@ export default function AttendancePage() {
         label: `${guardMap.get(a.guard_id) ?? `Guard #${a.guard_id}`} — ${a.date} ${a.shift_start ?? '?'}–${a.shift_end ?? '?'}`,
       }));
   }, [assignments, bookGuardId, guardMap]);
+
+  const canBulk = canDeleteMod;
+  const bulkAllIds = useMemo(() => filteredRows.map((a) => a.id), [filteredRows]);
+  const bulkPageIds = useMemo(() => pageRows.map((a) => a.id), [pageRows]);
+  const selection = useBulkSelection(bulkAllIds);
 
   return (
     <ProtectedRoute>
@@ -1124,9 +1130,25 @@ export default function AttendancePage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
+                    {canBulk ? (
+                      <BulkActionBar selection={selection} noun="attendance record" allIds={bulkAllIds}>
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="attendance record"
+                          deleteOne={(id) => api.attendance.delete(id)}
+                          onDone={() => { loadAttendance(); }}
+                          description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+                        />
+                      </BulkActionBar>
+                    ) : null}
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          {canBulk ? (
+                            <TableHead className="w-8">
+                              <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                            </TableHead>
+                          ) : null}
                           <SortableHead label="Staff" colKey="guard" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Site" colKey="site" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <TableHead>Location</TableHead>
@@ -1155,6 +1177,11 @@ export default function AttendancePage() {
                                 isCancelledStatus(a.status) && 'bg-slate-500/5'
                               )}
                             >
+                              {canBulk ? (
+                                <TableCell className="w-8">
+                                  <RowCheckbox selection={selection} id={a.id} label={`Select attendance ${a.id}`} />
+                                </TableCell>
+                              ) : null}
                               <TableCell className="whitespace-nowrap font-medium">
                                 <div className="flex flex-col gap-0.5">
                                   <span>{a.guard_name || guardMap.get(a.guard_id) || `Guard #${a.guard_id}`}</span>

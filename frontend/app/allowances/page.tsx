@@ -1,7 +1,7 @@
 'use client';
 import { InlineTableSkeleton } from '@/components/skeletons';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { Allowance } from '@/lib/types';
 import { z } from 'zod';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -215,7 +216,7 @@ export default function AllowancesPage() {
     }
   }, []);
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     allowances,
     search,
     sortKey,
@@ -250,6 +251,11 @@ export default function AllowancesPage() {
       caption: 'paid and billed',
     },
   ];
+
+  const canBulk = canDeleteMod;
+  const bulkAllIds = useMemo(() => filteredRows.map((a) => a.id), [filteredRows]);
+  const bulkPageIds = useMemo(() => pageRows.map((a) => a.id), [pageRows]);
+  const selection = useBulkSelection(bulkAllIds);
 
   return (
     <ProtectedRoute>
@@ -313,9 +319,25 @@ export default function AllowancesPage() {
                 <div className="text-center py-12 text-muted-foreground">No allowances match your search.</div>
               ) : (
                 <div className="overflow-x-auto">
+                  {canBulk ? (
+                    <BulkActionBar selection={selection} noun="allowance" allIds={bulkAllIds}>
+                      <BulkDeleteButton
+                        selection={selection}
+                        noun="allowance"
+                        deleteOne={(id) => api.allowances.delete(id)}
+                        onDone={() => { load(); }}
+                        description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+                      />
+                    </BulkActionBar>
+                  ) : null}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                          </TableHead>
+                        ) : null}
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Type" colKey="type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Amount" colKey="amount" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -327,6 +349,11 @@ export default function AllowancesPage() {
                     <TableBody>
                       {pageRows.map((a) => (
                         <TableRow key={a.id} onRowClick={canEditMod ? () => openEdit(a) : undefined}>
+                          {canBulk ? (
+                            <TableCell className="w-8">
+                              <RowCheckbox selection={selection} id={a.id} label={`Select allowance ${a.id}`} />
+                            </TableCell>
+                          ) : null}
                           <TableCell className="font-medium">{a.name}</TableCell>
                           <TableCell>
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${

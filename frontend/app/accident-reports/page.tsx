@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { AccidentReport, Site } from '@/lib/types';
 import { ClipboardCheck, Download, Plus, Printer, Trash2, Pencil, Search, AlertTriangle } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -271,6 +272,11 @@ export default function AccidentReportsPage() {
     },
   ];
 
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+  const bulkPageIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+  const selection = useBulkSelection(bulkAllIds);
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -338,10 +344,26 @@ export default function AccidentReportsPage() {
 
             <ResultsCard title="Accident reports" count={loading ? undefined : filtered.length}>
               <div className="p-4">
+                {canBulk ? (
+                  <BulkActionBar selection={selection} noun="report" allIds={bulkAllIds}>
+                    <BulkDeleteButton
+                      selection={selection}
+                      noun="report"
+                      deleteOne={(id) => api.accidentReports.remove(id)}
+                      onDone={() => { load(); }}
+                      description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+                    />
+                  </BulkActionBar>
+                ) : null}
                 <div className="overflow-x-auto rounded-md border bg-card">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/40">
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                          </TableHead>
+                        ) : null}
                         <TableHead>Reference</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead>Site</TableHead>
@@ -355,7 +377,7 @@ export default function AccidentReportsPage() {
                     <TableBody>
                       {filtered.length === 0 && !loading ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
+                          <TableCell colSpan={canBulk ? 9 : 8} className="text-center text-muted-foreground py-10">
                             No accident reports match these filters.
                           </TableCell>
                         </TableRow>
@@ -368,6 +390,11 @@ export default function AccidentReportsPage() {
                         ].filter(Boolean);
                         return (
                           <TableRow key={r.id} className="align-middle" onRowClick={canEdit ? () => openEdit(r) : undefined}>
+                            {canBulk ? (
+                              <TableCell className="w-8">
+                                <RowCheckbox selection={selection} id={r.id} label={`Select ${r.reference ?? r.id}`} />
+                              </TableCell>
+                            ) : null}
                             <TableCell className="font-mono text-xs font-medium">{r.reference ?? '—'}</TableCell>
                             <TableCell className="whitespace-nowrap tabular-nums text-sm">{r.report_date}</TableCell>
                             <TableCell className="max-w-[10rem] truncate">{r.site_name ?? '—'}</TableCell>

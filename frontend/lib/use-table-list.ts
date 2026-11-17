@@ -65,8 +65,93 @@ export function useTableList<T>(
   const rangeStart = total === 0 ? 0 : start + 1;
   const rangeEnd = Math.min(start + pageSize, total);
 
-  return { pageRows, total, pageCount, safePage, rangeStart, rangeEnd };
+  /** All rows matching the search, in display order (every page). */
+  const filteredRows = sorted;
+  return { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd };
 }
+
+type RowId = string | number;
+
+/** How long a just-created record is waited for before the scroll is abandoned. */
+const FOCUS_WAIT_MS = 15_000;
+/** How long the landed-on row stays highlighted. */
+const FOCUS_HIGHLIGHT_MS = 3_000;
+
+/**
+ * Brings a just-created record into view. Call `focusRows(ids)` after a create; once
+ * any of those ids shows up in `rows` (the sorted, filtered list — every page), the
+ * table jumps to the page holding the first of them, scrolls that row to the middle of
+ * the screen and briefly highlights it. Rows opt in with `data-row-id={id}`.
+ *
+ * Waiting on `rows` rather than scrolling straight away matters: the list refetches
+ * after a create, so the new record is usually not there yet when the mutation resolves.
+ */
+export function useScrollToNewRow<T>(
+  rows: T[],
+  getId: (row: T) => RowId,
+  pageSize: number,
+  setPage: (page: number) => void
+) {
+  const [pending, setPending] = useState<Set<string> | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
+  const [highlighted, setHighlighted] = useState<Set<string>>(() => new Set());
+
+  const focusRows = useCallback((ids: RowId | RowId[]) => {
+    const list = (Array.isArray(ids) ? ids : [ids]).map(String);
+    if (list.length) setPending(new Set(list));
+  }, []);
+
+  // Give up quietly if the record never appears (a search or filter is hiding it), so a
+  // stale request cannot yank the page around later.
+  useEffect(() => {
+    if (!pending) return;
+    const t = window.setTimeout(() => setPending(null), FOCUS_WAIT_MS);
+    return () => window.clearTimeout(t);
+  }, [pending]);
+
+  useEffect(() => {
+    if (!pending) return;
+    const idx = rows.findIndex((r) => pending.has(String(getId(r))));
+    if (idx < 0) return;
+    setPage(Math.floor(idx / pageSize) + 1);
+    setTarget(String(getId(rows[idx])));
+    setHighlighted(pending);
+    setPending(null);
+  }, [rows, pending, getId, pageSize, setPage]);
+
+  // Runs after the page change has rendered, so the row is in the DOM.
+  useEffect(() => {
+    if (!target) return;
+    let tries = 0;
+    let raf = 0;
+    const scroll = () => {
+      const el = document.querySelector(`[data-row-id="${CSS.escape(target)}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTarget(null);
+      } else if (tries++ < 20) {
+        raf = requestAnimationFrame(scroll);
+      } else {
+        setTarget(null);
+      }
+    };
+    raf = requestAnimationFrame(scroll);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+
+  useEffect(() => {
+    if (!highlighted.size) return;
+    const t = window.setTimeout(() => setHighlighted(new Set()), FOCUS_HIGHLIGHT_MS);
+    return () => window.clearTimeout(t);
+  }, [highlighted]);
+
+  const isHighlighted = useCallback((id: RowId) => highlighted.has(String(id)), [highlighted]);
+
+  return { focusRows, isHighlighted };
+}
+
+/** Highlight for a row just brought into view by useScrollToNewRow. */
+export const NEW_ROW_HIGHLIGHT_CLASS = 'bg-primary/10 ring-1 ring-inset ring-primary/40 transition-colors';
 
 export function useResetPageOnQuery(query: string, extraDeps: unknown[] = []) {
   const [page, setPage] = useState(1);

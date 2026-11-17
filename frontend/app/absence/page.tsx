@@ -28,6 +28,7 @@ import {
 } from '@/components/module-dashboard';
 import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import { formatDateUK, localDateKey } from '@/lib/date-format';
 import type { AbsenceKind, AbsenceRecord, AbsenceStatus } from '@/lib/types';
 import { toast } from '@/lib/toast';
@@ -191,7 +192,7 @@ export default function AbsencePage() {
     }
   }, []);
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     rows,
     search,
     sortKey,
@@ -232,6 +233,11 @@ export default function AbsencePage() {
       tone: pendingCount > 0 ? 'warning' : 'positive',
     },
   ];
+
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
+  const bulkPageIds = useMemo(() => pageRows.map((r) => r.id), [pageRows]);
+  const selection = useBulkSelection(bulkAllIds);
 
   return (
     <ProtectedRoute>
@@ -350,9 +356,25 @@ export default function AbsencePage() {
                   <div className="text-center py-12 text-muted-foreground">No absences match your search.</div>
                 ) : (
                   <div className="overflow-x-auto">
+                    {canBulk ? (
+                      <BulkActionBar selection={selection} noun="absence" allIds={bulkAllIds}>
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="absence"
+                          deleteOne={(id) => api.absence.delete(id)}
+                          onDone={() => { load(); }}
+                          description="Each employee’s balance is recalculated straight away. This cannot be undone."
+                        />
+                      </BulkActionBar>
+                    ) : null}
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          {canBulk ? (
+                            <TableHead className="w-8">
+                              <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                            </TableHead>
+                          ) : null}
                           <SortableHead label="Employee" colKey="employee" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Type" colKey="kind" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                           <SortableHead label="Dates" colKey="from" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -365,6 +387,11 @@ export default function AbsencePage() {
                       <TableBody>
                         {pageRows.map((r) => (
                           <TableRow key={r.id} href={`/guards/${r.guard_id}?tab=absence`}>
+                            {canBulk ? (
+                              <TableCell className="w-8">
+                                <RowCheckbox selection={selection} id={r.id} label={`Select absence for ${r.guard_name ?? r.id}`} />
+                              </TableCell>
+                            ) : null}
                             <TableCell className="font-medium">
                               <Link
                                 href={`/guards/${r.guard_id}?tab=absence`}

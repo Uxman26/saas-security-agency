@@ -20,6 +20,8 @@ import { guardCreateSchema, guardSchema, guardSubmitSchema, type GuardFormData }
 import { guardFormDefaults, guardToForm, formToGuardPayload } from '@/lib/guard-form-map';
 import type { EmployeeHub, EmployeeHubRow, Guard, RecordView, Team } from '@/lib/types';
 import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
+import { useQueryClient } from '@tanstack/react-query';
 import { GuardFormWizard } from '@/app/guards/guard-form-wizard';
 import { EmailDialog } from '@/components/email-dialog';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
@@ -29,7 +31,7 @@ import { ModuleTabs } from '@/components/module-layout';
 import { JobTitlesPanel } from '@/app/guards/job-titles-panel';
 import { formatDateUK } from '@/lib/date-format';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
-import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ArchiveRestore, Pencil, Trash2, UserRound, Users, Eye, BadgeCheck, CalendarOff, FolderOpen, ShieldAlert, UserMinus, UserPlus } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
@@ -86,7 +88,7 @@ export default function GuardsPage() {
   const [filterArea, setFilterArea] = useState('');
   const [filterPostcode, setFilterPostcode] = useState('');
   const [filterNearby, setFilterNearby] = useState('');
-  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const { sortKey, sortDir, toggleSort } = useTableSort('name');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
@@ -209,6 +211,11 @@ export default function GuardsPage() {
       setPhotoFile(null);
       setAddOpen(false);
       addForm.reset(guardFormDefaults);
+      // A new person is active, so they are only ever found on the active list. The hub
+      // decides who is listed, so it has to learn about them too.
+      setListView('active');
+      loadHub();
+      if (created?.id) focusRows(created.id);
     } catch (err) {
       if (isDuplicateEmailError(err)) toast.error(DUPLICATE_EMAIL_MESSAGE);
     }
@@ -385,7 +392,7 @@ export default function GuardsPage() {
     [guards, hubIds, filterContractor, filterSubContractor, matchesContractor]
   );
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     contractorFiltered,
     search,
     sortKey,
@@ -395,6 +402,21 @@ export default function GuardsPage() {
     getSearchText,
     getSortValue
   );
+
+  const getGuardId = useCallback((g: Guard) => g.id, []);
+  const { focusRows, isHighlighted } = useScrollToNewRow(filteredRows, getGuardId, pageSize, setPage);
+
+  const queryClient = useQueryClient();
+  const canBulkArchive = canModule(user, 'guards', 'archive') && listView !== 'archived';
+  const canBulkPurge = canModule(user, 'guards', 'delete_permanent');
+  const canBulk = canBulkArchive || canBulkPurge;
+  const filteredIds = useMemo(() => filteredRows.map((g) => g.id), [filteredRows]);
+  const pageIds = useMemo(() => pageRows.map((g) => g.id), [pageRows]);
+  const selection = useBulkSelection(filteredIds);
+  const afterBulk = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['guards'] });
+    loadHub();
+  }, [queryClient, loadHub]);
 
   useEffect(() => {
     setPage(1);
@@ -781,9 +803,42 @@ export default function GuardsPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
+                  {canBulk ? (
+                    <BulkActionBar selection={selection} noun="staff member" allIds={filteredIds}>
+                      {canBulkArchive ? (
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="staff member"
+                          label="Archive selected"
+                          confirmLabel="Archive"
+                          verb="archived"
+                          deleteOne={(id) => api.guards.delete(id)}
+                          onDone={afterBulk}
+                          description="They leave the Staff list and every rota and payroll picker, and any portal login is switched off. Shifts, attendance and payroll history stay as they are. You can restore them from the Archived tab."
+                        />
+                      ) : null}
+                      {canBulkPurge ? (
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="staff member"
+                          label="Delete permanently"
+                          confirmLabel="Delete permanently"
+                          requireAck
+                          deleteOne={(id) => api.guards.delete(id, { permanent: true })}
+                          onDone={afterBulk}
+                          description="Each selected staff member and their records are destroyed. Anyone still in use elsewhere is skipped and listed afterwards — archive those instead. This cannot be undone."
+                        />
+                      ) : null}
+                    </BulkActionBar>
+                  ) : null}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={pageIds} />
+                          </TableHead>
+                        ) : null}
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Job title" colKey="job_title" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Team(s)</TableHead>
@@ -805,7 +860,17 @@ export default function GuardsPage() {
                         const siaStatus = getSiaStatus(guard.sia_expiry_date);
                         const visaStatus = getSiaStatus(guard.visa_expiry_date);
                         return (
-                          <TableRow key={guard.id} href={`/guards/${guard.id}`}>
+                          <TableRow
+                            key={guard.id}
+                            href={`/guards/${guard.id}`}
+                            data-row-id={guard.id}
+                            className={cn(selection.isSelected(guard.id) && 'bg-primary/5', isHighlighted(guard.id) && NEW_ROW_HIGHLIGHT_CLASS)}
+                          >
+                            {canBulk ? (
+                              <TableCell className="w-8">
+                                <RowCheckbox selection={selection} id={guard.id} label={`Select ${guard.full_name}`} />
+                              </TableCell>
+                            ) : null}
                             <TableCell className="font-medium whitespace-nowrap">
                               <Link href={`/guards/${guard.id}`} className="flex items-center gap-2 hover:underline">
                                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">

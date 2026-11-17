@@ -94,6 +94,11 @@ function isEnded(r: RotaPlanListItem) {
   return r.end_date < todayKey();
 }
 
+/** Ended → Archived; otherwise published → Active, anything else → Draft. */
+function tabOf(r: RotaPlanListItem): Tab {
+  return isEnded(r) ? 'old' : r.status === 'published' ? 'active' : 'draft';
+}
+
 /** Calendar-day arithmetic on a YYYY-MM-DD key, kept in UTC so it never shifts a day. */
 function addDays(key: string, n: number) {
   const d = new Date(`${key}T00:00:00Z`);
@@ -222,19 +227,27 @@ function RotaHubPage() {
     setSelectedIds(new Set());
   }, [tab, nameFilter, rangeFrom, rangeTo, statusFilter, needsMarking, workFilters]);
 
-  const tabRotas = useMemo(
+  // Rotas passing the page's filters, whatever tab they sit in.
+  const filteredRotas = useMemo(
     () =>
       rotas.filter((r) => {
-        const ended = isEnded(r);
-        if (tab === 'active' && (ended || r.status !== 'published')) return false;
-        if (tab === 'draft' && (ended || r.status === 'published')) return false;
-        if (tab === 'old' && !ended) return false;
         if (statusFilter !== 'all' && (statusFilter === 'published') !== (r.status === 'published')) return false;
         if (nameFilter.trim() && !r.name.toLowerCase().includes(nameFilter.trim().toLowerCase())) return false;
         return overlapsRange(r, rangeFrom, rangeTo);
       }),
-    [rotas, tab, statusFilter, nameFilter, rangeFrom, rangeTo]
+    [rotas, statusFilter, nameFilter, rangeFrom, rangeTo]
   );
+
+  const tabRotas = useMemo(() => filteredRotas.filter((r) => tabOf(r) === tab), [filteredRotas, tab]);
+
+  // A search that finds nothing here may still match rotas in another tab — most often
+  // a site whose rotas have all ended and moved to Archived. Counted so the empty state
+  // can point there instead of looking like the rotas are missing.
+  const matchesByTab = useMemo(() => {
+    const out: Record<Tab, number> = { active: 0, draft: 0, old: 0 };
+    for (const r of filteredRotas) out[tabOf(r)] += 1;
+    return out;
+  }, [filteredRotas]);
 
   // Same population as the rose banner: tab membership + unmarked count only.
   // Do not also require name/date filters here — that left "Show only these" empty
@@ -266,7 +279,7 @@ function RotaHubPage() {
     for (const r of rotas) {
       const n = Number(r.unmarked_attendance_count ?? 0);
       if (!(n > 0)) continue;
-      const t: Tab = isEnded(r) ? 'old' : r.status === 'published' ? 'active' : 'draft';
+      const t = tabOf(r);
       out[t].rotas += 1;
       out[t].shifts += n;
     }
@@ -948,6 +961,20 @@ function RotaHubPage() {
                 ) : total === 0 ? (
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     {emptyText}{' '}
+                    {!showOnlyMarks && filtersActive
+                      ? tabs
+                          .filter((t) => t.id !== tab && matchesByTab[t.id] > 0)
+                          .map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => setTab(t.id)}
+                              className="mr-2 text-primary underline hover:no-underline"
+                            >
+                              {matchesByTab[t.id]} matching rota{matchesByTab[t.id] === 1 ? '' : 's'} in {t.label}
+                            </button>
+                          ))
+                      : null}
                     {canCreateRota && tab !== 'old' ? (
                       <Link href="/rota/create" className="text-primary underline hover:no-underline">
                         Create a rota

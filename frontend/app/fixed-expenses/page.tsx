@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { FixedExpense, Vendor } from '@/lib/types';
 import { Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -81,6 +82,11 @@ export default function FixedExpensesPage() {
   };
 
   const vendorName = (id?: number | null) => vendors.find((v) => v.id === id)?.name || '—';
+
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const bulkPageIds = useMemo(() => rows.map((r) => r.id), [rows]);
+  const selection = useBulkSelection(bulkAllIds);
 
   return (
     <ProtectedRoute>
@@ -155,10 +161,26 @@ export default function FixedExpensesPage() {
               ) : null
             }
           />
+          {canBulk ? (
+            <BulkActionBar selection={selection} noun="fixed expense" allIds={bulkAllIds}>
+              <BulkDeleteButton
+                selection={selection}
+                noun="fixed expense"
+                deleteOne={(id) => api.fixedExpenses.delete(id)}
+                onDone={() => { void load(); }}
+                description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+              />
+            </BulkActionBar>
+          ) : null}
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canBulk ? (
+                    <TableHead className="w-8">
+                      <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                    </TableHead>
+                  ) : null}
                   <TableHead>Description</TableHead>
                   <TableHead>Vendor</TableHead>
                   <TableHead>Amount</TableHead>
@@ -171,11 +193,16 @@ export default function FixedExpensesPage() {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7}>No fixed expenses yet.</TableCell>
+                    <TableCell colSpan={canBulk ? 8 : 7}>No fixed expenses yet.</TableCell>
                   </TableRow>
                 ) : (
                   rows.map((r) => (
                     <TableRow key={r.id}>
+                      {canBulk ? (
+                        <TableCell className="w-8">
+                          <RowCheckbox selection={selection} id={r.id} label={`Select fixed expense ${r.id}`} />
+                        </TableCell>
+                      ) : null}
                       <TableCell className="font-medium">{r.description}</TableCell>
                       <TableCell>{vendorName(r.vendor_id)}</TableCell>
                       <TableCell>£{Number(r.amount).toFixed(2)}</TableCell>

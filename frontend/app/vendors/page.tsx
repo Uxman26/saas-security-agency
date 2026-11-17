@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ModuleHeader, ModulePage } from '@/components/module-layout';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { Vendor } from '@/lib/types';
 import Link from 'next/link';
 import { Plus, Pencil, ReceiptText, Trash2 } from 'lucide-react';
@@ -76,6 +77,11 @@ export default function VendorsPage() {
     }
   };
 
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => rows.map((v) => v.id), [rows]);
+  const bulkPageIds = useMemo(() => rows.map((v) => v.id), [rows]);
+  const selection = useBulkSelection(bulkAllIds);
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -134,10 +140,26 @@ export default function VendorsPage() {
               ) : null
             }
           />
+          {canBulk ? (
+            <BulkActionBar selection={selection} noun="vendor" allIds={bulkAllIds}>
+              <BulkDeleteButton
+                selection={selection}
+                noun="vendor"
+                deleteOne={(id) => api.vendors.delete(id)}
+                onDone={() => { void load(); }}
+                description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+              />
+            </BulkActionBar>
+          ) : null}
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canBulk ? (
+                    <TableHead className="w-8">
+                      <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                    </TableHead>
+                  ) : null}
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
@@ -148,15 +170,20 @@ export default function VendorsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5}>Loading…</TableCell>
+                    <TableCell colSpan={canBulk ? 6 : 5}>Loading…</TableCell>
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5}>No vendors yet.</TableCell>
+                    <TableCell colSpan={canBulk ? 6 : 5}>No vendors yet.</TableCell>
                   </TableRow>
                 ) : (
                   rows.map((v) => (
                     <TableRow key={v.id} onRowClick={canEdit ? () => openEditVendor(v) : undefined}>
+                      {canBulk ? (
+                        <TableCell className="w-8">
+                          <RowCheckbox selection={selection} id={v.id} label={`Select ${v.name ?? v.id}`} />
+                        </TableCell>
+                      ) : null}
                       <TableCell className="font-medium">{v.name}</TableCell>
                       <TableCell>{v.email || '—'}</TableCell>
                       <TableCell>{v.phone || '—'}</TableCell>

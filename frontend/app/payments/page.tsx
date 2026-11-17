@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
+import { BulkConfirmDialog, runBulk } from '@/components/bulk-select';
 import type { Payment, Invoice } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import {
@@ -61,6 +62,7 @@ export default function PaymentsPage() {
   const [reviewFilter, setReviewFilter] = useState<'all' | 'unreviewed' | 'reviewed'>('all');
   const [siteFilter, setSiteFilter] = useState<string>('all');
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort();
   const [page, setPage] = useState(1);
@@ -509,9 +511,31 @@ export default function PaymentsPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  {canEditMod && selected.size > 0 ? (
+                  {(canEditMod || canDeleteMod) && selected.size > 0 ? (
                     <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
                       <span className="font-medium">{selected.size} selected</span>
+                      {canDeleteMod ? (
+                        <>
+                          <Button size="sm" variant="destructive" disabled={reviewBusy} onClick={() => setBulkDeleteOpen(true)}>
+                            <Trash2 className="size-4 mr-1.5" />
+                            Delete
+                          </Button>
+                          <BulkConfirmDialog
+                            open={bulkDeleteOpen}
+                            onOpenChange={setBulkDeleteOpen}
+                            title={`Delete ${selected.size} payment${selected.size === 1 ? '' : 's'}?`}
+                            description="The linked invoices' paid amounts are updated. Any the server won't allow are skipped and listed afterwards. This cannot be undone."
+                            onConfirm={async () => {
+                              const res = await runBulk([...selected], (id) => api.payments.delete(id), { noun: 'payment' });
+                              const gone = new Set(res.ok);
+                              setSelected((prev) => new Set([...prev].filter((id) => !gone.has(id))));
+                              loadPayments();
+                            }}
+                          />
+                        </>
+                      ) : null}
+                      {canEditMod ? (
+                      <>
                       <Button
                         size="sm"
                         variant="outline"
@@ -530,6 +554,8 @@ export default function PaymentsPage() {
                         <Circle className="size-4 mr-1.5" />
                         Mark as not reviewed
                       </Button>
+                      </>
+                      ) : null}
                       <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
                         Clear
                       </Button>
@@ -538,7 +564,7 @@ export default function PaymentsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        {canEditMod ? (
+                        {canEditMod || canDeleteMod ? (
                           <TableHead className="w-8">
                             <input
                               type="checkbox"
@@ -568,7 +594,7 @@ export default function PaymentsPage() {
                         const inv = p.invoice_id ? invoiceMap.get(p.invoice_id) : null;
                         return (
                           <TableRow key={p.id} className={selected.has(p.id) ? 'bg-primary/5' : undefined}>
-                            {canEditMod ? (
+                            {canEditMod || canDeleteMod ? (
                               <TableCell className="w-8">
                                 <input
                                   type="checkbox"

@@ -28,6 +28,8 @@ import { cn } from '@/lib/utils';
 import { clientCreateSchema, clientSchema, clientRenewSchema, PASSWORD_REQUIREMENTS_MSG } from '@/lib/validation';
 import type { Client, RecordView } from '@/lib/types';
 import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
+import { useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { EmailDialog } from '@/components/email-dialog';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -431,7 +433,7 @@ export default function ClientsPage() {
     }
   }, []);
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     byStatus,
     search,
     sortKey,
@@ -441,6 +443,17 @@ export default function ClientsPage() {
     getSearchText,
     getSortValue
   );
+
+  const queryClient = useQueryClient();
+  const canBulkArchive = canArchiveMod && listView !== 'archived';
+  const canBulkPurge = canPurgeMod;
+  const canBulk = canBulkArchive || canBulkPurge;
+  const filteredIds = useMemo(() => filteredRows.map((c) => c.id), [filteredRows]);
+  const pageIds = useMemo(() => pageRows.map((c) => c.id), [pageRows]);
+  const selection = useBulkSelection(filteredIds);
+  const afterBulk = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['clients'] });
+  }, [queryClient]);
 
   useEffect(() => {
     setPage(1);
@@ -681,9 +694,42 @@ export default function ClientsPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
+                  {canBulk ? (
+                    <BulkActionBar selection={selection} noun="client" allIds={filteredIds}>
+                      {canBulkArchive ? (
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="client"
+                          label="Archive selected"
+                          confirmLabel="Archive"
+                          verb="archived"
+                          deleteOne={(id) => api.clients.delete(id)}
+                          onDone={afterBulk}
+                          description="They leave the Clients list and every picker, while their sites, invoices and history stay readable. You can restore them from the Archived tab."
+                        />
+                      ) : null}
+                      {canBulkPurge ? (
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="client"
+                          label="Delete permanently"
+                          confirmLabel="Delete permanently"
+                          requireAck
+                          deleteOne={(id) => api.clients.delete(id, { permanent: true })}
+                          onDone={afterBulk}
+                          description="Each selected client and their records are destroyed. Any still in use elsewhere are skipped and listed afterwards — archive those instead. This cannot be undone."
+                        />
+                      ) : null}
+                    </BulkActionBar>
+                  ) : null}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={pageIds} />
+                          </TableHead>
+                        ) : null}
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Contract end" colKey="contract_end" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -702,8 +748,13 @@ export default function ClientsPage() {
                           <TableRow
                             key={client.id}
                             onRowClick={canViewMod ? () => setViewClient(client) : undefined}
-                            className={expiredRow ? 'bg-red-500/10 dark:bg-red-950/25 border-red-500/20' : undefined}
+                            className={expiredRow ? 'bg-red-500/10 dark:bg-red-950/25 border-red-500/20' : selection.isSelected(client.id) ? 'bg-primary/5' : undefined}
                           >
+                            {canBulk ? (
+                              <TableCell className="w-8">
+                                <RowCheckbox selection={selection} id={client.id} label={`Select ${client.name}`} />
+                              </TableCell>
+                            ) : null}
                             <TableCell className="font-medium whitespace-nowrap">{client.name}</TableCell>
                             <TableCell className="whitespace-nowrap text-sm">
                               {client.contract_end_date || '—'}

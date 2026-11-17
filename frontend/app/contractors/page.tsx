@@ -36,6 +36,7 @@ import {
 } from '@/components/module-dashboard';
 import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import { can, canModule, PERMS } from '@/lib/permissions';
 import { toast, toastMutationError } from '@/lib/toast';
 import type { DirectoryContractorList } from '@/lib/types';
@@ -146,7 +147,7 @@ export default function ContractorsDirectoryPage() {
     return r.name;
   }, []);
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     filtered,
     '',
     sortKey,
@@ -231,6 +232,11 @@ export default function ContractorsDirectoryPage() {
       disabled: !canDeleteRow(r),
     },
   ];
+
+  const canBulk = canModule(user, 'contractors', 'delete');
+  const bulkAllIds = useMemo(() => filteredRows.map((r) => r.id), [filteredRows]);
+  const bulkPageIds = useMemo(() => pageRows.map((r) => r.id), [pageRows]);
+  const selection = useBulkSelection(bulkAllIds);
 
   return (
     <ProtectedRoute>
@@ -383,9 +389,25 @@ export default function ContractorsDirectoryPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
+                  {canBulk ? (
+                    <BulkActionBar selection={selection} noun="contractor" allIds={bulkAllIds}>
+                      <BulkDeleteButton
+                        selection={selection}
+                        noun="contractor"
+                        deleteOne={(id) => api.directoryContractors.deleteContractor(id)}
+                        onDone={() => { void load(); }}
+                        description="Each selected contractor is permanently deleted. Any the server won’t allow (or you can’t delete) are skipped and listed afterwards. This cannot be undone."
+                      />
+                    </BulkActionBar>
+                  ) : null}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                          </TableHead>
+                        ) : null}
                         <SortableHead label="Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Type" colKey="type" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -396,6 +418,11 @@ export default function ContractorsDirectoryPage() {
                     <TableBody>
                       {pageRows.map((r) => (
                         <TableRow key={r.id} href={canViewRow(r) ? `/contractors/${r.id}` : undefined}>
+                          {canBulk ? (
+                            <TableCell className="w-8">
+                              <RowCheckbox selection={selection} id={r.id} label={`Select ${r.name}`} />
+                            </TableCell>
+                          ) : null}
                           <TableCell className="max-w-[240px] font-medium">
                             <div className="flex items-center gap-2">
                               <RecordAvatar name={r.name} className="size-8" />

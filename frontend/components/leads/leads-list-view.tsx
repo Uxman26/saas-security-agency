@@ -7,6 +7,7 @@ import { AppShell } from '@/components/app-shell';
 import { LeadFormFields } from '@/components/leads/lead-form-fields';
 import { LeadsSubnav } from '@/components/leads/leads-subnav';
 import { LeadsTable } from '@/components/leads/leads-table';
+import { BulkActionBar, BulkDeleteButton, useBulkSelection } from '@/components/bulk-select';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -80,6 +81,9 @@ export function LeadsListView({ title, description, fixedFilters = {}, showDates
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const deleteLead = useDeleteLead();
+  const canBulkDelete = can(user, 'leads.delete');
+  const leadIds = useMemo(() => leads.map((l) => l.id), [leads]);
+  const selection = useBulkSelection(leadIds);
 
   if (user && !enabled) {
     return (
@@ -364,9 +368,20 @@ export function LeadsListView({ title, description, fixedFilters = {}, showDates
             </div>
           )}
 
+          {canBulkDelete ? (
+            <BulkActionBar selection={selection} noun="lead">
+              <BulkDeleteButton
+                selection={selection}
+                noun="lead"
+                deleteOne={(id) => api.leads.delete(id)}
+                onDone={() => qc.invalidateQueries({ queryKey: ['leads'] })}
+              />
+            </BulkActionBar>
+          ) : null}
           <Card>
             <CardContent className="p-0 overflow-x-auto">
               <LeadsTable
+                selection={canBulkDelete ? selection : undefined}
                 leads={leads}
                 isLoading={isLoading}
                 user={user}

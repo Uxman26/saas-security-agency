@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { ModuleGuard } from '@/components/module-guard';
@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { Guard, Site, Task, TaskCounts } from '@/lib/types';
 import { AlertTriangle, CheckCircle2, Clock, ListChecks, Plus, Trash2, Pencil, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -200,6 +201,11 @@ export default function TasksPage() {
       ]
     : [];
 
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => rows.map((t) => t.id), [rows]);
+  const bulkPageIds = useMemo(() => rows.map((t) => t.id), [rows]);
+  const selection = useBulkSelection(bulkAllIds);
+
   return (
     <ProtectedRoute>
       <AppShell>
@@ -253,10 +259,26 @@ export default function TasksPage() {
 
             <ResultsCard title="Tasks" count={loading ? undefined : rows.length}>
               <div className="p-4">
+                {canBulk ? (
+                  <BulkActionBar selection={selection} noun="task" allIds={bulkAllIds}>
+                    <BulkDeleteButton
+                      selection={selection}
+                      noun="task"
+                      deleteOne={(id) => api.tasks.remove(id)}
+                      onDone={() => { load(); }}
+                      description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+                    />
+                  </BulkActionBar>
+                ) : null}
                 <div className="overflow-x-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                          </TableHead>
+                        ) : null}
                         <TableHead className="w-10" />
                         <TableHead>Task</TableHead>
                         <TableHead>Assigned to</TableHead>
@@ -270,13 +292,18 @@ export default function TasksPage() {
                     <TableBody>
                       {rows.length === 0 && !loading ? (
                         <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                          <TableCell colSpan={canBulk ? 9 : 8} className="text-center text-muted-foreground py-8">
                             Nothing here. {canCreate ? 'Use New task to assign one.' : 'You have no tasks for this filter.'}
                           </TableCell>
                         </TableRow>
                       ) : null}
                       {rows.map((t) => (
                         <TableRow key={t.id} className={cn(t.status === 'done' && 'opacity-60')} onRowClick={canEdit ? () => openEdit(t) : undefined}>
+                          {canBulk ? (
+                            <TableCell className="w-8">
+                              <RowCheckbox selection={selection} id={t.id} label={`Select ${t.title}`} />
+                            </TableCell>
+                          ) : null}
                           <TableCell>
                             <input
                               type="checkbox"

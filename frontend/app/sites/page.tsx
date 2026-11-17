@@ -22,6 +22,8 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
 import type { Client, RecordView, Site } from '@/lib/types';
 import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
@@ -39,7 +41,7 @@ import {
   type ResultsView,
   type StatCardSpec,
 } from '@/components/module-dashboard';
-import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
+import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
 import { MapPin, Pencil, Trash2, ArchiveRestore, Building2, PoundSterling, Users } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
@@ -325,7 +327,7 @@ export default function SitesPage() {
   const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState('');
-  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const { sortKey, sortDir, toggleSort } = useTableSort('name');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
 
@@ -465,9 +467,12 @@ export default function SitesPage() {
         payload.login_full_name = data.login_full_name || undefined;
         payload.login_password = data.login_password;
       }
-      await createSite.mutateAsync(payload);
+      const created = await createSite.mutateAsync(payload);
       setAddOpen(false);
       addForm.reset();
+      // A new site is active, so it is only ever found on the active list.
+      setListView('active');
+      if (created?.id) focusRows(created.id);
     } catch (err) {
       if (isDuplicateEmailError(err)) toast.error(DUPLICATE_EMAIL_MESSAGE);
       else console.error(err);
@@ -559,7 +564,7 @@ export default function SitesPage() {
     [clientMap, contractorLabel]
   );
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     sites,
     search,
     sortKey,
@@ -569,6 +574,23 @@ export default function SitesPage() {
     getSearchText,
     getSortValue
   );
+
+  const getSiteId = useCallback((s: Site) => s.id, []);
+  const { focusRows, isHighlighted } = useScrollToNewRow(filteredRows, getSiteId, pageSize, setPage);
+
+  const queryClient = useQueryClient();
+  const canBulkArchive = canArchiveSites && listView !== 'archived';
+  const canBulkPurge = canPurgeSites;
+  const canBulk = canBulkArchive || canBulkPurge;
+  const filteredIds = useMemo(() => filteredRows.map((s) => s.id), [filteredRows]);
+  const pageIds = useMemo(() => pageRows.map((s) => s.id), [pageRows]);
+  const selection = useBulkSelection(filteredIds);
+  const afterBulk = useCallback(async () => {
+    // Rotas, shifts and payroll show site names, so refresh them too.
+    for (const key of ['sites', 'assignments', 'rota', 'rotaDetail', 'rotaSummary', 'rota-plans', 'rotaPlans']) {
+      await queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }, [queryClient]);
 
   useEffect(() => {
     setPage(1);
@@ -749,7 +771,7 @@ export default function SitesPage() {
               ) : resultsView === 'cards' ? (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {pageRows.map((site) => (
-                    <div key={site.id} className="rounded-lg border p-4">
+                    <div key={site.id} data-row-id={site.id} className={cn('rounded-lg border p-4', isHighlighted(site.id) && NEW_ROW_HIGHLIGHT_CLASS)}>
                       <div className="flex items-start gap-3">
                         <RecordAvatar name={site.name} />
                         <div className="min-w-0 flex-1">
@@ -777,9 +799,42 @@ export default function SitesPage() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
+                  {canBulk ? (
+                    <BulkActionBar selection={selection} noun="site" allIds={filteredIds}>
+                      {canBulkArchive ? (
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="site"
+                          label="Archive selected"
+                          confirmLabel="Archive"
+                          verb="archived"
+                          deleteOne={(id) => api.sites.delete(id)}
+                          onDone={afterBulk}
+                          description="They leave the Sites list and every rota and picker, while shifts, invoices and history stay readable. You can restore them from the Archived tab."
+                        />
+                      ) : null}
+                      {canBulkPurge ? (
+                        <BulkDeleteButton
+                          selection={selection}
+                          noun="site"
+                          label="Delete permanently"
+                          confirmLabel="Delete permanently"
+                          requireAck
+                          deleteOne={(id) => api.sites.delete(id, { permanent: true })}
+                          onDone={afterBulk}
+                          description="Each selected site and its records are destroyed. Any still in use elsewhere are skipped and listed afterwards — archive those instead. This cannot be undone."
+                        />
+                      ) : null}
+                    </BulkActionBar>
+                  ) : null}
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulk ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={pageIds} />
+                          </TableHead>
+                        ) : null}
                         <SortableHead label="Site Name" colKey="name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <TableHead>Colour</TableHead>
                         <SortableHead label="Contractor" colKey="contractor" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -801,7 +856,14 @@ export default function SitesPage() {
                         <TableRow
                           key={site.id}
                           onRowClick={canEditSites && site.deleted_at == null ? () => openEdit(site) : undefined}
+                          data-row-id={site.id}
+                          className={cn(selection.isSelected(site.id) && 'bg-primary/5', isHighlighted(site.id) && NEW_ROW_HIGHLIGHT_CLASS)}
                         >
+                          {canBulk ? (
+                            <TableCell className="w-8">
+                              <RowCheckbox selection={selection} id={site.id} label={`Select ${site.name}`} />
+                            </TableCell>
+                          ) : null}
                           <TableCell className="font-medium whitespace-nowrap">{site.name}</TableCell>
                           <TableCell>
                             <span

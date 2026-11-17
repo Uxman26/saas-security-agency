@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { ModulePage } from '@/components/module-layout';
 import { DashboardHeader, Pill, StatCards } from '@/components/module-dashboard';
 import { INVOICE_CURRENCIES } from '@/lib/invoice-currency';
 import { api } from '@/lib/api';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import type { Client, RecurringInvoice, Site } from '@/lib/types';
 import { List, Pause, Plus, Repeat, Trash2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
@@ -113,6 +114,11 @@ export default function RecurringInvoicesPage() {
   const clientName = (id?: number | null) => clients.find((c) => c.id === id)?.name || '—';
   const visible = statusFilter === 'all' ? rows : rows.filter((r) => r.status === statusFilter);
   const activeCount = rows.filter((r) => r.status === 'active').length;
+
+  const canBulk = canDelete;
+  const bulkAllIds = useMemo(() => visible.map((r) => r.id), [visible]);
+  const bulkPageIds = useMemo(() => visible.map((r) => r.id), [visible]);
+  const selection = useBulkSelection(bulkAllIds);
 
   return (
     <ProtectedRoute>
@@ -255,10 +261,26 @@ export default function RecurringInvoicesPage() {
               </button>
             ))}
           </div>
+          {canBulk ? (
+            <BulkActionBar selection={selection} noun="recurring invoice" allIds={bulkAllIds}>
+              <BulkDeleteButton
+                selection={selection}
+                noun="recurring invoice"
+                deleteOne={(id) => api.recurringInvoices.delete(id)}
+                onDone={() => { void load(); }}
+                description="Any the server won’t allow are skipped and listed afterwards. This cannot be undone."
+              />
+            </BulkActionBar>
+          ) : null}
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  {canBulk ? (
+                    <TableHead className="w-8">
+                      <SelectAllCheckbox selection={selection} ids={bulkPageIds} />
+                    </TableHead>
+                  ) : null}
                   <TableHead>Client</TableHead>
                   <TableHead>Frequency</TableHead>
                   <TableHead>Next run</TableHead>
@@ -271,11 +293,16 @@ export default function RecurringInvoicesPage() {
               <TableBody>
                 {visible.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7}>No recurring invoices yet.</TableCell>
+                    <TableCell colSpan={canBulk ? 8 : 7}>No recurring invoices yet.</TableCell>
                   </TableRow>
                 ) : (
                   visible.map((r) => (
                     <TableRow key={r.id}>
+                      {canBulk ? (
+                        <TableCell className="w-8">
+                          <RowCheckbox selection={selection} id={r.id} label={`Select recurring invoice ${r.id}`} />
+                        </TableCell>
+                      ) : null}
                       <TableCell className="font-medium">{clientName(r.client_id)}</TableCell>
                       <TableCell>{r.frequency}</TableCell>
                       <TableCell>{r.next_run || '—'}</TableCell>

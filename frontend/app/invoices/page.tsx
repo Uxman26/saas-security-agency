@@ -16,8 +16,8 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import type { Invoice, Client, Site, ClientBankAccount } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
-import { DEFAULT_TABLE_PAGE_SIZE, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, Plus, FileMinus2, Send, Undo2 } from 'lucide-react';
+import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
+import { FileText, Zap, Users, CalendarDays, Clock, Tag, Percent, PoundSterling, Landmark, ClipboardCheck, Layers, MapPin, List, Cog, Hash, Coins, Calculator, type LucideIcon, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, Plus, FileMinus2, Send, Undo2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
@@ -53,8 +53,31 @@ import {
   type WorkFilterValues,
 } from '@/components/work-filter-bar';
 import { cn } from '@/lib/utils';
+import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 
 const STATUS_OPTIONS = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
+
+/** A created invoice opens straight away; this carries its id back to the list. */
+const NEW_INVOICE_FOCUS_KEY = 'invoices:new-invoice-focus';
+
+function rememberNewInvoice(id: number) {
+  try {
+    sessionStorage.setItem(NEW_INVOICE_FOCUS_KEY, String(id));
+  } catch {
+    /* storage blocked: the list simply opens at the top */
+  }
+}
+
+function takeNewInvoiceFocus(): number | null {
+  try {
+    const raw = sessionStorage.getItem(NEW_INVOICE_FOCUS_KEY);
+    sessionStorage.removeItem(NEW_INVOICE_FOCUS_KEY);
+    const id = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
 
 function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
@@ -160,7 +183,7 @@ export default function InvoicesPage() {
   const [payLoading, setPayLoading] = useState(false);
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
   const [reminderSending, setReminderSending] = useState(false);
-  const { sortKey, sortDir, toggleSort } = useTableSort();
+  const { sortKey, sortDir, toggleSort } = useTableSort('client');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
   const [resultsView, setResultsView] = useState<ResultsView>('list');
@@ -248,13 +271,19 @@ export default function InvoicesPage() {
       });
   }, [customClientId]);
 
-  const customClientSites = useMemo(
-    () =>
-      customClientId
-        ? sites.filter((s) => s.client_id != null && String(s.client_id) === customClientId)
-        : [],
-    [sites, customClientId]
-  );
+  // The client's own sites come first. Most sites are never linked to a client, so those
+  // are offered too (after them) — filtering on the link alone left the picker empty.
+  // Sites belonging to a different client stay out.
+  const customClientSiteOptions = useMemo(() => {
+    if (!customClientId) return [];
+    const byName = (a: Site, b: Site) => a.name.localeCompare(b.name);
+    const own = sites.filter((s) => s.client_id != null && String(s.client_id) === customClientId).sort(byName);
+    const unlinked = sites.filter((s) => s.client_id == null).sort(byName);
+    return [
+      ...own.map((s) => ({ value: String(s.id), label: s.name })),
+      ...unlinked.map((s) => ({ value: String(s.id), label: `${s.name} (no client set)` })),
+    ];
+  }, [sites, customClientId]);
 
   const resetCustomForm = () => {
     setCustomClientId('');
@@ -317,6 +346,7 @@ export default function InvoicesPage() {
       resetCustomForm();
       loadInvoices();
       toast.success(`Invoice #${inv.id} created`);
+      rememberNewInvoice(inv.id);
       router.push(`/invoices/${inv.id}/edit`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Create failed');
@@ -361,6 +391,7 @@ export default function InvoicesPage() {
       );
       // "Where did it go?" is the commonest question about this button, so it lands on
       // the invoice itself rather than a list the user then has to search.
+      rememberNewInvoice(inv.id);
       router.push(`/invoices/${inv.id}/view`);
     } catch (err) {
       // 409 means an invoice already covers this period. That is nearly always a repeat
@@ -452,7 +483,7 @@ export default function InvoicesPage() {
     [customerLabel]
   );
 
-  const { pageRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
+  const { pageRows, filteredRows, total, pageCount, safePage, rangeStart, rangeEnd } = useTableList(
     invoices,
     search,
     sortKey,
@@ -463,6 +494,11 @@ export default function InvoicesPage() {
     getSortValue
   );
 
+  const canBulkDelete = can(user, 'invoices.delete');
+  const filteredIds = useMemo(() => filteredRows.map((i) => i.id), [filteredRows]);
+  const pageIds = useMemo(() => pageRows.map((i) => i.id), [pageRows]);
+  const selection = useBulkSelection(filteredIds);
+
   useEffect(() => {
     setPage(1);
   }, [search, statusFilter, workFilters]);
@@ -470,6 +506,15 @@ export default function InvoicesPage() {
   useEffect(() => {
     setPage((p) => Math.min(p, pageCount));
   }, [pageCount]);
+
+  const getInvoiceId = useCallback((inv: Invoice) => inv.id, []);
+  const { focusRows, isHighlighted } = useScrollToNewRow(filteredRows, getInvoiceId, pageSize, setPage);
+
+  // Creating an invoice opens it; coming back to this list then lands on it.
+  useEffect(() => {
+    const id = takeNewInvoiceFocus();
+    if (id != null) focusRows(id);
+  }, [focusRows]);
 
   const totalAmount = invoiceStats.reduce((sum, inv) => sum + inv.total, 0);
   const paidAmount = invoiceStats.reduce((sum, i) => sum + (i.amount_paid ?? 0), 0);
@@ -489,6 +534,7 @@ export default function InvoicesPage() {
     try {
       const dup = await api.invoices.duplicate(id);
       loadInvoices();
+      focusRows(dup.id);
       toast.success(`Invoice #${dup.id} created`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Duplicate failed');
@@ -908,32 +954,38 @@ export default function InvoicesPage() {
                       Custom Invoice
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Create Custom Invoice</DialogTitle>
+                  <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0 [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4 [&>[data-slot=dialog-close]]:z-20 [&>[data-slot=dialog-close]]:text-primary-foreground [&>[data-slot=dialog-close]]:opacity-90">
+                    <DialogHeader className="sticky top-0 z-10 bg-primary text-primary-foreground px-5 py-3.5 text-left">
+                      <DialogTitle className="flex items-center gap-2.5 text-lg">
+                        <span className="flex size-8 items-center justify-center rounded-md bg-primary-foreground/15">
+                          <FilePlus2 className="size-4.5" />
+                        </span>
+                        Create Custom Invoice
+                      </DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4 py-2">
-                      <div className="space-y-1">
-                        <Label>Client <span className="text-destructive">*</span></Label>
-                        <SearchableSelect
-                          value={customClientId}
-                          options={clientOptions}
-                          placeholder="Select client"
-                          searchPlaceholder="Search clients…"
-                          onChange={setCustomClientId}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <Label>Invoice date</Label>
+                    <div className="space-y-3 p-4 sm:p-5 bg-muted/30">
+                      {/* Client & invoice date */}
+                      <InvoiceFormCard className="grid gap-4 sm:grid-cols-2 sm:divide-x sm:divide-primary/15">
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Users} required>Client</InvoiceFieldLabel>
+                          <SearchableSelect
+                            value={customClientId}
+                            options={clientOptions}
+                            placeholder="Select client"
+                            searchPlaceholder="Search clients…"
+                            onChange={setCustomClientId}
+                          />
+                        </div>
+                        <div className="space-y-1.5 sm:pl-4">
+                          <InvoiceFieldLabel icon={CalendarDays}>Invoice date</InvoiceFieldLabel>
                           <Input type="date" value={customInvoiceDate} onChange={(e) => setCustomInvoiceDate(e.target.value)} />
                         </div>
-                        <div className="space-y-1">
-                          <Label>Due date</Label>
-                          <DueDateField invoiceDate={customInvoiceDate} value={customDueDate} onChange={setCustomDueDate} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Period start <span className="text-destructive">*</span></Label>
+                      </InvoiceFormCard>
+
+                      {/* Period & due date */}
+                      <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1fr_1fr_1.6fr]">
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={CalendarDays} required>Period start</InvoiceFieldLabel>
                           <Input
                             type="date"
                             value={customPeriodStart}
@@ -941,8 +993,8 @@ export default function InvoicesPage() {
                             onChange={(e) => setCustomPeriodStart(e.target.value)}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label>Period end <span className="text-destructive">*</span></Label>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={CalendarDays} required>Period end</InvoiceFieldLabel>
                           <Input
                             type="date"
                             value={customPeriodEnd}
@@ -950,12 +1002,20 @@ export default function InvoicesPage() {
                             onChange={(e) => setCustomPeriodEnd(e.target.value)}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label>PO number</Label>
-                          <Input value={customPo} onChange={(e) => setCustomPo(e.target.value)} />
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Clock}>Due date</InvoiceFieldLabel>
+                          <DueDateField invoiceDate={customInvoiceDate} value={customDueDate} onChange={setCustomDueDate} />
                         </div>
-                        <div className="space-y-1">
-                          <Label>Tax rate (%)</Label>
+                      </InvoiceFormCard>
+
+                      {/* Reference, tax, currency, bank */}
+                      <InvoiceFormCard className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Tag}>PO number</InvoiceFieldLabel>
+                          <Input placeholder="Enter PO number" value={customPo} onChange={(e) => setCustomPo(e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Percent}>Tax rate (%)</InvoiceFieldLabel>
                           <Input
                             type="number"
                             step="0.01"
@@ -963,10 +1023,10 @@ export default function InvoicesPage() {
                             onChange={(e) => setCustomTaxRate(e.target.value)}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label>Currency</Label>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={PoundSterling}>Currency</InvoiceFieldLabel>
                           <Select value={customCurrency} onValueChange={setCustomCurrency}>
-                            <SelectTrigger>
+                            <SelectTrigger className="w-full">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -978,14 +1038,14 @@ export default function InvoicesPage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1 sm:col-span-2">
-                          <Label>Bank account</Label>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Landmark}>Bank account</InvoiceFieldLabel>
                           <Select
                             value={customBankId || 'none'}
                             onValueChange={(v) => setCustomBankId(v === 'none' ? '' : v)}
                             disabled={!customClientId}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger className="w-full">
                               <SelectValue placeholder={customClientId ? 'Select account' : 'Select a client first'} />
                             </SelectTrigger>
                             <SelectContent>
@@ -1000,180 +1060,155 @@ export default function InvoicesPage() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1 sm:col-span-2">
-                          <Label>Notes / terms</Label>
-                          <textarea
-                            className="flex min-h-[72px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            value={customNotes}
-                            onChange={(e) => setCustomNotes(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1 sm:col-span-2">
-                          <Label>Rota review</Label>
-                          <textarea
-                            className="flex min-h-[56px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            value={customRotaReview}
-                            onChange={(e) => setCustomRotaReview(e.target.value)}
-                          />
-                        </div>
-                      </div>
+                      </InvoiceFormCard>
 
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <Label>Line items</Label>
+                      {/* Notes */}
+                      <InvoiceFormCard title="Notes / terms" icon={FileText} bodyClassName="p-3">
+                        <textarea
+                          className="flex min-h-[64px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          placeholder="Enter notes, terms or payment instructions…"
+                          value={customNotes}
+                          onChange={(e) => setCustomNotes(e.target.value)}
+                        />
+                      </InvoiceFormCard>
+
+                      {/* Rota review */}
+                      <InvoiceFormCard title="Rota review" icon={ClipboardCheck} bodyClassName="p-3">
+                        <textarea
+                          className="flex min-h-[56px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          placeholder="Enter rota review or additional comments…"
+                          value={customRotaReview}
+                          onChange={(e) => setCustomRotaReview(e.target.value)}
+                        />
+                      </InvoiceFormCard>
+
+                      {/* Line items */}
+                      <div className="overflow-hidden rounded-xl border border-primary/40 bg-background shadow-sm">
+                        <div className="flex items-center justify-between gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
+                          <span className="flex items-center gap-2 font-semibold">
+                            <Layers className="size-4.5" /> Line items
+                          </span>
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
+                            className="h-8 border-primary-foreground/70 bg-transparent text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
                             onClick={() => setCustomLines((prev) => [...prev, emptyCustomLine()])}
                           >
                             <Plus className="size-3.5 mr-1" /> Add line
                           </Button>
                         </div>
-                        {customLines.map((line, idx) => {
-                          const hours = parseFloat(line.hours) || 0;
-                          const rate = parseFloat(line.rate) || 0;
-                          const amount = hours * rate;
-                          return (
-                            <div key={idx} className="rounded-md border p-3 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-medium text-muted-foreground">Line {idx + 1}</span>
-                                {customLines.length > 1 ? (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-destructive"
-                                    onClick={() => setCustomLines((prev) => prev.filter((_, i) => i !== idx))}
+                        <div className="space-y-3 p-3">
+                          {customLines.map((line, idx) => {
+                            const hours = parseFloat(line.hours) || 0;
+                            const rate = parseFloat(line.rate) || 0;
+                            const amount = hours * rate;
+                            const setLine = (patch: Partial<typeof line>) =>
+                              setCustomLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+                            return (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  'rounded-lg border p-3 space-y-3',
+                                  idx % 2 === 0 ? 'border-primary/30 bg-primary/[0.03]' : 'border-sky-500/30 bg-sky-500/[0.04]'
+                                )}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span
+                                    className={cn(
+                                      'rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                                      idx % 2 === 0 ? 'bg-primary/15 text-primary' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                                    )}
                                   >
-                                    <Trash2 className="size-3.5" />
-                                  </Button>
-                                ) : null}
-                              </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                <div className="space-y-1 sm:col-span-3">
-                                  <Label>Site <span className="text-destructive">*</span></Label>
-                                  <SearchableSelect
-                                    value={line.site_id}
-                                    onChange={(v) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, site_id: v } : l))
-                                      )
-                                    }
-                                    options={customClientSites.map((s) => ({ value: String(s.id), label: s.name }))}
-                                    noneOption={{ value: '', label: 'Select site' }}
-                                    placeholder={customClientId ? 'Select site' : 'Select a client first'}
-                                    searchPlaceholder="Search sites…"
-                                    emptyText="No matching sites"
-                                    disabled={!customClientId}
-                                  />
+                                    Line {idx + 1}
+                                  </span>
+                                  {customLines.length > 1 ? (
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                      aria-label={`Remove line ${idx + 1}`}
+                                      onClick={() => setCustomLines((prev) => prev.filter((_, i) => i !== idx))}
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </Button>
+                                  ) : null}
                                 </div>
-                                <div className="space-y-1">
-                                  <Label>Shift date</Label>
-                                  <Input
-                                    type="date"
-                                    value={line.shift_date}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, shift_date: e.target.value } : l))
-                                      )
-                                    }
-                                  />
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[2fr_1.4fr_1fr_1fr]">
+                                  <div className="col-span-2 space-y-1.5 sm:col-span-1">
+                                    <InvoiceFieldLabel icon={MapPin} required>Site</InvoiceFieldLabel>
+                                    <SearchableSelect
+                                      value={line.site_id}
+                                      onChange={(v) => setLine({ site_id: v })}
+                                      options={customClientSiteOptions}
+                                      noneOption={{ value: '', label: 'Select site' }}
+                                      placeholder={customClientId ? 'Select site' : 'Select a client first'}
+                                      searchPlaceholder="Search sites…"
+                                      emptyText="No matching sites"
+                                      disabled={!customClientId}
+                                    />
+                                  </div>
+                                  <div className="col-span-2 space-y-1.5 sm:col-span-1">
+                                    <InvoiceFieldLabel icon={CalendarDays}>Shift date</InvoiceFieldLabel>
+                                    <Input type="date" value={line.shift_date} onChange={(e) => setLine({ shift_date: e.target.value })} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <InvoiceFieldLabel icon={Clock}>Start</InvoiceFieldLabel>
+                                    <Input type="time" value={line.shift_start} onChange={(e) => setLine({ shift_start: e.target.value })} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <InvoiceFieldLabel icon={Clock}>End</InvoiceFieldLabel>
+                                    <Input type="time" value={line.shift_end} onChange={(e) => setLine({ shift_end: e.target.value })} />
+                                  </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <Label>Start</Label>
-                                  <Input
-                                    type="time"
-                                    value={line.shift_start}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, shift_start: e.target.value } : l))
-                                      )
-                                    }
-                                  />
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <div className="space-y-1.5">
+                                    <InvoiceFieldLabel icon={List}>Description</InvoiceFieldLabel>
+                                    <Input
+                                      placeholder="Enter description…"
+                                      value={line.description}
+                                      onChange={(e) => setLine({ description: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <InvoiceFieldLabel icon={Cog}>Service detail</InvoiceFieldLabel>
+                                    <Input
+                                      placeholder="Enter service detail…"
+                                      value={line.service_detail}
+                                      onChange={(e) => setLine({ service_detail: e.target.value })}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <Label>End</Label>
-                                  <Input
-                                    type="time"
-                                    value={line.shift_end}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, shift_end: e.target.value } : l))
-                                      )
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-1 sm:col-span-3">
-                                  <Label>Description</Label>
-                                  <Input
-                                    value={line.description}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, description: e.target.value } : l))
-                                      )
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-1 sm:col-span-3">
-                                  <Label>Service detail</Label>
-                                  <Input
-                                    value={line.service_detail}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, service_detail: e.target.value } : l))
-                                      )
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label>Qty</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={line.quantity}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, quantity: e.target.value } : l))
-                                      )
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label>Hours</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={line.hours}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, hours: e.target.value } : l))
-                                      )
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label>Rate</Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={line.rate}
-                                    onChange={(e) =>
-                                      setCustomLines((prev) =>
-                                        prev.map((l, i) => (i === idx ? { ...l, rate: e.target.value } : l))
-                                      )
-                                    }
-                                  />
+                                <div className="grid grid-cols-3 gap-3 sm:grid-cols-[1fr_1fr_1fr_1.2fr]">
+                                  <div className="space-y-1.5">
+                                    <InvoiceFieldLabel icon={Hash}>Qty</InvoiceFieldLabel>
+                                    <Input type="number" step="0.01" value={line.quantity} onChange={(e) => setLine({ quantity: e.target.value })} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <InvoiceFieldLabel icon={Clock}>Hours</InvoiceFieldLabel>
+                                    <Input type="number" step="0.01" value={line.hours} onChange={(e) => setLine({ hours: e.target.value })} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <InvoiceFieldLabel icon={Coins}>Rate</InvoiceFieldLabel>
+                                    <Input type="number" step="0.01" value={line.rate} onChange={(e) => setLine({ rate: e.target.value })} />
+                                  </div>
+                                  <div className="col-span-3 flex items-center gap-3 rounded-lg bg-primary/12 px-3 py-2 sm:col-span-1">
+                                    <Calculator className="size-5 shrink-0 text-primary" />
+                                    <div className="leading-tight">
+                                      <div className="text-xs font-medium text-muted-foreground">Amount</div>
+                                      <div className="text-lg font-bold">{formatGbp(amount)}</div>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                              <p className="text-sm text-muted-foreground">Amount: {formatGbp(amount)}</p>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <Button
-                        className="w-full"
+                        className="w-full h-11 text-base shadow-sm"
                         onClick={() => void handleCustomCreate()}
                         disabled={
                           customLoading ||
@@ -1184,6 +1219,7 @@ export default function InvoicesPage() {
                           !customLines.some((l) => l.site_id)
                         }
                       >
+                        <Send className="size-4 mr-2" />
                         {customLoading ? 'Creating…' : 'Create Invoice'}
                       </Button>
                     </div>
@@ -1465,11 +1501,30 @@ export default function InvoicesPage() {
                 <div className="py-12 text-center text-muted-foreground">
                   {search ? 'No invoices match your search.' : 'No invoices yet. Use "Generate Invoice" to create one.'}
                 </div>
-              ) : resultsView === 'cards' ? (
+              ) : null}
+              {!loading && total > 0 && canBulkDelete ? (
+                <BulkActionBar selection={selection} noun="invoice" allIds={filteredIds}>
+                  <BulkDeleteButton
+                    selection={selection}
+                    noun="invoice"
+                    deleteOne={(id) => api.invoices.delete(id)}
+                    onDone={() => loadInvoices()}
+                    description="Selected invoices are deleted one by one. Any the server won't allow (for example invoices with payments recorded) are skipped and listed afterwards. This cannot be undone."
+                  />
+                </BulkActionBar>
+              ) : null}
+              {loading || total === 0 ? null : resultsView === 'cards' ? (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {pageRows.map((inv) => (
-                    <div key={inv.id} className="rounded-lg border p-4">
+                    <div
+                      key={inv.id}
+                      data-row-id={inv.id}
+                      className={cn('rounded-lg border p-4', selection.isSelected(inv.id) && 'bg-primary/5 border-primary/40', isHighlighted(inv.id) && NEW_ROW_HIGHLIGHT_CLASS)}
+                    >
                       <div className="flex items-start justify-between gap-2">
+                        {canBulkDelete ? (
+                          <RowCheckbox selection={selection} id={inv.id} label={`Select invoice ${inv.id}`} />
+                        ) : null}
                         <div className="min-w-0">
                           <Link href={`/invoices/${inv.id}/view`} className="font-medium hover:underline">
                             #{inv.id}
@@ -1496,6 +1551,11 @@ export default function InvoicesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        {canBulkDelete ? (
+                          <TableHead className="w-8">
+                            <SelectAllCheckbox selection={selection} ids={pageIds} />
+                          </TableHead>
+                        ) : null}
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Due" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Date" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -1522,8 +1582,14 @@ export default function InvoicesPage() {
                         <TableRow
                           key={inv.id}
                           href={`/invoices/${inv.id}/view`}
-                          className={cn(overdue && 'bg-red-50/60 dark:bg-red-950/20')}
+                          data-row-id={inv.id}
+                          className={cn(overdue && 'bg-red-50/60 dark:bg-red-950/20', selection.isSelected(inv.id) && 'bg-primary/5', isHighlighted(inv.id) && NEW_ROW_HIGHLIGHT_CLASS)}
                         >
+                          {canBulkDelete ? (
+                            <TableCell className="w-8">
+                              <RowCheckbox selection={selection} id={inv.id} label={`Select invoice ${inv.id}`} />
+                            </TableCell>
+                          ) : null}
                           <TableCell>
                             {renderStatus(inv)}
                           </TableCell>
@@ -1720,5 +1786,53 @@ export default function InvoicesPage() {
         </ModulePage>
     </AppShell>
     </ProtectedRoute>
+  );
+}
+
+/** Bordered, lightly tinted section card used by the Create Custom Invoice dialog. */
+function InvoiceFormCard({
+  title,
+  icon: Icon,
+  className,
+  bodyClassName,
+  children,
+}: {
+  title?: string;
+  icon?: LucideIcon;
+  className?: string;
+  bodyClassName?: string;
+  children: React.ReactNode;
+}) {
+  if (!title) {
+    return (
+      <div className={cn('rounded-xl border border-primary/25 bg-background p-4 shadow-sm', className)}>{children}</div>
+    );
+  }
+  return (
+    <div className={cn('overflow-hidden rounded-xl border border-primary/25 bg-background shadow-sm', className)}>
+      <div className="flex items-center gap-2 border-b border-primary/20 bg-primary/10 px-4 py-2 text-sm font-semibold">
+        {Icon ? <Icon className="size-4 text-primary" /> : null}
+        {title}
+      </div>
+      <div className={bodyClassName}>{children}</div>
+    </div>
+  );
+}
+
+function InvoiceFieldLabel({
+  icon: Icon,
+  required,
+  children,
+}: {
+  icon: LucideIcon;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label className="flex items-center gap-1.5 text-sm font-medium">
+      <Icon className="size-3.5 text-primary" />
+      {children}
+      {required ? <span className="text-destructive">*</span> : null}
+    </Label>
   );
 }

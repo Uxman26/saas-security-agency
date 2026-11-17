@@ -192,7 +192,10 @@ export function lineSiteOptions(sites: Site[], clients: Client[], clientId: stri
 }
 
 export const INVOICE_DIALOG_CONTENT_CLASS =
-  'sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0 [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4 [&>[data-slot=dialog-close]]:z-20 [&>[data-slot=dialog-close]]:text-primary-foreground [&>[data-slot=dialog-close]]:opacity-90';
+  // Width follows the screen (up to a comfortable maximum) instead of a fixed size;
+  // height is the base dialog's viewport cap, so it only scrolls when it must.
+  // Grid children get min-w-0 so date/time inputs can't push the form sideways.
+  'w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:max-w-[min(72rem,calc(100vw-4rem))] overflow-x-hidden overflow-y-auto p-0 gap-0 [&_.grid>*]:min-w-0 [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4 [&>[data-slot=dialog-close]]:z-20 [&>[data-slot=dialog-close]]:text-primary-foreground [&>[data-slot=dialog-close]]:opacity-90';
 
 export const INVOICE_DIALOG_BODY_CLASS = 'space-y-3 p-4 sm:p-5 bg-muted/30';
 

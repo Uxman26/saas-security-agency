@@ -152,7 +152,6 @@ def oauth_providers():
     return {"providers": oauth_service.list_enabled_providers()}
 
 
-<<<<<<< HEAD
 @router.post("/oauth/complete-signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 def oauth_complete_signup(body: OAuthCompleteSignupRequest, db: Session = Depends(get_db)):
     user, receipt, trial = oauth_service.complete_oauth_signup(
@@ -167,7 +166,6 @@ def oauth_complete_signup(body: OAuthCompleteSignupRequest, db: Session = Depend
         postcode=body.postcode,
     )
     return _signup_response(db, user, receipt, False, trial)
-=======
 @router.post("/oauth/google/mobile", response_model=TokenResponse)
 def oauth_google_mobile(
     body: GoogleMobileLoginRequest,
@@ -199,7 +197,6 @@ def oauth_google_mobile(
     if not token:
         raise HTTPException(status_code=401, detail="Google sign-in failed")
     return TokenResponse(access_token=token, token_type="bearer", mfa_required=False)
->>>>>>> 3f42ab7548e51755c47c1614ddd700533d8d0bb1
 
 
 @router.get("/oauth/{provider}/start")

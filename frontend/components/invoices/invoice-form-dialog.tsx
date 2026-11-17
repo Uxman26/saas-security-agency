@@ -1,0 +1,755 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Calculator,
+  CalendarDays,
+  ClipboardCheck,
+  Clock,
+  Cog,
+  Coins,
+  FilePlus2,
+  FileText,
+  Hash,
+  Landmark,
+  Layers,
+  List,
+  type LucideIcon,
+  MapPin,
+  Pencil,
+  Percent,
+  Plus,
+  PoundSterling,
+  Send,
+  Tag,
+  Trash2,
+  UserRound,
+  Users,
+  Activity,
+} from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { DueDateField } from '@/components/invoices/due-date-field';
+import { api } from '@/lib/api';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
+import { localDateKey } from '@/lib/date-format';
+import { syncPaymentTermsNote } from '@/lib/invoice-utils';
+import { INVOICE_CURRENCIES, formatInvoiceMoney } from '@/lib/invoice-currency';
+import type { Client, ClientBankAccount, Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
+
+const STATUSES = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
+
+type FormLine = {
+  /** Stable React key; survives reordering and removal. */
+  key: string;
+  /** Server id for lines that already exist on the invoice (edit mode). */
+  id?: number;
+  site_id: string;
+  guard_id: string;
+  shift_date: string;
+  shift_start: string;
+  shift_end: string;
+  description: string;
+  service_detail: string;
+  quantity: string;
+  hours: string;
+  rate: string;
+  /** Allowances come from rota-generated lines; kept as-is and added to the amount. */
+  allowance: number;
+  /** Shown when the line's site has since been deleted. */
+  site_name?: string;
+};
+
+let keySeq = 0;
+const nextKey = () => `l${++keySeq}`;
+
+const emptyLine = (): FormLine => ({
+  key: nextKey(),
+  site_id: '',
+  guard_id: '',
+  shift_date: '',
+  shift_start: '',
+  shift_end: '',
+  description: '',
+  service_detail: '',
+  quantity: '1',
+  hours: '0',
+  rate: '0',
+  allowance: 0,
+});
+
+const fromServerLine = (l: InvoiceLine): FormLine => ({
+  key: nextKey(),
+  id: l.id,
+  site_id: l.site_id != null ? String(l.site_id) : '',
+  guard_id: l.guard_id != null ? String(l.guard_id) : '',
+  shift_date: (l.shift_date ?? '').slice(0, 10),
+  shift_start: (l.shift_start ?? '').slice(0, 5),
+  shift_end: (l.shift_end ?? '').slice(0, 5),
+  description: l.description ?? '',
+  service_detail: l.service_detail ?? '',
+  quantity: String(l.quantity ?? 1),
+  hours: String(l.hours ?? 0),
+  rate: String(l.rate ?? 0),
+  allowance: l.allowance_amount ?? 0,
+  site_name: l.site_name ?? undefined,
+});
+
+/** Hours between two HH:MM times; an end at or before the start runs past midnight. */
+function hoursBetween(start: string, end: string): number | null {
+  const m = (t: string) => {
+    const [h, mm] = t.split(':').map(Number);
+    return Number.isFinite(h) && Number.isFinite(mm) ? h * 60 + mm : NaN;
+  };
+  const a = m(start);
+  const b = m(end);
+  if (!start || !end || Number.isNaN(a) || Number.isNaN(b)) return null;
+  const mins = b > a ? b - a : b + 1440 - a;
+  return Math.round((mins / 60) * 100) / 100;
+}
+
+const lineAmount = (l: FormLine) => (parseFloat(l.hours) || 0) * (parseFloat(l.rate) || 0) + (l.allowance || 0);
+
+/** Fields compared to decide whether an existing line needs saving. */
+const lineSignature = (l: FormLine) =>
+  JSON.stringify([l.site_id, l.guard_id, l.shift_date, l.shift_start, l.shift_end, l.description, l.service_detail, l.quantity, l.hours, l.rate]);
+
+const linePayload = (l: FormLine) => {
+  const hours = parseFloat(l.hours) || 0;
+  const rate = parseFloat(l.rate) || 0;
+  return {
+    site_id: parseInt(l.site_id, 10),
+    guard_id: l.guard_id ? parseInt(l.guard_id, 10) : null,
+    shift_date: l.shift_date || null,
+    shift_start: l.shift_start || null,
+    shift_end: l.shift_end || null,
+    description: l.description.trim() || null,
+    service_detail: l.service_detail.trim() || null,
+    quantity: parseFloat(l.quantity) || 1,
+    hours,
+    rate,
+    allowance_amount: l.allowance || 0,
+    amount: hours * rate + (l.allowance || 0),
+  };
+};
+
+const TEXTAREA_CLASS =
+  'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/**
+ * The one invoice form: "Create Custom Invoice" when `invoiceId` is null, and the
+ * same layout pre-filled for editing when it is set. Client and currency are fixed
+ * once an invoice exists (the API does not allow changing them).
+ */
+export function InvoiceFormDialog({
+  open,
+  onOpenChange,
+  invoiceId = null,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  invoiceId?: number | null;
+  onSaved: (invoice: Invoice) => void;
+}) {
+  const isEdit = invoiceId != null;
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [guards, setGuards] = useState<Guard[]>([]);
+  const [banks, setBanks] = useState<ClientBankAccount[]>([]);
+
+  const [original, setOriginal] = useState<Invoice | null>(null);
+  const [clientId, setClientId] = useState('');
+  const [invoiceDate, setInvoiceDate] = useState(() => localDateKey());
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [po, setPo] = useState('');
+  const [taxRate, setTaxRate] = useState('20');
+  const [currency, setCurrency] = useState('GBP');
+  const [bankId, setBankId] = useState('');
+  const [status, setStatus] = useState('draft');
+  const [notes, setNotes] = useState('');
+  const [rotaReview, setRotaReview] = useState('');
+  const [lines, setLines] = useState<FormLine[]>([emptyLine()]);
+  /** Signatures of existing lines as loaded, keyed by line id. */
+  const originalSigs = useRef<Map<number, string>>(new Map());
+
+  const reset = () => {
+    setOriginal(null);
+    setClientId('');
+    setInvoiceDate(localDateKey());
+    setPeriodStart('');
+    setPeriodEnd('');
+    setDueDate('');
+    setPo('');
+    setTaxRate('20');
+    setCurrency('GBP');
+    setBankId('');
+    setBanks([]);
+    setStatus('draft');
+    setNotes('');
+    setRotaReview('');
+    setLines([emptyLine()]);
+    originalSigs.current = new Map();
+  };
+
+  // Reference data, fetched when the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    api.sites.list().then(setSites).catch(() => {});
+    api.guards.list().then(setGuards).catch(() => {});
+    if (!isEdit) api.clients.list().then(setClients).catch(() => {});
+  }, [open, isEdit]);
+
+  // Edit mode: load the invoice and fill the form.
+  useEffect(() => {
+    if (!open || invoiceId == null) return;
+    let cancelled = false;
+    setLoadingInvoice(true);
+    api.invoices
+      .get(invoiceId)
+      .then((inv) => {
+        if (cancelled) return;
+        setOriginal(inv);
+        setClientId(inv.client_id != null ? String(inv.client_id) : '');
+        setInvoiceDate((inv.invoice_date ?? '').slice(0, 10));
+        setPeriodStart((inv.period_start ?? '').slice(0, 10));
+        setPeriodEnd((inv.period_end ?? '').slice(0, 10));
+        setDueDate((inv.due_date ?? '').slice(0, 10));
+        setPo(inv.po_number ?? '');
+        setTaxRate(String(inv.tax_rate ?? 0));
+        setCurrency(inv.currency || 'GBP');
+        setBankId(inv.client_bank_account_id != null ? String(inv.client_bank_account_id) : '');
+        setStatus(inv.status);
+        setNotes(inv.notes ?? '');
+        setRotaReview(inv.rota_review ?? '');
+        const formLines = (inv.lines ?? []).map(fromServerLine);
+        originalSigs.current = new Map(formLines.map((l) => [l.id as number, lineSignature(l)]));
+        setLines(formLines.length ? formLines : [emptyLine()]);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('Could not load invoice');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingInvoice(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, invoiceId]);
+
+  // Bank accounts follow the client. A new invoice picks the client's default; an
+  // existing one keeps the account it was saved with.
+  useEffect(() => {
+    if (!clientId) {
+      setBanks([]);
+      if (!isEdit) setBankId('');
+      return;
+    }
+    api.clients
+      .bankAccounts(parseInt(clientId, 10))
+      .then((rows) => {
+        setBanks(rows);
+        if (!isEdit) {
+          const def = rows.find((r) => r.is_default) ?? rows[0];
+          setBankId(def ? String(def.id) : '');
+        }
+      })
+      .catch(() => setBanks([]));
+  }, [clientId, isEdit]);
+
+  const clientOptions = useMemo(() => clients.map((c) => ({ value: String(c.id), label: c.name })), [clients]);
+
+  // The client's own sites first, then sites not linked to any client. An invoice with
+  // no client (raised for a site) can use any site.
+  const baseSiteOptions = useMemo(() => {
+    const byName = (a: Site, b: Site) => a.name.localeCompare(b.name);
+    if (!clientId) {
+      return isEdit ? [...sites].sort(byName).map((s) => ({ value: String(s.id), label: s.name })) : [];
+    }
+    const own = sites.filter((s) => s.client_id != null && String(s.client_id) === clientId).sort(byName);
+    const unlinked = sites.filter((s) => s.client_id == null).sort(byName);
+    return [
+      ...own.map((s) => ({ value: String(s.id), label: s.name })),
+      ...unlinked.map((s) => ({ value: String(s.id), label: `${s.name} (no client set)` })),
+    ];
+  }, [sites, clientId, isEdit]);
+
+  const siteOptionsFor = (siteId: string) => {
+    if (!siteId || baseSiteOptions.some((o) => o.value === siteId)) return baseSiteOptions;
+    const s = sites.find((x) => String(x.id) === siteId);
+    return s ? [{ value: siteId, label: s.name }, ...baseSiteOptions] : baseSiteOptions;
+  };
+
+  const guardOptions = useMemo(() => guards.map((g) => ({ value: String(g.id), label: g.full_name })), [guards]);
+
+  const subtotal = lines.reduce((sum, l) => sum + (isEdit || l.site_id ? lineAmount(l) : 0), 0);
+  const tax = subtotal * ((parseFloat(taxRate) || 0) / 100);
+  const money = (n: number) => formatInvoiceMoney(n, currency);
+
+  const setLine = (key: string, patch: Partial<FormLine>) =>
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.key !== key) return l;
+        const next = { ...l, ...patch };
+        // Changing either time works the hours out; Hours can still be typed over.
+        if ('shift_start' in patch || 'shift_end' in patch) {
+          const h = hoursBetween(next.shift_start, next.shift_end);
+          if (h != null) next.hours = String(h);
+        }
+        return next;
+      })
+    );
+
+  const changeInvoiceDate = (v: string) => {
+    setInvoiceDate(v);
+    if (isEdit) setNotes((n) => syncPaymentTermsNote(n, v, dueDate));
+  };
+  const changeDueDate = (v: string) => {
+    setDueDate(v);
+    if (isEdit) setNotes((n) => syncPaymentTermsNote(n, invoiceDate, v));
+  };
+
+  const close = (o: boolean) => {
+    onOpenChange(o);
+    if (!o) reset();
+  };
+
+  const handleCreate = async () => {
+    const chosen = lines.filter((l) => l.site_id);
+    if (chosen.length === 0) {
+      toast.error('Add at least one line with a site');
+      return;
+    }
+    const inv = await api.invoices.create({
+      client_id: parseInt(clientId, 10),
+      period_start: periodStart,
+      period_end: periodEnd,
+      invoice_date: invoiceDate || undefined,
+      due_date: dueDate || undefined,
+      po_number: po.trim() || undefined,
+      notes: notes.trim() || undefined,
+      rota_review: rotaReview.trim() || undefined,
+      client_bank_account_id: bankId ? parseInt(bankId, 10) : undefined,
+      tax_rate: parseFloat(taxRate) || 0,
+      currency,
+      lines: chosen.map((l) => {
+        const p = linePayload(l);
+        return { ...p, guard_id: p.guard_id ?? undefined };
+      }),
+    });
+    toast.success(`Invoice #${inv.id} created`);
+    return inv;
+  };
+
+  const handleUpdate = async (id: number) => {
+    const existing = lines.filter((l) => l.id != null);
+    const added = lines.filter((l) => l.id == null && l.site_id);
+    const changed = existing.filter((l) => originalSigs.current.get(l.id as number) !== lineSignature(l));
+    const keptIds = new Set(existing.map((l) => l.id));
+    const removed = [...originalSigs.current.keys()].filter((lid) => !keptIds.has(lid));
+
+    const missingSite = changed.find((l) => !l.site_id);
+    if (missingSite) {
+      toast.error(`Line ${lines.indexOf(missingSite) + 1} needs a site`);
+      return;
+    }
+
+    await api.invoices.patch(id, {
+      invoice_date: invoiceDate || null,
+      due_date: dueDate || null,
+      period_start: periodStart,
+      period_end: periodEnd,
+      po_number: po.trim() || null,
+      notes: notes || null,
+      rota_review: rotaReview || null,
+      tax_rate: parseFloat(taxRate) || 0,
+      status,
+      client_bank_account_id: bankId ? parseInt(bankId, 10) : null,
+    });
+    for (const lid of removed) await api.invoices.deleteLine(id, lid);
+    for (const l of changed) await api.invoices.updateLine(id, l.id as number, linePayload(l));
+    for (const l of added) {
+      const p = linePayload(l);
+      await api.invoices.addLine(id, { ...p, guard_id: p.guard_id ?? undefined });
+    }
+    const inv = await api.invoices.get(id);
+    toast.success(`Invoice #${id} saved`);
+    return inv;
+  };
+
+  const submit = async () => {
+    if (!periodStart || !periodEnd) return;
+    if (periodStart > periodEnd) {
+      toast.error('Period start cannot be after period end');
+      return;
+    }
+    setSaving(true);
+    try {
+      const inv = isEdit ? await handleUpdate(invoiceId as number) : await handleCreate();
+      if (!inv) return;
+      onOpenChange(false);
+      reset();
+      onSaved(inv);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : isEdit ? 'Save failed' : 'Create failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canSubmit =
+    !saving &&
+    !loadingInvoice &&
+    !!periodStart &&
+    !!periodEnd &&
+    periodStart <= periodEnd &&
+    (isEdit ? !!original : !!clientId && lines.some((l) => l.site_id));
+
+  const title = isEdit ? `Edit Invoice #${invoiceId}` : 'Create Custom Invoice';
+  const TitleIcon = isEdit ? Pencil : FilePlus2;
+
+  return (
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0 [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4 [&>[data-slot=dialog-close]]:z-20 [&>[data-slot=dialog-close]]:text-primary-foreground [&>[data-slot=dialog-close]]:opacity-90">
+        <DialogHeader className="sticky top-0 z-10 bg-primary text-primary-foreground px-5 py-3.5 text-left">
+          <DialogTitle className="flex items-center gap-2.5 text-lg">
+            <span className="flex size-8 items-center justify-center rounded-md bg-primary-foreground/15">
+              <TitleIcon className="size-4.5" />
+            </span>
+            {title}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {isEdit ? 'Change the invoice details and line items.' : 'Raise an invoice with your own line items.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isEdit && loadingInvoice ? (
+          <div className="p-10 text-center text-sm text-muted-foreground">Loading invoice…</div>
+        ) : (
+          <div className="space-y-3 p-4 sm:p-5 bg-muted/30">
+            {/* Client & invoice date */}
+            <InvoiceFormCard className="grid gap-4 sm:grid-cols-2 sm:divide-x sm:divide-primary/15">
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={Users} required={!isEdit}>Client</InvoiceFieldLabel>
+                {isEdit ? (
+                  <Input disabled value={original?.client_name || (original?.client_id ? `Client #${original.client_id}` : 'No client')} />
+                ) : (
+                  <SearchableSelect
+                    value={clientId}
+                    options={clientOptions}
+                    placeholder="Select client"
+                    searchPlaceholder="Search clients…"
+                    onChange={setClientId}
+                  />
+                )}
+              </div>
+              <div className="space-y-1.5 sm:pl-4">
+                <InvoiceFieldLabel icon={CalendarDays}>Invoice date</InvoiceFieldLabel>
+                <Input type="date" value={invoiceDate} onChange={(e) => changeInvoiceDate(e.target.value)} />
+              </div>
+            </InvoiceFormCard>
+
+            {/* Period & due date */}
+            <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1fr_1fr_1.6fr]">
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={CalendarDays} required>Period start</InvoiceFieldLabel>
+                <Input type="date" value={periodStart} max={periodEnd || undefined} onChange={(e) => setPeriodStart(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={CalendarDays} required>Period end</InvoiceFieldLabel>
+                <Input type="date" value={periodEnd} min={periodStart || undefined} onChange={(e) => setPeriodEnd(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={Clock}>Due date</InvoiceFieldLabel>
+                <DueDateField invoiceDate={invoiceDate} value={dueDate} onChange={changeDueDate} />
+              </div>
+            </InvoiceFormCard>
+
+            {/* Reference, tax, currency, bank, status */}
+            <InvoiceFormCard className={cn('grid gap-4 grid-cols-2', isEdit ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={Tag}>PO number</InvoiceFieldLabel>
+                <Input placeholder="Enter PO number" value={po} onChange={(e) => setPo(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={Percent}>Tax rate (%)</InvoiceFieldLabel>
+                <Input type="number" step="0.01" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={PoundSterling}>Currency</InvoiceFieldLabel>
+                <Select value={currency} onValueChange={setCurrency} disabled={isEdit}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVOICE_CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.code} — {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <InvoiceFieldLabel icon={Landmark}>Bank account</InvoiceFieldLabel>
+                <Select value={bankId || 'none'} onValueChange={(v) => setBankId(v === 'none' ? '' : v)} disabled={!clientId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={clientId ? 'Select account' : 'Select a client first'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Company default</SelectItem>
+                    {banks.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.label}
+                        {b.is_default ? ' (Default)' : ''}
+                        {b.bank_name ? ` · ${b.bank_name}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {isEdit ? (
+                <div className="space-y-1.5">
+                  <InvoiceFieldLabel icon={Activity}>Status</InvoiceFieldLabel>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+            </InvoiceFormCard>
+
+            <InvoiceFormCard title="Notes / terms" icon={FileText} bodyClassName="p-3">
+              <textarea
+                className={cn(TEXTAREA_CLASS, 'min-h-[64px]')}
+                placeholder="Enter notes, terms or payment instructions…"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </InvoiceFormCard>
+
+            <InvoiceFormCard title="Rota review" icon={ClipboardCheck} bodyClassName="p-3">
+              <textarea
+                className={cn(TEXTAREA_CLASS, 'min-h-[56px]')}
+                placeholder="Enter rota review or additional comments…"
+                value={rotaReview}
+                onChange={(e) => setRotaReview(e.target.value)}
+              />
+            </InvoiceFormCard>
+
+            {/* Line items */}
+            <div className="overflow-hidden rounded-xl border border-primary/40 bg-background shadow-sm">
+              <div className="flex items-center justify-between gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
+                <span className="flex items-center gap-2 font-semibold">
+                  <Layers className="size-4.5" /> Line items
+                  <span className="rounded-full bg-primary-foreground/20 px-2 text-xs font-medium">{lines.length}</span>
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-primary-foreground/70 bg-transparent text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
+                  onClick={() => setLines((prev) => [...prev, emptyLine()])}
+                >
+                  <Plus className="size-3.5 mr-1" /> Add line
+                </Button>
+              </div>
+              <div className="space-y-3 p-3">
+                {lines.map((line, idx) => {
+                  const even = idx % 2 === 0;
+                  return (
+                    <div
+                      key={line.key}
+                      className={cn(
+                        'rounded-lg border p-3 space-y-3',
+                        even ? 'border-primary/30 bg-primary/[0.03]' : 'border-sky-500/30 bg-sky-500/[0.04]'
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={cn(
+                            'rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                            even ? 'bg-primary/15 text-primary' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+                          )}
+                        >
+                          Line {idx + 1}
+                        </span>
+                        {lines.length > 1 ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            aria-label={`Remove line ${idx + 1}`}
+                            onClick={() => setLines((prev) => prev.filter((l) => l.key !== line.key))}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-[1.6fr_1.4fr_1.3fr_1fr_1fr]">
+                        <div className="col-span-2 space-y-1.5 sm:col-span-1">
+                          <InvoiceFieldLabel icon={MapPin} required>Site</InvoiceFieldLabel>
+                          <SearchableSelect
+                            value={line.site_id}
+                            onChange={(v) => setLine(line.key, { site_id: v })}
+                            options={siteOptionsFor(line.site_id)}
+                            noneOption={{ value: '', label: 'Select site' }}
+                            placeholder={
+                              line.site_name ? `${line.site_name} (deleted)` : clientId || isEdit ? 'Select site' : 'Select a client first'
+                            }
+                            searchPlaceholder="Search sites…"
+                            emptyText="No matching sites"
+                            disabled={!isEdit && !clientId}
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-1.5 sm:col-span-1">
+                          <InvoiceFieldLabel icon={UserRound}>Staff</InvoiceFieldLabel>
+                          <SearchableSelect
+                            value={line.guard_id}
+                            onChange={(v) => setLine(line.key, { guard_id: v })}
+                            options={guardOptions}
+                            noneOption={{ value: '', label: '—' }}
+                            placeholder="—"
+                            searchPlaceholder="Search staff…"
+                            emptyText="No matching staff"
+                          />
+                        </div>
+                        <div className="col-span-2 space-y-1.5 sm:col-span-1">
+                          <InvoiceFieldLabel icon={CalendarDays}>Shift date</InvoiceFieldLabel>
+                          <Input type="date" value={line.shift_date} onChange={(e) => setLine(line.key, { shift_date: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Clock}>Start</InvoiceFieldLabel>
+                          <Input type="time" value={line.shift_start} onChange={(e) => setLine(line.key, { shift_start: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Clock}>End</InvoiceFieldLabel>
+                          <Input type="time" value={line.shift_end} onChange={(e) => setLine(line.key, { shift_end: e.target.value })} />
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={List}>Description</InvoiceFieldLabel>
+                          <Input
+                            placeholder="Enter description…"
+                            value={line.description}
+                            onChange={(e) => setLine(line.key, { description: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Cog}>Service detail</InvoiceFieldLabel>
+                          <Input
+                            placeholder="Enter service detail…"
+                            value={line.service_detail}
+                            onChange={(e) => setLine(line.key, { service_detail: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 sm:grid-cols-[1fr_1fr_1fr_1.2fr]">
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Hash}>Qty</InvoiceFieldLabel>
+                          <Input type="number" step="0.01" value={line.quantity} onChange={(e) => setLine(line.key, { quantity: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Clock}>Hours</InvoiceFieldLabel>
+                          <Input type="number" step="0.01" value={line.hours} onChange={(e) => setLine(line.key, { hours: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <InvoiceFieldLabel icon={Coins}>Rate</InvoiceFieldLabel>
+                          <Input type="number" step="0.01" value={line.rate} onChange={(e) => setLine(line.key, { rate: e.target.value })} />
+                        </div>
+                        <div className="col-span-3 flex items-center gap-3 rounded-lg bg-primary/12 px-3 py-2 sm:col-span-1">
+                          <Calculator className="size-5 shrink-0 text-primary" />
+                          <div className="leading-tight">
+                            <div className="text-xs font-medium text-muted-foreground">
+                              Amount{line.allowance ? ` (incl. ${money(line.allowance)} allowance)` : ''}
+                            </div>
+                            <div className="text-lg font-bold tabular-nums">{money(lineAmount(line))}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Totals */}
+            <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-xl border border-primary/25 bg-background px-4 py-3 text-sm shadow-sm">
+              <span className="text-muted-foreground">
+                Subtotal <span className="font-medium text-foreground tabular-nums">{money(subtotal)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                Tax <span className="font-medium text-foreground tabular-nums">{money(tax)}</span>
+              </span>
+              <span className="text-base font-semibold">
+                Total <span className="text-primary tabular-nums">{money(subtotal + tax)}</span>
+              </span>
+            </div>
+
+            <Button className="w-full h-11 text-base shadow-sm" onClick={() => void submit()} disabled={!canSubmit}>
+              <Send className="size-4 mr-2" />
+              {saving ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save Invoice' : 'Create Invoice'}
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Bordered section card used by the invoice form. */
+function InvoiceFormCard({
+  title,
+  icon: Icon,
+  className,
+  bodyClassName,
+  children,
+}: {
+  title?: string;
+  icon?: LucideIcon;
+  className?: string;
+  bodyClassName?: string;
+  children: React.ReactNode;
+}) {
+  if (!title) {
+    return <div className={cn('rounded-xl border border-primary/25 bg-background p-4 shadow-sm', className)}>{children}</div>;
+  }
+  return (
+    <div className={cn('overflow-hidden rounded-xl border border-primary/25 bg-background shadow-sm', className)}>
+      <div className="flex items-center gap-2 border-b border-primary/20 bg-primary/10 px-4 py-2 text-sm font-semibold">
+        {Icon ? <Icon className="size-4 text-primary" /> : null}
+        {title}
+      </div>
+      <div className={bodyClassName}>{children}</div>
+    </div>
+  );
+}
+
+function InvoiceFieldLabel({ icon: Icon, required, children }: { icon: LucideIcon; required?: boolean; children: React.ReactNode }) {
+  return (
+    <Label className="flex items-center gap-1.5 text-sm font-medium">
+      <Icon className="size-3.5 text-primary" />
+      {children}
+      {required ? <span className="text-destructive">*</span> : null}
+    </Label>
+  );
+}

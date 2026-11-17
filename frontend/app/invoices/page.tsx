@@ -14,10 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import type { Invoice, Client, Site, ClientBankAccount } from '@/lib/types';
+import type { Invoice, Client, Site } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
-import { FileText, Zap, Users, CalendarDays, Clock, Tag, Percent, PoundSterling, Landmark, ClipboardCheck, Layers, MapPin, List, Cog, Hash, Coins, Calculator, type LucideIcon, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, Plus, FileMinus2, Send, Undo2 } from 'lucide-react';
+import { FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, FileMinus2, Send, Undo2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
@@ -45,6 +45,7 @@ import { StatusPieChart } from '@/components/charts/status-chart';
 import { METHOD_LABELS, PAYMENT_METHODS } from '@/lib/payment-methods';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DueDateField } from '@/components/invoices/due-date-field';
+import { InvoiceFormDialog } from '@/components/invoices/invoice-form-dialog';
 import {
   EMPTY_WORK_FILTERS,
   WorkFilterBar,
@@ -91,30 +92,6 @@ function invoiceStatusTone(status: string): 'positive' | 'danger' | 'muted' | 'w
   return 'neutral';
 }
 
-type CustomLineDraft = {
-  site_id: string;
-  shift_date: string;
-  shift_start: string;
-  shift_end: string;
-  description: string;
-  service_detail: string;
-  quantity: string;
-  hours: string;
-  rate: string;
-};
-
-const emptyCustomLine = (): CustomLineDraft => ({
-  site_id: '',
-  shift_date: '',
-  shift_start: '',
-  shift_end: '',
-  description: '',
-  service_detail: '',
-  quantity: '1',
-  hours: '0',
-  rate: '0',
-});
-
 function formatGbp(n: unknown, currency = 'GBP'): string {
   const v = typeof n === 'number' ? n : Number(n);
   if (!Number.isFinite(v) || Math.abs(v) > 1e12) return '—';
@@ -139,25 +116,15 @@ export default function InvoicesPage() {
   const [genLoading, setGenLoading] = useState(false);
   const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
   const [genCurrency, setGenCurrency] = useState('GBP');
-  const [customCurrency, setCustomCurrency] = useState('GBP');
   const [customOpen, setCustomOpen] = useState(false);
+  // Invoice open in the shared form dialog for editing; null when closed.
+  const [editInvoiceId, setEditInvoiceId] = useState<number | null>(null);
 
   useEffect(() => {
     if (searchParams.get('custom') === '1') setCustomOpen(true);
+    const editParam = parseInt(searchParams.get('edit') ?? '', 10);
+    if (Number.isFinite(editParam)) setEditInvoiceId(editParam);
   }, [searchParams]);
-  const [customLoading, setCustomLoading] = useState(false);
-  const [customClientId, setCustomClientId] = useState('');
-  const [customInvoiceDate, setCustomInvoiceDate] = useState(() => localDateKey());
-  const [customPeriodStart, setCustomPeriodStart] = useState('');
-  const [customPeriodEnd, setCustomPeriodEnd] = useState('');
-  const [customDueDate, setCustomDueDate] = useState('');
-  const [customPo, setCustomPo] = useState('');
-  const [customNotes, setCustomNotes] = useState('');
-  const [customRotaReview, setCustomRotaReview] = useState('');
-  const [customTaxRate, setCustomTaxRate] = useState('20');
-  const [customBankId, setCustomBankId] = useState('');
-  const [customBanks, setCustomBanks] = useState<ClientBankAccount[]>([]);
-  const [customLines, setCustomLines] = useState<CustomLineDraft[]>([emptyCustomLine()]);
   // Optional narrowing on top of the client/site the invoice is raised for.
   const [genNarrow, setGenNarrow] = useState<WorkFilterValues>(EMPTY_WORK_FILTERS);
   const [sites, setSites] = useState<Site[]>([]);
@@ -250,110 +217,6 @@ export default function InvoicesPage() {
     api.clients.list().then(setClients).catch(() => {});
     api.sites.list().then(setSites).catch(() => {});
   }, [loadInvoices]);
-
-  useEffect(() => {
-    if (!customClientId) {
-      setCustomBanks([]);
-      setCustomBankId('');
-      return;
-    }
-    const id = parseInt(customClientId, 10);
-    api.clients
-      .bankAccounts(id)
-      .then((rows) => {
-        setCustomBanks(rows);
-        const def = rows.find((r) => r.is_default) ?? rows[0];
-        setCustomBankId(def ? String(def.id) : '');
-      })
-      .catch(() => {
-        setCustomBanks([]);
-        setCustomBankId('');
-      });
-  }, [customClientId]);
-
-  // The client's own sites come first. Most sites are never linked to a client, so those
-  // are offered too (after them) — filtering on the link alone left the picker empty.
-  // Sites belonging to a different client stay out.
-  const customClientSiteOptions = useMemo(() => {
-    if (!customClientId) return [];
-    const byName = (a: Site, b: Site) => a.name.localeCompare(b.name);
-    const own = sites.filter((s) => s.client_id != null && String(s.client_id) === customClientId).sort(byName);
-    const unlinked = sites.filter((s) => s.client_id == null).sort(byName);
-    return [
-      ...own.map((s) => ({ value: String(s.id), label: s.name })),
-      ...unlinked.map((s) => ({ value: String(s.id), label: `${s.name} (no client set)` })),
-    ];
-  }, [sites, customClientId]);
-
-  const resetCustomForm = () => {
-    setCustomClientId('');
-    setCustomInvoiceDate(localDateKey());
-    setCustomPeriodStart('');
-    setCustomPeriodEnd('');
-    setCustomDueDate('');
-    setCustomPo('');
-    setCustomNotes('');
-    setCustomRotaReview('');
-    setCustomTaxRate('20');
-    setCustomBankId('');
-    setCustomBanks([]);
-    setCustomLines([emptyCustomLine()]);
-  };
-
-  const handleCustomCreate = async () => {
-    if (!customClientId || !customPeriodStart || !customPeriodEnd) return;
-    if (customPeriodStart > customPeriodEnd) {
-      toast.error('Period start cannot be after period end');
-      return;
-    }
-    const lines = customLines.filter((l) => l.site_id);
-    if (lines.length === 0) {
-      toast.error('Add at least one line with a site');
-      return;
-    }
-    setCustomLoading(true);
-    try {
-      const inv = await api.invoices.create({
-        client_id: parseInt(customClientId, 10),
-        period_start: customPeriodStart,
-        period_end: customPeriodEnd,
-        invoice_date: customInvoiceDate || undefined,
-        due_date: customDueDate || undefined,
-        po_number: customPo.trim() || undefined,
-        notes: customNotes.trim() || undefined,
-        rota_review: customRotaReview.trim() || undefined,
-        client_bank_account_id: customBankId ? parseInt(customBankId, 10) : undefined,
-        tax_rate: parseFloat(customTaxRate) || 0,
-        currency: customCurrency,
-        lines: lines.map((l) => {
-          const hours = parseFloat(l.hours) || 0;
-          const rate = parseFloat(l.rate) || 0;
-          return {
-            site_id: parseInt(l.site_id, 10),
-            shift_date: l.shift_date || undefined,
-            shift_start: l.shift_start || undefined,
-            shift_end: l.shift_end || undefined,
-            description: l.description.trim() || undefined,
-            service_detail: l.service_detail.trim() || undefined,
-            quantity: parseFloat(l.quantity) || 1,
-            hours,
-            rate,
-            amount: hours * rate,
-          };
-        }),
-      });
-      setCustomOpen(false);
-      resetCustomForm();
-      loadInvoices();
-      toast.success(`Invoice #${inv.id} created`);
-      rememberNewInvoice(inv.id);
-      router.push(`/invoices/${inv.id}/edit`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Create failed');
-    } finally {
-      setCustomLoading(false);
-    }
-  };
 
   const handleGenerate = async (force = false) => {
     if (!genStart || !genEnd) return;
@@ -802,7 +665,7 @@ export default function InvoicesPage() {
     {
       label: 'Edit invoice',
       icon: Pencil,
-      onSelect: () => router.push(`/invoices/${inv.id}/edit`),
+      onSelect: () => setEditInvoiceId(inv.id),
       disabled: !can(user, 'invoices.write'),
     },
     { label: 'Download PDF', icon: Download, onSelect: () => void downloadPdf(inv.id) },
@@ -941,290 +804,29 @@ export default function InvoicesPage() {
                     Statement
                   </Link>
                 </Button>
-                <Dialog
-                  open={customOpen}
+                <Button variant="outline" onClick={() => setCustomOpen(true)}>
+                  <FilePlus2 className="size-4 mr-2" />
+                  Custom Invoice
+                </Button>
+                <InvoiceFormDialog
+                  open={customOpen || editInvoiceId != null}
+                  invoiceId={editInvoiceId}
                   onOpenChange={(o) => {
-                    setCustomOpen(o);
-                    if (!o) resetCustomForm();
+                    if (o) return;
+                    setCustomOpen(false);
+                    setEditInvoiceId(null);
+                    if (searchParams.get('edit') || searchParams.get('custom')) router.replace('/invoices');
                   }}
-                >
-                  <DialogTrigger asChild>
-                    <Button variant="outline">
-                      <FilePlus2 className="size-4 mr-2" />
-                      Custom Invoice
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0 [&>[data-slot=dialog-close]]:top-4 [&>[data-slot=dialog-close]]:right-4 [&>[data-slot=dialog-close]]:z-20 [&>[data-slot=dialog-close]]:text-primary-foreground [&>[data-slot=dialog-close]]:opacity-90">
-                    <DialogHeader className="sticky top-0 z-10 bg-primary text-primary-foreground px-5 py-3.5 text-left">
-                      <DialogTitle className="flex items-center gap-2.5 text-lg">
-                        <span className="flex size-8 items-center justify-center rounded-md bg-primary-foreground/15">
-                          <FilePlus2 className="size-4.5" />
-                        </span>
-                        Create Custom Invoice
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-3 p-4 sm:p-5 bg-muted/30">
-                      {/* Client & invoice date */}
-                      <InvoiceFormCard className="grid gap-4 sm:grid-cols-2 sm:divide-x sm:divide-primary/15">
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={Users} required>Client</InvoiceFieldLabel>
-                          <SearchableSelect
-                            value={customClientId}
-                            options={clientOptions}
-                            placeholder="Select client"
-                            searchPlaceholder="Search clients…"
-                            onChange={setCustomClientId}
-                          />
-                        </div>
-                        <div className="space-y-1.5 sm:pl-4">
-                          <InvoiceFieldLabel icon={CalendarDays}>Invoice date</InvoiceFieldLabel>
-                          <Input type="date" value={customInvoiceDate} onChange={(e) => setCustomInvoiceDate(e.target.value)} />
-                        </div>
-                      </InvoiceFormCard>
-
-                      {/* Period & due date */}
-                      <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1fr_1fr_1.6fr]">
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={CalendarDays} required>Period start</InvoiceFieldLabel>
-                          <Input
-                            type="date"
-                            value={customPeriodStart}
-                            max={customPeriodEnd || undefined}
-                            onChange={(e) => setCustomPeriodStart(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={CalendarDays} required>Period end</InvoiceFieldLabel>
-                          <Input
-                            type="date"
-                            value={customPeriodEnd}
-                            min={customPeriodStart || undefined}
-                            onChange={(e) => setCustomPeriodEnd(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={Clock}>Due date</InvoiceFieldLabel>
-                          <DueDateField invoiceDate={customInvoiceDate} value={customDueDate} onChange={setCustomDueDate} />
-                        </div>
-                      </InvoiceFormCard>
-
-                      {/* Reference, tax, currency, bank */}
-                      <InvoiceFormCard className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={Tag}>PO number</InvoiceFieldLabel>
-                          <Input placeholder="Enter PO number" value={customPo} onChange={(e) => setCustomPo(e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={Percent}>Tax rate (%)</InvoiceFieldLabel>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={customTaxRate}
-                            onChange={(e) => setCustomTaxRate(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={PoundSterling}>Currency</InvoiceFieldLabel>
-                          <Select value={customCurrency} onValueChange={setCustomCurrency}>
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {INVOICE_CURRENCIES.map((c) => (
-                                <SelectItem key={c.code} value={c.code}>
-                                  {c.code} — {c.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <InvoiceFieldLabel icon={Landmark}>Bank account</InvoiceFieldLabel>
-                          <Select
-                            value={customBankId || 'none'}
-                            onValueChange={(v) => setCustomBankId(v === 'none' ? '' : v)}
-                            disabled={!customClientId}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder={customClientId ? 'Select account' : 'Select a client first'} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Company default</SelectItem>
-                              {customBanks.map((b) => (
-                                <SelectItem key={b.id} value={String(b.id)}>
-                                  {b.label}
-                                  {b.is_default ? ' (Default)' : ''}
-                                  {b.bank_name ? ` · ${b.bank_name}` : ''}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </InvoiceFormCard>
-
-                      {/* Notes */}
-                      <InvoiceFormCard title="Notes / terms" icon={FileText} bodyClassName="p-3">
-                        <textarea
-                          className="flex min-h-[64px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          placeholder="Enter notes, terms or payment instructions…"
-                          value={customNotes}
-                          onChange={(e) => setCustomNotes(e.target.value)}
-                        />
-                      </InvoiceFormCard>
-
-                      {/* Rota review */}
-                      <InvoiceFormCard title="Rota review" icon={ClipboardCheck} bodyClassName="p-3">
-                        <textarea
-                          className="flex min-h-[56px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          placeholder="Enter rota review or additional comments…"
-                          value={customRotaReview}
-                          onChange={(e) => setCustomRotaReview(e.target.value)}
-                        />
-                      </InvoiceFormCard>
-
-                      {/* Line items */}
-                      <div className="overflow-hidden rounded-xl border border-primary/40 bg-background shadow-sm">
-                        <div className="flex items-center justify-between gap-2 bg-primary px-4 py-2.5 text-primary-foreground">
-                          <span className="flex items-center gap-2 font-semibold">
-                            <Layers className="size-4.5" /> Line items
-                          </span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8 border-primary-foreground/70 bg-transparent text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
-                            onClick={() => setCustomLines((prev) => [...prev, emptyCustomLine()])}
-                          >
-                            <Plus className="size-3.5 mr-1" /> Add line
-                          </Button>
-                        </div>
-                        <div className="space-y-3 p-3">
-                          {customLines.map((line, idx) => {
-                            const hours = parseFloat(line.hours) || 0;
-                            const rate = parseFloat(line.rate) || 0;
-                            const amount = hours * rate;
-                            const setLine = (patch: Partial<typeof line>) =>
-                              setCustomLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
-                            return (
-                              <div
-                                key={idx}
-                                className={cn(
-                                  'rounded-lg border p-3 space-y-3',
-                                  idx % 2 === 0 ? 'border-primary/30 bg-primary/[0.03]' : 'border-sky-500/30 bg-sky-500/[0.04]'
-                                )}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span
-                                    className={cn(
-                                      'rounded-full px-2.5 py-0.5 text-xs font-semibold',
-                                      idx % 2 === 0 ? 'bg-primary/15 text-primary' : 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
-                                    )}
-                                  >
-                                    Line {idx + 1}
-                                  </span>
-                                  {customLines.length > 1 ? (
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                      aria-label={`Remove line ${idx + 1}`}
-                                      onClick={() => setCustomLines((prev) => prev.filter((_, i) => i !== idx))}
-                                    >
-                                      <Trash2 className="size-3.5" />
-                                    </Button>
-                                  ) : null}
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-[2fr_1.4fr_1fr_1fr]">
-                                  <div className="col-span-2 space-y-1.5 sm:col-span-1">
-                                    <InvoiceFieldLabel icon={MapPin} required>Site</InvoiceFieldLabel>
-                                    <SearchableSelect
-                                      value={line.site_id}
-                                      onChange={(v) => setLine({ site_id: v })}
-                                      options={customClientSiteOptions}
-                                      noneOption={{ value: '', label: 'Select site' }}
-                                      placeholder={customClientId ? 'Select site' : 'Select a client first'}
-                                      searchPlaceholder="Search sites…"
-                                      emptyText="No matching sites"
-                                      disabled={!customClientId}
-                                    />
-                                  </div>
-                                  <div className="col-span-2 space-y-1.5 sm:col-span-1">
-                                    <InvoiceFieldLabel icon={CalendarDays}>Shift date</InvoiceFieldLabel>
-                                    <Input type="date" value={line.shift_date} onChange={(e) => setLine({ shift_date: e.target.value })} />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <InvoiceFieldLabel icon={Clock}>Start</InvoiceFieldLabel>
-                                    <Input type="time" value={line.shift_start} onChange={(e) => setLine({ shift_start: e.target.value })} />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <InvoiceFieldLabel icon={Clock}>End</InvoiceFieldLabel>
-                                    <Input type="time" value={line.shift_end} onChange={(e) => setLine({ shift_end: e.target.value })} />
-                                  </div>
-                                </div>
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                  <div className="space-y-1.5">
-                                    <InvoiceFieldLabel icon={List}>Description</InvoiceFieldLabel>
-                                    <Input
-                                      placeholder="Enter description…"
-                                      value={line.description}
-                                      onChange={(e) => setLine({ description: e.target.value })}
-                                    />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <InvoiceFieldLabel icon={Cog}>Service detail</InvoiceFieldLabel>
-                                    <Input
-                                      placeholder="Enter service detail…"
-                                      value={line.service_detail}
-                                      onChange={(e) => setLine({ service_detail: e.target.value })}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="grid grid-cols-3 gap-3 sm:grid-cols-[1fr_1fr_1fr_1.2fr]">
-                                  <div className="space-y-1.5">
-                                    <InvoiceFieldLabel icon={Hash}>Qty</InvoiceFieldLabel>
-                                    <Input type="number" step="0.01" value={line.quantity} onChange={(e) => setLine({ quantity: e.target.value })} />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <InvoiceFieldLabel icon={Clock}>Hours</InvoiceFieldLabel>
-                                    <Input type="number" step="0.01" value={line.hours} onChange={(e) => setLine({ hours: e.target.value })} />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <InvoiceFieldLabel icon={Coins}>Rate</InvoiceFieldLabel>
-                                    <Input type="number" step="0.01" value={line.rate} onChange={(e) => setLine({ rate: e.target.value })} />
-                                  </div>
-                                  <div className="col-span-3 flex items-center gap-3 rounded-lg bg-primary/12 px-3 py-2 sm:col-span-1">
-                                    <Calculator className="size-5 shrink-0 text-primary" />
-                                    <div className="leading-tight">
-                                      <div className="text-xs font-medium text-muted-foreground">Amount</div>
-                                      <div className="text-lg font-bold">{formatGbp(amount)}</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <Button
-                        className="w-full h-11 text-base shadow-sm"
-                        onClick={() => void handleCustomCreate()}
-                        disabled={
-                          customLoading ||
-                          !customClientId ||
-                          !customPeriodStart ||
-                          !customPeriodEnd ||
-                          customPeriodStart > customPeriodEnd ||
-                          !customLines.some((l) => l.site_id)
-                        }
-                      >
-                        <Send className="size-4 mr-2" />
-                        {customLoading ? 'Creating…' : 'Create Invoice'}
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                  onSaved={(inv) => {
+                    const created = editInvoiceId == null;
+                    setCustomOpen(false);
+                    setEditInvoiceId(null);
+                    loadInvoices();
+                    if (created) rememberNewInvoice(inv.id);
+                    // Land on the rendered invoice so the user can check it looks right.
+                    router.push(`/invoices/${inv.id}/view`);
+                  }}
+                />
                 <Dialog open={genOpen} onOpenChange={setGenOpen}>
                   <DialogTrigger asChild>
                     <Button>
@@ -1789,50 +1391,3 @@ export default function InvoicesPage() {
   );
 }
 
-/** Bordered, lightly tinted section card used by the Create Custom Invoice dialog. */
-function InvoiceFormCard({
-  title,
-  icon: Icon,
-  className,
-  bodyClassName,
-  children,
-}: {
-  title?: string;
-  icon?: LucideIcon;
-  className?: string;
-  bodyClassName?: string;
-  children: React.ReactNode;
-}) {
-  if (!title) {
-    return (
-      <div className={cn('rounded-xl border border-primary/25 bg-background p-4 shadow-sm', className)}>{children}</div>
-    );
-  }
-  return (
-    <div className={cn('overflow-hidden rounded-xl border border-primary/25 bg-background shadow-sm', className)}>
-      <div className="flex items-center gap-2 border-b border-primary/20 bg-primary/10 px-4 py-2 text-sm font-semibold">
-        {Icon ? <Icon className="size-4 text-primary" /> : null}
-        {title}
-      </div>
-      <div className={bodyClassName}>{children}</div>
-    </div>
-  );
-}
-
-function InvoiceFieldLabel({
-  icon: Icon,
-  required,
-  children,
-}: {
-  icon: LucideIcon;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Label className="flex items-center gap-1.5 text-sm font-medium">
-      <Icon className="size-3.5 text-primary" />
-      {children}
-      {required ? <span className="text-destructive">*</span> : null}
-    </Label>
-  );
-}

@@ -2,7 +2,7 @@
 
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import type { CreditNote, Invoice, InvoiceAuditEntry } from '@/lib/types';
 import { InvoiceDocument } from '@/components/invoices/invoice-document';
 import { CreditNoteDialog } from '@/components/invoices/credit-note-dialog';
+import { InvoiceFormDialog } from '@/components/invoices/invoice-form-dialog';
 import { ArrowLeft, Download, FileMinus2, History, Pencil, Printer, ReceiptText, Send, Settings } from 'lucide-react';
 import { canModule } from '@/lib/permissions';
 import { useAuth } from '@/contexts/auth-context';
@@ -32,6 +33,10 @@ export default function InvoiceViewPage() {
   const [downloading, setDownloading] = useState(false);
   const [cnOpen, setCnOpen] = useState(false);
   const [editingCn, setEditingCn] = useState<CreditNote | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // `?edit=1` (from old /edit links) opens the edit form over the invoice.
+  const [editOpen, setEditOpen] = useState(false);
 
   const [sendRequest, setSendRequest] = useState<SendDocumentRequest | null>(null);
   const canDownloadReceipt = !!user && canModule(user, 'invoices', 'pdf_download');
@@ -57,6 +62,10 @@ export default function InvoiceViewPage() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (searchParams.get('edit') === '1' && canEdit) setEditOpen(true);
+  }, [searchParams, canEdit]);
 
   const downloadPdf = async () => {
     if (!id || Number.isNaN(id)) return;
@@ -182,11 +191,21 @@ export default function InvoiceViewPage() {
                             <Settings className="size-4 mr-1" /> Company details
                           </Link>
                         </Button>
-                        <Button size="sm" asChild>
-                          <Link href={`/invoices/${inv.id}/edit`}>
-                            <Pencil className="size-4 mr-1" /> Edit
-                          </Link>
+                        <Button size="sm" onClick={() => setEditOpen(true)}>
+                          <Pencil className="size-4 mr-1" /> Edit
                         </Button>
+                        <InvoiceFormDialog
+                          open={editOpen}
+                          invoiceId={inv.id}
+                          onOpenChange={(o) => {
+                            setEditOpen(o);
+                            if (!o && searchParams.get('edit')) router.replace(`/invoices/${inv.id}/view`);
+                          }}
+                          onSaved={() => {
+                            if (searchParams.get('edit')) router.replace(`/invoices/${inv.id}/view`);
+                            reload();
+                          }}
+                        />
                       </>
                     )}
                   </div>

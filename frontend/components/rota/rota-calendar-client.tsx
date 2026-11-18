@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
-import { attKey, addMinutesToTime, attendanceStatusLine, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, parseDateKey, payableHoursForAttendance, payTypeRateSuffix, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
+import { attKey, addMinutesToTime, attendanceStatusLine, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, orderDaysTodayFirst, parseDateKey, payableHoursForAttendance, payTypeRateSuffix, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
 import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftSiteBarColor } from '@/lib/rota-shifts-types';
@@ -884,6 +884,11 @@ export function RotaCalendarClient() {
   }, [state.employees]);
 
   const todayKey = dateKey(new Date());
+  /** Timeline / list day order: today first, then remaining days chronologically. */
+  const timelineDays = useMemo(
+    () => orderDaysTodayFirst(state.days, todayKey),
+    [state.days, todayKey]
+  );
 
   // A shift whose start time has passed with no attendance recorded is flagged in the
   // grid, so a missed mark is visible without opening every card. Ticks each minute so a
@@ -1036,6 +1041,15 @@ export function RotaCalendarClient() {
     const scrollLeft = targetLeft + ROTA_DAY_COL_W - (scroller.clientWidth - stickyRightW);
     scroller.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
   }, [stickyRightW]);
+
+  // Table view keeps calendar column order; scroll today's column into view on open.
+  useEffect(() => {
+    if (state.rotaView !== 'table') return;
+    const idx = tableDays.indexOf(todayKey);
+    if (idx < 0) return;
+    const timer = window.setTimeout(() => scrollDayColumnIntoView(idx), 120);
+    return () => window.clearTimeout(timer);
+  }, [state.rotaView, tableDays, todayKey, scrollDayColumnIntoView]);
 
   const openDaysEditor = (e: React.MouseEvent<HTMLButtonElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -2803,10 +2817,11 @@ export function RotaCalendarClient() {
                       />
                     ) : null}
                     <Input
-                      placeholder="Name, job title…"
+                      placeholder="Search staff by name…"
                       value={empFilter}
                       onChange={(e) => setEmpFilter(e.target.value)}
                       className="h-8 text-xs flex-1 min-w-0 text-left"
+                      aria-label="Search shifts by staff name"
                     />
                   </div>
                   <button
@@ -3245,7 +3260,7 @@ export function RotaCalendarClient() {
             <p className="text-xs text-muted-foreground shrink-0">
               Scroll each day left/right along the 24-hour axis. Today auto-scrolls to the current time.
             </p>
-            {state.days.map((dk, dayIdx) => {
+            {timelineDays.map((dk, dayIdx) => {
               const tone = TIMELINE_DAY_TONES[dayIdx % TIMELINE_DAY_TONES.length];
               const isToday = dk === todayKey;
               const dayParts = fmtRotaDayParts(dk);

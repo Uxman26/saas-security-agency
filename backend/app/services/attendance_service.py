@@ -36,7 +36,8 @@ ALLOWED_STATUS = {
 STATUS_ALIASES = {"present": "on_time", "cancelled_unpaid": CANCELLED_UNPAID}
 
 NOTE_REQUIRED_DETAIL = "Note is required for Late, Absent, No show, and Cancelled"
-EARLY_BOOK_ON_MINUTES = 20
+# Keep in sync with mobile `BookOnRules.earlyWindow` (5 minutes).
+EARLY_BOOK_ON_MINUTES = 5
 # Late only after the scheduled start minute has fully passed (11:15 → late from 11:16).
 LATE_GRACE = timedelta(minutes=1)
 DEFAULT_COMPANY_TZ = "Europe/London"

@@ -14,6 +14,18 @@ export function buildDayRange(startStr: string, count: number) {
   return Array.from({ length: count }, (_, i) => dateKey(addDays(start, i)));
 }
 
+/**
+ * Today first, then remaining days: future ascending, then past descending
+ * (most recent past first). Presentation-only — do not mutate `state.days`.
+ */
+export function orderDaysTodayFirst(days: string[], today: string = dateKey(new Date())): string[] {
+  const unique = Array.from(new Set(days)).sort();
+  if (!unique.length || !unique.includes(today)) return unique;
+  const futureOrToday = unique.filter((d) => d >= today);
+  const past = unique.filter((d) => d < today).reverse();
+  return [...futureOrToday, ...past];
+}
+
 export function calcHours(s: ShiftRec, inclBreaks = false) {
   const [sh, sm] = s.start.split(':').map(Number);
   const [eh, em] = s.end.split(':').map(Number);

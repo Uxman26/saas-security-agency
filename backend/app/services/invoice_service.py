@@ -21,6 +21,59 @@ from app.services.recycle_bin import archive as _bin_archive
 DEFAULT_INVOICE_VAT_RATE = 20.0
 
 
+def _increment_number(num: str) -> Optional[str]:
+    """XAEL007 -> XAEL008, X-SAE-L-001 -> X-SAE-L-002, INV-9 -> INV-10: the last run of
+    digits goes up by one and keeps its zero padding. None when there are no digits."""
+    import re
+
+    m = re.search(r"(\d+)(\D*)$", num)
+    if not m:
+        return None
+    digits = m.group(1)
+    bumped = str(int(digits) + 1).zfill(len(digits))
+    return num[: m.start(1)] + bumped + m.group(2)
+
+
+def next_invoice_number(
+    db: Session, company_id: int, client_id: Optional[int] = None, site_id: Optional[int] = None
+) -> tuple[Optional[str], Optional[str]]:
+    """(next, last) for a client's sequence, or a site's when billing a site.
+
+    Each client and each separately billed site has its own sequence, continued from the
+    most recent numbered invoice raised for it. The next number skips any already taken.
+    """
+    from sqlalchemy import func as _f
+
+    q = db.query(Invoice.invoice_number).filter(
+        Invoice.company_id == company_id,
+        Invoice.deleted_at.is_(None),
+        Invoice.invoice_number.isnot(None),
+        Invoice.invoice_number != "",
+    )
+    if site_id:
+        q = q.filter(Invoice.billed_site_id == site_id)
+    elif client_id:
+        q = q.filter(Invoice.client_id == client_id, Invoice.billed_site_id.is_(None))
+    else:
+        return None, None
+    row = q.order_by(Invoice.created_at.desc(), Invoice.id.desc()).first()
+    if not row:
+        return None, None
+    last = row[0]
+    taken = {
+        (n or "").lower()
+        for (n,) in db.query(Invoice.invoice_number).filter(
+            Invoice.company_id == company_id, Invoice.deleted_at.is_(None), Invoice.invoice_number.isnot(None)
+        )
+    }
+    nxt = _increment_number(last)
+    guard = 0
+    while nxt and nxt.lower() in taken and guard < 1000:
+        nxt = _increment_number(nxt)
+        guard += 1
+    return nxt, last
+
+
 def clean_invoice_number(
     db: Session, company_id: int, raw: Optional[str], exclude_id: Optional[int] = None
 ) -> Optional[str]:
@@ -215,6 +268,12 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     bank_account_id = payload.pop("client_bank_account_id", None)
     payload["currency"] = normalize_invoice_currency(payload.get("currency"))
     payload["invoice_number"] = clean_invoice_number(db, company.id, payload.get("invoice_number"))
+    payload["billed_site_id"] = invoice_site.id if invoice_site is not None else None
+    if not payload["invoice_number"]:
+        # Left blank: carry on this client's / site's sequence when it has one.
+        payload["invoice_number"], _ = next_invoice_number(
+            db, company.id, client_id=payload.get("client_id"), site_id=payload["billed_site_id"]
+        )
     # A custom invoice need not name a period: it then spans its lines' dates, or
     # failing those the invoice date, and either end can be given on its own.
     if not payload.get("period_start") or not payload.get("period_end"):
@@ -742,6 +801,8 @@ def generate_from_rota(
         raise HTTPException(status_code=400, detail="break_mode must be shift, without_break or deduct")
     company = get_company_by_user_id(db, user_id)
     invoice_number = clean_invoice_number(db, company.id, invoice_number)
+    if not invoice_number:
+        invoice_number, _ = next_invoice_number(db, company.id, client_id=client_id, site_id=site_id)
     # A site with no client is billable on its own: the invoice simply carries no
     # customer record, and the site name stands in for one wherever it is displayed.
     site = None
@@ -849,6 +910,7 @@ def generate_from_rota(
         period_end=period_end,
         invoice_date=today,
         invoice_number=invoice_number,
+        billed_site_id=site_id or None,
         due_date=due,
         total=0,
         subtotal=0,

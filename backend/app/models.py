@@ -1235,6 +1235,9 @@ class Invoice(Base):
     due_date = Column(Date)
     # Optional number typed in by the user; blank means the invoice is shown as "#<id>".
     invoice_number = Column(String, nullable=True, index=True)
+    # The site an invoice was raised against ("Invoice for: Site"). Each client, and each
+    # site billed on its own, keeps a separate invoice number sequence.
+    billed_site_id = Column(Integer, ForeignKey("sites.id"), nullable=True, index=True)
     po_number = Column(String, nullable=True)
     notes = Column(Text)
     rota_review = Column(Text)

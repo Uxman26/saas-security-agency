@@ -43,6 +43,70 @@ import { invoiceLabel, syncPaymentTermsNote } from '@/lib/invoice-utils';
 import { INVOICE_CURRENCIES, formatInvoiceMoney } from '@/lib/invoice-currency';
 import type { Client, ClientBankAccount, Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
 
+/**
+ * Fills the invoice number with the next one in the chosen client's (or site's) own
+ * sequence — XAEL007 after XAEL006. A number the user typed is left alone; one this hook
+ * filled in is replaced when the customer changes. Returns the last number used.
+ */
+export function useNextInvoiceNumber({
+  enabled,
+  clientId,
+  siteId,
+  value,
+  onChange,
+}: {
+  enabled: boolean;
+  clientId?: string;
+  siteId?: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [last, setLast] = useState<string | null>(null);
+  const suggested = useRef<string | null>(null);
+  const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    valueRef.current = value;
+    onChangeRef.current = onChange;
+  });
+
+  useEffect(() => {
+    if (!enabled || (!clientId && !siteId)) return;
+    let cancelled = false;
+    api.invoices
+      .nextNumber(siteId ? { site_id: parseInt(siteId, 10) } : { client_id: parseInt(clientId as string, 10) })
+      .then(({ next_number, last_number }) => {
+        if (cancelled) return;
+        setLast(last_number);
+        const current = valueRef.current.trim();
+        // Only overwrite an empty box or our own earlier suggestion.
+        if (!current || current === suggested.current) {
+          suggested.current = next_number;
+          onChangeRef.current(next_number ?? '');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLast(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, clientId, siteId]);
+
+  /** Forget the suggestion, e.g. when the form is reset. */
+  const resetSuggestion = () => {
+    suggested.current = null;
+    setLast(null);
+  };
+  return { last: enabled && (clientId || siteId) ? last : null, resetSuggestion };
+}
+
+/** Hint under the invoice number box. */
+export function invoiceNumberHint(last: string | null, hasCustomer: boolean): string | undefined {
+  if (!hasCustomer) return undefined;
+  return last ? `Last used: ${last}` : 'First invoice here: type a number (e.g. X-SAE-L-001) to start its sequence.';
+}
+
 const STATUSES = ['draft', 'sent', 'paid', 'partial', 'unpaid', 'overdue', 'cancelled'];
 
 /** Who the invoice is raised against. */
@@ -506,7 +570,16 @@ export function InvoiceFormDialog({
   /** Signatures of existing lines as loaded, keyed by line id. */
   const originalSigs = useRef<Map<number, string>>(new Map());
 
+  const { last: lastNumber, resetSuggestion } = useNextInvoiceNumber({
+    enabled: open && !isEdit,
+    clientId: billTo === 'client' ? clientId : undefined,
+    siteId: billTo === 'site' ? siteId : undefined,
+    value: invoiceNumber,
+    onChange: setInvoiceNumber,
+  });
+
   const reset = () => {
+    resetSuggestion();
     setOriginal(null);
     setBillTo('client');
     setClientId('');
@@ -821,11 +894,16 @@ export function InvoiceFormDialog({
                 <div className="space-y-2">
                   <InvoiceFieldLabel icon={Hash}>Invoice number</InvoiceFieldLabel>
                   <Input
-                    placeholder={isEdit ? `#${invoiceId}` : 'Auto'}
+                    placeholder={isEdit ? `#${invoiceId}` : 'e.g. X-SAE-L-001'}
                     maxLength={50}
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
                   />
+                  {!isEdit && invoiceNumberHint(lastNumber, billTo === 'client' ? !!clientId : !!siteId) ? (
+                    <p className="text-xs text-muted-foreground">
+                      {invoiceNumberHint(lastNumber, billTo === 'client' ? !!clientId : !!siteId)}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <InvoiceFieldLabel icon={CalendarDays}>Invoice date</InvoiceFieldLabel>

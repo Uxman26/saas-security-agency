@@ -351,16 +351,22 @@ def _ensure_invoice_number_and_town_columns():
         from app.database import engine
 
         insp = inspect(engine)
-        for table, col in (("invoices", "invoice_number"), ("clients", "town"), ("sites", "town")):
+        for table, col in (
+            ("invoices", "invoice_number"),
+            ("invoices", "billed_site_id"),
+            ("clients", "town"),
+            ("sites", "town"),
+        ):
             if not insp.has_table(table):
                 continue
             cols = {c["name"] for c in insp.get_columns(table)}
             if col in cols:
                 continue
             with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} VARCHAR"))
+                col_type = "INTEGER REFERENCES sites(id)" if col == "billed_site_id" else "VARCHAR"
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}"))
                 if table == "invoices":
-                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_invoices_invoice_number ON invoices (invoice_number)"))
+                    conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_invoices_{col} ON invoices ({col})"))
     except Exception:
         import logging
 

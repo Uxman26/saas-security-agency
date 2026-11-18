@@ -1422,6 +1422,13 @@ export const api = {
       request<void>(`/invoices/${invoiceId}/lines/${lineId}`, { method: 'DELETE' }),
     create: (data: Record<string, unknown>): Promise<Invoice> =>
       request<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(data) }),
+    /** Next number in a client's (or billed site's) own sequence; null before the first one is typed. */
+    nextNumber: (params: { client_id?: number; site_id?: number }): Promise<{ next_number: string | null; last_number: string | null }> => {
+      const q = new URLSearchParams();
+      if (params.client_id) q.set('client_id', String(params.client_id));
+      if (params.site_id) q.set('site_id', String(params.site_id));
+      return request<{ next_number: string | null; last_number: string | null }>(`/invoices/next-number?${q.toString()}`);
+    },
     generate: (params: {
       period_start: string;
       period_end: string;

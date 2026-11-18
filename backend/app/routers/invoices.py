@@ -323,6 +323,22 @@ def generate_invoice(
     return _serialize_invoice(inv, True, db)
 
 
+@router.get("/next-number")
+def next_invoice_number(
+    client_id: Optional[int] = None,
+    site_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("invoices", "view")),
+):
+    """The next number in this client's (or billed site's) sequence, and the last one used.
+    Both are null until the first invoice for it is given a number by hand."""
+    from app.services.company_service import get_company_by_user_id
+
+    company = get_company_by_user_id(db, current_user.id)
+    nxt, last = invoice_service.next_invoice_number(db, company.id, client_id=client_id, site_id=site_id)
+    return {"next_number": nxt, "last_number": last}
+
+
 @router.get("/statement", response_model=InvoiceStatementResponse)
 def get_statement(
     date_from: date,

@@ -55,6 +55,8 @@ import {
   InvoiceFormCard,
   InvoiceFormDialog,
   LineItemsEditor,
+  invoiceNumberHint,
+  useNextInvoiceNumber,
   addLinePayload,
   isBlankLine,
   linePayload,
@@ -129,6 +131,14 @@ export default function InvoicesPage() {
   const [genEnd, setGenEnd] = useState('');
   const [genDueDate, setGenDueDate] = useState(() => localDateOffset(30));
   const [genInvoiceNumber, setGenInvoiceNumber] = useState('');
+  // Each client / site carries its own number sequence; the next one is filled in.
+  const { last: genLastNumber, resetSuggestion: resetGenNumber } = useNextInvoiceNumber({
+    enabled: genOpen,
+    clientId: genMode === 'client' ? genClientId : undefined,
+    siteId: genMode === 'site' ? genSiteId : undefined,
+    value: genInvoiceNumber,
+    onChange: setGenInvoiceNumber,
+  });
   const [genLoading, setGenLoading] = useState(false);
   const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
   const [genCurrency, setGenCurrency] = useState('GBP');
@@ -259,6 +269,7 @@ export default function InvoicesPage() {
       setGenLines([]);
       loadInvoices();
       setGenInvoiceNumber('');
+      resetGenNumber();
       toast.success(`Invoice ${invoiceLabel(inv)} created from manual lines`);
       rememberNewInvoice(inv.id);
       router.push(`/invoices/${inv.id}/view`);
@@ -305,6 +316,7 @@ export default function InvoicesPage() {
       setGenEnd('');
       setGenDueDate(localDateOffset(30));
       setGenInvoiceNumber('');
+      resetGenNumber();
       loadInvoices();
       const shifts = (inv.lines ?? []).filter((l) => l.shift_date).length;
       toast.success(
@@ -964,11 +976,16 @@ export default function InvoicesPage() {
                       <div className="space-y-1.5">
                         <InvoiceFieldLabel icon={Hash}>Invoice number</InvoiceFieldLabel>
                         <Input
-                          placeholder="Auto"
+                          placeholder="e.g. X-SAE-L-001"
                           maxLength={50}
                           value={genInvoiceNumber}
                           onChange={(e) => setGenInvoiceNumber(e.target.value)}
                         />
+                        {invoiceNumberHint(genLastNumber, genMode === 'client' ? !!genClientId : !!genSiteId) ? (
+                          <p className="text-xs text-muted-foreground">
+                            {invoiceNumberHint(genLastNumber, genMode === 'client' ? !!genClientId : !!genSiteId)}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="space-y-1.5">
                         <InvoiceFieldLabel icon={CalendarDays} required>Period start</InvoiceFieldLabel>

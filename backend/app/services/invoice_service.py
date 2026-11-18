@@ -21,6 +21,30 @@ from app.services.recycle_bin import archive as _bin_archive
 DEFAULT_INVOICE_VAT_RATE = 20.0
 
 
+def clean_invoice_number(
+    db: Session, company_id: int, raw: Optional[str], exclude_id: Optional[int] = None
+) -> Optional[str]:
+    """A manually entered invoice number: trimmed, blank means none (shown as #id).
+    It must not repeat another live invoice of the same company."""
+    num = (raw or "").strip()
+    if not num:
+        return None
+    if len(num) > 50:
+        raise HTTPException(status_code=400, detail="Invoice number must be 50 characters or fewer")
+    q = db.query(Invoice.id).filter(
+        Invoice.company_id == company_id,
+        Invoice.deleted_at.is_(None),
+        Invoice.invoice_number.isnot(None),
+    )
+    if exclude_id is not None:
+        q = q.filter(Invoice.id != exclude_id)
+    from sqlalchemy import func as _f
+
+    if q.filter(_f.lower(Invoice.invoice_number) == num.lower()).first():
+        raise HTTPException(status_code=400, detail=f"Invoice number {num} is already used by another invoice")
+    return num
+
+
 def _assert_site_matches_client(site: Site, client_id: Optional[int]) -> None:
     if client_id is None or site.client_id is None:
         return
@@ -190,6 +214,7 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
             raise HTTPException(status_code=404, detail="Client not found")
     bank_account_id = payload.pop("client_bank_account_id", None)
     payload["currency"] = normalize_invoice_currency(payload.get("currency"))
+    payload["invoice_number"] = clean_invoice_number(db, company.id, payload.get("invoice_number"))
     inv = Invoice(company_id=company.id, **payload)
     if not inv.invoice_date:
         inv.invoice_date = date_cls.today()
@@ -413,6 +438,8 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
     before = {k: _snap(getattr(inv, k)) for k in payload.keys() if hasattr(inv, k)}
     bank_account_id = payload.pop("client_bank_account_id", None) if "client_bank_account_id" in payload else ...
     headers = payload.pop("column_headers", None) if "column_headers" in payload else ...
+    if "invoice_number" in payload:
+        payload["invoice_number"] = clean_invoice_number(db, company.id, payload["invoice_number"], exclude_id=inv.id)
     for k, v in payload.items():
         if hasattr(inv, k):
             setattr(inv, k, v)
@@ -674,6 +701,7 @@ def generate_from_rota(
     break_mode: str = "shift",
     currency: str = "GBP",
     due_date: Optional[date] = None,
+    invoice_number: Optional[str] = None,
 ) -> Invoice:
     """Create a draft invoice from published rota planner shifts for a client/site period.
 
@@ -687,6 +715,7 @@ def generate_from_rota(
     if break_mode not in INVOICE_BREAK_MODES:
         raise HTTPException(status_code=400, detail="break_mode must be shift, without_break or deduct")
     company = get_company_by_user_id(db, user_id)
+    invoice_number = clean_invoice_number(db, company.id, invoice_number)
     # A site with no client is billable on its own: the invoice simply carries no
     # customer record, and the site name stands in for one wherever it is displayed.
     site = None
@@ -793,6 +822,7 @@ def generate_from_rota(
         period_start=period_start,
         period_end=period_end,
         invoice_date=today,
+        invoice_number=invoice_number,
         due_date=due,
         total=0,
         subtotal=0,

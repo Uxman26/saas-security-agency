@@ -344,6 +344,29 @@ def _ensure_invoice_currency_columns():
         logging.getLogger(__name__).exception("invoice currency columns migration failed")
 
 
+def _ensure_invoice_number_and_town_columns():
+    """invoices.invoice_number (manual number, optional) and clients/sites.town."""
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        for table, col in (("invoices", "invoice_number"), ("clients", "town"), ("sites", "town")):
+            if not insp.has_table(table):
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            if col in cols:
+                continue
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} VARCHAR"))
+                if table == "invoices":
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_invoices_invoice_number ON invoices (invoice_number)"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("invoice number / town columns migration failed")
+
+
 def _ensure_invoice_sent_at_column():
     """invoices.sent_at: the overdue clock (90 days) starts when an invoice is sent.
 
@@ -550,6 +573,7 @@ def _run_migrations():
     # SQLite-only alters below never run). A second pass runs after table creates.
     _ensure_invoice_currency_columns()
     _ensure_invoice_sent_at_column()
+    _ensure_invoice_number_and_town_columns()
     _ensure_company_workforce_size()
     path = get_db_path()
     if not path:

@@ -252,7 +252,16 @@ def render_invoice_pdf(
                 break
     bill_to = client.name if client else (bill_site.name if bill_site else "—")
     bill_contact = (client.contact_person if client else (bill_site.contact_person if bill_site else None)) or ""
-    bill_address = (client.address if client else (bill_site.address if bill_site else None)) or ""
+    _bill_src = client if client else bill_site
+    bill_address = "\n".join(
+        str(v).strip()
+        for v in (
+            getattr(_bill_src, "address", None),
+            getattr(_bill_src, "town", None),
+            getattr(_bill_src, "postcode", None),
+        )
+        if v and str(v).strip()
+    )
     bill_email = (client.email if client else (bill_site.contact_email if bill_site else None)) or ""
     bill_phone = (client.phone if client else (bill_site.contact_phone if bill_site else None)) or ""
 
@@ -278,7 +287,7 @@ def render_invoice_pdf(
 
     inv_date = inv.invoice_date or (inv.created_at.date() if inv.created_at else None)
     meta_rows = [
-        ["Invoice Number:", f"#{inv.id}"],
+        ["Invoice Number:", (getattr(inv, "invoice_number", None) or f"#{inv.id}")],
         ["Invoice Date:", _long_date(inv_date)],
         ["Payment Due:", _long_date(inv.due_date)],
         ["Purchase Order:", (getattr(inv, "po_number", None) or "").strip()],
@@ -596,7 +605,7 @@ def render_invoice_pdf(
     foot_style = ParagraphStyle("Foot", parent=styles["Normal"], fontSize=7.5, leading=10, textColor=colors.HexColor("#52525b"))
     foot_right = ParagraphStyle("FootR", parent=foot_style, alignment=2)
     t_foot = Table(
-        [[Paragraph("<br/>".join(foot_left) or " ", foot_style), Paragraph(f"Invoice #{inv.id}", foot_right)]],
+        [[Paragraph("<br/>".join(foot_left) or " ", foot_style), Paragraph(f"Invoice {getattr(inv, 'invoice_number', None) or f'#{inv.id}'}", foot_right)]],
         colWidths=[12 * cm, 6 * cm],
     )
     t_foot.setStyle(TableStyle([
@@ -609,6 +618,6 @@ def render_invoice_pdf(
     story.append(t_foot)
 
     canvas_cls = _numbered_canvas_class()
-    canvas_cls.footer_ref = f"Invoice #{inv.id}"
+    canvas_cls.footer_ref = f"Invoice {getattr(inv, 'invoice_number', None) or f'#{inv.id}'}"
     build_branded(doc, story, onFirstPage=_draw_edge_bands, onLaterPages=_draw_edge_bands, canvasmaker=canvas_cls, powered_by=True)
     return buf.getvalue()

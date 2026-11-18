@@ -840,6 +840,7 @@ class SiteBase(BaseModel):
     color: Optional[str] = "#3b82f6"
     client_id: Optional[int] = None
     address: Optional[str] = None
+    town: Optional[str] = Field(default=None, max_length=100)
     postcode: Optional[str] = None
     contact_person: Optional[str] = None
     contact_email: Optional[EmailStr] = None
@@ -1161,6 +1162,7 @@ class ClientBase(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    town: Optional[str] = Field(default=None, max_length=100)
     postcode: Optional[str] = None
     contact_person: Optional[str] = None
     double_rate_special_days: bool = False
@@ -1694,6 +1696,7 @@ class InvoiceBase(BaseModel):
     status: Optional[str] = "draft"
     due_date: Optional[date] = None
     invoice_date: Optional[date] = None
+    invoice_number: Optional[str] = Field(default=None, max_length=50)
     po_number: Optional[str] = None
     notes: Optional[str] = None
     rota_review: Optional[str] = None
@@ -1713,6 +1716,7 @@ class InvoiceCreate(InvoiceBase):
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
     invoice_date: Optional[date] = None
+    invoice_number: Optional[str] = Field(default=None, max_length=50)
     po_number: Optional[str] = None
     notes: Optional[str] = None
     rota_review: Optional[str] = None
@@ -1750,6 +1754,8 @@ class InvoiceResponse(InvoiceBase):
     client_email: Optional[str] = None
     client_phone: Optional[str] = None
     client_address: Optional[str] = None
+    client_town: Optional[str] = None
+    client_postcode: Optional[str] = None
     client_contact_person: Optional[str] = None
     lines: list[InvoiceLineResponse] = []
     amount_paid: float = 0

@@ -7,6 +7,7 @@ import { formatDateUK } from '@/lib/date-format';
 import { hasInvoiceAccountDetails } from '@/lib/invoice-account';
 import { groupInvoiceLines } from '@/lib/invoice-lines';
 import { storageGet } from '@/lib/safe-storage';
+import { invoiceLabel } from '@/lib/invoice-utils';
 import { PoweredByControlOps } from '@/components/invoices/powered-by';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -79,6 +80,10 @@ type Props = {
 export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHeaders, onHeadersChange }: Props) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
   const [headers, setHeaders] = useState({ ...DEFAULT_HEADERS, ...(invoice.column_headers || {}) });
+  const billAddress = [invoice.client_address, invoice.client_town, invoice.client_postcode]
+    .map((v) => (v ?? '').trim())
+    .filter(Boolean)
+    .join('\n');
 
   useEffect(() => {
     setHeaders({ ...DEFAULT_HEADERS, ...(invoice.column_headers || {}) });
@@ -121,7 +126,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
   const multiSite = new Set(dayRows.flatMap((r) => r.siteNames)).size > 1;
 
   const meta: { label: string; value: string }[] = [
-    { label: 'Invoice Number', value: `#${invoice.id}` },
+    { label: 'Invoice Number', value: invoiceLabel(invoice) },
     { label: 'Invoice Date', value: fmtLongDate(invoiceDate) },
     { label: 'Payment Due', value: fmtLongDate(invoice.due_date) },
     { label: 'Purchase Order', value: invoice.po_number || '' },
@@ -202,7 +207,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
             {invoice.client_name ?? `Client #${invoice.client_id}`}
           </p>
           {invoice.client_contact_person ? <p className="mt-1 text-sm text-slate-600">{invoice.client_contact_person}</p> : null}
-          {invoice.client_address ? <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{invoice.client_address}</p> : null}
+          {billAddress ? <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{billAddress}</p> : null}
           {invoice.client_phone || invoice.client_email ? (
             <div className="mt-5 space-y-1.5">
               {invoice.client_phone ? (
@@ -428,7 +433,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
           {invoice.company_registration_number ? <p>Company Registration Number: {invoice.company_registration_number}</p> : null}
         </div>
         <p className="border-slate-300 sm:border-l sm:pl-4">
-          Invoice #{invoice.id} <span className="mx-1.5 text-slate-300">|</span> Page 1 of 1
+          Invoice {invoiceLabel(invoice)} <span className="mx-1.5 text-slate-300">|</span> Page 1 of 1
         </p>
       </div>
 

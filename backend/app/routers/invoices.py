@@ -190,7 +190,7 @@ def _serialize_invoice(
                     status=cn.status,
                     created_at=cn.created_at,
                     updated_at=cn.updated_at,
-                    invoice_number=f"INV-{cn.invoice_id}",
+                    invoice_number=inv.invoice_number or f"INV-{cn.invoice_id}",
                     client_name=cl.name if cl else None,
                     site_name=cn.site.name if getattr(cn, "site", None) else None,
                 )
@@ -208,6 +208,7 @@ def _serialize_invoice(
         period_start=inv.period_start,
         period_end=inv.period_end,
         invoice_date=inv.invoice_date or (inv.created_at.date() if inv.created_at else None),
+        invoice_number=getattr(inv, "invoice_number", None),
         total=inv.total,
         status=inv.status,
         due_date=inv.due_date,
@@ -240,6 +241,8 @@ def _serialize_invoice(
         client_email=cl.email if cl else None,
         client_phone=cl.phone if cl else None,
         client_address=cl.address if cl else None,
+        client_town=getattr(cl, "town", None) if cl else None,
+        client_postcode=cl.postcode if cl else None,
         client_contact_person=cl.contact_person if cl else None,
         lines=lines_out,
         amount_paid=paid,
@@ -288,6 +291,7 @@ def generate_invoice(
     break_mode: str = "shift",
     currency: str = "GBP",
     due_date: Optional[date] = None,
+    invoice_number: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("invoices", "generate")),
 ):
@@ -312,6 +316,7 @@ def generate_invoice(
         break_mode=break_mode,
         currency=currency,
         due_date=due_date,
+        invoice_number=invoice_number,
     )
     inv = invoice_service.get_invoice(db, inv.id, current_user.id)
     return _serialize_invoice(inv, True, db)

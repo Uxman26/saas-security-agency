@@ -69,3 +69,9 @@ export function formatDueDate(due?: string | null): string {
   if (!due) return '—';
   return formatDateUK(due) || '—';
 }
+
+/** The number to show for an invoice: the one typed in, else "#<id>". */
+export function invoiceLabel(inv: Pick<Invoice, 'id' | 'invoice_number'>): string {
+  const n = (inv.invoice_number ?? '').trim();
+  return n || `#${inv.id}`;
+}

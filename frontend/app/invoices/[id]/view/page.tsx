@@ -21,6 +21,7 @@ import { toast } from '@/lib/toast';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { Pill } from '@/components/module-dashboard';
 import { formatDateUK } from '@/lib/date-format';
+import { invoiceLabel } from '@/lib/invoice-utils';
 
 export default function InvoiceViewPage() {
   const params = useParams();
@@ -142,7 +143,7 @@ export default function InvoiceViewPage() {
               </Button>
               {inv && (
                 <>
-                  <h1 className="text-2xl font-bold">Invoice #{inv.id}</h1>
+                  <h1 className="text-2xl font-bold">Invoice {invoiceLabel(inv)}</h1>
                   <div className="flex flex-wrap gap-2 ml-auto">
                     <Button variant="outline" size="sm" onClick={() => window.print()}>
                       <Printer className="size-4 mr-1" /> Print

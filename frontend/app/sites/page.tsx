@@ -203,7 +203,12 @@ function SiteForm({
           <Input {...register('address')} placeholder="123 High Street, London" />
           {errors.address && <p className="text-xs text-destructive">{errors.address.message}</p>}
         </div>
-        <div className="space-y-1 sm:col-span-2">
+        <div className="space-y-1">
+          <Label>Town</Label>
+          <Input {...register('town')} placeholder="e.g. London" />
+          {errors.town && <p className="text-xs text-destructive">{errors.town.message}</p>}
+        </div>
+        <div className="space-y-1">
           <Label>Postcode <span className="text-destructive">*</span></Label>
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
           {errors.postcode && <p className="text-xs text-destructive">{errors.postcode.message}</p>}
@@ -417,6 +422,7 @@ export default function SitesPage() {
       color: data.color || DEFAULT_SITE_COLOR,
       client_id: data.client_id ?? null,
       address: data.address || undefined,
+      town: data.town?.trim() || null,
       postcode: data.postcode || undefined,
       contact_person: data.contact_person || undefined,
       contact_email: data.contact_email || undefined,
@@ -489,6 +495,7 @@ export default function SitesPage() {
       default_hourly_rate: site.default_hourly_rate ?? undefined,
       staff_hourly_rate: site.staff_hourly_rate ?? undefined,
       address: site.address ?? '',
+      town: site.town ?? '',
       postcode: site.postcode ?? '',
       contact_person: site.contact_person ?? '',
       contact_email: site.contact_email ?? '',
@@ -528,7 +535,7 @@ export default function SitesPage() {
 
   const getSearchText = useCallback(
     (s: Site) =>
-      [s.name, s.address, s.postcode, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_email, s.contact_phone, String(s.default_hourly_rate ?? ''), String(s.staff_hourly_rate ?? ''), s.site_type === 2 ? 'Ad-hoc' : 'Regular', s.reference ?? '']
+      [s.name, s.address, s.town, s.postcode, clientMap.get(s.client_id ?? 0), contractorLabel(s), s.contact_person, s.contact_email, s.contact_phone, String(s.default_hourly_rate ?? ''), String(s.staff_hourly_rate ?? ''), s.site_type === 2 ? 'Ad-hoc' : 'Regular', s.reference ?? '']
         .filter(Boolean)
         .join(' '),
     [clientMap, contractorLabel]
@@ -792,7 +799,7 @@ export default function SitesPage() {
                         ) : null}
                       </div>
                       <p className="mt-2 truncate text-xs text-muted-foreground">
-                        {[site.address, site.postcode].filter(Boolean).join(', ') || 'No address'}
+                        {[site.address, site.town, site.postcode].filter(Boolean).join(', ') || 'No address'}
                       </p>
                     </div>
                   ))}
@@ -888,7 +895,7 @@ export default function SitesPage() {
                           <TableCell className="whitespace-nowrap font-medium">
                             {site.default_hourly_rate != null ? `£${Number(site.default_hourly_rate).toFixed(2)}/hr` : '-'}
                           </TableCell>
-                          <TableCell className="max-w-[200px] truncate">{site.address || '-'}</TableCell>
+                          <TableCell className="max-w-[200px] truncate">{[site.address, site.town].filter(Boolean).join(', ') || '-'}</TableCell>
                           <TableCell>{site.postcode || '-'}</TableCell>
                           <TableCell>{site.contact_person || '-'}</TableCell>
                           <TableCell>{site.contact_email || '-'}</TableCell>

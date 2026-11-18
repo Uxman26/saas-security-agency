@@ -942,6 +942,7 @@ export interface Site {
   deleted_at?: string | null;
   color?: string;
   address?: string;
+  town?: string | null;
   postcode?: string;
   contact_person?: string;
   contact_email?: string;
@@ -1517,6 +1518,7 @@ export interface Client {
   email?: string;
   phone?: string;
   address?: string;
+  town?: string | null;
   postcode?: string;
   contact_person?: string;
   double_rate_special_days?: boolean;
@@ -1872,6 +1874,8 @@ export interface Invoice {
   /** When the invoice was first sent; null for drafts. Overdue is counted from here. */
   sent_at?: string | null;
   due_date?: string | null;
+  /** Number typed in by the user; when empty the invoice is shown as "#<id>". */
+  invoice_number?: string | null;
   po_number?: string | null;
   notes?: string | null;
   rota_review?: string | null;
@@ -1906,6 +1910,8 @@ export interface Invoice {
   client_email?: string | null;
   client_phone?: string | null;
   client_address?: string | null;
+  client_town?: string | null;
+  client_postcode?: string | null;
   client_contact_person?: string | null;
   lines?: InvoiceLine[];
   amount_paid?: number;

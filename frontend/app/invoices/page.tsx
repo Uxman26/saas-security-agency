@@ -17,11 +17,11 @@ import { api } from '@/lib/api';
 import type { Invoice, Client, Site, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Building2, CalendarDays, Clock, Coffee, Filter, PoundSterling, Users, FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, ReceiptText, Wallet, FileMinus2, Send, Undo2 } from 'lucide-react';
+import { Building2, CalendarDays, Clock, Coffee, Filter, PoundSterling, Users, FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, Hash, ReceiptText, Wallet, FileMinus2, Send, Undo2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
-import { canSendInvoiceReminder, formatDueCountdown, isInvoiceOpen, isInvoiceOverdue, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
+import { canSendInvoiceReminder, formatDueCountdown, invoiceLabel, isInvoiceOpen, isInvoiceOverdue, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
@@ -128,6 +128,7 @@ export default function InvoicesPage() {
   const [genStart, setGenStart] = useState('');
   const [genEnd, setGenEnd] = useState('');
   const [genDueDate, setGenDueDate] = useState(() => localDateOffset(30));
+  const [genInvoiceNumber, setGenInvoiceNumber] = useState('');
   const [genLoading, setGenLoading] = useState(false);
   const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
   const [genCurrency, setGenCurrency] = useState('GBP');
@@ -250,13 +251,15 @@ export default function InvoicesPage() {
         period_start: genStart,
         period_end: genEnd,
         due_date: genDueDate || undefined,
+        invoice_number: genInvoiceNumber.trim() || undefined,
         currency: genCurrency,
         lines: manual.map((l) => linePayload(l, forcedSite)),
       });
       setGenOpen(false);
       setGenLines([]);
       loadInvoices();
-      toast.success(`Invoice #${inv.id} created from manual lines`);
+      setGenInvoiceNumber('');
+      toast.success(`Invoice ${invoiceLabel(inv)} created from manual lines`);
       rememberNewInvoice(inv.id);
       router.push(`/invoices/${inv.id}/view`);
     } catch (e) {
@@ -285,6 +288,7 @@ export default function InvoicesPage() {
         break_mode: genBreakMode,
         currency: genCurrency,
         ...(genDueDate ? { due_date: genDueDate } : {}),
+        ...(genInvoiceNumber.trim() ? { invoice_number: genInvoiceNumber.trim() } : {}),
         ...toWorkFilterParams(genNarrow),
         ...(genMode === 'client' ? { client_id: parseInt(genClientId, 10) } : {}),
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
@@ -300,10 +304,11 @@ export default function InvoicesPage() {
       setGenStart('');
       setGenEnd('');
       setGenDueDate(localDateOffset(30));
+      setGenInvoiceNumber('');
       loadInvoices();
       const shifts = (inv.lines ?? []).filter((l) => l.shift_date).length;
       toast.success(
-        `Invoice #${inv.id} — ${formatMoney(inv.total ?? 0)} from ${shifts} shift${shifts === 1 ? '' : 's'}`
+        `Invoice ${invoiceLabel(inv)} — ${formatMoney(inv.total ?? 0)} from ${shifts} shift${shifts === 1 ? '' : 's'}`
       );
       // "Where did it go?" is the commonest question about this button, so it lands on
       // the invoice itself rather than a list the user then has to search.
@@ -375,6 +380,7 @@ export default function InvoicesPage() {
     (inv: Invoice) =>
       [
         String(inv.id),
+        inv.invoice_number,
         customerLabel(inv),
         inv.status,
         inv.period_start,
@@ -949,8 +955,17 @@ export default function InvoicesPage() {
                       )}
                     </InvoiceFormCard>
 
-                    {/* Period & due date */}
-                    <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1fr_1fr_1.6fr]">
+                    {/* Invoice number, period & due date */}
+                    <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1fr_1fr_1fr_1.6fr]">
+                      <div className="space-y-1.5">
+                        <InvoiceFieldLabel icon={Hash}>Invoice number</InvoiceFieldLabel>
+                        <Input
+                          placeholder="Auto"
+                          maxLength={50}
+                          value={genInvoiceNumber}
+                          onChange={(e) => setGenInvoiceNumber(e.target.value)}
+                        />
+                      </div>
                       <div className="space-y-1.5">
                         <InvoiceFieldLabel icon={CalendarDays} required>Period start</InvoiceFieldLabel>
                         <Input type="date" value={genStart} max={genEnd || undefined} onChange={(e) => setGenStart(e.target.value)} />
@@ -964,7 +979,7 @@ export default function InvoicesPage() {
                         <DueDateField invoiceDate="" value={genDueDate} onChange={setGenDueDate} />
                       </div>
                       {genStart && genEnd && genStart > genEnd ? (
-                        <p className="text-sm text-destructive sm:col-span-3">Period start cannot be after period end</p>
+                        <p className="text-sm text-destructive sm:col-span-4">Period start cannot be after period end</p>
                       ) : null}
                     </InvoiceFormCard>
 
@@ -1180,7 +1195,7 @@ export default function InvoicesPage() {
                         ) : null}
                         <div className="min-w-0">
                           <Link href={`/invoices/${inv.id}/view`} className="font-medium hover:underline">
-                            #{inv.id}
+                            {invoiceLabel(inv)}
                           </Link>
                           <p className="truncate text-sm text-muted-foreground">
                             {customerLabel(inv) ?? '—'}
@@ -1250,7 +1265,7 @@ export default function InvoicesPage() {
                             {formatDueCountdown(inv)}
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>
-                          <TableCell className="font-medium tabular-nums">#{inv.id}</TableCell>
+                          <TableCell className="font-medium tabular-nums">{invoiceLabel(inv)}</TableCell>
                           <TableCell className="font-medium max-w-[220px]">
                             <div className="group relative truncate" title={customer}>
                               {customer}

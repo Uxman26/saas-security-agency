@@ -39,7 +39,7 @@ import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { localDateKey } from '@/lib/date-format';
-import { syncPaymentTermsNote } from '@/lib/invoice-utils';
+import { invoiceLabel, syncPaymentTermsNote } from '@/lib/invoice-utils';
 import { INVOICE_CURRENCIES, formatInvoiceMoney } from '@/lib/invoice-currency';
 import type { Client, ClientBankAccount, Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
 
@@ -478,6 +478,7 @@ export function InvoiceFormDialog({
   const [periodEnd, setPeriodEnd] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [po, setPo] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [taxRate, setTaxRate] = useState('20');
   const [currency, setCurrency] = useState('GBP');
   const [bankId, setBankId] = useState('');
@@ -498,6 +499,7 @@ export function InvoiceFormDialog({
     setPeriodEnd('');
     setDueDate('');
     setPo('');
+    setInvoiceNumber('');
     setTaxRate('20');
     setCurrency('GBP');
     setBankId('');
@@ -543,6 +545,7 @@ export function InvoiceFormDialog({
         setPeriodEnd((inv.period_end ?? '').slice(0, 10));
         setDueDate((inv.due_date ?? '').slice(0, 10));
         setPo(inv.po_number ?? '');
+        setInvoiceNumber(inv.invoice_number ?? '');
         setTaxRate(String(inv.tax_rate ?? 0));
         setCurrency(inv.currency || 'GBP');
         setBankId(inv.client_bank_account_id != null ? String(inv.client_bank_account_id) : '');
@@ -623,6 +626,7 @@ export function InvoiceFormDialog({
       period_end: periodEnd,
       invoice_date: invoiceDate || undefined,
       due_date: dueDate || undefined,
+      invoice_number: invoiceNumber.trim() || undefined,
       po_number: po.trim() || undefined,
       notes: notes.trim() || undefined,
       rota_review: rotaReview.trim() || undefined,
@@ -631,7 +635,7 @@ export function InvoiceFormDialog({
       currency,
       lines: chosen.map((l) => linePayload(l, forcedSite)),
     });
-    toast.success(`Invoice #${inv.id} created`);
+    toast.success(`Invoice ${invoiceLabel(inv)} created`);
     return inv;
   };
 
@@ -647,6 +651,7 @@ export function InvoiceFormDialog({
       due_date: dueDate || null,
       period_start: periodStart,
       period_end: periodEnd,
+      invoice_number: invoiceNumber.trim() || null,
       po_number: po.trim() || null,
       notes: notes || null,
       rota_review: rotaReview || null,
@@ -661,7 +666,7 @@ export function InvoiceFormDialog({
     }
     for (const l of added) await api.invoices.addLine(id, addLinePayload(l, forcedSite));
     const inv = await api.invoices.get(id);
-    toast.success(`Invoice #${id} saved`);
+    toast.success(`Invoice ${invoiceLabel(inv)} saved`);
     return inv;
   };
 
@@ -693,7 +698,7 @@ export function InvoiceFormDialog({
     periodStart <= periodEnd &&
     (isEdit ? !!original : (billTo === 'client' ? !!clientId : !!siteId) && lines.some((l) => !isBlankLine(l)));
 
-  const title = isEdit ? `Edit Invoice #${invoiceId}` : 'Create Custom Invoice';
+  const title = isEdit ? `Edit Invoice ${original ? invoiceLabel(original) : `#${invoiceId}`}` : 'Create Custom Invoice';
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -758,9 +763,20 @@ export function InvoiceFormDialog({
                   <p className="text-xs text-muted-foreground">This site has no client, so its name is shown as the customer.</p>
                 ) : null}
               </div>
-              <div className="space-y-2 sm:pl-4">
-                <InvoiceFieldLabel icon={CalendarDays}>Invoice date</InvoiceFieldLabel>
-                <Input type="date" value={invoiceDate} onChange={(e) => changeInvoiceDate(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3 sm:pl-4">
+                <div className="space-y-2">
+                  <InvoiceFieldLabel icon={Hash}>Invoice number</InvoiceFieldLabel>
+                  <Input
+                    placeholder={isEdit ? `#${invoiceId}` : 'Auto'}
+                    maxLength={50}
+                    value={invoiceNumber}
+                    onChange={(e) => setInvoiceNumber(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <InvoiceFieldLabel icon={CalendarDays}>Invoice date</InvoiceFieldLabel>
+                  <Input type="date" value={invoiceDate} onChange={(e) => changeInvoiceDate(e.target.value)} />
+                </div>
               </div>
             </InvoiceFormCard>
 

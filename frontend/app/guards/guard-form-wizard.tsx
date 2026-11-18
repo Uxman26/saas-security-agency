@@ -230,6 +230,24 @@ export function GuardFormWizard({
     }
   };
 
+  /** Tab click: going back is free; going forward checks each step it passes, like Next. */
+  const goToStep = async (target: number) => {
+    if (target === step) return;
+    if (target < step) {
+      setStep(target);
+      return;
+    }
+    if (step === 0) {
+      const ok = await trigger(stepFields[0]);
+      if (!ok) return;
+      if (target === 1) {
+        setStep(1);
+        return;
+      }
+    }
+    await goToSummary();
+  };
+
   const saveSummary = () => {
     clearErrors();
     const values = getValues();
@@ -269,15 +287,20 @@ export function GuardFormWizard({
       )}
       <div className="flex gap-0 text-sm font-medium">
         {STEPS.map((label, i) => (
-          <div
+          <button
             key={label}
+            type="button"
+            aria-current={i === step ? 'step' : undefined}
+            onClick={() => void goToStep(i)}
             className={cn(
-              'flex-1 py-2 px-3 text-center border-b-2',
-              i === step ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'
+              'flex-1 py-2 px-3 text-center border-b-2 transition-colors cursor-pointer focus-visible:outline-none focus-visible:bg-muted/60',
+              i === step
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
             )}
           >
             {label}
-          </div>
+          </button>
         ))}
       </div>
 

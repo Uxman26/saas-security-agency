@@ -1387,6 +1387,7 @@ export const api = {
       data: {
         due_date?: string | null;
         invoice_date?: string | null;
+        invoice_number?: string | null;
         po_number?: string | null;
         notes?: string | null;
         rota_review?: string | null;
@@ -1429,6 +1430,7 @@ export const api = {
       break_mode?: 'shift' | 'without_break' | 'deduct';
       currency?: string;
       due_date?: string;
+      invoice_number?: string;
     } & WorkFilterParams): Promise<Invoice> => {
       const q = appendWorkFilters(
         new URLSearchParams({ period_start: params.period_start, period_end: params.period_end }),
@@ -1438,6 +1440,7 @@ export const api = {
       if (params.break_mode && params.break_mode !== 'shift') q.append('break_mode', params.break_mode);
       if (params.currency) q.append('currency', params.currency);
       if (params.due_date) q.append('due_date', params.due_date);
+      if (params.invoice_number?.trim()) q.append('invoice_number', params.invoice_number.trim());
       return request<Invoice>(`/invoices/generate?${q.toString()}`, { method: 'POST' });
     },
     revertPayments: (id: number): Promise<Invoice> =>

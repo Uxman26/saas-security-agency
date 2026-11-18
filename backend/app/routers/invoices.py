@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.services.invoice_pdf import company_full_address
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi import status as http_status
@@ -126,7 +127,7 @@ def _serialize_invoice(
     if co:
         company_email = (co.email or "").strip() or (admin.email if admin else None)
         company_phone = co.phone
-        company_address = co.address
+        company_address = company_full_address(co) or None
         company_website = co.website
         company_registration_number = co.registration_number
         company_vat_number = co.vat_number

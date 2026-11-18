@@ -215,6 +215,32 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     bank_account_id = payload.pop("client_bank_account_id", None)
     payload["currency"] = normalize_invoice_currency(payload.get("currency"))
     payload["invoice_number"] = clean_invoice_number(db, company.id, payload.get("invoice_number"))
+    # A custom invoice need not name a period: it then spans its lines' dates, or
+    # failing those the invoice date, and either end can be given on its own.
+    if not payload.get("period_start") or not payload.get("period_end"):
+        line_dates = []
+        for ld in lines_data:
+            d = ld.get("shift_date") if isinstance(ld, dict) else getattr(ld, "shift_date", None)
+            if isinstance(d, str):
+                try:
+                    d = date_cls.fromisoformat(d[:10])
+                except ValueError:
+                    d = None
+            if d:
+                line_dates.append(d)
+        fallback = payload.get("invoice_date") or date_cls.today()
+        start = payload.get("period_start") or (min(line_dates) if line_dates else None)
+        end = payload.get("period_end") or (max(line_dates) if line_dates else None)
+        payload["period_start"] = start or end or fallback
+        payload["period_end"] = end or payload["period_start"]
+        # Only one end was typed and the line dates fall outside it: widen to fit.
+        if payload["period_start"] > payload["period_end"]:
+            if start and not end:
+                payload["period_end"] = payload["period_start"]
+            elif end and not start:
+                payload["period_start"] = payload["period_end"]
+    if payload["period_start"] > payload["period_end"]:
+        raise HTTPException(status_code=400, detail="Period start cannot be after period end")
     inv = Invoice(company_id=company.id, **payload)
     if not inv.invoice_date:
         inv.invoice_date = date_cls.today()

@@ -886,6 +886,10 @@ export default function InvoicesPage() {
                     setEditInvoiceId(null);
                     if (searchParams.get('edit') || searchParams.get('custom')) router.replace('/invoices');
                   }}
+                  onDraftSaved={(inv) => {
+                    loadInvoices();
+                    rememberNewInvoice(inv.id);
+                  }}
                   onSaved={(inv) => {
                     const created = editInvoiceId == null;
                     setCustomOpen(false);

@@ -1711,6 +1711,10 @@ class InvoiceCreate(InvoiceBase):
     # if it has one, and every line is put on that site). One of the two is required.
     client_id: Optional[int] = None
     site_id: Optional[int] = None
+    # Optional on a custom invoice: left out, the period follows the line dates
+    # (or the invoice date when no line has one).
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
     lines: Optional[list[InvoiceLineBase]] = None
 
 class InvoiceUpdate(BaseModel):

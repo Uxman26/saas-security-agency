@@ -12,10 +12,21 @@ def _money(v: float) -> str:
     return f"£{float(v):,.2f}"
 
 
+def company_full_address(company: Optional[Company]) -> str:
+    """The company address with its postcode, unless the address already ends in it."""
+    if company is None:
+        return ""
+    address = (company.address or "").strip()
+    postcode = (getattr(company, "postcode", None) or "").strip()
+    if postcode and postcode.replace(" ", "").upper() not in address.replace(" ", "").upper():
+        address = f"{address}, {postcode}" if address else postcode
+    return address
+
+
 def _company_contact(company: Company, admin: Optional[User]) -> tuple[str, str, str]:
     email = (company.email or "").strip() or (admin.email if admin else "") or "—"
     phone = (company.phone or "").strip() or "—"
-    address = (company.address or "").strip() or "—"
+    address = company_full_address(company) or "—"
     return email, phone, address
 
 

@@ -280,10 +280,24 @@ export function LineItemsEditor({
       prev.map((l) => {
         if (l.key !== key) return l;
         const next = { ...l, ...patch };
-        // Changing either time works the hours out; Hours can still be typed over.
+        const qtyOf = (q: string) => {
+          const n = parseFloat(q);
+          return Number.isFinite(n) && n > 0 ? n : 1;
+        };
+        // Changing either time works the hours out (times × quantity); Hours can still be typed over.
         if ('shift_start' in patch || 'shift_end' in patch) {
           const h = hoursBetween(next.shift_start, next.shift_end);
-          if (h != null) next.hours = String(h);
+          if (h != null) next.hours = String(Math.round(h * qtyOf(next.quantity) * 100) / 100);
+        }
+        // Quantity scales the hours: 2 × a 12-hour shift is 24 hours. An empty box is
+        // skipped so typing over the number does not reset the hours.
+        if ('quantity' in patch && !('hours' in patch)) {
+          const newQ = parseFloat(next.quantity);
+          const hours = parseFloat(l.hours);
+          if (Number.isFinite(newQ) && newQ > 0 && Number.isFinite(hours) && hours > 0) {
+            const perUnit = hours / qtyOf(l.quantity);
+            next.hours = String(Math.round(perUnit * newQ * 100) / 100);
+          }
         }
         return next;
       })
@@ -455,11 +469,14 @@ export function InvoiceFormDialog({
   onOpenChange,
   invoiceId = null,
   onSaved,
+  onDraftSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoiceId?: number | null;
   onSaved: (invoice: Invoice) => void;
+  /** A new invoice closed part-way through was kept as a draft. */
+  onDraftSaved?: (invoice: Invoice) => void;
 }) {
   const isEdit = invoiceId != null;
   const [loadingInvoice, setLoadingInvoice] = useState(false);
@@ -609,7 +626,47 @@ export function InvoiceFormDialog({
     if (isEdit) setNotes((n) => syncPaymentTermsNote(n, invoiceDate, v));
   };
 
+  /**
+   * Closing a new invoice that already has a customer keeps it as a draft instead of
+   * losing what was typed. Without a client or site there is nothing it could belong to.
+   */
+  const saveDraftOnClose = async () => {
+    const target = billTo === 'client' ? clientId : siteId;
+    if (isEdit || saving || !target) return;
+    const chosen = lines.filter((l) => !isBlankLine(l));
+    const touched =
+      chosen.length > 0 || !!periodStart || !!periodEnd || !!po.trim() || !!notes.trim() || !!rotaReview.trim() || !!invoiceNumber.trim();
+    if (!touched) return;
+    if (periodStart && periodEnd && periodStart > periodEnd) {
+      toast.error('Draft not saved: period start is after period end');
+      return;
+    }
+    try {
+      const inv = await api.invoices.create({
+        ...(billTo === 'site' ? { site_id: parseInt(siteId, 10) } : { client_id: parseInt(clientId, 10) }),
+        period_start: periodStart || undefined,
+        period_end: periodEnd || undefined,
+        invoice_date: invoiceDate || undefined,
+        due_date: dueDate || undefined,
+        invoice_number: invoiceNumber.trim() || undefined,
+        po_number: po.trim() || undefined,
+        notes: notes.trim() || undefined,
+        rota_review: rotaReview.trim() || undefined,
+        client_bank_account_id: bankId ? parseInt(bankId, 10) : undefined,
+        tax_rate: parseFloat(taxRate) || 0,
+        currency,
+        status: 'draft',
+        lines: chosen.map((l) => linePayload(l, billTo === 'site' ? siteId : undefined)),
+      });
+      toast.success(`Invoice ${invoiceLabel(inv)} saved as a draft`);
+      onDraftSaved?.(inv);
+    } catch (err) {
+      toast.error(err instanceof Error ? `Draft not saved: ${err.message}` : 'Draft not saved');
+    }
+  };
+
   const close = (o: boolean) => {
+    if (!o) void saveDraftOnClose();
     onOpenChange(o);
     if (!o) reset();
   };
@@ -622,8 +679,8 @@ export function InvoiceFormDialog({
     }
     const inv = await api.invoices.create({
       ...(billTo === 'site' ? { site_id: parseInt(siteId, 10) } : { client_id: parseInt(clientId, 10) }),
-      period_start: periodStart,
-      period_end: periodEnd,
+      period_start: periodStart || undefined,
+      period_end: periodEnd || undefined,
       invoice_date: invoiceDate || undefined,
       due_date: dueDate || undefined,
       invoice_number: invoiceNumber.trim() || undefined,
@@ -649,8 +706,8 @@ export function InvoiceFormDialog({
     await api.invoices.patch(id, {
       invoice_date: invoiceDate || null,
       due_date: dueDate || null,
-      period_start: periodStart,
-      period_end: periodEnd,
+      ...(periodStart ? { period_start: periodStart } : {}),
+      ...(periodEnd ? { period_end: periodEnd } : {}),
       invoice_number: invoiceNumber.trim() || null,
       po_number: po.trim() || null,
       notes: notes || null,
@@ -671,8 +728,7 @@ export function InvoiceFormDialog({
   };
 
   const submit = async () => {
-    if (!periodStart || !periodEnd) return;
-    if (periodStart > periodEnd) {
+    if (periodStart && periodEnd && periodStart > periodEnd) {
       toast.error('Period start cannot be after period end');
       return;
     }
@@ -693,9 +749,7 @@ export function InvoiceFormDialog({
   const canSubmit =
     !saving &&
     !loadingInvoice &&
-    !!periodStart &&
-    !!periodEnd &&
-    periodStart <= periodEnd &&
+    !(periodStart && periodEnd && periodStart > periodEnd) &&
     (isEdit ? !!original : (billTo === 'client' ? !!clientId : !!siteId) && lines.some((l) => !isBlankLine(l)));
 
   const title = isEdit ? `Edit Invoice ${original ? invoiceLabel(original) : `#${invoiceId}`}` : 'Create Custom Invoice';
@@ -783,11 +837,11 @@ export function InvoiceFormDialog({
             {/* Period & due date */}
             <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1fr_1fr_1.6fr]">
               <div className="space-y-1.5">
-                <InvoiceFieldLabel icon={CalendarDays} required>Period start</InvoiceFieldLabel>
+                <InvoiceFieldLabel icon={CalendarDays}>Period start</InvoiceFieldLabel>
                 <Input type="date" value={periodStart} max={periodEnd || undefined} onChange={(e) => setPeriodStart(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <InvoiceFieldLabel icon={CalendarDays} required>Period end</InvoiceFieldLabel>
+                <InvoiceFieldLabel icon={CalendarDays}>Period end</InvoiceFieldLabel>
                 <Input type="date" value={periodEnd} min={periodStart || undefined} onChange={(e) => setPeriodEnd(e.target.value)} />
               </div>
               <div className="space-y-1.5">

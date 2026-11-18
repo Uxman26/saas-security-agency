@@ -232,7 +232,13 @@ function RotaHubPage() {
     () =>
       rotas.filter((r) => {
         if (statusFilter !== 'all' && (statusFilter === 'published') !== (r.status === 'published')) return false;
-        if (nameFilter.trim() && !r.name.toLowerCase().includes(nameFilter.trim().toLowerCase())) return false;
+        // One box searches the rota name and the sites / clients it covers, since people
+        // look rotas up by site ("Hive") far more often than by the rota's own name.
+        const needle = nameFilter.trim().toLowerCase();
+        if (needle) {
+          const haystack = [r.name, ...(r.site_names ?? []), ...(r.client_names ?? [])].join('\n').toLowerCase();
+          if (!haystack.includes(needle)) return false;
+        }
         return overlapsRange(r, rangeFrom, rangeTo);
       }),
     [rotas, statusFilter, nameFilter, rangeFrom, rangeTo]
@@ -721,8 +727,8 @@ function RotaHubPage() {
                   <FilterField label="To" className="flex-1">
                     <Input type="date" value={rangeTo} min={rangeFrom || undefined} onChange={(e) => setRangeTo(e.target.value)} />
                   </FilterField>
-                  <FilterField label="Rota name" className="min-w-[220px] flex-[2]">
-                    <Input placeholder="Search rota name…" value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} />
+                  <FilterField label="Search" className="min-w-[220px] flex-[2]">
+                    <Input placeholder="Rota name, site or client…" value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} />
                   </FilterField>
                   <FilterField label="Status" className="flex-1">
                     <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>

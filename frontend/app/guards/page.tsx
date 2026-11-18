@@ -584,7 +584,7 @@ export default function GuardsPage() {
                 <DialogTrigger asChild>
                   <Button disabled={!can(user, 'guards.write')}>Add employees</Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+                <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
                   <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
                     <DialogTitle>Add staff member</DialogTitle>
                     <DialogDescription className="sr-only">
@@ -1011,7 +1011,7 @@ export default function GuardsPage() {
 
         {/* Edit Dialog */}
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent className="sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
+          <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0">
             <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
               <DialogTitle className="break-words">Edit staff — {editingGuard?.full_name}</DialogTitle>
               <DialogDescription className="sr-only">Update this staff member&apos;s profile.</DialogDescription>

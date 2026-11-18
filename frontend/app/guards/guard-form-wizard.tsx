@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -26,53 +27,223 @@ import {
 } from '@/lib/guard-options';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { cn } from '@/lib/utils';
+import {
+  BriefcaseBusiness,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  ImagePlus,
+  Info,
+  type LucideIcon,
+  MapPin,
+  Pencil,
+  ShieldCheck,
+  UserRound,
+} from 'lucide-react';
 
-const STEPS = ['Employee details', 'Employment details', 'Summary'] as const;
+const STEPS: { label: string; hint: string; icon: LucideIcon; title: string; description: string }[] = [
+  {
+    label: 'Personal details',
+    hint: 'Profile & contact',
+    icon: UserRound,
+    title: 'Personal details',
+    description: "Start with the essentials about this team member.",
+  },
+  {
+    label: 'Address & bank',
+    hint: 'Location & payment',
+    icon: MapPin,
+    title: 'Address & banking',
+    description: 'Home address, availability, emergency contact and payment details.',
+  },
+  {
+    label: 'Compliance',
+    hint: 'Identity & SIA',
+    icon: ShieldCheck,
+    title: 'Identity & compliance',
+    description: 'Right-to-work, licensing and identity details in one place.',
+  },
+  {
+    label: 'Employment',
+    hint: 'Working arrangements',
+    icon: BriefcaseBusiness,
+    title: 'Employment setup',
+    description: 'Working pattern, pay and leave entitlement.',
+  },
+  {
+    label: 'Review & finish',
+    hint: 'Confirm details',
+    icon: ClipboardCheck,
+    title: 'Review & finish',
+    description: 'Check these details before saving.',
+  },
+];
+
+const LAST_STEP = STEPS.length - 1;
+const EMPLOYMENT_STEP = 3;
 
 const REQUIRED_KEYS: (keyof GuardFormData)[] = ['first_name', 'last_name'];
 
-const STEP0_KEYS: (keyof GuardFormData)[] = [
-  'first_name',
-  'last_name',
-  'phone',
-  'visa_status',
-  'work_phone',
-  'emergency_mobile',
-  'emergency_home_phone',
-  'emergency_work_phone',
-  'bank_account_number',
+/** Fields checked when leaving each step (format checks only; the rest is checked on save). */
+const STEP_VALIDATE: (keyof GuardFormData)[][] = [
+  REQUIRED_KEYS,
+  ['emergency_mobile', 'emergency_home_phone', 'emergency_work_phone', 'bank_account_number'],
+  [],
+  [],
+  [],
 ];
 
-const STEP1_KEYS: (keyof GuardFormData)[] = [
-  'holiday_jurisdiction',
-  'employee_type',
-  'employment_pay_type',
-  'pay_method',
-  'salary_amount',
-  'weekly_contracted_hours',
-  'contracted_week_hrs',
-  'hourly_rate',
-  'per_job_rate',
-  'entitlement_unit',
-  'working_time_pattern',
-];
-
-// The login fields live on the Summary step, so their errors must keep the user there
-// rather than bouncing to step 0 where the inputs are not rendered.
-const STEP2_KEYS: (keyof GuardFormData)[] = ['create_login', 'login_password'];
+/** Which step shows a field, so an error can take the user to it. Unlisted fields are on step 0. */
+const FIELD_STEP: Partial<Record<keyof GuardFormData, number>> = {
+  address_line_1: 1,
+  address_line_2: 1,
+  address_line_3: 1,
+  town_city: 1,
+  county: 1,
+  postcode: 1,
+  service_area: 1,
+  nearby_areas: 1,
+  available_days: 1,
+  availability_timing: 1,
+  pay_frequency: 1,
+  emergency_first_name: 1,
+  emergency_last_name: 1,
+  emergency_mobile: 1,
+  emergency_home_phone: 1,
+  emergency_work_phone: 1,
+  emergency_relationship: 1,
+  emergency_address_line_1: 1,
+  emergency_town_city: 1,
+  emergency_postcode: 1,
+  bank_account_name: 1,
+  bank_name: 1,
+  bank_branch: 1,
+  bank_account_number: 1,
+  bank_sort_code: 1,
+  tax_code: 2,
+  ni_number: 2,
+  passport_number: 2,
+  passport_country: 2,
+  passport_expiry_date: 2,
+  license_number: 2,
+  driving_licence_country: 2,
+  driving_licence_class: 2,
+  driving_licence_expiry_date: 2,
+  badge_number: 2,
+  sia_number: 2,
+  sia_expiry_date: 2,
+  rtw_status: 2,
+  share_code: 2,
+  share_code_expiry_date: 2,
+  dbs_status: 2,
+  employment_history: 2,
+  employment_start_date: 3,
+  probation_end_date: 3,
+  holiday_jurisdiction: 3,
+  employee_type: 3,
+  working_time_pattern: 3,
+  employment_pay_type: 3,
+  pay_method: 3,
+  salary_amount: 3,
+  weekly_contracted_hours: 3,
+  hourly_rate: 3,
+  per_job_rate: 3,
+  entitlement_unit: 3,
+  contracted_week_hrs: 3,
+  // The login fields live on the review step, so their errors must keep the user there.
+  create_login: 4,
+  login_password: 4,
+};
 
 function stepForField(key: string) {
-  if (STEP2_KEYS.includes(key as keyof GuardFormData)) return 2;
-  if (STEP0_KEYS.includes(key as keyof GuardFormData)) return 0;
-  if (STEP1_KEYS.includes(key as keyof GuardFormData)) return 1;
-  return 0;
+  return FIELD_STEP[key as keyof GuardFormData] ?? 0;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  index,
+  title,
+  subtitle,
+  children,
+}: {
+  index: number;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border p-4 space-y-4">
-      <h3 className="font-semibold text-sm">{title}</h3>
-      <div className="min-w-0">{children}</div>
+    <section className="min-w-0 overflow-hidden rounded-xl border bg-card shadow-xs">
+      <header className="flex items-center justify-between gap-3 border-b bg-muted/30 px-4 py-3">
+        <h3 className="flex items-center gap-2.5 text-sm font-semibold">
+          <span className="grid size-6 place-items-center rounded-md bg-primary/10 text-xs font-bold text-primary tabular-nums">
+            {String(index).padStart(2, '0')}
+          </span>
+          {title}
+        </h3>
+        {subtitle ? <span className="hidden text-xs text-muted-foreground sm:block">{subtitle}</span> : null}
+      </header>
+      <div className="min-w-0 p-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  required,
+  error,
+  hint,
+  className,
+  children,
+}: {
+  label: React.ReactNode;
+  required?: boolean;
+  error?: string;
+  hint?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn('min-w-0 space-y-1.5', className)}>
+      <Label className="text-xs font-semibold text-foreground/80">
+        {label}
+        {required ? <span className="text-destructive">*</span> : null}
+      </Label>
+      {children}
+      {error ? (
+        <p className="text-xs text-destructive">{error}</p>
+      ) : hint ? (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  onEdit,
+  rows,
+}: {
+  title: string;
+  onEdit: () => void;
+  rows: [string, React.ReactNode][];
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold">{title}</h4>
+        <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs text-primary" onClick={onEdit}>
+          <Pencil className="size-3" />
+          Edit
+        </Button>
+      </div>
+      <dl className="space-y-2.5">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3 text-xs">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="min-w-0 truncate text-right font-medium">{v || '—'}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -111,19 +282,27 @@ function RadioCards({
   options: { value: string; label: string; description: string }[];
 }) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            'text-left rounded-lg border p-4 transition-colors',
-            value === o.value ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted/50'
+            'relative rounded-xl border p-4 pl-11 text-left transition-colors',
+            value === o.value ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/30' : 'hover:bg-muted/50'
           )}
         >
-          <p className="font-medium text-sm">{o.label}</p>
-          <p className="text-xs text-muted-foreground mt-1">{o.description}</p>
+          <span
+            className={cn(
+              'absolute left-4 top-4.5 grid size-4 place-items-center rounded-full border',
+              value === o.value ? 'border-primary' : 'border-muted-foreground/40'
+            )}
+          >
+            {value === o.value ? <span className="size-2 rounded-full bg-primary" /> : null}
+          </span>
+          <p className="text-sm font-medium">{o.label}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{o.description}</p>
         </button>
       ))}
     </div>
@@ -180,11 +359,6 @@ export function GuardFormWizard({
 
   const displayName = [first, last].filter(Boolean).join(' ') || 'New employee';
 
-  const stepFields: (keyof GuardFormData)[][] = [
-    ['first_name', 'last_name'],
-    [],
-    [],
-  ];
   const selectedDays = (watch('available_days') || '').split(',').filter(Boolean);
   const toggleDay = (v: string) => {
     const set = new Set(selectedDays);
@@ -202,50 +376,43 @@ export function GuardFormWizard({
     .map(([k, v]) => (v?.message ? `${k.replace(/_/g, ' ')}: ${v.message}` : null))
     .filter(Boolean) as string[];
 
-  const goToSummary = async () => {
-    const ok = await trigger(REQUIRED_KEYS);
-    if (!ok) return;
+  /** Pay rules belong to the employment step, so stop there rather than letting Save bounce back. */
+  const payIssuesOk = () => {
     clearErrors();
-    // Pay rules (rate for the chosen method, salary + hours) belong to this step, so
-    // stop here rather than letting Save bounce the user back to it.
     const pay = guardSubmitSchema.safeParse(getValues());
     const payIssues = pay.success
       ? []
-      : pay.error.issues.filter((i) => stepForField(String(i.path[0] ?? '')) === 1);
+      : pay.error.issues.filter((i) => stepForField(String(i.path[0] ?? '')) === EMPLOYMENT_STEP);
     if (payIssues.length) {
       for (const issue of payIssues) setError(String(issue.path[0]) as keyof GuardFormData, { message: issue.message });
-      return;
+      setStep(EMPLOYMENT_STEP);
+      return false;
     }
-    setStep(2);
+    return true;
   };
 
-  const next = async () => {
-    if (step === 0) {
-      const ok = await trigger(stepFields[0]);
-      if (ok) setStep(1);
-      return;
-    }
-    if (step === 1) {
-      await goToSummary();
-    }
-  };
-
-  /** Tab click: going back is free; going forward checks each step it passes, like Next. */
+  /** Next and tab clicks: going back is free; going forward checks every step it passes. */
   const goToStep = async (target: number) => {
     if (target === step) return;
     if (target < step) {
       setStep(target);
       return;
     }
-    if (step === 0) {
-      const ok = await trigger(stepFields[0]);
-      if (!ok) return;
-      if (target === 1) {
-        setStep(1);
+    for (let s = step; s < target; s++) {
+      const keys = STEP_VALIDATE[s];
+      if (keys.length && !(await trigger(keys))) {
+        setStep(s);
         return;
       }
     }
-    await goToSummary();
+    if (target === LAST_STEP) {
+      if (!(await trigger(REQUIRED_KEYS))) {
+        setStep(0);
+        return;
+      }
+      if (!payIssuesOk()) return;
+    }
+    setStep(target);
   };
 
   const saveSummary = () => {
@@ -259,602 +426,657 @@ export function GuardFormWizard({
         const path = issue.path[0];
         if (path) setError(String(path) as keyof GuardFormData, { message: issue.message });
       }
-      const first = parsed.error.issues[0];
-      if (first?.path[0]) setStep(stepForField(String(first.path[0])));
+      const firstIssue = parsed.error.issues[0];
+      if (firstIssue?.path[0]) setStep(stepForField(String(firstIssue.path[0])));
       return;
     }
     onSubmit({ ...getValues(), ...parsed.data } as GuardFormData);
   };
 
+  const current = STEPS[step];
+  const progress = Math.round(((step + 1) / STEPS.length) * 100);
+  const err = (k: keyof GuardFormData) => errors[k]?.message as string | undefined;
+  const payType = watch('employment_pay_type');
+  const payMethod = watch('pay_method');
+
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (step === 2) saveSummary();
+        if (step === LAST_STEP) saveSummary();
         else handleSubmit(onSubmit, onInvalid)(e);
       }}
-      className="min-w-0 max-w-full space-y-4"
+      className="min-w-0 max-w-full"
     >
-      {step !== 2 && errorMessages.length > 0 && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive space-y-1">
-          <p className="font-medium">Please fix these fields:</p>
-          <ul className="list-disc pl-4 text-xs">
-            {errorMessages.map((m) => (
-              <li key={m}>{m}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      <div className="flex gap-0 text-sm font-medium">
-        {STEPS.map((label, i) => (
-          <button
-            key={label}
-            type="button"
-            aria-current={i === step ? 'step' : undefined}
-            onClick={() => void goToStep(i)}
-            className={cn(
-              'flex-1 py-2 px-3 text-center border-b-2 transition-colors cursor-pointer focus-visible:outline-none focus-visible:bg-muted/60',
-              i === step
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <p className="text-lg font-semibold break-words line-clamp-2">{displayName}</p>
-
-      {step === 0 && (
-        <div className="min-w-0 space-y-4 max-h-[60vh] overflow-y-auto overflow-x-hidden pr-1">
-          <div className="min-w-0 overflow-hidden rounded-md border p-3 bg-muted/30 space-y-3">
-            <p className="text-sm font-medium">Contractor (optional)</p>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Main contractor</Label>
-                <Select
-                  value={cid && mains.some((m) => m.id === cid) ? cid : '__none__'}
-                  onValueChange={(v) => {
-                    if (v === '__none__') {
-                      if (mains.some((m) => m.id === cid)) setValue('contractor_id', undefined);
-                      return;
-                    }
-                    setValue('contractor_id', v);
-                    setValue('main_contractor_id', undefined);
-                    setValue('sub_contractor_id', undefined);
-                  }}
+      <div className="grid min-w-0 gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+        {/* Step navigation: a sidebar on desktop, a scrolling strip on mobile */}
+        <aside className="min-w-0 md:sticky md:top-0 md:self-start" aria-label="Form steps">
+          <p className="mb-3 hidden px-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground md:block">
+            {STEPS.length} simple steps
+          </p>
+          <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
+            {STEPS.map((st, i) => {
+              const isCurrent = i === step;
+              const isDone = i < step;
+              return (
+                <button
+                  key={st.label}
+                  type="button"
+                  aria-current={isCurrent ? 'step' : undefined}
+                  onClick={() => void goToStep(i)}
+                  className={cn(
+                    'flex shrink-0 items-center gap-3 rounded-xl border px-2.5 py-2 text-left transition-colors md:w-full md:py-2.5',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    isCurrent ? 'border-primary/30 bg-primary/10' : 'border-transparent hover:bg-muted'
+                  )}
                 >
-                  <SelectTrigger><SelectValue placeholder="Main" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— None —</SelectItem>
-                    {mains.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Sub contractor</Label>
-                <Select
-                  value={cid && subs.some((s) => s.id === cid) ? cid : '__none__'}
-                  onValueChange={(v) => {
-                    if (v === '__none__') {
-                      if (subs.some((s) => s.id === cid)) setValue('contractor_id', undefined);
-                      return;
-                    }
-                    setValue('contractor_id', v);
-                    setValue('main_contractor_id', undefined);
-                    setValue('sub_contractor_id', undefined);
-                  }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Sub" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— None —</SelectItem>
-                    {subs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <span
+                    className={cn(
+                      'grid size-8 shrink-0 place-items-center rounded-lg border text-xs font-bold tabular-nums',
+                      isCurrent && 'border-primary bg-primary text-primary-foreground shadow-sm',
+                      isDone && 'border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-400',
+                      !isCurrent && !isDone && 'bg-background text-muted-foreground'
+                    )}
+                  >
+                    {isDone ? <Check className="size-4" /> : String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span className="min-w-0">
+                    <span className={cn('block text-xs font-semibold leading-tight md:text-sm', isCurrent ? 'text-primary' : 'text-foreground/80')}>
+                      {st.label}
+                    </span>
+                    <span className="mt-0.5 hidden text-xs text-muted-foreground md:block">{st.hint}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="mt-6 hidden rounded-xl border bg-card p-4 md:block">
+            <span className="mb-2 grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
+              <Info className="size-4" />
+            </span>
+            <p className="text-xs font-semibold">Quick setup</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Only first and last name are required. Everything else can be added later.
+            </p>
+          </div>
+        </aside>
+
+        <div className="min-w-0 space-y-4">
+          {/* Progress */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold tracking-wider text-primary">
+                STEP {String(step + 1).padStart(2, '0')} OF {String(STEPS.length).padStart(2, '0')}
+              </span>
+              <span className="text-muted-foreground">{progress}% complete</span>
             </div>
-            {errors.main_contractor_id && <p className="text-xs text-destructive">{errors.main_contractor_id.message}</p>}
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${progress}%` }} />
+            </div>
           </div>
 
-          <Section title="Basic details">
-            {onPhotoFileChange ? (
-              <div className="space-y-1.5 mb-3">
-                <Label>Staff photo (optional)</Label>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => onPhotoFileChange(e.target.files?.[0] ?? null)}
-                />
-                {photoFile ? (
-                  <p className="text-xs text-muted-foreground">Selected: {photoFile.name}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Shown on the staff profile. Not used on the shift rota.</p>
-                )}
-              </div>
-            ) : null}
-            <div className="grid min-w-0 sm:grid-cols-2 gap-3">
-              <div className="space-y-1 min-w-0">
-                <Label>Title</Label>
-                <Select value={watch('title') || '__none__'} onValueChange={(v) => setValue('title', v === '__none__' ? '' : v)}>
-                  <SelectTrigger className="min-w-0"><SelectValue placeholder="Title" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">—</SelectItem>
-                    {TITLES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1 min-w-0">
-                <Label>First name <span className="text-destructive">*</span></Label>
-                <Input className="min-w-0" maxLength={80} {...register('first_name')} />
-                {errors.first_name && <p className="text-xs text-destructive">{errors.first_name.message}</p>}
-              </div>
-              <div className="space-y-1 min-w-0">
-                <Label>Middle name</Label>
-                <Input className="min-w-0" maxLength={80} {...register('middle_name')} />
-              </div>
-              <div className="space-y-1 min-w-0">
-                <Label>Last name <span className="text-destructive">*</span></Label>
-                <Input className="min-w-0" maxLength={80} {...register('last_name')} />
-                {errors.last_name && <p className="text-xs text-destructive">{errors.last_name.message}</p>}
-              </div>
-              <div className="space-y-1 min-w-0">
-                <Label>Mobile number <span className="text-destructive">*</span></Label>
-                <PhoneInput
-                  value={watch('phone') || ''}
-                  onChange={(v) => setValue('phone', v, { shouldValidate: true })}
-                />
-                <p className="text-xs text-muted-foreground">Digits only after country code (e.g. UK +44).</p>
-                {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
-              </div>
-              <div className="space-y-1 min-w-0 sm:col-span-2">
-                <Label>Visa type</Label>
-                <Input className="min-w-0" maxLength={100} {...register('visa_status')} placeholder="e.g. British citizen, Skilled Worker" />
-                {errors.visa_status && <p className="text-xs text-destructive">{errors.visa_status.message}</p>}
-              </div>
-              <div className="space-y-1">
-                <Label>Visa expiry</Label>
-                <Input type="date" {...register('visa_expiry_date')} />
-              </div>
-              <div className="space-y-1">
-                <Label>Gender</Label>
-                <Select value={watch('gender') || 'Unspecified'} onValueChange={(v) => setValue('gender', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{GENDERS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Ethnicity</Label>
-                <Select value={watch('ethnicity') || 'Unspecified'} onValueChange={(v) => setValue('ethnicity', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{ETHNICITIES.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Date of birth</Label>
-                <Input type="date" {...register('date_of_birth')} />
-              </div>
-              <div className="space-y-1">
-                <Label>Email</Label>
-                <Input type="email" {...register('email')} />
-                {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
-              </div>
-              <div className="space-y-1">
-                <Label>Work phone</Label>
-                <PhoneInput
-                  value={watch('work_phone') || ''}
-                  onChange={(v) => setValue('work_phone', v, { shouldValidate: true })}
-                />
-                {errors.work_phone && <p className="text-xs text-destructive">{errors.work_phone.message}</p>}
-              </div>
-              <div className="space-y-1 min-w-0 sm:col-span-2">
-                <Label>Job title</Label>
-                <SearchableSelect
-                  value={jobTitle}
-                  options={jobTitleOptions}
-                  placeholder="Select or add job title"
-                  searchPlaceholder="Search job titles…"
-                  allowCreate
-                  createLabel={(q) => `Add “${q}”`}
-                  onChange={(v) => {
-                    setValue('job_title', v, { shouldValidate: true });
-                    void onCreateJobTitle?.(v);
-                  }}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label>Employment start date</Label>
-                <Input type="date" {...register('employment_start_date')} />
-              </div>
-              <div className="space-y-1">
-                <Label>Probation end date</Label>
-                <Input type="date" {...register('probation_end_date')} />
-              </div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+                <current.icon className="size-5 text-primary" />
+                {current.title}
+              </h2>
+              <p className="text-sm text-muted-foreground">{current.description}</p>
             </div>
-          </Section>
+            <span className="max-w-full truncate rounded-full border bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground">
+              {displayName}
+            </span>
+          </div>
 
-          <Section title="Address details">
-            <div className="grid min-w-0 sm:grid-cols-2 gap-3">
-              <div className="space-y-1 min-w-0 sm:col-span-2"><Label>Address 1</Label><Input className="min-w-0" maxLength={200} {...register('address_line_1')} /></div>
-              <div className="space-y-1 min-w-0 sm:col-span-2"><Label>Address 2</Label><Input className="min-w-0" maxLength={200} {...register('address_line_2')} /></div>
-              <div className="space-y-1 min-w-0 sm:col-span-2"><Label>Address 3</Label><Input className="min-w-0" maxLength={200} {...register('address_line_3')} /></div>
-              <div className="space-y-1 min-w-0"><Label>Town/City</Label><Input className="min-w-0" maxLength={200} {...register('town_city')} /></div>
-              <div className="space-y-1 min-w-0"><Label>County</Label><Input className="min-w-0" maxLength={200} {...register('county')} /></div>
-              <div className="space-y-1 min-w-0"><Label>Postcode</Label><Input className="min-w-0" maxLength={20} {...register('postcode')} placeholder="e.g. E15 2AB" /></div>
+          {step !== LAST_STEP && errorMessages.length > 0 && (
+            <div className="space-y-1 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <p className="font-medium">Please fix these fields:</p>
+              <ul className="list-disc pl-4 text-xs">
+                {errorMessages.map((m) => (
+                  <li key={m}>{m}</li>
+                ))}
+              </ul>
             </div>
-          </Section>
+          )}
 
-          <Section title="Area & availability">
-            <div className="grid min-w-0 sm:grid-cols-2 gap-3">
-              <div className="space-y-1 min-w-0">
-                <Label>Service area</Label>
-                <Input className="min-w-0" maxLength={200} {...register('service_area')} placeholder="e.g. East London" />
-              </div>
-              <div className="space-y-1 min-w-0">
-                <Label>Nearby areas willing to work</Label>
-                <Input className="min-w-0" maxLength={200} {...register('nearby_areas')} placeholder="e.g. Stratford, Hackney" />
-              </div>
-              <div className="sm:col-span-2 rounded-md border bg-muted/30 px-3 py-3">
-                <div className="flex items-start gap-3">
-                  <input type="checkbox" id="has_car" className="size-4 mt-0.5 shrink-0" {...register('has_car')} />
-                  <Label htmlFor="has_car" className="font-normal cursor-pointer leading-snug">
-                    Has car / can drive to sites
-                  </Label>
-                </div>
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Available days</Label>
-                <div className="flex flex-wrap gap-2">
-                  {WEEKDAYS.map((d) => (
-                    <button
-                      key={d.value}
-                      type="button"
-                      onClick={() => toggleDay(d.value)}
-                      className={cn(
-                        'px-3 py-1 rounded-full text-xs border',
-                        selectedDays.includes(d.value) ? 'bg-primary text-primary-foreground border-primary' : 'hover:bg-muted'
-                      )}
+          {step === 0 && (
+            <div className="min-w-0 space-y-4">
+              <Section index={1} title="Employee profile" subtitle="Basic information">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Main contractor (optional)" error={err('main_contractor_id')}>
+                    <Select
+                      value={cid && mains.some((m) => m.id === cid) ? cid : '__none__'}
+                      onValueChange={(v) => {
+                        if (v === '__none__') {
+                          if (mains.some((m) => m.id === cid)) setValue('contractor_id', undefined);
+                          return;
+                        }
+                        setValue('contractor_id', v);
+                        setValue('main_contractor_id', undefined);
+                        setValue('sub_contractor_id', undefined);
+                      }}
                     >
-                      {d.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1 min-w-0 sm:col-span-2">
-                <Label>Preferred timing</Label>
-                <Input className="min-w-0" maxLength={200} {...register('availability_timing')} placeholder="e.g. 06:00–14:00, nights only" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Pay / contract period</Label>
-                <div className="flex gap-2">
-                  {PAY_FREQUENCIES.map((p) => (
-                    <button
-                      key={p.value}
-                      type="button"
-                      onClick={() => setValue('pay_frequency', p.value)}
-                      className={cn(
-                        'px-4 py-2 rounded-md border text-sm',
-                        watch('pay_frequency') === p.value ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
-                      )}
+                      <SelectTrigger className="w-full"><SelectValue placeholder="None selected" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None selected</SelectItem>
+                        {mains.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Sub-contractor">
+                    <Select
+                      value={cid && subs.some((s) => s.id === cid) ? cid : '__none__'}
+                      onValueChange={(v) => {
+                        if (v === '__none__') {
+                          if (subs.some((s) => s.id === cid)) setValue('contractor_id', undefined);
+                          return;
+                        }
+                        setValue('contractor_id', v);
+                        setValue('main_contractor_id', undefined);
+                        setValue('sub_contractor_id', undefined);
+                      }}
                     >
-                      {p.label}
-                    </button>
-                  ))}
+                      <SelectTrigger className="w-full"><SelectValue placeholder="None selected" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None selected</SelectItem>
+                        {subs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  {onPhotoFileChange ? (
+                    <Field label="Staff photo (optional)" className="sm:col-span-2">
+                      <label className="flex cursor-pointer items-center gap-4 rounded-xl border-[1.5px] border-dashed border-primary/30 bg-primary/5 p-4 transition-colors hover:bg-primary/10">
+                        <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary/15 text-primary">
+                          <ImagePlus className="size-5" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">
+                            {photoFile ? photoFile.name : 'Upload a profile photo'}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            JPG or PNG. Shown on the staff profile, not on the shift rota.
+                          </span>
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          onChange={(e) => onPhotoFileChange(e.target.files?.[0] ?? null)}
+                        />
+                      </label>
+                    </Field>
+                  ) : null}
+
+                  <Field label="Title">
+                    <Select value={watch('title') || '__none__'} onValueChange={(v) => setValue('title', v === '__none__' ? '' : v)}>
+                      <SelectTrigger className="w-full min-w-0"><SelectValue placeholder="Select title" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Select title</SelectItem>
+                        {TITLES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="First name" required error={err('first_name')}>
+                    <Input className="min-w-0" maxLength={80} placeholder="e.g. Sarah" {...register('first_name')} />
+                  </Field>
+                  <Field label="Middle name">
+                    <Input className="min-w-0" maxLength={80} placeholder="Optional" {...register('middle_name')} />
+                  </Field>
+                  <Field label="Last name" required error={err('last_name')}>
+                    <Input className="min-w-0" maxLength={80} placeholder="e.g. Williams" {...register('last_name')} />
+                  </Field>
+                  <Field label="Gender">
+                    <Select value={watch('gender') || 'Unspecified'} onValueChange={(v) => setValue('gender', v)}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>{GENDERS.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Date of birth">
+                    <Input type="date" {...register('date_of_birth')} />
+                  </Field>
+                  <Field label="Ethnicity">
+                    <Select value={watch('ethnicity') || 'Unspecified'} onValueChange={(v) => setValue('ethnicity', v)}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>{ETHNICITIES.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </Field>
                 </div>
-              </div>
-            </div>
-          </Section>
+              </Section>
 
-          <Section title="Emergency contact">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>First name</Label><Input {...register('emergency_first_name')} /></div>
-              <div className="space-y-1"><Label>Last name</Label><Input {...register('emergency_last_name')} /></div>
-              <div className="space-y-1">
-                <Label>Mobile</Label>
-                <PhoneInput
-                  value={watch('emergency_mobile') || ''}
-                  onChange={(v) => setValue('emergency_mobile', v, { shouldValidate: true })}
-                />
-                {errors.emergency_mobile && <p className="text-xs text-destructive">{errors.emergency_mobile.message}</p>}
-              </div>
-              <div className="space-y-1">
-                <Label>Home phone</Label>
-                <PhoneInput
-                  value={watch('emergency_home_phone') || ''}
-                  onChange={(v) => setValue('emergency_home_phone', v, { shouldValidate: true })}
-                />
-                {errors.emergency_home_phone && <p className="text-xs text-destructive">{errors.emergency_home_phone.message}</p>}
-              </div>
-              <div className="space-y-1">
-                <Label>Work phone</Label>
-                <PhoneInput
-                  value={watch('emergency_work_phone') || ''}
-                  onChange={(v) => setValue('emergency_work_phone', v, { shouldValidate: true })}
-                />
-                {errors.emergency_work_phone && <p className="text-xs text-destructive">{errors.emergency_work_phone.message}</p>}
-              </div>
-              <div className="space-y-1">
-                <Label>Relationship</Label>
-                <Select value={watch('emergency_relationship') || '__none__'} onValueChange={(v) => setValue('emergency_relationship', v === '__none__' ? '' : v)}>
-                  <SelectTrigger><SelectValue placeholder="Relationship" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">—</SelectItem>
-                    {EMERGENCY_RELATIONSHIPS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1 sm:col-span-2"><Label>Address 1</Label><Input {...register('emergency_address_line_1')} /></div>
-              <div className="space-y-1"><Label>Town/City</Label><Input {...register('emergency_town_city')} /></div>
-              <div className="space-y-1"><Label>Postcode</Label><Input {...register('emergency_postcode')} /></div>
-            </div>
-          </Section>
-
-          <Section title="Bank details">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Name on account</Label><Input {...register('bank_account_name')} maxLength={60} /></div>
-              <div className="space-y-1"><Label>Name of bank</Label><Input {...register('bank_name')} maxLength={60} /></div>
-              <div className="space-y-1"><Label>Bank branch</Label><Input {...register('bank_branch')} /></div>
-              <div className="space-y-1"><Label>Account number</Label><Input {...register('bank_account_number')} placeholder="8 digit number" /></div>
-              <div className="space-y-1"><Label>Sort code</Label><Input {...register('bank_sort_code')} placeholder="00-00-00" /></div>
-            </div>
-          </Section>
-
-          <Section title="Sensitive details">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Tax code</Label><Input {...register('tax_code')} /></div>
-              <div className="space-y-1"><Label>NI number</Label><Input {...register('ni_number')} /></div>
-              <div className="space-y-1"><Label>Passport number</Label><Input {...register('passport_number')} /></div>
-              <div className="space-y-1"><Label>Country of issue</Label><Input {...register('passport_country')} /></div>
-              <div className="space-y-1"><Label>Passport expiry</Label><Input type="date" {...register('passport_expiry_date')} /></div>
-              <div className="space-y-1"><Label>Licence number</Label><Input {...register('license_number')} /></div>
-              <div className="space-y-1"><Label>Licence country</Label><Input {...register('driving_licence_country')} /></div>
-              <div className="space-y-1"><Label>Licence class</Label><Input {...register('driving_licence_class')} /></div>
-              <div className="space-y-1"><Label>Licence expiry</Label><Input type="date" {...register('driving_licence_expiry_date')} /></div>
-            </div>
-          </Section>
-
-          <Section title="Security & compliance">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1"><Label>Badge number</Label><Input {...register('badge_number')} /></div>
-              <div className="space-y-1"><Label>SIA badge number</Label><Input {...register('sia_number')} /></div>
-              <div className="space-y-1"><Label>SIA expiry</Label><Input type="date" {...register('sia_expiry_date')} /></div>
-              <div className="space-y-1"><Label>RTW status</Label><Input {...register('rtw_status')} /></div>
-              <div className="space-y-1"><Label>Share code</Label><Input {...register('share_code')} placeholder="e.g. W12 345 67A" /></div>
-              <div className="space-y-1"><Label>Share code expiry</Label><Input type="date" {...register('share_code_expiry_date')} /></div>
-              <div className="space-y-1"><Label>DBS check</Label><Input {...register('dbs_status')} /></div>
-              <div className="space-y-1 sm:col-span-2"><Label>Employment history (5 years)</Label><Input {...register('employment_history')} /></div>
-            </div>
-          </Section>
-        </div>
-      )}
-
-      {step === 1 && (
-        <div className="min-w-0 space-y-4 max-h-[60vh] overflow-y-auto overflow-x-hidden pr-1">
-          <Section title="Location">
-            <div className="space-y-1 max-w-md">
-              <Label>Public holidays observed for</Label>
-              <Select value={watch('holiday_jurisdiction') || ''} onValueChange={(v) => setValue('holiday_jurisdiction', v)}>
-                <SelectTrigger><SelectValue placeholder="Select jurisdiction" /></SelectTrigger>
-                <SelectContent>
-                  {HOLIDAY_JURISDICTIONS.map((j) => (
-                    <SelectItem key={j.value} value={j.value}>{j.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.holiday_jurisdiction && <p className="text-xs text-destructive">{errors.holiday_jurisdiction.message}</p>}
-            </div>
-          </Section>
-
-          <Section title="Employment details">
-            <div className="space-y-3">
-              <Label>Hours pattern</Label>
-              <RadioCards
-                value={employeeType}
-                onChange={(v) => setValue('employee_type', v as 'fixed' | 'variable')}
-                options={EMPLOYEE_TYPES.map((e) => ({ value: e.value, label: e.label, description: e.description }))}
-              />
-              {errors.employee_type && <p className="text-xs text-destructive">{errors.employee_type.message}</p>}
-            </div>
-            {employeeType === 'fixed' && (
-              <div className="space-y-1 max-w-md mt-4">
-                <Label>Working time pattern</Label>
-                <Select value={watch('working_time_pattern') || ''} onValueChange={(v) => setValue('working_time_pattern', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select a working pattern" /></SelectTrigger>
-                  <SelectContent>
-                    {WORKING_TIME_PATTERNS.map((p) => (
-                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.working_time_pattern && <p className="text-xs text-destructive">{errors.working_time_pattern.message}</p>}
-              </div>
-            )}
-            <div className="mt-6 space-y-3">
-              <Label>Employment type</Label>
-              <RadioCards
-                value={watch('employment_pay_type') || ''}
-                onChange={(v) => {
-                  setValue('employment_pay_type', v as 'salaried' | 'non_salaried');
-                  if (v === 'salaried') setValue('pay_method', '');
-                }}
-                options={[
-                  { value: 'salaried', label: 'Salaried', description: 'Fixed salary with contracted weekly hours' },
-                  { value: 'non_salaried', label: 'Non-salaried', description: 'Paid per hour or per job' },
-                ]}
-              />
-              {errors.employment_pay_type && <p className="text-xs text-destructive">{errors.employment_pay_type.message}</p>}
-            </div>
-            {watch('employment_pay_type') === 'salaried' && (
-              <div className="grid sm:grid-cols-2 gap-4 mt-4">
-                <div className="space-y-1">
-                  <Label>Salary</Label>
-                  <Input type="number" min={0} step="0.01" {...register('salary_amount', { valueAsNumber: true })} />
-                  {errors.salary_amount && <p className="text-xs text-destructive">{errors.salary_amount.message}</p>}
+              <Section index={2} title="Contact & role" subtitle="How to reach them">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Mobile number" required error={err('phone')} hint="Digits only after country code (e.g. UK +44).">
+                    <PhoneInput value={watch('phone') || ''} onChange={(v) => setValue('phone', v, { shouldValidate: true })} />
+                  </Field>
+                  <Field label="Email address" error={err('email')}>
+                    <Input type="email" placeholder="name@example.com" {...register('email')} />
+                  </Field>
+                  <Field label="Work phone" error={err('work_phone')}>
+                    <PhoneInput value={watch('work_phone') || ''} onChange={(v) => setValue('work_phone', v, { shouldValidate: true })} />
+                  </Field>
+                  <Field label="Job title">
+                    <SearchableSelect
+                      value={jobTitle}
+                      options={jobTitleOptions}
+                      placeholder="Select or add job title"
+                      searchPlaceholder="Search job titles…"
+                      allowCreate
+                      createLabel={(q) => `Add “${q}”`}
+                      onChange={(v) => {
+                        setValue('job_title', v, { shouldValidate: true });
+                        void onCreateJobTitle?.(v);
+                      }}
+                    />
+                  </Field>
+                  <Field label="Visa type / status" error={err('visa_status')}>
+                    <Input className="min-w-0" maxLength={100} {...register('visa_status')} placeholder="e.g. British citizen, Skilled Worker" />
+                  </Field>
+                  <Field label="Visa expiry">
+                    <Input type="date" {...register('visa_expiry_date')} />
+                  </Field>
                 </div>
-                <div className="space-y-1">
-                  <Label>Weekly hours</Label>
-                  <Input type="number" min={0} step="0.25" {...register('weekly_contracted_hours', { valueAsNumber: true })} />
-                  {errors.weekly_contracted_hours && (
-                    <p className="text-xs text-destructive">{errors.weekly_contracted_hours.message}</p>
+              </Section>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="min-w-0 space-y-4">
+              <Section index={1} title="Address details">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Address line 1" className="sm:col-span-2">
+                    <Input className="min-w-0" maxLength={200} placeholder="House number and street" {...register('address_line_1')} />
+                  </Field>
+                  <Field label="Address line 2" className="sm:col-span-2">
+                    <Input className="min-w-0" maxLength={200} placeholder="Apartment, building etc. (optional)" {...register('address_line_2')} />
+                  </Field>
+                  <Field label="Address line 3" className="sm:col-span-2">
+                    <Input className="min-w-0" maxLength={200} placeholder="Optional" {...register('address_line_3')} />
+                  </Field>
+                  <Field label="Town / City">
+                    <Input className="min-w-0" maxLength={200} placeholder="e.g. Slough" {...register('town_city')} />
+                  </Field>
+                  <Field label="County">
+                    <Input className="min-w-0" maxLength={200} {...register('county')} />
+                  </Field>
+                  <Field label="Postcode">
+                    <Input className="min-w-0" maxLength={20} placeholder="e.g. SL1 2JA" {...register('postcode')} />
+                  </Field>
+                </div>
+              </Section>
+
+              <Section index={2} title="Area & availability" subtitle="Where and when they work">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Service area">
+                    <Input className="min-w-0" maxLength={200} {...register('service_area')} placeholder="e.g. East London" />
+                  </Field>
+                  <Field label="Nearby areas willing to work">
+                    <Input className="min-w-0" maxLength={200} {...register('nearby_areas')} placeholder="e.g. Stratford, Hackney" />
+                  </Field>
+                  <label
+                    htmlFor="has_car"
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border bg-muted/30 px-3 py-3 sm:col-span-2"
+                  >
+                    <input type="checkbox" id="has_car" className="mt-0.5 size-4 shrink-0 accent-primary" {...register('has_car')} />
+                    <span className="text-sm leading-snug">Has car / can drive to sites</span>
+                  </label>
+                  <Field label="Available days" className="sm:col-span-2">
+                    <div className="flex flex-wrap gap-2">
+                      {WEEKDAYS.map((d) => (
+                        <button
+                          key={d.value}
+                          type="button"
+                          onClick={() => toggleDay(d.value)}
+                          className={cn(
+                            'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                            selectedDays.includes(d.value) ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'
+                          )}
+                        >
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Preferred timing" className="sm:col-span-2">
+                    <Input className="min-w-0" maxLength={200} {...register('availability_timing')} placeholder="e.g. 06:00–14:00, nights only" />
+                  </Field>
+                  <Field label="Pay / contract period" className="sm:col-span-2">
+                    <div className="flex gap-2">
+                      {PAY_FREQUENCIES.map((p) => (
+                        <button
+                          key={p.value}
+                          type="button"
+                          onClick={() => setValue('pay_frequency', p.value)}
+                          className={cn(
+                            'rounded-lg border px-4 py-2 text-sm transition-colors',
+                            watch('pay_frequency') === p.value ? 'border-primary/60 bg-primary/5 font-medium text-primary' : 'hover:bg-muted/50'
+                          )}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                </div>
+              </Section>
+
+              <Section index={3} title="Emergency contact">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="First name"><Input {...register('emergency_first_name')} /></Field>
+                  <Field label="Last name"><Input {...register('emergency_last_name')} /></Field>
+                  <Field label="Mobile" error={err('emergency_mobile')}>
+                    <PhoneInput value={watch('emergency_mobile') || ''} onChange={(v) => setValue('emergency_mobile', v, { shouldValidate: true })} />
+                  </Field>
+                  <Field label="Home phone" error={err('emergency_home_phone')}>
+                    <PhoneInput value={watch('emergency_home_phone') || ''} onChange={(v) => setValue('emergency_home_phone', v, { shouldValidate: true })} />
+                  </Field>
+                  <Field label="Work phone" error={err('emergency_work_phone')}>
+                    <PhoneInput value={watch('emergency_work_phone') || ''} onChange={(v) => setValue('emergency_work_phone', v, { shouldValidate: true })} />
+                  </Field>
+                  <Field label="Relationship">
+                    <Select
+                      value={watch('emergency_relationship') || '__none__'}
+                      onValueChange={(v) => setValue('emergency_relationship', v === '__none__' ? '' : v)}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Relationship" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">—</SelectItem>
+                        {EMERGENCY_RELATIONSHIPS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field label="Address line 1" className="sm:col-span-2"><Input {...register('emergency_address_line_1')} /></Field>
+                  <Field label="Town / City"><Input {...register('emergency_town_city')} /></Field>
+                  <Field label="Postcode"><Input {...register('emergency_postcode')} /></Field>
+                </div>
+              </Section>
+
+              <Section index={4} title="Bank details" subtitle="Payment information">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Name on account"><Input {...register('bank_account_name')} maxLength={60} placeholder="Account holder's name" /></Field>
+                  <Field label="Name of bank"><Input {...register('bank_name')} maxLength={60} placeholder="e.g. Lloyds Bank" /></Field>
+                  <Field label="Bank branch"><Input {...register('bank_branch')} placeholder="Optional" /></Field>
+                  <Field label="Account number" error={err('bank_account_number')}>
+                    <Input {...register('bank_account_number')} inputMode="numeric" placeholder="8-digit number" autoComplete="off" />
+                  </Field>
+                  <Field label="Sort code"><Input {...register('bank_sort_code')} inputMode="numeric" placeholder="00-00-00" autoComplete="off" /></Field>
+                </div>
+              </Section>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="min-w-0 space-y-4">
+              <Section index={1} title="Sensitive details" subtitle="Restricted information">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Tax code"><Input {...register('tax_code')} placeholder="e.g. 1257L" /></Field>
+                  <Field label="NI number"><Input {...register('ni_number')} placeholder="e.g. QQ 12 34 56 C" /></Field>
+                  <Field label="Passport number"><Input {...register('passport_number')} /></Field>
+                  <Field label="Country of issue"><Input {...register('passport_country')} /></Field>
+                  <Field label="Passport expiry"><Input type="date" {...register('passport_expiry_date')} /></Field>
+                  <Field label="Licence number"><Input {...register('license_number')} /></Field>
+                  <Field label="Licence country"><Input {...register('driving_licence_country')} /></Field>
+                  <Field label="Licence class"><Input {...register('driving_licence_class')} /></Field>
+                  <Field label="Licence expiry"><Input type="date" {...register('driving_licence_expiry_date')} /></Field>
+                </div>
+              </Section>
+
+              <Section index={2} title="Security & compliance" subtitle="SIA / right to work">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Badge number"><Input {...register('badge_number')} /></Field>
+                  <Field label="SIA badge number"><Input {...register('sia_number')} /></Field>
+                  <Field label="SIA expiry"><Input type="date" {...register('sia_expiry_date')} /></Field>
+                  <Field label="Right to work status"><Input {...register('rtw_status')} /></Field>
+                  <Field label="Share code"><Input {...register('share_code')} placeholder="e.g. W12 345 67A" /></Field>
+                  <Field label="Share code expiry"><Input type="date" {...register('share_code_expiry_date')} /></Field>
+                  <Field label="DBS check"><Input {...register('dbs_status')} placeholder="e.g. Complete / pending" /></Field>
+                  <Field label="Employment history (last 5 years)" className="sm:col-span-2">
+                    <Textarea rows={3} {...register('employment_history')} placeholder="Previous roles, employers and dates" />
+                  </Field>
+                </div>
+              </Section>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="min-w-0 space-y-4">
+              <Section index={1} title="Position & location">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <Field label="Employment start date"><Input type="date" {...register('employment_start_date')} /></Field>
+                  <Field label="Probation end date"><Input type="date" {...register('probation_end_date')} /></Field>
+                  <Field label="Public holidays observed for" error={err('holiday_jurisdiction')} className="sm:col-span-2">
+                    <Select value={watch('holiday_jurisdiction') || ''} onValueChange={(v) => setValue('holiday_jurisdiction', v)}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select jurisdiction" /></SelectTrigger>
+                      <SelectContent>
+                        {HOLIDAY_JURISDICTIONS.map((j) => (
+                          <SelectItem key={j.value} value={j.value}>{j.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+              </Section>
+
+              <Section index={2} title="Working arrangements">
+                <div className="space-y-5">
+                  <Field label="Hours pattern" error={err('employee_type')}>
+                    <RadioCards
+                      value={employeeType}
+                      onChange={(v) => setValue('employee_type', v as 'fixed' | 'variable')}
+                      options={EMPLOYEE_TYPES.map((e) => ({ value: e.value, label: e.label, description: e.description }))}
+                    />
+                  </Field>
+                  {employeeType === 'fixed' && (
+                    <Field label="Working time pattern" error={err('working_time_pattern')} className="max-w-md">
+                      <Select value={watch('working_time_pattern') || ''} onValueChange={(v) => setValue('working_time_pattern', v)}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select a working pattern" /></SelectTrigger>
+                        <SelectContent>
+                          {WORKING_TIME_PATTERNS.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
                   )}
+                  <Field label="Employment type" error={err('employment_pay_type')}>
+                    <RadioCards
+                      value={payType || ''}
+                      onChange={(v) => {
+                        setValue('employment_pay_type', v as 'salaried' | 'non_salaried');
+                        if (v === 'salaried') setValue('pay_method', '');
+                      }}
+                      options={[
+                        { value: 'salaried', label: 'Salaried', description: 'Fixed pay with contracted weekly hours.' },
+                        { value: 'non_salaried', label: 'Non-salaried', description: 'Paid by the hour or per job.' },
+                      ]}
+                    />
+                  </Field>
+                  {payType === 'salaried' && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="Salary" error={err('salary_amount')}>
+                        <Input type="number" min={0} step="0.01" {...register('salary_amount', { valueAsNumber: true })} />
+                      </Field>
+                      <Field label="Weekly hours" error={err('weekly_contracted_hours')}>
+                        <Input type="number" min={0} step="0.25" {...register('weekly_contracted_hours', { valueAsNumber: true })} />
+                      </Field>
+                    </div>
+                  )}
+                  {payType === 'non_salaried' && (
+                    <div className="space-y-4">
+                      <Field label="Payment method" error={err('pay_method')}>
+                        <RadioCards
+                          value={payMethod || ''}
+                          onChange={(v) => setValue('pay_method', v as 'per_hour' | 'per_job')}
+                          options={[
+                            { value: 'per_hour', label: 'Per hour', description: 'Hourly rate for rota and payroll.' },
+                            { value: 'per_job', label: 'Per job', description: 'Flat rate per job/shift.' },
+                          ]}
+                        />
+                      </Field>
+                      {payMethod === 'per_hour' && (
+                        <Field label="Per hour rate" error={err('hourly_rate')} className="max-w-xs">
+                          <Input type="number" min={0} step="0.01" {...register('hourly_rate', { valueAsNumber: true })} />
+                        </Field>
+                      )}
+                      {payMethod === 'per_job' && (
+                        <Field label="Per job rate" error={err('per_job_rate')} className="max-w-xs">
+                          <Input type="number" min={0} step="0.01" {...register('per_job_rate', { valueAsNumber: true })} />
+                        </Field>
+                      )}
+                    </div>
+                  )}
+                  <HoursMins
+                    label="Company's full-time working week"
+                    hrsName="company_full_time_week_hrs"
+                    minsName="company_full_time_week_mins"
+                    register={register}
+                  />
                 </div>
-              </div>
-            )}
-            {watch('employment_pay_type') === 'non_salaried' && (
-              <div className="mt-4 space-y-3">
-                <Label>Payment method</Label>
-                <RadioCards
-                  value={watch('pay_method') || ''}
-                  onChange={(v) => setValue('pay_method', v as 'per_hour' | 'per_job')}
-                  options={[
-                    { value: 'per_hour', label: 'Per hour', description: 'Hourly rate for rota and payroll' },
-                    { value: 'per_job', label: 'Per job', description: 'Flat rate per job/shift' },
+              </Section>
+
+              <Section index={3} title="Contract details" subtitle="Leave & entitlement">
+                <div className="space-y-5">
+                  <Field label="Entitlement unit" error={err('entitlement_unit')}>
+                    <RadioCards
+                      value={entitlementUnit}
+                      onChange={(v) => setValue('entitlement_unit', v as 'days' | 'hours')}
+                      options={ENTITLEMENT_UNITS.map((e) => ({ value: e.value, label: e.label, description: e.description }))}
+                    />
+                  </Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <HoursMins label="Employee contracted hours per week" hrsName="contracted_week_hrs" minsName="contracted_week_mins" register={register} />
+                    <HoursMins label="Average working day" hrsName="average_day_hrs" minsName="average_day_mins" register={register} />
+                    <HoursMins
+                      label="Full-time annual leave entitlement equivalent"
+                      hrsName="annual_leave_equivalent_hrs"
+                      minsName="annual_leave_equivalent_mins"
+                      register={register}
+                    />
+                  </div>
+                  <div className="grid max-w-md grid-cols-2 gap-3">
+                    <Field label="Leave year start — day">
+                      <Input type="number" min={1} max={31} {...register('leave_year_start_day', { valueAsNumber: true })} />
+                    </Field>
+                    <Field label="Month">
+                      <Select
+                        value={String(watch('leave_year_start_month') || 1)}
+                        onValueChange={(v) => setValue('leave_year_start_month', Number(v))}
+                      >
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {LEAVE_MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <HoursMins label="Leave entitlement" hrsName="leave_entitlement_hrs" minsName="leave_entitlement_mins" register={register} />
+                    <HoursMins label="Leave allowance" hrsName="leave_allowance_hrs" minsName="leave_allowance_mins" register={register} />
+                  </div>
+                </div>
+              </Section>
+            </div>
+          )}
+
+          {step === LAST_STEP && (
+            <div className="min-w-0 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <SummaryCard
+                  title="Personal details"
+                  onEdit={() => setStep(0)}
+                  rows={[
+                    ['Full name', [first, watch('middle_name'), last].filter(Boolean).join(' ') || 'Not entered'],
+                    ['Job title', jobTitle],
+                    ['Mobile', watch('phone')],
+                    ['Email', watch('email')],
                   ]}
                 />
-                {errors.pay_method && <p className="text-xs text-destructive">{errors.pay_method.message}</p>}
-                {watch('pay_method') === 'per_hour' && (
-                  <div className="space-y-1 max-w-xs mt-3">
-                    <Label>Per hour rate</Label>
-                    <Input type="number" min={0} step="0.01" {...register('hourly_rate', { valueAsNumber: true })} />
-                    {errors.hourly_rate && <p className="text-xs text-destructive">{errors.hourly_rate.message}</p>}
-                  </div>
-                )}
-                {watch('pay_method') === 'per_job' && (
-                  <div className="space-y-1 max-w-xs mt-3">
-                    <Label>Per job rate</Label>
-                    <Input type="number" min={0} step="0.01" {...register('per_job_rate', { valueAsNumber: true })} />
-                    {errors.per_job_rate && <p className="text-xs text-destructive">{errors.per_job_rate.message}</p>}
-                  </div>
-                )}
+                <SummaryCard
+                  title="Address & bank"
+                  onEdit={() => setStep(1)}
+                  rows={[
+                    ['Town / City', watch('town_city')],
+                    ['Postcode', watch('postcode')],
+                    ['Bank', watch('bank_name')],
+                  ]}
+                />
+                <SummaryCard
+                  title="Compliance"
+                  onEdit={() => setStep(2)}
+                  rows={[
+                    ['SIA badge', watch('sia_number')],
+                    ['RTW status', watch('rtw_status')],
+                    ['DBS check', watch('dbs_status')],
+                  ]}
+                />
+                <SummaryCard
+                  title="Employment"
+                  onEdit={() => setStep(EMPLOYMENT_STEP)}
+                  rows={[
+                    ['Start date', watch('employment_start_date')],
+                    ['Hours pattern', EMPLOYEE_TYPES.find((e) => e.value === employeeType)?.label],
+                    ['Employment type', payType === 'salaried' ? 'Salaried' : payType === 'non_salaried' ? 'Non-salaried' : ''],
+                    ['Jurisdiction', HOLIDAY_JURISDICTIONS.find((j) => j.value === watch('holiday_jurisdiction'))?.label],
+                    ['Entitlement', entitlementUnit],
+                  ]}
+                />
               </div>
-            )}
-            <div className="mt-4 max-w-xs">
-              <HoursMins label="Company's full time working week" hrsName="company_full_time_week_hrs" minsName="company_full_time_week_mins" register={register} />
-            </div>
-          </Section>
 
-          <Section title="Contract details">
-            <div className="space-y-3">
-              <Label>Entitlement unit</Label>
-              <RadioCards
-                value={entitlementUnit}
-                onChange={(v) => setValue('entitlement_unit', v as 'days' | 'hours')}
-                options={ENTITLEMENT_UNITS.map((e) => ({ value: e.value, label: e.label, description: e.description }))}
-              />
-              {errors.entitlement_unit && <p className="text-xs text-destructive">{errors.entitlement_unit.message}</p>}
+              {allowLogin && (
+                <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+                  <label htmlFor="guard_create_login" className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      id="guard_create_login"
+                      className="mt-0.5 size-4 accent-primary"
+                      {...register('create_login')}
+                    />
+                    <span className="space-y-0.5">
+                      <span className="block text-sm font-semibold">Create a portal login for this staff member</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Signs in with the email above and gets the Staff role. Manage what that role can see in Settings →
+                        Roles &amp; Permissions.
+                      </span>
+                    </span>
+                  </label>
+
+                  {createLogin && (
+                    <Field
+                      label="Login password"
+                      required
+                      error={err('login_password') ?? err('email')}
+                      hint={PASSWORD_REQUIREMENTS_MSG}
+                      className="max-w-md"
+                    >
+                      <PasswordInput autoComplete="new-password" {...register('login_password')} />
+                    </Field>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="grid sm:grid-cols-2 gap-4 mt-4">
-              <HoursMins label="Employee contracted hours per week" hrsName="contracted_week_hrs" minsName="contracted_week_mins" register={register} />
-              <HoursMins label="Average working day" hrsName="average_day_hrs" minsName="average_day_mins" register={register} />
-              <HoursMins label="Full time annual leave entitlement equivalent" hrsName="annual_leave_equivalent_hrs" minsName="annual_leave_equivalent_mins" register={register} />
-            </div>
-            <div className="flex gap-3 items-end mt-4 max-w-md">
-              <div className="space-y-1 flex-1">
-                <Label>Leave year start — day</Label>
-                <Input type="number" min={1} max={31} {...register('leave_year_start_day', { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-1 flex-1">
-                <Label>Month</Label>
-                <Select
-                  value={String(watch('leave_year_start_month') || 1)}
-                  onValueChange={(v) => setValue('leave_year_start_month', Number(v))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {LEAVE_MONTHS.map((m) => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4 mt-4">
-              <HoursMins label="Leave entitlement" hrsName="leave_entitlement_hrs" minsName="leave_entitlement_mins" register={register} />
-              <HoursMins label="Leave allowance" hrsName="leave_allowance_hrs" minsName="leave_allowance_mins" register={register} />
-            </div>
-          </Section>
+          )}
         </div>
-      )}
+      </div>
 
-      {step === 2 && (
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Required: first name and last name. Mobile number, visa status, employee type and entitlement are optional.
-          </p>
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted">
-              <tr>
-                <th className="text-left p-3 font-medium">Name</th>
-                <th className="text-left p-3 font-medium">Email address</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="p-3 border-t">{displayName}</td>
-                <td className="p-3 border-t">{watch('email') || '—'}</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="p-4 text-sm text-muted-foreground space-y-1 border-t">
-            <p><span className="font-medium text-foreground">Jurisdiction:</span> {HOLIDAY_JURISDICTIONS.find((j) => j.value === watch('holiday_jurisdiction'))?.label || '—'}</p>
-            <p><span className="font-medium text-foreground">Employee type:</span> {EMPLOYEE_TYPES.find((e) => e.value === employeeType)?.label || '—'}</p>
-            <p><span className="font-medium text-foreground">Entitlement:</span> {entitlementUnit || '—'}</p>
-          </div>
-        </div>
-
-        {allowLogin && (
-          <div className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-start gap-2">
-              <input
-                type="checkbox"
-                id="guard_create_login"
-                className="size-4 mt-0.5 accent-primary"
-                {...register('create_login')}
-              />
-              <div className="space-y-0.5">
-                <Label htmlFor="guard_create_login" className="font-normal cursor-pointer">
-                  Create a portal login for this staff member
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Signs in with the Email above and gets the Staff role. Manage what that role
-                  can see in Settings → Roles &amp; Permissions.
-                </p>
-              </div>
-            </div>
-
-            {createLogin && (
-              <div className="space-y-1">
-                <Label>
-                  Login password <span className="text-destructive">*</span>
-                </Label>
-                <PasswordInput autoComplete="new-password" {...register('login_password')} />
-                {errors.login_password ? (
-                  <p className="text-xs text-destructive">{errors.login_password.message}</p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MSG}</p>
-                )}
-                {errors.email && (
-                  <p className="text-xs text-destructive">{errors.email.message}</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        </div>
-      )}
-
-      <div className="flex justify-between gap-2 pt-2">
+      {/* Footer stays in view while the dialog body scrolls */}
+      <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-5 flex items-center justify-between gap-3 border-t bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <Button type="button" variant="outline" disabled={step === 0} onClick={() => setStep((s) => s - 1)}>
+          <ChevronLeft className="size-4" />
           Back
         </Button>
-        <div className="flex gap-2">
-          {step < 2 && (
-            <Button type="button" onClick={next}>
-              Next
+        <div className="flex items-center gap-3">
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            Step {step + 1} of {STEPS.length}
+          </span>
+          {step < LAST_STEP ? (
+            <Button type="button" onClick={() => void goToStep(step + 1)}>
+              Continue
+              <ChevronRight className="size-4" />
             </Button>
-          )}
-          {step === 2 && (
+          ) : (
             <Button type="submit" disabled={isPending}>
-              {isPending ? 'Saving...' : submitLabel}
+              <Check className="size-4" />
+              {isPending ? 'Saving…' : submitLabel}
             </Button>
           )}
         </div>

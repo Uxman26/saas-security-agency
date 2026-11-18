@@ -4081,7 +4081,7 @@ export function RotaCalendarClient() {
           if (!o) addStaffForm.reset(guardFormDefaults);
         }}
       >
-        <DialogContent className="rota-density sm:max-w-4xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0 z-[110]">
+        <DialogContent className="rota-density sm:max-w-5xl max-h-[92vh] overflow-hidden flex flex-col gap-0 p-0 z-[110]">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>Add New Staff</DialogTitle>
             <DialogDescription className="sr-only">

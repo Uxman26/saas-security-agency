@@ -45,21 +45,6 @@ function fmtHours(n: number) {
 
 const DEFAULT_DESCRIPTION = 'security services';
 
-/** Slanted red-on-charcoal strip used as the top and bottom edge of the page. */
-function EdgeBand({ side }: { side: 'top' | 'bottom' }) {
-  return (
-    <div className="relative h-4 w-full" style={{ backgroundColor: DARK }}>
-      <div
-        className={`absolute inset-y-0 w-[28%] ${side === 'top' ? 'left-0' : 'right-0'}`}
-        style={{
-          backgroundColor: ACCENT,
-          clipPath: side === 'top' ? 'polygon(0 0, 100% 0, 88% 100%, 0 100%)' : 'polygon(12% 0, 100% 0, 100% 100%, 0 100%)',
-        }}
-      />
-    </div>
-  );
-}
-
 const STATUS_STYLES: Record<string, string> = {
   draft: 'bg-muted text-muted-foreground print:bg-slate-200 print:text-slate-700',
   sent: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300 print:bg-blue-100 print:text-blue-800',
@@ -148,8 +133,6 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
       id={printId}
       className="mx-auto max-w-4xl overflow-hidden rounded-lg border bg-white text-slate-900 shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none [print-color-adjust:exact] [-webkit-print-color-adjust:exact]"
     >
-      <EdgeBand side="top" />
-
       {/* Header: logo and company details, a divider, then the word INVOICE. */}
       <div className="flex flex-col gap-6 px-8 pb-6 pt-8 sm:flex-row sm:items-stretch sm:justify-between sm:px-10">
         <div className="flex min-w-0 items-start gap-5">
@@ -438,7 +421,6 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
       </div>
 
       <PoweredByControlOps />
-      <EdgeBand side="bottom" />
     </div>
   );
 }

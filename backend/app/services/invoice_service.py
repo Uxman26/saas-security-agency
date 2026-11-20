@@ -98,6 +98,23 @@ def clean_invoice_number(
     return num
 
 
+def default_invoice_notes(invoice_date, due) -> str:
+    """Standard payment terms printed in an invoice's Notes."""
+    lines = []
+    if due and invoice_date:
+        term_days = (due - invoice_date).days
+        lines.append(
+            f"Payment is due within {term_days} day{'' if term_days == 1 else 's'} of the invoice date."
+            if term_days > 0
+            else f"Payment is due by {due:%d/%m/%Y}."
+        )
+    elif due:
+        lines.append(f"Payment is due by {due:%d/%m/%Y}.")
+    lines.append("Please quote the invoice number as your payment reference.")
+    lines.append("Thank you for your business.")
+    return "\n".join(lines)
+
+
 def _assert_site_matches_client(site: Site, client_id: Optional[int]) -> None:
     if client_id is None or site.client_id is None:
         return
@@ -303,6 +320,9 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     inv = Invoice(company_id=company.id, **payload)
     if not inv.invoice_date:
         inv.invoice_date = date_cls.today()
+    if not (inv.notes or "").strip():
+        # Same standard terms a generated invoice carries, so both look alike.
+        inv.notes = default_invoice_notes(inv.invoice_date, inv.due_date)
     if not inv.subtotal and inv.total:
         inv.subtotal = inv.total
     account = None
@@ -897,12 +917,6 @@ def generate_from_rota(
     # any invoice raised more than 30 days after it overdue the moment it was created.
     today = datetime.now(_company_zone(company)).date()
     due = due_date or max(period_end, today) + timedelta(days=30)
-    term_days = (due - today).days
-    payment_terms = (
-        f"Payment is due within {term_days} day{'' if term_days == 1 else 's'} of the invoice date."
-        if term_days > 0
-        else f"Payment is due by {due:%d/%m/%Y}."
-    )
     inv = Invoice(
         company_id=company.id,
         client_id=client_id,
@@ -918,7 +932,7 @@ def generate_from_rota(
         tax_amount=0,
         status="draft",
         currency=normalize_invoice_currency(currency),
-        notes=f"{payment_terms}\nPlease quote the invoice number as your payment reference.\nThank you for your business.",
+        notes=default_invoice_notes(today, due),
         rota_review="Generated from published rota. Please review shift timings and hours before sending.",
     )
     from app.services import client_bank_service

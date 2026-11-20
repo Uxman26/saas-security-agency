@@ -36,7 +36,7 @@ NAVY_HEX = DARK_HEX  # statement PDF still imports the old name
 SOFT_HEX = "#FDECEC"
 PANEL_HEX = "#F4F4F5"
 DEFAULT_DESCRIPTION = "security services"
-EDGE_BAND = 11  # height in points of the charcoal strips at the top and bottom of the page
+EDGE_BAND = 11  # spacing kept where the top and bottom page strips used to be
 
 
 def _long_date(d) -> str:
@@ -45,42 +45,6 @@ def _long_date(d) -> str:
 
 def _hours(v: float) -> str:
     return f"{round(float(v), 2):g}"
-
-
-def _draw_edge_bands(canvas, doc) -> None:
-    """Charcoal strip across the top and bottom of every page with a slanted red end."""
-    from reportlab.lib import colors
-
-    w, h = doc.pagesize
-    dark = colors.HexColor(DARK_HEX)
-    red = colors.HexColor(ACCENT_HEX)
-    red_w = w * 0.28
-    slant = EDGE_BAND * 2.2
-    canvas.saveState()
-    canvas.setFillColor(dark)
-    canvas.rect(0, h - EDGE_BAND, w, EDGE_BAND, stroke=0, fill=1)
-    canvas.setFillColor(red)
-    p = canvas.beginPath()
-    p.moveTo(0, h)
-    p.lineTo(red_w + slant, h)
-    p.lineTo(red_w, h - EDGE_BAND)
-    p.lineTo(0, h - EDGE_BAND)
-    p.close()
-    canvas.drawPath(p, stroke=0, fill=1)
-
-    # Bottom strip sits just above the "Powered by ControlOps" banner.
-    y = 44
-    canvas.setFillColor(dark)
-    canvas.rect(0, y, w, EDGE_BAND, stroke=0, fill=1)
-    canvas.setFillColor(red)
-    p = canvas.beginPath()
-    p.moveTo(w - red_w, y + EDGE_BAND)
-    p.lineTo(w, y + EDGE_BAND)
-    p.lineTo(w, y)
-    p.lineTo(w - red_w - slant, y)
-    p.close()
-    canvas.drawPath(p, stroke=0, fill=1)
-    canvas.restoreState()
 
 
 def _numbered_canvas_class():
@@ -105,8 +69,8 @@ def _numbered_canvas_class():
                 w, _h = self._pagesize
                 self.saveState()
                 self.setFont("Helvetica", 7.5)
-                self.setFillColorRGB(1, 1, 1)
-                self.drawRightString(w - 18, 44 + 3.2, f"{self.footer_ref}  |  Page {self._pageNumber} of {total}")
+                self.setFillColorRGB(0x71 / 255, 0x71 / 255, 0x7A / 255)
+                self.drawRightString(w - 1.5 * 28.3465, 44 + 3.2, f"{self.footer_ref}  |  Page {self._pageNumber} of {total}")
                 self.restoreState()
                 super().showPage()
             super().save()
@@ -630,5 +594,5 @@ def render_invoice_pdf(
 
     canvas_cls = _numbered_canvas_class()
     canvas_cls.footer_ref = f"Invoice {getattr(inv, 'invoice_number', None) or f'#{inv.id}'}"
-    build_branded(doc, story, onFirstPage=_draw_edge_bands, onLaterPages=_draw_edge_bands, canvasmaker=canvas_cls, powered_by=True)
+    build_branded(doc, story, canvasmaker=canvas_cls, powered_by=True)
     return buf.getvalue()

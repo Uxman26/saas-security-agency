@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -15,11 +15,17 @@ import {
 } from '@/lib/rota-shifts-utils';
 import { SHIFT_TYPE_OPTS, classifyShiftType, normalizeShiftType } from '@/lib/rota-shifts-types';
 import type { EmployeeRec, RotaJsState, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
-import type { Site } from '@/lib/types';
 import { useSites } from '@/hooks/use-sites';
 import { openWhatsApp } from '@/lib/whatsapp';
+import {
+  canShareImageNatively,
+  copyImageToClipboard,
+  downloadBlob,
+  renderShiftPreviewPng,
+  type ShiftImageData,
+} from '@/lib/shift-preview-image';
 import { format } from 'date-fns';
-import { Building2, CalendarDays, Clock, MapPin, MessageCircle, Moon, Sun, Sunrise, Sunset, User } from 'lucide-react';
+import { Building2, CalendarDays, Clock, Download, MapPin, MessageCircle, Moon, Sun, Sunrise, Sunset, User } from 'lucide-react';
 import { toast } from '@/lib/toast';
 
 type Props = {
@@ -86,32 +92,10 @@ function SummaryTile({
   );
 }
 
-function buildShiftMessage(
-  employee: EmployeeRec,
-  state: RotaJsState,
-  rotaName: string,
-  siteByName: Map<string, Site>
-): string {
-  const lines: string[] = [`Hi ${employee.name.split(' ')[0]},`, '', `Your shifts for ${rotaName || 'the rota'}:`];
-  let total = 0;
-  for (const dk of state.days) {
-    const shifts = shiftsInTimeOrder(state.shifts[employee.id]?.[dk] || []).map((r) => r.shift);
-    for (const sh of shifts) {
-      const hrs = calcHours(sh);
-      total += hrs;
-      const site = shiftSiteLine(sh);
-      const address = formatSiteAddress(siteByName.get(normalizeSiteKey(site)));
-      let line = `• ${fmtLongDate(dk)}: ${sh.start}–${sh.end}${site ? ` @ ${site}` : ''} (${formatHoursDecimal(hrs)})`;
-      if (address) line += `\n  ${address}`;
-      lines.push(line);
-    }
-  }
-  if (total > 0) {
-    lines.push('', `Total: ${formatHoursDecimal(total)}`);
-  } else {
-    lines.push('', 'No shifts scheduled yet.');
-  }
-  return lines.join('\n');
+/** Short text sent alongside the shift preview image. */
+function buildShiftCaption(employee: EmployeeRec, rotaName: string, weekLabel: string): string {
+  const first = employee.name.split(' ')[0] || employee.name;
+  return `Hi ${first}, here are your shifts for ${rotaName || 'the rota'}${weekLabel && weekLabel !== '—' ? ` (${weekLabel})` : ''}.`;
 }
 
 function fmtLongDate(dk: string) {
@@ -146,24 +130,121 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
     );
   }, [employee, state.days, state.shifts]);
 
-  if (!employee) return null;
-
   const totalHours = rows.reduce((sum, r) => sum + calcHours(r.shift), 0);
   const siteCount = new Set(rows.map((r) => normalizeSiteKey(shiftSiteLine(r.shift))).filter(Boolean)).size;
   const weekLabel =
     state.days.length > 0
       ? `${fmtLongDate(state.days[0])} – ${fmtLongDate(state.days[state.days.length - 1])}`
       : '—';
+  const resolvedRotaName = rotaName || state.rotaName || 'Rota';
 
-  const sendWhatsApp = () => {
+  // The same content as the dialog, laid out for the image sent on WhatsApp.
+  const imageData = useMemo<ShiftImageData | null>(() => {
+    if (!employee) return null;
+    return {
+      employeeName: employee.name,
+      rotaName: resolvedRotaName,
+      totalHours: formatHoursDecimal(totalHours),
+      totalShifts: rows.length,
+      totalSites: siteCount,
+      week: weekLabel,
+      rows: rows.map(({ dk, shift }) => {
+        const { weekday, day, month } = dateParts(dk);
+        const site = shiftSiteLine(shift);
+        return {
+          weekday,
+          day,
+          month,
+          time: `${shift.start} – ${shift.end}`,
+          hours: formatHoursDecimal(calcHours(shift)),
+          dotColor: shift.color,
+          period: periodOf(shift),
+          site,
+          note: (shift.notes || shift.label || '').trim() || undefined,
+          address: formatSiteAddress(siteByName.get(normalizeSiteKey(site))) || undefined,
+        };
+      }),
+    };
+  }, [employee, resolvedRotaName, totalHours, rows, siteCount, weekLabel, siteByName]);
+
+  // Built ahead of the click: copying to the clipboard must happen while the click still
+  // counts as a user action, which an image rendered after it could outlast.
+  const [image, setImage] = useState<Blob | null>(null);
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    if (!open || !imageData) {
+      setImage(null);
+      return;
+    }
+    let cancelled = false;
+    renderShiftPreviewPng(imageData)
+      .then((b) => {
+        if (!cancelled) setImage(b);
+      })
+      .catch(() => {
+        if (!cancelled) setImage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, imageData]);
+
+  if (!employee) return null;
+
+  const fileName = `shifts-${employee.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'staff'}.png`;
+
+  const getImage = async () => image ?? (imageData ? await renderShiftPreviewPng(imageData) : null);
+
+  const downloadImage = async () => {
+    const blob = await getImage().catch(() => null);
+    if (!blob) {
+      toast.error('Could not create the shift preview image');
+      return;
+    }
+    downloadBlob(blob, fileName);
+  };
+
+  const sendWhatsApp = async () => {
     const phone = employee.phone || '';
     if (!phone) {
       toast.error('No phone number on file for this employee');
       return;
     }
-    const msg = buildShiftMessage(employee, state, rotaName || state.rotaName || 'Rota', siteByName);
-    if (!openWhatsApp(phone, msg)) {
-      toast.error('Could not open WhatsApp');
+    setSending(true);
+    try {
+      const blob = await getImage().catch(() => null);
+      if (!blob) {
+        toast.error('Could not create the shift preview image');
+        return;
+      }
+      const caption = buildShiftCaption(employee, resolvedRotaName, weekLabel);
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // Phones and tablets: the share sheet sends the image itself to WhatsApp.
+      if (canShareImageNatively(file)) {
+        try {
+          await navigator.share({ files: [file], text: caption });
+        } catch (e) {
+          if ((e as Error)?.name !== 'AbortError') toast.error('Could not share the shift preview');
+        }
+        return;
+      }
+
+      // Desktop: WhatsApp chat links carry text only, so the image goes on the clipboard
+      // and the chat opens with this employee ready for it to be pasted.
+      const copied = await copyImageToClipboard(blob);
+      if (!copied) downloadBlob(blob, fileName);
+      if (!openWhatsApp(phone, caption)) {
+        toast.error('Could not open WhatsApp');
+        return;
+      }
+      if (copied) {
+        toast.success('Shift preview copied. Paste it into the WhatsApp chat (Ctrl+V / ⌘V) and send.');
+      } else {
+        toast.success('Shift preview downloaded. Attach it in the WhatsApp chat and send.');
+      }
+    } finally {
+      setSending(false);
     }
   };
 
@@ -281,9 +362,17 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Close
           </Button>
-          <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={sendWhatsApp} disabled={!employee.phone}>
+          <Button variant="outline" onClick={() => void downloadImage()}>
+            <Download className="size-4 mr-2" />
+            Download image
+          </Button>
+          <Button
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={() => void sendWhatsApp()}
+            disabled={!employee.phone || sending}
+          >
             <MessageCircle className="size-4 mr-2" />
-            Send via WhatsApp
+            {sending ? 'Preparing…' : 'Send via WhatsApp'}
           </Button>
         </DialogFooter>
       </DialogContent>

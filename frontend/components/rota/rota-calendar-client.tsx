@@ -32,7 +32,7 @@ import { useGuards } from '@/hooks/use-guards';
 import { useSites } from '@/hooks/use-sites';
 import { contractorMatcher, usedContractorOptions } from '@/lib/contractor-match';
 import { guardFormDefaults, formToGuardPayload } from '@/lib/guard-form-map';
-import { guardSubmitSchema, type GuardFormData } from '@/lib/validation';
+import { guardCreateSchema, type GuardFormData } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule, isPortalRole } from '@/lib/permissions';
 import {
@@ -372,7 +372,7 @@ export function RotaCalendarClient() {
     [allSites]
   );
   const addStaffForm = useForm<GuardFormData>({
-    resolver: zodResolver(guardSubmitSchema) as Resolver<GuardFormData>,
+    resolver: zodResolver(guardCreateSchema) as Resolver<GuardFormData>,
     defaultValues: guardFormDefaults,
   });
   const [planLoading, setPlanLoading] = useState(!!planIdParam);
@@ -4098,6 +4098,7 @@ export function RotaCalendarClient() {
               photoFile={addStaffPhoto}
               onPhotoFileChange={setAddStaffPhoto}
               allowLogin
+              checkDuplicate={(email, phone) => api.guards.checkDuplicate({ email, phone })}
               onSubmit={async (data) => {
                 try {
                   const created = await createGuard.mutateAsync(formToGuardPayload(data));

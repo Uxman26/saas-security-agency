@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { PasswordInput } from '@/components/ui/password-input';
-import { guardSubmitSchema, PASSWORD_REQUIREMENTS_MSG, type GuardFormData } from '@/lib/validation';
+import { guardCreateSchema, PASSWORD_REQUIREMENTS_MSG, type GuardFormData, type GuardSaveSchema } from '@/lib/validation';
 import {
   TITLES,
   GENDERS,
@@ -26,6 +26,7 @@ import {
   mergeJobTitles,
 } from '@/lib/guard-options';
 import { PhoneInput } from '@/components/ui/phone-input';
+import { DateOfBirthPicker } from '@/components/ui/date-of-birth-picker';
 import { cn } from '@/lib/utils';
 import {
   BriefcaseBusiness,
@@ -38,6 +39,7 @@ import {
   type LucideIcon,
   MapPin,
   Pencil,
+  Save,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
@@ -83,11 +85,11 @@ const STEPS: { label: string; hint: string; icon: LucideIcon; title: string; des
 const LAST_STEP = STEPS.length - 1;
 const EMPLOYMENT_STEP = 3;
 
-const REQUIRED_KEYS: (keyof GuardFormData)[] = ['first_name', 'last_name'];
+const REQUIRED_KEYS: (keyof GuardFormData)[] = ['first_name', 'last_name', 'phone', 'email'];
 
 /** Fields checked when leaving each step (format checks only; the rest is checked on save). */
 const STEP_VALIDATE: (keyof GuardFormData)[][] = [
-  REQUIRED_KEYS,
+  [...REQUIRED_KEYS, 'work_phone'],
   ['emergency_mobile', 'emergency_home_phone', 'emergency_work_phone', 'bank_account_number'],
   [],
   [],
@@ -322,6 +324,10 @@ export function GuardFormWizard({
   jobTitles: companyJobTitles,
   onCreateJobTitle,
   allowLogin = false,
+  submitSchema = guardCreateSchema,
+  requireEmail = true,
+  saveFromAnyStep = false,
+  checkDuplicate,
 }: {
   form: ReturnType<typeof useForm<GuardFormData>>;
   mains: { id: string; name: string }[];
@@ -338,6 +344,14 @@ export function GuardFormWizard({
   onCreateJobTitle?: (name: string) => void | Promise<void>;
   /** Only the create flows provision logins; editing a guard must not silently make one. */
   allowLogin?: boolean;
+  /** Schema run on save; it decides whether mobile and email are mandatory. */
+  submitSchema?: GuardSaveSchema;
+  /** Marks the email field as required (keep in step with submitSchema). */
+  requireEmail?: boolean;
+  /** Editing: show Save on every step so a change need not be walked to the last one. */
+  saveFromAnyStep?: boolean;
+  /** Asks the server whether the email or mobile already belongs to another staff member. */
+  checkDuplicate?: (email: string, phone: string) => Promise<{ field: 'email' | 'phone'; message: string }[]>;
 }) {
   const [step, setStep] = useState(0);
 
@@ -379,7 +393,7 @@ export function GuardFormWizard({
   /** Pay rules belong to the employment step, so stop there rather than letting Save bounce back. */
   const payIssuesOk = () => {
     clearErrors();
-    const pay = guardSubmitSchema.safeParse(getValues());
+    const pay = submitSchema.safeParse(getValues());
     const payIssues = pay.success
       ? []
       : pay.error.issues.filter((i) => stepForField(String(i.path[0] ?? '')) === EMPLOYMENT_STEP);
@@ -387,6 +401,25 @@ export function GuardFormWizard({
       for (const issue of payIssues) setError(String(issue.path[0]) as keyof GuardFormData, { message: issue.message });
       setStep(EMPLOYMENT_STEP);
       return false;
+    }
+    return true;
+  };
+
+  /** Server-side duplicate check of email and mobile; marks the fields and returns false on a clash. */
+  const contactIsUnique = async () => {
+    if (!checkDuplicate) return true;
+    const email = (getValues('email') || '').trim();
+    const phone = (getValues('phone') || '').trim();
+    if (!email && !phone) return true;
+    try {
+      const clashes = await checkDuplicate(email, phone);
+      for (const c of clashes) setError(c.field, { message: c.message });
+      if (clashes.length) {
+        setStep(0);
+        return false;
+      }
+    } catch {
+      /* the save itself re-checks, so a failed lookup must not block the user */
     }
     return true;
   };
@@ -404,6 +437,7 @@ export function GuardFormWizard({
         setStep(s);
         return;
       }
+      if (s === 0 && !(await contactIsUnique())) return;
     }
     if (target === LAST_STEP) {
       if (!(await trigger(REQUIRED_KEYS))) {
@@ -415,10 +449,10 @@ export function GuardFormWizard({
     setStep(target);
   };
 
-  const saveSummary = () => {
+  const saveSummary = async () => {
     clearErrors();
     const values = getValues();
-    const parsed = guardSubmitSchema.safeParse(values);
+    const parsed = submitSchema.safeParse(values);
     if (!parsed.success) {
       // Surface the messages: without this a failure only jumps step, so an invalid
       // login password would make Save look like it did nothing at all.
@@ -430,6 +464,7 @@ export function GuardFormWizard({
       if (firstIssue?.path[0]) setStep(stepForField(String(firstIssue.path[0])));
       return;
     }
+    if (!(await contactIsUnique())) return;
     onSubmit({ ...getValues(), ...parsed.data } as GuardFormData);
   };
 
@@ -443,7 +478,7 @@ export function GuardFormWizard({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (step === LAST_STEP) saveSummary();
+        if (step === LAST_STEP || saveFromAnyStep) void saveSummary();
         else handleSubmit(onSubmit, onInvalid)(e);
       }}
       className="min-w-0 max-w-full"
@@ -496,7 +531,7 @@ export function GuardFormWizard({
             </span>
             <p className="text-xs font-semibold">Quick setup</p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Only first and last name are required. Everything else can be added later.
+              Name, mobile number{requireEmail ? ' and email' : ''} are required. Everything else can be added later.
             </p>
           </div>
         </aside>
@@ -633,7 +668,10 @@ export function GuardFormWizard({
                     </Select>
                   </Field>
                   <Field label="Date of birth">
-                    <Input type="date" {...register('date_of_birth')} />
+                    <DateOfBirthPicker
+                      value={watch('date_of_birth')}
+                      onChange={(v) => setValue('date_of_birth', v, { shouldDirty: true })}
+                    />
                   </Field>
                   <Field label="Ethnicity">
                     <Select value={watch('ethnicity') || 'Unspecified'} onValueChange={(v) => setValue('ethnicity', v)}>
@@ -649,7 +687,7 @@ export function GuardFormWizard({
                   <Field label="Mobile number" required error={err('phone')} hint="Digits only after country code (e.g. UK +44).">
                     <PhoneInput value={watch('phone') || ''} onChange={(v) => setValue('phone', v, { shouldValidate: true })} />
                   </Field>
-                  <Field label="Email address" error={err('email')}>
+                  <Field label="Email address" required={requireEmail} error={err('email')}>
                     <Input type="email" placeholder="name@example.com" {...register('email')} />
                   </Field>
                   <Field label="Work phone" error={err('work_phone')}>
@@ -1068,6 +1106,12 @@ export function GuardFormWizard({
           <span className="hidden text-xs text-muted-foreground sm:inline">
             Step {step + 1} of {STEPS.length}
           </span>
+          {saveFromAnyStep && step < LAST_STEP ? (
+            <Button type="button" variant="outline" disabled={isPending} onClick={() => void saveSummary()}>
+              <Save className="size-4" />
+              {isPending ? 'Saving…' : submitLabel}
+            </Button>
+          ) : null}
           {step < LAST_STEP ? (
             <Button type="button" onClick={() => void goToStep(step + 1)}>
               Continue

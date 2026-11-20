@@ -48,24 +48,43 @@ def _normalize_phone(value: Optional[str]) -> str:
     return digits
 
 
-def _assert_unique_contact(
+def find_contact_conflicts(
     db: Session, company_id: int, data: dict[str, Any], *, exclude_guard_id: Optional[int] = None
-) -> None:
-    """Reject a staff email (case-insensitive) or mobile number already used by another
-    staff member in the same company. Archived staff count, since they can be restored."""
+) -> list[dict[str, str]]:
+    """Email (case-insensitive) or mobile number already used by another staff member in
+    the same company, as [{field, message}]. Archived staff count, since they can be restored."""
     email = _normalize_email(data.get("email"))
     phone = _normalize_phone(data.get("phone"))
     if not email and not phone:
-        return
+        return []
     q = db.query(Guard.id, Guard.full_name, Guard.email, Guard.phone).filter(Guard.company_id == company_id)
     if exclude_guard_id is not None:
         q = q.filter(Guard.id != exclude_guard_id)
+    out: dict[str, dict[str, str]] = {}
     for _gid, name, g_email, g_phone in q:
         who = name or "another staff member"
-        if email and _normalize_email(g_email) == email:
-            raise HTTPException(status_code=400, detail=f"This email address is already used by {who}.")
-        if phone and _normalize_phone(g_phone) == phone:
-            raise HTTPException(status_code=400, detail=f"This mobile number is already used by {who}.")
+        if email and "email" not in out and _normalize_email(g_email) == email:
+            out["email"] = {"field": "email", "message": f"This email address is already used by {who}."}
+        if phone and "phone" not in out and _normalize_phone(g_phone) == phone:
+            out["phone"] = {"field": "phone", "message": f"This mobile number is already used by {who}."}
+    return list(out.values())
+
+
+def _assert_unique_contact(
+    db: Session, company_id: int, data: dict[str, Any], *, exclude_guard_id: Optional[int] = None
+) -> None:
+    conflicts = find_contact_conflicts(db, company_id, data, exclude_guard_id=exclude_guard_id)
+    if conflicts:
+        raise HTTPException(status_code=400, detail=conflicts[0]["message"])
+
+
+def check_contact_duplicates(
+    db: Session, user_id: int, email: Optional[str], phone: Optional[str], exclude_guard_id: Optional[int]
+) -> list[dict[str, str]]:
+    company = get_company_by_user_id(db, user_id)
+    return find_contact_conflicts(
+        db, company.id, {"email": email, "phone": phone}, exclude_guard_id=exclude_guard_id
+    )
 
 
 def _apply_contractor_fields(
@@ -296,13 +315,15 @@ def update_guard(db: Session, guard_id: int, guard: GuardCreate, user_id: int) -
     if data.get("badge_number") and data["badge_number"] != db_guard.badge_number:
         if db.query(Guard).filter(Guard.badge_number == data["badge_number"]).first():
             raise HTTPException(status_code=400, detail="Badge number already exists")
-    if "email" in data or "phone" in data:
-        _assert_unique_contact(
-            db,
-            company.id,
-            {k: data[k] for k in ("email", "phone") if k in data},
-            exclude_guard_id=db_guard.id,
-        )
+    changed_contact = {
+        k: data[k]
+        for k in ("email", "phone")
+        if k in data
+        and (_normalize_email if k == "email" else _normalize_phone)(data[k])
+        != (_normalize_email if k == "email" else _normalize_phone)(getattr(db_guard, k))
+    }
+    if changed_contact:
+        _assert_unique_contact(db, company.id, changed_contact, exclude_guard_id=db_guard.id)
     for key, value in data.items():
         setattr(db_guard, key, value)
     audit_service.log_action(

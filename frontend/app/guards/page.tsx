@@ -16,7 +16,7 @@ import { useGuards, useCreateGuard, useUpdateGuard, useDeleteGuard, useRestoreGu
 import { useDirectoryContractorsList } from '@/hooks/use-directory-contractors';
 import { useMainContractors } from '@/hooks/use-main-contractors';
 import { useSubContractors } from '@/hooks/use-sub-contractors';
-import { guardCreateSchema, guardSchema, guardSubmitSchema, type GuardFormData } from '@/lib/validation';
+import { guardCreateSchema, guardSchema, guardSchemaRequiring, type GuardFormData } from '@/lib/validation';
 import { guardFormDefaults, guardToForm, formToGuardPayload } from '@/lib/guard-form-map';
 import type { EmployeeHub, EmployeeHubRow, Guard, RecordView, Team } from '@/lib/types';
 import { DeleteRecordDialog, type DeleteRecordTarget } from '@/components/delete-record-dialog';
@@ -179,12 +179,14 @@ export default function GuardsPage() {
     defaultValues: guardFormDefaults,
   });
 
-  // Mobile number is mandatory, but legacy staff saved without one can still be edited;
-  // once a number is on file it cannot be cleared (mirrors the API rule).
-  const editHadPhone = useRef(false);
+  // Mobile number and email are mandatory, but legacy staff saved without one can still be
+  // edited; once either is on file it cannot be cleared (mirrors the API rule).
+  const [editRequire, setEditRequire] = useState({ phone: false, email: false });
+  const editRequireRef = useRef(editRequire);
+  const editSchema = useMemo(() => guardSchemaRequiring(editRequire), [editRequire]);
   const editForm = useForm<GuardFormData>({
     resolver: ((values, ctx, opts) =>
-      (zodResolver(editHadPhone.current ? guardCreateSchema : guardSubmitSchema) as Resolver<GuardFormData>)(
+      (zodResolver(guardSchemaRequiring(editRequireRef.current)) as Resolver<GuardFormData>)(
         values,
         ctx,
         opts
@@ -223,7 +225,9 @@ export default function GuardsPage() {
 
   const openEdit = (guard: Guard) => {
     setEditingGuard(guard);
-    editHadPhone.current = Boolean(guard.phone?.trim());
+    const req = { phone: Boolean(guard.phone?.trim()), email: Boolean(guard.email?.trim()) };
+    editRequireRef.current = req;
+    setEditRequire(req);
     editForm.reset(guardToForm(guard));
     setEditOpen(true);
   };
@@ -605,6 +609,7 @@ export default function GuardsPage() {
                       jobTitles={jobTitleNames}
                       onCreateJobTitle={handleCreateJobTitle}
                       allowLogin
+                      checkDuplicate={(email, phone) => api.guards.checkDuplicate({ email, phone })}
                     />
                   </div>
                 </DialogContent>
@@ -1037,6 +1042,12 @@ export default function GuardsPage() {
                 existingJobTitles={guards.map((g) => g.job_title || '').filter(Boolean)}
                 jobTitles={jobTitleNames}
                 onCreateJobTitle={handleCreateJobTitle}
+                submitSchema={editSchema}
+                requireEmail={editRequire.email}
+                saveFromAnyStep
+                checkDuplicate={(email, phone) =>
+                  api.guards.checkDuplicate({ email, phone, exclude_id: editingGuard?.id })
+                }
               />
             </div>
           </DialogContent>

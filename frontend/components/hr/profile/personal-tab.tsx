@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { ChevronDown, Loader2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DateOfBirthPicker } from '@/components/ui/date-of-birth-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
@@ -97,11 +98,15 @@ function EditGrid({
       {fields.map((f) => (
         <div key={String(f.key)} className="space-y-1">
           <Label>{f.label}</Label>
-          <Input
-            type={f.type ?? 'text'}
-            value={values[f.key] ?? ''}
-            onChange={(e) => onChange(f.key, e.target.value)}
-          />
+          {f.key === 'date_of_birth' ? (
+            <DateOfBirthPicker value={values[f.key] ?? ''} onChange={(v) => onChange(f.key, v)} />
+          ) : (
+            <Input
+              type={f.type ?? 'text'}
+              value={values[f.key] ?? ''}
+              onChange={(e) => onChange(f.key, e.target.value)}
+            />
+          )}
         </div>
       ))}
     </div>

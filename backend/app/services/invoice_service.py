@@ -1096,15 +1096,41 @@ def send_overdue_reminder(db: Session, invoice_id: int, user_id: int) -> str:
 
 
 def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
+    """Copy an invoice as a new draft dated today.
+
+    The copy takes the next number in the source's own sequence (its client's, or its
+    billed site's) and keeps the billed site, so the sequence carries on rather than the
+    copy appearing unnumbered and outside it.
+    """
     src = get_invoice(db, invoice_id, user_id)
     company = get_company_by_user_id(db, user_id)
+    billed_site_id = getattr(src, "billed_site_id", None)
+    number, _ = next_invoice_number(db, company.id, client_id=src.client_id, site_id=billed_site_id)
+    today = date.today()
+    due = src.due_date
+    if src.due_date and src.invoice_date:
+        # Keep the source's payment terms rather than a due date that may already be past.
+        due = today + (src.due_date - src.invoice_date)
     inv = Invoice(
         company_id=company.id,
         client_id=src.client_id,
+        billed_site_id=billed_site_id,
+        client_bank_account_id=src.client_bank_account_id,
+        invoice_number=number,
         period_start=src.period_start,
         period_end=src.period_end,
-        due_date=src.due_date,
+        invoice_date=today,
+        due_date=due,
+        po_number=src.po_number,
         notes=src.notes,
+        rota_review=src.rota_review,
+        payee_account_name=src.payee_account_name,
+        payee_bank_name=src.payee_bank_name,
+        payee_sort_code=src.payee_sort_code,
+        payee_account_number=src.payee_account_number,
+        payee_iban=src.payee_iban,
+        payee_swift_code=src.payee_swift_code,
+        column_headers_json=src.column_headers_json,
         subtotal=src.subtotal,
         tax_rate=src.tax_rate,
         tax_amount=src.tax_amount,
@@ -1120,16 +1146,26 @@ def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
                 invoice_id=inv.id,
                 site_id=ln.site_id,
                 guard_id=ln.guard_id,
+                shift_date=ln.shift_date,
+                shift_start=ln.shift_start,
+                shift_end=ln.shift_end,
+                description=ln.description,
+                service_detail=ln.service_detail,
+                quantity=ln.quantity,
                 hours=ln.hours,
                 rate=ln.rate,
                 amount=ln.amount,
                 allowance_amount=ln.allowance_amount or 0,
             )
         )
+    db.flush()
     recalc_invoice_totals(db, inv)
     db.commit()
     db.refresh(inv)
-    log_invoice_audit(db, company.id, user_id, inv.id, "invoice_duplicated", {"source_id": invoice_id})
+    log_invoice_audit(
+        db, company.id, user_id, inv.id, "invoice_duplicated",
+        {"source_id": invoice_id, "invoice_number": number},
+    )
     db.commit()
     return inv
 

@@ -386,6 +386,14 @@ export const api = {
       return request<Guard[]>(`/guards${qs ? `?${qs}` : ''}`);
     },
     get: (id: number): Promise<Guard> => request<Guard>(`/guards/${id}`),
+    /** Email / mobile already used by another staff member of the company. */
+    checkDuplicate: (data: { email?: string; phone?: string; exclude_id?: number }) => {
+      const q = new URLSearchParams();
+      if (data.email) q.append('email', data.email);
+      if (data.phone) q.append('phone', data.phone);
+      if (data.exclude_id != null) q.append('exclude_id', String(data.exclude_id));
+      return request<{ field: 'email' | 'phone'; message: string }[]>(`/guards/check-duplicate?${q.toString()}`);
+    },
     create: (data: Omit<Guard, 'id' | 'company_id' | 'created_at'>): Promise<Guard> => {
       const sanitized = Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])

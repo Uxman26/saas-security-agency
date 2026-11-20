@@ -334,12 +334,28 @@ export type GuardFormData = z.infer<typeof guardSchema>;
 
 const isBlank = (v: unknown) => v == null || String(v).trim() === '';
 
-/** New staff must have a mobile number. Edits use this only when one is already on file. */
-export const guardCreateSchema = guardSubmitSchema.superRefine((v, ctx) => {
-  if (isBlank(v.phone)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phone'], message: 'Mobile number is required' });
-  }
-});
+/**
+ * The save schema with mobile and/or email made mandatory. New staff need both; an edit
+ * requires each one only when it is already on file (legacy staff saved without one can
+ * still be edited), matching the API rule.
+ */
+export function guardSchemaRequiring(req: { phone?: boolean; email?: boolean }) {
+  return guardSubmitSchema.superRefine((v, ctx) => {
+    if (req.phone && isBlank(v.phone)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phone'], message: 'Mobile number is required' });
+    }
+    if (req.email && isBlank(v.email)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['email'], message: 'Email address is required' });
+    } else if (!isBlank(v.email) && !emailFieldSchema.safeParse(String(v.email).trim()).success) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['email'], message: 'Invalid email address' });
+    }
+  });
+}
+
+export type GuardSaveSchema = ReturnType<typeof guardSchemaRequiring>;
+
+/** New staff must have a mobile number and an email address. */
+export const guardCreateSchema = guardSchemaRequiring({ phone: true, email: true });
 
 export const siteSchema = z
   .object({

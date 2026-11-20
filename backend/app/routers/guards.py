@@ -28,6 +28,7 @@ router = APIRouter(prefix="/guards", tags=["guards"])
 @router.post("", response_model=GuardResponse, status_code=status.HTTP_201_CREATED)
 def create_guard(guard: GuardCreate, db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("guards", "create"))):
     require_on_create(guard.phone, "Mobile number")
+    require_on_create(guard.email, "Email address")
     return guard_service.create_guard(db, guard, current_user.id)
 
 @router.get("", response_model=List[GuardResponse])
@@ -45,6 +46,18 @@ def get_guards(
     return guard_service.get_guards(
         db, current_user.id, area=area, postcode=postcode, nearby=nearby, view=view
     )
+
+@router.get("/check-duplicate")
+def check_guard_duplicate(
+    email: Optional[str] = Query(None),
+    phone: Optional[str] = Query(None),
+    exclude_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("guards", "view")),
+):
+    """[{field, message}] for an email or mobile already used by another staff member."""
+    return guard_service.check_contact_duplicates(db, current_user.id, email, phone, exclude_id)
+
 
 @router.get("/hub", response_model=EmployeeHubResponse)
 def employee_hub(
@@ -176,7 +189,13 @@ def update_guard(guard_id: int, guard: GuardCreate, db: Session = Depends(get_db
             detail="A portal login cannot be created from an edit. Use Roles & Permissions → Users.",
         )
     existing = guard_service.get_guard_by_id(db, guard_id, current_user.id)
-    require_on_update(guard.phone, existing.phone, "Mobile number")
+    # The profile page saves one section at a time, so only a field actually sent can
+    # have been cleared; an omitted one is left as it is.
+    sent = guard.model_fields_set
+    if "phone" in sent:
+        require_on_update(guard.phone, existing.phone, "Mobile number")
+    if "email" in sent:
+        require_on_update(guard.email, existing.email, "Email address")
     return guard_service.update_guard(db, guard_id, guard, current_user.id)
 
 

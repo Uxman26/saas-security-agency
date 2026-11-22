@@ -6,7 +6,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -39,8 +38,10 @@ import {
   type LucideIcon,
   MapPin,
   Pencil,
+  Plus,
   Save,
   ShieldCheck,
+  Trash2,
   UserRound,
 } from 'lucide-react';
 
@@ -160,6 +161,86 @@ const FIELD_STEP: Partial<Record<keyof GuardFormData, number>> = {
 
 function stepForField(key: string) {
   return FIELD_STEP[key as keyof GuardFormData] ?? 0;
+}
+
+type AddressHistoryEntry = { address: string; from: string; to: string };
+
+const EMPTY_ADDRESS_ENTRY: AddressHistoryEntry = { address: '', from: '', to: '' };
+
+/** Stored as a JSON array in `employment_history`; older free-text values load into the first row. */
+function parseAddressHistory(raw: string): AddressHistoryEntry[] {
+  const text = (raw || '').trim();
+  if (!text) return [{ ...EMPTY_ADDRESS_ENTRY }];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      const rows = parsed
+        .filter((r) => r && typeof r === 'object')
+        .map((r) => ({ address: String(r.address ?? ''), from: String(r.from ?? ''), to: String(r.to ?? '') }));
+      if (rows.length) return rows;
+    }
+  } catch {
+    /* legacy free text */
+  }
+  return [{ address: text, from: '', to: '' }];
+}
+
+function serializeAddressHistory(rows: AddressHistoryEntry[]): string {
+  const filled = rows
+    .map((r) => ({ address: r.address.trim(), from: r.from, to: r.to }))
+    .filter((r) => r.address || r.from || r.to);
+  return filled.length ? JSON.stringify(filled) : '';
+}
+
+function AddressHistoryInput({ initial, onChange }: { initial: string; onChange: (value: string) => void }) {
+  const [rows, setRows] = useState<AddressHistoryEntry[]>(() => parseAddressHistory(initial));
+
+  const update = (next: AddressHistoryEntry[]) => {
+    setRows(next);
+    onChange(serializeAddressHistory(next));
+  };
+  const patch = (i: number, field: keyof AddressHistoryEntry, value: string) =>
+    update(rows.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  const remove = (i: number) => {
+    const next = rows.filter((_, idx) => idx !== i);
+    update(next.length ? next : [{ ...EMPTY_ADDRESS_ENTRY }]);
+  };
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row, i) => (
+        <div key={i} className="grid min-w-0 gap-3 rounded-lg border bg-muted/20 p-3 sm:grid-cols-[1fr_1fr_auto]">
+          <div className="space-y-1.5 sm:col-span-3">
+            <Label className="text-xs text-muted-foreground">Address {rows.length > 1 ? i + 1 : ''}</Label>
+            <Input value={row.address} onChange={(e) => patch(i, 'address', e.target.value)} placeholder="Full address incl. postcode" maxLength={300} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">From</Label>
+            <Input type="date" value={row.from} max={row.to || undefined} onChange={(e) => patch(i, 'from', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">To</Label>
+            <Input type="date" value={row.to} min={row.from || undefined} onChange={(e) => patch(i, 'to', e.target.value)} />
+          </div>
+          <div className="flex items-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={`Remove address ${i + 1}`}
+              onClick={() => remove(i)}
+              disabled={rows.length === 1 && !row.address && !row.from && !row.to}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="outline" size="sm" onClick={() => update([...rows, { ...EMPTY_ADDRESS_ENTRY }])}>
+        <Plus className="mr-1 h-4 w-4" /> Add address
+      </Button>
+    </div>
+  );
 }
 
 function Section({
@@ -852,7 +933,7 @@ export function GuardFormWizard({
                   <Field label="Passport number"><Input {...register('passport_number')} /></Field>
                   <Field label="Country of issue"><Input {...register('passport_country')} /></Field>
                   <Field label="Passport expiry"><Input type="date" {...register('passport_expiry_date')} /></Field>
-                  <Field label="Licence number"><Input {...register('license_number')} /></Field>
+                  <Field label="Driving licence number"><Input {...register('license_number')} /></Field>
                   <Field label="Licence country"><Input {...register('driving_licence_country')} /></Field>
                   <Field label="Licence class"><Input {...register('driving_licence_class')} /></Field>
                   <Field label="Licence expiry"><Input type="date" {...register('driving_licence_expiry_date')} /></Field>
@@ -868,8 +949,11 @@ export function GuardFormWizard({
                   <Field label="Share code"><Input {...register('share_code')} placeholder="e.g. W12 345 67A" /></Field>
                   <Field label="Share code expiry"><Input type="date" {...register('share_code_expiry_date')} /></Field>
                   <Field label="DBS check"><Input {...register('dbs_status')} placeholder="e.g. Complete / pending" /></Field>
-                  <Field label="Employment history (last 5 years)" className="sm:col-span-2">
-                    <Textarea rows={3} {...register('employment_history')} placeholder="Previous roles, employers and dates" />
+                  <Field label="Address history (last 5 years)" className="sm:col-span-2">
+                    <AddressHistoryInput
+                      initial={getValues('employment_history') || ''}
+                      onChange={(v) => setValue('employment_history', v, { shouldDirty: true, shouldValidate: true })}
+                    />
                   </Field>
                 </div>
               </Section>

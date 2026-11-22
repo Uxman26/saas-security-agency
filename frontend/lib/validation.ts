@@ -263,7 +263,7 @@ export const guardSchema = z.object({
   share_code: z.string().max(50).optional().or(z.literal('')),
   share_code_expiry_date: optDate,
   rtw_status: z.string().max(100).optional().or(z.literal('')),
-  employment_history: z.string().max(2000).optional().or(z.literal('')),
+  employment_history: z.string().max(10000).optional().or(z.literal('')),
   dbs_status: z.string().max(100).optional().or(z.literal('')),
   weekly_contracted_hours: z.preprocess(
     toOptNum,

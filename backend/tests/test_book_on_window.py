@@ -15,8 +15,8 @@ class _A:
         self.shift_end = shift_end
 
 
-def test_early_book_on_minutes_is_20():
-    assert EARLY_BOOK_ON_MINUTES == 20
+def test_early_book_on_minutes_is_5():
+    assert EARLY_BOOK_ON_MINUTES == 5
 
 
 def test_assignment_shift_start_dt_parses_hm():
@@ -28,9 +28,9 @@ def test_early_window_boundary():
     a = _A(date(2026, 10, 16), "20:00")
     start = _assignment_shift_start_dt(a)
     earliest = start - timedelta(minutes=EARLY_BOOK_ON_MINUTES)
-    assert earliest == datetime.combine(date(2026, 10, 16), time(19, 40))
-    assert datetime(2026, 10, 16, 19, 39) < earliest
-    assert datetime(2026, 10, 16, 19, 40) >= earliest
+    assert earliest == datetime.combine(date(2026, 10, 16), time(19, 55))
+    assert datetime(2026, 10, 16, 19, 54) < earliest
+    assert datetime(2026, 10, 16, 19, 55) >= earliest
 
 
 def test_assignment_shift_start_dt_invalid():
@@ -43,11 +43,11 @@ def test_assignment_shift_end_dt_overnight():
     assert _assignment_shift_end_dt(a) == datetime(2026, 10, 17, 5, 0)
 
 
-def test_example_1715_opens_at_1655():
+def test_example_1715_opens_at_1710():
     a = _A(date(2026, 10, 16), "17:15")
     start = _assignment_shift_start_dt(a)
     earliest = start - timedelta(minutes=EARLY_BOOK_ON_MINUTES)
-    assert earliest == datetime(2026, 10, 16, 16, 55)
+    assert earliest == datetime(2026, 10, 16, 17, 10)
 
 
 def test_late_from_one_minute_after_start():

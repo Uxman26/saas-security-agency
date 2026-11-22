@@ -245,3 +245,23 @@ def _sweep_shift_reminders_sync() -> dict[str, Any]:
 
 async def sweep_shift_reminders(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_sweep_shift_reminders_sync)
+
+
+def _sweep_missed_attendance_sync() -> dict[str, Any]:
+    def run():
+        db: Session = SessionLocal()
+        try:
+            from app.services import missed_attendance_service
+
+            result = missed_attendance_service.sweep_missed_attendance(db)
+            if result.get("missed_clock_in_sent") or result.get("missed_clock_out_sent"):
+                logger.info("missed attendance: %s", result)
+            return result
+        finally:
+            db.close()
+
+    return _track_job("sweep_missed_attendance", run)()
+
+
+async def sweep_missed_attendance(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_sweep_missed_attendance_sync)

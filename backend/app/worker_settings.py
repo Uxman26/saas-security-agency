@@ -13,6 +13,7 @@ from app.worker_jobs import (
     sweep_finance_recurring,
     snapshot_server_metrics,
     sweep_shift_reminders,
+    sweep_missed_attendance,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +31,7 @@ class WorkerSettings:
         sweep_finance_recurring,
         snapshot_server_metrics,
         sweep_shift_reminders,
+        sweep_missed_attendance,
     ]
     # unique=True: skip enqueue if the same job is already queued/running (overlap guard).
     cron_jobs = [
@@ -37,6 +39,7 @@ class WorkerSettings:
         cron(check_missed_patrols, minute=set(range(60)), unique=True, timeout=240, max_tries=1),
         cron(sweep_lone_worker, minute=set(range(60)), unique=True, timeout=240, max_tries=1),
         cron(sweep_shift_reminders, minute=set(range(60)), unique=True, timeout=240, max_tries=1),
+        cron(sweep_missed_attendance, minute=set(range(60)), unique=True, timeout=240, max_tries=1),
         cron(sweep_trials, minute={0}, unique=True, timeout=300, max_tries=1),
         cron(sweep_renewal_invoices, hour=4, minute=15, unique=True, timeout=600, max_tries=1),
         cron(sweep_finance_recurring, hour=5, minute=0, unique=True, timeout=600, max_tries=1),

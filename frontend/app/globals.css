@@ -183,7 +183,7 @@
   --surface-dark: #1E293B;
   --surface-dark-foreground: #F8FAFC;
   /* Shift periods, shared by the rota grid and the shift dialog.
-     Keep in sync with mobile lib/core/utils/shift_type_display.dart. */
+     Keep in sync with mobile lib/core/utils/shift_colors.dart (and shift_type_display). */
   --shift-morning: #7DD3FC;
   --shift-morning-fg: #0C4A6E;
   --shift-afternoon: #CA8A04;

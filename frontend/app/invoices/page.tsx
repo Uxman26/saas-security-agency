@@ -479,7 +479,10 @@ export default function InvoicesPage() {
       const dup = await api.invoices.duplicate(id);
       loadInvoices();
       focusRows(dup.id);
-      toast.success(`Invoice ${invoiceLabel(dup)} created as a draft copy`);
+      rememberNewInvoice(dup.id);
+      toast.success(`Invoice ${invoiceLabel(dup)} created as a draft copy for the next period`);
+      // Open the copy straight away so its dates and lines can be checked before sending.
+      setEditInvoiceId(dup.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Duplicate failed');
     }

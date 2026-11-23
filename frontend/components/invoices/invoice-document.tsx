@@ -114,17 +114,22 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
     { label: 'Invoice Number', value: invoiceLabel(invoice) },
     { label: 'Invoice Date', value: fmtLongDate(invoiceDate) },
     { label: 'Payment Due', value: fmtLongDate(invoice.due_date) },
-    { label: 'Purchase Order', value: invoice.po_number || '' },
   ];
+  // No PO given: leave the row out rather than print an empty "Purchase Order:".
+  if (invoice.po_number?.trim()) meta.push({ label: 'Purchase Order', value: invoice.po_number.trim() });
 
-  const columns = [
-    ['date', headers.date, 'text-left'],
-    ['operatives', headers.operatives, 'text-center'],
-    ['hours', headers.hours, 'text-center'],
-    ['shift_timing', headers.shift_timing, 'text-center'],
-    ['rate', headers.rate, 'text-center'],
-    ['amount', headers.amount, 'text-right'],
-  ] as const;
+  // No line has start/end times: leave the Timings column out instead of a column of dashes.
+  const showTiming = dayRows.some((r) => r.timings.length > 0);
+  const columns = (
+    [
+      ['date', headers.date, 'text-left'],
+      ['operatives', headers.operatives, 'text-center'],
+      ['hours', headers.hours, 'text-center'],
+      ['shift_timing', headers.shift_timing, 'text-center'],
+      ['rate', headers.rate, 'text-center'],
+      ['amount', headers.amount, 'text-right'],
+    ] as const
+  ).filter(([key]) => key !== 'shift_timing' || showTiming);
 
   const hasNotes = !!(invoice.notes?.trim() || invoice.rota_review?.trim());
 
@@ -279,7 +284,9 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                         {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
                       </td>
                       <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.hours > 0 ? fmtHours(row.hours) : '—'}</td>
-                      <td className="px-4 py-3.5 text-center tabular-nums whitespace-nowrap text-slate-800">{timingLabel}</td>
+                      {showTiming ? (
+                        <td className="px-4 py-3.5 text-center tabular-nums whitespace-nowrap text-slate-800">{timingLabel}</td>
+                      ) : null}
                       <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.rate != null ? fmtMoney(row.rate) : '—'}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-slate-800">{fmtMoney(row.amount)}</td>
                     </tr>

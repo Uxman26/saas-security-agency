@@ -7,6 +7,7 @@ import {
   Calculator,
   CalendarDays,
   ClipboardCheck,
+  Eye,
   Clock,
   Cog,
   Coins,
@@ -35,13 +36,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DueDateField } from '@/components/invoices/due-date-field';
+import { InvoiceDocument } from '@/components/invoices/invoice-document';
+import { storageGet, storageSet } from '@/lib/safe-storage';
 import { api } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { localDateKey } from '@/lib/date-format';
 import { invoiceLabel, syncPaymentTermsNote } from '@/lib/invoice-utils';
 import { INVOICE_CURRENCIES, formatInvoiceMoney } from '@/lib/invoice-currency';
-import type { Client, ClientBankAccount, Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
+import type { Client, ClientBankAccount, CompanyBankAccount, CompanyProfile, Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
 
 /**
  * Fills the invoice number with the next one in the chosen client's (or site's) own
@@ -183,7 +186,34 @@ function hoursBetween(start: string, end: string): number | null {
   return Math.round((mins / 60) * 100) / 100;
 }
 
-export const lineAmount = (l: FormLine) => (parseFloat(l.hours) || 0) * (parseFloat(l.rate) || 0) + (l.allowance || 0);
+/** Rounded to the penny per line, as the server stores it, so the form's totals match the invoice's. */
+export const lineAmount = (l: FormLine) =>
+  Math.round(((parseFloat(l.hours) || 0) * (parseFloat(l.rate) || 0) + (l.allowance || 0)) * 100) / 100;
+
+/** Subtotal, tax and total worked out the way the server does (VAT rounded to the penny). */
+export function invoiceTotals(lines: FormLine[], taxRate: string) {
+  const subtotal = Math.round(lines.reduce((sum, l) => sum + (isBlankLine(l) ? 0 : lineAmount(l)), 0) * 100) / 100;
+  const tax = Math.round(subtotal * (parseFloat(taxRate) || 0)) / 100;
+  return { subtotal, tax, total: Math.round((subtotal + tax) * 100) / 100 };
+}
+
+/**
+ * The bank account box holds "co:<id>" (one of the company's own accounts), "cl:<id>"
+ * (an account on the client) or "" (the company default).
+ */
+const LAST_BANK_KEY = 'invoice:last-bank-account';
+export const rememberBankChoice = (value: string) => {
+  if (value) storageSet(LAST_BANK_KEY, value);
+};
+export const lastBankChoice = () => storageGet(LAST_BANK_KEY) || '';
+
+/** API fields for the chosen account. */
+export function bankPayload(value: string): { company_bank_account_id?: number; client_bank_account_id?: number | null } {
+  const [kind, id] = value.split(':');
+  if (kind === 'co' && id) return { company_bank_account_id: parseInt(id, 10) };
+  if (kind === 'cl' && id) return { client_bank_account_id: parseInt(id, 10) };
+  return { client_bank_account_id: null };
+}
 
 /** A line the user added but never filled in; dropped rather than saved. */
 export const isBlankLine = (l: FormLine) =>
@@ -549,6 +579,11 @@ export function InvoiceFormDialog({
   const [sites, setSites] = useState<Site[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
   const [banks, setBanks] = useState<ClientBankAccount[]>([]);
+  const [companyBanks, setCompanyBanks] = useState<CompanyBankAccount[]>([]);
+  const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  /** The bank choice as loaded, so saving an edit only re-points the account when it changed. */
+  const loadedBank = useRef('');
 
   const [original, setOriginal] = useState<Invoice | null>(null);
   const [billTo, setBillTo] = useState<BillTo>('client');
@@ -594,6 +629,8 @@ export function InvoiceFormDialog({
     setCurrency('GBP');
     setBankId('');
     setBanks([]);
+    loadedBank.current = '';
+    setPreviewOpen(false);
     setStatus('draft');
     setNotes('');
     setRotaReview('');
@@ -607,6 +644,8 @@ export function InvoiceFormDialog({
     api.sites.list().then(setSites).catch(() => {});
     api.guards.list().then(setGuards).catch(() => {});
     api.clients.list().then(setClients).catch(() => {});
+    api.company.bankAccounts().then(setCompanyBanks).catch(() => setCompanyBanks([]));
+    api.company.profile().then(setProfile).catch(() => setProfile(null));
   }, [open]);
 
   // Edit mode: load the invoice and fill the form.
@@ -638,10 +677,11 @@ export function InvoiceFormDialog({
         setInvoiceNumber(inv.invoice_number ?? '');
         setTaxRate(String(inv.tax_rate ?? 0));
         setCurrency(inv.currency || 'GBP');
-        setBankId(inv.client_bank_account_id != null ? String(inv.client_bank_account_id) : '');
+        setBankId(inv.client_bank_account_id != null ? `cl:${inv.client_bank_account_id}` : '');
         setStatus(inv.status);
         setNotes(inv.notes ?? '');
         setRotaReview(inv.rota_review ?? '');
+        loadedBank.current = inv.client_bank_account_id != null ? `cl:${inv.client_bank_account_id}` : '';
         originalSigs.current = new Map(formLines.map((l) => [l.id as number, lineSignature(l)]));
         setLines(formLines.length ? formLines : [emptyLine()]);
       })
@@ -661,24 +701,62 @@ export function InvoiceFormDialog({
   const bankClientId =
     billTo === 'client' ? clientId : selectedSite?.client_id != null ? String(selectedSite.client_id) : '';
 
-  // A new invoice picks the client's default account; an existing one keeps its own.
+  // The client's own accounts (if the invoice has a client) sit beside the company's.
   useEffect(() => {
     if (!bankClientId) {
       setBanks([]);
-      if (!isEdit) setBankId('');
       return;
     }
     api.clients
       .bankAccounts(parseInt(bankClientId, 10))
-      .then((rows) => {
-        setBanks(rows);
-        if (!isEdit) {
-          const def = rows.find((r) => r.is_default) ?? rows[0];
-          setBankId(def ? String(def.id) : '');
-        }
-      })
+      .then(setBanks)
       .catch(() => setBanks([]));
-  }, [bankClientId, isEdit]);
+  }, [bankClientId]);
+
+  const bankOptions = useMemo(
+    () => [
+      ...companyBanks.map((b) => ({
+        value: `co:${b.id}`,
+        label: `${b.label}${b.bank_name ? ` · ${b.bank_name}` : ''}${b.account_number ? ` · ${b.account_number}` : ''}${b.is_default ? ' (Default)' : ''}`,
+        account: b as CompanyBankAccount | ClientBankAccount,
+      })),
+      ...banks.map((b) => ({
+        value: `cl:${b.id}`,
+        label: `${b.label} (client)${b.bank_name ? ` · ${b.bank_name}` : ''}${b.account_number ? ` · ${b.account_number}` : ''}`,
+        account: b as CompanyBankAccount | ClientBankAccount,
+      })),
+    ],
+    [companyBanks, banks]
+  );
+
+  // A new invoice starts on the account used last time, else the client's default,
+  // else the company's default. An existing invoice shows the account it pays into.
+  useEffect(() => {
+    if (!open || loadingInvoice) return;
+    if (isEdit) {
+      if (!original || bankId) return;
+      const match = companyBanks.find(
+        (b) =>
+          (b.account_number || '') === (original.account_number || '') &&
+          (b.sort_code || '') === (original.sort_code || '') &&
+          !!(b.account_number || b.sort_code)
+      );
+      if (match) {
+        setBankId(`co:${match.id}`);
+        loadedBank.current = `co:${match.id}`;
+      }
+      return;
+    }
+    if (bankId && bankOptions.some((o) => o.value === bankId)) return;
+    const last = lastBankChoice();
+    const pick =
+      (last && bankOptions.some((o) => o.value === last) ? last : '') ||
+      (banks.find((b) => b.is_default) ? `cl:${banks.find((b) => b.is_default)!.id}` : '') ||
+      (companyBanks.find((b) => b.is_default) ? `co:${companyBanks.find((b) => b.is_default)!.id}` : '') ||
+      bankOptions[0]?.value ||
+      '';
+    if (pick !== bankId) setBankId(pick);
+  }, [open, isEdit, loadingInvoice, original, bankOptions, banks, companyBanks, bankId]);
 
   const clientOptions = useMemo(() => clients.map((c) => ({ value: String(c.id), label: c.name })), [clients]);
   const siteBillOptions = useMemo(() => billToSiteOptions(sites, clients), [sites, clients]);
@@ -686,8 +764,7 @@ export function InvoiceFormDialog({
   const guardOptions = useMemo(() => guards.map((g) => ({ value: String(g.id), label: g.full_name })), [guards]);
 
   const forcedSite = billTo === 'site' ? siteId : undefined;
-  const subtotal = lines.reduce((sum, l) => sum + (isBlankLine(l) ? 0 : lineAmount(l)), 0);
-  const tax = subtotal * ((parseFloat(taxRate) || 0) / 100);
+  const { subtotal, tax } = invoiceTotals(lines, taxRate);
   const money = (n: number) => formatInvoiceMoney(n, currency);
 
   const changeInvoiceDate = (v: string) => {
@@ -725,7 +802,7 @@ export function InvoiceFormDialog({
         po_number: po.trim() || undefined,
         notes: notes.trim() || undefined,
         rota_review: rotaReview.trim() || undefined,
-        client_bank_account_id: bankId ? parseInt(bankId, 10) : undefined,
+        ...(bankId ? bankPayload(bankId) : {}),
         tax_rate: parseFloat(taxRate) || 0,
         currency,
         status: 'draft',
@@ -760,11 +837,12 @@ export function InvoiceFormDialog({
       po_number: po.trim() || undefined,
       notes: notes.trim() || undefined,
       rota_review: rotaReview.trim() || undefined,
-      client_bank_account_id: bankId ? parseInt(bankId, 10) : undefined,
+      ...(bankId ? bankPayload(bankId) : {}),
       tax_rate: parseFloat(taxRate) || 0,
       currency,
       lines: chosen.map((l) => linePayload(l, forcedSite)),
     });
+    rememberBankChoice(bankId);
     toast.success(`Invoice ${invoiceLabel(inv)} created`);
     return inv;
   };
@@ -787,8 +865,10 @@ export function InvoiceFormDialog({
       rota_review: rotaReview || null,
       tax_rate: parseFloat(taxRate) || 0,
       status,
-      client_bank_account_id: bankId ? parseInt(bankId, 10) : null,
+      // Only re-point the account when it was changed here.
+      ...(bankId !== loadedBank.current ? bankPayload(bankId) : {}),
     });
+    rememberBankChoice(bankId);
     for (const lid of removed) await api.invoices.deleteLine(id, lid);
     for (const l of changed) {
       const p = linePayload(l, forcedSite);
@@ -944,17 +1024,15 @@ export function InvoiceFormDialog({
               </div>
               <div className="space-y-1.5">
                 <InvoiceFieldLabel icon={Landmark}>Bank account</InvoiceFieldLabel>
-                <Select value={bankId || 'none'} onValueChange={(v) => setBankId(v === 'none' ? '' : v)} disabled={!bankClientId}>
+                <Select value={bankId || 'none'} onValueChange={(v) => setBankId(v === 'none' ? '' : v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Company default" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Company default</SelectItem>
-                    {banks.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.label}
-                        {b.is_default ? ' (Default)' : ''}
-                        {b.bank_name ? ` · ${b.bank_name}` : ''}
+                    {bankOptions.length === 0 || !bankId ? <SelectItem value="none">Company default</SelectItem> : null}
+                    {bankOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1013,15 +1091,227 @@ export function InvoiceFormDialog({
 
             <InvoiceTotals subtotal={subtotal} tax={tax} money={money} />
 
-            <Button className="w-full h-11 text-base shadow-sm" onClick={() => void submit()} disabled={!canSubmit}>
-              <Send className="size-4 mr-2" />
-              {saving ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save Invoice' : 'Create Invoice'}
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 text-base shadow-sm sm:w-56"
+                onClick={() => setPreviewOpen(true)}
+                disabled={loadingInvoice || (isEdit ? !original : billTo === 'client' ? !clientId : !siteId)}
+              >
+                <Eye className="size-4 mr-2" />
+                Preview Invoice
+              </Button>
+              <Button className="h-11 flex-1 text-base shadow-sm" onClick={() => void submit()} disabled={!canSubmit}>
+                <Send className="size-4 mr-2" />
+                {saving ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save Invoice' : 'Create Invoice'}
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className={INVOICE_DIALOG_CONTENT_CLASS}>
+          <InvoiceDialogHeader icon={Eye} title="Invoice preview" description="How the invoice will look once saved. Nothing has been saved yet." />
+          <div className="bg-muted/30 p-4 sm:p-6">
+            {previewOpen ? (
+              <InvoiceDocument
+                printId="invoice-preview"
+                invoice={buildPreviewInvoice({
+                  original,
+                  profile,
+                  client:
+                    billTo === 'client'
+                      ? clients.find((c) => String(c.id) === clientId)
+                      : selectedSite?.client_id != null
+                        ? clients.find((c) => c.id === selectedSite.client_id)
+                        : undefined,
+                  site: billTo === 'site' ? selectedSite : undefined,
+                  account: bankOptions.find((o) => o.value === bankId)?.account,
+                  fields: {
+                    invoice_number: invoiceNumber.trim() || null,
+                    invoice_date: invoiceDate || null,
+                    due_date: dueDate || null,
+                    period_start: periodStart,
+                    period_end: periodEnd,
+                    po_number: po.trim() || null,
+                    notes: notes.trim() || null,
+                    rota_review: rotaReview.trim() || null,
+                    tax_rate: parseFloat(taxRate) || 0,
+                    currency,
+                    status,
+                  },
+                  lines: lines.filter((l) => !isBlankLine(l)),
+                  sites,
+                  forcedSite,
+                })}
+              />
+            ) : null}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+                <Pencil className="size-4 mr-2" />
+                Back to editing
+              </Button>
+              <Button
+                onClick={() => {
+                  setPreviewOpen(false);
+                  void submit();
+                }}
+                disabled={!canSubmit}
+              >
+                <Send className="size-4 mr-2" />
+                {isEdit ? 'Save Invoice' : 'Create Invoice'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
+}
+
+/**
+ * An Invoice built from the unsaved form, shaped like the server's, for the preview.
+ * Company details come from the saved invoice when editing, else the company profile.
+ */
+function buildPreviewInvoice({
+  original,
+  profile,
+  client,
+  site,
+  account,
+  fields,
+  lines,
+  sites,
+  forcedSite,
+}: {
+  original: Invoice | null;
+  profile: CompanyProfile | null;
+  client?: Client;
+  site?: Site;
+  account?: CompanyBankAccount | ClientBankAccount;
+  fields: {
+    invoice_number: string | null;
+    invoice_date: string | null;
+    due_date: string | null;
+    period_start: string;
+    period_end: string;
+    po_number: string | null;
+    notes: string | null;
+    rota_review: string | null;
+    tax_rate: number;
+    currency: string;
+    status: string;
+  };
+  lines: FormLine[];
+  sites: Site[];
+  forcedSite?: string;
+}): Invoice {
+  const now = new Date().toISOString();
+  const siteName = new Map(sites.map((s) => [String(s.id), s.name]));
+  const previewLines: InvoiceLine[] = lines.map((l, i) => {
+    const siteId = forcedSite || l.site_id;
+    return {
+      id: -(i + 1),
+      invoice_id: original?.id ?? 0,
+      site_id: siteId ? parseInt(siteId, 10) : (null as unknown as number),
+      guard_id: l.guard_id ? parseInt(l.guard_id, 10) : undefined,
+      shift_date: l.shift_date || null,
+      shift_start: l.shift_start || null,
+      shift_end: l.shift_end || null,
+      description: l.description.trim() || null,
+      service_detail: l.service_detail.trim() || null,
+      quantity: parseFloat(l.quantity) || 1,
+      hours: parseFloat(l.hours) || 0,
+      rate: parseFloat(l.rate) || 0,
+      amount: lineAmount(l),
+      allowance_amount: l.allowance || 0,
+      created_at: now,
+      site_name: (siteId && siteName.get(siteId)) || l.site_name || null,
+    };
+  });
+  const subtotal = Math.round(previewLines.reduce((n, l) => n + l.amount, 0) * 100) / 100;
+  const tax = Math.round(subtotal * fields.tax_rate) / 100;
+  const companyAddress = (() => {
+    const a = (profile?.address || '').trim();
+    const pc = (profile?.postcode || '').trim();
+    if (pc && !a.replace(/\s/g, '').toUpperCase().includes(pc.replace(/\s/g, '').toUpperCase())) return a ? `${a}, ${pc}` : pc;
+    return a;
+  })();
+  // Who it is billed to: the client, else the site standing in for one.
+  const bill = original
+    ? {
+        client_name: original.client_name,
+        client_email: original.client_email,
+        client_phone: original.client_phone,
+        client_address: original.client_address,
+        client_town: original.client_town,
+        client_postcode: original.client_postcode,
+        client_contact_person: original.client_contact_person,
+      }
+    : client
+      ? {
+          client_name: client.name,
+          client_email: client.email,
+          client_phone: client.phone,
+          client_address: client.address,
+          client_town: client.town,
+          client_postcode: client.postcode,
+          client_contact_person: client.contact_person,
+        }
+      : {
+          client_name: site?.name,
+          client_email: site?.contact_email,
+          client_phone: site?.contact_phone,
+          client_address: site?.address,
+          client_town: site?.town,
+          client_postcode: site?.postcode,
+          client_contact_person: site?.contact_person,
+        };
+  const bank = account
+    ? account
+    : original
+      ? original
+      : profile;
+  return {
+    id: original?.id ?? 0,
+    company_id: original?.company_id ?? profile?.id ?? 0,
+    client_id: original?.client_id ?? client?.id ?? null,
+    period_start: fields.period_start,
+    period_end: fields.period_end,
+    invoice_date: fields.invoice_date,
+    due_date: fields.due_date,
+    invoice_number: fields.invoice_number ?? original?.invoice_number ?? 'Not numbered yet',
+    po_number: fields.po_number,
+    notes: fields.notes,
+    rota_review: fields.rota_review,
+    tax_rate: fields.tax_rate,
+    subtotal,
+    tax_amount: tax,
+    total: Math.round((subtotal + tax) * 100) / 100,
+    currency: fields.currency,
+    status: original ? fields.status : 'draft',
+    created_at: original?.created_at ?? now,
+    company_name: original?.company_name ?? profile?.name,
+    company_email: original?.company_email ?? profile?.email,
+    company_phone: original?.company_phone ?? profile?.phone,
+    company_address: original?.company_address ?? (companyAddress || null),
+    company_website: original?.company_website ?? profile?.website,
+    company_registration_number: original?.company_registration_number ?? profile?.registration_number,
+    company_vat_number: original?.company_vat_number ?? profile?.vat_number,
+    company_logo_url: original?.company_logo_url ?? profile?.logo_url,
+    account_name: bank?.account_name,
+    bank_name: bank?.bank_name,
+    sort_code: bank?.sort_code,
+    account_number: bank?.account_number,
+    iban: bank?.iban,
+    swift_code: bank?.swift_code,
+    ...bill,
+    lines: previewLines,
+    amount_paid: original?.amount_paid ?? 0,
+    credit_applied: original?.credit_applied ?? 0,
+    column_headers: original?.column_headers ?? null,
+  };
 }
 
 export function CurrencySelect({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {

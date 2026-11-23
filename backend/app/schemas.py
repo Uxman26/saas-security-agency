@@ -1716,6 +1716,9 @@ class InvoiceCreate(InvoiceBase):
     period_start: Optional[date] = None
     period_end: Optional[date] = None
     lines: Optional[list[InvoiceLineBase]] = None
+    # Pay into one of the company's own bank accounts (Company → Bank accounts) instead
+    # of a client account. Takes precedence over client_bank_account_id.
+    company_bank_account_id: Optional[int] = None
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
@@ -1725,6 +1728,7 @@ class InvoiceUpdate(BaseModel):
     notes: Optional[str] = None
     rota_review: Optional[str] = None
     client_bank_account_id: Optional[int] = None
+    company_bank_account_id: Optional[int] = None
     tax_rate: Optional[float] = None
     status: Optional[str] = None
     period_start: Optional[date] = None

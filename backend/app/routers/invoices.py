@@ -63,6 +63,22 @@ def _site_stand_in_name(inv: Invoice, db: Session | None = None) -> Optional[str
     return None
 
 
+def _bill_site(inv: Invoice, db: Session | None = None):
+    """The site a client-less invoice is addressed to: its billed site, else its first line's."""
+    from app.models import Site
+
+    site_id = getattr(inv, "billed_site_id", None)
+    if site_id and db is not None:
+        row = db.query(Site).filter(Site.id == site_id).first()
+        if row:
+            return row
+    for ln in sorted(inv.lines, key=lambda x: x.id):
+        site = getattr(ln, "site", None)
+        if site:
+            return site
+    return None
+
+
 def _shift_timing(ln: InvoiceLine) -> Optional[str]:
     start = (ln.shift_start or "").strip()
     end = (ln.shift_end or "").strip()
@@ -108,6 +124,8 @@ def _serialize_invoice(
             )
     co = inv.company
     cl = inv.client
+    # No client: the site's own address and contacts go under "Bill to" (as on the PDF).
+    bs = _bill_site(inv, db) if cl is None and include_lines else None
     admin = None
     if db and co:
         admin = db.query(User).filter(User.id == co.admin_id).first()
@@ -239,12 +257,12 @@ def _serialize_invoice(
         account_number=account_number,
         iban=iban,
         swift_code=swift_code,
-        client_email=cl.email if cl else None,
-        client_phone=cl.phone if cl else None,
-        client_address=cl.address if cl else None,
-        client_town=getattr(cl, "town", None) if cl else None,
-        client_postcode=cl.postcode if cl else None,
-        client_contact_person=cl.contact_person if cl else None,
+        client_email=cl.email if cl else (bs.contact_email if bs else None),
+        client_phone=cl.phone if cl else (bs.contact_phone if bs else None),
+        client_address=cl.address if cl else (bs.address if bs else None),
+        client_town=getattr(cl, "town", None) if cl else (bs.town if bs else None),
+        client_postcode=cl.postcode if cl else (bs.postcode if bs else None),
+        client_contact_person=cl.contact_person if cl else (bs.contact_person if bs else None),
         lines=lines_out,
         amount_paid=paid,
         credit_applied=credited,

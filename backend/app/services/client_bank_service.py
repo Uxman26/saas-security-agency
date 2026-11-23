@@ -166,3 +166,14 @@ def apply_account_to_invoice(db: Session, inv, account: Optional[ClientBankAccou
         inv.payee_account_number = company.account_number
         inv.payee_iban = company.iban
         inv.payee_swift_code = company.swift_code
+
+
+def apply_company_account_to_invoice(inv, account) -> None:
+    """Pay the invoice into one of the company's own bank accounts."""
+    inv.client_bank_account_id = None
+    inv.payee_account_name = account.account_name
+    inv.payee_bank_name = account.bank_name
+    inv.payee_sort_code = account.sort_code
+    inv.payee_account_number = account.account_number
+    inv.payee_iban = account.iban
+    inv.payee_swift_code = account.swift_code

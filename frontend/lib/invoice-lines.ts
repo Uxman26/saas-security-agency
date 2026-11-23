@@ -102,7 +102,8 @@ export function groupInvoiceLines(lines: InvoiceLine[]): InvoiceDayRow[] {
       description: ln.description ?? ((ln.allowance_amount ?? 0) > 0 ? 'Allowance' : 'Charge'),
       siteNames: ln.site_name ? [ln.site_name] : [],
       timings: [lineTiming(ln)].filter((t): t is string => !!t),
-      operatives: null,
+      // A hand-entered line's Qty is the number of staff; a bare allowance has none.
+      operatives: (ln.hours || ln.rate) ? Number(ln.quantity) || 1 : null,
       hours: ln.hours || 0,
       rate: ln.rate ? Number(ln.rate) : null,
       rateIsBlended: false,

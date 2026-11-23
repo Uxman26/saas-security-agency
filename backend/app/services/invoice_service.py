@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload, noload
 from fastapi import HTTPException
 from typing import List, Optional, Any, Dict
 from app.authz import assert_owned_by_company
-from app.models import Allowance, AuditLog, Client, ClientBankAccount, CreditNote, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
+from app.models import Allowance, AuditLog, Client, ClientBankAccount, CompanyBankAccount, CreditNote, Guard, Invoice, InvoiceLine, Payment, RotaPlan, Site, User
 from app.services.invoice_currency import normalize_invoice_currency
 from app.services.invoice_payment_service import invoice_amount_paid
 from app.schemas import InvoiceCreate, InvoiceLineBase, InvoiceUpdate, InvoiceLineUpdate
@@ -259,6 +259,17 @@ def log_invoice_audit(
     )
 
 
+def _company_bank_account(db: Session, company_id: int, account_id: int) -> CompanyBankAccount:
+    row = (
+        db.query(CompanyBankAccount)
+        .filter(CompanyBankAccount.id == account_id, CompanyBankAccount.company_id == company_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    return row
+
+
 def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     from datetime import date as date_cls
     from app.services import client_bank_service
@@ -283,6 +294,7 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
         if not client:
             raise HTTPException(status_code=404, detail="Client not found")
     bank_account_id = payload.pop("client_bank_account_id", None)
+    company_account_id = payload.pop("company_bank_account_id", None)
     payload["currency"] = normalize_invoice_currency(payload.get("currency"))
     payload["invoice_number"] = clean_invoice_number(db, company.id, payload.get("invoice_number"))
     payload["billed_site_id"] = invoice_site.id if invoice_site is not None else None
@@ -326,7 +338,11 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
     if not inv.subtotal and inv.total:
         inv.subtotal = inv.total
     account = None
-    if bank_account_id and client:
+    if company_account_id:
+        client_bank_service.apply_company_account_to_invoice(
+            inv, _company_bank_account(db, company.id, company_account_id)
+        )
+    elif bank_account_id and client:
         account = (
             db.query(ClientBankAccount)
             .filter(
@@ -340,7 +356,8 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
             raise HTTPException(status_code=404, detail="Bank account not found")
     elif client:
         account = client_bank_service.get_default_account(db, client.id, company.id)
-    client_bank_service.apply_account_to_invoice(db, inv, account=account, company=company if not account else None)
+    if not company_account_id:
+        client_bank_service.apply_account_to_invoice(db, inv, account=account, company=company if not account else None)
     db.add(inv)
     db.flush()
     for ld in lines_data:
@@ -542,6 +559,7 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
 
     before = {k: _snap(getattr(inv, k)) for k in payload.keys() if hasattr(inv, k)}
     bank_account_id = payload.pop("client_bank_account_id", None) if "client_bank_account_id" in payload else ...
+    company_account_id = payload.pop("company_bank_account_id", None)
     headers = payload.pop("column_headers", None) if "column_headers" in payload else ...
     if "invoice_number" in payload:
         payload["invoice_number"] = clean_invoice_number(db, company.id, payload["invoice_number"], exclude_id=inv.id)
@@ -551,7 +569,11 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
     if headers is not ...:
         import json
         inv.column_headers_json = json.dumps(headers) if headers is not None else None
-    if bank_account_id is not ...:
+    if company_account_id:
+        client_bank_service.apply_company_account_to_invoice(
+            inv, _company_bank_account(db, company.id, company_account_id)
+        )
+    elif bank_account_id is not ...:
         if bank_account_id is None:
             client_bank_service.apply_account_to_invoice(db, inv, account=None, company=company)
         else:
@@ -576,7 +598,12 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
         user_id,
         inv.id,
         "invoice_updated",
-        {"before": before, "fields": list(payload.keys()) + (["client_bank_account_id"] if bank_account_id is not ... else [])},
+        {
+            "before": before,
+            "fields": list(payload.keys())
+            + (["client_bank_account_id"] if bank_account_id is not ... else [])
+            + (["company_bank_account_id"] if company_account_id else []),
+        },
     )
     db.commit()
     return inv
@@ -1119,6 +1146,11 @@ def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
     src = get_invoice(db, invoice_id, user_id)
     company = get_company_by_user_id(db, user_id)
     billed_site_id = getattr(src, "billed_site_id", None)
+    # The copy is for the next period of the same length (a weekly invoice becomes next
+    # week's), and dated lines move with it, so it is not a second bill for the same work.
+    shift = timedelta(0)
+    if src.period_start and src.period_end and src.period_end >= src.period_start:
+        shift = timedelta(days=(src.period_end - src.period_start).days + 1)
     number, _ = next_invoice_number(db, company.id, client_id=src.client_id, site_id=billed_site_id)
     today = date.today()
     due = src.due_date
@@ -1131,8 +1163,8 @@ def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
         billed_site_id=billed_site_id,
         client_bank_account_id=src.client_bank_account_id,
         invoice_number=number,
-        period_start=src.period_start,
-        period_end=src.period_end,
+        period_start=src.period_start + shift if src.period_start else None,
+        period_end=src.period_end + shift if src.period_end else None,
         invoice_date=today,
         due_date=due,
         po_number=src.po_number,
@@ -1160,7 +1192,7 @@ def duplicate_invoice(db: Session, invoice_id: int, user_id: int) -> Invoice:
                 invoice_id=inv.id,
                 site_id=ln.site_id,
                 guard_id=ln.guard_id,
-                shift_date=ln.shift_date,
+                shift_date=ln.shift_date + shift if ln.shift_date else None,
                 shift_start=ln.shift_start,
                 shift_end=ln.shift_end,
                 description=ln.description,

@@ -139,7 +139,8 @@ def _group_lines_by_day(lines, site_map) -> list:
                 "shift_date": None,
                 "label": label,
                 "site_names": [site_map[ln.site_id].name] if ln.site_id in site_map else [],
-                "operatives": 0,
+                # A hand-entered line's Qty is the number of staff; a bare allowance has none.
+                "operatives": int(float(ln.quantity or 1)) if (ln.hours or ln.rate) else 0,
                 "hours": round(float(ln.hours or 0), 2),
                 "rate": float(ln.rate) if ln.rate else None,
                 "rate_is_blended": False,
@@ -220,7 +221,9 @@ def render_invoice_pdf(
     # An invoice raised against a site that belongs to no client has no customer record.
     # The site's own name and contact details are what the bill is addressed to instead.
     bill_site = None
-    if client is None:
+    if client is None and getattr(inv, "billed_site_id", None):
+        bill_site = db.query(Site).filter(Site.id == inv.billed_site_id).first()
+    if client is None and bill_site is None:
         for ln in lines:
             if getattr(ln, "site", None):
                 bill_site = ln.site
@@ -265,8 +268,10 @@ def render_invoice_pdf(
         ["Invoice Number:", (getattr(inv, "invoice_number", None) or f"#{inv.id}")],
         ["Invoice Date:", _long_date(inv_date)],
         ["Payment Due:", _long_date(inv.due_date)],
-        ["Purchase Order:", (getattr(inv, "po_number", None) or "").strip()],
     ]
+    po_number = (getattr(inv, "po_number", None) or "").strip()
+    if po_number:
+        meta_rows.append(["Purchase Order:", po_number])
     t_meta_inner = Table(meta_rows, colWidths=[3.4 * cm, 4.6 * cm])
     t_meta_inner.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
@@ -376,19 +381,20 @@ def render_invoice_pdf(
         ])
     if len(data) == 1:
         data.append([Paragraph("No line items", cell_muted), "", "", "", "", ""])
-    t_lines = Table(
-        data,
-        colWidths=[4.6 * cm, 2.4 * cm, 2.2 * cm, 3.0 * cm, 2.6 * cm, 3.2 * cm],
-        repeatRows=1,
-    )
+    col_widths = [4.6 * cm, 2.4 * cm, 2.2 * cm, 3.0 * cm, 2.6 * cm, 3.2 * cm]
+    # No line has start/end times: leave the Timings column out instead of a column of dashes.
+    if not any((r.get("timing") or "—") != "—" for r in rows):
+        data = [row[:3] + row[4:] for row in data]
+        col_widths = [6.0 * cm, 2.8 * cm, 2.6 * cm, 2.8 * cm, 3.8 * cm]
+    t_lines = Table(data, colWidths=col_widths, repeatRows=1)
     style_cmds = [
         ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
         ("TEXTCOLOR", (1, 1), (-1, -1), DARK),
-        ("ALIGN", (1, 0), (4, -1), "CENTER"),
-        ("ALIGN", (5, 0), (5, -1), "RIGHT"),
+        ("ALIGN", (1, 0), (-2, -1), "CENTER"),
+        ("ALIGN", (-1, 0), (-1, -1), "RIGHT"),
         ("LINEBELOW", (0, 1), (-1, -1), 0.4, LINE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 8),

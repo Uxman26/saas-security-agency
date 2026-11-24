@@ -11,6 +11,7 @@ import type { CreditNote, Invoice, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { localDateKey } from '@/lib/date-format';
+import { invoiceLabel } from '@/lib/invoice-utils';
 
 type Props = {
   open: boolean;
@@ -114,7 +115,7 @@ export function CreditNoteDialog({ open, onOpenChange, invoice, editing, onSaved
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? `Edit ${editing.number}` : `Credit note for Invoice #${invoice.id}`}</DialogTitle>
+          <DialogTitle>{editing ? `Edit ${editing.number}` : `Credit note for Invoice ${invoiceLabel(invoice)}`}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
           <p className="text-sm text-muted-foreground">

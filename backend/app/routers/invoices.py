@@ -34,6 +34,7 @@ from app.services.invoice_payment_service import (
     invoice_balance_due,
 )
 from app.services.company_profile_service import company_logo_url
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -209,7 +210,7 @@ def _serialize_invoice(
                     status=cn.status,
                     created_at=cn.created_at,
                     updated_at=cn.updated_at,
-                    invoice_number=inv.invoice_number or f"INV-{cn.invoice_id}",
+                    invoice_number=invoice_no(inv),
                     client_name=cl.name if cl else None,
                     site_name=cn.site.name if getattr(cn, "site", None) else None,
                 )
@@ -224,6 +225,7 @@ def _serialize_invoice(
         id=inv.id,
         company_id=inv.company_id,
         client_id=inv.client_id,
+        billed_site_id=getattr(inv, "billed_site_id", None),
         period_start=inv.period_start,
         period_end=inv.period_end,
         invoice_date=inv.invoice_date or (inv.created_at.date() if inv.created_at else None),
@@ -469,7 +471,7 @@ def invoice_pdf(
     return Response(
         content=body,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="invoice-{invoice_id}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{invoice_filename(inv)}"'},
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 from typing import Any
 
 from sqlalchemy import String, cast, or_
@@ -253,6 +254,7 @@ def tenant_search(db: Session, user: User, q: str, *, limit: int = 8) -> dict:
     if _can(db, user, "invoices") and not is_portal_role(user):
         iq = db.query(Invoice).filter(Invoice.company_id == cid, Invoice.deleted_at.is_(None))
         filters = [
+            Invoice.invoice_number.ilike(like, escape="\\"),
             Invoice.po_number.ilike(like, escape="\\"),
             Invoice.notes.ilike(like, escape="\\"),
             Invoice.status.ilike(like, escape="\\"),
@@ -269,7 +271,7 @@ def tenant_search(db: Session, user: User, q: str, *, limit: int = 8) -> dict:
             [
                 _hit(
                     i.id,
-                    f"Invoice #{i.id}",
+                    invoice_label(i),
                     f"/invoices/{i.id}/view",
                     (i.client.name if i.client else None) or (i.po_number and f"PO {i.po_number}") or i.status,
                 )
@@ -647,7 +649,7 @@ def tenant_search(db: Session, user: User, q: str, *, limit: int = 8) -> dict:
                     p.id,
                     f"Payment #{p.id}",
                     "/payments",
-                    f"Invoice #{p.invoice_id} · £{float(p.amount or 0):,.2f}",
+                    f"{invoice_label(p.invoice) if p.invoice else f'Invoice #{p.invoice_id}'} · £{float(p.amount or 0):,.2f}",
                 )
                 for p in payments
             ],

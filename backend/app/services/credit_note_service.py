@@ -12,6 +12,7 @@ from app.services.company_service import get_company_by_user_id
 from app.services.invoice_payment_service import sync_invoice_payment_status
 from app.services.invoice_service import log_invoice_audit
 from app.services.recycle_bin import archive as _bin_archive
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 ISSUED = "issued"
 DRAFT = "draft"
@@ -92,7 +93,7 @@ def _serialize(cn: CreditNote) -> dict:
         "status": cn.status,
         "created_at": cn.created_at,
         "updated_at": cn.updated_at,
-        "invoice_number": f"INV-{cn.invoice_id}" if cn.invoice_id else None,
+        "invoice_number": invoice_no(inv) if inv else None,
         "client_name": client.name if client else (inv.client.name if inv and inv.client else None),
         "site_name": site.name if site else None,
     }

@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session, with_loader_criteria
 
 from app import models
 from app.services import soft_delete
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 
 @dataclass(frozen=True)
@@ -118,7 +119,7 @@ RESOURCES: tuple[BinResource, ...] = (
     ),
     BinResource(
         "invoices", "Invoice", "Invoices", models.Invoice, "invoices",
-        lambda r: f"Invoice #{r.id}",
+        lambda r: invoice_label(r),
         lambda r: f"{getattr(r, 'period_start', '')} – {getattr(r, 'period_end', '')}".strip(" –") or None,
     ),
     BinResource(

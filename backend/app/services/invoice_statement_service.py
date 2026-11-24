@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import Client, Invoice, Site
 from app.services.company_service import get_company_by_user_id
 from app.services.credit_note_service import ACTIVE_STATUSES
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 
 def _as_date(v) -> Optional[date]:
@@ -164,7 +165,7 @@ def build_statement(
                     {
                         "date": p_date.isoformat(),
                         "kind": "payment",
-                        "item": f"Payment made for Invoice #{inv.id}",
+                        "item": f"Payment made for {invoice_label(inv)}",
                         "invoice_id": inv.id,
                         "amount": -round(p_amt, 2),
                         "method": p.method,
@@ -193,7 +194,7 @@ def build_statement(
                     {
                         "date": c_date.isoformat(),
                         "kind": "credit",
-                        "item": f"Credit note {cn.number} for Invoice #{inv.id}",
+                        "item": f"Credit note {cn.number} for {invoice_label(inv)}",
                         "invoice_id": inv.id,
                         "amount": -round(c_amt, 2),
                         "method": cn.reason,
@@ -209,7 +210,7 @@ def build_statement(
                 {
                     "date": inv_date.isoformat(),
                     "kind": "invoice",
-                    "item": f"Invoice #{inv.id}",
+                    "item": invoice_label(inv),
                     "invoice_id": inv.id,
                     "due_date": due,
                     "period_start": inv.period_start.isoformat() if inv.period_start else None,
@@ -321,7 +322,7 @@ def _build_outstanding(*, company, client, site, invoices, site_id, date_from, d
             {
                 "date": item_date.isoformat(),
                 "kind": "invoice",
-                "item": f"Invoice #{inv.id} (outstanding)",
+                "item": f"{invoice_label(inv)} (outstanding)",
                 "invoice_id": inv.id,
                 "due_date": due,
                 "period_start": inv.period_start.isoformat() if inv.period_start else None,

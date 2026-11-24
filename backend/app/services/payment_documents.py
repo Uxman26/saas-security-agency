@@ -18,6 +18,7 @@ from app.models import Company, Expense, Invoice, Payment, User
 from app.services.invoice_currency import INVOICE_CURRENCIES
 from app.services.invoice_pdf import _company_contact, _long_date
 from app.services.invoice_payment_service import invoice_balance_due
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 GREEN = "#15803D"
 AMBER = "#B45309"
@@ -172,7 +173,7 @@ def _billed_party(inv: Invoice) -> tuple[str, str]:
 
 
 def receipt_filename(inv: Invoice) -> str:
-    return f"receipt-invoice-{inv.id}.pdf"
+    return invoice_filename(inv, "Receipt")
 
 
 def remittance_filename(exp: Expense) -> str:
@@ -219,7 +220,7 @@ def render_invoice_receipt(db: Session, inv: Invoice) -> bytes:
             company=company,
             admin=admin,
             title="Payment Receipt",
-            reference=f"Invoice #{inv.id}",
+            reference=invoice_label(inv),
             party_line=f"for {_billed_party(inv)[0]}",
             party_detail="",
             paid_on=payments[-1].paid_at,
@@ -295,9 +296,9 @@ def send_invoice_receipt(db: Session, invoice_id: int, user_id: int, to: Optiona
         raise HTTPException(status_code=400, detail="There is no email address on record. Enter one to send the receipt.")
     code = (inv.currency or "GBP").upper()
     received = round(sum(float(p.amount or 0) for p in _invoice_payments(db, inv)), 2)
-    body = _email_body(inv.company, "payment_receipt", {"invoice_id": inv.id, "amount": _money(received, code)})
+    body = _email_body(inv.company, "payment_receipt", {"invoice_id": invoice_no(inv), "invoice_number": invoice_no(inv), "amount": _money(received, code)})
     email_config_service.send_tenant_email(
-        db, user_id, recipient, f"Payment receipt — invoice #{inv.id}", body, "payment_receipt",
+        db, user_id, recipient, f"Payment receipt — {invoice_label(inv)}", body, "payment_receipt",
         [(receipt_filename(inv), pdf)],
     )
     invoice_service.log_invoice_audit(db, inv.company_id, user_id, inv.id, "receipt_sent", {"recipient": recipient})

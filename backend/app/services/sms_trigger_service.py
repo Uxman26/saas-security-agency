@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import Assignment, Client, Guard, Invoice, Site
 from app.services import sms_service
 from app.services.company_service import get_company_by_user_id
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 
 def _guard_phone(guard: Guard) -> Optional[str]:
@@ -69,7 +70,8 @@ def notify_invoice_sent(db: Session, user_id: int, inv: Invoice) -> None:
         user_id,
         _client_phone(client),
         "invoice_sent",
-        invoice_id=inv.id,
+        invoice_id=invoice_no(inv),
+        invoice_number=invoice_no(inv),
         amount=f"£{float(inv.total or 0):.2f}",
         due_date=str(inv.due_date or ""),
     )
@@ -84,6 +86,7 @@ def notify_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: fl
         user_id,
         _client_phone(client),
         "payment_reminder",
-        invoice_id=inv.id,
+        invoice_id=invoice_no(inv),
+        invoice_number=invoice_no(inv),
         amount=f"£{balance:.2f}",
     )

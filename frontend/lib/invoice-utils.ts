@@ -70,6 +70,12 @@ export function formatDueDate(due?: string | null): string {
   return formatDateUK(due) || '—';
 }
 
+/** Download name for an invoice PDF: "Invoice-XSBH001.pdf" (the id only when it has no number). */
+export function invoiceFilename(inv: Pick<Invoice, 'id' | 'invoice_number'>, prefix = 'Invoice'): string {
+  const n = (inv.invoice_number ?? '').trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  return `${prefix}-${n || inv.id}.pdf`;
+}
+
 /** The number to show for an invoice: the one typed in, else "#<id>". */
 export function invoiceLabel(inv: Pick<Invoice, 'id' | 'invoice_number'>): string {
   const n = (inv.invoice_number ?? '').trim();

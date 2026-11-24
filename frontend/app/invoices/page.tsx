@@ -21,7 +21,7 @@ import { Building2, CalendarDays, Clock, Coffee, Filter, PoundSterling, Users, F
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
-import { canSendInvoiceReminder, formatDueCountdown, invoiceLabel, isInvoiceOpen, isInvoiceOverdue, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
+import { canSendInvoiceReminder, formatDueCountdown, invoiceFilename, invoiceLabel, isInvoiceOpen, isInvoiceOverdue, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
@@ -366,13 +366,13 @@ export default function InvoicesPage() {
     }, { label: 'Delete', description: 'This cannot be undone.' });
   };
 
-  const downloadPdf = async (id: number) => {
+  const downloadPdf = async (inv: Invoice) => {
     try {
-      const blob = await api.invoices.pdf(id);
+      const blob = await api.invoices.pdf(inv.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `invoice-${id}.pdf`;
+      a.download = invoiceFilename(inv);
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -540,7 +540,7 @@ export default function InvoicesPage() {
   };
 
   const handleMarkUnsent = (inv: Invoice) => {
-    toast.confirm(`Mark invoice #${inv.id} as unsent?`, () => applyStatusChange(inv, 'draft'), {
+    toast.confirm(`Mark invoice ${invoiceLabel(inv)} as unsent?`, () => applyStatusChange(inv, 'draft'), {
       label: 'Mark as unsent',
       description: 'It goes back to Draft and comes out of the accounts until it is sent again. The client is not notified.',
     });
@@ -549,7 +549,7 @@ export default function InvoicesPage() {
   const handleRevertPayments = (inv: Invoice) => {
     const paid = inv.amount_paid ?? 0;
     toast.confirm(
-      `Revert ${paid > 0 ? `£${paid.toFixed(2)} of ` : ''}payments on invoice #${inv.id}?`,
+      `Revert ${paid > 0 ? `£${paid.toFixed(2)} of ` : ''}payments on invoice ${invoiceLabel(inv)}?`,
       async () => {
         try {
           await api.invoices.revertPayments(inv.id);
@@ -678,16 +678,16 @@ export default function InvoicesPage() {
 
   const openSendReceipt = (inv: Invoice) =>
     setSendRequest({
-      title: `Receipt for invoice #${inv.id}`,
+      title: `Receipt for invoice ${invoiceLabel(inv)}`,
       description: 'Check the receipt, then email it to the customer as a PDF, download it or print it.',
       email: inv.client_email,
       send: (to) => api.invoices.sendReceipt(inv.id, to),
-      pdf: { load: () => api.invoices.receiptPdf(inv.id), filename: `receipt-invoice-${inv.id}.pdf` },
+      pdf: { load: () => api.invoices.receiptPdf(inv.id), filename: invoiceFilename(inv, 'Receipt') },
     });
 
   const downloadReceipt = async (inv: Invoice) => {
     try {
-      downloadBlob(await api.invoices.receiptPdf(inv.id), `receipt-invoice-${inv.id}.pdf`);
+      downloadBlob(await api.invoices.receiptPdf(inv.id), invoiceFilename(inv, 'Receipt'));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not download the receipt');
     }
@@ -752,7 +752,7 @@ export default function InvoicesPage() {
       onSelect: () => setEditInvoiceId(inv.id),
       disabled: !can(user, 'invoices.write'),
     },
-    { label: 'Download PDF', icon: Download, onSelect: () => void downloadPdf(inv.id) },
+    { label: 'Download PDF', icon: Download, onSelect: () => void downloadPdf(inv) },
     {
       label: 'Record payment',
       icon: CreditCard,
@@ -1382,7 +1382,7 @@ export default function InvoicesPage() {
                 return (
                   <div className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                      Invoice #{payInvoice.id} — balance {formatGbp(balance, payInvoice.currency)}
+                      Invoice {invoiceLabel(payInvoice)} — balance {formatGbp(balance, payInvoice.currency)}
                     </p>
                     <div className="space-y-1">
                       <Label htmlFor="pay-date">Date</Label>

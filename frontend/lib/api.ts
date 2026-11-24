@@ -1401,6 +1401,9 @@ export const api = {
         rota_review?: string | null;
         client_bank_account_id?: number | null;
         company_bank_account_id?: number;
+        client_id?: number;
+        site_id?: number;
+        currency?: string;
         tax_rate?: number;
         status?: string;
         period_start?: string;

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -279,7 +280,7 @@ def post_invoice_issued(db: Session, company_id: int, invoice: Invoice) -> None:
         db,
         company_id,
         entry_date=invoice.invoice_date or date.today(),
-        reference=f"INV-{invoice.id}",
+        reference=invoice_no(invoice) if invoice.invoice_number else f"INV-{invoice.id}",
         memo="Invoice issued",
         source_type="invoice",
         source_id=invoice.id,

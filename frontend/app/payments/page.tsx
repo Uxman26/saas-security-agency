@@ -34,6 +34,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { formatDateUK, localDateKey } from '@/lib/date-format';
 import { METHOD_LABELS, PAYMENT_METHODS } from '@/lib/payment-methods';
+import { invoiceFilename, invoiceLabel } from '@/lib/invoice-utils';
 
 
 export default function PaymentsPage() {
@@ -48,7 +49,11 @@ export default function PaymentsPage() {
   const [sendRequest, setSendRequest] = useState<SendDocumentRequest | null>(null);
   const downloadReceipt = async (invoiceId: number) => {
     try {
-      downloadBlob(await api.invoices.receiptPdf(invoiceId), `receipt-invoice-${invoiceId}.pdf`);
+      const linked = invoices.find((i) => i.id === invoiceId);
+      downloadBlob(
+        await api.invoices.receiptPdf(invoiceId),
+        linked ? invoiceFilename(linked, 'Receipt') : `Receipt-${invoiceId}.pdf`
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not download the receipt');
     }
@@ -372,7 +377,7 @@ export default function PaymentsPage() {
                           <SelectItem value="none">No invoice</SelectItem>
                           {invoices.map((inv) => (
                             <SelectItem key={inv.id} value={inv.id.toString()}>
-                              Invoice #{inv.id} — £{inv.total.toFixed(2)} ({inv.status})
+                              Invoice {invoiceLabel(inv)} — £{inv.total.toFixed(2)} ({inv.status})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -614,7 +619,7 @@ export default function PaymentsPage() {
                             <TableCell>
                               {inv ? (
                                 <span className="text-sm">
-                                  Invoice #{inv.id} <span className="text-muted-foreground">(£{inv.total.toFixed(2)})</span>
+                                  Invoice {invoiceLabel(inv)} <span className="text-muted-foreground">(£{inv.total.toFixed(2)})</span>
                                 </span>
                               ) : p.invoice_id ? (
                                 <span className="text-sm text-muted-foreground">Invoice #{p.invoice_id}</span>
@@ -688,11 +693,11 @@ export default function PaymentsPage() {
                                     title="Send receipt"
                                     onClick={() =>
                                       setSendRequest({
-                                        title: `Receipt for invoice #${p.invoice_id}`,
+                                        title: `Receipt for invoice ${inv ? invoiceLabel(inv) : `#${p.invoice_id}`}`,
                                         description: 'Check the receipt, then email it to the customer as a PDF, download it or print it.',
                                         email: inv?.client_email,
                                         send: (to) => api.invoices.sendReceipt(p.invoice_id!, to),
-                                        pdf: { load: () => api.invoices.receiptPdf(p.invoice_id!), filename: `receipt-invoice-${p.invoice_id}.pdf` },
+                                        pdf: { load: () => api.invoices.receiptPdf(p.invoice_id!), filename: inv ? invoiceFilename(inv, 'Receipt') : `Receipt-${p.invoice_id}.pdf` },
                                       })
                                     }
                                   >
@@ -802,7 +807,7 @@ export default function PaymentsPage() {
                     <SelectItem value="none">No invoice</SelectItem>
                     {invoices.map((inv) => (
                       <SelectItem key={inv.id} value={inv.id.toString()}>
-                        Invoice #{inv.id} — £{inv.total.toFixed(2)} ({inv.status})
+                        Invoice {invoiceLabel(inv)} — £{inv.total.toFixed(2)} ({inv.status})
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -659,11 +659,11 @@ export function InvoiceFormDialog({
         if (cancelled) return;
         const formLines = (inv.lines ?? []).map(fromServerLine);
         setOriginal(inv);
-        // An invoice with no client was raised for a site; its lines carry that site.
-        if (inv.client_id == null) {
+        // Raised for one site (or with no client): bill to that site.
+        if (inv.billed_site_id != null || inv.client_id == null) {
           setBillTo('site');
           setClientId('');
-          setSiteId(formLines.find((l) => l.site_id)?.site_id ?? '');
+          setSiteId(inv.billed_site_id != null ? String(inv.billed_site_id) : (formLines.find((l) => l.site_id)?.site_id ?? ''));
         } else {
           setBillTo('client');
           setClientId(String(inv.client_id));
@@ -697,6 +697,14 @@ export function InvoiceFormDialog({
   }, [open, invoiceId]);
 
   const selectedSite = useMemo(() => sites.find((s) => String(s.id) === siteId), [sites, siteId]);
+  /** Who the saved invoice is billed to, to tell whether the user changed it. */
+  const originalTarget = original
+    ? original.billed_site_id != null || original.client_id == null
+      ? `site:${original.billed_site_id ?? lines.find((l) => l.id != null && l.site_id)?.site_id ?? ''}`
+      : `client:${original.client_id}`
+    : '';
+  const currentTarget = billTo === 'site' ? `site:${siteId}` : `client:${clientId}`;
+  const customerChanged = isEdit && !!original && currentTarget !== originalTarget;
   // The client whose bank accounts apply: the chosen client, or the billed site's client.
   const bankClientId =
     billTo === 'client' ? clientId : selectedSite?.client_id != null ? String(selectedSite.client_id) : '';
@@ -734,7 +742,13 @@ export function InvoiceFormDialog({
   useEffect(() => {
     if (!open || loadingInvoice) return;
     if (isEdit) {
-      if (!original || bankId) return;
+      if (!original) return;
+      // Customer changed: an account of the old client no longer applies.
+      if (bankId.startsWith('cl:') && customerChanged && !bankOptions.some((o) => o.value === bankId)) {
+        setBankId('');
+        return;
+      }
+      if (bankId) return;
       const match = companyBanks.find(
         (b) =>
           (b.account_number || '') === (original.account_number || '') &&
@@ -756,7 +770,7 @@ export function InvoiceFormDialog({
       bankOptions[0]?.value ||
       '';
     if (pick !== bankId) setBankId(pick);
-  }, [open, isEdit, loadingInvoice, original, bankOptions, banks, companyBanks, bankId]);
+  }, [open, isEdit, loadingInvoice, original, bankOptions, banks, companyBanks, bankId, customerChanged]);
 
   const clientOptions = useMemo(() => clients.map((c) => ({ value: String(c.id), label: c.name })), [clients]);
   const siteBillOptions = useMemo(() => billToSiteOptions(sites, clients), [sites, clients]);
@@ -855,6 +869,12 @@ export function InvoiceFormDialog({
     const removed = [...originalSigs.current.keys()].filter((lid) => !keptIds.has(lid));
 
     await api.invoices.patch(id, {
+      ...(customerChanged
+        ? billTo === 'site'
+          ? { site_id: parseInt(siteId, 10) }
+          : { client_id: parseInt(clientId, 10) }
+        : {}),
+      ...(original && currency !== (original.currency || 'GBP') ? { currency } : {}),
       invoice_date: invoiceDate || null,
       due_date: dueDate || null,
       ...(periodStart ? { period_start: periodStart } : {}),
@@ -903,7 +923,8 @@ export function InvoiceFormDialog({
     !saving &&
     !loadingInvoice &&
     !(periodStart && periodEnd && periodStart > periodEnd) &&
-    (isEdit ? !!original : (billTo === 'client' ? !!clientId : !!siteId) && lines.some((l) => !isBlankLine(l)));
+    (billTo === 'client' ? !!clientId : !!siteId) &&
+    (isEdit ? !!original : lines.some((l) => !isBlankLine(l)));
 
   const title = isEdit ? `Edit Invoice ${original ? invoiceLabel(original) : `#${invoiceId}`}` : 'Create Custom Invoice';
 
@@ -926,12 +947,11 @@ export function InvoiceFormDialog({
             <InvoiceFormCard className="grid gap-4 sm:grid-cols-[1.4fr_1fr] sm:divide-x sm:divide-primary/15">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <InvoiceFieldLabel icon={billTo === 'client' ? Users : Building2} required={!isEdit}>
+                  <InvoiceFieldLabel icon={billTo === 'client' ? Users : Building2} required>
                     Invoice for
                   </InvoiceFieldLabel>
                   <BillToTabs
                     value={billTo}
-                    disabled={isEdit}
                     onChange={(v) => {
                       setBillTo(v);
                       setClientId('');
@@ -939,16 +959,7 @@ export function InvoiceFormDialog({
                     }}
                   />
                 </div>
-                {isEdit ? (
-                  <Input
-                    disabled
-                    value={
-                      billTo === 'client'
-                        ? original?.client_name || `Client #${original?.client_id}`
-                        : selectedSite?.name || original?.client_name || 'Site'
-                    }
-                  />
-                ) : billTo === 'client' ? (
+                {billTo === 'client' ? (
                   <SearchableSelect
                     value={clientId}
                     options={clientOptions}
@@ -1020,7 +1031,7 @@ export function InvoiceFormDialog({
               </div>
               <div className="space-y-1.5">
                 <InvoiceFieldLabel icon={PoundSterling}>Currency</InvoiceFieldLabel>
-                <CurrencySelect value={currency} onChange={setCurrency} disabled={isEdit} />
+                <CurrencySelect value={currency} onChange={setCurrency} />
               </div>
               <div className="space-y-1.5">
                 <InvoiceFieldLabel icon={Landmark}>Bank account</InvoiceFieldLabel>
@@ -1097,7 +1108,7 @@ export function InvoiceFormDialog({
                 variant="outline"
                 className="h-11 text-base shadow-sm sm:w-56"
                 onClick={() => setPreviewOpen(true)}
-                disabled={loadingInvoice || (isEdit ? !original : billTo === 'client' ? !clientId : !siteId)}
+                disabled={loadingInvoice || (isEdit && !original) || (billTo === 'client' ? !clientId : !siteId)}
               >
                 <Eye className="size-4 mr-2" />
                 Preview Invoice
@@ -1144,6 +1155,7 @@ export function InvoiceFormDialog({
                   lines: lines.filter((l) => !isBlankLine(l)),
                   sites,
                   forcedSite,
+                  customerChanged,
                 })}
               />
             ) : null}
@@ -1184,7 +1196,9 @@ function buildPreviewInvoice({
   lines,
   sites,
   forcedSite,
+  customerChanged,
 }: {
+  customerChanged?: boolean;
   original: Invoice | null;
   profile: CompanyProfile | null;
   client?: Client;
@@ -1239,7 +1253,7 @@ function buildPreviewInvoice({
     return a;
   })();
   // Who it is billed to: the client, else the site standing in for one.
-  const bill = original
+  const bill = original && !customerChanged
     ? {
         client_name: original.client_name,
         client_email: original.client_email,
@@ -1276,7 +1290,7 @@ function buildPreviewInvoice({
   return {
     id: original?.id ?? 0,
     company_id: original?.company_id ?? profile?.id ?? 0,
-    client_id: original?.client_id ?? client?.id ?? null,
+    client_id: customerChanged ? (client?.id ?? null) : (original?.client_id ?? client?.id ?? null),
     period_start: fields.period_start,
     period_end: fields.period_end,
     invoice_date: fields.invoice_date,

@@ -1729,6 +1729,11 @@ class InvoiceUpdate(BaseModel):
     rota_review: Optional[str] = None
     client_bank_account_id: Optional[int] = None
     company_bank_account_id: Optional[int] = None
+    # Re-bill the invoice to another client, or to a single site (every line then moves
+    # onto that site). Send one of the two.
+    client_id: Optional[int] = None
+    site_id: Optional[int] = None
+    currency: Optional[str] = None
     tax_rate: Optional[float] = None
     status: Optional[str] = None
     period_start: Optional[date] = None
@@ -1739,6 +1744,7 @@ class InvoiceResponse(InvoiceBase):
     id: int
     company_id: int
     client_id: Optional[int] = None
+    billed_site_id: Optional[int] = None
     pdf_path: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

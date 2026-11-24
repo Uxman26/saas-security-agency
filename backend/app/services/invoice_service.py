@@ -16,6 +16,7 @@ from app.services.rota_service import calc_shift_hours, normalize_shift_type
 from app.services.attendance_service import CANCELLED_PAID, CANCELLED_UNPAID, _company_zone
 from app.services.work_filters import resolve_work_scope
 from app.services.recycle_bin import archive as _bin_archive
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 
 DEFAULT_INVOICE_VAT_RATE = 20.0
@@ -558,6 +559,36 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
         return v
 
     before = {k: _snap(getattr(inv, k)) for k in payload.keys() if hasattr(inv, k)}
+    before["billed_site_id"] = getattr(inv, "billed_site_id", None)
+    new_client_id = payload.pop("client_id", None)
+    new_site_id = payload.pop("site_id", None)
+    if "currency" in payload:
+        cur = payload.pop("currency")
+        if cur:
+            inv.currency = normalize_invoice_currency(cur)
+    old_client_id = inv.client_id
+    if new_site_id:
+        site = db.query(Site).filter(Site.id == new_site_id, Site.company_id == company.id).first()
+        if not site:
+            raise HTTPException(status_code=404, detail="Site not found")
+        # Billed to a site: the invoice follows that site's client (or has none) and
+        # every line goes on the site, as when it is created that way.
+        inv.client_id = site.client_id
+        inv.billed_site_id = site.id
+        for ln in inv.lines:
+            ln.site_id = site.id
+    elif new_client_id:
+        client = db.query(Client).filter(Client.id == new_client_id, Client.company_id == company.id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="Client not found")
+        inv.client_id = client.id
+        inv.billed_site_id = None
+        # Lines on another client's site cannot stay on this client's bill.
+        for ln in inv.lines:
+            s = getattr(ln, "site", None)
+            if s is not None and s.client_id is not None and int(s.client_id) != int(client.id):
+                ln.site_id = None
+    customer_changed = inv.client_id != old_client_id
     bank_account_id = payload.pop("client_bank_account_id", None) if "client_bank_account_id" in payload else ...
     company_account_id = payload.pop("company_bank_account_id", None)
     headers = payload.pop("column_headers", None) if "column_headers" in payload else ...
@@ -573,6 +604,9 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
         client_bank_service.apply_company_account_to_invoice(
             inv, _company_bank_account(db, company.id, company_account_id)
         )
+    elif customer_changed and (bank_account_id is ... or bank_account_id is None) and inv.client_bank_account_id:
+        # The old client's account does not belong on the new customer's invoice.
+        client_bank_service.apply_account_to_invoice(db, inv, account=None, company=company)
     elif bank_account_id is not ...:
         if bank_account_id is None:
             client_bank_service.apply_account_to_invoice(db, inv, account=None, company=company)
@@ -602,7 +636,9 @@ def update_invoice(db: Session, invoice_id: int, data: InvoiceUpdate, user_id: i
             "before": before,
             "fields": list(payload.keys())
             + (["client_bank_account_id"] if bank_account_id is not ... else [])
-            + (["company_bank_account_id"] if company_account_id else []),
+            + (["company_bank_account_id"] if company_account_id else [])
+            + (["client_id"] if new_client_id else [])
+            + (["site_id"] if new_site_id else []),
         },
     )
     db.commit()
@@ -936,7 +972,7 @@ def generate_from_rota(
             raise HTTPException(
                 status_code=409,
                 detail=(
-                    f"Invoice #{existing.id} already covers this period "
+                    f"{invoice_label(existing)} already covers this period "
                     f"({period_start} to {period_end}). Generate another only if you meant to."
                 ),
             )

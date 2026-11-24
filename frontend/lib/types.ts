@@ -1865,6 +1865,8 @@ export interface Invoice {
   company_id: number;
   /** Null when the invoice was raised against a site that belongs to no client. */
   client_id: number | null;
+  /** The site the invoice is billed to, when it was raised for one site. */
+  billed_site_id?: number | null;
   client_bank_account_id?: number | null;
   period_start: string;
   period_end: string;

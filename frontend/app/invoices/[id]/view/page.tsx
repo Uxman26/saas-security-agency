@@ -21,7 +21,7 @@ import { toast } from '@/lib/toast';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { Pill } from '@/components/module-dashboard';
 import { formatDateUK } from '@/lib/date-format';
-import { invoiceLabel } from '@/lib/invoice-utils';
+import { invoiceFilename, invoiceLabel } from '@/lib/invoice-utils';
 
 export default function InvoiceViewPage() {
   const params = useParams();
@@ -76,7 +76,7 @@ export default function InvoiceViewPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `invoice-${id}.pdf`;
+      a.download = inv ? invoiceFilename(inv) : `Invoice-${id}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -88,7 +88,7 @@ export default function InvoiceViewPage() {
 
   const downloadReceipt = async () => {
     try {
-      downloadBlob(await api.invoices.receiptPdf(id), `receipt-invoice-${id}.pdf`);
+      downloadBlob(await api.invoices.receiptPdf(id), inv ? invoiceFilename(inv, 'Receipt') : `Receipt-${id}.pdf`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not download the receipt');
     }
@@ -162,11 +162,11 @@ export default function InvoiceViewPage() {
                         size="sm"
                         onClick={() =>
                           setSendRequest({
-                            title: `Receipt for invoice #${inv.id}`,
+                            title: `Receipt for invoice ${invoiceLabel(inv)}`,
                             description: 'Check the receipt, then email it to the customer as a PDF, download it or print it.',
                             email: inv.client_email,
                             send: (to) => api.invoices.sendReceipt(inv.id, to),
-                            pdf: { load: () => api.invoices.receiptPdf(inv.id), filename: `receipt-invoice-${inv.id}.pdf` },
+                            pdf: { load: () => api.invoices.receiptPdf(inv.id), filename: invoiceFilename(inv, 'Receipt') },
                           })
                         }
                       >

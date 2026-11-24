@@ -10,6 +10,7 @@ from app.services import email_config_service, email_service
 from app.services.company_service import get_company_by_user_id
 from app.services.invoice_currency import INVOICE_CURRENCIES
 from app.services.module_service import is_module_enabled
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 
 def _guard_email(guard: Guard) -> Optional[str]:
@@ -76,9 +77,10 @@ def notify_invoice_sent(db: Session, user_id: int, inv: Invoice) -> None:
         db,
         user_id,
         _client_email(client),
-        f"Invoice #{inv.id}",
+        invoice_label(inv),
         "invoice_sent",
-        invoice_id=inv.id,
+        invoice_id=invoice_no(inv),
+        invoice_number=invoice_no(inv),
         amount=f"£{float(inv.total or 0):.2f}",
         due_date=str(inv.due_date or ""),
     )
@@ -92,9 +94,10 @@ def notify_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: fl
         db,
         user_id,
         _client_email(client),
-        f"Payment reminder — invoice #{inv.id}",
+        f"Payment reminder — {invoice_label(inv)}",
         "payment_reminder",
-        invoice_id=inv.id,
+        invoice_id=invoice_no(inv),
+        invoice_number=invoice_no(inv),
         amount=f"£{balance:.2f}",
     )
 
@@ -117,14 +120,14 @@ def send_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: floa
     symbol = INVOICE_CURRENCIES.get(code, f"{code} ")
     template = email_config_service.parse_templates(company.email_templates_json)["payment_reminder"]
     try:
-        body = template.format(**esc_map({"invoice_id": inv.id, "amount": f"{symbol}{balance:,.2f}"}))
+        body = template.format(**esc_map({"invoice_id": invoice_no(inv), "invoice_number": invoice_no(inv), "amount": f"{symbol}{balance:,.2f}"}))
     except (KeyError, IndexError, ValueError):
         raise HTTPException(
             status_code=400,
             detail="The payment reminder template is invalid. Check it in Email settings.",
         )
     email_config_service.send_tenant_email(
-        db, user_id, recipient, f"Payment reminder — invoice #{inv.id}", body, "payment_reminder"
+        db, user_id, recipient, f"Payment reminder — {invoice_label(inv)}", body, "payment_reminder"
     )
     return recipient
 

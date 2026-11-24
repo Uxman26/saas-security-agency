@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Company, Invoice, InvoiceLine, Client, Site, Guard, User, Payment
 from app.services.invoice_payment_service import invoice_amount_paid
+from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
 
 
 def _money(v: float) -> str:
@@ -265,7 +266,7 @@ def render_invoice_pdf(
 
     inv_date = inv.invoice_date or (inv.created_at.date() if inv.created_at else None)
     meta_rows = [
-        ["Invoice Number:", (getattr(inv, "invoice_number", None) or f"#{inv.id}")],
+        ["Invoice Number:", invoice_no(inv)],
         ["Invoice Date:", _long_date(inv_date)],
         ["Payment Due:", _long_date(inv.due_date)],
     ]

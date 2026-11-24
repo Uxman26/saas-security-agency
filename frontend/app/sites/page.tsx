@@ -213,15 +213,26 @@ function SiteForm({
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
           {errors.postcode && <p className="text-xs text-destructive">{errors.postcode.message}</p>}
         </div>
+        <div className="sm:col-span-2 border-t pt-3">
+          <p className="text-sm font-semibold">Registered company / billing details</p>
+          <p className="text-xs text-muted-foreground">
+            Used on invoices only. The rota keeps the site name and address above. Leave blank to use the client&rsquo;s billing
+            details, or failing those the site&rsquo;s own.
+          </p>
+        </div>
         <div className="space-y-1 sm:col-span-2">
-          <Label>Invoice address</Label>
+          <Label>Registered company name</Label>
+          <Input {...register('billing_name')} placeholder="e.g. ABC Holdings Limited" />
+          {errors.billing_name && <p className="text-xs text-destructive">{errors.billing_name.message}</p>}
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Registered / billing address</Label>
           <textarea
             {...register('invoice_address')}
             rows={3}
-            placeholder={'Where invoices for this site are addressed, if not the site itself\ne.g. Accounts Payable, 1 Head Office Road, London, W1 1AA'}
+            placeholder={'e.g. Accounts Payable\n1 Head Office Road\nLondon W1 1AA'}
             className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          <p className="text-xs text-muted-foreground">Shown under &ldquo;Bill to&rdquo; on this site&rsquo;s invoices. Leave blank to use the site address.</p>
           {errors.invoice_address && <p className="text-xs text-destructive">{errors.invoice_address.message}</p>}
         </div>
         <div className="space-y-1">
@@ -435,6 +446,7 @@ export default function SitesPage() {
       address: data.address || undefined,
       town: data.town?.trim() || null,
       postcode: data.postcode || undefined,
+      billing_name: data.billing_name?.trim() || null,
       invoice_address: data.invoice_address?.trim() || null,
       contact_person: data.contact_person || undefined,
       contact_email: data.contact_email || undefined,
@@ -509,6 +521,7 @@ export default function SitesPage() {
       address: site.address ?? '',
       town: site.town ?? '',
       postcode: site.postcode ?? '',
+      billing_name: site.billing_name ?? '',
       invoice_address: site.invoice_address ?? '',
       contact_person: site.contact_person ?? '',
       contact_email: site.contact_email ?? '',

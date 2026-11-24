@@ -996,7 +996,6 @@ def generate_from_rota(
         status="draft",
         currency=normalize_invoice_currency(currency),
         notes=default_invoice_notes(today, due),
-        rota_review="Generated from published rota. Please review shift timings and hours before sending.",
     )
     from app.services import client_bank_service
 

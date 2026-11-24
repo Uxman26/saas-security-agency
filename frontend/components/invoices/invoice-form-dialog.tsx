@@ -1253,7 +1253,6 @@ function buildPreviewInvoice({
     return a;
   })();
   // Who it is billed to: the client, else the site standing in for one.
-  const siteInvoiceAddress = (site?.invoice_address || '').trim();
   const billBase = original && !customerChanged
     ? {
         client_name: original.client_name,
@@ -1283,10 +1282,22 @@ function buildPreviewInvoice({
           client_postcode: site?.postcode,
           client_contact_person: site?.contact_person,
         };
-  // A billed site's Invoice Address replaces the address under "Bill to".
-  const bill = siteInvoiceAddress && (!original || customerChanged)
-    ? { ...billBase, client_address: siteInvoiceAddress, client_town: null, client_postcode: null }
-    : billBase;
+  // Registered company name and billing address, by the server's rule
+  // (backend invoice_billto.billing_party): billed site's, then client's, then trading.
+  const join = (...parts: (string | null | undefined)[]) =>
+    parts.map((v) => (v ?? '').trim()).filter(Boolean).join('\n');
+  const billTo =
+    original && !customerChanged
+      ? { bill_to_name: original.bill_to_name, bill_to_address: original.bill_to_address }
+      : {
+          bill_to_name:
+            site?.billing_name?.trim() || client?.billing_name?.trim() || client?.name || site?.name || null,
+          bill_to_address:
+            site?.invoice_address?.trim() ||
+            client?.billing_address?.trim() ||
+            (client ? join(client.address, client.town, client.postcode) : join(site?.address, site?.town, site?.postcode)),
+        };
+  const bill = { ...billBase, ...billTo };
   const bank = account
     ? account
     : original

@@ -944,7 +944,9 @@ export interface Site {
   address?: string;
   town?: string | null;
   postcode?: string;
-  /** Address printed under "Bill to" on this site's invoices; blank uses the site address. */
+  /** Registered company name on this site's invoices; blank uses the client's, then the site name. */
+  billing_name?: string | null;
+  /** Billing address on this site's invoices; blank uses the client's, then the site address. */
   invoice_address?: string | null;
   contact_person?: string;
   contact_email?: string;
@@ -1522,6 +1524,10 @@ export interface Client {
   address?: string;
   town?: string | null;
   postcode?: string;
+  /** Registered company name used on invoices (name stays on the rota). */
+  billing_name?: string | null;
+  /** Billing address used on invoices (address stays on the rota). */
+  billing_address?: string | null;
   contact_person?: string;
   double_rate_special_days?: boolean;
   contract_start_date?: string;
@@ -1917,6 +1923,9 @@ export interface Invoice {
   client_town?: string | null;
   client_postcode?: string | null;
   client_contact_person?: string | null;
+  /** What "Bill to" shows: the registered company name and billing address. */
+  bill_to_name?: string | null;
+  bill_to_address?: string | null;
   lines?: InvoiceLine[];
   amount_paid?: number;
   credit_applied?: number;

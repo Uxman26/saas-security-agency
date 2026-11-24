@@ -842,7 +842,9 @@ class SiteBase(BaseModel):
     address: Optional[str] = None
     town: Optional[str] = Field(default=None, max_length=100)
     postcode: Optional[str] = None
-    # Address printed under "Bill to" on the site's invoices; blank uses the site address.
+    # Registered company name and billing address printed under "Bill to" on the site's
+    # invoices; blank uses the client's, then the site's own name / address.
+    billing_name: Optional[str] = Field(default=None, max_length=200)
     invoice_address: Optional[str] = Field(default=None, max_length=500)
     contact_person: Optional[str] = None
     contact_email: Optional[EmailStr] = None
@@ -1166,6 +1168,10 @@ class ClientBase(BaseModel):
     address: Optional[str] = None
     town: Optional[str] = Field(default=None, max_length=100)
     postcode: Optional[str] = None
+    # Registered company name and billing address used on invoices (the trading
+    # name / address above stay on the rota). Blank falls back to name / address.
+    billing_name: Optional[str] = Field(default=None, max_length=200)
+    billing_address: Optional[str] = Field(default=None, max_length=500)
     contact_person: Optional[str] = None
     double_rate_special_days: bool = False
     contract_start_date: Optional[date] = None
@@ -1773,6 +1779,9 @@ class InvoiceResponse(InvoiceBase):
     client_town: Optional[str] = None
     client_postcode: Optional[str] = None
     client_contact_person: Optional[str] = None
+    # What "Bill to" shows: the registered company name and billing address.
+    bill_to_name: Optional[str] = None
+    bill_to_address: Optional[str] = None
     lines: list[InvoiceLineResponse] = []
     amount_paid: float = 0
     credit_applied: float = 0

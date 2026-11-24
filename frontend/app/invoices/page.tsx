@@ -425,11 +425,13 @@ export default function InvoicesPage() {
         case 'client':
           return customerLabel(inv) ?? '';
         case 'period':
-          return inv.period_start;
+          return (inv.invoice_date || inv.created_at || '').slice(0, 10);
         case 'due':
           return inv.due_date ?? '';
         case 'total':
           return inv.total;
+        case 'balance':
+          return inv.balance_due ?? Math.max(0, inv.total - (inv.amount_paid ?? 0) - (inv.credit_applied ?? 0));
         case 'status':
           return inv.status;
         default:
@@ -648,21 +650,9 @@ export default function InvoicesPage() {
             return sum + Math.max(0, (end - start) / 86400000);
           }, 0) / paidForAverage.length
         );
-  const unpaidShare = new Map<number, string>();
-  const byCustomer = new Map<string, Invoice[]>();
-  for (const inv of openInvoices) {
-    const key = String(inv.client_id ?? inv.client_name ?? 'none');
-    const list = byCustomer.get(key) ?? [];
-    list.push(inv);
-    byCustomer.set(key, list);
-  }
-  for (const list of byCustomer.values()) {
-    if (list.length < 2) continue;
-    list.forEach((inv, index) => unpaidShare.set(inv.id, `${index + 1} of ${list.length}`));
-  }
-
   const formatInvoiceDate = (inv: Invoice) => {
-    const raw = inv.created_at ?? inv.period_end;
+    // The invoice's own date, as printed on it (not when the record was created).
+    const raw = inv.invoice_date ?? inv.created_at ?? inv.period_end;
     if (!raw) return '—';
     return formatDateUK(raw) || '—';
   };
@@ -715,7 +705,7 @@ export default function InvoicesPage() {
         </Button>
       );
     }
-    if (next === 'record_payment' && canRecordPayment) {
+    if ((next === 'record_payment' || next === 'send_reminder') && canRecordPayment) {
       return (
         <Button variant="outline" size="sm" className={button} onClick={() => openRecordPayment(inv)}>
           <CreditCard className="size-3.5" />
@@ -723,31 +713,13 @@ export default function InvoicesPage() {
         </Button>
       );
     }
-    if (next === 'send_reminder' && canSendReminder) {
-      return (
-        <Button variant="outline" size="sm" className={button} onClick={() => setReminderInvoice(inv)}>
-          <Send className="size-3.5" />
-          Send reminder
-        </Button>
-      );
-    }
-    if (next === 'paid' && canSendReminder) {
-      const hasPayment = (inv.amount_paid ?? 0) > 0;
-      return (
-        <Button
-          variant="outline"
-          size="sm"
-          className={button}
-          disabled={!hasPayment}
-          title={hasPayment ? undefined : 'Record the payment on this invoice to issue a receipt'}
-          onClick={() => openSendReceipt(inv)}
-        >
-          <Send className="size-3.5" />
-          Send receipt
-        </Button>
-      );
-    }
-    return null;
+    // Paid, cancelled, or no permission for the step above: just open it.
+    return (
+      <Button variant="outline" size="sm" className={button} onClick={() => router.push(`/invoices/${inv.id}/view`)}>
+        <Eye className="size-3.5" />
+        View
+      </Button>
+    );
   };
 
   /**
@@ -772,6 +744,12 @@ export default function InvoicesPage() {
         inv.status === 'draft' ||
         inv.status === 'cancelled' ||
         (inv.status === 'paid' && (inv.balance_due ?? 0) <= 0),
+    },
+    {
+      label: 'Send reminder',
+      icon: Send,
+      onSelect: () => setReminderInvoice(inv),
+      disabled: !canSendReminder || !canSendInvoiceReminder(inv),
     },
     {
       label: 'Revert payment',
@@ -1275,12 +1253,11 @@ export default function InvoicesPage() {
                           </TableHead>
                         ) : null}
                         <SortableHead label="Status" colKey="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <SortableHead label="Due" colKey="due" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Date" colKey="period" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Number" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                         <SortableHead label="Customer" colKey="client" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                        <TableHead>Unpaid by customer</TableHead>
-                        <SortableHead label="Amount due" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                        <SortableHead label="Total" colKey="total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
+                        <SortableHead label="Amount due" colKey="balance" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} className="text-right" />
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1311,9 +1288,6 @@ export default function InvoicesPage() {
                           <TableCell>
                             {renderStatus(inv)}
                           </TableCell>
-                          <TableCell className={cn('text-sm whitespace-nowrap', overdue && 'text-red-600 dark:text-red-400 font-medium')}>
-                            {formatDueCountdown(inv)}
-                          </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>
                           <TableCell className="font-medium tabular-nums">{invoiceLabel(inv)}</TableCell>
                           <TableCell className="font-medium max-w-[220px]">
@@ -1328,8 +1302,16 @@ export default function InvoicesPage() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{unpaidShare.get(inv.id) || '—'}</TableCell>
-                          <TableCell className="font-semibold whitespace-nowrap tabular-nums">{formatGbp(safeBalance, inv.currency)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap tabular-nums">{formatGbp(inv.total, inv.currency)}</TableCell>
+                          <TableCell className="text-right whitespace-nowrap">
+                            <div className="font-semibold tabular-nums">{formatGbp(safeBalance, inv.currency)}</div>
+                            {/* When an open invoice falls due; red once it is past due. */}
+                            {isInvoiceOpen(inv) && inv.status !== 'draft' && inv.due_date ? (
+                              <div className={cn('text-xs text-muted-foreground', overdue && 'font-medium text-red-600 dark:text-red-400')}>
+                                {formatDueCountdown(inv)}
+                              </div>
+                            ) : null}
+                          </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
                               {nextActionButtons(inv)}

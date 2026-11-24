@@ -65,10 +65,15 @@ type Props = {
 export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHeaders, onHeadersChange }: Props) {
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
   const [headers, setHeaders] = useState({ ...DEFAULT_HEADERS, ...(invoice.column_headers || {}) });
-  const billAddress = [invoice.client_address, invoice.client_town, invoice.client_postcode]
-    .map((v) => (v ?? '').trim())
-    .filter(Boolean)
-    .join('\n');
+  // Registered company name / billing address when the server worked them out.
+  const billAddress =
+    invoice.bill_to_address != null
+      ? invoice.bill_to_address.trim()
+      : [invoice.client_address, invoice.client_town, invoice.client_postcode]
+          .map((v) => (v ?? '').trim())
+          .filter(Boolean)
+          .join('\n');
+  const billName = invoice.bill_to_name?.trim() || invoice.client_name || `Client #${invoice.client_id}`;
 
   useEffect(() => {
     setHeaders({ ...DEFAULT_HEADERS, ...(invoice.column_headers || {}) });
@@ -192,7 +197,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
             Bill to
           </p>
           <p className="text-base font-extrabold uppercase" style={{ color: DARK }}>
-            {invoice.client_name ?? `Client #${invoice.client_id}`}
+            {billName}
           </p>
           {invoice.client_contact_person ? <p className="mt-1 text-sm text-slate-600">{invoice.client_contact_person}</p> : null}
           {billAddress ? <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{billAddress}</p> : null}

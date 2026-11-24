@@ -10,6 +10,7 @@ from app.models import Client, Invoice, Site
 from app.services.company_service import get_company_by_user_id
 from app.services.credit_note_service import ACTIVE_STATUSES
 from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
+from app.services.invoice_billto import billing_party
 
 
 def _as_date(v) -> Optional[date]:
@@ -396,12 +397,13 @@ def _statement_payload(
             "address": company.address,
             "postcode": company.postcode,
         },
+        # Statements go to the registered company and billing address, like invoices.
         "client": {
             "id": client.id if client else None,
-            "name": client.name if client else (site.name if site else "—"),
+            "name": billing_party(client, site)["name"] if (client or site) else "—",
             "contact_name": client.contact_person if client else None,
-            "address": client.address if client else None,
-            "postcode": client.postcode if client else None,
+            "address": billing_party(client, site)["address"].replace("\n", ", ") or None,
+            "postcode": None,
             "email": client.email if client else None,
         },
         "site": {"id": site.id, "name": site.name} if site else None,

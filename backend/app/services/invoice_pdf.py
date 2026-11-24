@@ -229,24 +229,15 @@ def render_invoice_pdf(
             if getattr(ln, "site", None):
                 bill_site = ln.site
                 break
-    bill_to = client.name if client else (bill_site.name if bill_site else "—")
-    bill_contact = (client.contact_person if client else (bill_site.contact_person if bill_site else None)) or ""
-    _bill_src = client if client else bill_site
-    bill_address = "\n".join(
-        str(v).strip()
-        for v in (
-            getattr(_bill_src, "address", None),
-            getattr(_bill_src, "town", None),
-            getattr(_bill_src, "postcode", None),
-        )
-        if v and str(v).strip()
-    )
-    # The billed site's Invoice Address, when set, replaces the address above.
-    _site_inv_addr = (getattr(bill_site, "invoice_address", None) or "").strip() if bill_site else ""
-    if _site_inv_addr:
-        bill_address = _site_inv_addr
-    bill_email = (client.email if client else (bill_site.contact_email if bill_site else None)) or ""
-    bill_phone = (client.phone if client else (bill_site.contact_phone if bill_site else None)) or ""
+    # Registered company name and billing address (see invoice_billto.billing_party).
+    from app.services.invoice_billto import billing_party
+
+    _party = billing_party(client, bill_site)
+    bill_to = _party["name"]
+    bill_contact = _party["contact"]
+    bill_address = _party["address"]
+    bill_email = _party["email"]
+    bill_phone = _party["phone"]
 
     label_style = ParagraphStyle("Lbl", parent=styles["Normal"], fontSize=8, fontName="Helvetica-Bold", textColor=ACCENT)
     billee_style = ParagraphStyle("Billee", parent=styles["Normal"], fontSize=11, leading=14, fontName="Helvetica-Bold", textColor=DARK)
@@ -418,13 +409,16 @@ def render_invoice_pdf(
     notes_cell = []
     if (inv.notes or "").strip():
         notes_cell += [Paragraph("NOTES", label_style), Spacer(1, 4), Paragraph(inv.notes.strip().replace("\n", "<br/>"), small)]
-    if (getattr(inv, "rota_review", None) or "").strip():
+    from app.services.invoice_billto import client_visible_rota_review
+
+    _rota_review = client_visible_rota_review(getattr(inv, "rota_review", None))
+    if _rota_review:
         if notes_cell:
             notes_cell.append(Spacer(1, 8))
         notes_cell += [
             Paragraph("ROTA REVIEW", ParagraphStyle("Rr", parent=label_style, textColor=colors.HexColor("#71717a"))),
             Spacer(1, 2),
-            Paragraph(str(inv.rota_review).strip().replace("\n", "<br/>"), small),
+            Paragraph(_rota_review.replace("\n", "<br/>"), small),
         ]
     if notes_cell:
         notes_box = Table([[notes_cell]], colWidths=[9 * cm])

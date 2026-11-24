@@ -13,7 +13,7 @@ export function invoiceSendRequest(inv: Invoice, onDone: () => void): SendDocume
   const isDraft = inv.status === 'draft';
   return {
     title: `Send ${label}`,
-    description: `Check the invoice and the email address, then send. ${inv.client_name ? `Billed to ${inv.client_name}.` : ''}`.trim(),
+    description: `Check the invoice and the email address, then send. ${inv.bill_to_name || inv.client_name ? `Billed to ${inv.bill_to_name || inv.client_name}.` : ''}`.trim(),
     email: inv.client_email,
     documentLabel: `${label} (${formatInvoiceMoney(inv.total ?? 0, inv.currency || 'GBP')})`,
     sendLabel: 'Send',

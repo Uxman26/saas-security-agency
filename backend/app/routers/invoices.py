@@ -35,6 +35,7 @@ from app.services.invoice_payment_service import (
 )
 from app.services.company_profile_service import company_logo_url
 from app.services.invoice_ref import invoice_filename, invoice_label, invoice_no
+from app.services.invoice_billto import billing_party, client_visible_rota_review
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -125,13 +126,11 @@ def _serialize_invoice(
             )
     co = inv.company
     cl = inv.client
-    # No client: the site's own address and contacts go under "Bill to" (as on the PDF).
-    # A site's Invoice Address, when set, is what its invoices are addressed to.
+    # The site an invoice is billed to (or, with no client, the site standing in for one).
     bs = _bill_site(inv, db) if include_lines and (cl is None or getattr(inv, "billed_site_id", None)) else None
-    site_inv_addr = (getattr(bs, "invoice_address", None) or "").strip() if bs else ""
     if cl is not None and bs is not None and bs.id != getattr(inv, "billed_site_id", None):
         bs = None
-        site_inv_addr = ""
+    party = billing_party(cl, bs) if include_lines else None
     admin = None
     if db and co:
         admin = db.query(User).filter(User.id == co.admin_id).first()
@@ -240,7 +239,7 @@ def _serialize_invoice(
         due_date=inv.due_date,
         po_number=inv.po_number,
         notes=inv.notes,
-        rota_review=inv.rota_review,
+        rota_review=client_visible_rota_review(inv.rota_review) or None,
         client_bank_account_id=inv.client_bank_account_id,
         tax_rate=inv.tax_rate or 0,
         subtotal=inv.subtotal or 0,
@@ -266,10 +265,12 @@ def _serialize_invoice(
         swift_code=swift_code,
         client_email=cl.email if cl else (bs.contact_email if bs else None),
         client_phone=cl.phone if cl else (bs.contact_phone if bs else None),
-        client_address=site_inv_addr or (cl.address if cl else (bs.address if bs else None)),
-        client_town=None if site_inv_addr else (getattr(cl, "town", None) if cl else (bs.town if bs else None)),
-        client_postcode=None if site_inv_addr else (cl.postcode if cl else (bs.postcode if bs else None)),
+        client_address=cl.address if cl else (bs.address if bs else None),
+        client_town=getattr(cl, "town", None) if cl else (bs.town if bs else None),
+        client_postcode=cl.postcode if cl else (bs.postcode if bs else None),
         client_contact_person=cl.contact_person if cl else (bs.contact_person if bs else None),
+        bill_to_name=party["name"] if party else None,
+        bill_to_address=party["address"] if party else None,
         lines=lines_out,
         amount_paid=paid,
         credit_applied=credited,

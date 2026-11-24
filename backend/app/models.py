@@ -872,6 +872,9 @@ class Client(Base):
     address = Column(String)
     town = Column(String)
     postcode = Column(String)
+    # Registered company name and billing address used on invoices.
+    billing_name = Column(String)
+    billing_address = Column(String)
     contact_person = Column(String)
     double_rate_special_days = Column(Boolean, default=False)
     contract_start_date = Column(Date, nullable=True)
@@ -966,7 +969,9 @@ class Site(Base):
     address = Column(String)
     town = Column(String)
     postcode = Column(String)
-    # Where the site's invoices are addressed, when that differs from the site itself.
+    # Registered company name and billing address for invoices; the rota keeps using
+    # name / address. Blank falls back to the client's, then the site's own.
+    billing_name = Column(String)
     invoice_address = Column(String)
     contact_person = Column(String)
     contact_email = Column(String)

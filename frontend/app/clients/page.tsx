@@ -129,6 +129,27 @@ function ClientForm({
           <Label>Postcode</Label>
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
         </div>
+        <div className="sm:col-span-2 border-t pt-3">
+          <p className="text-sm font-semibold">Registered company / billing details</p>
+          <p className="text-xs text-muted-foreground">
+            Used on invoices and statements only. The rota keeps the name and address above. Leave blank to use them.
+          </p>
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Registered company name</Label>
+          <Input {...register('billing_name')} placeholder="e.g. ABC Holdings Limited" />
+          {errors.billing_name && <p className="text-xs text-destructive">{errors.billing_name.message}</p>}
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Registered / billing address</Label>
+          <textarea
+            {...register('billing_address')}
+            rows={3}
+            placeholder={'e.g. Accounts Payable\n1 Head Office Road\nLondon W1 1AA'}
+            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          {errors.billing_address && <p className="text-xs text-destructive">{errors.billing_address.message}</p>}
+        </div>
         <div className="space-y-1">
           <Label>Contract start</Label>
           <Input type="date" {...register('contract_start_date')} />
@@ -226,6 +247,8 @@ function ClientDetailsDialog({ client, canEdit = false }: { client: Client; canE
     ['Phone', client.phone || '—'],
     ['Address', client.address || '—'],
     ['Postcode', client.postcode || '—'],
+    ['Registered company name', client.billing_name || '—'],
+    ['Billing address', client.billing_address || '—'],
     ['Contract start', client.contract_start_date || '—'],
     ['Contract end', client.contract_end_date || '—'],
     ['Double rate on special days', client.double_rate_special_days ? 'Yes' : 'No'],
@@ -293,6 +316,8 @@ export default function ClientsPage() {
     phone: '',
     address: '',
     postcode: '',
+    billing_name: '',
+    billing_address: '',
     contact_person: '',
     double_rate_special_days: false,
     contract_start_date: '',
@@ -348,6 +373,8 @@ export default function ClientsPage() {
       phone: client.phone ?? '',
       address: client.address ?? '',
       postcode: client.postcode ?? '',
+      billing_name: client.billing_name ?? '',
+      billing_address: client.billing_address ?? '',
       contact_person: client.contact_person ?? '',
       double_rate_special_days: client.double_rate_special_days ?? false,
       contract_start_date: client.contract_start_date ?? '',

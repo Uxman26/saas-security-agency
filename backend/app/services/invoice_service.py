@@ -1099,7 +1099,7 @@ def generate_from_rota(
 generate_from_assignments = generate_from_rota
 
 
-def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: int) -> Invoice:
+def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: int, notify: bool = True) -> Invoice:
     inv = get_invoice(db, invoice_id, user_id)
     company = get_company_by_user_id(db, user_id)
     prev = inv.status
@@ -1143,7 +1143,7 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
             accounting_service.post_invoice_issued(db, company.id, inv)
         except Exception:
             pass
-    if status == "sent" and prev != "sent":
+    if notify and status == "sent" and prev != "sent":
         from app.services import sms_trigger_service, email_trigger_service
         sms_trigger_service.notify_invoice_sent(db, user_id, inv)
         email_trigger_service.notify_invoice_sent(db, user_id, inv)

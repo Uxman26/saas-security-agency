@@ -1464,7 +1464,17 @@ export const api = {
     },
     revertPayments: (id: number): Promise<Invoice> =>
       request<Invoice>(`/invoices/${id}/revert-payments`, { method: 'POST' }),
-    updateStatus: (id: number, status: string): Promise<Invoice> => request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}`, { method: 'PATCH' }),
+    /** `notify: false` changes the status without the automatic email / SMS to the client. */
+    updateStatus: (id: number, status: string, notify = true): Promise<Invoice> =>
+      request<Invoice>(`/invoices/${id}/status?status=${encodeURIComponent(status)}${notify ? '' : '&notify=false'}`, {
+        method: 'PATCH',
+      }),
+    /** Emails the invoice PDF to `to` and marks a draft as sent. */
+    send: (id: number, to: string): Promise<{ message: string; recipient: string }> =>
+      request<{ message: string; recipient: string }>(`/invoices/${id}/send`, {
+        method: 'POST',
+        body: JSON.stringify({ to: to || null }),
+      }),
     receiptPdf: (id: number): Promise<Blob> => requestBlob(`/invoices/${id}/receipt/pdf`),
     sendReceipt: (id: number, to: string): Promise<{ message: string; recipient: string }> =>
       request<{ message: string; recipient: string }>(`/invoices/${id}/send-receipt`, {

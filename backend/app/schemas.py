@@ -842,6 +842,8 @@ class SiteBase(BaseModel):
     address: Optional[str] = None
     town: Optional[str] = Field(default=None, max_length=100)
     postcode: Optional[str] = None
+    # Address printed under "Bill to" on the site's invoices; blank uses the site address.
+    invoice_address: Optional[str] = Field(default=None, max_length=500)
     contact_person: Optional[str] = None
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None

@@ -222,7 +222,7 @@ def render_invoice_pdf(
     # An invoice raised against a site that belongs to no client has no customer record.
     # The site's own name and contact details are what the bill is addressed to instead.
     bill_site = None
-    if client is None and getattr(inv, "billed_site_id", None):
+    if getattr(inv, "billed_site_id", None):
         bill_site = db.query(Site).filter(Site.id == inv.billed_site_id).first()
     if client is None and bill_site is None:
         for ln in lines:
@@ -241,6 +241,10 @@ def render_invoice_pdf(
         )
         if v and str(v).strip()
     )
+    # The billed site's Invoice Address, when set, replaces the address above.
+    _site_inv_addr = (getattr(bill_site, "invoice_address", None) or "").strip() if bill_site else ""
+    if _site_inv_addr:
+        bill_address = _site_inv_addr
     bill_email = (client.email if client else (bill_site.contact_email if bill_site else None)) or ""
     bill_phone = (client.phone if client else (bill_site.contact_phone if bill_site else None)) or ""
 

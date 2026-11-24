@@ -944,6 +944,8 @@ export interface Site {
   address?: string;
   town?: string | null;
   postcode?: string;
+  /** Address printed under "Bill to" on this site's invoices; blank uses the site address. */
+  invoice_address?: string | null;
   contact_person?: string;
   contact_email?: string;
   contact_phone?: string;

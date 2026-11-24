@@ -18,6 +18,12 @@ export type SendDocumentRequest = {
   send: (to: string) => Promise<{ message: string }>;
   /** When given, the document is previewed in the dialog and can be downloaded or printed too. */
   pdf?: { load: () => Promise<Blob>; filename: string };
+  /** What is being sent, e.g. "Invoice XSBH-01 (£1,910.80)", repeated beside the address to confirm. */
+  documentLabel?: string;
+  /** Main button text; defaults to "Send email". */
+  sendLabel?: string;
+  /** An extra action beside Send, e.g. marking an invoice sent without emailing it. */
+  secondary?: { label: string; run: () => Promise<{ message: string }> };
 };
 
 /** Shows a receipt or remittance, then emails, downloads or prints it. */
@@ -78,6 +84,20 @@ export function SendDocumentDialog({
     }
   };
 
+  const runSecondary = async () => {
+    if (!request?.secondary || sending) return;
+    setSending(true);
+    try {
+      const { message } = await request.secondary.run();
+      toast.success(message);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const download = () => {
     if (pdfBlob && request?.pdf) downloadBlob(pdfBlob, request.pdf.filename);
   };
@@ -131,6 +151,20 @@ export function SendDocumentDialog({
             onKeyDown={(e) => e.key === 'Enter' && void submit()}
             placeholder="name@example.com"
           />
+          {request?.documentLabel ? (
+            <p className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-sm">
+              {email.trim() ? (
+                <>
+                  <span className="font-semibold">{request.documentLabel}</span> will be emailed to{' '}
+                  <span className="font-semibold break-all">{email.trim()}</span>. Check both before sending.
+                </>
+              ) : (
+                <>
+                  Enter the email address to send <span className="font-semibold">{request.documentLabel}</span> to.
+                </>
+              )}
+            </p>
+          ) : null}
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
           {hasPdf ? (
@@ -149,9 +183,14 @@ export function SendDocumentDialog({
             <Button variant="outline" onClick={onClose} disabled={sending}>
               Cancel
             </Button>
-            <Button onClick={() => void submit()} disabled={sending}>
+            {request?.secondary ? (
+              <Button variant="outline" onClick={() => void runSecondary()} disabled={sending}>
+                {request.secondary.label}
+              </Button>
+            ) : null}
+            <Button onClick={() => void submit()} disabled={sending || (!!request?.documentLabel && !email.trim())}>
               <Send className="size-4" />
-              {sending ? 'Sending…' : 'Send email'}
+              {sending ? 'Sending…' : request?.sendLabel || 'Send email'}
             </Button>
           </div>
         </DialogFooter>

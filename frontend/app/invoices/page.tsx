@@ -17,13 +17,14 @@ import { api } from '@/lib/api';
 import type { Invoice, Client, Site, Guard } from '@/lib/types';
 import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
-import { Building2, CalendarDays, Clock, Coffee, Filter, PoundSterling, Users, FileText, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, Hash, ReceiptText, Wallet, FileMinus2, Send, Undo2 } from 'lucide-react';
+import { Building2, CalendarDays, Clock, Coffee, Filter, PoundSterling, Users, FileText, Landmark, Zap, Trash2, Eye, Pencil, Download, Copy, CreditCard, AlertTriangle, BadgePoundSterling, CheckCircle2, FilePlus2, Hash, ReceiptText, Wallet, FileMinus2, Send, Undo2 } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
 import { canSendInvoiceReminder, formatDueCountdown, invoiceFilename, invoiceLabel, isInvoiceOpen, isInvoiceOverdue, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
+import { invoiceSendRequest } from '@/lib/invoice-send';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { formatInvoiceMoney, invoiceCurrencyCode } from '@/lib/invoice-currency';
@@ -54,7 +55,10 @@ import {
   InvoiceFieldLabel,
   InvoiceFormCard,
   InvoiceFormDialog,
+  InvoiceBankSelect,
   LineItemsEditor,
+  bankPayload,
+  rememberBankChoice,
   invoiceNumberHint,
   useNextInvoiceNumber,
   addLinePayload,
@@ -142,6 +146,7 @@ export default function InvoicesPage() {
   const [genLoading, setGenLoading] = useState(false);
   const [genBreakMode, setGenBreakMode] = useState<'shift' | 'without_break' | 'deduct'>('shift');
   const [genCurrency, setGenCurrency] = useState('GBP');
+  const [genBankId, setGenBankId] = useState('');
   // Manual lines added to a rota invoice for work that isn't on the rota.
   const [genLines, setGenLines] = useState<FormLine[]>([]);
   const [guards, setGuards] = useState<Guard[]>([]);
@@ -263,8 +268,10 @@ export default function InvoicesPage() {
         due_date: genDueDate || undefined,
         invoice_number: genInvoiceNumber.trim() || undefined,
         currency: genCurrency,
+        ...(genBankId ? bankPayload(genBankId) : {}),
         lines: manual.map((l) => linePayload(l, forcedSite)),
       });
+      rememberBankChoice(genBankId);
       setGenOpen(false);
       setGenLines([]);
       loadInvoices();
@@ -305,7 +312,12 @@ export default function InvoicesPage() {
         ...(genMode === 'site' ? { site_id: parseInt(genSiteId, 10) } : {}),
       });
       for (const l of manual) await api.invoices.addLine(inv.id, addLinePayload(l, forcedSite));
-      if (manual.length) inv = await api.invoices.get(inv.id);
+      // The bank account chosen in the dialog (generation itself uses the default one).
+      if (genBankId) {
+        await api.invoices.patch(inv.id, bankPayload(genBankId));
+        rememberBankChoice(genBankId);
+      }
+      if (manual.length || genBankId) inv = await api.invoices.get(inv.id);
       setGenOpen(false);
       setGenLines([]);
       setGenClientId('');
@@ -574,10 +586,8 @@ export default function InvoicesPage() {
       return;
     }
     if (next === 'sent') {
-      toast.confirm('Mark this invoice as sent?', () => applyStatusChange(inv, next), {
-        label: 'Mark as sent',
-        description: 'The client is told by email or SMS when those notifications are switched on.',
-      });
+      // Show the invoice and the address first; nothing goes out until Send is pressed.
+      setSendRequest(invoiceSendRequest(inv, loadInvoices));
       return;
     }
     void applyStatusChange(inv, next);
@@ -1030,6 +1040,22 @@ export default function InvoicesPage() {
                         <InvoiceFieldLabel icon={PoundSterling}>Currency</InvoiceFieldLabel>
                         <CurrencySelect value={genCurrency} onChange={setGenCurrency} />
                         <p className="text-xs text-muted-foreground">Amounts stay in this currency. They are not converted.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <InvoiceFieldLabel icon={Landmark}>Bank account</InvoiceFieldLabel>
+                        <InvoiceBankSelect
+                          clientId={
+                            genMode === 'client'
+                              ? genClientId || undefined
+                              : (() => {
+                                  const s = sites.find((x) => String(x.id) === genSiteId);
+                                  return s?.client_id != null ? String(s.client_id) : undefined;
+                                })()
+                          }
+                          value={genBankId}
+                          onChange={setGenBankId}
+                        />
+                        <p className="text-xs text-muted-foreground">The account the client is asked to pay into.</p>
                       </div>
                     </InvoiceFormCard>
 

@@ -356,6 +356,7 @@ def _ensure_invoice_number_and_town_columns():
             ("invoices", "billed_site_id"),
             ("clients", "town"),
             ("sites", "town"),
+            ("sites", "invoice_address"),
         ):
             if not insp.has_table(table):
                 continue

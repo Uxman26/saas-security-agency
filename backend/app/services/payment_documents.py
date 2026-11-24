@@ -166,7 +166,14 @@ def _billed_party(inv: Invoice) -> tuple[str, str]:
     """Name and email the invoice is addressed to; a client-less invoice bills its site."""
     if inv.client:
         return inv.client.name or "—", (inv.client.email or "").strip()
-    site = next((ln.site for ln in inv.lines if getattr(ln, "site", None)), None)
+    site = None
+    if getattr(inv, "billed_site_id", None):
+        from sqlalchemy.orm import object_session
+        from app.models import Site
+
+        sess = object_session(inv)
+        site = sess.query(Site).filter(Site.id == inv.billed_site_id).first() if sess else None
+    site = site or next((ln.site for ln in inv.lines if getattr(ln, "site", None)), None)
     if site:
         return site.name or "—", (site.contact_email or "").strip()
     return "—", ""
@@ -303,6 +310,44 @@ def send_invoice_receipt(db: Session, invoice_id: int, user_id: int, to: Optiona
     )
     invoice_service.log_invoice_audit(db, inv.company_id, user_id, inv.id, "receipt_sent", {"recipient": recipient})
     db.commit()
+    return recipient
+
+
+def send_invoice_email(db: Session, invoice_id: int, user_id: int, to: Optional[str]) -> str:
+    """Email the invoice as a PDF to the address the user confirmed, then mark it sent.
+
+    The automatic "invoice sent" email is not also sent: this one replaces it.
+    """
+    from app.services import email_config_service, invoice_service
+    from app.services.invoice_pdf import render_invoice_pdf
+
+    inv = invoice_service.get_invoice(db, invoice_id, user_id)
+    if inv.status == "cancelled":
+        raise HTTPException(status_code=400, detail="A cancelled invoice cannot be sent.")
+    recipient = (to or _billed_party(inv)[1] or "").strip()
+    if not recipient:
+        raise HTTPException(status_code=400, detail="There is no email address on record. Enter one to send the invoice.")
+    lines = sorted(inv.lines, key=lambda x: x.id)
+    admin = db.query(User).filter(User.id == inv.company.admin_id).first() if inv.company else None
+    pdf = render_invoice_pdf(db, inv, inv.company, inv.client, list(lines), admin)
+    code = (inv.currency or "GBP").upper()
+    body = _email_body(
+        inv.company,
+        "invoice_sent",
+        {
+            "invoice_id": invoice_no(inv),
+            "invoice_number": invoice_no(inv),
+            "amount": _money(float(inv.total or 0), code),
+            "due_date": _long_date(inv.due_date) if inv.due_date else "",
+        },
+    )
+    email_config_service.send_tenant_email(
+        db, user_id, recipient, invoice_label(inv), body, "invoice_sent", [(invoice_filename(inv), pdf)]
+    )
+    invoice_service.log_invoice_audit(db, inv.company_id, user_id, inv.id, "invoice_emailed", {"recipient": recipient})
+    db.commit()
+    if inv.status == "draft":
+        invoice_service.update_invoice_status(db, inv.id, "sent", user_id, notify=False)
     return recipient
 
 

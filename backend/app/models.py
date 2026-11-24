@@ -966,6 +966,8 @@ class Site(Base):
     address = Column(String)
     town = Column(String)
     postcode = Column(String)
+    # Where the site's invoices are addressed, when that differs from the site itself.
+    invoice_address = Column(String)
     contact_person = Column(String)
     contact_email = Column(String)
     contact_phone = Column(String)

@@ -368,6 +368,7 @@ export const siteSchema = z
     address: z.string().max(200).optional().or(z.literal('')),
     town: z.string().max(100).optional().or(z.literal('')),
     postcode: z.string().max(20).optional().or(z.literal('')),
+    invoice_address: z.string().max(500).optional().or(z.literal('')),
     contact_person: z.string().max(100).optional().or(z.literal('')),
     contact_email: emailFieldSchema.optional().or(z.literal('')),
     contact_phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),

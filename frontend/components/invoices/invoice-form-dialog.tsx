@@ -1253,7 +1253,8 @@ function buildPreviewInvoice({
     return a;
   })();
   // Who it is billed to: the client, else the site standing in for one.
-  const bill = original && !customerChanged
+  const siteInvoiceAddress = (site?.invoice_address || '').trim();
+  const billBase = original && !customerChanged
     ? {
         client_name: original.client_name,
         client_email: original.client_email,
@@ -1282,6 +1283,10 @@ function buildPreviewInvoice({
           client_postcode: site?.postcode,
           client_contact_person: site?.contact_person,
         };
+  // A billed site's Invoice Address replaces the address under "Bill to".
+  const bill = siteInvoiceAddress && (!original || customerChanged)
+    ? { ...billBase, client_address: siteInvoiceAddress, client_town: null, client_postcode: null }
+    : billBase;
   const bank = account
     ? account
     : original
@@ -1326,6 +1331,80 @@ function buildPreviewInvoice({
     credit_applied: original?.credit_applied ?? 0,
     column_headers: original?.column_headers ?? null,
   };
+}
+
+/**
+ * Bank account picker for a new invoice: the company's accounts, plus the client's own
+ * when there is a client. Starts on the account used last time, else the client's
+ * default, else the company's default. Value is "co:<id>" / "cl:<id>" (see bankPayload).
+ */
+export function InvoiceBankSelect({
+  clientId,
+  value,
+  onChange,
+}: {
+  clientId?: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [companyBanks, setCompanyBanks] = useState<CompanyBankAccount[]>([]);
+  const [loadedClientBanks, setClientBanks] = useState<{ clientId: string; rows: ClientBankAccount[] }>({ clientId: '', rows: [] });
+  useEffect(() => {
+    api.company.bankAccounts().then(setCompanyBanks).catch(() => setCompanyBanks([]));
+  }, []);
+  useEffect(() => {
+    if (!clientId) return;
+    api.clients
+      .bankAccounts(parseInt(clientId, 10))
+      .then((rows) => setClientBanks({ clientId, rows }))
+      .catch(() => setClientBanks({ clientId, rows: [] }));
+  }, [clientId]);
+  // Only the current client's accounts; a previous client's are never offered.
+  const clientBanks = useMemo(
+    () => (clientId && loadedClientBanks.clientId === clientId ? loadedClientBanks.rows : []),
+    [clientId, loadedClientBanks]
+  );
+  const options = useMemo(
+    () => [
+      ...companyBanks.map((b) => ({
+        value: `co:${b.id}`,
+        label: `${b.label}${b.bank_name ? ` · ${b.bank_name}` : ''}${b.account_number ? ` · ${b.account_number}` : ''}${b.is_default ? ' (Default)' : ''}`,
+      })),
+      ...clientBanks.map((b) => ({
+        value: `cl:${b.id}`,
+        label: `${b.label} (client)${b.bank_name ? ` · ${b.bank_name}` : ''}${b.account_number ? ` · ${b.account_number}` : ''}`,
+      })),
+    ],
+    [companyBanks, clientBanks]
+  );
+  useEffect(() => {
+    if (value && options.some((o) => o.value === value)) return;
+    const last = lastBankChoice();
+    const clientDefault = clientBanks.find((b) => b.is_default);
+    const companyDefault = companyBanks.find((b) => b.is_default);
+    const pick =
+      (last && options.some((o) => o.value === last) ? last : '') ||
+      (clientDefault ? `cl:${clientDefault.id}` : '') ||
+      (companyDefault ? `co:${companyDefault.id}` : '') ||
+      options[0]?.value ||
+      '';
+    if (pick !== value) onChange(pick);
+  }, [options, value, onChange, clientBanks, companyBanks]);
+  return (
+    <Select value={value || 'none'} onValueChange={(v) => onChange(v === 'none' ? '' : v)}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="Company default" />
+      </SelectTrigger>
+      <SelectContent>
+        {options.length === 0 || !value ? <SelectItem value="none">Company default</SelectItem> : null}
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 export function CurrencySelect({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {

@@ -2,6 +2,7 @@
 
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
+import { invoiceSendRequest } from '@/lib/invoice-send';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -151,6 +152,11 @@ export default function InvoiceViewPage() {
                     <Button variant="outline" size="sm" onClick={() => void downloadPdf()} disabled={downloading}>
                       <Download className="size-4 mr-1" /> {downloading ? 'Downloading…' : 'Download PDF'}
                     </Button>
+                    {canSendReceipt && inv.status !== 'cancelled' ? (
+                      <Button variant="outline" size="sm" onClick={() => setSendRequest(invoiceSendRequest(inv, reload))}>
+                        <Send className="size-4 mr-1" /> {inv.status === 'draft' ? 'Send invoice' : 'Email invoice'}
+                      </Button>
+                    ) : null}
                     {(inv.amount_paid ?? 0) > 0 && canDownloadReceipt ? (
                       <Button variant="outline" size="sm" onClick={() => void downloadReceipt()}>
                         <ReceiptText className="size-4 mr-1" /> Download receipt

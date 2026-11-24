@@ -75,7 +75,8 @@ export function groupInvoiceLines(lines: InvoiceLine[]): InvoiceDayRow[] {
     const hours = group.reduce((n, l) => n + (l.hours || 0), 0);
     const amount = group.reduce((n, l) => n + (l.amount || 0), 0);
     const guardIds = new Set(group.map((l) => l.guard_id).filter((id): id is number => id != null));
-    const qty = group.reduce((n, l) => n + (Number(l.quantity) || 1), 0);
+    // Staff assigned, else the Qty typed in; neither means operatives were not given.
+    const qty = group.reduce((n, l) => n + (Number(l.quantity) || 0), 0);
     const siteNames = [...new Set(group.map((l) => l.site_name).filter((s): s is string => !!s))];
     const timing = lineTiming(first);
     rows.push({
@@ -85,7 +86,7 @@ export function groupInvoiceLines(lines: InvoiceLine[]): InvoiceDayRow[] {
       description: (first.description || '').trim() || 'Security services',
       siteNames,
       timings: timing ? [timing] : [],
-      operatives: Math.max(guardIds.size, qty) || group.length,
+      operatives: Math.max(guardIds.size, qty) || null,
       hours,
       rate: Number(first.rate || 0),
       rateIsBlended: false,
@@ -103,7 +104,7 @@ export function groupInvoiceLines(lines: InvoiceLine[]): InvoiceDayRow[] {
       siteNames: ln.site_name ? [ln.site_name] : [],
       timings: [lineTiming(ln)].filter((t): t is string => !!t),
       // A hand-entered line's Qty is the number of staff; a bare allowance has none.
-      operatives: (ln.hours || ln.rate) ? Number(ln.quantity) || 1 : null,
+      operatives: ln.hours || ln.rate ? (ln.guard_id ? 1 : Number(ln.quantity) || null) : null,
       hours: ln.hours || 0,
       rate: ln.rate ? Number(ln.rate) : null,
       rateIsBlended: false,

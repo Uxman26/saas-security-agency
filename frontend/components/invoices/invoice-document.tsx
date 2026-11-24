@@ -12,6 +12,8 @@ import { PoweredByControlOps } from '@/components/invoices/powered-by';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const ACCENT = '#D7141A';
+/** Brand orange: bar under INVOICE, line-table header, payment-details bar. */
+const BRAND = '#F45100';
 const DARK = '#1F1F1F';
 const SOFT = '#FDECEC';
 const PANEL = '#F4F4F5';
@@ -123,18 +125,20 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
   // No PO given: leave the row out rather than print an empty "Purchase Order:".
   if (invoice.po_number?.trim()) meta.push({ label: 'Purchase Order', value: invoice.po_number.trim() });
 
-  // No line has start/end times: leave the Timings column out instead of a column of dashes.
+  // A column no line fills in (no start/end times, no operatives given) is left out
+  // instead of showing a column of dashes.
   const showTiming = dayRows.some((r) => r.timings.length > 0);
+  const showOperatives = dayRows.some((r) => (r.operatives ?? 0) > 0);
   const columns = (
     [
       ['date', headers.date, 'text-left'],
       ['operatives', headers.operatives, 'text-center'],
-      ['hours', headers.hours, 'text-center'],
       ['shift_timing', headers.shift_timing, 'text-center'],
+      ['hours', headers.hours, 'text-center'],
       ['rate', headers.rate, 'text-center'],
       ['amount', headers.amount, 'text-right'],
     ] as const
-  ).filter(([key]) => key !== 'shift_timing' || showTiming);
+  ).filter(([key]) => (key !== 'shift_timing' || showTiming) && (key !== 'operatives' || showOperatives));
 
   const hasNotes = !!(invoice.notes?.trim() || invoice.rota_review?.trim());
 
@@ -182,7 +186,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
             <p className="text-4xl font-black tracking-tight sm:text-5xl" style={{ color: DARK }}>
               INVOICE
             </p>
-            <div className="mt-2 h-1.5 w-3/4 rounded-full" style={{ backgroundColor: ACCENT }} />
+            <div className="mt-2 h-1.5 w-3/4 rounded-full" style={{ backgroundColor: BRAND }} />
             <span className={`mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide print:hidden ${statusStyle}`}>
               {invoice.status}
             </span>
@@ -244,7 +248,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
         <div className="overflow-x-auto rounded-t-lg">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr style={{ backgroundColor: ACCENT }}>
+              <tr style={{ backgroundColor: BRAND }}>
                 {columns.map(([key, label, align]) => (
                   <th key={key} className={`px-4 py-3 text-xs font-bold uppercase tracking-wider text-white ${align}`}>
                     {editableHeaders && onHeadersChange ? (
@@ -285,13 +289,15 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                         </span>
                         {detail.length ? <span className="mt-0.5 block text-xs text-slate-500">{detail.join(' · ')}</span> : null}
                       </td>
-                      <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">
-                        {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
-                      </td>
-                      <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.hours > 0 ? fmtHours(row.hours) : '—'}</td>
+                      {showOperatives ? (
+                        <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">
+                          {row.operatives != null && row.operatives > 0 ? row.operatives : '—'}
+                        </td>
+                      ) : null}
                       {showTiming ? (
                         <td className="px-4 py-3.5 text-center tabular-nums whitespace-nowrap text-slate-800">{timingLabel}</td>
                       ) : null}
+                      <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.hours > 0 ? fmtHours(row.hours) : '—'}</td>
                       <td className="px-4 py-3.5 text-center tabular-nums text-slate-800">{row.rate != null ? fmtMoney(row.rate) : '—'}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-slate-800">{fmtMoney(row.amount)}</td>
                     </tr>
@@ -369,7 +375,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
       {showAccountFooter ? (
         <div className="px-8 pb-6 sm:px-10">
           <div className="flex flex-col gap-4 rounded-xl p-5 text-white sm:flex-row sm:items-center sm:justify-between" style={{ backgroundColor: DARK }}>
-            <div className="border-l-4 pl-4" style={{ borderColor: ACCENT }}>
+            <div className="border-l-4 pl-4" style={{ borderColor: BRAND }}>
               <p className="text-sm font-bold uppercase tracking-wider">Payment details</p>
               {invoice.bank_name ? <p className="mt-1.5 text-sm font-semibold">{invoice.bank_name}</p> : null}
               {invoice.account_name ? <p className="text-sm text-slate-300">Account Name: {invoice.account_name}</p> : null}

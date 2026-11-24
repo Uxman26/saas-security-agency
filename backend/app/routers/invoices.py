@@ -112,7 +112,7 @@ def _serialize_invoice(
                     shift_end=ln.shift_end,
                     description=ln.description,
                     service_detail=ln.service_detail,
-                    quantity=ln.quantity if ln.quantity is not None else 1,
+                    quantity=ln.quantity,
                     guard_id=ln.guard_id,
                     hours=ln.hours,
                     rate=ln.rate,

@@ -1422,7 +1422,7 @@ export const api = {
         shift_end?: string | null;
         description?: string | null;
         service_detail?: string | null;
-        quantity?: number;
+        quantity?: number | null;
         hours?: number;
         rate?: number;
         allowance_amount?: number;
@@ -1493,7 +1493,7 @@ export const api = {
         shift_end?: string | null;
         description?: string | null;
         service_detail?: string | null;
-        quantity?: number;
+        quantity?: number | null;
         hours: number;
         rate: number;
         allowance_amount?: number;

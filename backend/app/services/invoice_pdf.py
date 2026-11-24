@@ -32,6 +32,8 @@ def _company_contact(company: Company, admin: Optional[User]) -> tuple[str, str,
 
 
 ACCENT_HEX = "#D7141A"
+# Brand orange for the bar under INVOICE, the line-table header and the payment-details bar.
+BRAND_HEX = "#F45100"
 DARK_HEX = "#1F1F1F"
 NAVY_HEX = DARK_HEX  # statement PDF still imports the old name
 SOFT_HEX = "#FDECEC"
@@ -117,13 +119,14 @@ def _group_lines_by_day(lines, site_map) -> list:
         hours = sum(float(l.hours or 0) for l in group)
         amount = sum(float(l.amount or 0) for l in group)
         guards = len({l.guard_id for l in group if l.guard_id})
-        qty = sum(float(l.quantity or 1) for l in group)
+        # Staff assigned, else the Qty typed in; neither means operatives were not given.
+        qty = sum(float(l.quantity) for l in group if l.quantity)
         rows.append(
             {
                 "shift_date": day,
                 "label": day.strftime("%d/%m/%Y"),
                 "site_names": sorted({site_map[l.site_id].name for l in group if l.site_id in site_map}),
-                "operatives": int(max(guards, qty)) or len(group),
+                "operatives": int(max(guards, qty)),
                 "hours": round(hours, 2),
                 "rate": float(first.rate or 0),
                 "rate_is_blended": False,
@@ -141,7 +144,7 @@ def _group_lines_by_day(lines, site_map) -> list:
                 "label": label,
                 "site_names": [site_map[ln.site_id].name] if ln.site_id in site_map else [],
                 # A hand-entered line's Qty is the number of staff; a bare allowance has none.
-                "operatives": int(float(ln.quantity or 1)) if (ln.hours or ln.rate) else 0,
+                "operatives": (1 if ln.guard_id else int(float(ln.quantity or 0))) if (ln.hours or ln.rate) else 0,
                 "hours": round(float(ln.hours or 0), 2),
                 "rate": float(ln.rate) if ln.rate else None,
                 "rate_is_blended": False,
@@ -180,6 +183,7 @@ def render_invoice_pdf(
     )
     styles = getSampleStyleSheet()
     ACCENT = colors.HexColor(ACCENT_HEX)
+    BRAND = colors.HexColor(BRAND_HEX)
     DARK = colors.HexColor(DARK_HEX)
     PANEL = colors.HexColor(PANEL_HEX)
     SOFT = colors.HexColor(SOFT_HEX)
@@ -200,7 +204,7 @@ def render_invoice_pdf(
             details.append(Paragraph(bit.replace("\n", "<br/>"), small))
 
     underline = Table([[""]], colWidths=[4.2 * cm], rowHeights=[4])
-    underline.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), ACCENT), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+    underline.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), BRAND), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
     word_cell = [Paragraph("INVOICE", word_style), Spacer(1, 4), underline]
 
     if logo_flowable is not None:
@@ -347,8 +351,8 @@ def render_invoice_pdf(
     data = [[
         hdr["date"],
         hdr["operatives"],
-        hdr["hours"],
         hdr["shift_timing"],
+        hdr["hours"],
         hdr["rate"],
         hdr["amount"],
     ]]
@@ -370,21 +374,32 @@ def render_invoice_pdf(
         data.append([
             first,
             str(ops) if ops else "—",
-            _hours(hours) if hours else "—",
             timing,
+            _hours(hours) if hours else "—",
             _money(float(rate)) if rate is not None else "—",
             _money(row["amount"] or 0),
         ])
     if len(data) == 1:
         data.append([Paragraph("No line items", cell_muted), "", "", "", "", ""])
-    col_widths = [4.6 * cm, 2.4 * cm, 2.2 * cm, 3.0 * cm, 2.6 * cm, 3.2 * cm]
-    # No line has start/end times: leave the Timings column out instead of a column of dashes.
+    # Columns: Date | Operatives | Timings | Hours | Rate | Amount. A column no line
+    # fills in (no start/end times, no operatives given) is left out, not shown as dashes.
+    widths = [4.6, 2.4, 3.0, 2.2, 2.6, 3.2]
+    drop = set()
+    if not any(int(r["operatives"] or 0) for r in rows):
+        drop.add(1)
     if not any((r.get("timing") or "—") != "—" for r in rows):
-        data = [row[:3] + row[4:] for row in data]
-        col_widths = [6.0 * cm, 2.8 * cm, 2.6 * cm, 2.8 * cm, 3.8 * cm]
+        drop.add(2)
+    keep = [i for i in range(6) if i not in drop]
+    data = [[row[i] for i in keep] for row in data]
+    spare = sum(widths[i] for i in drop)
+    kept = [widths[i] for i in keep]
+    # Give the freed width to Date and Amount.
+    kept[0] += spare * 0.6
+    kept[-1] += spare * 0.4
+    col_widths = [w * cm for w in kept]
     t_lines = Table(data, colWidths=col_widths, repeatRows=1)
     style_cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+        ("BACKGROUND", (0, 0), (-1, 0), BRAND),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
@@ -543,7 +558,7 @@ def render_invoice_pdf(
             left_bits.append(Paragraph(f"Account Name: {payee_account_name.strip()}", pay_sub))
         bar = Table([[left_bits]], colWidths=[8.2 * cm])
         bar.setStyle(TableStyle([
-            ("LINEBEFORE", (0, 0), (0, -1), 3, ACCENT),
+            ("LINEBEFORE", (0, 0), (0, -1), 3, BRAND),
             ("LEFTPADDING", (0, 0), (-1, -1), 10),
         ]))
         boxes = []

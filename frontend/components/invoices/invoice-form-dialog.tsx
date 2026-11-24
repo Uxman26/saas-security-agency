@@ -150,7 +150,8 @@ export const emptyLine = (): FormLine => ({
   shift_end: '',
   description: '',
   service_detail: '',
-  quantity: '1',
+  // Blank until typed: an invoice whose lines give no operatives has no Operatives column.
+  quantity: '',
   hours: '0',
   rate: '0',
   allowance: 0,
@@ -166,7 +167,7 @@ const fromServerLine = (l: InvoiceLine): FormLine => ({
   shift_end: (l.shift_end ?? '').slice(0, 5),
   description: l.description ?? '',
   service_detail: l.service_detail ?? '',
-  quantity: String(l.quantity ?? 1),
+  quantity: l.quantity != null ? String(l.quantity) : '',
   hours: String(l.hours ?? 0),
   rate: String(l.rate ?? 0),
   allowance: l.allowance_amount ?? 0,
@@ -242,7 +243,7 @@ export const linePayload = (l: FormLine, forcedSiteId?: string) => {
     shift_end: l.shift_end || null,
     description: l.description.trim() || null,
     service_detail: l.service_detail.trim() || null,
-    quantity: parseFloat(l.quantity) || 1,
+    quantity: parseFloat(l.quantity) || null,
     hours,
     rate,
     allowance_amount: l.allowance || 0,
@@ -522,7 +523,13 @@ export function LineItemsEditor({
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-[1fr_1fr_1fr_1.2fr]">
                 <div className="space-y-1.5">
                   <InvoiceFieldLabel icon={Hash}>Qty</InvoiceFieldLabel>
-                  <Input type="number" step="0.01" value={line.quantity} onChange={(e) => setLine(line.key, { quantity: e.target.value })} />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="Staff"
+                    value={line.quantity}
+                    onChange={(e) => setLine(line.key, { quantity: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <InvoiceFieldLabel icon={Clock}>Hours</InvoiceFieldLabel>
@@ -1235,7 +1242,7 @@ function buildPreviewInvoice({
       shift_end: l.shift_end || null,
       description: l.description.trim() || null,
       service_detail: l.service_detail.trim() || null,
-      quantity: parseFloat(l.quantity) || 1,
+      quantity: parseFloat(l.quantity) || null,
       hours: parseFloat(l.hours) || 0,
       rate: parseFloat(l.rate) || 0,
       amount: lineAmount(l),

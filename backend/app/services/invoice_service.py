@@ -389,7 +389,8 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
             shift_end = ld.get("shift_end")
             description = ld.get("description")
             service_detail = ld.get("service_detail")
-            quantity = ld.get("quantity") or 1
+            # Left empty: operatives not given (the invoice then has no Operatives column).
+            quantity = ld.get("quantity") or None
         else:
             guard_id = ld.guard_id
             shift_date = ld.shift_date
@@ -397,7 +398,7 @@ def create_invoice(db: Session, data: InvoiceCreate, user_id: int) -> Invoice:
             shift_end = ld.shift_end
             description = ld.description
             service_detail = ld.service_detail
-            quantity = ld.quantity or 1
+            quantity = ld.quantity or None
         assert_owned_by_company(db, Guard, guard_id, company.id, field_name="guard_id")
         db.add(
             InvoiceLine(
@@ -671,7 +672,7 @@ def add_invoice_line(db: Session, invoice_id: int, data: InvoiceLineBase, user_i
         shift_end=data.shift_end,
         description=data.description,
         service_detail=data.service_detail,
-        quantity=data.quantity if data.quantity is not None else 1,
+        quantity=data.quantity or None,
         hours=hours,
         rate=rate,
         amount=amount,

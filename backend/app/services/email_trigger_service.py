@@ -69,65 +69,77 @@ def notify_shift_assignment(db: Session, user_id: int, assignment: Assignment) -
     )
 
 
+def _safe_send_invoice_email(db: Session, user_id: int, inv: Invoice, kind: str, balance: Optional[float] = None) -> None:
+    """Automatic invoice / reminder email in the branded layout, never raising."""
+    from app.services import invoice_email
+
+    try:
+        company = get_company_by_user_id(db, user_id)
+        if not is_module_enabled(company, "email") or not email_service.is_company_configured(company):
+            return
+        _name, recipient = invoice_email._billed_to(inv)
+        if not recipient:
+            return
+        msg = invoice_email.build(db, inv, kind=kind, balance=balance)
+        email_service.send_and_log(
+            db,
+            company.id,
+            recipient,
+            msg["subject"],
+            msg["html"],
+            "payment_reminder" if kind == "reminder" else "invoice_sent",
+            msg["attachments"],
+            msg["inline_images"],
+        )
+    except Exception:
+        pass
+
+
 def notify_invoice_sent(db: Session, user_id: int, inv: Invoice) -> None:
-    client = db.query(Client).filter(Client.id == inv.client_id).first()
-    if not client:
-        return
-    _safe_send(
-        db,
-        user_id,
-        _client_email(client),
-        invoice_label(inv),
-        "invoice_sent",
-        invoice_id=invoice_no(inv),
-        invoice_number=invoice_no(inv),
-        amount=f"£{float(inv.total or 0):.2f}",
-        due_date=str(inv.due_date or ""),
-    )
+    _safe_send_invoice_email(db, user_id, inv, "invoice")
 
 
 def notify_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: float) -> None:
-    client = db.query(Client).filter(Client.id == inv.client_id).first()
-    if not client:
-        return
-    _safe_send(
-        db,
-        user_id,
-        _client_email(client),
-        f"Payment reminder — {invoice_label(inv)}",
-        "payment_reminder",
-        invoice_id=invoice_no(inv),
-        invoice_number=invoice_no(inv),
-        amount=f"£{balance:.2f}",
-    )
+    _safe_send_invoice_email(db, user_id, inv, "reminder", balance)
 
 
-def send_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: float) -> str:
+def build_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: float, *, preview: bool = False) -> dict:
+    """The reminder email exactly as it would be sent: recipient (None if there is no
+    address on record), subject, HTML body and, unless previewing, the attachments."""
+    from app.services import invoice_email
+
+    _name, recipient = invoice_email._billed_to(inv)
+    msg = invoice_email.build(db, inv, kind="reminder", balance=balance, preview=preview)
+    return {
+        "recipient": recipient or None,
+        "subject": msg["subject"],
+        "body": msg["html"],
+        "attachments": msg["attachments"],
+        "inline_images": msg["inline_images"],
+    }
+
+
+def send_payment_reminder(
+    db: Session, user_id: int, inv: Invoice, balance: float, to_email: Optional[str] = None
+) -> str:
     """Email a reminder someone asked for and return the recipient.
 
+    `to_email` is the address confirmed in the preview; left out, the one on record.
     Unlike the automatic notify_* helpers this raises on failure, so the person who
     clicked Send is never told an email went out when it did not.
     """
-    client = db.query(Client).filter(Client.id == inv.client_id).first()
-    recipient = _client_email(client) if client else None
+    msg = build_payment_reminder(db, user_id, inv, balance)
+    recipient = (to_email or "").strip() or msg["recipient"]
     if not recipient:
         raise HTTPException(
             status_code=400,
             detail="This client has no email address. Add one to the client record first.",
         )
-    company = get_company_by_user_id(db, user_id)
-    code = (inv.currency or "GBP").upper()
-    symbol = INVOICE_CURRENCIES.get(code, f"{code} ")
-    template = email_config_service.parse_templates(company.email_templates_json)["payment_reminder"]
-    try:
-        body = template.format(**esc_map({"invoice_id": invoice_no(inv), "invoice_number": invoice_no(inv), "amount": f"{symbol}{balance:,.2f}"}))
-    except (KeyError, IndexError, ValueError):
-        raise HTTPException(
-            status_code=400,
-            detail="The payment reminder template is invalid. Check it in Email settings.",
-        )
+    if "@" not in recipient or any(c.isspace() for c in recipient):
+        raise HTTPException(status_code=400, detail="Enter a valid email address.")
     email_config_service.send_tenant_email(
-        db, user_id, recipient, f"Payment reminder — {invoice_label(inv)}", body, "payment_reminder"
+        db, user_id, recipient, msg["subject"], msg["body"], "payment_reminder",
+        msg["attachments"], msg["inline_images"],
     )
     return recipient
 

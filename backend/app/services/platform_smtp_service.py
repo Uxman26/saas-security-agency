@@ -6,6 +6,7 @@ import smtplib
 import socket
 import ssl
 from email.mime.application import MIMEApplication
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Optional
@@ -240,6 +241,7 @@ def send_with_config(
     subject: str,
     body: str,
     attachments: Optional[list[tuple[str, bytes]]] = None,
+    inline_images: Optional[list[tuple[str, bytes]]] = None,
 ) -> None:
     mail_from = (cfg.get("mail_from") or cfg.get("mail_username") or "").strip()
     from_name = (cfg.get("mail_from_name") or "ControlOps").strip()
@@ -249,7 +251,18 @@ def send_with_config(
     msg["From"] = f"{from_name} <{mail_from}>"
     msg["To"] = to_email
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "html"))
+    if inline_images:
+        # HTML plus the images it shows by cid:, kept together so clients draw them in place.
+        related = MIMEMultipart("related")
+        related.attach(MIMEText(body, "html"))
+        for cid, data in inline_images:
+            img = MIMEImage(data, _subtype="png")
+            img.add_header("Content-ID", f"<{cid}>")
+            img.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
+            related.attach(img)
+        msg.attach(related)
+    else:
+        msg.attach(MIMEText(body, "html"))
     for filename, content in attachments or []:
         part = MIMEApplication(content, _subtype="pdf")
         part.add_header("Content-Disposition", "attachment", filename=filename)

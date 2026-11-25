@@ -137,16 +137,18 @@ def _billable_hours_for_shift(
 ) -> Optional[float]:
     """Hours to bill for one planner shift, or None when the shift must not be invoiced.
 
-    Unpaid cancellations are never billed. Paid cancellations bill the agreed client
-    hours (which may differ from staff paid hours). An early finish bills the Chargeable
-    Hours entered for it. Everything else keeps the scheduled span.
+    Unpaid cancellations, no shows and absences are never billed: nobody worked the
+    shift, so the client is not charged (payroll does not pay them either). Paid
+    cancellations bill the agreed client hours (which may differ from staff paid hours).
+    An early finish bills the Chargeable Hours entered for it. Everything else keeps the
+    scheduled span.
     """
     if not isinstance(att, dict):
         return scheduled_hours if agreed_early is None else agreed_early
-    status = str(att.get("status") or "").strip().lower().replace(" ", "_")
+    status = str(att.get("status") or "").strip().lower().replace(" ", "_").replace("-", "_")
     if status == "cancelled_unpaid":
         status = CANCELLED_UNPAID
-    if status == CANCELLED_UNPAID:
+    if status in (CANCELLED_UNPAID, "no_show", "noshow", "absent"):
         return None
     if status == CANCELLED_PAID:
         client = _parse_att_hours(att.get("clientHours") if "clientHours" in att else att.get("client_hours"))
@@ -1150,9 +1152,8 @@ def update_invoice_status(db: Session, invoice_id: int, status: str, user_id: in
     return inv
 
 
-def send_overdue_reminder(db: Session, invoice_id: int, user_id: int) -> str:
-    """Email the client a reminder for an overdue invoice and return the recipient."""
-    from app.services import email_trigger_service
+def _reminder_invoice(db: Session, invoice_id: int, user_id: int):
+    """The invoice and its outstanding balance, if a reminder may be sent for it."""
     from app.services.invoice_payment_service import invoice_balance_due
 
     inv = get_invoice(db, invoice_id, user_id)
@@ -1166,7 +1167,31 @@ def send_overdue_reminder(db: Session, invoice_id: int, user_id: int) -> str:
     balance = invoice_balance_due(db, inv)
     if balance <= 0:
         raise HTTPException(status_code=400, detail="This invoice has no balance outstanding")
-    recipient = email_trigger_service.send_payment_reminder(db, user_id, inv, balance)
+    return inv, balance
+
+
+def preview_overdue_reminder(db: Session, invoice_id: int, user_id: int) -> dict:
+    """The reminder email for an overdue invoice, built but not sent."""
+    from app.services import email_trigger_service
+
+    inv, balance = _reminder_invoice(db, invoice_id, user_id)
+    msg = email_trigger_service.build_payment_reminder(db, user_id, inv, balance, preview=True)
+    return {
+        "recipient": msg["recipient"],
+        "subject": msg["subject"],
+        "body": msg["body"],
+        "balance": balance,
+        "currency": (inv.currency or "GBP").upper(),
+    }
+
+
+def send_overdue_reminder(db: Session, invoice_id: int, user_id: int, to_email: Optional[str] = None) -> str:
+    """Email the client a reminder for an overdue invoice and return the recipient."""
+    from app.services import email_trigger_service
+
+    inv, balance = _reminder_invoice(db, invoice_id, user_id)
+    company = get_company_by_user_id(db, user_id)
+    recipient = email_trigger_service.send_payment_reminder(db, user_id, inv, balance, to_email)
     log_invoice_audit(db, company.id, user_id, inv.id, "reminder_sent", {"recipient": recipient, "balance": balance})
     db.commit()
     return recipient

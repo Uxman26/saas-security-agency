@@ -285,7 +285,7 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
                     <tr key={row.key} className="border-b border-slate-200" style={{ backgroundColor: idx % 2 ? PANEL : '#fff' }}>
                       <td className="px-4 py-3.5 text-slate-800">
                         <span className={row.shiftDate ? 'whitespace-nowrap' : 'font-semibold'}>
-                          {row.shiftDate ? fmtLongDate(row.shiftDate) : row.description || row.label}
+                          {row.shiftDate ? fmtLongDate(row.shiftDate) : row.description || row.label || '—'}
                         </span>
                         {detail.length ? <span className="mt-0.5 block text-xs text-slate-500">{detail.join(' · ')}</span> : null}
                       </td>

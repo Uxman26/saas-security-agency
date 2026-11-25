@@ -1481,8 +1481,15 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ to: to || null }),
       }),
-    sendReminder: (id: number): Promise<{ message: string; recipient: string }> =>
-      request<{ message: string; recipient: string }>(`/invoices/${id}/send-reminder`, { method: 'POST' }),
+    reminderPreview: (
+      id: number
+    ): Promise<{ recipient: string | null; subject: string; body: string; balance: number; currency: string }> =>
+      request(`/invoices/${id}/reminder-preview`),
+    sendReminder: (id: number, to?: string): Promise<{ message: string; recipient: string }> =>
+      request<{ message: string; recipient: string }>(`/invoices/${id}/send-reminder`, {
+        method: 'POST',
+        body: JSON.stringify(to ? { to } : {}),
+      }),
     addLine: (
       invoiceId: number,
       data: {

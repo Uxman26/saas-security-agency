@@ -24,6 +24,7 @@ import { can, canModule } from '@/lib/permissions';
 import { canSendInvoiceReminder, formatDueCountdown, invoiceFilename, invoiceLabel, isInvoiceOpen, isInvoiceOverdue, isInvoicePastDue, nextInvoiceAction } from '@/lib/invoice-utils';
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
+import { ReminderPreviewDialog } from '@/components/invoices/reminder-preview-dialog';
 import { invoiceSendRequest } from '@/lib/invoice-send';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
@@ -183,7 +184,6 @@ export default function InvoicesPage() {
   const [statusSavingId, setStatusSavingId] = useState<number | null>(null);
   const [payLoading, setPayLoading] = useState(false);
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
-  const [reminderSending, setReminderSending] = useState(false);
   const { sortKey, sortDir, toggleSort } = useTableSort('client');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -658,20 +658,6 @@ export default function InvoicesPage() {
   };
 
   const canSendReminder = canModule(user, 'invoices', 'send');
-
-  const handleSendReminder = async () => {
-    if (!reminderInvoice || reminderSending) return;
-    setReminderSending(true);
-    try {
-      const { message } = await api.invoices.sendReminder(reminderInvoice.id);
-      toast.success(message);
-      setReminderInvoice(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not send the reminder');
-    } finally {
-      setReminderSending(false);
-    }
-  };
 
   const canSendInvoice = canModule(user, 'invoices', 'status_change') && canSendReminder;
   const canRecordPayment = canModule(user, 'payments', 'create');
@@ -1463,22 +1449,7 @@ export default function InvoicesPage() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={!!reminderInvoice} onOpenChange={(open) => !open && !reminderSending && setReminderInvoice(null)}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Send reminder</DialogTitle>
-                <DialogDescription>Are you sure you want to send a reminder email to this client?</DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setReminderInvoice(null)} disabled={reminderSending}>
-                  Cancel
-                </Button>
-                <Button onClick={() => void handleSendReminder()} disabled={reminderSending}>
-                  {reminderSending ? 'Sending…' : 'Yes'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <ReminderPreviewDialog invoice={reminderInvoice} onClose={() => setReminderInvoice(null)} />
 
           <SendDocumentDialog request={sendRequest} onClose={() => setSendRequest(null)} />
           </>

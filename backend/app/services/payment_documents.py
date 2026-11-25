@@ -319,7 +319,6 @@ def send_invoice_email(db: Session, invoice_id: int, user_id: int, to: Optional[
     The automatic "invoice sent" email is not also sent: this one replaces it.
     """
     from app.services import email_config_service, invoice_service
-    from app.services.invoice_pdf import render_invoice_pdf
 
     inv = invoice_service.get_invoice(db, invoice_id, user_id)
     if inv.status == "cancelled":
@@ -327,22 +326,12 @@ def send_invoice_email(db: Session, invoice_id: int, user_id: int, to: Optional[
     recipient = (to or _billed_party(inv)[1] or "").strip()
     if not recipient:
         raise HTTPException(status_code=400, detail="There is no email address on record. Enter one to send the invoice.")
-    lines = sorted(inv.lines, key=lambda x: x.id)
-    admin = db.query(User).filter(User.id == inv.company.admin_id).first() if inv.company else None
-    pdf = render_invoice_pdf(db, inv, inv.company, inv.client, list(lines), admin)
-    code = (inv.currency or "GBP").upper()
-    body = _email_body(
-        inv.company,
-        "invoice_sent",
-        {
-            "invoice_id": invoice_no(inv),
-            "invoice_number": invoice_no(inv),
-            "amount": _money(float(inv.total or 0), code),
-            "due_date": _long_date(inv.due_date) if inv.due_date else "",
-        },
-    )
+    from app.services import invoice_email
+
+    msg = invoice_email.build(db, inv, kind="invoice")
     email_config_service.send_tenant_email(
-        db, user_id, recipient, invoice_label(inv), body, "invoice_sent", [(invoice_filename(inv), pdf)]
+        db, user_id, recipient, msg["subject"], msg["html"], "invoice_sent",
+        msg["attachments"], msg["inline_images"],
     )
     invoice_service.log_invoice_audit(db, inv.company_id, user_id, inv.id, "invoice_emailed", {"recipient": recipient})
     db.commit()

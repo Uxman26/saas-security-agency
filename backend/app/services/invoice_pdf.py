@@ -137,7 +137,8 @@ def _group_lines_by_day(lines, site_map) -> list:
         )
 
     for ln in undated:
-        label = ln.description or ("Allowance" if float(ln.allowance_amount or 0) > 0 else "Charge")
+        # No description typed: leave the Date cell blank rather than inventing a word.
+        label = ln.description or ("Allowance" if float(ln.allowance_amount or 0) > 0 else "")
         rows.append(
             {
                 "shift_date": None,
@@ -364,7 +365,7 @@ def render_invoice_pdf(
             detail.append(desc)
         if multi_site and row["site_names"]:
             detail.append(", ".join(row["site_names"]))
-        first = [Paragraph(_long_date(row["shift_date"]) if dated else (desc or row["label"]), cell if dated else cell_bold)]
+        first = [Paragraph(_long_date(row["shift_date"]) if dated else (desc or row["label"] or "—"), cell if dated else cell_bold)]
         if detail:
             first.append(Paragraph(" · ".join(detail), cell_muted))
         hours = float(row["hours"] or 0)

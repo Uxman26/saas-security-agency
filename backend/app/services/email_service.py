@@ -42,8 +42,9 @@ def _send_with_config(
     subject: str,
     body: str,
     attachments: Optional[list[tuple[str, bytes]]] = None,
+    inline_images: Optional[list[tuple[str, bytes]]] = None,
 ) -> None:
-    send_with_config(cfg, to_email, subject, body, attachments)
+    send_with_config(cfg, to_email, subject, body, attachments, inline_images)
 
 
 def send_email_async(to_email: str, subject: str, body: str) -> None:
@@ -85,12 +86,13 @@ def send_company_email(
     subject: str,
     body: str,
     attachments: Optional[list[tuple[str, bytes]]] = None,
+    inline_images: Optional[list[tuple[str, bytes]]] = None,
 ) -> bool:
     if not to_email:
         raise HTTPException(status_code=400, detail="Recipient email is required")
     cfg = company_smtp_config(company)
     try:
-        _send_with_config(cfg, to_email, subject, body, attachments)
+        _send_with_config(cfg, to_email, subject, body, attachments, inline_images)
         return True
     except HTTPException:
         raise
@@ -108,6 +110,7 @@ def send_and_log(
     body: str,
     template_key: Optional[str] = None,
     attachments: Optional[list[tuple[str, bytes]]] = None,
+    inline_images: Optional[list[tuple[str, bytes]]] = None,
 ) -> EmailLog:
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -122,7 +125,7 @@ def send_and_log(
     db.add(log)
     db.flush()
     try:
-        send_company_email(company, to_email, subject, body, attachments)
+        send_company_email(company, to_email, subject, body, attachments, inline_images)
         log.status = "sent"
     except HTTPException as e:
         log.status = "failed"

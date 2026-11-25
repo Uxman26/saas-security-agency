@@ -29,8 +29,8 @@ const TEMPLATE_LABELS: Record<string, string> = {
 
 const TEMPLATE_VARS: Record<string, string> = {
   shift_reminder: '{date}, {site}, {shift}',
-  invoice_sent: '{invoice_id}, {amount}, {due_date}',
-  payment_reminder: '{invoice_id}, {amount}',
+  invoice_sent: '{invoice_number}, {amount}, {due_date}, {client_name}, {company_name}',
+  payment_reminder: '{invoice_number}, {amount}, {due_date}, {client_name}, {company_name}',
   appointment: '{date}, {time}',
   alert: '{message}',
 };

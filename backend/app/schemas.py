@@ -1663,7 +1663,7 @@ class InvoiceLineBase(BaseModel):
     shift_end: Optional[str] = None
     description: Optional[str] = None
     service_detail: Optional[str] = None
-    quantity: Optional[float] = 1
+    quantity: Optional[float] = None
     hours: float = 0
     rate: float = 0
     amount: float = 0

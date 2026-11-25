@@ -1313,7 +1313,8 @@ class InvoiceLine(Base):
     shift_end = Column(String, nullable=True)
     description = Column(String)
     service_detail = Column(String, nullable=True)
-    quantity = Column(Float, default=1)
+    # No default: an empty Qty means operatives were not given (no Operatives column).
+    quantity = Column(Float, nullable=True)
     hours = Column(Float, default=0)
     rate = Column(Float, default=0)
     amount = Column(Float, default=0)

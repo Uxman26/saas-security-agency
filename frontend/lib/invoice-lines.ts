@@ -99,8 +99,9 @@ export function groupInvoiceLines(lines: InvoiceLine[]): InvoiceDayRow[] {
     rows.push({
       key: `u:${ln.id}`,
       shiftDate: null,
-      label: ln.description ?? ((ln.allowance_amount ?? 0) > 0 ? 'Allowance' : 'Charge'),
-      description: ln.description ?? ((ln.allowance_amount ?? 0) > 0 ? 'Allowance' : 'Charge'),
+      // No description typed: the Date cell stays blank ("—") rather than saying "Charge".
+      label: ln.description || ((ln.allowance_amount ?? 0) > 0 ? 'Allowance' : ''),
+      description: ln.description || ((ln.allowance_amount ?? 0) > 0 ? 'Allowance' : ''),
       siteNames: ln.site_name ? [ln.site_name] : [],
       timings: [lineTiming(ln)].filter((t): t is string => !!t),
       // A hand-entered line's Qty is the number of staff; a bare allowance has none.

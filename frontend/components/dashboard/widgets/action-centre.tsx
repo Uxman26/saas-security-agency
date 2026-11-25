@@ -3,14 +3,13 @@
 import { memo, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { AlertOctagon, AlertTriangle, BellRing, CheckCircle2, Info, Loader2 } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, BellRing, CheckCircle2, Info } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { api } from '@/lib/api';
 import { canModule } from '@/lib/permissions';
-import { toast, toastMutationError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { daysUntil, fmtDate, fmtGbp } from '@/lib/dashboard/format';
 import type { ComplianceAlert, ContractExpiryAlert, DashboardInsights } from '@/lib/types';
+import { ReminderPreviewDialog, type ReminderTarget } from '@/components/invoices/reminder-preview-dialog';
 import { WidgetCard } from '../kit/widget-card';
 import { EmptyState } from '../kit/empty-state';
 import { Segmented } from '../kit/segmented';
@@ -50,7 +49,7 @@ function ActionCentreInner({ documents, contracts, sia, requests, invoices, part
   const t = useTranslations('dashboard.actions');
   const { user } = useAuth();
   const [tab, setTab] = useState<'all' | Group>('all');
-  const [sending, setSending] = useState<number | null>(null);
+  const [reminderFor, setReminderFor] = useState<ReminderTarget | null>(null);
   const canRemind = canModule(user, 'invoices', 'send');
 
   const items = useMemo(() => {
@@ -133,17 +132,8 @@ function ActionCentreInner({ documents, contracts, sia, requests, invoices, part
   const list = tab === 'all' ? items : items.filter((i) => i.group === tab);
   const critical = items.filter((i) => i.severity === 'critical').length;
 
-  const remind = async (id: number) => {
-    setSending(id);
-    try {
-      const r = await api.invoices.sendReminder(id);
-      toast.success(r.message);
-    } catch (e) {
-      toastMutationError(e, t('remindFailed'));
-    } finally {
-      setSending(null);
-    }
-  };
+  // Opens the reminder preview; nothing is emailed until it is confirmed there.
+  const remind = (id: number) => setReminderFor({ id, invoice_number: null });
 
   const tabs = [
     { value: 'all' as const, label: t('tab.all'), badge: items.length },
@@ -184,11 +174,10 @@ function ActionCentreInner({ documents, contracts, sia, requests, invoices, part
                   {it.invoiceId && canRemind ? (
                     <button
                       type="button"
-                      onClick={() => void remind(it.invoiceId!)}
-                      disabled={sending === it.invoiceId}
+                      onClick={() => remind(it.invoiceId!)}
                       className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-foreground/80 ring-1 ring-hairline transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                     >
-                      {sending === it.invoiceId ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <BellRing className="size-3.5" aria-hidden />}
+                      <BellRing className="size-3.5" aria-hidden />
                       {t('remind')}
                     </button>
                   ) : null}
@@ -206,6 +195,7 @@ function ActionCentreInner({ documents, contracts, sia, requests, invoices, part
         </ul>
       )}
       {partial ? <p className="mt-3 text-[11px] text-muted-foreground">{t('partial')}</p> : null}
+      <ReminderPreviewDialog invoice={reminderFor} onClose={() => setReminderFor(null)} />
     </WidgetCard>
   );
 }

@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi import status as http_status
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import date
 from app.database import get_db
@@ -583,13 +584,30 @@ def update_status(
     return _serialize_invoice(inv, True, db)
 
 
-@router.post("/{invoice_id}/send-reminder")
-def send_invoice_reminder(
+class ReminderSendBody(BaseModel):
+    to: Optional[str] = None
+
+
+@router.get("/{invoice_id}/reminder-preview")
+def preview_invoice_reminder(
     invoice_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_internal_module("invoices", "send")),
 ):
-    recipient = invoice_service.send_overdue_reminder(db, invoice_id, current_user.id)
+    """The reminder email (recipient, subject, HTML body) as it would go out, unsent."""
+    return invoice_service.preview_overdue_reminder(db, invoice_id, current_user.id)
+
+
+@router.post("/{invoice_id}/send-reminder")
+def send_invoice_reminder(
+    invoice_id: int,
+    body: Optional[ReminderSendBody] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("invoices", "send")),
+):
+    recipient = invoice_service.send_overdue_reminder(
+        db, invoice_id, current_user.id, to_email=body.to if body else None
+    )
     return {"message": f"Reminder sent to {recipient}", "recipient": recipient}
 
 

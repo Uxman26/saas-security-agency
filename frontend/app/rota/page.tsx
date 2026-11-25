@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleGuard } from '@/components/module-guard';
 import { InlineTableSkeleton } from '@/components/skeletons';
@@ -72,6 +72,9 @@ import {
 } from '@/components/work-filter-bar';
 
 type Tab = 'active' | 'draft' | 'old';
+/** The tabs on the page: each kind of rota, plus every rota in one list. */
+type HubTab = Tab | 'all';
+const HUB_TABS: HubTab[] = ['all', 'active', 'draft', 'old'];
 type RotaView = 'list' | 'week' | 'month';
 
 /** Planned shifts on the grid, and how many of them reached staff (published). */
@@ -131,8 +134,12 @@ function rotaType(r: RotaPlanListItem): { label: string; tone: BadgeTone } {
   return { label: `${n} days`, tone: 'muted' };
 }
 
-/** Draft, Published, or Active while a published rota is actually running. */
-function rotaStatus(r: RotaPlanListItem): { label: string; tone: BadgeTone } {
+/**
+ * Draft, Published, or Active while a published rota is actually running. With
+ * showArchived (the All rotas tab) an ended rota says Archived, since no tab says so.
+ */
+function rotaStatus(r: RotaPlanListItem, showArchived = false): { label: string; tone: BadgeTone } {
+  if (showArchived && isEnded(r)) return { label: r.status === 'published' ? 'Archived' : 'Archived draft', tone: 'muted' };
   if (r.status !== 'published') return { label: 'Draft', tone: 'warning' };
   if (isRunningNow(r)) return { label: 'Active', tone: 'info' };
   return { label: 'Published', tone: 'positive' };
@@ -157,10 +164,28 @@ function RotaHubPage() {
   const canDeleteRota = !portal && canModule(user, 'rota', 'delete');
   const canPublishRota = !portal && (canModule(user, 'rota', 'publish') || canEditRota);
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const urlTab = searchParams.get('tab');
-  const initialTab: Tab = urlTab === 'old' ? 'old' : urlTab === 'draft' ? 'draft' : 'active';
+  const initialTab: HubTab = HUB_TABS.includes(urlTab as HubTab) ? (urlTab as HubTab) : 'active';
 
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const [tab, setTabState] = useState<HubTab>(initialTab);
+  // The tab lives in the URL (?tab=old) so a refresh, or a shared link, opens the same tab.
+  const setTab = useCallback(
+    (next: HubTab) => {
+      setTabState(next);
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === 'active') params.delete('tab');
+      else params.set('tab', next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
+  // Back / forward between tabs, or a link to another tab, while the page stays mounted.
+  useEffect(() => {
+    setTabState(initialTab);
+  }, [initialTab]);
   const [rotas, setRotas] = useState<RotaPlanListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -244,13 +269,16 @@ function RotaHubPage() {
     [rotas, statusFilter, nameFilter, rangeFrom, rangeTo]
   );
 
-  const tabRotas = useMemo(() => filteredRotas.filter((r) => tabOf(r) === tab), [filteredRotas, tab]);
+  const tabRotas = useMemo(
+    () => (tab === 'all' ? filteredRotas : filteredRotas.filter((r) => tabOf(r) === tab)),
+    [filteredRotas, tab]
+  );
 
   // A search that finds nothing here may still match rotas in another tab — most often
   // a site whose rotas have all ended and moved to Archived. Counted so the empty state
   // can point there instead of looking like the rotas are missing.
   const matchesByTab = useMemo(() => {
-    const out: Record<Tab, number> = { active: 0, draft: 0, old: 0 };
+    const out: Record<HubTab, number> = { all: filteredRotas.length, active: 0, draft: 0, old: 0 };
     for (const r of filteredRotas) out[tabOf(r)] += 1;
     return out;
   }, [filteredRotas]);
@@ -264,6 +292,7 @@ function RotaHubPage() {
         const n = Number(r.unmarked_attendance_count ?? 0);
         if (!(n > 0)) return false;
         const ended = isEnded(r);
+        if (tab === 'all') return true;
         if (tab === 'active') return !ended && r.status === 'published';
         if (tab === 'draft') return !ended && r.status !== 'published';
         return ended;
@@ -277,7 +306,8 @@ function RotaHubPage() {
   // Rotas per tab still waiting on attendance, counted before the page's own filters so
   // the tab badge stays put while the user narrows the list.
   const unmarkedByTab = useMemo(() => {
-    const out: Record<Tab, { rotas: number; shifts: number }> = {
+    const out: Record<HubTab, { rotas: number; shifts: number }> = {
+      all: { rotas: 0, shifts: 0 },
       active: { rotas: 0, shifts: 0 },
       draft: { rotas: 0, shifts: 0 },
       old: { rotas: 0, shifts: 0 },
@@ -288,6 +318,8 @@ function RotaHubPage() {
       const t = tabOf(r);
       out[t].rotas += 1;
       out[t].shifts += n;
+      out.all.rotas += 1;
+      out.all.shifts += n;
     }
     return out;
   }, [rotas]);
@@ -660,7 +692,7 @@ function RotaHubPage() {
     const head = ['Rota', 'Start', 'End', 'Days', 'Type', 'Clients', 'Sites', 'Shifts', 'Staff', 'Status', 'Unmarked', 'Last updated'];
     const body = rows.map((r) => [
       r.name, r.start_date, r.end_date, r.day_count, rotaType(r).label, r.client_names.join('; '), r.site_names.join('; '),
-      r.shift_count, r.staff_count, rotaStatus(r).label, r.unmarked_attendance_count ?? 0,
+      r.shift_count, r.staff_count, rotaStatus(r, tab === 'all').label, r.unmarked_attendance_count ?? 0,
       r.updated_at ?? r.created_at,
     ]);
     const csv = [head, ...body].map((line) => line.map(csvCell).join(',')).join('\n');
@@ -676,9 +708,10 @@ function RotaHubPage() {
   const filtersActive = !!(nameFilter || rangeFrom || rangeTo || statusFilter !== 'all' || needsMarking || hasWorkFilters(workFilters));
   const selectedOne = selected.length === 1 ? listedRotas.find((r) => r.id === selected[0]) ?? null : null;
 
-  const unmarkedTitle = (t: Tab) =>
+  const unmarkedTitle = (t: HubTab) =>
     `${unmarkedByTab[t].rotas} rota${unmarkedByTab[t].rotas === 1 ? '' : 's'} with ${unmarkedByTab[t].shifts} shift${unmarkedByTab[t].shifts === 1 ? '' : 's'} where attendance was never marked`;
-  const tabs: { id: Tab; label: string; badge?: number; badgeTitle?: string }[] = [
+  const tabs: { id: HubTab; label: string; badge?: number; badgeTitle?: string }[] = [
+    { id: 'all', label: 'All rotas', badge: unmarkedByTab.all.rotas, badgeTitle: unmarkedTitle('all') },
     { id: 'active', label: 'Active rotas', badge: unmarkedByTab.active.rotas, badgeTitle: unmarkedTitle('active') },
     { id: 'draft', label: 'Draft rotas' },
     { id: 'old', label: 'Archived rotas', badge: unmarkedByTab.old.rotas, badgeTitle: unmarkedTitle('old') },
@@ -687,7 +720,9 @@ function RotaHubPage() {
 
   const emptyText = showOnlyMarks
     ? 'No rotas with unmarked attendance in this tab.'
-    : tab === 'draft'
+    : tab === 'all'
+      ? 'No rotas yet.'
+      : tab === 'draft'
       ? 'No draft rotas. Create one and publish it when it is ready.'
       : tab === 'old'
         ? 'No rotas have ended yet. They move here once their end date passes.'
@@ -969,7 +1004,7 @@ function RotaHubPage() {
                     {emptyText}{' '}
                     {!showOnlyMarks && filtersActive
                       ? tabs
-                          .filter((t) => t.id !== tab && matchesByTab[t.id] > 0)
+                          .filter((t) => t.id !== tab && t.id !== 'all' && matchesByTab[t.id] > 0)
                           .map((t) => (
                             <button
                               key={t.id}
@@ -1016,7 +1051,7 @@ function RotaHubPage() {
                       <TableBody>
                         {pageRows.map((r) => {
                           const type = rotaType(r);
-                          const status = rotaStatus(r);
+                          const status = rotaStatus(r, tab === 'all');
                           const busy = busyId === r.id || bulkBusy;
                           const unmarked = r.unmarked_attendance_count ?? 0;
                           const unpublished = r.unpublished_staff_count ?? 0;

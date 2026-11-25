@@ -375,15 +375,15 @@ export function agreedEarlyFinishHours(
 
 /**
  * Hours the client is invoiced for, by the same rules as the invoice run: scheduled span
- * unless the shift was cancelled unpaid (none), cancelled paid (the agreed client hours)
- * or finished early with Chargeable Hours entered.
+ * unless the shift was cancelled unpaid, a no show or absent (none: nobody worked it),
+ * cancelled paid (the agreed client hours) or finished early with Chargeable Hours entered.
  */
 export function chargeableHoursForAttendance(
   sh: ShiftRec,
   att: { status?: string; paidHours?: string; clientHours?: string } | null | undefined
 ): number {
   const status = normalizeAttStatus(att?.status ?? null);
-  if (status === 'cancelled') return 0;
+  if (status === 'cancelled' || status === 'no_show' || status === 'absent') return 0;
   if (status === 'cancelled_paid') {
     // Older paid cancellations only stored staff hours.
     const agreed = [att?.clientHours, att?.paidHours].map((v) => String(v ?? '').trim()).find(Boolean);

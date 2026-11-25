@@ -12,8 +12,21 @@ from app.services.module_service import is_module_enabled
 DEFAULT_TEMPLATES = {
     "shift_reminder": "<p>Reminder: You have a shift on {date} at {site}. {shift}</p>",
     "rota_change": "<p>Your rota has been updated.</p><p>{message}</p><p>{date} · {site} · {shift}</p>",
-    "invoice_sent": "<p>Invoice #{invoice_id} for {amount} is due on {due_date}.</p>",
-    "payment_reminder": "<p>Payment reminder: {amount} outstanding on invoice #{invoice_id}.</p>",
+    "invoice_sent": (
+        "<p>Hi {client_name},</p>"
+        "<p>Please find attached invoice <strong>{invoice_number}</strong> for <strong>{amount}</strong>, "
+        "due on <strong>{due_date}</strong>.</p>"
+        "<p>If you have any questions about this invoice, just reply to this email.</p>"
+        "<p>Thank you for your business.<br>{company_name}</p>"
+    ),
+    "payment_reminder": (
+        "<p>Hi {client_name},</p>"
+        "<p>This is a friendly reminder that invoice <strong>{invoice_number}</strong> was due on "
+        "<strong>{due_date}</strong> and <strong>{amount}</strong> is still outstanding. A copy of the invoice is attached.</p>"
+        "<p>If you have already paid, please ignore this message. Otherwise we would be grateful if you could "
+        "arrange payment as soon as possible.</p>"
+        "<p>Thank you,<br>{company_name}</p>"
+    ),
     "payment_receipt": "<p>Thank you for your payment. Your receipt for invoice #{invoice_id}, showing {amount} received, is attached.</p>",
     "remittance_advice": "<p>Please find attached our remittance advice confirming a payment of {amount}, reference {reference}.</p>",
     "appointment": "<p>Appointment reminder for {date} at {time}.</p>",
@@ -105,10 +118,13 @@ def send_tenant_email(
     body: str,
     template_key: Optional[str] = None,
     attachments: Optional[list[tuple[str, bytes]]] = None,
+    inline_images: Optional[list[tuple[str, bytes]]] = None,
 ) -> EmailLog:
     company = get_company_by_user_id(db, user_id)
     if not is_module_enabled(company, "email"):
         raise HTTPException(status_code=403, detail="Email module is not enabled")
     if not email_service.is_company_configured(company):
         raise HTTPException(status_code=400, detail="SMTP not configured. Add your mail server settings first.")
-    return email_service.send_and_log(db, company.id, to_email.strip(), subject, body, template_key, attachments)
+    return email_service.send_and_log(
+        db, company.id, to_email.strip(), subject, body, template_key, attachments, inline_images
+    )

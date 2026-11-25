@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Mail, MapPin, MessageCircle } from 'lucide-react';
 import { MarketingBrand } from '@/components/marketing/marketing-brand';
+import { AppStoreBadges } from '@/components/marketing/app-store-badges';
 import { BlurFade } from '@/components/ui/blur-fade';
 import { BorderBeam } from '@/components/ui/border-beam';
 import { cn } from '@/lib/utils';
@@ -96,6 +97,7 @@ export function MarketingFooter() {
             <p className="mt-3 text-xs font-medium tracking-wide" style={{ color: ACCENT }}>
               {t('tagline')}
             </p>
+            <AppStoreBadges className="mt-5" size="sm" />
           </BlurFade>
 
           <BlurFade delay={0.12} inView>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
+import { AppStoreBadges } from '@/components/marketing/app-store-badges';
 import { BlurFade } from '@/components/ui/blur-fade';
 import { AnimatedGradientText } from '@/components/ui/animated-gradient-text';
 import { NumberTicker } from '@/components/ui/number-ticker';
@@ -125,6 +126,7 @@ export function SecurityHero({
                   <Link href="/platform">{secondaryCta}</Link>
                 </Button>
               </div>
+              <AppStoreBadges className="mt-5" />
             </BlurFade>
           </div>
 

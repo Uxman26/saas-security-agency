@@ -104,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ImpersonationBanner />
         <TrialBanner />
-        <header className="app-header-safe @container/header z-40 flex min-h-14 shrink-0 items-center justify-between gap-2 border-b @5xl/header:gap-3 border-border bg-card px-3 sm:px-4">
+        <header className="app-header-safe @container/header z-40 flex min-h-14 shrink-0 items-center justify-between gap-2 border-b @5xl/header:gap-3 border-border bg-page px-3 sm:px-4">
           <div className="flex min-w-0 flex-1 shrink-0 items-center gap-2 overflow-hidden md:hidden">
             <Button
               type="button"

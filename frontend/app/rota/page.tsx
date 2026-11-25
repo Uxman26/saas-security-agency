@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleGuard } from '@/components/module-guard';
 import { InlineTableSkeleton } from '@/components/skeletons';
@@ -75,6 +75,7 @@ type Tab = 'active' | 'draft' | 'old';
 /** The tabs on the page: each kind of rota, plus every rota in one list. */
 type HubTab = Tab | 'all';
 const HUB_TABS: HubTab[] = ['all', 'active', 'draft', 'old'];
+const ROTA_TAB_KEY = 'rota-hub-tab';
 type RotaView = 'list' | 'week' | 'month';
 
 /** Planned shifts on the grid, and how many of them reached staff (published). */
@@ -164,28 +165,39 @@ function RotaHubPage() {
   const canDeleteRota = !portal && canModule(user, 'rota', 'delete');
   const canPublishRota = !portal && (canModule(user, 'rota', 'publish') || canEditRota);
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
   const urlTab = searchParams.get('tab');
-  const initialTab: HubTab = HUB_TABS.includes(urlTab as HubTab) ? (urlTab as HubTab) : 'active';
+  const urlHubTab: HubTab | null = HUB_TABS.includes(urlTab as HubTab) ? (urlTab as HubTab) : null;
 
-  const [tab, setTabState] = useState<HubTab>(initialTab);
-  // The tab lives in the URL (?tab=old) so a refresh, or a shared link, opens the same tab.
-  const setTab = useCallback(
-    (next: HubTab) => {
-      setTabState(next);
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === 'active') params.delete('tab');
-      else params.set('tab', next);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [router, pathname, searchParams]
-  );
-  // Back / forward between tabs, or a link to another tab, while the page stays mounted.
+  // ?tab= wins; without it, the tab this browser last had open; else All rotas.
+  const [tab, setTabState] = useState<HubTab>(urlHubTab ?? 'all');
   useEffect(() => {
-    setTabState(initialTab);
-  }, [initialTab]);
+    if (urlHubTab) return;
+    try {
+      const saved = window.localStorage.getItem(ROTA_TAB_KEY) as HubTab | null;
+      if (saved && HUB_TABS.includes(saved)) setTabState(saved);
+    } catch {
+      /* storage blocked: stay on All rotas */
+    }
+    // Only on arrival: later changes come from setTab below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // The tab lives in the URL (?tab=old) and in this browser, so a refresh, or coming
+  // back to Rotas later, opens the same tab.
+  const setTab = useCallback((next: HubTab) => {
+    setTabState(next);
+    try {
+      window.localStorage.setItem(ROTA_TAB_KEY, next);
+    } catch {
+      /* storage blocked: the URL still keeps it */
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', next);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+  // Back / forward, or a link to another tab, while the page stays mounted.
+  useEffect(() => {
+    if (urlHubTab) setTabState(urlHubTab);
+  }, [urlHubTab]);
   const [rotas, setRotas] = useState<RotaPlanListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);

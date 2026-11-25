@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { TimeHmField, DurationHmField } from '@/components/ui/time-hm-field';
 import { useRotaShifts } from '@/contexts/rota-shifts-context';
 import { attKey, addMinutesToTime, attendanceStatusLine, attStatusLabel, buildDayRange, buildShiftConflictMap, calcHours, countedHoursForAttendance, dateKey, elapsedFromStart, fmtRotaDayParts, fmtShortDate, formatHoursDecimal, formatMoney, initials, isAttendanceMarked, latestShiftAdjustment, minutesBetweenTimes, normalizeAttStatus, orderDaysTodayFirst, parseDateKey, payableHoursForAttendance, payTypeRateSuffix, shiftConflictKey, shiftSiteLine, shiftsInTimeOrder, timeMins } from '@/lib/rota-shifts-utils';
-import { downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
+import { downloadEmployeeRotaPdf, downloadPlannerRotaCsv, downloadPlannerRotaPdf } from '@/lib/rota-planner-export';
 import type { AttStatus, AttendanceRec, EmployeeRec, RotaViewMode, ShiftAdjustment, ShiftRec, ShiftType } from '@/lib/rota-shifts-types';
 import { SHIFT_TYPE_OPTS, SHIFT_URGENT_COLOR, isCancelledStatus, normalizeShiftType, shiftSiteBarColor } from '@/lib/rota-shifts-types';
 import type { RotaPlanListItem } from '@/lib/types';
@@ -1245,6 +1245,28 @@ export function RotaCalendarClient() {
       setExporting(false);
     }
   }, [state]);
+
+  /** One employee's own rota as a PDF, from the staff name menu. */
+  const downloadEmployeeRota = useCallback(
+    async (empId: string) => {
+      const emp = state.employees.find((e) => e.id === empId);
+      const hasShifts = Object.values(state.shifts[empId] ?? {}).some((list) => (list ?? []).length > 0);
+      if (!emp || !state.days.length || !hasShifts) {
+        toast.warning(`${emp?.name ?? 'This employee'} has no shifts on this rota`);
+        return;
+      }
+      setExporting(true);
+      try {
+        await downloadEmployeeRotaPdf(state, empId);
+        toast.snack(`Rota downloaded for ${emp.name}`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'PDF download failed');
+      } finally {
+        setExporting(false);
+      }
+    },
+    [state]
+  );
 
   /** `returnToList` sends the user back to that employee's shift list once the dialog closes. */
   const openAddShift = (dk: string, empId: string, returnToList = false) => {
@@ -4808,6 +4830,21 @@ export function RotaCalendarClient() {
           style={{ left: empMenuAnchor.x, top: empMenuAnchor.y, width: empMenuAnchor.w, maxHeight: empMenuAnchor.maxH, overflowY: 'auto' }}
           onMouseDown={(e) => e.stopPropagation()}
         >
+          {canExportRota ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 text-left px-4 py-2.5 text-sky-600 hover:bg-muted font-medium disabled:opacity-50"
+              disabled={exporting}
+              onClick={() => {
+                const id = empMenu;
+                closeEmpMenu();
+                void downloadEmployeeRota(id);
+              }}
+            >
+              <Download className="size-4 shrink-0" />
+              Download rota
+            </button>
+          ) : null}
           {canCreateShift ? (
             <button
               type="button"

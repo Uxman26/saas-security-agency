@@ -17,11 +17,12 @@ function csvCell(value: string | number | null | undefined) {
   return s;
 }
 
-function rotaFilename(state: RotaJsState, ext: string) {
+function rotaFilename(state: RotaJsState, ext: string, who?: string) {
   const from = state.days[0] || 'start';
   const to = state.days[state.days.length - 1] || 'end';
-  const safeName = (state.rotaName || 'rota').replace(/[^\w.-]+/g, '_').slice(0, 40);
-  return `${safeName}_${from}_${to}.${ext}`;
+  const safe = (s: string) => s.replace(/[^\w.-]+/g, '_').slice(0, 40);
+  const person = who ? `${safe(who)}_` : '';
+  return `${person}${safe(state.rotaName || 'rota')}_${from}_${to}.${ext}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -101,11 +102,25 @@ export function downloadPlannerRotaCsv(
   return true;
 }
 
-export async function downloadPlannerRotaPdf(state: RotaJsState) {
+export async function downloadPlannerRotaPdf(state: RotaJsState, who?: string) {
   if (!state.days.length) return false;
   const payload = JSON.parse(serializePlannerState(state)) as Record<string, unknown>;
   payload.rotaName = state.rotaName;
   const blob = await api.rotaPlans.exportPlanner(JSON.stringify(payload), 'pdf');
-  downloadBlob(blob, rotaFilename(state, 'pdf'));
+  downloadBlob(blob, rotaFilename(state, 'pdf', who));
   return true;
+}
+
+/** The rota PDF with only one employee's row: their own shifts, for them to keep. */
+export async function downloadEmployeeRotaPdf(state: RotaJsState, empId: string) {
+  const emp = state.employees.find((e) => e.id === empId);
+  if (!emp || !state.days.length) return false;
+  const prefix = `${empId}:`;
+  const only: RotaJsState = {
+    ...state,
+    employees: [emp],
+    shifts: { [empId]: state.shifts[empId] ?? {} },
+    attendance: Object.fromEntries(Object.entries(state.attendance).filter(([k]) => k.startsWith(prefix))),
+  };
+  return downloadPlannerRotaPdf(only, emp.name);
 }

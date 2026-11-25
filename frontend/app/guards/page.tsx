@@ -195,7 +195,7 @@ export default function GuardsPage() {
 
   const handleCreate = async (data: GuardFormData) => {
     try {
-      if (data.create_login) {
+      if (data.create_login && data.login_with !== 'phone') {
         const dup = await assertEmailAvailable(data.email || '');
         if (dup) {
           toast.error(dup);
@@ -1030,6 +1030,7 @@ export default function GuardsPage() {
                   save={api.guards.setPortalLoginPassword}
                   create={api.guards.createPortalLogin}
                   defaultEmail={editingGuard.email ?? ''}
+                  defaultPhone={editingGuard.phone ?? ''}
                 />
               )}
               <GuardFormWizard

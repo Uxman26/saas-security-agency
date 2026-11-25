@@ -34,6 +34,8 @@ export interface Role {
 export interface CompanyUser {
   id: number;
   email: string;
+  /** "+447700900123" when the login signs in with a mobile number (email is then internal). */
+  login_phone?: string | null;
   full_name: string;
   role_id: number | null;
   role_slug: string | null;
@@ -931,6 +933,8 @@ export interface Guard {
   /** Write-only, POST /guards only: provisions a Staff-role portal login. Never returned. */
   create_login?: boolean;
   login_password?: string;
+  /** Write-only: the new login signs in with the email (default) or the mobile number. */
+  login_with?: 'email' | 'phone';
 }
 
 export interface Site {
@@ -2016,6 +2020,8 @@ export interface UsageSummary {
 export interface PortalLogin {
   id: number;
   email: string;
+  /** "+447700900123" when the login signs in with a mobile number (email is then internal). */
+  login_phone?: string | null;
   full_name: string;
   role_name: string;
   is_active: boolean;

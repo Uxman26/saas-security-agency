@@ -362,15 +362,18 @@ function LoginForm() {
 
                   <div className="space-y-1.5">
                     <Label htmlFor="email" className="text-sm font-medium text-neutral-700">
-                      Email address
+                      Email or mobile number
                     </Label>
                     <div className="relative">
                       <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-neutral-400" />
                       <Input
                         id="email"
-                        type="email"
-                        autoComplete="email"
-                        placeholder="you@example.com"
+                        type="text"
+                        inputMode="email"
+                        autoComplete="username"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        placeholder="you@example.com or 07700 900123"
                         className={fieldClass}
                         {...register('email')}
                       />

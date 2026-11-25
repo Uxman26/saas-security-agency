@@ -13,7 +13,7 @@ from app.services import soft_delete
 
 # Carried on GuardCreate to drive portal-login creation; not columns on Guard, so they
 # must never reach the model constructor or the update setattr loop.
-_NON_COLUMN_FIELDS = ("create_login", "login_password")
+_NON_COLUMN_FIELDS = ("create_login", "login_password", "login_with")
 
 
 def _payload(guard: GuardCreate, *, only_set: bool = False) -> dict[str, Any]:
@@ -150,9 +150,17 @@ def _create_staff_login(db: Session, db_guard: Guard, company_id: int, data: Gua
     from app.schemas import CompanyUserCreate
     from app.services import role_service, user_service
 
-    email = (data.email or "").strip()
-    if not email:
-        raise HTTPException(status_code=400, detail="Email is required to create a portal login")
+    from app.services.phone_login import normalize_login_phone, phone_login_email
+
+    if getattr(data, "login_with", "email") == "phone":
+        digits = normalize_login_phone(data.phone)
+        if not digits:
+            raise HTTPException(status_code=400, detail="A valid mobile number is required to sign in with a phone number")
+        email = phone_login_email(digits)
+    else:
+        email = (data.email or "").strip()
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required to create a portal login")
     if not data.login_password:
         raise HTTPException(status_code=400, detail="Password is required to create a portal login")
 
@@ -190,7 +198,12 @@ def list_guard_portal_logins(db: Session, guard_id: int, user_id: int) -> List["
 
 
 def create_guard_portal_login(
-    db: Session, guard_id: int, email: Optional[str], password: str, user_id: int
+    db: Session,
+    guard_id: int,
+    email: Optional[str],
+    password: str,
+    user_id: int,
+    phone: Optional[str] = None,
 ) -> "User":
     """Provision the Staff-role login for an existing guard, from its edit screen.
 
@@ -205,9 +218,17 @@ def create_guard_portal_login(
     if list_guard_portal_logins(db, guard_id, user_id):
         raise HTTPException(status_code=400, detail="This staff member already has a portal login")
 
-    login_email = (email or guard.email or "").strip()
+    from app.services.phone_login import normalize_login_phone, phone_login_email
+
+    if (phone or "").strip():
+        digits = normalize_login_phone(phone)
+        if not digits:
+            raise HTTPException(status_code=400, detail="Enter a valid mobile number")
+        login_email = phone_login_email(digits)
+    else:
+        login_email = (email or guard.email or "").strip()
     if not login_email:
-        raise HTTPException(status_code=400, detail="Email is required to create a portal login")
+        raise HTTPException(status_code=400, detail="An email or mobile number is required to create a portal login")
 
     role = role_service.get_role_by_slug(db, company.id, "staff")
     if not role:

@@ -26,10 +26,17 @@ type Props = {
    * Provisions the first login for this record. Omit to keep the read-only empty state
    * that points at Roles & Permissions instead.
    */
-  create?: (id: number, data: { email?: string; password: string }) => Promise<PortalLogin>;
+  create?: (id: number, data: { email?: string; phone?: string; password: string }) => Promise<PortalLogin>;
   /** Pre-fills the create form's email with the record's own address. */
   defaultEmail?: string;
+  /** Staff only: offer signing in with a mobile number, pre-filled with this one. */
+  defaultPhone?: string;
 };
+
+/** What a login signs in with, as staff would type it. */
+function loginIdentity(l: PortalLogin) {
+  return l.login_phone || l.email;
+}
 
 /**
  * Change the password of the portal login attached to a client or site, from that
@@ -40,7 +47,7 @@ type Props = {
  * A role that can edit a client but not manage logins simply does not see this panel —
  * the API enforces the same split independently.
  */
-export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEmail }: Props) {
+export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEmail, defaultPhone }: Props) {
   const { user } = useAuth();
   const canView = canModule(user, 'roles', 'users_view');
   const canReset = canModule(user, 'roles', 'users_reset_password');
@@ -50,7 +57,10 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
   const [selectedId, setSelectedId] = useState<string>('');
   const [password, setPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [loginWith, setLoginWith] = useState<'email' | 'phone'>('email');
   const [saving, setSaving] = useState(false);
+  const allowPhone = kind === 'staff' && defaultPhone !== undefined;
 
   const refresh = useCallback(() => {
     if (!canView || !recordId) return;
@@ -69,7 +79,9 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
 
   useEffect(() => {
     setNewEmail(defaultEmail ?? '');
-  }, [defaultEmail, recordId]);
+    setNewPhone(defaultPhone ?? '');
+    setLoginWith('email');
+  }, [defaultEmail, defaultPhone, recordId]);
 
   if (!canView) return null;
 
@@ -97,9 +109,11 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
 
   const submitCreate = async () => {
     if (!create) return;
+    const byPhone = allowPhone && loginWith === 'phone';
     const email = newEmail.trim();
-    if (!email) {
-      toast.error('An email address is required for the login');
+    const phone = newPhone.trim();
+    if (byPhone ? !/^\+?[\d\s().-]{9,20}$/.test(phone) : !email) {
+      toast.error(byPhone ? 'Enter a valid mobile number for the login' : 'An email address is required for the login');
       return;
     }
     const parsed = passwordFieldSchema.safeParse(password);
@@ -109,12 +123,14 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
     }
     setSaving(true);
     try {
-      const dup = await assertEmailAvailable(email);
-      if (dup) {
-        toast.error(dup);
-        return;
+      if (!byPhone) {
+        const dup = await assertEmailAvailable(email);
+        if (dup) {
+          toast.error(dup);
+          return;
+        }
       }
-      await create(recordId, { email, password });
+      await create(recordId, byPhone ? { phone, password } : { email, password });
       setPassword('');
       toast.success('Portal login created');
       refresh();
@@ -146,17 +162,57 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
             <p className="text-xs text-muted-foreground">
               This {label} has no portal login yet. Set one up here.
             </p>
-            <Label htmlFor={`portal-new-email-${kind}-${recordId}`} className="text-xs">
-              Login email
-            </Label>
-            <Input
-              id={`portal-new-email-${kind}-${recordId}`}
-              type="email"
-              autoComplete="username"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="name@example.com"
-            />
+            {allowPhone ? (
+              <div className="flex gap-2 pb-1" role="radiogroup" aria-label="Signs in with">
+                {(
+                  [
+                    ['email', 'Email address'],
+                    ['phone', 'Mobile number'],
+                  ] as const
+                ).map(([value, text]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    size="sm"
+                    role="radio"
+                    aria-checked={loginWith === value}
+                    variant={loginWith === value ? 'default' : 'outline'}
+                    onClick={() => setLoginWith(value)}
+                  >
+                    {text}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+            {allowPhone && loginWith === 'phone' ? (
+              <>
+                <Label htmlFor={`portal-new-phone-${kind}-${recordId}`} className="text-xs">
+                  Login mobile number
+                </Label>
+                <Input
+                  id={`portal-new-phone-${kind}-${recordId}`}
+                  type="tel"
+                  autoComplete="username"
+                  value={newPhone}
+                  onChange={(e) => setNewPhone(e.target.value)}
+                  placeholder="07700 900123"
+                />
+              </>
+            ) : (
+              <>
+                <Label htmlFor={`portal-new-email-${kind}-${recordId}`} className="text-xs">
+                  Login email
+                </Label>
+                <Input
+                  id={`portal-new-email-${kind}-${recordId}`}
+                  type="email"
+                  autoComplete="username"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="name@example.com"
+                />
+              </>
+            )}
             <Label htmlFor={`portal-new-password-${kind}-${recordId}`} className="text-xs">
               Password
             </Label>
@@ -169,13 +225,15 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
             />
             <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MSG}</p>
             <p className="text-xs text-muted-foreground">
-              If this email already has a ControlOps login at another company, they keep that password and sign in with this company&apos;s Company ID.
+              {allowPhone && loginWith === 'phone'
+                ? 'They sign in with this mobile number, your Company ID and the password. If the number already has a ControlOps login at another company, they keep that password.'
+                : 'If this email already has a ControlOps login at another company, they keep that password and sign in with this company\u2019s Company ID.'}
             </p>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={saving || !password || !newEmail.trim()}
+              disabled={saving || !password || !(allowPhone && loginWith === 'phone' ? newPhone.trim() : newEmail.trim())}
               onClick={() => void submitCreate()}
             >
               {saving ? 'Creating…' : 'Create portal login'}
@@ -199,7 +257,7 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
                 <SelectContent>
                   {logins.map((l) => (
                     <SelectItem key={l.id} value={String(l.id)}>
-                      {l.email}
+                      {loginIdentity(l)}
                       {l.full_name ? ` · ${l.full_name}` : ''}
                     </SelectItem>
                   ))}
@@ -208,7 +266,7 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Signs in as <span className="font-medium text-foreground">{logins[0].email}</span>
+              Signs in as <span className="font-medium text-foreground">{loginIdentity(logins[0])}</span>
               {logins[0].is_active ? '' : ' (account disabled)'}
             </p>
           )}
@@ -220,10 +278,10 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
               </Label>
               {/* Paired with the login email so password managers offer the right entry. */}
               <input
-                type="email"
+                type="text"
                 name="username"
                 autoComplete="username"
-                value={logins.find((l) => String(l.id) === selectedId)?.email ?? logins[0].email}
+                value={loginIdentity(logins.find((l) => String(l.id) === selectedId) ?? logins[0])}
                 readOnly
                 tabIndex={-1}
                 aria-hidden

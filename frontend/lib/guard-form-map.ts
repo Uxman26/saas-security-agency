@@ -90,6 +90,7 @@ export const guardFormDefaults: GuardFormData = {
   // and can never provision a login by carrying stale state over from an add.
   create_login: false,
   login_password: '',
+  login_with: 'email',
 };
 
 const s = (v?: string | null) => v ?? '';

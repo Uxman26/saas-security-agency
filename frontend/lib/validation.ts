@@ -40,13 +40,24 @@ const emailFieldSchema = z
   .email('Invalid email address')
   .max(TEXT_LIMITS.email, tooLongMessage('Email', TEXT_LIMITS.email));
 
+/** Sign-in accepts an email address or a mobile number (staff who log in by phone). */
+const emailOrPhoneFieldSchema = z
+  .string()
+  .trim()
+  .min(1, 'Enter your email address or mobile number')
+  .max(TEXT_LIMITS.email, tooLongMessage('Email', TEXT_LIMITS.email))
+  .refine(
+    (v) => (v.includes('@') ? z.string().email().safeParse(v).success : /^\+?[\d\s().-]{9,20}$/.test(v)),
+    'Enter a valid email address or mobile number'
+  );
+
 export const loginSchema = z.object({
   company_id: z
     .string()
     .trim()
     .min(3, 'Company ID is required')
     .max(32, tooLongMessage('Company ID', 32)),
-  email: emailFieldSchema,
+  email: emailOrPhoneFieldSchema,
   password: z
     .string()
     .min(6, 'Password must be at least 6 characters')
@@ -274,6 +285,8 @@ export const guardSchema = z.object({
   sub_contractor_id: optPosInt,
   create_login: z.boolean().default(false),
   login_password: z.string().optional().or(z.literal('')),
+  // What a new portal login signs in with: the email or the mobile number.
+  login_with: z.enum(['email', 'phone']).default('email'),
 });
 
 // .partial() drops the base object's own refinements, so the login cross-field rules are
@@ -286,7 +299,15 @@ export const guardSubmitSchema = guardSchema
   })
   .superRefine((v, ctx) => {
     if (!v.create_login) return;
-    if (!v.email) {
+    if (v.login_with === 'phone') {
+      if (!/^\+?[\d\s().-]{9,20}$/.test(String(v.phone ?? '').trim())) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['phone'],
+          message: 'A valid mobile number is required to sign in with it',
+        });
+      }
+    } else if (!v.email) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['email'],

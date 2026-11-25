@@ -17,6 +17,9 @@ def _require_company(user: User) -> int:
     return user.company_id
 
 
+from app.services.phone_login import phone_from_login_email
+
+
 def _out(u: User, company_id: int, db: Session) -> CompanyUserOut:
     membership = membership_service.get_membership(db, u.id, company_id)
     role_id = membership.role_id if membership else u.role_id
@@ -27,6 +30,7 @@ def _out(u: User, company_id: int, db: Session) -> CompanyUserOut:
     return CompanyUserOut(
         id=u.id,
         email=u.email,
+        login_phone=phone_from_login_email(u.email),
         full_name=u.full_name,
         role_id=role_id,
         role_slug=rr.slug if rr else (membership.role if membership else None),

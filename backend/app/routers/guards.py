@@ -222,7 +222,7 @@ def create_guard_portal_login(
 ):
     """Give an existing staff member a portal login."""
     user = guard_service.create_guard_portal_login(
-        db, guard_id, body.email, body.password, current_user.id
+        db, guard_id, body.email, body.password, current_user.id, phone=body.phone
     )
     return portal_login_out(db, user)
 

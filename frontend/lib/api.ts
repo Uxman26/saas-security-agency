@@ -452,7 +452,7 @@ export const api = {
       request<void>(`/guards/${id}/emergency-contacts/${contactId}`, { method: 'DELETE' }),
     deleteImpact: (id: number): Promise<DeleteImpact> => request<DeleteImpact>(`/guards/${id}/delete-impact`),
     portalLogins: (id: number): Promise<PortalLogin[]> => request<PortalLogin[]>(`/guards/${id}/portal-logins`),
-    createPortalLogin: (id: number, data: { email?: string; password: string }): Promise<PortalLogin> =>
+    createPortalLogin: (id: number, data: { email?: string; phone?: string; password: string }): Promise<PortalLogin> =>
       request<PortalLogin>(`/guards/${id}/portal-logins`, {
         method: 'POST',
         body: JSON.stringify(data),

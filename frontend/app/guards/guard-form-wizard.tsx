@@ -157,6 +157,7 @@ const FIELD_STEP: Partial<Record<keyof GuardFormData, number>> = {
   // The login fields live on the review step, so their errors must keep the user there.
   create_login: 4,
   login_password: 4,
+  login_with: 4,
 };
 
 function stepForField(key: string) {
@@ -1156,17 +1157,47 @@ export function GuardFormWizard({
                     <span className="space-y-0.5">
                       <span className="block text-sm font-semibold">Create a portal login for this staff member</span>
                       <span className="block text-xs text-muted-foreground">
-                        Signs in with the email above and gets the Staff role. Manage what that role can see in Settings →
-                        Roles &amp; Permissions.
+                        Gets the Staff role. Manage what that role can see in Settings → Roles &amp; Permissions.
                       </span>
                     </span>
                   </label>
 
                   {createLogin && (
+                    <fieldset className="space-y-1.5">
+                      <legend className="text-sm font-medium">Signs in with</legend>
+                      <div className="flex flex-wrap gap-2">
+                        {(
+                          [
+                            ['email', 'Email address', watch('email')],
+                            ['phone', 'Mobile number', watch('phone')],
+                          ] as const
+                        ).map(([value, label, shown]) => (
+                          <label
+                            key={value}
+                            className={cn(
+                              'flex cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm',
+                              (watch('login_with') ?? 'email') === value && 'border-primary ring-1 ring-primary'
+                            )}
+                          >
+                            <input type="radio" value={value} className="accent-primary" {...register('login_with')} />
+                            <span>
+                              {label}
+                              {shown ? <span className="ml-1 text-muted-foreground">({shown})</span> : null}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Staff enter this with your Company ID and the password below to sign in.
+                      </p>
+                    </fieldset>
+                  )}
+
+                  {createLogin && (
                     <Field
                       label="Login password"
                       required
-                      error={err('login_password') ?? err('email')}
+                      error={err('login_password') ?? (watch('login_with') === 'phone' ? err('phone') : err('email'))}
                       hint={PASSWORD_REQUIREMENTS_MSG}
                       className="max-w-md"
                     >

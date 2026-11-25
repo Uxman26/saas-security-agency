@@ -91,9 +91,25 @@ class UserCreate(StrictModel):
 
 class UserLogin(StrictModel):
     company_id: Optional[str] = Field(default=None, max_length=32)
-    email: EmailStr = Field(max_length=EMAIL_MAX)
+    # An email address or a mobile number. A number is turned into the address its
+    # phone login is stored under (see app.services.phone_login).
+    email: str = Field(max_length=EMAIL_MAX)
     password: str
     remember_me: Optional[bool] = False
+
+    @field_validator("email")
+    @classmethod
+    def email_or_phone(cls, v: str) -> str:
+        from pydantic import TypeAdapter
+
+        from app.services.phone_login import login_email_for
+
+        resolved = login_email_for(v)
+        if not resolved:
+            raise ValueError("Enter a valid email address or mobile number")
+        if "@" in (v or ""):
+            TypeAdapter(EmailStr).validate_python(resolved)
+        return resolved
 
     @field_validator("company_id")
     @classmethod
@@ -815,6 +831,8 @@ class GuardCreate(GuardBase):
     # rather than on GuardBase so they never appear on GuardResponse.
     create_login: bool = False
     login_password: Optional[str] = None
+    # What the new login signs in with: the email or the mobile number above.
+    login_with: Literal["email", "phone"] = "email"
 
     @field_validator("login_password")
     @classmethod
@@ -2127,6 +2145,8 @@ class AppModuleUpdate(StrictModel):
 class CompanyUserOut(BaseModel):
     id: int
     email: EmailStr
+    # Set for a login that signs in with a mobile number; email is then internal.
+    login_phone: Optional[str] = None
     full_name: str
     role_id: Optional[int] = None
     role_slug: Optional[str] = None
@@ -2143,6 +2163,7 @@ class UserRolePatch(StrictModel):
 
 
 class CompanyUserCreate(StrictModel):
+    # Give an email, or a mobile number (`phone`) for a login that signs in with it.
     email: EmailStr = Field(max_length=EMAIL_MAX)
     password: str
     full_name: str = Field(min_length=2, max_length=100)
@@ -2152,6 +2173,20 @@ class CompanyUserCreate(StrictModel):
     # Restricts the login to these sites. Omitted or empty leaves it unpinned, i.e. a
     # Client-role user sees every site of its client — the behaviour before pins existed.
     site_ids: Optional[list[int]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def phone_instead_of_email(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not (data.get("email") or "").strip() and (data.get("phone") or "").strip():
+            from app.services.phone_login import normalize_login_phone, phone_login_email
+
+            digits = normalize_login_phone(data.get("phone"))
+            if not digits:
+                raise ValueError("Enter a valid mobile number")
+            data = {**data, "email": phone_login_email(digits)}
+        if isinstance(data, dict):
+            data = {k: v for k, v in data.items() if k != "phone"}
+        return data
 
     @field_validator("email")
     @classmethod
@@ -2203,6 +2238,8 @@ class PortalLoginCreate(StrictModel):
 
     # Optional: falls back to the record's own email when omitted.
     email: Optional[EmailStr] = Field(default=None, max_length=EMAIL_MAX)
+    # A mobile number to sign in with instead of an email (staff logins).
+    phone: Optional[str] = Field(default=None, max_length=32)
     password: str
 
     @field_validator("password")
@@ -2216,6 +2253,8 @@ class PortalLoginOut(BaseModel):
 
     id: int
     email: str
+    # Set for a login that signs in with a mobile number; email is then internal.
+    login_phone: Optional[str] = None
     full_name: str = ""
     role_name: str = ""
     is_active: bool = True

@@ -243,6 +243,12 @@ def send_with_config(
     attachments: Optional[list[tuple[str, bytes]]] = None,
     inline_images: Optional[list[tuple[str, bytes]]] = None,
 ) -> None:
+    from app.services.phone_login import is_phone_login_email
+
+    if is_phone_login_email(to_email):
+        # A login that signs in with a mobile number has no mailbox behind its address.
+        logger.info("Skipped email to a phone login (%s)", subject)
+        return
     mail_from = (cfg.get("mail_from") or cfg.get("mail_username") or "").strip()
     from_name = (cfg.get("mail_from_name") or "ControlOps").strip()
     username = cfg.get("mail_username") or ""

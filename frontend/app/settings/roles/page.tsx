@@ -828,7 +828,7 @@ export default function RolesSettingsPage() {
   }, [users, userRoleId]);
 
   const getUserSearchText = useCallback(
-    (u: CompanyUser) => [u.email, u.full_name, u.role_name ?? '', String(u.role_id ?? '')].join(' '),
+    (u: CompanyUser) => [u.email, u.login_phone ?? '', u.full_name, u.role_name ?? '', String(u.role_id ?? '')].join(' '),
     []
   );
   const getUserSortValue = useCallback((u: CompanyUser, key: string) => {
@@ -1153,7 +1153,13 @@ export default function RolesSettingsPage() {
                     <TableBody>
                       {userList.pageRows.map((u) => (
                         <TableRow key={u.id} onRowClick={() => setViewUser(u)}>
-                          <TableCell className="text-sm">{u.email}</TableCell>
+                          <TableCell className="text-sm">
+                            {u.login_phone ? (
+                              <span title="Signs in with this mobile number">📱 {u.login_phone}</span>
+                            ) : (
+                              u.email
+                            )}
+                          </TableCell>
                           <TableCell>{u.full_name}</TableCell>
                           <TableCell>
                             {u.role_slug === 'admin' ? (
@@ -1317,7 +1323,7 @@ export default function RolesSettingsPage() {
                   {viewUser && (
                     <dl className="space-y-3 text-sm">
                       <div><dt className="text-muted-foreground">Name</dt><dd className="font-medium">{viewUser.full_name}</dd></div>
-                      <div><dt className="text-muted-foreground">Email</dt><dd className="font-medium">{viewUser.email}</dd></div>
+                      <div><dt className="text-muted-foreground">{viewUser.login_phone ? 'Mobile number (sign-in)' : 'Email'}</dt><dd className="font-medium">{viewUser.login_phone ?? viewUser.email}</dd></div>
                       <div><dt className="text-muted-foreground">Role</dt><dd className="font-medium">{viewUser.role_name ?? '—'}</dd></div>
                     </dl>
                   )}
@@ -1424,7 +1430,7 @@ export default function RolesSettingsPage() {
                       }}
                     >
                       <p className="text-sm text-muted-foreground">
-                        Set a new password for {resetUser.full_name || resetUser.email}.
+                        Set a new password for {resetUser.full_name || resetUser.login_phone || resetUser.email}.
                       </p>
                       {/* Keep browser autofill inside the dialog instead of the Users search field */}
                       <input

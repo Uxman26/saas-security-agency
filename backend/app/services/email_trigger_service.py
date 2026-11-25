@@ -69,17 +69,21 @@ def notify_shift_assignment(db: Session, user_id: int, assignment: Assignment) -
     )
 
 
-def _safe_send_invoice_email(db: Session, user_id: int, inv: Invoice, kind: str, balance: Optional[float] = None) -> None:
-    """Automatic invoice / reminder email in the branded layout, never raising."""
+def _safe_send_invoice_email(
+    db: Session, user_id: int, inv: Invoice, kind: str, balance: Optional[float] = None
+) -> Optional[str]:
+    """Automatic invoice / reminder email in the branded layout, never raising.
+
+    Returns the recipient when it went out, None when it could not be sent."""
     from app.services import invoice_email
 
     try:
         company = get_company_by_user_id(db, user_id)
         if not is_module_enabled(company, "email") or not email_service.is_company_configured(company):
-            return
+            return None
         _name, recipient = invoice_email._billed_to(inv)
         if not recipient:
-            return
+            return None
         msg = invoice_email.build(db, inv, kind=kind, balance=balance)
         email_service.send_and_log(
             db,
@@ -91,16 +95,17 @@ def _safe_send_invoice_email(db: Session, user_id: int, inv: Invoice, kind: str,
             msg["attachments"],
             msg["inline_images"],
         )
+        return recipient
     except Exception:
-        pass
+        return None
 
 
 def notify_invoice_sent(db: Session, user_id: int, inv: Invoice) -> None:
     _safe_send_invoice_email(db, user_id, inv, "invoice")
 
 
-def notify_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: float) -> None:
-    _safe_send_invoice_email(db, user_id, inv, "reminder", balance)
+def notify_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: float) -> Optional[str]:
+    return _safe_send_invoice_email(db, user_id, inv, "reminder", balance)
 
 
 def build_payment_reminder(db: Session, user_id: int, inv: Invoice, balance: float, *, preview: bool = False) -> dict:

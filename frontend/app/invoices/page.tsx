@@ -25,6 +25,7 @@ import { canSendInvoiceReminder, formatDueCountdown, invoiceFilename, invoiceLab
 import { downloadBlob } from '@/lib/download-blob';
 import { SendDocumentDialog, type SendDocumentRequest } from '@/components/finance/send-document-dialog';
 import { ReminderPreviewDialog } from '@/components/invoices/reminder-preview-dialog';
+import { useInvoiceHoverPreview } from '@/components/invoices/invoice-hover-preview';
 import { invoiceSendRequest } from '@/lib/invoice-send';
 import { formatDateUK, localDateKey, localDateOffset } from '@/lib/date-format';
 import { formatMoney } from '@/lib/rota-shifts-utils';
@@ -184,6 +185,7 @@ export default function InvoicesPage() {
   const [statusSavingId, setStatusSavingId] = useState<number | null>(null);
   const [payLoading, setPayLoading] = useState(false);
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
+  const { rowProps: hoverRowProps, preview: hoverPreview } = useInvoiceHoverPreview();
   const { sortKey, sortDir, toggleSort } = useTableSort('client');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PAGE_SIZE);
@@ -1264,6 +1266,7 @@ export default function InvoicesPage() {
                           key={inv.id}
                           href={`/invoices/${inv.id}/view`}
                           data-row-id={inv.id}
+                          {...hoverRowProps(inv)}
                           className={cn(overdue && 'bg-red-50/60 dark:bg-red-950/20', selection.isSelected(inv.id) && 'bg-primary/5', isHighlighted(inv.id) && NEW_ROW_HIGHLIGHT_CLASS)}
                         >
                           {canBulkDelete ? (
@@ -1277,16 +1280,7 @@ export default function InvoicesPage() {
                           <TableCell className="text-sm whitespace-nowrap">{formatInvoiceDate(inv)}</TableCell>
                           <TableCell className="font-medium tabular-nums">{invoiceLabel(inv)}</TableCell>
                           <TableCell className="font-medium max-w-[220px]">
-                            <div className="group relative truncate" title={customer}>
-                              {customer}
-                              <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-64 rounded-md border bg-popover p-3 text-xs text-popover-foreground shadow-md group-hover:block">
-                                <p className="font-medium">{customer}</p>
-                                <p className="mt-1 text-muted-foreground">{inv.account_name || 'No bank account on this invoice'}</p>
-                                {inv.bank_name ? <p>{inv.bank_name}</p> : null}
-                                {inv.sort_code ? <p>Sort code {inv.sort_code}</p> : null}
-                                {inv.account_number ? <p>Account {inv.account_number}</p> : null}
-                              </div>
-                            </div>
+                            <div className="truncate">{customer}</div>
                           </TableCell>
                           <TableCell className="text-right whitespace-nowrap tabular-nums">{formatGbp(inv.total, inv.currency)}</TableCell>
                           <TableCell className="text-right whitespace-nowrap">
@@ -1450,6 +1444,7 @@ export default function InvoicesPage() {
           </Dialog>
 
           <ReminderPreviewDialog invoice={reminderInvoice} onClose={() => setReminderInvoice(null)} />
+          {hoverPreview}
 
           <SendDocumentDialog request={sendRequest} onClose={() => setSendRequest(null)} />
           </>

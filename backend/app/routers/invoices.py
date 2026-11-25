@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import date
 from app.database import get_db
-from app.models import User, Invoice, InvoiceLine, Payment, CreditNote
+from app.models import AuditLog, User, Invoice, InvoiceLine, Payment, CreditNote
 from app.schemas import (
     InvoiceCreate,
     InvoiceResponse,
@@ -448,11 +448,41 @@ def list_invoices(
         guard_id=guard_id,
         job_title=job_title,
     )
-    settlements = batch_invoice_settlements(db, [inv.id for inv in rows])
-    return [
-        _serialize_invoice(inv, False, db, settlements=settlements.get(inv.id))
-        for inv in rows
-    ]
+    ids = [inv.id for inv in rows]
+    settlements = batch_invoice_settlements(db, ids)
+    last_sent, last_paid = _last_activity(db, ids)
+    out = []
+    for inv in rows:
+        item = _serialize_invoice(inv, False, db, settlements=settlements.get(inv.id))
+        item.last_sent_at = last_sent.get(inv.id) or inv.sent_at
+        item.last_paid_at = last_paid.get(inv.id)
+        out.append(item)
+    return out
+
+
+def _last_activity(db: Session, ids: list[int]) -> tuple[dict, dict]:
+    """Latest email (invoice or reminder) and latest payment per invoice, in two queries."""
+    if not ids:
+        return {}, {}
+    from sqlalchemy import func
+
+    sent = dict(
+        db.query(AuditLog.entity_id, func.max(AuditLog.created_at))
+        .filter(
+            AuditLog.entity_type == "invoice",
+            AuditLog.entity_id.in_(ids),
+            AuditLog.action.in_(("invoice_emailed", "reminder_sent")),
+        )
+        .group_by(AuditLog.entity_id)
+        .all()
+    )
+    paid = dict(
+        db.query(Payment.invoice_id, func.max(Payment.paid_at))
+        .filter(Payment.invoice_id.in_(ids), Payment.deleted_at.is_(None))
+        .group_by(Payment.invoice_id)
+        .all()
+    )
+    return sent, paid
 
 
 @router.get("/{invoice_id}/audit", response_model=List[InvoiceAuditEntry])

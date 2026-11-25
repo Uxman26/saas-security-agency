@@ -749,6 +749,7 @@ def sync_worker_jobs(db: Session = Depends(get_db), _: User = Depends(require_pl
         ("sweep_trials", "cron"),
         ("sweep_renewal_invoices", "cron"),
         ("sweep_finance_recurring", "cron"),
+        ("sweep_overdue_invoices", "cron"),
         ("snapshot_server_metrics", "cron"),
     ]
     created = 0

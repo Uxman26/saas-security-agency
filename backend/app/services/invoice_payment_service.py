@@ -67,17 +67,29 @@ def invoice_balance_due(
     return round(max(0, total - settled), 2)
 
 
-# An unpaid invoice turns overdue this many days after it was sent. Drafts have no
-# sent_at, so they never do, whatever their due date.
+# An unpaid invoice turns overdue the day after its due date. One with no due date
+# falls back to this many days after it was sent. Drafts have no sent_at, so they
+# never turn overdue, whatever their due date.
 OVERDUE_AFTER_SENT_DAYS = 90
+
+
+def _uk_today() -> date:
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("Europe/London")).date()
 
 
 def is_overdue_since_sent(inv: Invoice, today: Optional[date] = None) -> bool:
     sent_at = getattr(inv, "sent_at", None)
     if sent_at is None:
         return False
+    today = today or _uk_today()
+    due = getattr(inv, "due_date", None)
+    if due is not None:
+        due_day = due.date() if isinstance(due, datetime) else due
+        return due_day < today
     sent_day = sent_at.date() if isinstance(sent_at, datetime) else sent_at
-    return ((today or date.today()) - sent_day).days >= OVERDUE_AFTER_SENT_DAYS
+    return (today - sent_day).days >= OVERDUE_AFTER_SENT_DAYS
 
 
 def sync_invoice_payment_status(db: Session, inv: Invoice, user_id: Optional[int] = None) -> str:

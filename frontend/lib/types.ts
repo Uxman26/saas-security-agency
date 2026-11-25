@@ -1883,6 +1883,9 @@ export interface Invoice {
   status: string;
   /** When the invoice was first sent; null for drafts. Overdue is counted from here. */
   sent_at?: string | null;
+  /** List only: the latest time it was emailed (invoice or reminder), and the latest payment. */
+  last_sent_at?: string | null;
+  last_paid_at?: string | null;
   due_date?: string | null;
   /** Number typed in by the user; when empty the invoice is shown as "#<id>". */
   invoice_number?: string | null;

@@ -208,6 +208,25 @@ async def sweep_finance_recurring(ctx: dict[str, Any]) -> dict[str, Any]:
     return await asyncio.to_thread(_sweep_finance_recurring_sync)
 
 
+def _sweep_overdue_invoices_sync() -> dict[str, Any]:
+    def run():
+        db: Session = SessionLocal()
+        try:
+            from app.services import invoice_service
+
+            out = invoice_service.sweep_overdue_invoices(db)
+            logger.info("overdue invoices: %s", out)
+            return out
+        finally:
+            db.close()
+
+    return _track_job("sweep_overdue_invoices", run)()
+
+
+async def sweep_overdue_invoices(ctx: dict[str, Any]) -> dict[str, Any]:
+    return await asyncio.to_thread(_sweep_overdue_invoices_sync)
+
+
 def _snapshot_server_metrics_sync() -> dict[str, Any]:
     def run():
         db: Session = SessionLocal()

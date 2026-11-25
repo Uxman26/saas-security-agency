@@ -7,7 +7,7 @@ export function isInvoicePastDue(inv: Invoice): boolean {
   return inv.due_date.slice(0, 10) < localDateKey();
 }
 
-/** Red highlighting is for Overdue invoices only (sent, unpaid, 90+ days since sending). */
+/** Red highlighting is for Overdue invoices only (sent, unpaid and past the due date). */
 export function isInvoiceOverdue(inv: Invoice): boolean {
   return inv.status === 'overdue';
 }

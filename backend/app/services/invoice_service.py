@@ -242,6 +242,88 @@ def maybe_mark_overdue(db: Session, inv: Invoice) -> bool:
     return False
 
 
+# Automatic reminders only go out for invoices that fell due recently, so turning the
+# sweep on (or a long outage) never mails clients about invoices months old.
+AUTO_REMINDER_WINDOW_DAYS = 30
+
+
+def sweep_overdue_invoices(db: Session, today: Optional[date] = None) -> dict:
+    """Daily: turn sent, unpaid invoices past their due date Overdue, and email the
+    client one payment reminder for each overdue invoice that has not had one since
+    it fell due. Safe to run again: a reminder already logged is not repeated."""
+    from app.models import AuditLog, Company
+    from app.services import email_trigger_service, sms_trigger_service
+    from app.services.invoice_payment_service import (
+        _uk_today,
+        invoice_balance_due,
+        is_overdue_since_sent,
+        sync_invoice_payment_status,
+    )
+
+    today = today or _uk_today()
+    marked = reminded = 0
+    skipped: list[str] = []
+    open_rows = (
+        db.query(Invoice)
+        .filter(
+            Invoice.deleted_at.is_(None),
+            Invoice.sent_at.isnot(None),
+            Invoice.status.in_(("sent", "unpaid", "partial", "overdue")),
+        )
+        .all()
+    )
+    for inv in open_rows:
+        if inv.status in ("sent", "unpaid") and is_overdue_since_sent(inv, today):
+            # Recheck payments first: a fully paid invoice must not turn Overdue.
+            sync_invoice_payment_status(db, inv)
+            if inv.status == "overdue":
+                marked += 1
+                log_invoice_audit(db, inv.company_id, None, inv.id, "status_changed", {"from": "sent", "to": "overdue", "auto": True})
+                # Text once, on the day it turns overdue (an SMS is not logged, so it
+                # must not ride on the email retry below).
+                company = db.query(Company).filter(Company.id == inv.company_id).first()
+                if company and company.admin_id:
+                    try:
+                        sms_trigger_service.notify_payment_reminder(db, company.admin_id, inv, invoice_balance_due(db, inv))
+                    except Exception:
+                        pass
+    db.commit()
+
+    for inv in open_rows:
+        past_due = inv.due_date is not None and inv.due_date < today
+        if not (inv.status == "overdue" or (inv.status == "partial" and past_due)):
+            continue
+        if inv.due_date is not None and (today - inv.due_date).days > AUTO_REMINDER_WINDOW_DAYS:
+            continue
+        since = datetime.combine(inv.due_date or today, datetime.min.time())
+        already = (
+            db.query(AuditLog.id)
+            .filter(
+                AuditLog.entity_type == "invoice",
+                AuditLog.entity_id == inv.id,
+                AuditLog.action == "reminder_sent",
+                AuditLog.created_at >= since,
+            )
+            .first()
+        )
+        if already:
+            continue
+        company = db.query(Company).filter(Company.id == inv.company_id).first()
+        if not company or not company.admin_id:
+            continue
+        balance = invoice_balance_due(db, inv)
+        if balance <= 0:
+            continue
+        recipient = email_trigger_service.notify_payment_reminder(db, company.admin_id, inv, balance)
+        if recipient:
+            log_invoice_audit(db, inv.company_id, None, inv.id, "reminder_sent", {"recipient": recipient, "balance": balance, "auto": True})
+            db.commit()
+            reminded += 1
+        else:
+            skipped.append(invoice_no(inv))
+    return {"marked_overdue": marked, "reminders_sent": reminded, "reminders_not_sent": skipped}
+
+
 def log_invoice_audit(
     db: Session,
     company_id: int,

@@ -11,6 +11,7 @@ from app.worker_jobs import (
     sweep_trials,
     sweep_renewal_invoices,
     sweep_finance_recurring,
+    sweep_overdue_invoices,
     snapshot_server_metrics,
     sweep_shift_reminders,
     sweep_missed_attendance,
@@ -29,6 +30,7 @@ class WorkerSettings:
         sweep_trials,
         sweep_renewal_invoices,
         sweep_finance_recurring,
+        sweep_overdue_invoices,
         snapshot_server_metrics,
         sweep_shift_reminders,
         sweep_missed_attendance,
@@ -43,6 +45,9 @@ class WorkerSettings:
         cron(sweep_trials, minute={0}, unique=True, timeout=300, max_tries=1),
         cron(sweep_renewal_invoices, hour=4, minute=15, unique=True, timeout=600, max_tries=1),
         cron(sweep_finance_recurring, hour=5, minute=0, unique=True, timeout=600, max_tries=1),
+        # Overdue invoices and their payment reminders: 08:00 UTC, so clients get the
+        # email in the UK morning (08:00 GMT / 09:00 BST), not at midnight.
+        cron(sweep_overdue_invoices, hour=8, minute=0, unique=True, timeout=600, max_tries=1),
         # Every 5 minutes for historical host/API charts in Super Admin monitoring.
         cron(snapshot_server_metrics, minute={0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55}, unique=True, timeout=120, max_tries=1),
     ]

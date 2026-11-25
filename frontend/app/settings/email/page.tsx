@@ -328,7 +328,7 @@ export default function EmailSettingsPage() {
                 </div>
                 <div className="rounded-lg border p-4">
                   <p className="font-medium text-sm">Payment reminder</p>
-                  <p className="text-sm text-muted-foreground mt-1">Email when an invoice becomes overdue.</p>
+                  <p className="text-sm text-muted-foreground mt-1">Every morning, invoices past their due date turn Overdue and the client is emailed one reminder with the invoice attached.</p>
                 </div>
               </CardContent>
             </Card>

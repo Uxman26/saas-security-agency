@@ -1757,6 +1757,10 @@ class InvoiceResponse(InvoiceBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     sent_at: Optional[datetime] = None
+    # For the list's hover preview: the latest time it was emailed (invoice or reminder)
+    # and the latest payment, each None when there has been none.
+    last_sent_at: Optional[datetime] = None
+    last_paid_at: Optional[datetime] = None
     client_name: Optional[str] = None
     company_name: Optional[str] = None
     company_email: Optional[str] = None

@@ -90,6 +90,8 @@ class UserCreate(StrictModel):
         return validate_password_strength(v)
 
 class UserLogin(StrictModel):
+    """Login identity is email or staff phone; field name stays ``email`` for API compatibility."""
+
     company_id: Optional[str] = Field(default=None, max_length=32)
     # An email address or a mobile number. A number is turned into the address its
     # phone login is stored under (see app.services.phone_login).
@@ -122,6 +124,22 @@ class UserLogin(StrictModel):
         if len(code) < 3:
             raise ValueError("Company ID is required")
         return code
+
+    @field_validator("email")
+    @classmethod
+    def email_or_phone_rules(cls, v: str) -> str:
+        ident = (v or "").strip()
+        if not ident:
+            raise ValueError("Email or phone number is required")
+        if "@" in ident:
+            # Keep email shape checks without forcing EmailStr (phone is also valid).
+            if ident.count("@") != 1 or "." not in ident.split("@", 1)[1]:
+                raise ValueError("Invalid email address")
+            return ident.lower()
+        digits = "".join(ch for ch in ident if ch.isdigit())
+        if len(digits) < 7:
+            raise ValueError("Enter a valid email or phone number")
+        return ident
 
     @field_validator("password")
     @classmethod
@@ -858,7 +876,7 @@ class SiteBase(BaseModel):
     color: Optional[str] = "#3b82f6"
     client_id: Optional[int] = None
     address: Optional[str] = None
-    town: Optional[str] = Field(default=None, max_length=100)
+    town_city: Optional[str] = None
     postcode: Optional[str] = None
     # Registered company name and billing address printed under "Bill to" on the site's
     # invoices; blank uses the client's, then the site's own name / address.
@@ -1184,7 +1202,7 @@ class ClientBase(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     address: Optional[str] = None
-    town: Optional[str] = Field(default=None, max_length=100)
+    town_city: Optional[str] = None
     postcode: Optional[str] = None
     # Registered company name and billing address used on invoices (the trading
     # name / address above stay on the rota). Blank falls back to name / address.
@@ -1272,6 +1290,7 @@ class MainContractorBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
+    town_city: Optional[str] = None
     postcode: Optional[str] = None
     registration_number: Optional[str] = None
     contract_start_date: Optional[date] = None
@@ -1300,6 +1319,7 @@ class SubContractorBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     address: Optional[str] = None
+    town_city: Optional[str] = None
     postcode: Optional[str] = None
     registration_number: Optional[str] = None
     contract_start_date: Optional[date] = None
@@ -1550,6 +1570,28 @@ class AttendanceResponse(AttendanceBase):
 
     class Config:
         from_attributes = True
+
+
+class MissedAttendanceItem(BaseModel):
+    """Unresolved missed Clock-In / Clock-Out on a live (published) rota assignment."""
+
+    assignment_id: int
+    guard_id: int
+    guard_name: str = ""
+    site_id: Optional[int] = None
+    site_name: str = ""
+    date: Optional[date] = None
+    shift_start: Optional[str] = None
+    shift_end: Optional[str] = None
+    kind: str  # missed_clock_in | missed_clock_out
+    attendance_id: Optional[int] = None
+
+
+class MissedAttendanceSummary(BaseModel):
+    missed_clock_in_count: int = 0
+    missed_clock_out_count: int = 0
+    missed_clock_ins: List[MissedAttendanceItem] = []
+    missed_clock_outs: List[MissedAttendanceItem] = []
 
 
 class AttendanceByShiftRequest(BaseModel):

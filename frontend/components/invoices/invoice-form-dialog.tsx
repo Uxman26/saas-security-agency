@@ -1276,7 +1276,7 @@ function buildPreviewInvoice({
           client_email: client.email,
           client_phone: client.phone,
           client_address: client.address,
-          client_town: client.town,
+          client_town: client.town_city,
           client_postcode: client.postcode,
           client_contact_person: client.contact_person,
         }
@@ -1285,7 +1285,7 @@ function buildPreviewInvoice({
           client_email: site?.contact_email,
           client_phone: site?.contact_phone,
           client_address: site?.address,
-          client_town: site?.town,
+          client_town: site?.town_city,
           client_postcode: site?.postcode,
           client_contact_person: site?.contact_person,
         };
@@ -1302,7 +1302,7 @@ function buildPreviewInvoice({
           bill_to_address:
             site?.invoice_address?.trim() ||
             client?.billing_address?.trim() ||
-            (client ? join(client.address, client.town, client.postcode) : join(site?.address, site?.town, site?.postcode)),
+            (client ? join(client.address, client.town_city, client.postcode) : join(site?.address, site?.town_city, site?.postcode)),
         };
   const bill = { ...billBase, ...billTo };
   const bank = account

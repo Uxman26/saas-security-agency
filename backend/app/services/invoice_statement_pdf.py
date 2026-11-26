@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import os
 from io import BytesIO
 from typing import Any
 
-from app.services.invoice_pdf import ACCENT_HEX, NAVY_HEX, PANEL_HEX, SOFT_HEX
+from app.services.invoice_pdf import DARK_HEX, PANEL_HEX
+from app.services.image_avif_service import AVIF_EXT
+from app.storage_paths import resolve_storage_path
+
+# ControlOps brand orange (matches frontend --primary), not invoice red.
+STATEMENT_ACCENT_HEX = "#F45100"
+STATEMENT_SOFT_HEX = "#FFF4ED"
 
 
 def _money(v: float) -> str:
@@ -24,12 +31,38 @@ def _fmt_date(iso: str | None) -> str:
         return iso
 
 
+def _join_address(*parts: Any) -> str:
+    return ", ".join(str(x).strip() for x in parts if x and str(x).strip())
+
+
+def _logo_flowable(company: dict[str, Any]):
+    """Same logo retrieval path as invoice PDFs (uploaded company logo)."""
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Image as RLImage
+    from PIL import Image
+
+    logo_path = company.get("logo_path")
+    logo_resolved = resolve_storage_path(logo_path) if logo_path else None
+    if not logo_resolved:
+        return None
+    try:
+        ext = os.path.splitext(logo_resolved)[1].lower()
+        if ext == AVIF_EXT:
+            avif_buf = BytesIO()
+            Image.open(logo_resolved).save(avif_buf, format="PNG")
+            avif_buf.seek(0)
+            return RLImage(avif_buf, width=3.0 * cm, height=2.6 * cm, kind="proportional")
+        return RLImage(logo_resolved, width=3.0 * cm, height=2.6 * cm, kind="proportional")
+    except Exception:
+        return None
+
+
 def render_statement_pdf(data: dict[str, Any]) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     from app.services.pdf_branding import branded_bottom_margin, build_branded
 
@@ -43,17 +76,71 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
         bottomMargin=branded_bottom_margin(1.2 * cm),
     )
     styles = getSampleStyleSheet()
-    accent = colors.HexColor(ACCENT_HEX)
-    navy = colors.HexColor(NAVY_HEX)
+    accent = colors.HexColor(STATEMENT_ACCENT_HEX)
+    navy = colors.HexColor(DARK_HEX)
     panel = colors.HexColor(PANEL_HEX)
-    soft = colors.HexColor(SOFT_HEX)
+    soft = colors.HexColor(STATEMENT_SOFT_HEX)
 
-    title = ParagraphStyle("StTitle", parent=styles["Normal"], fontSize=20, fontName="Helvetica-Bold", textColor=navy, alignment=2)
-    subtitle = ParagraphStyle("StSub", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#64748b"), alignment=2)
-    co_name = ParagraphStyle("CoName", parent=styles["Normal"], fontSize=11, fontName="Helvetica-Bold", textColor=navy)
-    body = ParagraphStyle("Body", parent=styles["Normal"], fontSize=8, leading=11, textColor=colors.HexColor("#334155"))
-    label = ParagraphStyle("Lbl", parent=styles["Normal"], fontSize=8, fontName="Helvetica-Bold", textColor=colors.HexColor("#64748b"))
-    small = ParagraphStyle("Sm", parent=styles["Normal"], fontSize=7.5, leading=10, textColor=colors.HexColor("#64748b"))
+    title = ParagraphStyle(
+        "StTitle",
+        parent=styles["Normal"],
+        fontSize=18,
+        leading=22,
+        fontName="Helvetica-Bold",
+        textColor=navy,
+        alignment=2,
+        spaceAfter=4,
+    )
+    subtitle = ParagraphStyle(
+        "StSub",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#64748b"),
+        alignment=2,
+        spaceBefore=2,
+    )
+    co_name = ParagraphStyle(
+        "CoName",
+        parent=styles["Normal"],
+        fontSize=11,
+        leading=14,
+        fontName="Helvetica-Bold",
+        textColor=navy,
+    )
+    body = ParagraphStyle(
+        "Body",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=11,
+        textColor=colors.HexColor("#334155"),
+    )
+    label = ParagraphStyle(
+        "Lbl",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=10,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#64748b"),
+    )
+    small = ParagraphStyle(
+        "Sm",
+        parent=styles["Normal"],
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#64748b"),
+        alignment=2,
+    )
+    section = ParagraphStyle(
+        "StSection",
+        parent=styles["Normal"],
+        fontSize=11,
+        leading=14,
+        fontName="Helvetica-Bold",
+        textColor=navy,
+        spaceBefore=4,
+        spaceAfter=6,
+    )
 
     company = data.get("company") or {}
     client = data.get("client") or {}
@@ -61,28 +148,47 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
     summary = data.get("summary") or {}
     date_from = data.get("date_from")
     date_to = data.get("date_to")
+    statement_type = (data.get("statement_type") or "all").strip().lower()
 
     story = []
-    accent_bar = Table([[""]], colWidths=[18 * cm], rowHeights=[3])
+    accent_bar = Table([[""]], colWidths=[18 * cm], rowHeights=[4])
     accent_bar.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), accent)]))
     story.append(accent_bar)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 12))
 
-    addr_bits = [company.get("address") or "", company.get("postcode") or ""]
-    addr = ", ".join(x for x in addr_bits if (x or "").strip()) or "—"
-    left = [
+    addr = _join_address(company.get("address"), company.get("town_city"), company.get("postcode")) or "—"
+    left_bits = [
         Paragraph((company.get("name") or "Company").upper(), co_name),
-        Spacer(1, 2),
+        Spacer(1, 3),
         Paragraph(addr.replace("\n", "<br/>"), body),
     ]
+    logo = _logo_flowable(company)
+    if logo is not None:
+        left = [logo, Spacer(1, 6), *left_bits]
+    else:
+        left = left_bits
+
+    type_label = "Outstanding balances" if statement_type == "outstanding" else "Account activity"
     right = [
         Paragraph("Statement of Account", title),
-        Paragraph("Account activity", subtitle),
+        Paragraph(type_label, subtitle),
     ]
     if site:
+        right.append(Spacer(1, 4))
         right.append(Paragraph(f"Site: {site.get('name')}", small))
+
     hdr = Table([[left, right]], colWidths=[10 * cm, 8 * cm])
-    hdr.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    hdr.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
     story.append(hdr)
     story.append(Spacer(1, 16))
 
@@ -93,7 +199,7 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
     ]
     if client.get("contact_name"):
         bill_to.append(Paragraph(str(client["contact_name"]), body))
-    c_addr = ", ".join(x for x in [client.get("address") or "", client.get("postcode") or ""] if (x or "").strip())
+    c_addr = _join_address(client.get("address"), client.get("town_city"), client.get("postcode"))
     if c_addr:
         bill_to.append(Paragraph(c_addr.replace("\n", "<br/>"), body))
 
@@ -112,21 +218,25 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
         ],
     ]
     t_sum = Table(period_rows, colWidths=[5.5 * cm, 2.5 * cm])
-    t_sum.setStyle(TableStyle([
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("BACKGROUND", (0, -1), (-1, -1), panel),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, -1), (-1, -1), 4),
-        ("RIGHTPADDING", (0, -1), (-1, -1), 4),
-    ]))
+    t_sum.setStyle(
+        TableStyle(
+            [
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ("BACKGROUND", (0, -1), (-1, -1), panel),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING", (0, -1), (-1, -1), 4),
+                ("RIGHTPADDING", (0, -1), (-1, -1), 4),
+                ("BOX", (0, -1), (-1, -1), 0.5, accent),
+            ]
+        )
+    )
     top = Table([[bill_to, t_sum]], colWidths=[9.5 * cm, 8.5 * cm])
     top.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story.append(top)
     story.append(Spacer(1, 18))
 
-    story.append(Paragraph("<b>Account activity</b>", styles["Heading3"]))
-    story.append(Spacer(1, 6))
+    story.append(Paragraph("Account activity", section))
 
     rows = [["Date", "Item", "Amount", "Balance"]]
     for ln in data.get("lines") or []:
@@ -145,23 +255,28 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
             amt_s = f"({_money(abs(amt))})"
         else:
             amt_s = _money(amt)
-        rows.append([
-            _fmt_date(ln.get("date")),
-            Paragraph(item_html, body),
-            amt_s,
-            _money(float(ln.get("balance") or 0)),
-        ])
+        rows.append(
+            [
+                _fmt_date(ln.get("date")),
+                Paragraph(item_html, body),
+                amt_s,
+                _money(float(ln.get("balance") or 0)),
+            ]
+        )
 
     t = Table(rows, colWidths=[3.2 * cm, 8.2 * cm, 3.2 * cm, 3.2 * cm], repeatRows=1)
     cmds = [
-        ("BACKGROUND", (0, 0), (-1, 0), panel),
+        ("BACKGROUND", (0, 0), (-1, 0), accent),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
     ]
     for i, ln in enumerate(data.get("lines") or [], start=1):
         kind = ln.get("kind")
@@ -173,20 +288,30 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
     story.append(Spacer(1, 16))
 
     closing = Table(
-        [[
-            Paragraph(f"<b>Closing balance on {_fmt_date(date_to)} (GBP)</b>", body),
-            Paragraph(f"<b>{_money(summary.get('closing_balance') or 0)}</b>", ParagraphStyle("CloseAmt", parent=body, alignment=2, fontName="Helvetica-Bold")),
-        ]],
+        [
+            [
+                Paragraph(f"<b>Closing balance on {_fmt_date(date_to)} (GBP)</b>", body),
+                Paragraph(
+                    f"<b>{_money(summary.get('closing_balance') or 0)}</b>",
+                    ParagraphStyle("CloseAmt", parent=body, alignment=2, fontName="Helvetica-Bold"),
+                ),
+            ]
+        ],
         colWidths=[12 * cm, 6 * cm],
     )
-    closing.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), panel),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-    ]))
-    story.append(closing)
+    closing.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), panel),
+                ("BOX", (0, 0), (-1, -1), 0.5, accent),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    story.append(KeepTogether([closing]))
 
     build_branded(doc, story, powered_by=True)
     return buf.getvalue()

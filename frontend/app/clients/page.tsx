@@ -123,9 +123,13 @@ function ClientForm({
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label>Address</Label>
-          <Input {...register('address')} placeholder="123 Business Park, London" />
+          <Input {...register('address')} placeholder="123 Business Park" />
         </div>
-        <div className="space-y-1 sm:col-span-2">
+        <div className="space-y-1">
+          <Label>Town/City</Label>
+          <Input {...register('town_city')} maxLength={200} placeholder="e.g. London" />
+        </div>
+        <div className="space-y-1">
           <Label>Postcode</Label>
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
         </div>
@@ -246,6 +250,7 @@ function ClientDetailsDialog({ client, canEdit = false }: { client: Client; canE
     ['Email', client.email || '—'],
     ['Phone', client.phone || '—'],
     ['Address', client.address || '—'],
+    ['Town/City', client.town_city || '—'],
     ['Postcode', client.postcode || '—'],
     ['Registered company name', client.billing_name || '—'],
     ['Billing address', client.billing_address || '—'],
@@ -315,6 +320,7 @@ export default function ClientsPage() {
     email: '',
     phone: '',
     address: '',
+    town_city: '',
     postcode: '',
     billing_name: '',
     billing_address: '',
@@ -372,6 +378,7 @@ export default function ClientsPage() {
       email: client.email ?? '',
       phone: client.phone ?? '',
       address: client.address ?? '',
+      town_city: client.town_city ?? '',
       postcode: client.postcode ?? '',
       billing_name: client.billing_name ?? '',
       billing_address: client.billing_address ?? '',
@@ -433,7 +440,7 @@ export default function ClientsPage() {
 
   const getSearchText = useCallback(
     (c: Client) =>
-      [c.name, c.email, c.phone, c.contact_person, c.address, c.contract_end_date, c.contract_start_date]
+      [c.name, c.email, c.phone, c.contact_person, c.address, c.town_city, c.contract_end_date, c.contract_start_date]
         .filter(Boolean)
         .join(' '),
     []
@@ -713,7 +720,7 @@ export default function ClientsPage() {
                           {client.deleted_at ? <Pill tone="muted">Archived</Pill> : null}
                         </div>
                         <p className="mt-2 truncate text-xs text-muted-foreground">
-                          {[client.address, client.postcode].filter(Boolean).join(', ') || 'No address'}
+                          {[client.address, client.town_city, client.postcode].filter(Boolean).join(', ') || 'No address'}
                         </p>
                       </div>
                     );

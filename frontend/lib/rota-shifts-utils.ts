@@ -100,12 +100,19 @@ export function shiftsInTimeOrder<T extends { start: string }>(list: readonly T[
     .sort((a, b) => timeMins(a.shift.start) - timeMins(b.shift.start) || a.idx - b.idx);
 }
 
-/** Address + postcode for display / WhatsApp. Empty when neither is set. */
+/** Address + town/city + postcode for display / WhatsApp. Empty when none set. */
 export function formatSiteAddress(
-  site: { address?: string | null; postcode?: string | null } | null | undefined
+  site:
+    | { address?: string | null; town_city?: string | null; postcode?: string | null }
+    | null
+    | undefined
 ): string {
   if (!site) return '';
-  const parts = [(site.address || '').trim(), (site.postcode || '').trim()].filter(Boolean);
+  const parts = [
+    (site.address || '').trim(),
+    (site.town_city || '').trim(),
+    (site.postcode || '').trim(),
+  ].filter(Boolean);
   return parts.join(', ');
 }
 

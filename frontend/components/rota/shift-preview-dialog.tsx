@@ -350,12 +350,6 @@ export function ShiftPreviewDialog({ open, onOpenChange, employee, state, rotaNa
             </div>
           )}
 
-          {rows.length > 0 ? (
-            <div className="grid grid-cols-2 divide-x rounded-lg border bg-muted/50">
-              <SummaryTile icon={Clock} label="Total hours" value={formatHoursDecimal(totalHours)} />
-              <SummaryTile icon={CalendarDays} label="Total shifts" value={String(rows.length)} />
-            </div>
-          ) : null}
         </div>
 
         <DialogFooter className="shrink-0 gap-2 border-t px-5 py-3 sm:gap-2">

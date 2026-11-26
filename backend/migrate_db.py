@@ -377,6 +377,38 @@ def _ensure_invoice_number_and_town_columns():
         logging.getLogger(__name__).exception("invoice number / town columns migration failed")
 
 
+def _ensure_town_city_columns():
+    """town_city on sites / clients / contractors (same name as guards.town_city).
+
+    Runs on Postgres too (the SQLite block further down never does). Any town already
+    entered in the earlier clients/sites.town column is copied across so none is lost.
+    """
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        for table in ("sites", "clients", "contractors", "main_contractors", "sub_contractors"):
+            if not insp.has_table(table):
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            with engine.begin() as conn:
+                if "town_city" not in cols:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN town_city VARCHAR"))
+                if "town" in cols:
+                    conn.execute(
+                        text(
+                            f"UPDATE {table} SET town_city = town "
+                            "WHERE (town_city IS NULL OR town_city = '') "
+                            "AND town IS NOT NULL AND town <> ''"
+                        )
+                    )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("town_city columns migration failed")
+
+
 def _ensure_invoice_sent_at_column():
     """invoices.sent_at: the overdue clock (90 days) starts when an invoice is sent.
 
@@ -584,6 +616,7 @@ def _run_migrations():
     _ensure_invoice_currency_columns()
     _ensure_invoice_sent_at_column()
     _ensure_invoice_number_and_town_columns()
+    _ensure_town_city_columns()
     _ensure_company_workforce_size()
     path = get_db_path()
     if not path:
@@ -2924,6 +2957,14 @@ def _run_migrations():
             cur.execute("ALTER TABLE sites ADD COLUMN geofence_radius_m REAL")
         except sqlite3.OperationalError:
             pass
+
+    # Town/City on address entities — same field name as staff (guards.town_city).
+    for _town_table in ("sites", "clients", "contractors", "main_contractors", "sub_contractors"):
+        if table_exists(cur, _town_table) and not column_exists(cur, _town_table, "town_city"):
+            try:
+                cur.execute(f"ALTER TABLE {_town_table} ADD COLUMN town_city TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     if not table_exists(cur, "portal_message_threads"):
         try:

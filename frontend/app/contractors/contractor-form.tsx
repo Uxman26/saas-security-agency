@@ -13,6 +13,7 @@ export type ContractorFormValues = {
   contact_email: string;
   contact_phone: string;
   address: string;
+  town_city: string;
   postcode: string;
 };
 
@@ -22,6 +23,7 @@ const empty: ContractorFormValues = {
   contact_email: '',
   contact_phone: '',
   address: '',
+  town_city: '',
   postcode: '',
 };
 
@@ -68,6 +70,7 @@ export function ContractorForm({
           contact_email: form.contact_email.trim().replace(/[<>]/g, ''),
           contact_phone: phone,
           address: form.address.trim().replace(/[<>]/g, ''),
+          town_city: form.town_city.trim().replace(/[<>]/g, ''),
           postcode: form.postcode.trim().replace(/[<>]/g, ''),
         });
       }}
@@ -128,7 +131,17 @@ export function ContractorForm({
             maxLength={500}
           />
         </div>
-        <div className="space-y-1 min-w-0 sm:col-span-2">
+        <div className="space-y-1 min-w-0">
+          <Label>Town/City</Label>
+          <Input
+            className="min-w-0"
+            value={form.town_city}
+            onChange={(e) => set('town_city', e.target.value)}
+            maxLength={200}
+            placeholder="e.g. London"
+          />
+        </div>
+        <div className="space-y-1 min-w-0">
           <Label>Postcode</Label>
           <Input
             className="min-w-0"

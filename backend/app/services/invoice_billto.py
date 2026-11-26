@@ -50,9 +50,9 @@ def billing_party(client, site) -> dict[str, str]:
     elif client_addr:
         address = client_addr
     elif client is not None:
-        address = _joined(client.address, getattr(client, "town", None), client.postcode)
+        address = _joined(client.address, getattr(client, "town_city", None), client.postcode)
     elif site is not None:
-        address = _joined(site.address, getattr(site, "town", None), site.postcode)
+        address = _joined(site.address, getattr(site, "town_city", None), site.postcode)
     else:
         address = ""
 

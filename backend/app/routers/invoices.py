@@ -267,7 +267,7 @@ def _serialize_invoice(
         client_email=cl.email if cl else (bs.contact_email if bs else None),
         client_phone=cl.phone if cl else (bs.contact_phone if bs else None),
         client_address=cl.address if cl else (bs.address if bs else None),
-        client_town=getattr(cl, "town", None) if cl else (bs.town if bs else None),
+        client_town=getattr(cl, "town_city", None) if cl else (bs.town_city if bs else None),
         client_postcode=cl.postcode if cl else (bs.postcode if bs else None),
         client_contact_person=cl.contact_person if cl else (bs.contact_person if bs else None),
         bill_to_name=party["name"] if party else None,

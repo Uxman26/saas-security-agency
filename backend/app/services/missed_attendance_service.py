@@ -8,17 +8,18 @@ linked staff get one push+inbox row per event.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import AppNotification, Assignment, Attendance, Company, Guard, Site
+from app.models import AppNotification, Assignment, Attendance, Company, Guard, Site, User
 from app.services.attendance_service import (
     CANCELLED_STATUSES,
     _assignment_shift_end_dt,
     _company_zone,
 )
+from app.services.company_service import get_company_by_user_id
 from app.services.shift_reminder_service import (
     _oversight_user_ids,
     _staff_user_id,
@@ -318,6 +319,129 @@ def _notify(
     return delivered
 
 
+def list_missed_attendance(
+    db: Session,
+    user_id: int,
+    *,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    limit: int = 500,
+) -> dict:
+    """Return unresolved missed Clock-In / Clock-Out rows for live (active) rotas.
+
+    Active = published rota plan (or standalone assignment). A miss is counted once
+    the 5-minute grace after scheduled start/end has passed and the book-on / book-off
+    is still missing. Tenant + portal site/staff scope are applied.
+    """
+    from app.schemas import MissedAttendanceItem, MissedAttendanceSummary
+    from app.services.portal_access import (
+        filter_assignments_for_user,
+        get_linked_guard,
+        is_portal_role,
+        is_staff_portal_user,
+    )
+
+    company = get_company_by_user_id(db, user_id)
+    zone = _company_zone(company)
+    now_utc = datetime.now(timezone.utc)
+    local_today = now_utc.astimezone(zone).date()
+    start = start_date or (local_today - timedelta(days=60))
+    end = end_date or (local_today + timedelta(days=1))
+    if end < start:
+        start, end = end, start
+
+    q = (
+        db.query(Assignment)
+        .options(
+            joinedload(Assignment.site),
+            joinedload(Assignment.guard),
+            joinedload(Assignment.attendances),
+            joinedload(Assignment.rota_plan),
+        )
+        .join(Guard, Assignment.guard_id == Guard.id)
+        .join(Site, Assignment.site_id == Site.id)
+        .filter(
+            Guard.company_id == company.id,
+            Assignment.date >= start,
+            Assignment.date <= end,
+        )
+    )
+    user = db.query(User).filter(User.id == user_id).first()
+    # Staff / guard portal users: hard-scope to the linked guard only (never peers).
+    if user and is_staff_portal_user(user):
+        guard = get_linked_guard(db, user)
+        if not guard:
+            return MissedAttendanceSummary().model_dump()
+        q = q.filter(Assignment.guard_id == guard.id)
+    elif user and is_portal_role(user):
+        q = filter_assignments_for_user(db, user, q)
+
+    clock_ins: list[MissedAttendanceItem] = []
+    clock_outs: list[MissedAttendanceItem] = []
+    grace = timedelta(minutes=MISSED_GRACE_MINUTES)
+
+    for assignment in q.order_by(Assignment.date.desc(), Assignment.id.desc()).all():
+        if not _assignment_is_live(assignment):
+            continue
+        att = _attendance_for(assignment)
+        if _is_cancelled(att):
+            continue
+
+        start_utc = assignment_start_utc(assignment, zone)
+        end_utc = assignment_end_utc(assignment, zone)
+        guard = assignment.guard
+        site = assignment.site
+        staff_name = (
+            (getattr(guard, "full_name", None) or getattr(guard, "name", None) or "")
+            if guard
+            else ""
+        ).strip()
+        site_name = (site.name if site else "") or ""
+
+        def _item(kind: str) -> MissedAttendanceItem:
+            return MissedAttendanceItem(
+                assignment_id=assignment.id,
+                guard_id=assignment.guard_id,
+                guard_name=staff_name,
+                site_id=assignment.site_id,
+                site_name=site_name,
+                date=assignment.date,
+                shift_start=(assignment.shift_start or None),
+                shift_end=(assignment.shift_end or None),
+                kind=kind,
+                attendance_id=att.id if att else None,
+            )
+
+        if (
+            start_utc is not None
+            and now_utc >= (start_utc + grace)
+            and not _has_confirmed_absence(att)
+            and (att is None or not att.booked_at)
+            and len(clock_ins) < limit
+        ):
+            clock_ins.append(_item(KIND_CLOCK_IN))
+
+        if (
+            end_utc is not None
+            and now_utc >= (end_utc + grace)
+            and att is not None
+            and att.booked_at
+            and not att.booked_off_at
+            and len(clock_outs) < limit
+        ):
+            clock_outs.append(_item(KIND_CLOCK_OUT))
+
+        if len(clock_ins) >= limit and len(clock_outs) >= limit:
+            break
+
+    return MissedAttendanceSummary(
+        missed_clock_in_count=len(clock_ins),
+        missed_clock_out_count=len(clock_outs),
+        missed_clock_ins=clock_ins,
+        missed_clock_outs=clock_outs,
+    ).model_dump()
+
+
 __all__ = [
     "MISSED_GRACE_MINUTES",
     "KIND_CLOCK_IN",
@@ -326,4 +450,5 @@ __all__ = [
     "should_flag_missed_clock_in",
     "should_flag_missed_clock_out",
     "sweep_missed_attendance",
+    "list_missed_attendance",
 ]

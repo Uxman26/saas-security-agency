@@ -513,6 +513,7 @@ class Contractor(Base):
     contact_email = Column(String)
     contact_phone = Column(String)
     address = Column(String)
+    town_city = Column(String)
     postcode = Column(String)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), default=_utcnow)
@@ -870,7 +871,7 @@ class Client(Base):
     email = Column(String)
     phone = Column(String)
     address = Column(String)
-    town = Column(String)
+    town_city = Column(String)
     postcode = Column(String)
     # Registered company name and billing address used on invoices.
     billing_name = Column(String)
@@ -967,7 +968,7 @@ class Site(Base):
     name = Column(String, nullable=False)
     color = Column(String, default="#3b82f6")
     address = Column(String)
-    town = Column(String)
+    town_city = Column(String)
     postcode = Column(String)
     # Registered company name and billing address for invoices; the rota keeps using
     # name / address. Blank falls back to the client's, then the site's own.
@@ -1378,6 +1379,7 @@ class MainContractor(Base):
     phone = Column(String)
     email = Column(String)
     address = Column(String)
+    town_city = Column(String)
     postcode = Column(String)
     registration_number = Column(String)
     contract_start_date = Column(Date)
@@ -1402,6 +1404,7 @@ class SubContractor(Base):
     email = Column(String)
     phone = Column(String)
     address = Column(String)
+    town_city = Column(String)
     postcode = Column(String)
     contact_person = Column(String)
     license_number = Column(String)

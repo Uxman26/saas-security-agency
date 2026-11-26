@@ -275,6 +275,7 @@ export default function ContractorsDirectoryPage() {
                             ...(v.contact_email ? { contact_email: v.contact_email } : {}),
                             ...(v.contact_phone ? { contact_phone: v.contact_phone } : {}),
                             ...(v.address ? { address: v.address } : {}),
+                            ...(v.town_city ? { town_city: v.town_city } : {}),
                             ...(v.postcode ? { postcode: v.postcode } : {}),
                           });
                           setAddOpen(false);

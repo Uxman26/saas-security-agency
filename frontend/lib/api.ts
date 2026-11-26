@@ -2795,6 +2795,7 @@ export const api = {
       contact_email?: string;
       contact_phone?: string;
       address?: string;
+      town_city?: string;
       postcode?: string;
     }): Promise<DirectoryContractor> => {
       const sanitized = {
@@ -2802,6 +2803,7 @@ export const api = {
         name: sanitizeInput(data.name),
         contact_phone: data.contact_phone ? sanitizeInput(data.contact_phone) : undefined,
         address: data.address ? sanitizeInput(data.address) : undefined,
+        town_city: data.town_city ? sanitizeInput(data.town_city) : undefined,
         postcode: data.postcode ? sanitizeInput(data.postcode) : undefined,
       };
       return request<DirectoryContractor>('/contractors', { method: 'POST', body: JSON.stringify(sanitized) });
@@ -2814,6 +2816,7 @@ export const api = {
         contact_email?: string;
         contact_phone?: string;
         address?: string;
+        town_city?: string;
         postcode?: string;
         is_active?: boolean;
       }>

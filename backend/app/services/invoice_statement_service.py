@@ -388,6 +388,8 @@ def _statement_payload(
     lines,
     statement_type,
 ) -> dict[str, Any]:
+    from app.services.company_profile_service import company_logo_url
+
     return {
         "company": {
             "id": company.id,
@@ -395,14 +397,19 @@ def _statement_payload(
             "email": company.email,
             "phone": company.phone,
             "address": company.address,
+            "town_city": getattr(company, "town_city", None),
             "postcode": company.postcode,
+            "logo_url": company_logo_url(company),
+            "logo_path": getattr(company, "logo_path", None),
         },
         # Statements go to the registered company and billing address, like invoices.
         "client": {
             "id": client.id if client else None,
             "name": billing_party(client, site)["name"] if (client or site) else "—",
             "contact_name": client.contact_person if client else None,
+            # billing_party already folds town/city and postcode into the address.
             "address": billing_party(client, site)["address"].replace("\n", ", ") or None,
+            "town_city": None,
             "postcode": None,
             "email": client.email if client else None,
         },

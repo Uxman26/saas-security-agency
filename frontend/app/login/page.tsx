@@ -19,7 +19,7 @@ import { parsePaymentPending, parseEmailVerificationRequired, parseAccountLocked
 import { api } from '@/lib/api';
 import { GoogleIcon } from '@/components/auth/google-icon';
 import { setLocale } from '@/actions/locale';
-import { Building2, ChevronRight, Eye, EyeOff, Globe, Lock, Mail } from 'lucide-react';
+import { Building2, ChevronLeft, ChevronRight, Eye, EyeOff, Globe, Lock, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LoginHeroPanel } from '@/components/auth/login-hero-panel';
 import { TurnstileWidget } from '@/components/auth/turnstile-widget';
@@ -81,7 +81,7 @@ function LoginForm() {
   const tc = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { login, completeMfa } = useAuth();
+  const { login, completeMfa, user: signedInUser, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [mfaToken, setMfaToken] = useState<string | null>(null);
@@ -144,6 +144,13 @@ function LoginForm() {
   const goAfterLogin = (role?: string | null) => {
     router.push(homePathForRole(role));
   };
+
+  // Already signed in (e.g. "Sign in" clicked in a new tab): skip the form and go to
+  // the app. Not while this form is mid-login or asking for an MFA code.
+  useEffect(() => {
+    if (authLoading || !signedInUser || loading || mfaToken) return;
+    router.replace(homePathForRole(signedInUser.role));
+  }, [authLoading, signedInUser, loading, mfaToken, router]);
 
   const formatLockout = (total: number) => {
     const m = Math.floor(total / 60);
@@ -268,7 +275,14 @@ function LoginForm() {
         </section>
 
         <section className="relative flex min-h-svh flex-col px-4 pb-8 sm:px-8 lg:px-8 lg:pr-14">
-          <div className="flex justify-end pt-4 lg:pt-5">
+          <div className="flex items-center justify-between pt-4 lg:pt-5">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[13px] font-medium text-neutral-600 transition-colors hover:text-neutral-900"
+            >
+              <ChevronLeft className="size-4" aria-hidden />
+              Back to home
+            </Link>
             <LoginLocale />
           </div>
           <div className="flex flex-1 flex-col items-center justify-center">

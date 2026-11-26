@@ -250,6 +250,32 @@ def create_guard_portal_login(
     )
 
 
+def change_guard_login_identity(
+    db: Session,
+    guard_id: int,
+    login_user_id: int,
+    email: Optional[str],
+    phone: Optional[str],
+    user_id: int,
+) -> "User":
+    """Switch one of this guard's portal logins to sign in with a new email or mobile."""
+    from app.schemas import CompanyUserUpdate
+    from app.services import user_service
+
+    logins = {u.id for u in list_guard_portal_logins(db, guard_id, user_id)}
+    if login_user_id not in logins:
+        raise HTTPException(status_code=404, detail="Portal login not found for this staff member")
+    if not (email or "").strip() and not (phone or "").strip():
+        raise HTTPException(status_code=400, detail="Enter an email address or a mobile number")
+    company = get_company_by_user_id(db, user_id)
+    payload = {"phone": phone} if (phone or "").strip() else {"email": email}
+    try:
+        data = CompanyUserUpdate(**payload)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Enter a valid email address or mobile number") from e
+    return user_service.update_company_user(db, company.id, login_user_id, data)
+
+
 def set_guard_login_password(
     db: Session, guard_id: int, login_user_id: int, new_password: str, user_id: int
 ) -> "User":

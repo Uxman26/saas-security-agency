@@ -2162,6 +2162,22 @@ class UserRolePatch(StrictModel):
     role_id: int
 
 
+def _phone_to_login_email(data: Any) -> Any:
+    """A `phone` sent instead of `email` becomes the address its phone login is stored
+    under (see app.services.phone_login); the `phone` key itself is dropped."""
+    if not isinstance(data, dict):
+        return data
+    phone = (data.get("phone") or "").strip()
+    if phone and not (data.get("email") or "").strip():
+        from app.services.phone_login import normalize_login_phone, phone_login_email
+
+        digits = normalize_login_phone(phone)
+        if not digits:
+            raise ValueError("Enter a valid mobile number")
+        data = {**data, "email": phone_login_email(digits)}
+    return {k: v for k, v in data.items() if k != "phone"}
+
+
 class CompanyUserCreate(StrictModel):
     # Give an email, or a mobile number (`phone`) for a login that signs in with it.
     email: EmailStr = Field(max_length=EMAIL_MAX)
@@ -2177,16 +2193,7 @@ class CompanyUserCreate(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def phone_instead_of_email(cls, data: Any) -> Any:
-        if isinstance(data, dict) and not (data.get("email") or "").strip() and (data.get("phone") or "").strip():
-            from app.services.phone_login import normalize_login_phone, phone_login_email
-
-            digits = normalize_login_phone(data.get("phone"))
-            if not digits:
-                raise ValueError("Enter a valid mobile number")
-            data = {**data, "email": phone_login_email(digits)}
-        if isinstance(data, dict):
-            data = {k: v for k, v in data.items() if k != "phone"}
-        return data
+        return _phone_to_login_email(data)
 
     @field_validator("email")
     @classmethod
@@ -2200,6 +2207,8 @@ class CompanyUserCreate(StrictModel):
 
 
 class CompanyUserUpdate(StrictModel):
+    # Change what the login signs in with: a new email, or `phone` to switch it to a
+    # mobile number (send one or the other).
     email: Optional[EmailStr] = Field(default=None, max_length=EMAIL_MAX)
     full_name: Optional[str] = Field(default=None, min_length=2, max_length=100)
     password: Optional[str] = None
@@ -2208,6 +2217,11 @@ class CompanyUserUpdate(StrictModel):
     guard_id: Optional[int] = None
     # None leaves existing pins alone; [] clears them back to client-wide access.
     site_ids: Optional[list[int]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def phone_instead_of_email(cls, data: Any) -> Any:
+        return _phone_to_login_email(data)
 
     @field_validator("email")
     @classmethod
@@ -2246,6 +2260,13 @@ class PortalLoginCreate(StrictModel):
     @classmethod
     def password_rules(cls, v: str) -> str:
         return validate_password_strength(v)
+
+
+class PortalLoginIdentity(StrictModel):
+    """New sign-in for an existing portal login: an email, or a mobile number."""
+
+    email: Optional[str] = Field(default=None, max_length=EMAIL_MAX)
+    phone: Optional[str] = Field(default=None, max_length=32)
 
 
 class PortalLoginOut(BaseModel):

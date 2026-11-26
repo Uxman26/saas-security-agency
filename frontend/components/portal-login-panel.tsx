@@ -31,6 +31,8 @@ type Props = {
   defaultEmail?: string;
   /** Staff only: offer signing in with a mobile number, pre-filled with this one. */
   defaultPhone?: string;
+  /** Staff only: switch an existing login to a new email or to a mobile number. */
+  changeIdentity?: (id: number, loginUserId: number, data: { email?: string; phone?: string }) => Promise<PortalLogin>;
 };
 
 /** What a login signs in with, as staff would type it. */
@@ -47,11 +49,15 @@ function loginIdentity(l: PortalLogin) {
  * A role that can edit a client but not manage logins simply does not see this panel —
  * the API enforces the same split independently.
  */
-export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEmail, defaultPhone }: Props) {
+export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEmail, defaultPhone, changeIdentity }: Props) {
   const { user } = useAuth();
   const canView = canModule(user, 'roles', 'users_view');
   const canReset = canModule(user, 'roles', 'users_reset_password');
   const canCreate = canModule(user, 'roles', 'users_create');
+  const canEditLogin = canModule(user, 'roles', 'users_edit');
+  const [changing, setChanging] = useState(false);
+  const [changeWith, setChangeWith] = useState<'email' | 'phone'>('phone');
+  const [changeValue, setChangeValue] = useState('');
 
   const [logins, setLogins] = useState<PortalLogin[] | null>(null);
   const [selectedId, setSelectedId] = useState<string>('');
@@ -102,6 +108,45 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
       toast.success('Portal password updated');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to update the password');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startChange = (current: PortalLogin) => {
+    const next = current.login_phone ? 'email' : 'phone';
+    setChangeWith(next);
+    setChangeValue(next === 'phone' ? (defaultPhone ?? '') : (defaultEmail ?? ''));
+    setChanging(true);
+  };
+
+  const submitChange = async () => {
+    if (!changeIdentity) return;
+    const loginUserId = parseInt(selectedId, 10);
+    const value = changeValue.trim();
+    if (!loginUserId || !value) return;
+    const ok = changeWith === 'phone' ? /^\+?[\d\s().-]{9,20}$/.test(value) : value.includes('@');
+    if (!ok) {
+      toast.error(changeWith === 'phone' ? 'Enter a valid mobile number' : 'Enter a valid email address');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (changeWith === 'email') {
+        const dup = await assertEmailAvailable(value);
+        if (dup) {
+          toast.error(dup);
+          return;
+        }
+      }
+      const updated = await changeIdentity(recordId, loginUserId, changeWith === 'phone' ? { phone: value } : { email: value });
+      toast.success(`Now signs in with ${loginIdentity(updated)}`);
+      setChanging(false);
+      refresh();
+    } catch (e) {
+      toast.error(
+        isDuplicateEmailError(e) ? DUPLICATE_EMAIL_MESSAGE : e instanceof Error ? e.message : 'Could not change the sign-in'
+      );
     } finally {
       setSaving(false);
     }
@@ -270,6 +315,66 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
               {logins[0].is_active ? '' : ' (account disabled)'}
             </p>
           )}
+
+          {changeIdentity && canEditLogin && kind === 'staff' ? (
+            changing ? (
+              <div className="space-y-1.5 rounded-md bg-muted/40 p-2">
+                <Label className="text-xs">Change sign-in to</Label>
+                <div className="flex gap-2" role="radiogroup" aria-label="Signs in with">
+                  {(
+                    [
+                      ['email', 'Email address'],
+                      ['phone', 'Mobile number'],
+                    ] as const
+                  ).map(([value, text]) => (
+                    <Button
+                      key={value}
+                      type="button"
+                      size="sm"
+                      role="radio"
+                      aria-checked={changeWith === value}
+                      variant={changeWith === value ? 'default' : 'outline'}
+                      onClick={() => {
+                        setChangeWith(value);
+                        setChangeValue(value === 'phone' ? (defaultPhone ?? '') : (defaultEmail ?? ''));
+                      }}
+                    >
+                      {text}
+                    </Button>
+                  ))}
+                </div>
+                <Input
+                  type={changeWith === 'phone' ? 'tel' : 'email'}
+                  value={changeValue}
+                  onChange={(e) => setChangeValue(e.target.value)}
+                  placeholder={changeWith === 'phone' ? '07700 900123' : 'name@example.com'}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The password stays the same. From now on they sign in with this instead.
+                </p>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" disabled={saving || !changeValue.trim()} onClick={() => void submitChange()}>
+                    {saving ? 'Saving…' : 'Save sign-in'}
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => setChanging(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto px-0 text-xs"
+                onClick={() => startChange(logins.find((l) => String(l.id) === selectedId) ?? logins[0])}
+              >
+                {(logins.find((l) => String(l.id) === selectedId) ?? logins[0]).login_phone
+                  ? 'Switch to signing in with an email address'
+                  : 'Switch to signing in with a mobile number'}
+              </Button>
+            )
+          ) : null}
 
           {canReset ? (
             <div className="space-y-1">

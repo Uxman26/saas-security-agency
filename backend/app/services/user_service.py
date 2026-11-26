@@ -168,7 +168,18 @@ def update_company_user(db: Session, company_id: int, user_id: int, data: Compan
     from app.services.email_uniqueness import assert_email_available
 
     user = _get_user(db, company_id, user_id)
-    if data.email is not None:
+    if data.email is not None and data.email != (user.email or "").strip().lower():
+        # One login can belong to several companies; its sign-in may only be changed by
+        # the one company that owns it, or another tenant could take it over.
+        others = [
+            o for o in membership_service.list_company_options(db, user)
+            if int(o.get("company_id") or o.get("id") or 0) != int(company_id)
+        ]
+        if others:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This login is also used at another company, so its email or mobile number cannot be changed here.",
+            )
         user.email = assert_email_available(db, data.email, exclude_user_id=user_id)
     if data.full_name is not None:
         user.full_name = data.full_name.strip()

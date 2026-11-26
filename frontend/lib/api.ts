@@ -462,6 +462,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ new_password }),
       }),
+    /** Switch a staff login to sign in with a new email, or with a mobile number. */
+    changePortalLoginIdentity: (
+      id: number,
+      loginUserId: number,
+      data: { email?: string; phone?: string }
+    ): Promise<PortalLogin> =>
+      request<PortalLogin>(`/guards/${id}/portal-logins/${loginUserId}/identity`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
     uploadPhoto: async (id: number, file: File): Promise<Guard> => {
       const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
       const form = new FormData();

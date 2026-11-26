@@ -1031,6 +1031,7 @@ export default function GuardsPage() {
                   create={api.guards.createPortalLogin}
                   defaultEmail={editingGuard.email ?? ''}
                   defaultPhone={editingGuard.phone ?? ''}
+                  changeIdentity={api.guards.changePortalLoginIdentity}
                 />
               )}
               <GuardFormWizard

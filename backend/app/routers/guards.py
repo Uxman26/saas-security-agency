@@ -14,6 +14,7 @@ from app.schemas import (
     GuardCreate,
     GuardResponse,
     PortalLoginCreate,
+    PortalLoginIdentity,
     PortalLoginOut,
 )
 from app.rbac import require_internal_module, user_has_permission_db
@@ -223,6 +224,21 @@ def create_guard_portal_login(
     """Give an existing staff member a portal login."""
     user = guard_service.create_guard_portal_login(
         db, guard_id, body.email, body.password, current_user.id, phone=body.phone
+    )
+    return portal_login_out(db, user)
+
+
+@router.post("/{guard_id}/portal-logins/{login_user_id}/identity", response_model=PortalLoginOut)
+def change_guard_portal_login_identity(
+    guard_id: int,
+    login_user_id: int,
+    body: PortalLoginIdentity,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_internal_module("roles", "users_edit")),
+):
+    """Change what this staff member signs in with: a new email, or a mobile number."""
+    user = guard_service.change_guard_login_identity(
+        db, guard_id, login_user_id, body.email, body.phone, current_user.id
     )
     return portal_login_out(db, user)
 

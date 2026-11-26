@@ -5,7 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { companyUserSchema, companyUserUpdateSchema, passwordFieldSchema } from '@/lib/validation';
-import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
+import {
+  assertEmailAvailable,
+  duplicateErrorMessage,
+  isDuplicateEmailError,
+  LINKED_EXISTING_LOGIN_MESSAGE,
+} from '@/lib/email-availability';
 import type { z } from 'zod';
 import { ProtectedRoute } from '@/components/protected-route';
 import { ModuleHeader, ModulePage, ModuleTabs } from '@/components/module-layout';
@@ -605,7 +610,7 @@ export default function RolesSettingsPage() {
         toast.error(dup);
         return;
       }
-      await api.users.create({
+      const createdUser = await api.users.create({
         email: data.email,
         password: data.password,
         full_name: data.full_name,
@@ -617,11 +622,15 @@ export default function RolesSettingsPage() {
       setAddUserOpen(false);
       userForm.reset({ email: '', password: '', full_name: '', role_id: 0, client_id: null, guard_id: null, site_ids: [] });
       await load();
-      toast.success('User created');
+      if (createdUser?.linked_existing_login) {
+        toast.warning(LINKED_EXISTING_LOGIN_MESSAGE, { duration: 10000 });
+      } else {
+        toast.success('User created');
+      }
     } catch (e) {
       if (isDuplicateEmailError(e)) {
-        userForm.setError('email', { type: 'manual', message: DUPLICATE_EMAIL_MESSAGE });
-        toast.error(DUPLICATE_EMAIL_MESSAGE);
+        userForm.setError('email', { type: 'manual', message: duplicateErrorMessage(e) });
+        toast.error(duplicateErrorMessage(e));
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to create user');
       }
@@ -728,8 +737,8 @@ export default function RolesSettingsPage() {
       toast.success('User updated');
     } catch (e) {
       if (isDuplicateEmailError(e)) {
-        editUserForm.setError('email', { type: 'manual', message: DUPLICATE_EMAIL_MESSAGE });
-        toast.error(DUPLICATE_EMAIL_MESSAGE);
+        editUserForm.setError('email', { type: 'manual', message: duplicateErrorMessage(e) });
+        toast.error(duplicateErrorMessage(e));
       } else {
         toast.error(e instanceof Error ? e.message : 'Failed to update user');
       }

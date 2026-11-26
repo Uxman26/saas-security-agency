@@ -34,7 +34,12 @@ import { SortableHead, TablePaginationBar } from '@/components/table-controls';
 import { DEFAULT_TABLE_PAGE_SIZE, NEW_ROW_HIGHLIGHT_CLASS, useScrollToNewRow, useTableList, useTableSort } from '@/lib/use-table-list';
 import { ArchiveRestore, Pencil, Trash2, UserRound, Users, Eye, BadgeCheck, CalendarOff, FolderOpen, ShieldAlert, UserMinus, UserPlus } from 'lucide-react';
 import { toast } from '@/lib/toast';
-import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
+import {
+  assertEmailAvailable,
+  duplicateErrorMessage,
+  isDuplicateEmailError,
+  LINKED_EXISTING_LOGIN_MESSAGE,
+} from '@/lib/email-availability';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
@@ -210,6 +215,9 @@ export default function GuardsPage() {
           toast.error('Staff created, but photo upload failed');
         }
       }
+      if (created?.portal_login_linked_existing) {
+        toast.warning(LINKED_EXISTING_LOGIN_MESSAGE, { duration: 10000 });
+      }
       setPhotoFile(null);
       setAddOpen(false);
       addForm.reset(guardFormDefaults);
@@ -219,7 +227,7 @@ export default function GuardsPage() {
       loadHub();
       if (created?.id) focusRows(created.id);
     } catch (err) {
-      if (isDuplicateEmailError(err)) toast.error(DUPLICATE_EMAIL_MESSAGE);
+      if (isDuplicateEmailError(err)) toast.error(duplicateErrorMessage(err));
     }
   };
 

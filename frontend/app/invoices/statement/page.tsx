@@ -32,8 +32,9 @@ function moneyParen(n: number) {
   return formatMoney(n);
 }
 
+/** One part per line, the way an address is printed (shown with whitespace-pre-line). */
 function joinAddress(...parts: Array<string | null | undefined>) {
-  return parts.map((p) => (p || '').trim()).filter(Boolean).join(', ');
+  return parts.map((p) => (p || '').trim()).filter(Boolean).join('\n');
 }
 
 export default function InvoiceStatementPage() {
@@ -288,9 +289,6 @@ export default function InvoiceStatementPage() {
                     <div className="space-y-1 min-w-0">
                       <p className="text-xs font-semibold uppercase text-muted-foreground print:text-slate-500">Bill to</p>
                       <p className="font-semibold uppercase text-foreground print:text-slate-900">{statement.client.name}</p>
-                      {statement.client.contact_name ? (
-                        <p className="text-sm text-muted-foreground print:text-slate-600">{statement.client.contact_name}</p>
-                      ) : null}
                       <p className="text-sm text-muted-foreground print:text-slate-600 whitespace-pre-line">
                         {joinAddress(
                           statement.client.address,
@@ -298,6 +296,9 @@ export default function InvoiceStatementPage() {
                           statement.client.postcode
                         )}
                       </p>
+                      {statement.client.contact_name ? (
+                        <p className="text-sm text-muted-foreground print:text-slate-600">{statement.client.contact_name}</p>
+                      ) : null}
                     </div>
                     <div className="min-w-[240px] shrink-0 text-sm space-y-1">
                       <div className="flex justify-between gap-6">

@@ -25,16 +25,40 @@ def _s(v: Any) -> str:
     return str(v).strip() if v is not None else ""
 
 
-def _joined(*parts: Any) -> str:
-    return "\n".join(p for p in (_s(x) for x in parts) if p)
+def address_block(street: Any, town: Any, county: Any, postcode: Any) -> str:
+    """An address the way it is printed: street lines, then town, county and postcode,
+    each on its own line. Blank parts are left out."""
+    lines = [ln.strip() for ln in _s(street).splitlines() if ln.strip()]
+    return "\n".join(lines + [p for p in (_s(town), _s(county), _s(postcode)) if p])
+
+
+def _billing_address_of(row, street_attr: str) -> str:
+    """The registered/billing address of a client or site, or "" when none is entered."""
+    if row is None:
+        return ""
+    return address_block(
+        getattr(row, street_attr, None),
+        getattr(row, "billing_town_city", None),
+        getattr(row, "billing_county", None),
+        getattr(row, "billing_postcode", None),
+    )
+
+
+def _main_address_of(row) -> str:
+    return address_block(
+        getattr(row, "address", None),
+        getattr(row, "town_city", None),
+        getattr(row, "county", None),
+        getattr(row, "postcode", None),
+    )
 
 
 def billing_party(client, site) -> dict[str, str]:
     """Name, address (multi-line), contact, email and phone for "Bill to"."""
     site_name = _s(getattr(site, "billing_name", None)) if site else ""
-    site_addr = _s(getattr(site, "invoice_address", None)) if site else ""
+    site_addr = _billing_address_of(site, "invoice_address")
     client_name = _s(getattr(client, "billing_name", None)) if client else ""
-    client_addr = _s(getattr(client, "billing_address", None)) if client else ""
+    client_addr = _billing_address_of(client, "billing_address")
 
     if site_name:
         name = site_name
@@ -50,9 +74,9 @@ def billing_party(client, site) -> dict[str, str]:
     elif client_addr:
         address = client_addr
     elif client is not None:
-        address = _joined(client.address, getattr(client, "town_city", None), client.postcode)
+        address = _main_address_of(client)
     elif site is not None:
-        address = _joined(site.address, getattr(site, "town_city", None), site.postcode)
+        address = _main_address_of(site)
     else:
         address = ""
 

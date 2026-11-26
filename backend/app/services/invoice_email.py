@@ -227,7 +227,7 @@ def render(
             f"</td></tr></table></td></tr>"
         )
 
-    address = escape(company_full_address(company))
+    address = escape(company_full_address(company)).replace("\n", "<br>")
     contact = " · ".join(escape(x) for x in [(company.email or "").strip(), (company.phone or "").strip()] if x)
 
     html = f"""<!DOCTYPE html>

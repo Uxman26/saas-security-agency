@@ -54,6 +54,7 @@ import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { addressLines } from '@/lib/address';
 type ClientFormData = z.output<typeof clientSchema>;
 type RenewFormData = z.output<typeof clientRenewSchema>;
 
@@ -130,6 +131,10 @@ function ClientForm({
           <Input {...register('town_city')} maxLength={200} placeholder="e.g. London" />
         </div>
         <div className="space-y-1">
+          <Label>County</Label>
+          <Input {...register('county')} maxLength={100} placeholder="e.g. Middlesex" />
+        </div>
+        <div className="space-y-1">
           <Label>Postcode</Label>
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
         </div>
@@ -148,11 +153,24 @@ function ClientForm({
           <Label>Registered / billing address</Label>
           <textarea
             {...register('billing_address')}
-            rows={3}
-            placeholder={'e.g. Accounts Payable\n1 Head Office Road\nLondon W1 1AA'}
+            rows={2}
+            placeholder={'e.g. Beldham House\nParr Road'}
             className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           {errors.billing_address && <p className="text-xs text-destructive">{errors.billing_address.message}</p>}
+        </div>
+        <div className="space-y-1">
+          <Label>Billing town/city</Label>
+          <Input {...register('billing_town_city')} maxLength={200} placeholder="e.g. Stanmore" />
+        </div>
+        <div className="space-y-1">
+          <Label>Billing county</Label>
+          <Input {...register('billing_county')} maxLength={100} placeholder="e.g. Middlesex" />
+        </div>
+        <div className="space-y-1">
+          <Label>Billing postcode</Label>
+          <Input {...register('billing_postcode')} maxLength={20} placeholder="e.g. HA7 1NP" />
+          {errors.billing_postcode && <p className="text-xs text-destructive">{errors.billing_postcode.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Contract start</Label>
@@ -251,9 +269,14 @@ function ClientDetailsDialog({ client, canEdit = false }: { client: Client; canE
     ['Phone', client.phone || '—'],
     ['Address', client.address || '—'],
     ['Town/City', client.town_city || '—'],
+    ['County', client.county || '—'],
     ['Postcode', client.postcode || '—'],
     ['Registered company name', client.billing_name || '—'],
-    ['Billing address', client.billing_address || '—'],
+    [
+      'Billing address',
+      addressLines(client.billing_address, client.billing_town_city, client.billing_county, client.billing_postcode) ||
+        '—',
+    ],
     ['Contract start', client.contract_start_date || '—'],
     ['Contract end', client.contract_end_date || '—'],
     ['Double rate on special days', client.double_rate_special_days ? 'Yes' : 'No'],
@@ -268,7 +291,7 @@ function ClientDetailsDialog({ client, canEdit = false }: { client: Client; canE
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-muted-foreground">{k}</dt>
-            <dd className="break-words font-medium">{v}</dd>
+            <dd className="break-words whitespace-pre-line font-medium">{v}</dd>
           </div>
         ))}
         <dt className="text-muted-foreground">Contract status</dt>
@@ -321,9 +344,13 @@ export default function ClientsPage() {
     phone: '',
     address: '',
     town_city: '',
+    county: '',
     postcode: '',
     billing_name: '',
     billing_address: '',
+    billing_town_city: '',
+    billing_county: '',
+    billing_postcode: '',
     contact_person: '',
     double_rate_special_days: false,
     contract_start_date: '',
@@ -379,9 +406,13 @@ export default function ClientsPage() {
       phone: client.phone ?? '',
       address: client.address ?? '',
       town_city: client.town_city ?? '',
+      county: client.county ?? '',
       postcode: client.postcode ?? '',
       billing_name: client.billing_name ?? '',
       billing_address: client.billing_address ?? '',
+      billing_town_city: client.billing_town_city ?? '',
+      billing_county: client.billing_county ?? '',
+      billing_postcode: client.billing_postcode ?? '',
       contact_person: client.contact_person ?? '',
       double_rate_special_days: client.double_rate_special_days ?? false,
       contract_start_date: client.contract_start_date ?? '',
@@ -720,7 +751,7 @@ export default function ClientsPage() {
                           {client.deleted_at ? <Pill tone="muted">Archived</Pill> : null}
                         </div>
                         <p className="mt-2 truncate text-xs text-muted-foreground">
-                          {[client.address, client.town_city, client.postcode].filter(Boolean).join(', ') || 'No address'}
+                          {[client.address, client.town_city, client.county, client.postcode].filter(Boolean).join(', ') || 'No address'}
                         </p>
                       </div>
                     );

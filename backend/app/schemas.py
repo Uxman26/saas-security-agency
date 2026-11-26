@@ -861,6 +861,9 @@ class GuardCreate(GuardBase):
 
 class GuardResponse(GuardBase):
     id: int
+    # True only in the reply to a create whose new login was linked to one another company
+    # already has (it keeps that login's password, not the one sent).
+    portal_login_linked_existing: bool = False
     company_id: int
     full_name: str
     created_at: datetime
@@ -877,11 +880,16 @@ class SiteBase(BaseModel):
     client_id: Optional[int] = None
     address: Optional[str] = None
     town_city: Optional[str] = None
+    county: Optional[str] = Field(default=None, max_length=100)
     postcode: Optional[str] = None
     # Registered company name and billing address printed under "Bill to" on the site's
     # invoices; blank uses the client's, then the site's own name / address.
     billing_name: Optional[str] = Field(default=None, max_length=200)
+    # Street lines of the billing address; town, county and postcode follow on their own.
     invoice_address: Optional[str] = Field(default=None, max_length=500)
+    billing_town_city: Optional[str] = Field(default=None, max_length=200)
+    billing_county: Optional[str] = Field(default=None, max_length=100)
+    billing_postcode: Optional[str] = Field(default=None, max_length=20)
     contact_person: Optional[str] = None
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
@@ -1203,11 +1211,16 @@ class ClientBase(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     town_city: Optional[str] = None
+    county: Optional[str] = Field(default=None, max_length=100)
     postcode: Optional[str] = None
     # Registered company name and billing address used on invoices (the trading
     # name / address above stay on the rota). Blank falls back to name / address.
     billing_name: Optional[str] = Field(default=None, max_length=200)
+    # Street lines of the billing address; town, county and postcode follow on their own.
     billing_address: Optional[str] = Field(default=None, max_length=500)
+    billing_town_city: Optional[str] = Field(default=None, max_length=200)
+    billing_county: Optional[str] = Field(default=None, max_length=100)
+    billing_postcode: Optional[str] = Field(default=None, max_length=20)
     contact_person: Optional[str] = None
     double_rate_special_days: bool = False
     contract_start_date: Optional[date] = None
@@ -2198,6 +2211,9 @@ class CompanyUserOut(BaseModel):
     # Empty means the login is not pinned: a Client-role user then sees every site of
     # its client. Populated means it is restricted to exactly these sites.
     site_ids: list[int] = []
+    # True only in the reply to a create that found this person already signing in at
+    # another company: that login was linked here and keeps its own password.
+    linked_existing_login: bool = False
 
 
 class UserRolePatch(StrictModel):
@@ -2323,6 +2339,8 @@ class PortalLoginOut(BaseModel):
     is_active: bool = True
     # Sites this login is pinned to; empty means it is not pinned to any.
     site_ids: List[int] = Field(default_factory=list)
+    # True only in the reply to a create that linked a login another company already has.
+    linked_existing_login: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

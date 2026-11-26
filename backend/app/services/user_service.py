@@ -94,7 +94,12 @@ def _validate_role_scope(
 
 
 def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -> User:
-    from app.services.email_uniqueness import assert_email_available, find_user_by_email, normalize_email
+    from app.services.email_uniqueness import (
+        assert_email_available,
+        duplicate_message,
+        find_user_by_email,
+        normalize_email,
+    )
 
     company = db.query(Company).filter(Company.id == company_id).first()
     if not company:
@@ -111,7 +116,7 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
         if getattr(existing, "role", None) == SUPER_ADMIN_ROLE:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This email address is already registered. Please use a different email.",
+                detail=duplicate_message(email),
             )
         if membership_service.belongs_to_company(db, existing, company_id):
             raise HTTPException(
@@ -131,6 +136,9 @@ def create_company_user(db: Session, company_id: int, data: CompanyUserCreate) -
             _set_site_pins(db, existing, company_id, data.site_ids, client_id)
         db.commit()
         db.refresh(existing)
+        # The person already signs in elsewhere: this company now shares that login, and
+        # the password sent here was not applied. Not stored; read once by the response.
+        existing.linked_existing_login = True
         return existing
 
     email = assert_email_available(db, data.email)

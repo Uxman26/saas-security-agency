@@ -209,6 +209,10 @@ function SiteForm({
           {errors.town_city && <p className="text-xs text-destructive">{errors.town_city.message}</p>}
         </div>
         <div className="space-y-1">
+          <Label>County</Label>
+          <Input {...register('county')} maxLength={100} placeholder="e.g. Middlesex" />
+        </div>
+        <div className="space-y-1">
           <Label>Postcode <span className="text-destructive">*</span></Label>
           <Input {...register('postcode')} placeholder="e.g. E15 2AB" />
           {errors.postcode && <p className="text-xs text-destructive">{errors.postcode.message}</p>}
@@ -229,11 +233,24 @@ function SiteForm({
           <Label>Registered / billing address</Label>
           <textarea
             {...register('invoice_address')}
-            rows={3}
-            placeholder={'e.g. Accounts Payable\n1 Head Office Road\nLondon W1 1AA'}
+            rows={2}
+            placeholder={'e.g. Beldham House\nParr Road'}
             className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           {errors.invoice_address && <p className="text-xs text-destructive">{errors.invoice_address.message}</p>}
+        </div>
+        <div className="space-y-1">
+          <Label>Billing town/city</Label>
+          <Input {...register('billing_town_city')} maxLength={200} placeholder="e.g. Stanmore" />
+        </div>
+        <div className="space-y-1">
+          <Label>Billing county</Label>
+          <Input {...register('billing_county')} maxLength={100} placeholder="e.g. Middlesex" />
+        </div>
+        <div className="space-y-1">
+          <Label>Billing postcode</Label>
+          <Input {...register('billing_postcode')} maxLength={20} placeholder="e.g. HA7 1NP" />
+          {errors.billing_postcode && <p className="text-xs text-destructive">{errors.billing_postcode.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Latitude</Label>
@@ -445,9 +462,13 @@ export default function SitesPage() {
       client_id: data.client_id ?? null,
       address: data.address || undefined,
       town_city: data.town_city?.trim() || null,
+      county: data.county?.trim() || null,
       postcode: data.postcode || undefined,
       billing_name: data.billing_name?.trim() || null,
       invoice_address: data.invoice_address?.trim() || null,
+      billing_town_city: data.billing_town_city?.trim() || null,
+      billing_county: data.billing_county?.trim() || null,
+      billing_postcode: data.billing_postcode?.trim().toUpperCase() || null,
       contact_person: data.contact_person || undefined,
       contact_email: data.contact_email || undefined,
       contact_phone: data.contact_phone || undefined,
@@ -520,9 +541,13 @@ export default function SitesPage() {
       staff_hourly_rate: site.staff_hourly_rate ?? undefined,
       address: site.address ?? '',
       town_city: site.town_city ?? '',
+      county: site.county ?? '',
       postcode: site.postcode ?? '',
       billing_name: site.billing_name ?? '',
       invoice_address: site.invoice_address ?? '',
+      billing_town_city: site.billing_town_city ?? '',
+      billing_county: site.billing_county ?? '',
+      billing_postcode: site.billing_postcode ?? '',
       contact_person: site.contact_person ?? '',
       contact_email: site.contact_email ?? '',
       contact_phone: site.contact_phone ?? '',
@@ -825,7 +850,7 @@ export default function SitesPage() {
                         ) : null}
                       </div>
                       <p className="mt-2 truncate text-xs text-muted-foreground">
-                        {[site.address, site.town_city, site.postcode].filter(Boolean).join(', ') || 'No address'}
+                        {[site.address, site.town_city, site.county, site.postcode].filter(Boolean).join(', ') || 'No address'}
                       </p>
                     </div>
                   ))}

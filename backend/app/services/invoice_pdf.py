@@ -14,13 +14,13 @@ def _money(v: float) -> str:
 
 
 def company_full_address(company: Optional[Company]) -> str:
-    """The company address with its postcode, unless the address already ends in it."""
+    """The company address with its postcode on the line below, unless it already has it."""
     if company is None:
         return ""
     address = (company.address or "").strip()
     postcode = (getattr(company, "postcode", None) or "").strip()
     if postcode and postcode.replace(" ", "").upper() not in address.replace(" ", "").upper():
-        address = f"{address}, {postcode}" if address else postcode
+        address = f"{address}\n{postcode}" if address else postcode
     return address
 
 
@@ -248,7 +248,8 @@ def render_invoice_pdf(
     billee_style = ParagraphStyle("Billee", parent=styles["Normal"], fontSize=11, leading=14, fontName="Helvetica-Bold", textColor=DARK)
 
     bill_cell = [Paragraph("BILL TO", label_style), Spacer(1, 4), Paragraph(bill_to.upper(), billee_style)]
-    for bit in (bill_contact, bill_address):
+    # Name, then the address, then who it is for: the order a letter is addressed in.
+    for bit in (bill_address, bill_contact):
         if bit:
             bill_cell.append(Paragraph(str(bit).replace("\n", "<br/>"), small))
     if bill_phone or bill_email:

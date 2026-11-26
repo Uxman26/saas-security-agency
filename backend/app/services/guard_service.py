@@ -133,14 +133,16 @@ def create_guard(db: Session, guard: GuardCreate, user_id: int) -> Guard:
         entity_id=db_guard.id,
         meta={"full_name": data.get("full_name")},
     )
+    login = None
     if getattr(guard, "create_login", False):
-        _create_staff_login(db, db_guard, company.id, guard)
+        login = _create_staff_login(db, db_guard, company.id, guard)
     db.commit()
     db.refresh(db_guard)
+    db_guard.portal_login_linked_existing = bool(getattr(login, "linked_existing_login", False))
     return db_guard
 
 
-def _create_staff_login(db: Session, db_guard: Guard, company_id: int, data: GuardCreate) -> None:
+def _create_staff_login(db: Session, db_guard: Guard, company_id: int, data: GuardCreate) -> "User":
     """Create the Staff-role portal user for a freshly inserted guard.
 
     Every validation below (and inside create_company_user: quota, duplicate email, role
@@ -171,7 +173,7 @@ def _create_staff_login(db: Session, db_guard: Guard, company_id: int, data: Gua
     if not role:
         raise HTTPException(status_code=500, detail="Staff role is not configured for this company")
 
-    user_service.create_company_user(
+    return user_service.create_company_user(
         db,
         company_id,
         CompanyUserCreate(

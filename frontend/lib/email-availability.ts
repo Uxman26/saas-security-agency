@@ -22,11 +22,22 @@ export async function assertEmailAvailable(
   }
 }
 
+/** Shown when a login is linked to one the person already has at another company. */
+export const LINKED_EXISTING_LOGIN_MESSAGE =
+  'This person already has a ControlOps login at another company. It is now linked here too and keeps its existing password — the password you entered was not used.';
+
+/** The server's own duplicate wording (it says "mobile number" for a phone login). */
+export function duplicateErrorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : '';
+  return msg && isDuplicateEmailError(err) ? msg : DUPLICATE_EMAIL_MESSAGE;
+}
+
 export function isDuplicateEmailError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   const msg = err.message || '';
   return (
     msg.includes('already registered') ||
+    msg.includes('mobile number is already') ||
     msg.includes('already has a login for this company') ||
     msg.includes(DUPLICATE_EMAIL_MESSAGE) ||
     msg.toLowerCase().includes('email address is already')

@@ -11,7 +11,12 @@ import { canModule } from '@/lib/permissions';
 import { PASSWORD_REQUIREMENTS_MSG, passwordFieldSchema } from '@/lib/validation';
 import type { PortalLogin } from '@/lib/types';
 import { toast } from '@/lib/toast';
-import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } from '@/lib/email-availability';
+import {
+  assertEmailAvailable,
+  duplicateErrorMessage,
+  isDuplicateEmailError,
+  LINKED_EXISTING_LOGIN_MESSAGE,
+} from '@/lib/email-availability';
 import { KeyRound } from 'lucide-react';
 
 type Props = {
@@ -145,7 +150,7 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
       refresh();
     } catch (e) {
       toast.error(
-        isDuplicateEmailError(e) ? DUPLICATE_EMAIL_MESSAGE : e instanceof Error ? e.message : 'Could not change the sign-in'
+        isDuplicateEmailError(e) ? duplicateErrorMessage(e) : e instanceof Error ? e.message : 'Could not change the sign-in'
       );
     } finally {
       setSaving(false);
@@ -175,14 +180,18 @@ export function PortalLoginPanel({ kind, recordId, load, save, create, defaultEm
           return;
         }
       }
-      await create(recordId, byPhone ? { phone, password } : { email, password });
+      const created = await create(recordId, byPhone ? { phone, password } : { email, password });
       setPassword('');
-      toast.success('Portal login created');
+      if (created?.linked_existing_login) {
+        toast.warning(LINKED_EXISTING_LOGIN_MESSAGE, { duration: 10000 });
+      } else {
+        toast.success('Portal login created');
+      }
       refresh();
     } catch (e) {
       toast.error(
         isDuplicateEmailError(e)
-          ? DUPLICATE_EMAIL_MESSAGE
+          ? duplicateErrorMessage(e)
           : e instanceof Error
             ? e.message
             : 'Failed to create the login'

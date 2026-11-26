@@ -32,7 +32,8 @@ def _fmt_date(iso: str | None) -> str:
 
 
 def _join_address(*parts: Any) -> str:
-    return ", ".join(str(x).strip() for x in parts if x and str(x).strip())
+    """One part per line, the way an address is printed."""
+    return "\n".join(str(x).strip() for x in parts if x and str(x).strip())
 
 
 def _logo_flowable(company: dict[str, Any]):
@@ -197,11 +198,12 @@ def render_statement_pdf(data: dict[str, Any]) -> bytes:
         Spacer(1, 2),
         Paragraph((client.get("name") or "—").upper(), co_name),
     ]
-    if client.get("contact_name"):
-        bill_to.append(Paragraph(str(client["contact_name"]), body))
+    # Name, then the address, then who it is for: the order a letter is addressed in.
     c_addr = _join_address(client.get("address"), client.get("town_city"), client.get("postcode"))
     if c_addr:
         bill_to.append(Paragraph(c_addr.replace("\n", "<br/>"), body))
+    if client.get("contact_name"):
+        bill_to.append(Paragraph(str(client["contact_name"]), body))
 
     period_rows = [
         [Paragraph(f"From: {_fmt_date(date_from)}", body), ""],

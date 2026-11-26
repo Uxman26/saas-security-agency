@@ -38,6 +38,7 @@ def _out(u: User, company_id: int, db: Session) -> CompanyUserOut:
         client_id=client_id,
         guard_id=guard_id,
         site_ids=site_ids,
+        linked_existing_login=bool(getattr(u, "linked_existing_login", False)),
     )
 
 

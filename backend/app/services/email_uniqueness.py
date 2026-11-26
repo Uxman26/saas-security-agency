@@ -9,6 +9,14 @@ from sqlalchemy.orm import Session
 from app.models import User
 
 DUPLICATE_EMAIL_MESSAGE = "This email address is already registered. Please use a different email."
+DUPLICATE_PHONE_MESSAGE = "This mobile number is already registered. Please use a different number."
+
+
+def duplicate_message(email: str) -> str:
+    """The "already registered" message, worded for a phone login when it is one."""
+    from app.services.phone_login import is_phone_login_email
+
+    return DUPLICATE_PHONE_MESSAGE if is_phone_login_email(email) else DUPLICATE_EMAIL_MESSAGE
 
 
 def normalize_email(email: str) -> str:
@@ -34,5 +42,5 @@ def assert_email_available(db: Session, email: str, *, exclude_user_id: Optional
     if not normalized:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valid email required")
     if find_user_by_email(db, normalized, exclude_user_id=exclude_user_id):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=DUPLICATE_EMAIL_MESSAGE)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=duplicate_message(normalized))
     return normalized

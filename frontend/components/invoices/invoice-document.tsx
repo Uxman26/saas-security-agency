@@ -203,8 +203,8 @@ export function InvoiceDocument({ invoice, printId = 'invoice-print', editableHe
           <p className="text-base font-extrabold uppercase" style={{ color: DARK }}>
             {billName}
           </p>
-          {invoice.client_contact_person ? <p className="mt-1 text-sm text-slate-600">{invoice.client_contact_person}</p> : null}
           {billAddress ? <p className="mt-1 whitespace-pre-line text-sm text-slate-600">{billAddress}</p> : null}
+          {invoice.client_contact_person ? <p className="mt-1 text-sm text-slate-600">{invoice.client_contact_person}</p> : null}
           {invoice.client_phone || invoice.client_email ? (
             <div className="mt-5 space-y-1.5">
               {invoice.client_phone ? (

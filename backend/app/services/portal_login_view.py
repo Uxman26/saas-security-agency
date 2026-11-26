@@ -22,4 +22,5 @@ def portal_login_out(db: Session, user: User) -> PortalLoginOut:
         role_name=(getattr(role_row, "name", "") or user.role or ""),
         is_active=bool(user.is_active),
         site_ids=sorted(pins),
+        linked_existing_login=bool(getattr(user, "linked_existing_login", False)),
     )

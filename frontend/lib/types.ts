@@ -37,6 +37,8 @@ export interface CompanyUser {
   /** "+447700900123" when the login signs in with a mobile number (email is then internal). */
   login_phone?: string | null;
   full_name: string;
+  /** Only on a create reply: linked to a login another company already has. */
+  linked_existing_login?: boolean;
   role_id: number | null;
   role_slug: string | null;
   role_name: string | null;
@@ -810,6 +812,8 @@ export interface WebhookLogItem {
 
 export interface Guard {
   id: number;
+  /** Only on a create reply: the new login was linked to one another company already has. */
+  portal_login_linked_existing?: boolean;
   company_id: number;
   full_name: string;
   /** Set when the record is archived (soft deleted); null on everything live. */
@@ -947,11 +951,15 @@ export interface Site {
   color?: string;
   address?: string;
   town_city?: string | null;
+  county?: string | null;
   postcode?: string;
   /** Registered company name on this site's invoices; blank uses the client's, then the site name. */
   billing_name?: string | null;
-  /** Billing address on this site's invoices; blank uses the client's, then the site address. */
+  /** Street lines of the billing address on this site's invoices; blank uses the client's, then the site address. */
   invoice_address?: string | null;
+  billing_town_city?: string | null;
+  billing_county?: string | null;
+  billing_postcode?: string | null;
   contact_person?: string;
   contact_email?: string;
   contact_phone?: string;
@@ -1530,11 +1538,15 @@ export interface Client {
   phone?: string;
   address?: string;
   town_city?: string | null;
+  county?: string | null;
   postcode?: string;
   /** Registered company name used on invoices (name stays on the rota). */
   billing_name?: string | null;
-  /** Billing address used on invoices (address stays on the rota). */
+  /** Street lines of the billing address used on invoices (address stays on the rota). */
   billing_address?: string | null;
+  billing_town_city?: string | null;
+  billing_county?: string | null;
+  billing_postcode?: string | null;
   contact_person?: string;
   double_rate_special_days?: boolean;
   contract_start_date?: string;
@@ -2033,6 +2045,8 @@ export interface PortalLogin {
   role_name: string;
   is_active: boolean;
   site_ids: number[];
+  /** Only on a create reply: linked to a login another company already has. */
+  linked_existing_login?: boolean;
 }
 
 /** One immutable entry in the Shift History audit trail. */

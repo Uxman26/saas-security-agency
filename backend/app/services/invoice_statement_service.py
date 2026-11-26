@@ -407,8 +407,9 @@ def _statement_payload(
             "id": client.id if client else None,
             "name": billing_party(client, site)["name"] if (client or site) else "—",
             "contact_name": client.contact_person if client else None,
-            # billing_party already folds town/city and postcode into the address.
-            "address": billing_party(client, site)["address"].replace("\n", ", ") or None,
+            # billing_party already folds town, county and postcode into the address,
+            # one per line.
+            "address": billing_party(client, site)["address"] or None,
             "town_city": None,
             "postcode": None,
             "email": client.email if client else None,

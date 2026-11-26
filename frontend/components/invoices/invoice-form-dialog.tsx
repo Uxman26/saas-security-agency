@@ -44,6 +44,7 @@ import { cn } from '@/lib/utils';
 import { localDateKey } from '@/lib/date-format';
 import { invoiceLabel, syncPaymentTermsNote } from '@/lib/invoice-utils';
 import { INVOICE_CURRENCIES, formatInvoiceMoney } from '@/lib/invoice-currency';
+import { addressLines } from '@/lib/address';
 import type { Client, ClientBankAccount, CompanyBankAccount, CompanyProfile, Guard, Invoice, InvoiceLine, Site } from '@/lib/types';
 
 /**
@@ -1291,8 +1292,6 @@ function buildPreviewInvoice({
         };
   // Registered company name and billing address, by the server's rule
   // (backend invoice_billto.billing_party): billed site's, then client's, then trading.
-  const join = (...parts: (string | null | undefined)[]) =>
-    parts.map((v) => (v ?? '').trim()).filter(Boolean).join('\n');
   const billTo =
     original && !customerChanged
       ? { bill_to_name: original.bill_to_name, bill_to_address: original.bill_to_address }
@@ -1300,9 +1299,15 @@ function buildPreviewInvoice({
           bill_to_name:
             site?.billing_name?.trim() || client?.billing_name?.trim() || client?.name || site?.name || null,
           bill_to_address:
-            site?.invoice_address?.trim() ||
-            client?.billing_address?.trim() ||
-            (client ? join(client.address, client.town_city, client.postcode) : join(site?.address, site?.town_city, site?.postcode)),
+            (site
+              ? addressLines(site.invoice_address, site.billing_town_city, site.billing_county, site.billing_postcode)
+              : '') ||
+            (client
+              ? addressLines(client.billing_address, client.billing_town_city, client.billing_county, client.billing_postcode)
+              : '') ||
+            (client
+              ? addressLines(client.address, client.town_city, client.county, client.postcode)
+              : addressLines(site?.address, site?.town_city, site?.county, site?.postcode)),
         };
   const bill = { ...billBase, ...billTo };
   const bank = account

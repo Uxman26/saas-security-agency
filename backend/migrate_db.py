@@ -409,6 +409,31 @@ def _ensure_town_city_columns():
         logging.getLogger(__name__).exception("town_city columns migration failed")
 
 
+def _ensure_address_block_columns():
+    """county, and a structured registered/billing address, on clients and sites.
+
+    Addresses print as name, street, town, county, postcode, one per line; the billing
+    address used to be a single free-text box with no county.
+    """
+    try:
+        from sqlalchemy import inspect, text
+        from app.database import engine
+
+        insp = inspect(engine)
+        for table in ("clients", "sites"):
+            if not insp.has_table(table):
+                continue
+            cols = {c["name"] for c in insp.get_columns(table)}
+            with engine.begin() as conn:
+                for col in ("county", "billing_town_city", "billing_county", "billing_postcode"):
+                    if col not in cols:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} VARCHAR"))
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("address block columns migration failed")
+
+
 def _ensure_invoice_sent_at_column():
     """invoices.sent_at: the overdue clock (90 days) starts when an invoice is sent.
 
@@ -617,6 +642,7 @@ def _run_migrations():
     _ensure_invoice_sent_at_column()
     _ensure_invoice_number_and_town_columns()
     _ensure_town_city_columns()
+    _ensure_address_block_columns()
     _ensure_company_workforce_size()
     path = get_db_path()
     if not path:

@@ -872,10 +872,15 @@ class Client(Base):
     phone = Column(String)
     address = Column(String)
     town_city = Column(String)
+    county = Column(String)
     postcode = Column(String)
-    # Registered company name and billing address used on invoices.
+    # Registered company name and billing address used on invoices. billing_address holds
+    # the street lines; town, county and postcode each have their own column.
     billing_name = Column(String)
     billing_address = Column(String)
+    billing_town_city = Column(String)
+    billing_county = Column(String)
+    billing_postcode = Column(String)
     contact_person = Column(String)
     double_rate_special_days = Column(Boolean, default=False)
     contract_start_date = Column(Date, nullable=True)
@@ -969,11 +974,16 @@ class Site(Base):
     color = Column(String, default="#3b82f6")
     address = Column(String)
     town_city = Column(String)
+    county = Column(String)
     postcode = Column(String)
     # Registered company name and billing address for invoices; the rota keeps using
     # name / address. Blank falls back to the client's, then the site's own.
+    # invoice_address holds the street lines; town, county and postcode have their own.
     billing_name = Column(String)
     invoice_address = Column(String)
+    billing_town_city = Column(String)
+    billing_county = Column(String)
+    billing_postcode = Column(String)
     contact_person = Column(String)
     contact_email = Column(String)
     contact_phone = Column(String)

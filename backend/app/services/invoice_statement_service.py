@@ -386,6 +386,8 @@ def _statement_payload(
     lines,
     statement_type,
 ) -> dict[str, Any]:
+    from app.services.company_profile_service import company_logo_url
+
     return {
         "company": {
             "id": company.id,
@@ -393,14 +395,18 @@ def _statement_payload(
             "email": company.email,
             "phone": company.phone,
             "address": company.address,
+            "town_city": getattr(company, "town_city", None),
             "postcode": company.postcode,
+            "logo_url": company_logo_url(company),
+            "logo_path": getattr(company, "logo_path", None),
         },
         "client": {
             "id": client.id if client else None,
             "name": client.name if client else (site.name if site else "—"),
             "contact_name": client.contact_person if client else None,
-            "address": client.address if client else None,
-            "postcode": client.postcode if client else None,
+            "address": client.address if client else (getattr(site, "address", None) if site else None),
+            "town_city": (getattr(client, "town_city", None) if client else (getattr(site, "town_city", None) if site else None)),
+            "postcode": client.postcode if client else (getattr(site, "postcode", None) if site else None),
             "email": client.email if client else None,
         },
         "site": {"id": site.id, "name": site.name} if site else None,

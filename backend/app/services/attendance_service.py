@@ -670,6 +670,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
     from app.middleware.client_source import get_client_source
 
     mobile_client = get_client_source() == "mobile"
+    clock_event: Optional[str] = None  # "in" | "out" when a first successful transition happens
     if data.book_off:
         if att.booked_off_at:
             if mobile_client:
@@ -696,6 +697,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                 },
             )
         att.booked_off_at = now_utc
+        clock_event = "out"
         if is_early_finish:
             att.status = "early_leave"
             existing_ef = (
@@ -784,6 +786,7 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
                 },
             )
         att.booked_at = now_utc
+        clock_event = "in"
         if is_late_arrival:
             att.status = "late"
             late_mins = max(
@@ -848,6 +851,35 @@ def book_on_off(db: Session, data: BookingOnOff, user_id: int) -> Attendance:
         att.note = _append_note(att.note, gps_note)
 
     att.updated_by_user_id = user_id
+
+    if clock_event is not None:
+        try:
+            from app.services.clock_event_notify_service import notify_oversight_clock_event
+
+            # Ensure relationships are available for recipient/site labels.
+            if a.guard is None and a.guard_id:
+                a.guard = db.query(Guard).filter(Guard.id == a.guard_id).first()
+            if a.site is None and a.site_id:
+                a.site = site
+            notify_oversight_clock_event(
+                db,
+                company=company,
+                assignment=a,
+                book_off=clock_event == "out",
+                event_at_utc=now_utc,
+                actor_user_id=user_id,
+                late=bool(is_late_arrival and clock_event == "in"),
+                early_finish=bool(is_early_finish and clock_event == "out"),
+                overtime=bool(is_late_finish and clock_event == "out"),
+            )
+        except Exception:
+            # Attendance must succeed even if oversight push fails.
+            logger.exception(
+                "clock_event notify failed assignment=%s event=%s",
+                a.id,
+                clock_event,
+            )
+
     db.commit()
     db.refresh(att)
     att = (

@@ -20,6 +20,7 @@ class ContractorCreate(BaseModel):
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
     address: Optional[str] = Field(None, max_length=500)
+    town_city: Optional[str] = Field(None, max_length=200)
     postcode: Optional[str] = Field(None, max_length=20)
 
     @field_validator("name")
@@ -47,6 +48,7 @@ class ContractorUpdate(BaseModel):
     contact_email: Optional[EmailStr] = None
     contact_phone: Optional[str] = None
     address: Optional[str] = Field(None, max_length=500)
+    town_city: Optional[str] = Field(None, max_length=200)
     postcode: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
 
@@ -89,6 +91,7 @@ class ContractorRead(BaseModel):
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
     address: Optional[str] = None
+    town_city: Optional[str] = None
     postcode: Optional[str] = None
     is_active: bool
     created_at: datetime

@@ -15,6 +15,11 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatMoney } from '@/lib/rota-shifts-utils';
 import { formatDateUK, localDateKey } from '@/lib/date-format';
+import { storageGet } from '@/lib/safe-storage';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+/** ControlOps brand orange — matches globals.css --primary (not invoice red). */
+const BRAND_ORANGE = '#F45100';
 
 function fmtDate(iso?: string | null) {
   if (!iso) return '—';
@@ -24,6 +29,10 @@ function fmtDate(iso?: string | null) {
 function moneyParen(n: number) {
   if (n < 0) return `(${formatMoney(Math.abs(n))})`;
   return formatMoney(n);
+}
+
+function joinAddress(...parts: Array<string | null | undefined>) {
+  return parts.map((p) => (p || '').trim()).filter(Boolean).join(', ');
 }
 
 export default function InvoiceStatementPage() {
@@ -37,6 +46,7 @@ export default function InvoiceStatementPage() {
   const [statement, setStatement] = useState<InvoiceStatement | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [logoSrc, setLogoSrc] = useState<string | null>(null);
 
   useEffect(() => {
     api.clients.list().then(setClients).catch(() => setClients([]));
@@ -46,6 +56,32 @@ export default function InvoiceStatementPage() {
     setDateFrom(localDateKey(start));
     setDateTo(localDateKey(now));
   }, []);
+
+  useEffect(() => {
+    const logoUrl = statement?.company?.logo_url;
+    if (!logoUrl) {
+      setLogoSrc(null);
+      return;
+    }
+    let cancelled = false;
+    let blobUrl: string | null = null;
+    const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
+    void fetch(`${API_URL}${logoUrl}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        blobUrl = URL.createObjectURL(blob);
+        setLogoSrc(blobUrl);
+      })
+      .catch(() => setLogoSrc(null));
+    return () => {
+      cancelled = true;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [statement?.company?.logo_url]);
 
   const clientSites = useMemo(
     () => (clientId ? sites.filter((s) => String(s.client_id) === clientId) : sites),
@@ -204,41 +240,65 @@ export default function InvoiceStatementPage() {
             </div>
 
             {statement ? (
-              <div id="statement-print" className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden print:bg-white print:text-slate-800">
-                <div className="h-1 bg-primary" />
+              <div
+                id="statement-print"
+                className="rounded-lg border bg-card text-card-foreground shadow-sm overflow-hidden print:bg-white print:text-slate-800 [print-color-adjust:exact] [-webkit-print-color-adjust:exact]"
+              >
+                <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: BRAND_ORANGE }} />
                 <div className="p-6 sm:p-8 space-y-8">
-                  <div className="flex flex-wrap justify-between gap-6">
-                    <div className="max-w-md space-y-1">
-                      <p className="text-sm font-bold uppercase tracking-wide text-foreground print:text-slate-900">
-                        {statement.company.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground print:text-slate-600 whitespace-pre-line">
-                        {[statement.company.address, statement.company.postcode].filter(Boolean).join(', ') || '—'}
-                      </p>
+                  <div className="flex flex-col gap-6 sm:flex-row sm:justify-between sm:items-start">
+                    <div className="flex min-w-0 max-w-md items-start gap-4">
+                      {logoSrc ? (
+                        <img
+                          src={logoSrc}
+                          alt=""
+                          className="h-16 w-20 shrink-0 object-contain object-left sm:h-20 sm:w-24"
+                        />
+                      ) : null}
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-sm font-bold uppercase tracking-wide text-foreground print:text-slate-900">
+                          {statement.company.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground print:text-slate-600 whitespace-pre-line">
+                          {joinAddress(
+                            statement.company.address,
+                            statement.company.town_city,
+                            statement.company.postcode
+                          ) || '—'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <h2 className="text-2xl font-bold text-foreground print:text-slate-900">Statement of Account</h2>
-                      <p className="text-sm text-muted-foreground print:text-slate-500">
+                    <div className="shrink-0 text-left sm:text-right sm:max-w-xs">
+                      <h2 className="text-2xl font-bold leading-tight text-foreground print:text-slate-900">
+                        Statement of Account
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground print:text-slate-500">
                         {statement.statement_type === 'outstanding' ? 'Outstanding balances' : 'Account activity'}
                       </p>
                       {statement.site ? (
-                        <p className="text-xs text-muted-foreground print:text-slate-500 mt-1">Site: {statement.site.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground print:text-slate-500">
+                          Site: {statement.site.name}
+                        </p>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap justify-between gap-8">
-                    <div className="space-y-1">
+                  <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
+                    <div className="space-y-1 min-w-0">
                       <p className="text-xs font-semibold uppercase text-muted-foreground print:text-slate-500">Bill to</p>
                       <p className="font-semibold uppercase text-foreground print:text-slate-900">{statement.client.name}</p>
                       {statement.client.contact_name ? (
                         <p className="text-sm text-muted-foreground print:text-slate-600">{statement.client.contact_name}</p>
                       ) : null}
                       <p className="text-sm text-muted-foreground print:text-slate-600 whitespace-pre-line">
-                        {[statement.client.address, statement.client.postcode].filter(Boolean).join(', ')}
+                        {joinAddress(
+                          statement.client.address,
+                          statement.client.town_city,
+                          statement.client.postcode
+                        )}
                       </p>
                     </div>
-                    <div className="min-w-[240px] text-sm space-y-1">
+                    <div className="min-w-[240px] shrink-0 text-sm space-y-1">
                       <div className="flex justify-between gap-6">
                         <span className="text-muted-foreground print:text-slate-500">From</span>
                         <span>{fmtDate(statement.date_from)}</span>
@@ -268,7 +328,10 @@ export default function InvoiceStatementPage() {
                         <span>Refunded</span>
                         <span>{formatMoney(statement.summary.refunded)}</span>
                       </div>
-                      <div className="flex justify-between gap-6 bg-muted print:bg-slate-100 px-2 py-1.5 rounded mt-1 font-semibold">
+                      <div
+                        className="flex justify-between gap-6 px-2 py-1.5 rounded mt-1 font-semibold bg-muted print:bg-slate-100"
+                        style={{ boxShadow: `inset 0 0 0 1px ${BRAND_ORANGE}` }}
+                      >
                         <span>Closing Balance on {fmtDate(statement.date_to)} (GBP)</span>
                         <span>{formatMoney(statement.summary.closing_balance)}</span>
                       </div>
@@ -276,11 +339,11 @@ export default function InvoiceStatementPage() {
                   </div>
 
                   <div>
-                    <h3 className="font-semibold mb-3">Account activity</h3>
+                    <h3 className="font-semibold mb-3 text-foreground print:text-slate-900">Account activity</h3>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="bg-muted print:bg-slate-100 text-left">
+                          <tr className="text-left text-white" style={{ backgroundColor: BRAND_ORANGE }}>
                             <th className="px-3 py-2 font-semibold">Date</th>
                             <th className="px-3 py-2 font-semibold">Item</th>
                             <th className="px-3 py-2 font-semibold text-right">Amount</th>
@@ -296,7 +359,7 @@ export default function InvoiceStatementPage() {
                                 className={
                                   highlight
                                     ? ln.kind === 'closing'
-                                      ? 'bg-accent print:bg-[#FFF4ED] font-semibold'
+                                      ? 'bg-[#FFF4ED] font-semibold print:bg-[#FFF4ED]'
                                       : 'bg-slate-50 font-semibold'
                                     : 'border-b border-slate-100'
                                 }
@@ -339,7 +402,10 @@ export default function InvoiceStatementPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <div className="bg-muted print:bg-slate-100 rounded px-4 py-3 text-sm font-semibold flex gap-8 min-w-[280px] justify-between">
+                    <div
+                      className="bg-muted print:bg-slate-100 rounded px-4 py-3 text-sm font-semibold flex gap-8 min-w-[280px] justify-between"
+                      style={{ boxShadow: `inset 0 0 0 1px ${BRAND_ORANGE}` }}
+                    >
                       <span>Closing balance on {fmtDate(statement.date_to)} (GBP)</span>
                       <span>{formatMoney(statement.summary.closing_balance)}</span>
                     </div>

@@ -35,6 +35,8 @@ def create_contractor(db: Session, company_id: int, data: ContractorCreate, curr
         contact_email=str(data.contact_email) if data.contact_email else None,
         contact_phone=data.contact_phone,
         address=data.address,
+        town_city=data.town_city,
+        postcode=data.postcode,
         is_active=True,
     )
     db.add(row)

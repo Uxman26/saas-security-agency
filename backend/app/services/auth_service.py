@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException
 from app.html_safe import esc
-from app.models import User, Company
+from app.models import User, Company, Guard, UserCompanyMembership
 from app.schemas import UserCreate
 from app.auth import (
     get_password_hash,
@@ -35,6 +35,69 @@ MOBILE_APP_DENIED = {
 }
 
 log = logging.getLogger("controlops.auth")
+
+
+def _looks_like_phone_identifier(value: str) -> bool:
+    raw = (value or "").strip()
+    if not raw or "@" in raw:
+        return False
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    return len(digits) >= 7
+
+
+def _find_user_by_phone(db: Session, phone_raw: str, company_login_id: str | None) -> User | None:
+    """Resolve staff phone → Guard → User within the login company."""
+    from app.services.company_login_id_service import normalize_login_id, resolve_login_company
+    from app.services.guard_service import _normalize_phone
+
+    phone = _normalize_phone(phone_raw)
+    if len(phone) < 7:
+        return None
+    public_company_id = normalize_login_id(company_login_id)
+    if not public_company_id:
+        return None
+    try:
+        company, _is_platform = resolve_login_company(db, public_company_id)
+    except Exception:
+        return None
+    if company is None:
+        return None
+
+    match_ids: list[int] = []
+    for guard in db.query(Guard).filter(Guard.company_id == company.id).all():
+        if _normalize_phone(getattr(guard, "phone", None)) == phone or _normalize_phone(
+            getattr(guard, "work_phone", None)
+        ) == phone:
+            match_ids.append(guard.id)
+    if not match_ids:
+        return None
+
+    membership = (
+        db.query(UserCompanyMembership)
+        .filter(
+            UserCompanyMembership.company_id == company.id,
+            UserCompanyMembership.guard_id.in_(match_ids),
+            UserCompanyMembership.is_active.is_(True),
+        )
+        .first()
+    )
+    if membership is not None:
+        return db.query(User).filter(User.id == membership.user_id).first()
+
+    return (
+        db.query(User)
+        .filter(User.guard_id.in_(match_ids), User.company_id == company.id)
+        .first()
+    )
+
+
+def _resolve_login_user(db: Session, identifier: str, company_id: str | None) -> User | None:
+    raw = (identifier or "").strip()
+    if not raw:
+        return None
+    if _looks_like_phone_identifier(raw):
+        return _find_user_by_phone(db, raw, company_id)
+    return db.query(User).filter(func.lower(User.email) == raw.lower()).first()
 
 
 def _assert_mobile_app_entitled(
@@ -646,14 +709,18 @@ def authenticate_user(
     from app.services import login_guard_service, login_log_service
     from app.services.company_login_id_service import LOGIN_FAILED_DETAIL, normalize_login_id
 
-    login_guard_service.assert_login_allowed(db, email, ip_address)
+    identifier = (email or "").strip()
+    login_guard_service.assert_login_allowed(db, identifier, ip_address)
     public_company_id = normalize_login_id(company_id)
 
-    user = db.query(User).filter(func.lower(User.email) == email.lower().strip()).first()
+    user = _resolve_login_user(db, identifier, company_id)
+    # Audit / lockout keys use the account email when resolved so phone and email
+    # logins share the same failure counters.
+    audit_email = (getattr(user, "email", None) or identifier) if user else identifier
     if not user or not verify_password(password, user.password_hash):
         if user and (getattr(user, "auth_provider", None) or AUTH_PROVIDER_LOCAL) in OAUTH_AUTH_PROVIDERS:
             login_log_service.log_login(
-                db, email=email, status="failed", ip_address=ip_address, user_agent=user_agent, user=user
+                db, email=audit_email, status="failed", ip_address=ip_address, user_agent=user_agent, user=user
             )
             raise HTTPException(
                 status_code=401,
@@ -661,7 +728,7 @@ def authenticate_user(
             )
         _fail_login(
             db,
-            email=email,
+            email=audit_email,
             user=user,
             ip_address=ip_address,
             user_agent=user_agent,
@@ -672,7 +739,7 @@ def authenticate_user(
         if getattr(user, "role", None) != SUPER_ADMIN_ROLE:
             _fail_login(
                 db,
-                email=email,
+                email=audit_email,
                 user=user,
                 ip_address=ip_address,
                 user_agent=user_agent,
@@ -686,7 +753,7 @@ def authenticate_user(
             if exc.status_code == 401:
                 _fail_login(
                     db,
-                    email=email,
+                    email=audit_email,
                     user=user,
                     ip_address=ip_address,
                     user_agent=user_agent,
@@ -696,10 +763,10 @@ def authenticate_user(
     db.commit()
     db.refresh(user)
     if not user.is_active:
-        login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
+        login_log_service.log_login(db, email=audit_email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=403, detail="Account is deactivated")
     if requires_email_verification(user):
-        login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
+        login_log_service.log_login(db, email=audit_email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         receipt_ref = None
         if user.company_id:
             pending = latest_pending_receipt(db, user.company_id)
@@ -718,7 +785,7 @@ def authenticate_user(
     except Exception:
         block = None
     if block:
-        login_log_service.log_login(db, email=email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
+        login_log_service.log_login(db, email=audit_email, status="failed", user=user, ip_address=ip_address, user_agent=user_agent)
         raise HTTPException(status_code=402, detail=block)
 
     _assert_mobile_app_entitled(db, user, client_source, ip_address, user_agent)
@@ -741,7 +808,7 @@ def authenticate_user(
         }
 
     try:
-        login_log_service.log_login(db, email=email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
+        login_log_service.log_login(db, email=audit_email, status="success", user=user, ip_address=ip_address, user_agent=user_agent)
     except Exception:
         db.rollback()
     return issue_access_session(

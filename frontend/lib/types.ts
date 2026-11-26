@@ -942,6 +942,7 @@ export interface Site {
   deleted_at?: string | null;
   color?: string;
   address?: string;
+  town_city?: string;
   postcode?: string;
   contact_person?: string;
   contact_email?: string;
@@ -1481,13 +1482,16 @@ export interface InvoiceStatement {
     email?: string | null;
     phone?: string | null;
     address?: string | null;
+    town_city?: string | null;
     postcode?: string | null;
+    logo_url?: string | null;
   };
   client: {
     id: number;
     name: string;
     contact_name?: string | null;
     address?: string | null;
+    town_city?: string | null;
     postcode?: string | null;
     email?: string | null;
   };
@@ -1517,6 +1521,7 @@ export interface Client {
   email?: string;
   phone?: string;
   address?: string;
+  town_city?: string;
   postcode?: string;
   contact_person?: string;
   double_rate_special_days?: boolean;
@@ -1598,6 +1603,8 @@ export interface MainContractor {
   phone?: string;
   email?: string;
   address?: string;
+  town_city?: string;
+  postcode?: string;
   registration_number?: string;
   contract_start_date?: string;
   contract_end_date?: string;
@@ -1613,6 +1620,8 @@ export interface SubContractor {
   email?: string;
   phone?: string;
   address?: string;
+  town_city?: string;
+  postcode?: string;
   contact_person?: string;
   license_number?: string;
   registration_number?: string;
@@ -2138,6 +2147,7 @@ export interface DirectoryContractor {
   contact_email?: string | null;
   contact_phone?: string | null;
   address?: string | null;
+  town_city?: string | null;
   postcode?: string | null;
   is_active: boolean;
   created_at: string;

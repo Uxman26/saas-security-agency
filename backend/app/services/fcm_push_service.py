@@ -136,6 +136,13 @@ def send_to_user(
     if not tokens:
         return 0
 
+    # Dedicated loud channel + bundled ``alert`` / ``alert.wav`` so remote pushes
+    # stay audible even when the legacy ``controlops_ops`` channel was created with
+    # the OS default sound (Android cannot change a channel's sound after create).
+    android_channel = "controlops_ops_alert"
+    android_sound = "alert" if sound else None
+    ios_sound = "alert.wav" if sound else None
+
     message = messaging.MulticastMessage(
         notification=messaging.Notification(title=title, body=body),
         data=payload,
@@ -143,9 +150,9 @@ def send_to_user(
         android=messaging.AndroidConfig(
             priority="high",
             notification=messaging.AndroidNotification(
-                channel_id="controlops_ops",
-                sound="default" if sound else None,
-                default_sound=bool(sound),
+                channel_id=android_channel,
+                sound=android_sound,
+                default_sound=False,
                 default_vibrate_timings=True,
                 priority="high",
                 visibility="public",
@@ -157,7 +164,7 @@ def send_to_user(
             payload=messaging.APNSPayload(
                 aps=messaging.Aps(
                     alert=messaging.ApsAlert(title=title, body=body),
-                    sound="default" if sound else None,
+                    sound=ios_sound,
                     badge=1,
                     content_available=True,
                 )

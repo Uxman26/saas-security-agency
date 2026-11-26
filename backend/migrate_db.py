@@ -2769,6 +2769,14 @@ def _run_migrations():
         except sqlite3.OperationalError:
             pass
 
+    # Town/City on address entities — same field name as staff (guards.town_city).
+    for _town_table in ("sites", "clients", "contractors", "main_contractors", "sub_contractors"):
+        if table_exists(cur, _town_table) and not column_exists(cur, _town_table, "town_city"):
+            try:
+                cur.execute(f"ALTER TABLE {_town_table} ADD COLUMN town_city TEXT")
+            except sqlite3.OperationalError:
+                pass
+
     if not table_exists(cur, "portal_message_threads"):
         try:
             cur.execute(

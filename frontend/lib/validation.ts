@@ -40,13 +40,36 @@ const emailFieldSchema = z
   .email('Invalid email address')
   .max(TEXT_LIMITS.email, tooLongMessage('Email', TEXT_LIMITS.email));
 
+/** Email or staff phone (digits / +country). Same ``email`` JSON field as the API. */
+const loginIdentifierSchema = z
+  .string()
+  .trim()
+  .min(1, 'Email or phone is required')
+  .max(TEXT_LIMITS.email, tooLongMessage('Email or phone', TEXT_LIMITS.email))
+  .superRefine((value, ctx) => {
+    if (value.includes('@')) {
+      const parsed = emailFieldSchema.safeParse(value);
+      if (!parsed.success) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid email address' });
+      }
+      return;
+    }
+    const digits = value.replace(/\D/g, '');
+    if (digits.length < 7) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Enter a valid email or phone number',
+      });
+    }
+  });
+
 export const loginSchema = z.object({
   company_id: z
     .string()
     .trim()
     .min(3, 'Company ID is required')
     .max(32, tooLongMessage('Company ID', 32)),
-  email: emailFieldSchema,
+  email: loginIdentifierSchema,
   password: z
     .string()
     .min(6, 'Password must be at least 6 characters')
@@ -342,6 +365,7 @@ export const siteSchema = z
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     client_id: z.number().int().optional().nullable(),
     address: z.string().max(200).optional().or(z.literal('')),
+    town_city: z.string().max(200).optional().or(z.literal('')),
     postcode: z.string().max(20).optional().or(z.literal('')),
     contact_person: z.string().max(100).optional().or(z.literal('')),
     contact_email: emailFieldSchema.optional().or(z.literal('')),
@@ -428,6 +452,7 @@ export const clientSchema = z
     email: emailFieldSchema.optional().or(z.literal('')),
     phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
     address: z.string().max(200).optional().or(z.literal('')),
+    town_city: z.string().max(200).optional().or(z.literal('')),
     postcode: z.string().max(20).optional().or(z.literal('')),
     contact_person: z.string().max(100).optional().or(z.literal('')),
     double_rate_special_days: z.boolean().default(false),
@@ -468,6 +493,7 @@ export const mainContractorSchema = z.object({
   phone: z.string().regex(/^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/, 'Invalid phone number').optional().or(z.literal('')),
   email: emailFieldSchema.optional().or(z.literal('')),
   address: z.string().max(200).optional().or(z.literal('')),
+  town_city: z.string().max(200).optional().or(z.literal('')),
   postcode: z.string().max(20).optional().or(z.literal('')),
   registration_number: z.string().max(80).optional().or(z.literal('')),
   contract_start_date: z.string().optional().or(z.literal('')),

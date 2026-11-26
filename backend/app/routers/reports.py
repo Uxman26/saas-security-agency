@@ -7,11 +7,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.rbac import require_internal_module, user_has_permission_db
+from app.rbac import require_internal_module, require_module, user_has_permission_db
 from app.schemas import (
     DashboardOverview,
     ComplianceAlert,
     ContractExpiryAlert,
+    MissedAttendanceSummary,
     ReportsHubResponse,
     ShiftHistoryRow,
     StaffIndividualReportResponse,
@@ -19,7 +20,16 @@ from app.schemas import (
     SubscriptionReportSummary,
     UsageSummaryResponse,
 )
-from app.services import report_service, staff_report_service, reports_hub_service, export_service, reports_extended_service, shift_adjustment_service, shift_audit_service
+from app.services import (
+    report_service,
+    staff_report_service,
+    reports_hub_service,
+    export_service,
+    reports_extended_service,
+    shift_adjustment_service,
+    shift_audit_service,
+    missed_attendance_service,
+)
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -27,6 +37,24 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 @router.get("/dashboard", response_model=DashboardOverview)
 def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(require_internal_module("reports", "view"))):
     return report_service.get_dashboard_overview(db, current_user.id)
+
+
+@router.get("/missed-attendance", response_model=MissedAttendanceSummary)
+def missed_attendance_report(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    limit: Optional[int] = 500,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("attendance", "view")),
+):
+    """Missed Clock-In / Clock-Out summary (active rotas). Safe path for mobile clients."""
+    return missed_attendance_service.list_missed_attendance(
+        db,
+        current_user.id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=max(1, min(int(limit or 500), 1000)),
+    )
 
 
 @router.get("/compliance", response_model=List[ComplianceAlert])

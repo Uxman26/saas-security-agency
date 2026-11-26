@@ -100,6 +100,7 @@ export default function ContractorDetailPage() {
                         contact_email: row.contact_email || '',
                         contact_phone: row.contact_phone || '',
                         address: row.address || '',
+                        town_city: row.town_city || '',
                         postcode: row.postcode || '',
                       }}
                       onSubmit={async (v) => {
@@ -111,6 +112,7 @@ export default function ContractorDetailPage() {
                             contact_email: v.contact_email || undefined,
                             contact_phone: v.contact_phone || undefined,
                             address: v.address || undefined,
+                            town_city: v.town_city || undefined,
                             postcode: v.postcode || undefined,
                           });
                           setEditOpen(false);
@@ -182,6 +184,7 @@ export default function ContractorDetailPage() {
                   <p>Email: {row.contact_email || '—'}</p>
                   <p>Phone: {row.contact_phone || '—'}</p>
                   <p>Address: {row.address || '—'}</p>
+                  <p>Town/City: {row.town_city || '—'}</p>
                   <p>Postcode: {row.postcode || '—'}</p>
                 </CardContent>
               </Card>

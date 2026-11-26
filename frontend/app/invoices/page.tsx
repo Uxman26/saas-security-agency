@@ -693,6 +693,20 @@ export default function InvoicesPage() {
         </Button>
       );
     }
+    // Past due: chasing the client comes first. Record payment stays in the row menu.
+    if (next === 'send_reminder' && canSendReminder) {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(button, 'border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-900 dark:text-red-400')}
+          onClick={() => setReminderInvoice(inv)}
+        >
+          <Send className="size-3.5" />
+          Send reminder
+        </Button>
+      );
+    }
     if ((next === 'record_payment' || next === 'send_reminder') && canRecordPayment) {
       return (
         <Button variant="outline" size="sm" className={button} onClick={() => openRecordPayment(inv)}>

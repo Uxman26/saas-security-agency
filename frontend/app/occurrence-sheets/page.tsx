@@ -28,6 +28,7 @@ import { api } from '@/lib/api';
 import type { OccurrenceEntry, OccurrenceSheet, Site } from '@/lib/types';
 import { NotebookPen, Plus, Printer, Download, Trash2, Pencil, Search } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { SignaturePad } from '@/components/signature-pad';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { localDateKey } from '@/lib/date-format';
@@ -41,7 +42,7 @@ const STATUS_OPTIONS = [
 const STATUS_LABELS: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
 STATUS_LABELS.submitted = 'Reported';
 
-const BLANK_ROW: OccurrenceEntry = { start_time: '', finish_time: '', occurrence: '', action_taken: '' };
+const BLANK_ROW: OccurrenceEntry = { start_time: '', finish_time: '', occurrence: '', action_taken: '', informed_manager: false, informed_company: false, informed_client: false };
 const STARTING_ROWS = 6;
 
 function statusTone(status: string): 'muted' | 'info' | 'warning' | 'positive' {
@@ -79,7 +80,7 @@ export default function OccurrenceSheetsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<OccurrenceSheet | null>(null);
   const [header, setHeader] = useState({
-    sheet_date: '', site_id: '', officer_names: '', shift_start: '', shift_end: '', signature_name: '', status: 'open',
+    sheet_date: '', site_id: '', officer_names: '', shift_start: '', shift_end: '', checked_by: '', signature_data: '', status: 'open',
   });
   const [entries, setEntries] = useState<OccurrenceEntry[]>([]);
   const [saving, setSaving] = useState(false);
@@ -105,7 +106,7 @@ export default function OccurrenceSheetsPage() {
     setEditing(null);
     setHeader({
       sheet_date: localDateKey(),
-      site_id: '', officer_names: '', shift_start: '', shift_end: '', signature_name: '', status: 'open',
+      site_id: '', officer_names: '', shift_start: '', shift_end: '', checked_by: '', signature_data: '', status: 'open',
     });
     setEntries(Array.from({ length: STARTING_ROWS }, () => ({ ...BLANK_ROW })));
     setOpen(true);
@@ -122,12 +123,13 @@ export default function OccurrenceSheetsPage() {
         officer_names: full.officer_names ?? '',
         shift_start: full.shift_start ?? '',
         shift_end: full.shift_end ?? '',
-        signature_name: full.signature_name ?? '',
+        checked_by: full.checked_by ?? '',
+        signature_data: full.signature_data ?? '',
         status: status || 'open',
       });
       const existing = full.entries.map((e) => ({
         start_time: e.start_time ?? '', finish_time: e.finish_time ?? '',
-        occurrence: e.occurrence ?? '', action_taken: e.action_taken ?? '',
+        occurrence: e.occurrence ?? '', action_taken: e.action_taken ?? '', informed_manager: !!e.informed_manager, informed_company: !!e.informed_company, informed_client: !!e.informed_client,
       }));
       setEntries([...existing, ...Array.from({ length: 3 }, () => ({ ...BLANK_ROW }))]);
       setOpen(true);
@@ -136,7 +138,7 @@ export default function OccurrenceSheetsPage() {
     }
   };
 
-  const setEntry = (i: number, key: keyof OccurrenceEntry, value: string) =>
+  const setEntry = (i: number, key: keyof OccurrenceEntry, value: string | boolean) =>
     setEntries((rs) => rs.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
 
   const save = async () => {
@@ -151,7 +153,8 @@ export default function OccurrenceSheetsPage() {
       officer_names: header.officer_names || null,
       shift_start: header.shift_start || null,
       shift_end: header.shift_end || null,
-      signature_name: header.signature_name || null,
+      checked_by: header.checked_by || null,
+      signature_data: header.signature_data || null,
       ...(editing && canEdit ? { status: header.status } : {}),
       entries: entries.map((e, i) => ({ ...e, serial_no: i + 1 })),
     };
@@ -460,8 +463,14 @@ export default function OccurrenceSheetsPage() {
                       <Input value={header.officer_names} onChange={(e) => setHeader((h) => ({ ...h, officer_names: e.target.value }))} maxLength={300} />
                     </div>
                     <div className="space-y-1 sm:col-span-1">
-                      <Label>Security name (signature)</Label>
-                      <Input value={header.signature_name} onChange={(e) => setHeader((h) => ({ ...h, signature_name: e.target.value }))} maxLength={100} />
+                      <Label>Checked By</Label>
+                      <Input value={header.checked_by} onChange={(e) => setHeader((h) => ({ ...h, checked_by: e.target.value }))} maxLength={100} />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <SignaturePad
+                        value={header.signature_data || null}
+                        onChange={(v) => setHeader((h) => ({ ...h, signature_data: v || '' }))}
+                      />
                     </div>
                     {editing ? (
                       <div className="space-y-1">
@@ -494,7 +503,7 @@ export default function OccurrenceSheetsPage() {
                             <TableHead className="w-28">Start</TableHead>
                             <TableHead className="w-28">Finish</TableHead>
                             <TableHead>Occurrences &amp; patrols</TableHead>
-                            <TableHead className="w-64">Actions taken</TableHead>
+                            <TableHead className="w-80">Actions taken</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -512,6 +521,11 @@ export default function OccurrenceSheetsPage() {
                               </TableCell>
                               <TableCell>
                                 <Textarea rows={2} value={row.action_taken ?? ''} onChange={(e) => setEntry(i, 'action_taken', e.target.value)} maxLength={2000} />
+                                <div className="mt-2 flex flex-col gap-1 text-xs">
+                                  <label className="flex items-center gap-2"><input type="checkbox" className="rounded border" checked={!!row.informed_manager} onChange={(e) => setEntry(i, 'informed_manager', e.target.checked)} /> Informed to Manager</label>
+                                  <label className="flex items-center gap-2"><input type="checkbox" className="rounded border" checked={!!row.informed_company} onChange={(e) => setEntry(i, 'informed_company', e.target.checked)} /> Informed to Company</label>
+                                  <label className="flex items-center gap-2"><input type="checkbox" className="rounded border" checked={!!row.informed_client} onChange={(e) => setEntry(i, 'informed_client', e.target.checked)} /> Informed to Client</label>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}

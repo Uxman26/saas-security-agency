@@ -28,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import type { IncidentCatalogue, Incident, Site } from '@/lib/types';
 import { toast } from '@/lib/toast';
+import { SignaturePad } from '@/components/signature-pad';
 import { openAuthFile } from '@/lib/use-auth-blob-url';
 import { AlertTriangle, BarChart3, Plus } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
@@ -73,7 +74,7 @@ export default function IncidentsPage() {
   const [detail, setDetail] = useState<Incident | null>(null);
   const [form, setForm] = useState({
     notes: '', site_id: '', latitude: '', longitude: '',
-    category: 'other', police_called: false, ambulance_called: false, fire_brigade_called: false,
+    category: 'other', police_called: false, ambulance_called: false, fire_brigade_called: false, checked_by: '', signature_data: '',
   });
   const [catalogue, setCatalogue] = useState<IncidentCatalogue | null>(null);
   useEffect(() => {
@@ -101,7 +102,7 @@ export default function IncidentsPage() {
 
   const create = async () => {
     if (!form.notes.trim()) {
-      toast.warning('Notes are required');
+      toast.warning('Details of Incident are required');
       return;
     }
     try {
@@ -111,6 +112,8 @@ export default function IncidentsPage() {
         police_called: form.police_called,
         ambulance_called: form.ambulance_called,
         fire_brigade_called: form.fire_brigade_called,
+        checked_by: form.checked_by || undefined,
+        signature_data: form.signature_data || undefined,
         site_id: form.site_id ? Number(form.site_id) : undefined,
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
@@ -119,7 +122,7 @@ export default function IncidentsPage() {
       setOpen(false);
       setForm({
         notes: '', site_id: '', latitude: '', longitude: '',
-        category: 'other', police_called: false, ambulance_called: false, fire_brigade_called: false,
+        category: 'other', police_called: false, ambulance_called: false, fire_brigade_called: false, checked_by: '', signature_data: '',
       });
       load();
     } catch (e) {
@@ -235,7 +238,7 @@ export default function IncidentsPage() {
                     <TableHead>Site</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Reporter</TableHead>
-                    <TableHead>Notes</TableHead>
+                    <TableHead>Details of Incident</TableHead>
                     <TableHead>Called</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead />
@@ -359,8 +362,20 @@ export default function IncidentsPage() {
                     ))}
                   </div>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Checked By</Label>
+                    <Input value={form.checked_by} onChange={(e) => setForm((f) => ({ ...f, checked_by: e.target.value }))} maxLength={100} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <SignaturePad
+                      value={form.signature_data}
+                      onChange={(v) => setForm((f) => ({ ...f, signature_data: v || '' }))}
+                    />
+                  </div>
+                </div>
                 <div className="space-y-1">
-                  <Label>Notes</Label>
+                  <Label>Details of Incident</Label>
                   <Textarea rows={4} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
                 </div>
                 <div className="space-y-1">
@@ -416,6 +431,16 @@ export default function IncidentsPage() {
                     <span className="text-muted-foreground">Site:</span> {detail.site_name || '—'}
                   </p>
                   <p className="whitespace-pre-wrap border rounded-md p-3 bg-muted/30">{detail.notes}</p>
+                  {detail.checked_by ? (
+                    <p className="text-sm"><span className="text-muted-foreground">Checked By:</span> {detail.checked_by}</p>
+                  ) : null}
+                  {detail.signature_data?.startsWith('data:image') ? (
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Digital signature</p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={detail.signature_data} alt="Signature" className="max-h-32 rounded-md border bg-white object-contain" />
+                    </div>
+                  ) : null}
                   {(detail.attachments || []).length > 0 ? (
                     <div className="space-y-1">
                       <p className="text-muted-foreground">Attachments</p>

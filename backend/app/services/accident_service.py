@@ -27,6 +27,7 @@ from app.services.portal_access import (
     is_staff_portal_user,
     pinned_site_ids,
 )
+from app.services.signature_service import normalize_signature_data
 from app.services.recycle_bin import archive as _bin_archive
 
 STATUSES = ("open", "under_review", "closed")
@@ -119,6 +120,8 @@ def create_report(db: Session, user: User, data: AccidentReportCreate) -> Accide
     payload = data.model_dump()
     payload.pop("site_id", None)
     payload.pop("guard_id", None)
+    if "signature_data" in payload:
+        payload["signature_data"] = normalize_signature_data(payload.get("signature_data"))
     row = AccidentReport(
         company_id=company.id,
         site_id=site.id if site else None,
@@ -199,6 +202,8 @@ def update_report(
     company = get_company_by_user_id(db, user.id)
     row = _row_for_write(db, user, company.id, report_id)
     payload = data.model_dump(exclude_unset=True)
+    if "signature_data" in payload:
+        payload["signature_data"] = normalize_signature_data(payload.get("signature_data"))
     prev_status = row.status
 
     if "status" in payload:

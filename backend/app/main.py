@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests
+from app.routers import auth, guards, sites, assignments, clients, sub_contractors, main_contractors, email, rota_plans, staff_requests, bulk_io
 from app.routers import teams, absence, recycle_bin
 from app.routers import subscriptions, documents, rates, allowances, attendance, payroll, invoices, payments, credit_notes, reports, admin, admin_ext, admin_complete, admin_trials, admin_refunds, admin_server_monitor, roles, users, special_days, contractors, receipts, company, expenses, sms, leads, marketing, stripe_billing, billing, portal, patrol, incidents, accident_reports, occurrence_sheets, tasks, lone_worker, modules, job_titles, live_support, assistant, search, finance_ext, feedback
 from app.middleware.api_usage import ApiUsageMiddleware
@@ -136,6 +136,7 @@ app.include_router(job_titles.router)
 app.include_router(teams.router)
 app.include_router(absence.router)
 app.include_router(sites.router)
+app.include_router(bulk_io.router)
 app.include_router(assignments.router)
 app.include_router(rota_plans.router)
 app.include_router(staff_requests.router)

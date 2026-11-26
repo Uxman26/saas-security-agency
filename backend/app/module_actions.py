@@ -68,6 +68,8 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("sensitive_view", "View sensitive information", "view"),
         ActionDef("salary_view", "View salary & payroll details", "view"),
         ActionDef("terminate", "Record termination", "edit"),
+        ActionDef("export", "Bulk export", "view"),
+        ActionDef("import", "Bulk import", "create"),
     ),
     "absence": CRUD
     + ARCHIVING
@@ -88,8 +90,15 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("assignments_view", "View assignments", "view"),
         ActionDef("assign", "Assign to site", "edit"),
         ActionDef("unassign", "Remove assignment", "edit"),
+        ActionDef("export", "Bulk export", "view"),
+        ActionDef("import", "Bulk import", "create"),
     ),
-    "sub_contractors": CRUD + ARCHIVING,
+    "sub_contractors": CRUD
+    + ARCHIVING
+    + (
+        ActionDef("export", "Bulk export", "view"),
+        ActionDef("import", "Bulk import", "create"),
+    ),
     "attendance": CRUD
     + (
         ActionDef("book", "Book attendance", "create"),
@@ -122,7 +131,12 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
         ActionDef("incidents_view", "View incidents", "view"),
         ActionDef("incidents_create", "Report incidents", "create"),
     ),
-    "sites": CRUD + ARCHIVING,
+    "sites": CRUD
+    + ARCHIVING
+    + (
+        ActionDef("export", "Bulk export", "view"),
+        ActionDef("import", "Bulk import", "create"),
+    ),
     # The /assignments API is guarded by the rota.* codes, so the shift-log and export
     # actions live on `rota` where they are actually enforced. This row drives the
     # Assignments screen and sidebar entry.
@@ -217,6 +231,8 @@ MODULE_ACTIONS: dict[str, tuple[ActionDef, ...]] = {
     + (
         ActionDef("renew", "Renew contract", "edit"),
         ActionDef("renewals_view", "View renewals", "view"),
+        ActionDef("export", "Bulk export", "view"),
+        ActionDef("import", "Bulk import", "create"),
     ),
     "leads": CRUD
     + ARCHIVING

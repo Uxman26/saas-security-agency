@@ -52,6 +52,7 @@ import { assertEmailAvailable, DUPLICATE_EMAIL_MESSAGE, isDuplicateEmailError } 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
+import { BulkExportButton, BulkImportButton } from '@/components/bulk-io-dialog';
 type ClientFormData = z.output<typeof clientSchema>;
 type RenewFormData = z.output<typeof clientRenewSchema>;
 
@@ -437,6 +438,12 @@ export default function ClientsPage() {
     getSortValue
   );
 
+  const filteredClientIds = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return byStatus.map((c) => c.id);
+    return byStatus.filter((c) => getSearchText(c).toLowerCase().includes(q)).map((c) => c.id);
+  }, [byStatus, search, getSearchText]);
+
   useEffect(() => {
     setPage(1);
   }, [search, statusFilter, listView]);
@@ -539,7 +546,19 @@ export default function ClientsPage() {
             description="Client records, contracts and portal access. Track renewals and the sites each client is billed for."
             actions={
               <>
-
+              <BulkExportButton
+                module="clients"
+                label="Clients"
+                filteredIds={filteredClientIds}
+                canExport={canModule(permUser, 'clients', 'export') || canViewMod}
+              />
+              <BulkImportButton
+                module="clients"
+                label="Clients"
+                canImport={canModule(permUser, 'clients', 'import') || canCreateMod}
+                canUpdate={canEditMod}
+                onDone={() => void refetch()}
+              />
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>

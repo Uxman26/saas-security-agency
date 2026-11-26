@@ -47,7 +47,11 @@ def missed_attendance_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_module("attendance", "view")),
 ):
-    """Missed Clock-In / Clock-Out summary (active rotas). Safe path for mobile clients."""
+    """Missed Clock-In / Clock-Out summary (active rotas). Safe path for mobile clients.
+
+    Controllers/admins with attendance.view (or equivalent via role matrix) see company
+    scope; staff portal users are hard-scoped to their linked guard inside the service.
+    """
     return missed_attendance_service.list_missed_attendance(
         db,
         current_user.id,

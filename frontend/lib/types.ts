@@ -961,6 +961,8 @@ export interface Site {
   latitude?: number | null;
   longitude?: number | null;
   geofence_radius_m?: number | null;
+  assignment_instructions?: string | null;
+  instructions_acknowledged?: boolean;
   created_at: string;
   /** Write-only, POST /sites only: provisions a Client-role portal login pinned to this
    * site. Rejected on PUT. Never returned. */
@@ -2525,6 +2527,9 @@ export interface OccurrenceEntry {
   finish_time?: string | null;
   occurrence?: string | null;
   action_taken?: string | null;
+  informed_manager?: boolean;
+  informed_company?: boolean;
+  informed_client?: boolean;
 }
 
 export interface OccurrenceSheet {
@@ -2540,7 +2545,9 @@ export interface OccurrenceSheet {
   officer_names?: string | null;
   shift_start?: string | null;
   shift_end?: string | null;
+  checked_by?: string | null;
   signature_name?: string | null;
+  signature_data?: string | null;
   status: string;
   created_by_user_id: number;
   created_by_name?: string | null;
@@ -2602,6 +2609,9 @@ export interface AccidentReport {
   ambulance_time_attended?: string | null;
   ambulance_time_left?: string | null;
   comments?: string | null;
+  checked_by?: string | null;
+  signature_name?: string | null;
+  signature_data?: string | null;
   status: string;
   created_at: string;
 }
@@ -2622,6 +2632,9 @@ export interface Incident {
   police_called?: boolean;
   ambulance_called?: boolean;
   fire_brigade_called?: boolean;
+  checked_by?: string | null;
+  signature_name?: string | null;
+  signature_data?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   accuracy?: number | null;

@@ -24,6 +24,7 @@ from app.schemas import (
 )
 from app.services import audit_service
 from app.services.company_service import get_company_by_user_id
+from app.services.signature_service import normalize_signature_data
 from app.services.portal_access import (
     filter_sites_for_user,
     is_client_portal_user,
@@ -115,7 +116,12 @@ def _replace_entries(db: Session, sheet: OccurrenceSheet, entries: list[Occurren
     serial = 1
     for item in entries:
         # Skip entirely blank lines so an untouched row on screen is not stored.
-        if not any(
+        informed_any = bool(
+            getattr(item, "informed_manager", False)
+            or getattr(item, "informed_company", False)
+            or getattr(item, "informed_client", False)
+        )
+        if not informed_any and not any(
             (getattr(item, f) or "").strip()
             for f in ("start_time", "finish_time", "occurrence", "action_taken")
         ):
@@ -128,6 +134,9 @@ def _replace_entries(db: Session, sheet: OccurrenceSheet, entries: list[Occurren
                 finish_time=item.finish_time,
                 occurrence=item.occurrence,
                 action_taken=item.action_taken,
+                informed_manager=bool(getattr(item, "informed_manager", False)),
+                informed_company=bool(getattr(item, "informed_company", False)),
+                informed_client=bool(getattr(item, "informed_client", False)),
             )
         )
         serial += 1
@@ -157,6 +166,8 @@ def create_sheet(db: Session, user: User, data: OccurrenceSheetCreate) -> Occurr
             raise HTTPException(status_code=404, detail="Employee not found")
 
     payload = data.model_dump(exclude={"entries", "site_id", "guard_id"})
+    if "signature_data" in payload:
+        payload["signature_data"] = normalize_signature_data(payload.get("signature_data"))
     sheet = OccurrenceSheet(
         company_id=company.id,
         site_id=site.id if site else None,
@@ -227,6 +238,8 @@ def update_sheet(
     company = get_company_by_user_id(db, user.id)
     row = _row_for_write(db, user, company.id, sheet_id)
     payload = data.model_dump(exclude_unset=True)
+    if "signature_data" in payload:
+        payload["signature_data"] = normalize_signature_data(payload.get("signature_data"))
     entries = payload.pop("entries", None)
     prev_status = _normalize_status(row.status)
 

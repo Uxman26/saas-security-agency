@@ -844,6 +844,8 @@ class SiteBase(BaseModel):
     main_contractor_id: Optional[int] = None
     sub_contractor_id: Optional[int] = None
     contractor_id: Optional[UUID] = None
+    # Bullet / sub-point site briefing shown to assigned staff on mobile and web.
+    assignment_instructions: Optional[str] = Field(default=None, max_length=20000)
 
     @model_validator(mode="after")
     def staff_rate_not_above_site_rate(self):
@@ -879,9 +881,15 @@ class SiteResponse(SiteBase):
     created_at: datetime
     # Set only on archived (soft-deleted) records; null on everything in the normal lists.
     deleted_at: Optional[datetime] = None
+    # True when the current user has acknowledged the current instructions text.
+    instructions_acknowledged: bool = False
 
     class Config:
         from_attributes = True
+
+
+class SiteInstructionAckRequest(BaseModel):
+    acknowledged: bool = True
 
 class AssignmentBase(BaseModel):
     guard_id: int
@@ -3006,6 +3014,9 @@ class IncidentCreate(BaseModel):
     police_called: bool = False
     ambulance_called: bool = False
     fire_brigade_called: bool = False
+    checked_by: Optional[str] = Field(default=None, max_length=100)
+    signature_name: Optional[str] = Field(default=None, max_length=100)
+    signature_data: Optional[str] = Field(default=None, max_length=600000)
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     accuracy: Optional[float] = None
@@ -3024,6 +3035,9 @@ class IncidentUpdate(BaseModel):
     police_called: Optional[bool] = None
     ambulance_called: Optional[bool] = None
     fire_brigade_called: Optional[bool] = None
+    checked_by: Optional[str] = None
+    signature_name: Optional[str] = None
+    signature_data: Optional[str] = None
 
     @field_validator("status")
     @classmethod
@@ -3068,6 +3082,9 @@ class IncidentResponse(BaseModel):
     police_called: bool = False
     ambulance_called: bool = False
     fire_brigade_called: bool = False
+    checked_by: Optional[str] = None
+    signature_name: Optional[str] = None
+    signature_data: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     accuracy: Optional[float] = None
@@ -3143,6 +3160,9 @@ class OccurrenceEntryIn(BaseModel):
     finish_time: Optional[str] = Field(default=None, max_length=10)
     occurrence: Optional[str] = Field(default=None, max_length=2000)
     action_taken: Optional[str] = Field(default=None, max_length=2000)
+    informed_manager: bool = False
+    informed_company: bool = False
+    informed_client: bool = False
 
 
 class OccurrenceEntryResponse(OccurrenceEntryIn):
@@ -3160,7 +3180,9 @@ class OccurrenceSheetBase(BaseModel):
     officer_names: Optional[str] = Field(default=None, max_length=300)
     shift_start: Optional[str] = Field(default=None, max_length=10)
     shift_end: Optional[str] = Field(default=None, max_length=10)
+    checked_by: Optional[str] = Field(default=None, max_length=100)
     signature_name: Optional[str] = Field(default=None, max_length=100)
+    signature_data: Optional[str] = Field(default=None, max_length=600000)
 
 
 class OccurrenceSheetCreate(OccurrenceSheetBase):
@@ -3174,7 +3196,9 @@ class OccurrenceSheetUpdate(BaseModel):
     officer_names: Optional[str] = None
     shift_start: Optional[str] = None
     shift_end: Optional[str] = None
+    checked_by: Optional[str] = None
     signature_name: Optional[str] = None
+    signature_data: Optional[str] = None
     status: Optional[str] = None
     # When present, replaces the whole line set — the sheet is edited as one document.
     entries: Optional[List[OccurrenceEntryIn]] = None
@@ -3244,6 +3268,9 @@ class AccidentReportBase(BaseModel):
     ambulance_time_attended: Optional[str] = Field(default=None, max_length=10)
     ambulance_time_left: Optional[str] = Field(default=None, max_length=10)
     comments: Optional[str] = Field(default=None, max_length=5000)
+    checked_by: Optional[str] = Field(default=None, max_length=100)
+    signature_name: Optional[str] = Field(default=None, max_length=100)
+    signature_data: Optional[str] = Field(default=None, max_length=600000)
 
 
 class AccidentReportCreate(AccidentReportBase):
@@ -3273,6 +3300,9 @@ class AccidentReportUpdate(BaseModel):
     ambulance_time_attended: Optional[str] = None
     ambulance_time_left: Optional[str] = None
     comments: Optional[str] = None
+    checked_by: Optional[str] = None
+    signature_name: Optional[str] = None
+    signature_data: Optional[str] = None
     status: Optional[str] = None
 
 

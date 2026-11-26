@@ -365,6 +365,7 @@ export const siteSchema = z
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     client_id: z.number().int().optional().nullable(),
     address: z.string().max(200).optional().or(z.literal('')),
+    assignment_instructions: z.string().max(20000).optional().or(z.literal('')),
     town_city: z.string().max(200).optional().or(z.literal('')),
     postcode: z.string().max(20).optional().or(z.literal('')),
     contact_person: z.string().max(100).optional().or(z.literal('')),

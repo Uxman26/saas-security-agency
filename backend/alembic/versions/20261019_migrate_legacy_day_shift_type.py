@@ -46,15 +46,17 @@ def upgrade() -> None:
             sa.text("UPDATE assignments SET shift_type = :st WHERE id = :id"),
             {"st": new_type, "id": row[0]},
         )
-    # site_rates (legacy day rates → morning)
-    try:
-        conn.execute(sa.text("UPDATE site_rates SET shift_type = 'morning' WHERE lower(coalesce(shift_type, '')) = 'day'"))
-    except Exception:
-        pass
-    try:
-        conn.execute(sa.text("UPDATE guard_rates SET shift_type = 'morning' WHERE lower(coalesce(shift_type, '')) = 'day'"))
-    except Exception:
-        pass
+    inspector = sa.inspect(conn)
+    for table in ("site_rates", "guard_rates"):
+        if inspector.has_table(table) and "shift_type" in {
+            column["name"] for column in inspector.get_columns(table)
+        }:
+            conn.execute(
+                sa.text(
+                    f"UPDATE {table} SET shift_type = 'morning' "
+                    "WHERE lower(coalesce(shift_type, '')) = 'day'"
+                )
+            )
 
 
 def downgrade() -> None:

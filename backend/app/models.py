@@ -2276,9 +2276,9 @@ class OccurrenceEntry(Base):
     finish_time = Column(String)
     occurrence = Column(Text)
     action_taken = Column(Text)
-    informed_manager = Column(Boolean, default=False)
-    informed_company = Column(Boolean, default=False)
-    informed_client = Column(Boolean, default=False)
+    informed_manager = Column(Boolean, default=False, nullable=False)
+    informed_company = Column(Boolean, default=False, nullable=False)
+    informed_client = Column(Boolean, default=False, nullable=False)
     sheet = relationship("OccurrenceSheet", back_populates="entries")
 
 

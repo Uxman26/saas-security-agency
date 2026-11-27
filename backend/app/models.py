@@ -996,6 +996,8 @@ class Site(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     geofence_radius_m = Column(Float, nullable=True)
+    # Structured site briefing for assigned staff (bullets / sub-points as plain text).
+    assignment_instructions = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     # Soft delete ("archived"): the row stays for its history — past shifts, invoices and
@@ -1015,6 +1017,26 @@ class Site(Base):
     patrol_routes = relationship("PatrolRoute", back_populates="site", cascade="all, delete-orphan")
     patrol_checkpoints = relationship("PatrolCheckpoint", back_populates="site", cascade="all, delete-orphan")
     incidents = relationship("Incident", back_populates="site")
+    instruction_acks = relationship(
+        "SiteInstructionAck",
+        back_populates="site",
+        cascade="all, delete-orphan",
+    )
+
+
+class SiteInstructionAck(Base):
+    """Staff confirmation that they have read a site's assignment instructions."""
+
+    __tablename__ = "site_instruction_acks"
+    id = Column(Integer, primary_key=True, index=True)
+    site_id = Column(Integer, ForeignKey("sites.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    guard_id = Column(Integer, ForeignKey("guards.id"), nullable=True, index=True)
+    instructions_hash = Column(String, nullable=True)
+    acknowledged_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    site = relationship("Site", back_populates="instruction_acks")
+    user = relationship("User")
+    guard = relationship("Guard")
 
 class RotaPlan(Base):
     __tablename__ = "rota_plans"
@@ -2088,6 +2110,9 @@ class Incident(Base):
     police_called = Column(Boolean, default=False)
     ambulance_called = Column(Boolean, default=False)
     fire_brigade_called = Column(Boolean, default=False)
+    checked_by = Column(String)
+    signature_name = Column(String)
+    signature_data = Column(Text)  # PNG base64 (drawn signature)
     latitude = Column(Float)
     longitude = Column(Float)
     accuracy = Column(Float)
@@ -2146,6 +2171,9 @@ class AccidentReport(Base):
     ambulance_time_left = Column(String)
 
     comments = Column(Text)
+    checked_by = Column(String)
+    signature_name = Column(String)
+    signature_data = Column(Text)
     status = Column(String, default="open")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -2218,7 +2246,9 @@ class OccurrenceSheet(Base):
     officer_names = Column(String)
     shift_start = Column(String)
     shift_end = Column(String)
+    checked_by = Column(String)
     signature_name = Column(String)
+    signature_data = Column(Text)
     status = Column(String, default="open")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -2246,6 +2276,9 @@ class OccurrenceEntry(Base):
     finish_time = Column(String)
     occurrence = Column(Text)
     action_taken = Column(Text)
+    informed_manager = Column(Boolean, default=False)
+    informed_company = Column(Boolean, default=False)
+    informed_client = Column(Boolean, default=False)
     sheet = relationship("OccurrenceSheet", back_populates="entries")
 
 

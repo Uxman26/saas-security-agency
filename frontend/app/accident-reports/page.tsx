@@ -29,6 +29,7 @@ import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBul
 import type { AccidentReport, Site } from '@/lib/types';
 import { ClipboardCheck, Download, Plus, Printer, Trash2, Pencil, Search, AlertTriangle } from 'lucide-react';
 import { toast } from '@/lib/toast';
+import { SignaturePad } from '@/components/signature-pad';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { localDateKey } from '@/lib/date-format';
@@ -68,6 +69,8 @@ const EMPTY: FormState = {
   fire_time_attended: '',
   fire_time_left: '',
   ambulance_informed: false,
+  checked_by: '',
+  signature_data: '',
   ambulance_time_informed: '',
   ambulance_time_attended: '',
   ambulance_time_left: '',
@@ -616,7 +619,20 @@ export default function AccidentReportsPage() {
                   </div>
                 </div>
 
-                <DialogFooter>
+                
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label>Checked By</Label>
+                      <Input value={String(form.checked_by || '')} onChange={(e) => set('checked_by', e.target.value)} maxLength={100} />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <SignaturePad
+                        value={String(form.signature_data || '') || null}
+                        onChange={(v) => set('signature_data', v || '')}
+                      />
+                    </div>
+                  </div>
+<DialogFooter>
                   <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
                   <Button onClick={() => void save()} disabled={saving}>
                     {saving ? 'Saving…' : editing ? 'Save changes' : 'Log accident report'}

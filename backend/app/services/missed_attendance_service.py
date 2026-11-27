@@ -152,16 +152,19 @@ def sweep_missed_attendance(db: Session) -> dict:
 
 
 def _assignment_is_live(assignment: Assignment) -> bool:
-    """Skip draft/unpublished rota plan rows; standalone assignments still count."""
+    """Skip draft/unpublished rota plan rows; standalone assignments still count.
+
+    If ``rota_plan_id`` is set but the plan failed to join (hard-deleted / stale FK),
+    still treat the assignment as live so missed Clock-In/Out is not silently zeroed.
+    Soft-deleted and draft plans remain excluded.
+    """
     plan = getattr(assignment, "rota_plan", None)
-    if plan is None and assignment.rota_plan_id:
-        return False
     if plan is None:
         return True
     if getattr(plan, "deleted_at", None) is not None:
         return False
     status = (getattr(plan, "status", None) or "").strip().lower()
-    if status == "published" or getattr(plan, "published_at", None) is not None:
+    if status in ("published", "active", "live") or getattr(plan, "published_at", None) is not None:
         return True
     return False
 

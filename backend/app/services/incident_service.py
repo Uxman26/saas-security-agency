@@ -18,6 +18,7 @@ from app.schemas import (
     IncidentUpdate,
 )
 from app.services.company_service import get_company_by_user_id
+from app.services.signature_service import normalize_signature_data
 from app.incident_catalog import (
     CATEGORY_KEYS,
     INCIDENT_CATEGORIES,
@@ -152,6 +153,9 @@ def _out(inc: Incident) -> IncidentResponse:
         police_called=bool(inc.police_called),
         ambulance_called=bool(inc.ambulance_called),
         fire_brigade_called=bool(inc.fire_brigade_called),
+        checked_by=getattr(inc, "checked_by", None),
+        signature_name=getattr(inc, "signature_name", None),
+        signature_data=getattr(inc, "signature_data", None),
         latitude=inc.latitude,
         longitude=inc.longitude,
         accuracy=inc.accuracy,
@@ -213,6 +217,9 @@ def create_incident(
         police_called=bool(data.police_called),
         ambulance_called=bool(data.ambulance_called),
         fire_brigade_called=bool(data.fire_brigade_called),
+        checked_by=(data.checked_by or "").strip() or None,
+        signature_name=(data.signature_name or "").strip() or None,
+        signature_data=normalize_signature_data(getattr(data, "signature_data", None)),
         latitude=data.latitude,
         longitude=data.longitude,
         accuracy=data.accuracy,
@@ -295,6 +302,8 @@ def update_incident(db: Session, user: User, incident_id: int, data: IncidentUpd
         if data.status is not None:
             raise HTTPException(status_code=403, detail="Insufficient permissions to change status")
     payload = data.model_dump(exclude_unset=True)
+    if "signature_data" in payload:
+        payload["signature_data"] = normalize_signature_data(payload.get("signature_data"))
     prev_status = (inc.status or "open").strip().lower()
     if "category" in payload:
         payload["category"] = normalize_category(payload["category"])

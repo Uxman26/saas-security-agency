@@ -55,6 +55,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/contexts/auth-context';
 import { canModule } from '@/lib/permissions';
 import { addressLines } from '@/lib/address';
+import { BulkExportButton, BulkImportButton } from '@/components/bulk-io-dialog';
 type ClientFormData = z.output<typeof clientSchema>;
 type RenewFormData = z.output<typeof clientRenewSchema>;
 
@@ -622,7 +623,19 @@ export default function ClientsPage() {
             description="Client records, contracts and portal access. Track renewals and the sites each client is billed for."
             actions={
               <>
-
+              <BulkExportButton
+                module="clients"
+                label="Clients"
+                filteredIds={filteredIds}
+                canExport={canModule(permUser, 'clients', 'export') || canViewMod}
+              />
+              <BulkImportButton
+                module="clients"
+                label="Clients"
+                canImport={canModule(permUser, 'clients', 'import') || canCreateMod}
+                canUpdate={canEditMod}
+                onDone={() => void refetch()}
+              />
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>

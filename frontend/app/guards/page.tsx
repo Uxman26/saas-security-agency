@@ -27,6 +27,7 @@ import { EmailDialog } from '@/components/email-dialog';
 import { PortalLoginPanel } from '@/components/portal-login-panel';
 import { useAuth } from '@/contexts/auth-context';
 import { can, canModule } from '@/lib/permissions';
+import { BulkExportButton, BulkImportButton } from '@/components/bulk-io-dialog';
 import { ModuleTabs } from '@/components/module-layout';
 import { JobTitlesPanel } from '@/app/guards/job-titles-panel';
 import { formatDateUK } from '@/lib/date-format';
@@ -585,6 +586,19 @@ export default function GuardsPage() {
             description="Staff records, teams, absence, documents and compliance. Add employees, manage teams and open a full profile."
             actions={
               <>
+              <BulkExportButton
+                module="guards"
+                label="Staff"
+                filteredIds={filteredIds}
+                canExport={canModule(user, 'guards', 'export') || canModule(user, 'guards', 'view')}
+              />
+              <BulkImportButton
+                module="guards"
+                label="Staff"
+                canImport={canModule(user, 'guards', 'import') || canModule(user, 'guards', 'create') || can(user, 'guards.write')}
+                canUpdate={canModule(user, 'guards', 'edit') || can(user, 'guards.write')}
+                onDone={() => void refetch()}
+              />
               <Button
                 variant="outline"
                 onClick={() => (tab === 'staff' ? refetch() : loadJobTitles())}

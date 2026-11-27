@@ -3194,5 +3194,58 @@ def _run_migrations():
         logging.getLogger(__name__).warning("email retention policy update failed: %s", e)
 
 
+    # Daily Occurrence / Incident / Accident signature fields + site assignment instructions.
+    try:
+        path_forms = get_db_path()
+        if path_forms:
+            c_forms = sqlite3.connect(path_forms)
+            try:
+                cur_forms = c_forms.cursor()
+                form_alters = [
+                    ("occurrence_sheets", "checked_by", "TEXT"),
+                    ("occurrence_sheets", "signature_data", "TEXT"),
+                    ("occurrence_entries", "informed_manager", "INTEGER NOT NULL DEFAULT 0"),
+                    ("occurrence_entries", "informed_company", "INTEGER NOT NULL DEFAULT 0"),
+                    ("occurrence_entries", "informed_client", "INTEGER NOT NULL DEFAULT 0"),
+                    ("incidents", "checked_by", "TEXT"),
+                    ("incidents", "signature_name", "TEXT"),
+                    ("incidents", "signature_data", "TEXT"),
+                    ("accident_reports", "checked_by", "TEXT"),
+                    ("accident_reports", "signature_name", "TEXT"),
+                    ("accident_reports", "signature_data", "TEXT"),
+                    ("sites", "assignment_instructions", "TEXT"),
+                ]
+                for table, col, spec in form_alters:
+                    if table_exists(cur_forms, table) and not column_exists(cur_forms, table, col):
+                        try:
+                            cur_forms.execute(f"ALTER TABLE {table} ADD COLUMN {col} {spec}")
+                        except sqlite3.OperationalError:
+                            pass
+                if not table_exists(cur_forms, "site_instruction_acks"):
+                    cur_forms.execute(
+                        """CREATE TABLE site_instruction_acks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        site_id INTEGER NOT NULL REFERENCES sites(id),
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        guard_id INTEGER REFERENCES guards(id),
+                        instructions_hash TEXT,
+                        acknowledged_at TEXT DEFAULT CURRENT_TIMESTAMP
+                        )"""
+                    )
+                    cur_forms.execute(
+                        "CREATE INDEX IF NOT EXISTS ix_site_instruction_acks_site ON site_instruction_acks(site_id)"
+                    )
+                    cur_forms.execute(
+                        "CREATE INDEX IF NOT EXISTS ix_site_instruction_acks_user ON site_instruction_acks(user_id)"
+                    )
+                c_forms.commit()
+            finally:
+                c_forms.close()
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning("form fields / site instructions migration failed: %s", e)
+
+
 if __name__ == "__main__":
     run()

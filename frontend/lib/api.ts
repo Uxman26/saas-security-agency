@@ -494,6 +494,8 @@ export const api = {
     list: (params?: { view?: RecordView }): Promise<Site[]> =>
       request<Site[]>(`/sites${params?.view && params.view !== 'active' ? `?view=${params.view}` : ''}`),
     get: (id: number): Promise<Site> => request<Site>(`/sites/${id}`),
+    acknowledgeInstructions: (id: number): Promise<Site> =>
+      request<Site>(`/sites/${id}/acknowledge-instructions`, { method: 'POST', body: JSON.stringify({ acknowledged: true }) }),
     create: (data: Omit<Site, 'id' | 'company_id' | 'created_at'>): Promise<Site> => {
       const sanitized = Object.fromEntries(
         Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? sanitizeInput(v) : v])
@@ -517,6 +519,83 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ new_password }),
       }),
+  },
+  bulk: {
+    template: (module: string, format: 'xlsx' | 'csv' = 'xlsx'): Promise<Blob> =>
+      requestBlob(`/bulk/${module}/template?format=${format}`),
+    export: (module: string, opts?: { format?: 'xlsx' | 'csv'; ids?: Array<string | number> }): Promise<Blob> => {
+      const q = new URLSearchParams();
+      q.set('format', opts?.format || 'xlsx');
+      for (const id of opts?.ids || []) q.append('ids', String(id));
+      return requestBlob(`/bulk/${module}/export?${q.toString()}`);
+    },
+    previewImport: async (
+      module: string,
+      file: File,
+      update_existing = false
+    ): Promise<{
+      module: string;
+      label: string;
+      update_existing: boolean;
+      total: number;
+      valid: number;
+      invalid: number;
+      duplicate: number;
+      policy: string;
+      rows: Array<{
+        row: number;
+        status: string;
+        errors: string[];
+        existing_id?: string | null;
+        data: Record<string, string>;
+      }>;
+    }> => {
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
+      const form = new FormData();
+      form.append('file', file);
+      form.append('update_existing', update_existing ? 'true' : 'false');
+      const response = await apiFetch(`${API_URL}/bulk/${module}/import/preview`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Preview failed' }));
+        const d = error.detail;
+        throw new ApiError(response.status, typeof d === 'string' ? d : 'Preview failed');
+      }
+      return response.json();
+    },
+    commitImport: async (
+      module: string,
+      file: File,
+      update_existing = false
+    ): Promise<{
+      module: string;
+      label: string;
+      created: number;
+      updated: number;
+      skipped: number;
+      failed: number;
+      duplicate: number;
+      results: Array<{ row: number; status: string; errors?: string[]; id?: string | number }>;
+    }> => {
+      const token = typeof window !== 'undefined' ? storageGet('token')?.trim() : null;
+      const form = new FormData();
+      form.append('file', file);
+      form.append('update_existing', update_existing ? 'true' : 'false');
+      const response = await apiFetch(`${API_URL}/bulk/${module}/import`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Import failed' }));
+        const d = error.detail;
+        throw new ApiError(response.status, typeof d === 'string' ? d : 'Import failed');
+      }
+      return response.json();
+    },
   },
   assignments: {
     list: (params?: { start_date?: string; end_date?: string } & WorkFilterParams): Promise<Assignment[]> => {
@@ -2657,6 +2736,19 @@ export const api = {
       request<Attendance>('/attendance/book', { method: 'POST', body: JSON.stringify({ assignment_id, book_off: false }) }),
     bookOff: (assignment_id: number): Promise<Attendance> =>
       request<Attendance>('/attendance/book', { method: 'POST', body: JSON.stringify({ assignment_id, book_off: true }) }),
+    missedClocks: (params?: { start_date?: string; end_date?: string; limit?: number }) => {
+      const q = new URLSearchParams();
+      if (params?.start_date) q.append('start_date', params.start_date);
+      if (params?.end_date) q.append('end_date', params.end_date);
+      if (params?.limit) q.append('limit', String(params.limit));
+      const qs = q.toString();
+      return request<{
+        missed_clock_in_count: number;
+        missed_clock_out_count: number;
+        missed_clock_ins: Array<Record<string, unknown>>;
+        missed_clock_outs: Array<Record<string, unknown>>;
+      }>(`/reports/missed-attendance${qs ? `?${qs}` : ''}`);
+    },
     update: (
       id: number,
       data: {

@@ -38,6 +38,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { api } from '@/lib/api';
 import { BulkActionBar, BulkDeleteButton, RowCheckbox, SelectAllCheckbox, useBulkSelection } from '@/components/bulk-select';
 import { can, canModule, PERMS } from '@/lib/permissions';
+import { BulkExportButton, BulkImportButton } from '@/components/bulk-io-dialog';
 import { toast, toastMutationError } from '@/lib/toast';
 import type { DirectoryContractorList } from '@/lib/types';
 import { ContractorForm } from './contractor-form';
@@ -100,8 +101,16 @@ export default function ContractorsDirectoryPage() {
       );
   }, [rows, search, typeFilter, statusFilter]);
 
+  const filteredContractorIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+
   const canManage = can(user, PERMS.contractorManage);
   const canAssign = can(user, PERMS.contractorAssign);
+  const canExportContractors = canModule(user, 'contractors', 'export') || canModule(user, 'contractors', 'view');
+  const canImportContractors = canModule(user, 'contractors', 'import') || canModule(user, 'contractors', 'create') || canManage;
+  const canEditContractors = canModule(user, 'contractors', 'edit') || canManage;
+  const canExportSubs = canModule(user, 'sub_contractors', 'export') || canModule(user, 'sub_contractors', 'view');
+  const canImportSubs = canModule(user, 'sub_contractors', 'import') || canModule(user, 'sub_contractors', 'create');
+  const canEditSubs = canModule(user, 'sub_contractors', 'edit');
 
   // Sub-contractor rows carry their own module on top of the directory's: the API gates
   // this screen on `contractors`, so that right is the floor, and `sub_contractors` lets
@@ -248,7 +257,33 @@ export default function ContractorsDirectoryPage() {
             description="Manage all main and sub-contractors for your company. Add, edit and track contractor information and assignments."
             actions={
               <>
-
+              <BulkExportButton
+                module="contractors"
+                label="Contractors"
+                filteredIds={filteredContractorIds}
+                canExport={canExportContractors}
+              />
+              <BulkImportButton
+                module="contractors"
+                label="Contractors"
+                canImport={canImportContractors}
+                canUpdate={canEditContractors}
+                onDone={() => void load()}
+              />
+              <BulkExportButton
+                module="sub_contractors"
+                label="Sub-contractors"
+                buttonLabel="Export subs"
+                canExport={canExportSubs}
+              />
+              <BulkImportButton
+                module="sub_contractors"
+                label="Sub-contractors"
+                buttonLabel="Import subs"
+                canImport={canImportSubs}
+                canUpdate={canEditSubs}
+                onDone={() => void load()}
+              />
               {canManage && (
                 <Dialog open={addOpen} onOpenChange={setAddOpen}>
                   <DialogTrigger asChild>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/protected-route';
 import { AppShell } from '@/components/app-shell';
@@ -15,12 +15,45 @@ import { isCancelledStatus } from '@/lib/rota-shifts-types';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
+import { api } from '@/lib/api';
 
 export default function RotaAttendanceReportPage() {
   const { state } = useRotaShifts();
   const [from, setFrom] = useState(state.days[0] || '');
   const [to, setTo] = useState(state.days[state.days.length - 1] || '');
   const [empId, setEmpId] = useState<string>('__all');
+
+  const [missedIn, setMissedIn] = useState(0);
+  const [missedOut, setMissedOut] = useState(0);
+  const [missedRows, setMissedRows] = useState<Array<Record<string, unknown>>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const summary = await api.attendance.missedClocks({
+          start_date: from || undefined,
+          end_date: to || undefined,
+          limit: 500,
+        });
+        if (cancelled) return;
+        setMissedIn(summary.missed_clock_in_count || 0);
+        setMissedOut(summary.missed_clock_out_count || 0);
+        setMissedRows([
+          ...(summary.missed_clock_ins || []).map((r) => ({ ...r, _kind: 'Missed Clock-In' })),
+          ...(summary.missed_clock_outs || []).map((r) => ({ ...r, _kind: 'Missed Clock-Out' })),
+        ]);
+      } catch {
+        if (!cancelled) {
+          setMissedIn(0);
+          setMissedOut(0);
+          setMissedRows([]);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [from, to]);
+
 
   const rows = useMemo(() => {
     const out: {
@@ -235,6 +268,51 @@ export default function RotaAttendanceReportPage() {
               </Link>
             </Button>
             <h1 className="text-2xl font-bold">Attendance report</h1>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Missed Clock-Ins</CardTitle>
+                </CardHeader>
+                <CardContent className="text-3xl font-bold tabular-nums">{missedIn}</CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Missed Clock-Outs</CardTitle>
+                </CardHeader>
+                <CardContent className="text-3xl font-bold tabular-nums">{missedOut}</CardContent>
+              </Card>
+            </div>
+            {missedRows.length > 0 ? (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Missed clock details</CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-muted-foreground border-b">
+                        <th className="py-2 pr-3">Kind</th>
+                        <th className="py-2 pr-3">Date</th>
+                        <th className="py-2 pr-3">Staff</th>
+                        <th className="py-2 pr-3">Site</th>
+                        <th className="py-2 pr-3">Shift</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {missedRows.map((r, i) => (
+                        <tr key={i} className="border-b border-border/50">
+                          <td className="py-2 pr-3">{String(r._kind || '')}</td>
+                          <td className="py-2 pr-3 whitespace-nowrap">{String(r.date || '')}</td>
+                          <td className="py-2 pr-3">{String(r.guard_name || '')}</td>
+                          <td className="py-2 pr-3">{String(r.site_name || '')}</td>
+                          <td className="py-2 pr-3 tabular-nums">{String(r.shift_start || '')}–{String(r.shift_end || '')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            ) : null}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Filters</CardTitle>

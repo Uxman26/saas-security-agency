@@ -733,3 +733,75 @@ def site_delete_impact(db: Session, site_id: int, user_id: int) -> dict:
         "records": records,
         "blockers": [],
     }
+
+
+def _instructions_hash(text: str | None) -> str:
+    import hashlib
+
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+def instructions_acknowledged_for(db: Session, user: User, site: Site) -> bool:
+    """True when this user has acknowledged the current instructions text."""
+    from app.models import SiteInstructionAck
+
+    text = (getattr(site, "assignment_instructions", None) or "").strip()
+    if not text:
+        return True
+    digest = _instructions_hash(text)
+    row = (
+        db.query(SiteInstructionAck.id)
+        .filter(
+            SiteInstructionAck.site_id == site.id,
+            SiteInstructionAck.user_id == user.id,
+            SiteInstructionAck.instructions_hash == digest,
+        )
+        .first()
+    )
+    return row is not None
+
+
+def attach_instruction_ack(db: Session, user: User, sites: List[Site]) -> List[Site]:
+    """Stamp ``instructions_acknowledged`` onto site instances for SiteResponse."""
+    for site in sites:
+        try:
+            site.instructions_acknowledged = instructions_acknowledged_for(db, user, site)
+        except Exception:
+            site.instructions_acknowledged = False
+    return sites
+
+
+def acknowledge_instructions(db: Session, site_id: int, user: User) -> Site:
+    """Record that the current user has read the site assignment instructions."""
+    from datetime import datetime, timezone
+
+    from app.models import SiteInstructionAck
+
+    site = get_site_by_id(db, site_id, user.id)
+    text = (getattr(site, "assignment_instructions", None) or "").strip()
+    if not text:
+        site.instructions_acknowledged = True
+        return site
+    digest = _instructions_hash(text)
+    existing = (
+        db.query(SiteInstructionAck)
+        .filter(
+            SiteInstructionAck.site_id == site.id,
+            SiteInstructionAck.user_id == user.id,
+            SiteInstructionAck.instructions_hash == digest,
+        )
+        .first()
+    )
+    if existing is None:
+        db.add(
+            SiteInstructionAck(
+                site_id=site.id,
+                user_id=user.id,
+                guard_id=getattr(user, "guard_id", None),
+                instructions_hash=digest,
+                acknowledged_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+    site.instructions_acknowledged = True
+    return site

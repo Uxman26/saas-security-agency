@@ -38,6 +38,7 @@ const ACTION_PARENTS: Record<string, string> = {
   approve: 'edit',
   reject: 'edit',
   export: 'view',
+  import: 'create',
   send: 'edit',
   test: 'edit',
   logs_view: 'view',

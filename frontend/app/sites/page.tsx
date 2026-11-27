@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useSites, useCreateSite, useUpdateSite, useDeleteSite, useRestoreSite } from '@/hooks/use-sites';
@@ -49,6 +50,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DEFAULT_SITE_COLOR, SiteColorPicker } from '@/components/site-color-picker';
 import { useAuth } from '@/contexts/auth-context';
 import { canModule, isPortalRole } from '@/lib/permissions';
+import { BulkExportButton, BulkImportButton } from '@/components/bulk-io-dialog';
 
 function SiteForm({
   form,
@@ -202,6 +204,16 @@ function SiteForm({
           <Label>Address</Label>
           <Input {...register('address')} placeholder="123 High Street" />
           {errors.address && <p className="text-xs text-destructive">{errors.address.message}</p>}
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label>Site Assignment Instructions</Label>
+          <Textarea
+            rows={6}
+            {...register('assignment_instructions')}
+            placeholder={"• Report to reception on arrival\n  – Collect radios and keys\n• Check fire exits each hour\n• Record all visitors in the log"}
+          />
+          <p className="text-xs text-muted-foreground">Use bullets and sub-points. Staff see these on mobile and must confirm they have read them.</p>
+          {errors.assignment_instructions && <p className="text-xs text-destructive">{errors.assignment_instructions.message}</p>}
         </div>
         <div className="space-y-1">
           <Label>Town/City</Label>
@@ -402,6 +414,8 @@ export default function SitesPage() {
   // will be refused, which is what a view-only role was seeing before.
   const { user } = useAuth();
   const canCreateSites = canModule(user, 'sites', 'create');
+  const canExportSites = canModule(user, 'sites', 'export') || canModule(user, 'sites', 'view');
+  const canImportSites = canModule(user, 'sites', 'import') || canCreateSites;
   const canEditSites = canModule(user, 'sites', 'edit');
   // Each mirrors the exact right the API checks, so nobody is offered an action it will refuse.
   const canArchiveSites = canModule(user, 'sites', 'archive');
@@ -461,6 +475,7 @@ export default function SitesPage() {
       color: data.color || DEFAULT_SITE_COLOR,
       client_id: data.client_id ?? null,
       address: data.address || undefined,
+      assignment_instructions: data.assignment_instructions?.trim() || undefined,
       town_city: data.town_city?.trim() || null,
       county: data.county?.trim() || null,
       postcode: data.postcode || undefined,
@@ -540,6 +555,7 @@ export default function SitesPage() {
       default_hourly_rate: site.default_hourly_rate ?? undefined,
       staff_hourly_rate: site.staff_hourly_rate ?? undefined,
       address: site.address ?? '',
+      assignment_instructions: site.assignment_instructions ?? '',
       town_city: site.town_city ?? '',
       county: site.county ?? '',
       postcode: site.postcode ?? '',
@@ -737,7 +753,19 @@ export default function SitesPage() {
             description="The places your staff work. Manage site details, rates, contractors and portal access."
             actions={
               <>
-
+              <BulkExportButton
+                module="sites"
+                label="Sites"
+                filteredIds={filteredIds}
+                canExport={canExportSites}
+              />
+              <BulkImportButton
+                module="sites"
+                label="Sites"
+                canImport={canImportSites}
+                canUpdate={canEditSites}
+                onDone={() => void refetch()}
+              />
               <Button variant="outline" onClick={() => refetch()} disabled={isRefetching}>
                 {isRefetching ? 'Refreshing...' : 'Refresh'}
               </Button>

@@ -8,6 +8,7 @@ from app.schemas import (
     DeleteImpactResponse,
     PortalLoginOut,
     SiteCreate,
+    SiteInstructionAckRequest,
     SiteResponse,
 )
 from app.rbac import require_internal_module, require_module, user_has_permission_db
@@ -18,10 +19,17 @@ from app.services.required_fields import require_on_create, require_on_update
 
 router = APIRouter(prefix="/sites", tags=["sites"])
 
+
+def _sites_out(db, current_user: User, rows):
+    redacted = redact_sites_for_portal(current_user, rows)
+    return site_service.attach_instruction_ack(db, current_user, redacted if isinstance(redacted, list) else [redacted])
+
+
 @router.post("", response_model=SiteResponse, status_code=status.HTTP_201_CREATED)
 def create_site(site: SiteCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "create"))):
     require_on_create(site.postcode, "Postcode")
-    return site_service.create_site(db, site, current_user.id)
+    created = site_service.create_site(db, site, current_user.id)
+    return _sites_out(db, current_user, [created])[0]
 
 @router.get("", response_model=List[SiteResponse])
 def get_sites(
@@ -33,12 +41,26 @@ def get_sites(
     if view != "active" and not user_has_permission_db(db, current_user, "sites.archived_view"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     rows = site_service.get_sites(db, current_user.id, view)
-    return redact_sites_for_portal(current_user, rows)
+    return _sites_out(db, current_user, rows)
 
 @router.get("/{site_id}", response_model=SiteResponse)
 def get_site(site_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "view"))):
     site = site_service.get_site_by_id(db, site_id, current_user.id)
-    return redact_sites_for_portal(current_user, [site])[0]
+    return _sites_out(db, current_user, [site])[0]
+
+
+@router.post("/{site_id}/acknowledge-instructions", response_model=SiteResponse)
+def acknowledge_site_instructions(
+    site_id: int,
+    body: SiteInstructionAckRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_module("sites", "view")),
+):
+    """Staff checkbox: confirm the current assignment instructions have been read."""
+    if not body.acknowledged:
+        raise HTTPException(status_code=400, detail="acknowledged must be true")
+    site = site_service.acknowledge_instructions(db, site_id, current_user)
+    return _sites_out(db, current_user, [site])[0]
 
 @router.put("/{site_id}", response_model=SiteResponse)
 def update_site(site_id: int, site: SiteCreate, db: Session = Depends(get_db), current_user: User = Depends(require_module("sites", "edit"))):
